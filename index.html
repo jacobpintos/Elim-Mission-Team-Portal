@@ -850,24 +850,8 @@ function FLD(l,el){return D({cls:‘f’},[LBL({},l),el]);}
 function availBanner() {
 if (!S||!S.user) return D({});
 var uid = S.user.id;
-
-// ── DEBUG PANEL (remove after fix) ──
-var td = TODAY();
-var far = new Date(); far.setDate(far.getDate()+365);
-var allEvs = allInstances(td, far.toISOString().split(‘T’)[0]);
-var dbg = D({style:{background:‘rgba(0,0,0,.5)’,border:‘1px solid #e8624a’,borderRadius:‘8px’,padding:‘8px 12px’,marginBottom:‘8px’,fontSize:‘11px’,color:’#f0ece4’,lineHeight:‘1.7’}});
-dbg.appendChild(P({},‘DEBUG — uid: ‘+String(uid)+’  templates: ‘+S.templates.length+’  instances today→+365: ‘+allEvs.length));
-allEvs.slice(0,5).forEach(function(ev){
-var assigned = (ev.users||[]).some(function(x){return sameId(x,uid);});
-var r = getAvail(ev,uid);
-dbg.appendChild(P({},’• ‘+ev.title+’ | coordEnabled:’+ev.coordEnabled+’ | assigned:’+assigned+’ | users:’+JSON.stringify(ev.users||[]).slice(0,60)+’ | avail:’+(r?r.status:‘none’)));
-});
-if(!allEvs.length) dbg.appendChild(P({},‘No instances found in date range’));
-// ── END DEBUG ──
-var uid = S.user.id;
 var pending = pendingAvailEvents();
 var wrap = D({style:{marginBottom:‘1rem’}});
-wrap.appendChild(dbg);
 
 if (!pending.length) {
 // Collapsed pill — click to change availability
@@ -2530,7 +2514,7 @@ e.target.value=’’; rebuild();
 }});
 asel.style.cssText=‘width:100%;background:#fff;border:1px solid #ccc;border-radius:7px;padding:8px 12px;color:#1a1a1a;font-size:14px;font-family:sans-serif;outline:none’;
 asel.appendChild(OPT({value:’’},‘Add person or group…’));
-USERS.forEach(function(u){asel.appendChild(OPT({value:u.id},u.name));});
+USERS.forEach(function(u){asel.appendChild(OPT({value:String(u.uid||u.id)},u.name));});
 asel.appendChild(OPT({disabled:true},‘── Groups ──’));
 S.groups.forEach(function(g){asel.appendChild(OPT({value:‘g:’+g.id},‘Group: ‘+g.name));});
 w.appendChild(asel);
@@ -4703,6 +4687,21 @@ S._detailNoteOpen = null;
 S.coordAdminTab = S.coordAdminTab||‘matrix’;
 // Normalize all stored IDs to strings for consistent comparisons
 USERS.forEach(function(u){ u.id=String(u.uid||u.id); });
+// Normalize event users arrays — map old numeric IDs to Firebase UIDs
+function normalizeUid(oldId) {
+var u = USERS.find(function(u){ return String(u.id)===String(oldId)||String(u.uid)===String(oldId); });
+return u ? String(u.uid||u.id) : String(oldId);
+}
+S.templates.forEach(function(t){
+t.users = (t.users||[]).map(normalizeUid);
+(t.teams||[]).forEach(function(tm){
+tm.members = (tm.members||[]).map(normalizeUid);
+tm.leaders = (tm.leaders||[]).map(normalizeUid);
+});
+});
+Object.values(S.overrides||{}).forEach(function(ov){
+ov.users = (ov.users||[]).map(normalizeUid);
+});
 (S.groups||[]).forEach(function(g){
 g.members=(g.members||[]).map(function(x){return x==null?x:String(x);});
 });
