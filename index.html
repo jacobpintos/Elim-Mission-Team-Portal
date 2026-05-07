@@ -723,7 +723,7 @@ function availTemplateKey(tmplId, uid) {
 return ‘template_’ + String(tmplId) + ‘::’ + String(uid);
 }
 function getAvail(ev, uid) {
-if (!S.avail) return null;
+if (!S||!S.avail||!ev) return null;
 // Check instance-specific first, then template general
 if (ev.instanceKey) {
 var ikey = ev.instanceKey + ‘::’ + String(uid);
@@ -777,7 +777,7 @@ return b;
 
 // Get all events assigned to current user that need an availability response
 function pendingAvailEvents() {
-if (!S.user) return [];
+if (!S||!S.user) return [];
 var td = TODAY();
 var far = new Date(); far.setDate(far.getDate()+365);
 var farDs = far.toISOString().split(‘T’)[0];
@@ -839,6 +839,7 @@ function FLD(l,el){return D({cls:‘f’},[LBL({},l),el]);}
 
 // ── AVAILABILITY BANNER ─────────────────────────────────────────────────────
 function availBanner() {
+if (!S||!S.user) return D({});
 var uid = S.user.id;
 var pending = pendingAvailEvents();
 var wrap = D({style:{marginBottom:‘1rem’}});
@@ -996,6 +997,7 @@ return card;
 
 // ── COORDINATOR ADMIN SECTION ───────────────────────────────────────────────
 function coordAdminSection() {
+if (!S||!S.user) return D({});
 var wrap = D({style:{marginTop:‘1.5rem’}});
 wrap.appendChild(D({cls:‘divider’}));
 wrap.appendChild(P({cls:‘sec-t’,style:{marginTop:’.75rem’}}, ‘Availability Coordinator’));
@@ -1025,6 +1027,7 @@ return wrap;
 
 // Get all coord-enabled event templates + upcoming instances deduplicated
 function coordEvents() {
+if (!S||!S.templates) return [];
 var td = TODAY();
 var far = new Date(); far.setDate(far.getDate()+365);
 var all = allInstances(td, far.toISOString().split(‘T’)[0]);
@@ -1398,7 +1401,7 @@ var active=S.tab===t.id;
 var tb=BTN({cls:‘ntab’+(active?’ on’:’’),click:safe(function(){S.tab=t.id;S.modal=null;S.activeRoom=null;render();})},t.label);
 var secPend=t.id===‘security’&&canSeeSecurity(u)&&S.reports.filter(function(r){return !r.ack;}).length>0;
 var adPend=t.id===‘admin’&&S.pendingDel.length>0;
-var evPend=t.id===‘events’&&pendingAvailEvents().length>0;
+var evPend=t.id===‘events’&&S.user&&pendingAvailEvents().length>0;
 if(secPend) tb.appendChild(SP({cls:‘nbadge’},String(S.reports.filter(function(r){return !r.ack;}).length)));
 if(adPend)  tb.appendChild(SP({cls:‘nbadge’},String(S.pendingDel.length)));
 if(evPend)  tb.appendChild(SP({cls:‘nbadge’},String(pendingAvailEvents().length)));
@@ -1418,7 +1421,7 @@ w.appendChild(availBanner());
 w.appendChild(calWidget());
 w.appendChild(evList());
 // ── Admin coordinator section (below calendar) ──
-if(isAdmin(S.user)) w.appendChild(coordAdminSection());
+if(S.user&&isAdmin(S.user)) w.appendChild(coordAdminSection());
 return w;
 }
 
