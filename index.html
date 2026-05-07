@@ -4688,20 +4688,24 @@ S.coordAdminTab = S.coordAdminTab||‘matrix’;
 // Normalize all stored IDs to strings for consistent comparisons
 USERS.forEach(function(u){ u.id=String(u.uid||u.id); });
 // Normalize event users arrays — map old numeric IDs to Firebase UIDs
+try {
 function normalizeUid(oldId) {
 var u = USERS.find(function(u){ return String(u.id)===String(oldId)||String(u.uid)===String(oldId); });
 return u ? String(u.uid||u.id) : String(oldId);
 }
-S.templates.forEach(function(t){
+(S.templates||[]).forEach(function(t){
 t.users = (t.users||[]).map(normalizeUid);
 (t.teams||[]).forEach(function(tm){
 tm.members = (tm.members||[]).map(normalizeUid);
 tm.leaders = (tm.leaders||[]).map(normalizeUid);
 });
 });
-Object.values(S.overrides||{}).forEach(function(ov){
-ov.users = (ov.users||[]).map(normalizeUid);
+var ovKeys = Object.keys(S.overrides||{});
+ovKeys.forEach(function(k){
+var ov = S.overrides[k];
+if(ov && ov.users) ov.users = ov.users.map(normalizeUid);
 });
+} catch(normErr) { console.warn(‘ID normalization skipped:’, normErr); }
 (S.groups||[]).forEach(function(g){
 g.members=(g.members||[]).map(function(x){return x==null?x:String(x);});
 });
