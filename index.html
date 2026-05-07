@@ -3,12 +3,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>The Well of Iowa \u2014 Mission Team Portal</title>
+<title>The Well of Iowa — Mission Team Portal</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -497,8 +496,7 @@ nItem:4,nTx:1
 },
 nEv:2,nTask:2,nGroup:4,nRoom:3,nReport:2,nNotif:1,
 auditLog:[], announcements:[], reorderItems:[],
-setlists:[], inputLists:{sunday:[], event:[], wh2:[]},
-avail:{} // keyed: ‘template_TMPLID::UID’ or ‘INSTANCEKEY::UID’
+setlists:[], inputLists:{sunday:[], event:[], wh2:[]}, avail:{}
 };
 
 // ── AUDIT TRAIL ───────────────────────────────────────────────────────────
@@ -665,13 +663,7 @@ var DAYS=[‘Sunday’,‘Monday’,‘Tuesday’,‘Wednesday’,‘Thursday’
 function getInstances(tmpl,from,to){
 var list=[];
 if(!tmpl.isRec){
-if(tmpl.date>=from&&tmpl.date<=to){
-var nrKey=tmpl.id+’*’+tmpl.date;
-var nrOv=S.overrides[nrKey]||{};
-if(!nrOv.deleted){
-list.push(Object.assign({},tmpl,nrOv,{instanceKey:nrKey,templateId:tmpl.id}));
-}
-}
+if(tmpl.date>=from&&tmpl.date<=to) list.push(Object.assign({},tmpl,{instanceKey:null}));
 return list;
 }
 var fDate=new Date(from+‘T12:00:00’), tDate=new Date(to+‘T12:00:00’);
@@ -682,7 +674,7 @@ while(cur.getDay()!==tmpl.recDay) cur.setDate(cur.getDate()+1);
 var n=0;
 while(cur<=cap&&n<104){
 var ds=cur.toISOString().split(‘T’)[0];
-var key=tmpl.id+’*’+ds;
+var key=tmpl.id+’_’+ds;
 var ov=S.overrides[key]||{};
 if(!ov.deleted){
 var inst=Object.assign({},tmpl,ov,{date:ds,instanceKey:key,templateId:tmpl.id});
@@ -716,99 +708,322 @@ S.overrides[key].templateId=tmplId;
 return S.overrides[key];
 }
 
-// ── AVAILABILITY HELPERS ────────────────────────────────────────────────────
-// Key format:
-//   template_TMPLID::UID  → general/recurring response
-//   INSTANCEKEY::UID      → per-instance override (inherits from template if absent)
-function availKey(ev, uid) {
-// For a recurring event instance, try instance key first, fall back to template
-if (ev.isRec && ev.templateId) return ev.instanceKey + ‘::’ + String(uid);
-if (!ev.isRec && ev.instanceKey) return ev.instanceKey + ‘::’ + String(uid);
-return ‘template_’ + String(ev.id||ev.templateId) + ‘::’ + String(uid);
-}
-function availTemplateKey(tmplId, uid) {
-return ‘template_’ + String(tmplId) + ‘::’ + String(uid);
-}
-function getAvail(ev, uid) {
-if (!S||!S.avail||!ev) return null;
-var uidStr = String(uid);
-// Check instance-specific first
-if (ev.instanceKey) {
-var ikey = ev.instanceKey + ‘::’ + uidStr;
-if (S.avail[ikey]) return S.avail[ikey];
-}
-// Fall back to template-level key
-var tid = String(ev.templateId||ev.id);
-var tkey = ‘template_’ + tid + ‘::’ + uidStr;
-return S.avail[tkey] || null;
-}
-function setAvail(ev, uid, status, note, isInstance) {
-if (!S.avail) S.avail = {};
-var uidStr = String(uid);
-var key;
-// Use instanceKey when available (both recurring instances and non-recurring events)
-if (ev.instanceKey) {
-key = ev.instanceKey + ‘::’ + uidStr;
-} else {
-key = ‘template_’ + String(ev.templateId||ev.id) + ‘::’ + uidStr;
-}
-if (status === null) {
-delete S.avail[key];
-} else {
-S.avail[key] = { status: status, note: note||’’, uid: uidStr, ts: Date.now() };
-}
-}
-function isUnavailable(ev, uid) {
-var r = getAvail(ev, uid);
-return r && r.status === ‘no’;
-}
-function availStatusColor(status) {
-var map = { yes:’#27ae60’, no:’#c0392b’, partial:’#e67e22’, tbd:’#2980b9’ };
-return map[status] || ‘#b0adc4’;
-}
-function availStatusLabel(status) {
-var map = { yes:‘Available’, no:‘Not Available’, partial:‘Partial’, tbd:‘TBD’ };
-return map[status] || ‘—’;
-}
-function availBadge(status) {
-var colors = { yes:’#27ae60’, no:’#c0392b’, partial:’#e67e22’, tbd:’#2980b9’ };
-var labels = { yes:‘✓’, no:‘✗’, partial:‘◑’, tbd:’?’ };
-if (!status) return null;
-var b = SP({style:{
-display:‘inline-flex’, alignItems:‘center’, justifyContent:‘center’,
-width:‘18px’, height:‘18px’, borderRadius:‘50%’, fontSize:‘10px’,
-fontWeight:‘700’, background: colors[status]||’#555’, color:’#fff’,
-flexShrink:‘0’, marginLeft:‘4px’
-}}, labels[status]||’?’);
-return b;
+// ── AVAILABILITY HELPERS ──────────────────────────────────────────────────────
+function sameAvailId(a,b){ return String(a)===String(b); }
+
+function getAvail(ev,uid){
+if(!S||!S.avail||!ev) return null;
+var u=String(uid);
+var ik=(ev.instanceKey||(ev.id+’*’+ev.date))+’::’+u;
+if(S.avail[ik]) return S.avail[ik];
+var tk=’template*’+String(ev.templateId||ev.id)+’::’+u;
+return S.avail[tk]||null;
 }
 
-// Get all events assigned to current user that need an availability response
-function pendingAvailEvents() {
-if (!S||!S.user) return [];
-var td = TODAY();
-var far = new Date(); far.setDate(far.getDate()+365);
-var farDs = far.toISOString().split(‘T’)[0];
-var all = allInstances(td, farDs);
-var uid = S.user.id;
-var pending = [];
-all.forEach(function(ev) {
-if (!(ev.users||[]).some(function(x){return sameId(x,uid);})) return;
-// coordEnabled required — but fall back to true if field is missing (legacy events)
-if (ev.coordEnabled === false) return;
-var r = getAvail(ev, uid);
-if (!r || r.status === ‘tbd’) pending.push(ev);
-});
-// Dedupe — one entry per template/event, prefer instance-specific responses
-var seen = {};
-return pending.filter(function(ev) {
-var tkey = String(ev.templateId||ev.id);
-// If this instance already has its own avail response, skip
-if (ev.instanceKey && S.avail && S.avail[ev.instanceKey+’::’+uid]) return false;
-if (seen[tkey]) return false;
-seen[tkey] = true;
+function setAvail(ev,uid,status,note){
+if(!S.avail) S.avail={};
+var u=String(uid);
+var key=(ev.instanceKey||(ev.id+’_’+ev.date))+’::’+u;
+if(status===null){ delete S.avail[key]; }
+else{ S.avail[key]={status:status,note:note||’’,uid:u,ts:Date.now()}; }
+}
+
+function isUnavailable(ev,uid){ var r=getAvail(ev,uid); return r&&r.status===‘no’; }
+function availColor(s){ return ({yes:’#27ae60’,no:’#c0392b’,partial:’#e67e22’,tbd:’#2980b9’})[s]||’#b0adc4’; }
+function availLabel(s){ return ({yes:‘Available’,no:‘Not Available’,partial:‘Partial’,tbd:‘TBD’})[s]||’\u2014’; }
+
+function availBadge(s){
+if(!s) return null;
+var icon=({yes:’\u2713’,no:’\u2717’,partial:’\u25d1’,tbd:’?’})[s]||’?’;
+return SP({style:{display:‘inline-flex’,alignItems:‘center’,justifyContent:‘center’,
+width:‘16px’,height:‘16px’,borderRadius:‘50%’,fontSize:‘10px’,fontWeight:‘700’,
+background:availColor(s),color:’#fff’,flexShrink:‘0’,marginLeft:‘4px’}},icon);
+}
+
+function pendingAvailEvents(){
+if(!S||!S.user) return [];
+try{
+var uid=String(S.user.id||S.user.uid||’’);
+if(!uid) return [];
+var td=TODAY(), far=new Date(); far.setDate(far.getDate()+365);
+var all=allInstances(td,far.toISOString().split(‘T’)[0]);
+var seen={};
+return all.filter(function(ev){
+var assigned=(ev.users||[]).some(function(x){return sameAvailId(x,uid);});
+if(!assigned) return false;
+if(ev.coordEnabled===false) return false;
+var r=getAvail(ev,uid);
+if(r&&r.status&&r.status!==‘tbd’) return false;
+var tk=String(ev.templateId||ev.id);
+if(seen[tk]) return false;
+seen[tk]=true;
 return true;
 });
+}catch(e){ console.warn(‘pendingAvailEvents:’,e); return []; }
+}
+
+// ── AVAILABILITY BANNER ───────────────────────────────────────────────────────
+function availRespCard(ev,uid){
+var r=getAvail(ev,uid);
+var card=D({style:{background:‘rgba(255,255,255,.04)’,border:‘1px solid rgba(232,98,74,.2)’,borderRadius:‘8px’,padding:‘10px 12px’,marginBottom:‘8px’}});
+var row=D({style:{display:‘flex’,justifyContent:‘space-between’,alignItems:‘flex-start’,marginBottom:‘6px’,gap:‘8px’}});
+row.appendChild(D({},[
+P({style:{fontWeight:‘500’,fontSize:‘13px’,color:’#f0ece4’,marginBottom:‘2px’}},ev.title+(ev.isRec?’ \u21bb’:’’)),
+P({cls:‘cs’},FD(ev.date)+(ev.startTime?’ \u00b7 ‘+ev.startTime:’’)+(ev.location?’ \u00b7 ‘+ev.location:’’))
+]));
+if(r&&r.status&&r.status!==‘tbd’){ var ab=availBadge(r.status); if(ab) row.appendChild(ab); }
+card.appendChild(row);
+var btns=D({style:{display:‘flex’,gap:‘6px’,flexWrap:‘wrap’,marginBottom:‘4px’}});
+[[‘yes’,’\u2713 Yes’],[‘no’,’\u2717 No’],[‘partial’,’\u25d1 Partial’],[‘tbd’,’? TBD’]].forEach(function(opt){
+var sel=r&&r.status===opt[0];
+var b=BTN({cls:‘btn bsm’},opt[1]);
+b.style.cssText=‘background:’+(sel?availColor(opt[0]):‘transparent’)+’;color:’+(sel?’#fff’:availColor(opt[0]))+’;border:1px solid ‘+availColor(opt[0])+’;font-size:11px;padding:4px 10px’;
+(function(st,evRef){b.addEventListener(‘click’,safe(function(){
+var nk=’*an*’+(evRef.instanceKey||evRef.id);
+if(st===‘partial’||st===‘tbd’){ S[nk]=S[nk]===st?null:st; render(); }
+else{ setAvail(evRef,uid,st,’’); S[nk]=null; S.availExpanded=false; save(); render(); }
+}));})(opt[0],ev);
+btns.appendChild(b);
+});
+card.appendChild(btns);
+var nk=’*an*’+(ev.instanceKey||ev.id);
+if(S[nk]===‘partial’||S[nk]===‘tbd’){
+var ta=mk(‘textarea’,{placeholder:S[nk]===‘partial’?‘Describe your availability…’:‘Reason (optional)…’,style:{width:‘100%’,background:’#fff’,border:‘1px solid #ccc’,borderRadius:‘6px’,padding:‘7px 10px’,color:’#1a1a1a’,fontSize:‘12px’,fontFamily:‘sans-serif’,resize:‘vertical’,minHeight:‘55px’}});
+ta.value=(r&&r.status===S[nk])?r.note:’’;
+var sv=BTN({cls:‘btn bg bsm’,style:{marginTop:‘5px’}},‘Save’);
+(function(st,evRef,inp){sv.addEventListener(‘click’,safe(function(){
+setAvail(evRef,uid,st,inp.value.trim());
+S[’*an*’+(evRef.instanceKey||evRef.id)]=null;
+S.availExpanded=false; save(); render();
+}));})(S[nk],ev,ta);
+card.appendChild(ta); card.appendChild(sv);
+} else if(r&&r.note){
+card.appendChild(P({style:{fontSize:‘11px’,color:’#b0adc4’,marginTop:‘3px’,fontStyle:‘italic’}},’”’+r.note+’”’));
+}
+return card;
+}
+
+function availBanner(){
+if(!S||!S.user) return D({});
+try{
+var uid=String(S.user.id||S.user.uid||’’);
+var pending=pendingAvailEvents();
+var wrap=D({style:{marginBottom:‘1rem’}});
+if(!pending.length){
+var pill=D({style:{display:‘flex’,alignItems:‘center’,justifyContent:‘space-between’,background:‘rgba(39,174,96,.1)’,border:‘1px solid rgba(39,174,96,.25)’,borderRadius:‘8px’,padding:‘8px 14px’,fontSize:‘13px’,color:’#2ecc71’}});
+pill.appendChild(SP({},’\u2713 Availability up to date’));
+pill.appendChild(BTN({cls:‘btn bo bsm’,style:{fontSize:‘11px’,color:’#b0adc4’},click:safe(function(e){e.stopPropagation();S.availExpanded=true;render();})},’\u00b7\u00b7\u00b7 Change’));
+wrap.appendChild(pill);
+if(S.availExpanded){
+var ebox=D({cls:‘card’,style:{marginBottom:‘1rem’}});
+var ehdr=D({cls:‘rh’});
+ehdr.appendChild(P({style:{fontSize:‘14px’,fontWeight:‘500’,color:’#e8624a’}},‘Change My Availability’));
+ehdr.appendChild(BTN({cls:‘btn bo bsm’,click:safe(function(){S.availExpanded=false;render();})},’\u2715’));
+ebox.appendChild(ehdr);
+var etd=TODAY(), efar=new Date(); efar.setDate(efar.getDate()+365);
+var eall=allInstances(etd,efar.toISOString().split(‘T’)[0]).filter(function(ev){
+return (ev.users||[]).some(function(x){return sameAvailId(x,uid);})||isAdmin(S.user);
+});
+var eseen={};
+eall.filter(function(ev){var k=String(ev.templateId||ev.id);if(eseen[k])return false;eseen[k]=true;return true;})
+.forEach(function(ev){ebox.appendChild(availRespCard(ev,uid));});
+if(!eall.length) ebox.appendChild(P({cls:‘cs’,style:{textAlign:‘center’,padding:‘1rem’}},‘No events assigned to you.’));
+wrap.innerHTML=’’; wrap.appendChild(ebox);
+}
+return wrap;
+}
+var pbox=D({cls:‘card’,style:{marginBottom:‘1rem’,borderColor:‘rgba(232,98,74,.4)’}});
+pbox.appendChild(P({style:{fontSize:‘14px’,fontWeight:‘500’,color:’#e8624a’,marginBottom:’.75rem’}},‘Availability Needed: ‘+pending.length+’ event’+(pending.length===1?’’:‘s’)));
+pending.forEach(function(ev){pbox.appendChild(availRespCard(ev,uid));});
+wrap.appendChild(pbox);
+return wrap;
+}catch(e){ console.warn(‘availBanner error:’,e); return D({}); }
+}
+
+// ── COORDINATOR ADMIN SECTION ─────────────────────────────────────────────────
+function coordEvents(){
+if(!S||!S.templates) return [];
+try{
+var td=TODAY(), far=new Date(); far.setDate(far.getDate()+365);
+var all=allInstances(td,far.toISOString().split(‘T’)[0]);
+var seen={}, result=[];
+all.forEach(function(ev){
+if(ev.coordEnabled===false) return;
+var k=String(ev.templateId||ev.id);
+if(!seen[k]){ seen[k]=true; result.push(ev); }
+});
+return result;
+}catch(e){ return []; }
+}
+
+function coordAdminSection(){
+if(!S||!S.user) return D({});
+try{
+var wrap=D({style:{marginTop:‘1.5rem’}});
+wrap.appendChild(D({style:{borderTop:‘1px solid rgba(232,98,74,.2)’,margin:‘1rem 0’}}));
+wrap.appendChild(P({cls:‘sec-t’,style:{marginBottom:’.75rem’}},‘Availability Coordinator’));
+if(!S.coordAdminTab) S.coordAdminTab=‘matrix’;
+var tabs=[{id:‘matrix’,label:‘Matrix’},{id:‘results’,label:‘Results’},{id:‘outstanding’,label:‘Outstanding’}];
+var strow=D({style:{display:‘flex’,gap:‘6px’,marginBottom:‘1rem’,flexWrap:‘wrap’}});
+var ct=D({});
+tabs.forEach(function(t){
+var b=BTN({cls:‘btn bsm’+(t.id===S.coordAdminTab?’ bg’:’’)},t.label);
+if(t.id!==S.coordAdminTab) b.style.cssText=‘background:transparent;border:1px solid rgba(232,98,74,.3);color:#b0adc4’;
+(function(id){b.addEventListener(‘click’,safe(function(){S.coordAdminTab=id;render();}));})(t.id);
+strow.appendChild(b);
+});
+wrap.appendChild(strow);
+wrap.appendChild(ct);
+if(S.coordAdminTab===‘matrix’) ct.appendChild(coordMatrix());
+else if(S.coordAdminTab===‘results’) ct.appendChild(coordResults());
+else ct.appendChild(coordOutstanding());
+return wrap;
+}catch(e){ console.warn(‘coordAdminSection:’,e); return D({}); }
+}
+
+function coordMatrix(){
+var evs=coordEvents();
+if(!evs.length) return D({cls:‘empty’},‘No coordinator events found. Use the coordinator toggle when creating events, or existing events will appear here automatically.’);
+var users=[];
+USERS.forEach(function(u){
+if(evs.some(function(ev){return (ev.users||[]).some(function(x){return sameAvailId(x,String(u.id||u.uid));});}))
+users.push(u);
+});
+users.sort(function(a,b){return (a.name||’’).localeCompare(b.name||’’);});
+if(!users.length) return D({cls:‘empty’},‘No users assigned to coordinator events yet.’);
+var wrap=D({style:{overflowX:‘auto’,marginTop:’.5rem’}});
+var tbl=document.createElement(‘table’);
+tbl.style.cssText=‘width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap’;
+var thead=document.createElement(‘thead’);
+var hr=document.createElement(‘tr’);
+var th0=document.createElement(‘th’);
+th0.style.cssText=‘background:#1c1c2a;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:#b0adc4;border-bottom:1px solid rgba(232,98,74,.25);position:sticky;left:0;z-index:2;border-right:2px solid rgba(232,98,74,.2)’;
+th0.textContent=‘Name’; hr.appendChild(th0);
+evs.forEach(function(ev){
+var th=document.createElement(‘th’);
+th.style.cssText=‘background:#1c1c2a;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase;color:#b0adc4;border-bottom:1px solid rgba(232,98,74,.25);max-width:110px;overflow:hidden;text-overflow:ellipsis’;
+th.title=ev.title+’ \u00b7 ‘+FD(ev.date); th.textContent=ev.title;
+if(ev.isRec){var rs=document.createElement(‘span’);rs.style.cssText=‘color:#e8624a;font-size:9px;display:block’;rs.textContent=’\u21bb recurring’;th.appendChild(rs);}
+hr.appendChild(th);
+});
+thead.appendChild(hr);
+var tbody=document.createElement(‘tbody’);
+var totRow=document.createElement(‘tr’); totRow.style.background=‘rgba(0,0,0,.2)’;
+var totLbl=document.createElement(‘td’); totLbl.style.cssText=‘padding:5px 12px;font-size:10px;color:#b0adc4;text-transform:uppercase;position:sticky;left:0;background:#14141e;border-right:2px solid rgba(232,98,74,.2)’;
+totLbl.textContent=‘Totals’; totRow.appendChild(totLbl);
+evs.forEach(function(ev){
+var counts={yes:0,no:0,partial:0,tbd:0};
+users.forEach(function(u){
+var r=getAvail(ev,String(u.id||u.uid));
+if(r&&counts[r.status]!==undefined) counts[r.status]++;
+});
+var td2=document.createElement(‘td’); td2.style.cssText=‘padding:4px 8px;text-align:center;font-size:11px’;
+td2.innerHTML=’<span style="color:#27ae60">’+counts.yes+’\u2713</span> <span style="color:#e67e22">’+counts.partial+’\u25d1</span> <span style="color:#2980b9">’+counts.tbd+’?</span> <span style="color:#c0392b">’+counts.no+’\u2717</span>’;
+totRow.appendChild(td2);
+});
+tbody.appendChild(totRow);
+users.forEach(function(u){
+var uid=String(u.id||u.uid);
+var tr=document.createElement(‘tr’);
+var ntd=document.createElement(‘td’); ntd.style.cssText=‘padding:8px 12px;font-weight:500;color:#f0ece4;position:sticky;left:0;background:#1f1f2e;z-index:1;border-right:2px solid rgba(232,98,74,.2);border-bottom:1px solid rgba(255,255,255,.04)’;
+ntd.textContent=u.name; tr.appendChild(ntd);
+evs.forEach(function(ev){
+var td3=document.createElement(‘td’); td3.style.cssText=‘padding:8px 12px;text-align:center;border-bottom:1px solid rgba(255,255,255,.04)’;
+var assigned=(ev.users||[]).some(function(x){return sameAvailId(x,uid);});
+if(!assigned){ td3.style.opacity=‘0.2’; td3.textContent=’\u2014’; }
+else{
+var r=getAvail(ev,uid);
+if(r){
+var chip=document.createElement(‘span’);
+chip.style.cssText=‘display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:11px;font-weight:700;background:’+availColor(r.status)+’;color:#fff;cursor:default’;
+chip.textContent=({yes:’\u2713’,no:’\u2717’,partial:’\u25d1’,tbd:’?’})[r.status]||’?’;
+chip.title=availLabel(r.status)+(r.note?’ \u2014 ‘+r.note:’’);
+td3.appendChild(chip);
+} else {
+var dash=document.createElement(‘span’); dash.style.cssText=‘color:#5a5a6a;font-size:14px’; dash.textContent=’\u2013’; td3.appendChild(dash);
+}
+}
+tr.appendChild(td3);
+});
+tbody.appendChild(tr);
+});
+tbl.appendChild(thead); tbl.appendChild(tbody); wrap.appendChild(tbl);
+var leg=D({style:{display:‘flex’,gap:‘14px’,flexWrap:‘wrap’,marginTop:‘8px’,fontSize:‘11px’,color:’#b0adc4’}});
+[[’\u2713 Available’,’#27ae60’],[’\u25d1 Partial’,’#e67e22’],[’? TBD’,’#2980b9’],[’\u2717 Unavailable’,’#c0392b’]].forEach(function(l){leg.appendChild(SP({style:{color:l[1]}},l[0]));});
+leg.appendChild(SP({},’\u2013 No response’));
+wrap.appendChild(leg);
+return wrap;
+}
+
+function coordResults(){
+var evs=coordEvents();
+if(!evs.length) return D({cls:‘empty’},‘No coordinator events.’);
+var wrap=D({});
+var qi=INP({type:‘text’,placeholder:‘Search by event name, location, or date…’,style:{marginBottom:‘1rem’}});
+var ct=D({});
+wrap.appendChild(qi); wrap.appendChild(ct);
+function renderR(){
+ct.innerHTML=’’;
+var q=(qi.value||’’).toLowerCase().trim();
+var filtered=evs.filter(function(ev){
+if(!q) return true;
+return ev.title.toLowerCase().includes(q)||(ev.location||’’).toLowerCase().includes(q)||FD(ev.date).toLowerCase().includes(q);
+});
+if(!filtered.length){ct.appendChild(D({cls:‘empty’},‘No results.’));return;}
+filtered.forEach(function(ev){
+var users=USERS.filter(function(u){return (ev.users||[]).some(function(x){return sameAvailId(x,String(u.id||u.uid));});});
+var card=D({cls:‘card’,style:{marginBottom:’.65rem’}});
+card.appendChild(P({style:{fontWeight:‘500’,color:’#f0ece4’,marginBottom:‘2px’}},ev.title+(ev.isRec?’ \u21bb’:’’)));
+card.appendChild(P({cls:‘cs’,style:{marginBottom:‘8px’}},FD(ev.date)+(ev.location?’ \u00b7 ‘+ev.location:’’)));
+users.forEach(function(u){
+var uid=String(u.id||u.uid);
+var r=getAvail(ev,uid);
+var row=D({style:{display:‘flex’,justifyContent:‘space-between’,alignItems:‘flex-start’,padding:‘5px 0’,borderBottom:‘1px solid rgba(232,98,74,.1)’,gap:‘8px’}});
+row.appendChild(SP({style:{fontSize:‘13px’,color:’#f0ece4’,textDecoration:r&&r.status===‘no’?‘line-through’:‘none’,opacity:r&&r.status===‘no’?‘0.5’:‘1’}},u.name));
+var rgt=D({style:{textAlign:‘right’,flexShrink:‘0’}});
+if(r){ rgt.appendChild(SP({style:{fontSize:‘12px’,fontWeight:‘600’,color:availColor(r.status)}},availLabel(r.status))); if(r.note) rgt.appendChild(P({style:{fontSize:‘11px’,color:’#b0adc4’,fontStyle:‘italic’,marginTop:‘2px’}},’”’+r.note+’”’)); }
+else rgt.appendChild(SP({style:{fontSize:‘12px’,color:’#5a5a6a’}},’\u2014’));
+row.appendChild(rgt); card.appendChild(row);
+});
+ct.appendChild(card);
+});
+}
+qi.addEventListener(‘input’,renderR); renderR();
+return wrap;
+}
+
+function coordOutstanding(){
+var evs=coordEvents();
+if(!evs.length) return D({cls:‘empty’},‘No coordinator events.’);
+var wrap=D({}); var anyOut=false;
+evs.forEach(function(ev){
+var users=USERS.filter(function(u){return (ev.users||[]).some(function(x){return sameAvailId(x,String(u.id||u.uid));});});
+var noResp=users.filter(function(u){return !getAvail(ev,String(u.id||u.uid));});
+var tbdR=users.filter(function(u){var r=getAvail(ev,String(u.id||u.uid));return r&&r.status===‘tbd’;});
+if(!noResp.length&&!tbdR.length) return;
+anyOut=true;
+var card=D({cls:‘card’,style:{marginBottom:’.65rem’}});
+card.appendChild(P({style:{fontWeight:‘500’,color:’#f0ece4’,marginBottom:‘2px’}},ev.title+(ev.isRec?’ \u21bb’:’’)));
+card.appendChild(P({cls:‘cs’,style:{marginBottom:‘8px’}},FD(ev.date)));
+if(noResp.length){
+card.appendChild(P({style:{fontSize:‘12px’,color:’#b0adc4’,marginBottom:‘3px’}},‘No response:’));
+var nr=D({style:{display:‘flex’,flexWrap:‘wrap’,gap:‘3px’,marginBottom:‘5px’}});
+noResp.forEach(function(u){nr.appendChild(SP({cls:‘tag’},u.name));});
+card.appendChild(nr);
+}
+if(tbdR.length){
+card.appendChild(P({style:{fontSize:‘12px’,color:’#2980b9’,marginBottom:‘3px’}},‘TBD:’));
+var tr2=D({style:{display:‘flex’,flexWrap:‘wrap’,gap:‘3px’}});
+tbdR.forEach(function(u){
+var r=getAvail(ev,String(u.id||u.uid));
+tr2.appendChild(SP({cls:‘tag’,style:{borderColor:‘rgba(41,128,185,.4)’,background:‘rgba(41,128,185,.12)’,color:’#87b7e8’}},u.name+(r&&r.note?’ \u2014 ‘+r.note:’’)));
+});
+card.appendChild(tr2);
+}
+wrap.appendChild(card);
+});
+if(!anyOut) wrap.appendChild(D({cls:‘empty’},‘All assigned users have responded.’));
+return wrap;
 }
 
 // ── DOM BUILDER ────────────────────────────────────────────────────────────
@@ -845,407 +1060,6 @@ function LBL(p,c){return mk(‘label’,p,c);}
 function TA(p,c){return mk(‘textarea’,p,c);}
 function HR(){return mk(‘hr’,{cls:‘divider’});}
 function FLD(l,el){return D({cls:‘f’},[LBL({},l),el]);}
-
-// ── AVAILABILITY BANNER ─────────────────────────────────────────────────────
-function availBanner() {
-if (!S||!S.user) return D({});
-var uid = S.user.id;
-var pending = pendingAvailEvents();
-var wrap = D({style:{marginBottom:‘1rem’}});
-
-if (!pending.length) {
-// Collapsed pill — click to change availability
-var pill = D({style:{
-display:‘flex’, alignItems:‘center’, justifyContent:‘space-between’,
-background:‘rgba(39,174,96,.1)’, border:‘1px solid rgba(39,174,96,.25)’,
-borderRadius:‘8px’, padding:‘8px 14px’, cursor:‘pointer’, fontSize:‘13px’,
-color:’#2ecc71’
-}});
-pill.appendChild(SP({}, ‘✓ Availability up to date’));
-pill.appendChild(BTN({cls:‘btn bo bsm’, style:{fontSize:‘11px’,color:’#b0adc4’,borderColor:‘rgba(232,98,74,.25)’},
-click: safe(function(e){ e.stopPropagation(); S.availExpanded=true; render(); })
-}, ‘Change →’));
-wrap.appendChild(pill);
-
-```
-// Expanded change-availability view
-if (S.availExpanded) {
-  wrap.innerHTML = '';
-  var expBox = D({cls:'card', style:{marginBottom:'1rem'}});
-  var hdr = D({cls:'rh'});
-  hdr.appendChild(P({style:{fontSize:'14px',fontWeight:'500',color:'#e8624a'}}, 'Change My Availability'));
-  hdr.appendChild(BTN({cls:'btn bo bsm', click:safe(function(){S.availExpanded=false;render();})}, '✕'));
-  expBox.appendChild(hdr);
-  var td = TODAY();
-  var far = new Date(); far.setDate(far.getDate()+365);
-  var allEvs = allInstances(td, far.toISOString().split('T')[0]).filter(function(ev){
-    return (ev.users||[]).some(function(x){return sameId(x,uid);}) && ev.coordEnabled !== false;
-  });
-  var seen = {};
-  var deduped = allEvs.filter(function(ev){
-    var k = String(ev.templateId||ev.id);
-    if(seen[k]) return false; seen[k]=true; return true;
-  });
-  if (!deduped.length) {
-    expBox.appendChild(P({cls:'cs', style:{textAlign:'center',padding:'1rem'}}, 'No coordinator-enabled events assigned to you.'));
-  } else {
-    deduped.forEach(function(ev) {
-      expBox.appendChild(availResponseCard(ev, uid, false));
-    });
-  }
-  wrap.appendChild(expBox);
-}
-return wrap;
-```
-
-}
-
-// Expanded — pending responses
-var box = D({cls:‘card’, style:{marginBottom:‘1rem’,borderColor:‘rgba(232,98,74,.4)’}});
-var ct = pending.length === 1 ? ‘event needs’ : ‘events need’;
-box.appendChild(D({cls:‘rh’, style:{marginBottom:’.75rem’}},[
-P({style:{fontSize:‘14px’,fontWeight:‘500’,color:’#e8624a’}},
-‘ὌB ’ + pending.length + ’ ’ + ct + ’ your availability’),
-]));
-pending.forEach(function(ev) {
-box.appendChild(availResponseCard(ev, uid, true));
-});
-wrap.appendChild(box);
-return wrap;
-}
-
-function availResponseCard(ev, uid, isPending) {
-var existing = getAvail(ev, uid);
-var card = D({style:{
-background:‘rgba(255,255,255,.04)’, border:‘1px solid rgba(232,98,74,.2)’,
-borderRadius:‘8px’, padding:‘10px 12px’, marginBottom:‘8px’
-}});
-
-// Event title + date
-var titleRow = D({style:{display:‘flex’, justifyContent:‘space-between’, alignItems:‘flex-start’, marginBottom:‘6px’, gap:‘8px’}});
-titleRow.appendChild(D({},[
-P({style:{fontWeight:‘500’, fontSize:‘13px’, color:’#f0ece4’, marginBottom:‘2px’}},
-ev.title + (ev.isRec ? ’ ↻’ : ‘’)),
-P({cls:‘cs’}, FD(ev.date) + ’ · ’ + (ev.startTime||’’) + (ev.location ? ’ · ’+ev.location : ‘’))
-]));
-if (existing && existing.status !== ‘tbd’) {
-var badge = availBadge(existing.status);
-if (badge) titleRow.appendChild(badge);
-}
-card.appendChild(titleRow);
-
-// Response buttons
-var btnRow = D({style:{display:‘flex’, gap:‘6px’, flexWrap:‘wrap’, marginBottom:‘4px’}});
-[[‘yes’,‘✓ Yes’,’#27ae60’],[‘no’,‘✗ No’,’#c0392b’],[‘partial’,‘◑ Partial’,’#e67e22’],[‘tbd’,’? TBD’,’#2980b9’]].forEach(function(opt){
-var isSelected = existing && existing.status === opt[0];
-var b = BTN({cls:‘btn bsm’}, opt[1]);
-b.style.cssText = ‘background:’ + (isSelected ? opt[2] : ‘transparent’) + ‘;color:’ + (isSelected ? ‘#fff’ : opt[2]) + ’;border:1px solid ’ + opt[2] + ‘;font-size:11px;padding:4px 10px’;
-(function(status, evRef) {
-b.addEventListener(‘click’, safe(function() {
-if (status === ‘partial’ || status === ‘tbd’) {
-// Toggle note area
-var noteKey = ‘availNoteOpen_’ + (evRef.instanceKey||evRef.id);
-S[noteKey] = (S[noteKey] === status) ? null : status;
-render();
-} else {
-setAvail(evRef, uid, status, ‘’, false);
-if (status === ‘no’) {
-addNotif(uid, ’Marked not available for: ’ + evRef.title + ’ on ’ + FD(evRef.date));
-}
-S.availExpanded = false;
-save(); render();
-}
-}));
-})(opt[0], ev);
-btnRow.appendChild(b);
-});
-card.appendChild(btnRow);
-
-// Note area for partial/tbd
-var noteKey = ‘availNoteOpen_’ + (ev.instanceKey||ev.id);
-var openStatus = S[noteKey];
-if (openStatus === ‘partial’ || openStatus === ‘tbd’) {
-var noteBox = D({style:{marginTop:‘6px’}});
-var noteLabel = openStatus === ‘partial’ ? ‘Describe your availability’ : ‘Reason (optional)’;
-var noteInp = mk(‘textarea’, {
-placeholder: openStatus === ‘partial’ ? ‘e.g. Available after 3pm…’ : ‘e.g. Waiting on a schedule conflict…’,
-style:{width:‘100%’,background:’#fff’,border:‘1px solid #ccc’,borderRadius:‘6px’,padding:‘7px 10px’,color:’#1a1a1a’,fontSize:‘12px’,fontFamily:‘sans-serif’,resize:‘vertical’,minHeight:‘60px’}
-});
-var existNote = (existing && existing.status === openStatus) ? existing.note : ‘’;
-noteInp.value = existNote;
-noteBox.appendChild(noteInp);
-var saveNoteBtn = BTN({cls:‘btn bg bsm’, style:{marginTop:‘6px’}}, ‘Save’);
-(function(status, evRef, inp) {
-saveNoteBtn.addEventListener(‘click’, safe(function() {
-setAvail(evRef, uid, status, inp.value.trim(), false);
-S[noteKey] = null;
-S.availExpanded = false;
-save(); render();
-}));
-})(openStatus, ev, noteInp);
-noteBox.appendChild(saveNoteBtn);
-card.appendChild(noteBox);
-} else if (existing && (existing.status === ‘partial’ || existing.status === ‘tbd’) && existing.note) {
-card.appendChild(P({style:{fontSize:‘11px’,color:’#b0adc4’,marginTop:‘3px’,fontStyle:‘italic’}}, ‘”’ + existing.note + ‘”’));
-}
-
-// For recurring: option to set per-instance if viewing from expanded
-if (!isPending && ev.isRec && ev.instanceKey) {
-var instLink = SP({style:{fontSize:‘11px’,color:’#87b7e8’,cursor:‘pointer’,display:‘block’,marginTop:‘4px’}}, ‘Set for this date only →’);
-(function(evRef){
-instLink.addEventListener(‘click’, safe(function() {
-S.modal = {type:‘availInstance’, ev:evRef, uid:uid};
-render();
-}));
-})(ev);
-card.appendChild(instLink);
-}
-
-return card;
-}
-
-// ── COORDINATOR ADMIN SECTION ───────────────────────────────────────────────
-function coordAdminSection() {
-if (!S||!S.user) return D({});
-var wrap = D({style:{marginTop:‘1.5rem’}});
-wrap.appendChild(D({cls:‘divider’}));
-wrap.appendChild(P({cls:‘sec-t’,style:{marginTop:’.75rem’}}, ‘Availability Coordinator’));
-
-var tabs = [{id:‘matrix’,label:‘Matrix’},{id:‘results’,label:‘Results’},{id:‘outstanding’,label:‘Outstanding’}];
-if(!S.coordAdminTab) S.coordAdminTab = ‘matrix’;
-var st = D({cls:‘stabs’}), ct = D({});
-
-function show(id) {
-S.coordAdminTab = id;
-ct.innerHTML = ‘’;
-st.querySelectorAll(’.stab’).forEach(function(b){b.classList.toggle(‘on’,b.getAttribute(‘data-id’)===id);});
-if(id===‘matrix’)      ct.appendChild(coordMatrix());
-else if(id===‘results’) ct.appendChild(coordResults());
-else                    ct.appendChild(coordOutstanding());
-}
-tabs.forEach(function(t){
-var b=BTN({cls:‘stab’+(t.id===S.coordAdminTab?’ on’:’’)},t.label);
-b.setAttribute(‘data-id’,t.id);
-b.addEventListener(‘click’,safe(function(){show(t.id);}));
-st.appendChild(b);
-});
-wrap.appendChild(st); wrap.appendChild(ct);
-show(S.coordAdminTab);
-return wrap;
-}
-
-// Get all coord-enabled event templates + upcoming instances deduplicated
-function coordEvents() {
-if (!S||!S.templates) return [];
-var td = TODAY();
-var far = new Date(); far.setDate(far.getDate()+365);
-var all = allInstances(td, far.toISOString().split(‘T’)[0]);
-var seen={}, result=[];
-all.forEach(function(ev){
-if (ev.coordEnabled === false) return;
-var k = String(ev.templateId||ev.id);
-if(!seen[k]){ seen[k]=true; result.push(ev); }
-});
-return result;
-}
-
-// Get assigned users for an event
-function coordAssigned(ev) {
-return (ev.users||[]).map(function(id){return USERS.find(function(u){return sameId(u.id,id);});}).filter(Boolean);
-}
-
-function coordMatrix() {
-var evs = coordEvents();
-if(!evs.length) return D({cls:‘empty’},‘No coordinator-enabled events.’);
-var users = USERS.filter(function(u){
-return evs.some(function(ev){return (ev.users||[]).some(function(x){return sameId(x,u.id);});});
-}).sort(function(a,b){return (a.name||’’).localeCompare(b.name||’’);});
-if(!users.length) return D({cls:‘empty’},‘No assigned users.’);
-
-var statusColor={yes:’#27ae60’,no:’#c0392b’,partial:’#e67e22’,tbd:’#2980b9’};
-var statusIcon ={yes:‘✓’,no:‘✗’,partial:‘◑’,tbd:’?’};
-
-var wrap = D({style:{overflowX:‘auto’,marginTop:’.5rem’}});
-var tbl = document.createElement(‘table’);
-tbl.style.cssText=‘width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap’;
-
-// Header row
-var thead = document.createElement(‘thead’);
-var hr = document.createElement(‘tr’);
-var th0 = document.createElement(‘th’);
-th0.style.cssText=‘background:#1c1c2a;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#b0adc4;border-bottom:1px solid rgba(232,98,74,.25);position:sticky;left:0;z-index:2;border-right:2px solid rgba(232,98,74,.2)’;
-th0.textContent=‘Name’;
-hr.appendChild(th0);
-evs.forEach(function(ev){
-var th=document.createElement(‘th’);
-th.style.cssText=‘background:#1c1c2a;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#b0adc4;border-bottom:1px solid rgba(232,98,74,.25);max-width:110px;overflow:hidden;text-overflow:ellipsis;border-left:1px solid rgba(255,255,255,.04)’;
-th.title=ev.title+’ · ’+FD(ev.date);
-th.appendChild(document.createTextNode(ev.title));
-if(ev.isRec){var rec=document.createElement(‘span’);rec.style.cssText=‘color:#e8624a;font-size:9px;display:block’;rec.textContent=‘↻ recurring’;th.appendChild(rec);}
-hr.appendChild(th);
-});
-thead.appendChild(hr);
-tbl.appendChild(thead);
-
-// Totals row
-var tbody=document.createElement(‘tbody’);
-var totRow=document.createElement(‘tr’);
-totRow.style.background=‘rgba(0,0,0,.2)’;
-var totLbl=document.createElement(‘td’);
-totLbl.style.cssText=‘padding:5px 12px;font-size:10px;color:#b0adc4;text-transform:uppercase;letter-spacing:.4px;position:sticky;left:0;background:#14141e;border-right:2px solid rgba(232,98,74,.2)’;
-totLbl.textContent=‘Totals’;
-totRow.appendChild(totLbl);
-evs.forEach(function(ev){
-var counts={yes:0,no:0,partial:0,tbd:0};
-users.forEach(function(u){
-if(!(ev.users||[]).some(function(x){return sameId(x,u.id);})) return;
-var r=getAvail(ev,u.id);
-if(r&&counts[r.status]!==undefined) counts[r.status]++;
-});
-var td2=document.createElement(‘td’);
-td2.style.cssText=‘padding:4px 8px;text-align:center;font-size:11px;border-left:1px solid rgba(255,255,255,.04)’;
-td2.innerHTML=’<span style="color:#27ae60">’+counts.yes+‘✓</span> <span style="color:#e67e22">’+counts.partial+‘◑</span> <span style="color:#2980b9">’+counts.tbd+’?</span> <span style="color:#c0392b">’+counts.no+‘✗</span>’;
-totRow.appendChild(td2);
-});
-tbody.appendChild(totRow);
-
-// User rows
-users.forEach(function(u){
-var tr=document.createElement(‘tr’);
-var nameTd=document.createElement(‘td’);
-nameTd.style.cssText=‘padding:8px 12px;font-weight:500;color:#f0ece4;position:sticky;left:0;background:#1f1f2e;z-index:1;border-right:2px solid rgba(232,98,74,.2);border-bottom:1px solid rgba(255,255,255,.04)’;
-nameTd.textContent=u.name;
-tr.appendChild(nameTd);
-evs.forEach(function(ev){
-var td3=document.createElement(‘td’);
-td3.style.cssText=‘padding:8px 12px;text-align:center;border-left:1px solid rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.04)’;
-if(!(ev.users||[]).some(function(x){return sameId(x,u.id);})){
-td3.style.opacity=‘0.2’;
-td3.textContent=’—’;
-} else {
-var r=getAvail(ev,u.id);
-if(r){
-var chip=document.createElement(‘span’);
-chip.style.cssText=‘display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:11px;font-weight:700;background:’+statusColor[r.status]+’;color:#fff;cursor:default’;
-chip.textContent=statusIcon[r.status];
-chip.title=availStatusLabel(r.status)+(r.note?’ — ‘+r.note:’’);
-td3.appendChild(chip);
-} else {
-var dash=document.createElement(‘span’);
-dash.style.cssText=‘color:#5a5a6a;font-size:14px’;
-dash.textContent=’–’;
-td3.appendChild(dash);
-}
-}
-tr.appendChild(td3);
-});
-tbody.appendChild(tr);
-});
-tbl.appendChild(tbody);
-wrap.appendChild(tbl);
-
-var legend=D({style:{display:‘flex’,gap:‘14px’,flexWrap:‘wrap’,marginTop:‘8px’,fontSize:‘11px’,color:’#b0adc4’}});
-[[’#27ae60’,‘✓ Available’],[’#e67e22’,‘◑ Partial’],[’#2980b9’,’? TBD’],[’#c0392b’,‘✗ Unavailable’],].forEach(function(l){
-legend.appendChild(SP({style:{color:l[0]}},l[1]));
-});
-legend.appendChild(SP({},’— Not assigned / No response’));
-wrap.appendChild(legend);
-return wrap;
-}
-
-function coordResults() {
-var evs = coordEvents();
-if(!evs.length) return D({cls:‘empty’},‘No coordinator-enabled events.’);
-
-var wrap=D({});
-var qi=INP({type:‘text’,placeholder:‘Search by event name, location, or date…’,style:{marginBottom:‘1rem’}});
-var ct=D({});
-wrap.appendChild(qi);
-wrap.appendChild(ct);
-
-function renderResults(){
-ct.innerHTML=’’;
-var q=(qi.value||’’).toLowerCase().trim();
-var filtered=evs.filter(function(ev){
-if(!q) return true;
-if(ev.title.toLowerCase().includes(q)) return true;
-if((ev.location||’’).toLowerCase().includes(q)) return true;
-if(FD(ev.date).toLowerCase().includes(q)) return true;
-return false;
-});
-if(!filtered.length){ct.appendChild(D({cls:‘empty’},‘No results.’));return;}
-filtered.forEach(function(ev){
-var assigned=coordAssigned(ev);
-var card=D({cls:‘card’,style:{marginBottom:’.65rem’}});
-card.appendChild(D({cls:‘ch’},[
-D({},[
-SP({cls:‘ct’},ev.title+(ev.isRec?’ ↻’:’’)),
-P({cls:‘cs’},FD(ev.date)+(ev.location?’ · ‘+ev.location:’’)+(ev.startTime?’ · ‘+ev.startTime:’’))
-])
-]));
-var statusColor2={yes:’#27ae60’,no:’#c0392b’,partial:’#e67e22’,tbd:’#2980b9’};
-assigned.forEach(function(u){
-var r=getAvail(ev,u.id);
-var row=D({style:{display:‘flex’,justifyContent:‘space-between’,alignItems:‘flex-start’,padding:‘5px 0’,borderBottom:‘1px solid rgba(232,98,74,.1)’,gap:‘8px’}});
-var nameSpan=SP({style:{fontSize:‘13px’,color:’#f0ece4’,textDecoration:r&&r.status===‘no’?‘line-through’:‘none’,opacity:r&&r.status===‘no’?‘0.5’:‘1’}},u.name);
-row.appendChild(nameSpan);
-var right=D({style:{textAlign:‘right’,flexShrink:‘0’}});
-if(r){
-right.appendChild(SP({style:{fontSize:‘12px’,fontWeight:‘600’,color:statusColor2[r.status]}},availStatusLabel(r.status)));
-if(r.note) right.appendChild(P({style:{fontSize:‘11px’,color:’#b0adc4’,fontStyle:‘italic’,marginTop:‘2px’}},’”’+r.note+’”’));
-} else {
-right.appendChild(SP({style:{fontSize:‘12px’,color:’#5a5a6a’}},’—’));
-}
-row.appendChild(right);
-card.appendChild(row);
-});
-ct.appendChild(card);
-});
-}
-qi.addEventListener(‘input’,renderResults);
-renderResults();
-return wrap;
-}
-
-function coordOutstanding() {
-var evs = coordEvents();
-if(!evs.length) return D({cls:‘empty’},‘No coordinator-enabled events.’);
-var wrap=D({});
-var allGood=true;
-evs.forEach(function(ev){
-var assigned=coordAssigned(ev);
-var noResp=assigned.filter(function(u){var r=getAvail(ev,u.id);return !r;});
-var tbdResp=assigned.filter(function(u){var r=getAvail(ev,u.id);return r&&r.status===‘tbd’;});
-if(!noResp.length&&!tbdResp.length){
-allGood=false; // will be set true only at end if really all good
-return;
-}
-allGood=false;
-var card=D({cls:‘card’,style:{marginBottom:’.65rem’}});
-card.appendChild(D({cls:‘ch’},[
-D({},[SP({cls:‘ct’},ev.title+(ev.isRec?’ ↻’:’’)),P({cls:‘cs’},FD(ev.date))])
-]));
-if(noResp.length){
-card.appendChild(P({style:{fontSize:‘12px’,color:’#b0adc4’,marginBottom:‘3px’,marginTop:‘4px’}},‘No response:’));
-var nr=D({style:{display:‘flex’,flexWrap:‘wrap’,gap:‘3px’,marginBottom:‘5px’}});
-noResp.forEach(function(u){nr.appendChild(SP({cls:‘tag’},u.name));});
-card.appendChild(nr);
-}
-if(tbdResp.length){
-card.appendChild(P({style:{fontSize:‘12px’,color:’#2980b9’,marginBottom:‘3px’}},‘TBD:’));
-var tr2=D({style:{display:‘flex’,flexWrap:‘wrap’,gap:‘3px’}});
-tbdResp.forEach(function(u){
-var r=getAvail(ev,u.id);
-var chip=SP({cls:‘tag’,style:{borderColor:‘rgba(41,128,185,.4)’,background:‘rgba(41,128,185,.12)’,color:’#87b7e8’}},u.name+(r&&r.note?’ — ‘+r.note:’’));
-tr2.appendChild(chip);
-});
-card.appendChild(tr2);
-}
-wrap.appendChild(card);
-});
-if(allGood||!wrap.children.length) wrap.appendChild(D({cls:‘empty’},‘All assigned users have responded to all coordinator-enabled events.’));
-return wrap;
-}
 
 // ── RENDER ─────────────────────────────────────────────────────────────────
 function render(){
@@ -1410,10 +1224,10 @@ var active=S.tab===t.id;
 var tb=BTN({cls:‘ntab’+(active?’ on’:’’),click:safe(function(){S.tab=t.id;S.modal=null;S.activeRoom=null;render();})},t.label);
 var secPend=t.id===‘security’&&canSeeSecurity(u)&&S.reports.filter(function(r){return !r.ack;}).length>0;
 var adPend=t.id===‘admin’&&S.pendingDel.length>0;
-var evPend=t.id===‘events’&&S.user&&pendingAvailEvents().length>0;
+var evPend=t.id===‘events’&&S.user&&(function(){try{return pendingAvailEvents().length>0;}catch(e){return false;}})();
 if(secPend) tb.appendChild(SP({cls:‘nbadge’},String(S.reports.filter(function(r){return !r.ack;}).length)));
 if(adPend)  tb.appendChild(SP({cls:‘nbadge’},String(S.pendingDel.length)));
-if(evPend)  tb.appendChild(SP({cls:‘nbadge’},String(pendingAvailEvents().length)));
+if(evPend)  tb.appendChild(SP({cls:‘nbadge’},’!’));
 nav.appendChild(tb);
 });
 return nav;
@@ -1425,12 +1239,10 @@ var w=D({});
 var hdr=D({cls:‘rh’},[P({cls:‘sec-t’},‘Events Calendar’)]);
 if(isAdmin(S.user)) hdr.appendChild(BTN({cls:‘btn bg bsm’,click:safe(function(){S.modal=‘createEvent’;render();})},’+ New Event’));
 w.appendChild(hdr);
-// ── Availability banner (above calendar) ──
-w.appendChild(availBanner());
+try{w.appendChild(availBanner());}catch(e){console.warn(‘availBanner:’,e);}
 w.appendChild(calWidget());
 w.appendChild(evList());
-// ── Admin coordinator section (below calendar) ──
-if(S.user&&isAdmin(S.user)) w.appendChild(coordAdminSection());
+if(S.user&&isAdmin(S.user)){try{w.appendChild(coordAdminSection());}catch(e){console.warn(‘coordAdmin:’,e);}}
 return w;
 }
 
@@ -1467,7 +1279,7 @@ var de=D({cls:‘cd’+(isT?’ tod’:’’)});
 de.appendChild(SP({cls:‘cnum’},day));
 var dayEvs=insts.filter(function(e){return e.date===ds;});
 dayEvs.forEach(function(ev){
-var myId=String(S.user.id||S.user.uid||’’); if(isAdmin(S.user)||!myId||(ev.users||[]).some(function(x){return sameId(x,myId);})){
+if(isAdmin(S.user)||(ev.users||[]).some(function(x){return sameId(x,S.user.id);})){
 var isOv=ev.instanceKey&&!!S.overrides[ev.instanceKey];
 var ee=D({cls:‘cev’+(isOv?’ mod’:’’)},ev.title+(ev.isRec?’ ↻’:’’));
 (function(ev2){ee.addEventListener(‘click’,function(e){e.stopPropagation();S.modal={type:‘detail’,ev:ev2};render();});})(ev);
@@ -1492,7 +1304,7 @@ return wrap;
 function evList(){
 var td=TODAY(), to=new Date(); to.setDate(to.getDate()+60);
 var toDs=to.toISOString().split(‘T’)[0];
-var myUid=String(S.user.id||S.user.uid||’’); var insts=allInstances(td,toDs).filter(function(e){return isAdmin(S.user)||!myUid||(e.users||[]).some(function(x){return sameId(x,myUid);});});
+var insts=allInstances(td,toDs).filter(function(e){return isAdmin(S.user)||(e.users||[]).some(function(x){return sameId(x,S.user.id);});});
 var seen={}, deduped=[];
 insts.forEach(function(ev){var k=ev.templateId||ev.id;if(!seen[k]){seen[k]=true;deduped.push(ev);}});
 if(!deduped.length) return D({cls:‘empty’},‘No upcoming events assigned to you.’);
@@ -1513,7 +1325,7 @@ var calRow=D({style:{marginTop:‘7px’}});
 (function(ev2){
 var calBtn=document.createElement(‘button’);
 calBtn.className=‘cal-export-btn’;
-calBtn.innerHTML=‘Ὄ5 Add to Calendar’;
+calBtn.innerHTML=‘📅 Add to Calendar’;
 calBtn.addEventListener(‘click’, safe(function(e){ e.stopPropagation(); downloadICS(ev2); }));
 calRow.appendChild(calBtn);
 })(ev);
@@ -1643,7 +1455,7 @@ if(isAdminView||assigneeList.length>1){
 var assignedTo=D({style:{display:‘flex’,flexWrap:‘wrap’,gap:‘3px’,marginTop:‘4px’}});
 assigneeList.forEach(function(id){
 var isL=(t.lead===id||assigneeList.length===1);
-assignedTo.appendChild(SP({cls:‘tag ‘+(isL?‘tagl’:‘tagp’)},(isL?‘★ ‘:’’)+UN(id)));
+assignedTo.appendChild(SP({cls:‘tag ‘+(isL?‘tagl’:‘tagp’)},(isL?’\u2605 ‘:’’)+UN(id)));
 });
 c.appendChild(assignedTo);
 }
@@ -2112,7 +1924,7 @@ if(!myRooms.length){w.appendChild(D({cls:‘empty’},‘Not in any chat rooms.�
 myRooms.forEach(function(room){
 var c=D({cls:‘card’,style:{cursor:‘pointer’}});
 (function(rm){c.addEventListener(‘click’,function(){S.activeRoom=rm.id;render();});})(room);
-var nameSpan=SP({cls:‘ct’},room.name+(room.call?’ ὍE’:’’));
+var nameSpan=SP({cls:‘ct’},room.name+(room.call?’ 📞’:’’));
 var delBtn=isAdmin(u)?BTN({cls:‘btn br bsm’},‘Delete’):D({});
 if(isAdmin(u))(function(rm){delBtn.addEventListener(‘click’,function(e){e.stopPropagation();S.rooms=S.rooms.filter(function(r){return r.id!==rm.id;});save();render();});})(room);
 c.appendChild(D({cls:‘ch’},[nameSpan,delBtn]));
@@ -2269,7 +2081,6 @@ else if(type===‘changePW’)     mChangePW(mo);
 else if(type===‘createAnnounce’) mCreateAnnounce(mo);
 else if(type===‘secAckNote’)   mSecAckNote(mo,m.report);
 else if(type===‘editSetlist’)  mEditSetlist(mo,m.setlist);
-else if(type===‘availInstance’) mAvailInstance(mo,m.ev,m.uid);
 }
 function closeM(){S.modal=null;render();}
 
@@ -2286,53 +2097,6 @@ else{df(‘Report Time (Prod)’,ev.rtp);df(‘Report Time (Mission)’,ev.rtm);
 df(‘Dress Code (Worship)’,ev.dcw); df(‘Dress Code (Mission)’,ev.dcm);
 mo.appendChild(dg);
 if(ev.attachment){var att=renderAttachment(ev.attachment);if(att){mo.appendChild(HR());mo.appendChild(att);}}
-// ── Availability section in event detail ──
-if(ev.coordEnabled){
-mo.appendChild(HR());
-var myAvail=getAvail(ev,S.user.id);
-var availRow=D({style:{display:‘flex’,alignItems:‘center’,justifyContent:‘space-between’,flexWrap:‘wrap’,gap:‘8px’,marginBottom:‘4px’}});
-availRow.appendChild(P({cls:‘dl’,style:{marginBottom:‘0’}},‘My Availability’));
-var ab=myAvail?availBadge(myAvail.status):null;
-var myStatus=D({style:{display:‘flex’,alignItems:‘center’,gap:‘6px’,fontSize:‘13px’,color:myAvail?availStatusColor(myAvail.status):’#b0adc4’}});
-myStatus.appendChild(SP({},myAvail?availStatusLabel(myAvail.status):‘Not yet responded’));
-if(ab) myStatus.appendChild(ab);
-availRow.appendChild(myStatus);
-mo.appendChild(availRow);
-if(myAvail&&myAvail.note){mo.appendChild(P({style:{fontSize:‘12px’,color:’#b0adc4’,fontStyle:‘italic’,marginBottom:‘6px’}},’”’+myAvail.note+’”’));}
-// Change availability buttons inline
-var changeRow=D({style:{display:‘flex’,gap:‘5px’,flexWrap:‘wrap’,marginBottom:‘4px’}});
-[[‘yes’,‘✓ Yes’,’#27ae60’],[‘no’,‘✗ No’,’#c0392b’],[‘partial’,‘◑ Partial’,’#e67e22’],[‘tbd’,’? TBD’,’#2980b9’]].forEach(function(opt){
-var isSel=myAvail&&myAvail.status===opt[0];
-var b=BTN({cls:‘btn bsm’},opt[1]);
-b.style.cssText=‘background:’+(isSel?opt[2]:‘transparent’)+’;color:’+(isSel?’#fff’:opt[2])+’;border:1px solid ‘+opt[2]+’;font-size:11px;padding:4px 10px’;
-(function(status,evRef){b.addEventListener(‘click’,safe(function(){
-if(status===‘partial’||status===‘tbd’){
-S._detailNoteOpen=S._detailNoteOpen===status?null:status;
-S.modal={type:‘detail’,ev:evRef};render();
-} else {
-setAvail(evRef,S.user.id,status,’’,!!(evRef.isRec&&evRef.instanceKey));
-save();S.modal={type:‘detail’,ev:evRef};render();
-}
-}));})(opt[0],ev);
-changeRow.appendChild(b);
-});
-mo.appendChild(changeRow);
-if(S._detailNoteOpen===‘partial’||S._detailNoteOpen===‘tbd’){
-var dNoteBox=D({style:{marginBottom:‘8px’}});
-var dNoteLabel=S._detailNoteOpen===‘partial’?‘Describe your availability’:‘Reason (optional)’;
-var dNoteInp=mk(‘textarea’,{placeholder:S._detailNoteOpen===‘partial’?‘e.g. Available after 3pm…’:‘e.g. Waiting on a conflict…’,style:{width:‘100%’,background:’#fff’,border:‘1px solid #ccc’,borderRadius:‘6px’,padding:‘7px 10px’,color:’#1a1a1a’,fontSize:‘12px’,fontFamily:‘sans-serif’,resize:‘vertical’,minHeight:‘55px’}});
-var existNote2=(myAvail&&myAvail.status===S._detailNoteOpen)?myAvail.note:’’;
-dNoteInp.value=existNote2;
-var dSaveBtn=BTN({cls:‘btn bg bsm’,style:{marginTop:‘5px’}},‘Save’);
-(function(status,evRef,inp){dSaveBtn.addEventListener(‘click’,safe(function(){
-setAvail(evRef,S.user.id,status,inp.value.trim(),!!(evRef.isRec&&evRef.instanceKey));
-S._detailNoteOpen=null;save();S.modal={type:‘detail’,ev:evRef};render();
-}));})(S._detailNoteOpen,ev,dNoteInp);
-dNoteBox.appendChild(dNoteInp);dNoteBox.appendChild(dSaveBtn);
-mo.appendChild(dNoteBox);
-}
-}
-
 if((ev.teams||[]).length){
 mo.appendChild(HR());
 mo.appendChild(P({cls:‘dl’,style:{marginBottom:‘6px’}},‘Teams’));
@@ -2340,22 +2104,10 @@ ev.teams.forEach(function(t){
 var tb=D({cls:‘team-block’});
 tb.appendChild(P({style:{fontWeight:‘500’,color:’#e8624a’,marginBottom:‘5px’}},t.name));
 var ll=D({style:{display:‘flex’,flexWrap:‘wrap’,gap:‘3px’,marginBottom:‘4px’}});
-t.leaders.forEach(function(id){
-var avR=ev.coordEnabled?getAvail(ev,id):null;
-var unavail=avR&&avR.status===‘no’;
-var chip=SP({cls:‘tag tagl’,style:unavail?{textDecoration:‘line-through’,opacity:‘0.5’}:{},title:avR?availStatusLabel(avR.status)+( avR.note?’ — ‘+avR.note:’’):’’},‘★ ‘+UN(id));
-if(avR){var ab2=availBadge(avR.status);if(ab2)chip.appendChild(ab2);}
-ll.appendChild(chip);
-});
+t.leaders.forEach(function(id){ll.appendChild(SP({cls:‘tag tagl’},‘★ ‘+UN(id)));});
 tb.appendChild(ll);
 var ml=D({style:{display:‘flex’,flexWrap:‘wrap’,gap:‘3px’}});
-t.members.filter(function(id){return t.leaders.indexOf(id)<0;}).forEach(function(id){
-var avR=ev.coordEnabled?getAvail(ev,id):null;
-var unavail=avR&&avR.status===‘no’;
-var chip=SP({cls:‘tag tagp’,style:unavail?{textDecoration:‘line-through’,opacity:‘0.5’}:{},title:avR?availStatusLabel(avR.status)+(avR.note?’ — ‘+avR.note:’’):’’},UN(id));
-if(avR){var ab3=availBadge(avR.status);if(ab3)chip.appendChild(ab3);}
-ml.appendChild(chip);
-});
+t.members.filter(function(id){return t.leaders.indexOf(id)<0;}).forEach(function(id){ml.appendChild(SP({cls:‘tag tagp’},UN(id)));});
 tb.appendChild(ml);
 mo.appendChild(tb);
 });
@@ -2389,7 +2141,7 @@ var ft=D({cls:‘mfooter’});
 (function(evCal){
 var calBtn=document.createElement(‘button’);
 calBtn.className=‘cal-export-btn’;
-calBtn.innerHTML=‘Ὄ5 Add to Calendar’;
+calBtn.innerHTML=‘📅 Add to Calendar’;
 calBtn.title=‘Download .ics to add to Google Calendar, Apple Calendar, or Outlook’;
 calBtn.addEventListener(‘click’, safe(function(){ downloadICS(evCal); }));
 ft.appendChild(calBtn);
@@ -2422,13 +2174,7 @@ BTN({cls:‘btn bg’,click:safe(function(){
 if(!fs.title||(!fs.isRec&&!fs.date)||!fs.location){err.textContent=‘Title, location, and date/recurrence required.’;return;}
 var tmpl=Object.assign({},fs,{id:S.nEv++,teams:fs.teams.map(function(t){return Object.assign({},t,{members:t.members.slice(),leaders:t.leaders.slice()});})});
 S.templates.push(tmpl);
-fs.users.forEach(function(uid){
-if(uid!==S.user.id){
-var msg=‘You have been added to: ‘+fs.title;
-if(fs.coordEnabled) msg+=’ — please respond to availability request’;
-addNotif(uid,msg,{type:‘info’});
-}
-});
+fs.users.forEach(function(uid){if(uid!==S.user.id)addNotif(uid,‘You have been added to: ‘+fs.title,{type:‘info’});});
 audit(‘Event Created’,fs.title+(fs.isRec?’ (recurring)’:’’));
 showToast(‘Event created!’, ‘success’);
 save(); closeM();
@@ -2482,13 +2228,8 @@ evAttPreview.appendChild(SP({style:{fontSize:‘11px’,color:’#b0adc4’,disp
 }));
 if(fs.attachment) evAttRow.appendChild(BTN({cls:‘btn br bsm’,click:function(){fs.attachment=null;evAttPreview.innerHTML=’’;rebuild();}},‘Remove’));
 ct.appendChild(evAttRow); ct.appendChild(evAttPreview);
-// ── Coordinator toggle ──
 ct.appendChild(HR());
-ct.appendChild(D({cls:‘toggle-row’},[
-INP({type:‘checkbox’,checked:!!fs.coordEnabled,change:function(e){fs.coordEnabled=e.target.checked;rebuild();}}),
-SP({style:{fontWeight:‘500’,color:’#e8624a’}}, ‘Add to Availability Coordinator’),
-SP({style:{fontSize:‘11px’,color:’#b0adc4’,marginLeft:‘4px’}}, ‘(assigned users will be asked for availability)’)
-]));
+ct.appendChild(D({cls:‘toggle-row’},[INP({type:‘checkbox’,checked:!!fs.coordEnabled,change:function(e){fs.coordEnabled=e.target.checked;rebuild();}}), ‘Add to Availability Coordinator’]));
 ct.appendChild(D({cls:‘toggle-row’},[INP({type:‘checkbox’,checked:fs.food,change:function(e){fs.food=e.target.checked;rebuild();}}), ‘Food Required (Potluck)’]));
 if(fs.food) ct.appendChild(buildFoodSection(fs,rebuild));
 ct.appendChild(D({cls:‘toggle-row’},[INP({type:‘checkbox’,checked:fs.carpool,change:function(e){fs.carpool=e.target.checked;rebuild();}}), ‘Carpool Required’]));
@@ -2514,7 +2255,7 @@ e.target.value=’’; rebuild();
 }});
 asel.style.cssText=‘width:100%;background:#fff;border:1px solid #ccc;border-radius:7px;padding:8px 12px;color:#1a1a1a;font-size:14px;font-family:sans-serif;outline:none’;
 asel.appendChild(OPT({value:’’},‘Add person or group…’));
-USERS.forEach(function(u){asel.appendChild(OPT({value:String(u.uid||u.id)},u.name));});
+USERS.forEach(function(u){asel.appendChild(OPT({value:u.id},u.name));});
 asel.appendChild(OPT({disabled:true},‘── Groups ──’));
 S.groups.forEach(function(g){asel.appendChild(OPT({value:‘g:’+g.id},‘Group: ‘+g.name));});
 w.appendChild(asel);
@@ -2531,17 +2272,7 @@ return w;
 function buildTeamsSection(fs,rebuild){
 var w=D({});
 var unassigned=fs.users.filter(function(uid){return !(fs.teams||[]).some(function(t){return t.members.some(function(x){return sameId(x,uid);});});});
-// Split unassigned into available vs unavailable
-var reallyUnavail=unassigned.filter(function(uid){
-if(!fs.coordEnabled||!fs.id) return false;
-// Check template avail
-var fakeEv={id:fs.id,templateId:fs.id,isRec:fs.isRec,instanceKey:null};
-var r=getAvail(fakeEv,uid);
-return r&&r.status===‘no’;
-});
-var assignable=unassigned.filter(function(uid){return reallyUnavail.indexOf(uid)<0;});
-if(assignable.length) w.appendChild(D({cls:‘warn-box’},‘Unassigned to a team: ‘+assignable.map(UN).join(’, ‘)));
-if(reallyUnavail.length) w.appendChild(D({cls:‘warn-box’,style:{background:‘rgba(192,57,43,.12)’,borderColor:‘rgba(192,57,43,.3)’,color:’#e74c3c’}},‘Not available (cannot be assigned): ‘+reallyUnavail.map(UN).join(’, ‘)));
+if(unassigned.length) w.appendChild(D({cls:‘warn-box’},‘Unassigned to a team: ‘+unassigned.map(UN).join(’, ‘)));
 (fs.teams||[]).forEach(function(team,ti){
 var tb=D({cls:‘team-block’});
 var removeBtn=BTN({cls:‘btn br bsm’},  ‘Remove’);
@@ -2550,14 +2281,7 @@ tb.appendChild(D({style:{display:‘flex’,justifyContent:‘space-between’,a
 tb.appendChild(LBL({style:{fontSize:‘11px’,color:’#b0adc4’}},‘Leaders’));
 var lsel=SEL({style:{width:‘100%’,fontSize:‘12px’,background:’#fff’,border:‘1px solid #ccc’,borderRadius:‘5px’,padding:‘4px’,color:’#1a1a1a’,marginBottom:‘5px’}});
 lsel.appendChild(OPT({value:’’},‘Add leader…’));
-fs.users.forEach(function(u){
-var fakeEv={id:fs.id,templateId:fs.id,isRec:fs.isRec,instanceKey:null};
-var avR=fs.coordEnabled&&fs.id?getAvail(fakeEv,u):null;
-var unavail=avR&&avR.status===‘no’;
-var opt=OPT({value:u},UN(u)+(unavail?’ (unavailable)’:’’));
-if(unavail) opt.style.color=’#e74c3c’;
-lsel.appendChild(opt);
-});
+fs.users.forEach(function(u){lsel.appendChild(OPT({value:u},UN(u)));});
 (function(tm){lsel.addEventListener(‘change’,function(e){
 var id=e.target.value; if(!id)return;
 var sid=String(id); if(!tm.leaders.some(function(x){return sameId(x,sid);})){if(!tm.members.some(function(x){return sameId(x,sid);}))tm.members.push(sid);tm.leaders.push(sid);}
@@ -2695,7 +2419,7 @@ mo.appendChild(D({cls:‘mfooter’},[
 BTN({cls:‘btn bo’,click:closeM},‘Cancel’),
 BTN({cls:‘btn bg’,click:function(){
 S.overrides[ov.instanceKey]=ov;
-(ov.users||[]).forEach(function(uid){if(uid!==S.user.id){var emsg=‘Event updated: ‘+ov.title+’ on ‘+FD(ov.date);if(ov.coordEnabled)emsg+=’ — please review your availability’;addNotif(uid,emsg,{type:‘info’});}});
+(ov.users||[]).forEach(function(uid){if(uid!==S.user.id)addNotif(uid,’Event updated: ‘+ov.title+’ on ’+FD(ov.date));});
 save(); closeM();
 }},‘Save & Notify Attendees’)
 ]));
@@ -3175,7 +2899,7 @@ mo.appendChild(D({cls:‘mfooter’},[BTN({cls:‘btn bo’,click:closeM},‘Can
 // Uploads file to Firebase Storage and returns {name, type, url} via callback.
 // Falls back to base64 for sandbox/offline use.
 function filePickerBtn(label, onFile){
-var btn=BTN({cls:‘btn bo bsm’},label+’ ὌE’);
+var btn=BTN({cls:‘btn bo bsm’},label+’ 📎’);
 btn.addEventListener(‘click’,function(){
 var inp=document.createElement(‘input’);
 inp.type=‘file’;
@@ -3197,13 +2921,13 @@ var pct=Math.round(snap.bytesTransferred/snap.totalBytes*100);
 btn.textContent=‘Uploading ‘+pct+’%…’;
 },
 function(err){
-btn.textContent=(label||‘Attach’)+’ ὌE’;
+btn.textContent=(label||‘Attach’)+’ 📎’;
 btn.disabled=false;
 alert(‘Upload failed: ‘+err.message);
 },
 function(){
 ref.getDownloadURL().then(function(url){
-btn.textContent=(label||‘Attach’)+’ ὌE’;
+btn.textContent=(label||‘Attach’)+’ 📎’;
 btn.disabled=false;
 onFile({name:file.name, type:file.type, url:url});
 });
@@ -3230,7 +2954,7 @@ wrap.appendChild(img);
 var link=document.createElement(‘a’);
 link.href=src; link.target=’_blank’; link.rel=‘noopener’;
 link.style.cssText=‘font-size:12px;color:#87b7e8;text-decoration:none;display:flex;align-items:center;gap:5px;’;
-link.textContent=’Ὄ4 ’+att.name;
+link.textContent=’📄 ’+att.name;
 wrap.appendChild(link);
 }
 return wrap;
@@ -4589,48 +4313,6 @@ save(); closeM();
 ]));
 }
 
-// ── AVAILABILITY INSTANCE OVERRIDE MODAL ────────────────────────────────────
-function mAvailInstance(mo, ev, uid) {
-var u = USERS.find(function(x){return sameId(x.id,uid);});
-mo.appendChild(P({cls:‘modal-title’}, ‘Set Availability for This Date’));
-mo.appendChild(P({cls:‘cs’,style:{marginBottom:‘1rem’}}, (u?u.name:‘User’) + ’ · ’ + ev.title + ’ · ’ + FD(ev.date)));
-var cur = getAvail(ev, uid);
-var selStatus = cur ? cur.status : null;
-var noteVal = cur ? cur.note : ‘’;
-var btnsWrap = D({style:{display:‘flex’,gap:‘6px’,flexWrap:‘wrap’,marginBottom:‘8px’}});
-var noteWrap = D({});
-
-function refreshBtns() {
-btnsWrap.innerHTML=’’; noteWrap.innerHTML=’’;
-[[‘yes’,‘✓ Yes’,’#27ae60’],[‘no’,‘✗ No’,’#c0392b’],[‘partial’,‘◑ Partial’,’#e67e22’],[‘tbd’,’? TBD’,’#2980b9’]].forEach(function(opt){
-var isSel=selStatus===opt[0];
-var b=BTN({cls:‘btn bsm’},opt[1]);
-b.style.cssText=‘background:’+(isSel?opt[2]:‘transparent’)+’;color:’+(isSel?’#fff’:opt[2])+’;border:1px solid ‘+opt[2]+’;font-size:12px;padding:6px 14px’;
-b.addEventListener(‘click’,function(){ selStatus=opt[0]; if(opt[0]!==‘partial’&&opt[0]!==‘tbd’) noteVal=’’; refreshBtns(); });
-btnsWrap.appendChild(b);
-});
-if(selStatus===‘partial’||selStatus===‘tbd’){
-var lbl=selStatus===‘partial’?‘Describe availability’:‘Reason (optional)’;
-var ta=mk(‘textarea’,{placeholder:selStatus===‘partial’?‘e.g. Available after 3pm…’:‘e.g. Waiting on a conflict…’,style:{width:‘100%’,background:’#fff’,border:‘1px solid #ccc’,borderRadius:‘6px’,padding:‘8px 10px’,color:’#1a1a1a’,fontSize:‘13px’,fontFamily:‘sans-serif’,resize:‘vertical’,minHeight:‘60px’,marginTop:‘6px’}});
-ta.value=noteVal;
-ta.addEventListener(‘input’,function(e){noteVal=e.target.value;});
-noteWrap.appendChild(FLD(lbl,ta));
-}
-}
-refreshBtns();
-mo.appendChild(btnsWrap); mo.appendChild(noteWrap);
-mo.appendChild(D({cls:‘mfooter’},[
-BTN({cls:‘btn bo’,click:function(){S._detailNoteOpen=null;closeM();}}, ‘Cancel’),
-BTN({cls:‘btn bg’,click:safe(function(){
-if(!selStatus){showToast(‘Please select a status.’,‘error’);return;}
-setAvail(ev, uid, selStatus, noteVal, true); // force instance-level
-S._detailNoteOpen=null;
-save(); closeM();
-showToast(‘Availability saved for this date.’,‘success’);
-})}, ‘Save for This Date’)
-]));
-}
-
 // ── BOOT ───────────────────────────────────────────────────────────────────
 // Show loading screen while Firebase initializes
 (function(){
@@ -4683,29 +4365,9 @@ profile.id  = String(profile.uid);
 S.user = profile;
 S.tab  = S.tab||‘events’;
 S.availExpanded = false;
-S._detailNoteOpen = null;
 S.coordAdminTab = S.coordAdminTab||‘matrix’;
 // Normalize all stored IDs to strings for consistent comparisons
 USERS.forEach(function(u){ u.id=String(u.uid||u.id); });
-// Normalize event users arrays — map old numeric IDs to Firebase UIDs
-try {
-function normalizeUid(oldId) {
-var u = USERS.find(function(u){ return String(u.id)===String(oldId)||String(u.uid)===String(oldId); });
-return u ? String(u.uid||u.id) : String(oldId);
-}
-(S.templates||[]).forEach(function(t){
-t.users = (t.users||[]).map(normalizeUid);
-(t.teams||[]).forEach(function(tm){
-tm.members = (tm.members||[]).map(normalizeUid);
-tm.leaders = (tm.leaders||[]).map(normalizeUid);
-});
-});
-var ovKeys = Object.keys(S.overrides||{});
-ovKeys.forEach(function(k){
-var ov = S.overrides[k];
-if(ov && ov.users) ov.users = ov.users.map(normalizeUid);
-});
-} catch(normErr) { console.warn(‘ID normalization skipped:’, normErr); }
 (S.groups||[]).forEach(function(g){
 g.members=(g.members||[]).map(function(x){return x==null?x:String(x);});
 });
