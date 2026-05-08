@@ -492,7 +492,8 @@ var S = {
   },
   nEv:2,nTask:2,nGroup:4,nRoom:3,nReport:2,nNotif:1,
   auditLog:[], announcements:[], reorderItems:[],
-  setlists:[], inputLists:{sunday:[], event:[], wh2:[]}, avail:{}
+  setlists:[], inputLists:{sunday:[], event:[], wh2:[]}, avail:{},
+  taskTemplates:[]
 };
 
 // -- AUDIT TRAIL -----------------------------------------------------------
@@ -546,6 +547,7 @@ function save(){
     inputLists: S.inputLists||{sunday:[],event:[],wh2:[]},
     merch: S.merch,
     avail: S.avail||{},
+    taskTemplates: S.taskTemplates||[],
     nEv: S.nEv,
     nTask: S.nTask,
     nGroup: S.nGroup,
@@ -607,7 +609,7 @@ function startRealtimeListener(){
     if(!doc.exists||!S.user) return;
     var d = doc.data();
     var needRender = false;
-    ['templates','overrides','groups','tasks','rooms','reports','notifs','pendingDel','merch','auditLog','announcements','reorderItems','setlists','inputLists','productionItems','avail',
+    ['templates','overrides','groups','tasks','rooms','reports','notifs','pendingDel','merch','auditLog','announcements','reorderItems','setlists','inputLists','productionItems','avail','taskTemplates',
      'nEv','nTask','nGroup','nRoom','nReport','nNotif'].forEach(function(k){
       if(d[k]!==undefined){
         var oldStr = JSON.stringify(S[k]);
@@ -1035,7 +1037,7 @@ function coordResults(){
   var evs=coordEvents();
   if(!evs.length) return D({cls:'empty'},'No coordinator events.');
   var wrap=D({});
-  var qi=INP({type:'text',placeholder:'Search by event name, location, or date...',style:{marginBottom:'1rem'}});
+  var qi=INP({type:'text',placeholder:'Search by event name, location, or date...',style:{marginBottom:'1rem',background:'rgba(255,255,255,.06)',border:'1px solid rgba(232,98,74,.25)',borderRadius:'8px',padding:'10px 14px',color:'#f0ece4',fontSize:'13px',width:'100%',boxSizing:'border-box'}});
   var ct=D({});
   wrap.appendChild(qi); wrap.appendChild(ct);
   function renderR(){
@@ -1140,6 +1142,193 @@ function LBL(p,c){return mk('label',p,c);}
 function TA(p,c){return mk('textarea',p,c);}
 function HR(){return mk('hr',{cls:'divider'});}
 function FLD(l,el){return D({cls:'f'},[LBL({},l),el]);}
+
+
+// -- COMBOBOX HELPER ----------------------------------------------------------
+// A typeable dropdown that filters as you type
+function ComboBox(placeholder, options, onSelect, style) {
+  var wrap = D({style:{position:'relative',marginBottom:'.5rem'}});
+  var inp = INP({type:'text', placeholder:placeholder||'Search...'});
+  inp.style.cssText = 'width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(232,98,74,.3);border-radius:7px;padding:8px 12px;color:#f0ece4;font-size:13px;font-family:sans-serif;outline:none;' + (style||'');
+  var drop = D({style:{display:'none',position:'absolute',top:'100%',left:'0',right:'0',zIndex:'200',background:'#1f1f2e',border:'1px solid rgba(232,98,74,.3)',borderRadius:'7px',maxHeight:'200px',overflowY:'auto',boxShadow:'0 4px 16px rgba(0,0,0,.5)'}});
+  wrap.appendChild(inp); wrap.appendChild(drop);
+
+  function renderDrop(filter) {
+    drop.innerHTML = '';
+    var q = (filter||'').toLowerCase().trim();
+    var shown = q ? options.filter(function(o){return o.label.toLowerCase().includes(q);}) : options;
+    if(!shown.length) { drop.style.display='none'; return; }
+    shown.forEach(function(o) {
+      var item = D({style:{padding:'8px 12px',cursor:'pointer',fontSize:'13px',color: o.disabled?'#5a5a6a':'#f0ece4',borderBottom:'1px solid rgba(232,98,74,.1)'}});
+      if(o.disabled) {
+        item.textContent = o.label;
+        item.style.color = '#e8624a';
+        item.style.fontSize = '11px';
+        item.style.textTransform = 'uppercase';
+        item.style.letterSpacing = '.4px';
+        item.style.cursor = 'default';
+        item.style.background = 'rgba(232,98,74,.06)';
+      } else {
+        item.textContent = o.label;
+        item.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          inp.value = '';
+          drop.style.display = 'none';
+          onSelect(o.value, o.label);
+        });
+        item.addEventListener('mouseover', function(){ item.style.background='rgba(232,98,74,.12)'; });
+        item.addEventListener('mouseout', function(){ item.style.background=''; });
+      }
+      drop.appendChild(item);
+    });
+    drop.style.display = 'block';
+  }
+
+  inp.addEventListener('focus', function(){ renderDrop(inp.value); });
+  inp.addEventListener('input', function(){ renderDrop(inp.value); });
+  inp.addEventListener('blur', function(){ setTimeout(function(){ drop.style.display='none'; }, 150); });
+  return wrap;
+}
+
+// -- TASK TEMPLATES VIEW (admin panel) ----------------------------------------
+function taskTemplatesView() {
+  if(!S.taskTemplates) S.taskTemplates = [];
+  var w = D({});
+  w.appendChild(D({cls:'rh'}, [
+    P({style:{fontSize:'14px',fontWeight:'500'}}, 'Task Templates'),
+    BTN({cls:'btn bg bsm', click:safe(function(){
+      S.modal = {type:'editTaskTemplate', tpl:null}; render();
+    })}, '+ New Template')
+  ]));
+  if(!S.taskTemplates.length) {
+    w.appendChild(D({cls:'empty'}, 'No task templates yet. Create one to attach pre-built assignment lists to events.'));
+    return w;
+  }
+  S.taskTemplates.forEach(function(tpl) {
+    var c = D({cls:'card'});
+    c.appendChild(D({cls:'ch'}, [
+      D({}, [
+        P({style:{fontWeight:'500',fontSize:'14px'}}, tpl.name),
+        P({cls:'cs'}, tpl.items.length + ' task' + (tpl.items.length===1?'':'s'))
+      ]),
+      D({style:{display:'flex',gap:'7px'}}, [
+        BTN({cls:'btn bo bsm', click:safe(function(){ S.modal={type:'editTaskTemplate',tpl:tpl}; render(); })}, 'Edit'),
+        BTN({cls:'btn br bsm', click:safe(function(){
+          if(!confirm('Delete template "'+tpl.name+'"?')) return;
+          S.taskTemplates = S.taskTemplates.filter(function(t){ return t.id !== tpl.id; });
+          save(); render();
+        })}, 'Delete')
+      ])
+    ]));
+    tpl.items.forEach(function(item) {
+      c.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginTop:'4px'}},
+        '\u2022 ' + item.title + ' \u2014 assigned to: ' + (item.assignToRole||'(unset)') + ', due ' + item.daysBefore + ' day' + (item.daysBefore===1?'':'s') + ' before event'
+      ));
+    });
+    w.appendChild(c);
+  });
+  return w;
+}
+
+// -- EDIT TASK TEMPLATE MODAL -------------------------------------------------
+function mEditTaskTemplate(mo, tpl) {
+  var isNew = !tpl;
+  var ft = isNew ? {id: Date.now(), name:'', items:[]} : JSON.parse(JSON.stringify(tpl));
+  var ct = D({});
+  mo.appendChild(P({cls:'modal-title'}, isNew ? 'New Task Template' : 'Edit Template'));
+  mo.appendChild(ct);
+  mo.appendChild(D({cls:'mfooter'}, [
+    BTN({cls:'btn bo', click:closeM}, 'Cancel'),
+    BTN({cls:'btn bg', click:safe(function(){
+      if(!ft.name.trim()) { alert('Template name required.'); return; }
+      if(!ft.items.length) { alert('Add at least one task item.'); return; }
+      if(isNew) {
+        S.taskTemplates.push(ft);
+      } else {
+        var idx = S.taskTemplates.findIndex(function(t){ return t.id===ft.id; });
+        if(idx>=0) S.taskTemplates[idx] = ft;
+      }
+      save(); closeM();
+    })}, isNew ? 'Create' : 'Save')
+  ]));
+
+  function rebuild() {
+    ct.innerHTML = '';
+    ct.appendChild(FLD('Template Name *', INP({type:'text', value:ft.name, input:function(e){ft.name=e.target.value;}})));
+    ct.appendChild(P({style:{fontSize:'13px',color:'#e8624a',fontWeight:'500',marginBottom:'8px'}}, 'Tasks'));
+    ft.items.forEach(function(item, i) {
+      var row = D({style:{background:'rgba(255,255,255,.03)',border:'1px solid rgba(232,98,74,.15)',borderRadius:'8px',padding:'10px',marginBottom:'8px'}});
+      row.appendChild(FLD('Task Title', INP({type:'text',value:item.title,input:function(e){ft.items[i].title=e.target.value;}})));
+      // Who gets assigned - role selector
+      var roleOpts = [
+        {value:'',label:'Select role...'},
+        {value:'specific',label:'Specific person'},
+        {value:'leaders',label:'All team leaders'},
+        {value:'all',label:'All attendees'},
+      ];
+      USERS.filter(function(u){return u.name&&u.name!=='?';}).forEach(function(u){
+        roleOpts.push({value:'user:'+u.id, label:u.name});
+      });
+      var curRole = item.assignToRole||'';
+      row.appendChild(FLD('Assign To', SEL({change:function(e){ft.items[i].assignToRole=e.target.value;}},
+        roleOpts.map(function(o){ return OPT({value:o.value,selected:curRole===o.value},o.label); })
+      )));
+      row.appendChild(FLD('Days Before Event (due date)', INP({type:'number',value:item.daysBefore||7,input:function(e){ft.items[i].daysBefore=parseInt(e.target.value)||7;}})));
+      var rmBtn = BTN({cls:'btn br bsm', style:{marginTop:'4px'}}, 'Remove Task');
+      (function(idx2){ rmBtn.addEventListener('click', function(){ ft.items.splice(idx2,1); rebuild(); }); })(i);
+      row.appendChild(rmBtn);
+      ct.appendChild(row);
+    });
+    var addBtn = BTN({cls:'btn bg bsm', style:{marginBottom:'1rem'}}, '+ Add Task');
+    addBtn.addEventListener('click', function(){ ft.items.push({title:'',assignToRole:'',daysBefore:7}); rebuild(); });
+    ct.appendChild(addBtn);
+  }
+  rebuild();
+}
+
+// -- GENERATE TASKS FROM TEMPLATE FOR AN EVENT --------------------------------
+function generateEventTasks(tmpl, eventTemplate) {
+  var tasks = [];
+  var eventDate = eventTemplate.date;
+  var tid = eventTemplate.id;
+  (tmpl.items||[]).forEach(function(item) {
+    // Compute due date
+    var due = null;
+    if(eventDate && item.daysBefore) {
+      var d = new Date(eventDate + 'T12:00:00');
+      d.setDate(d.getDate() - (item.daysBefore||0));
+      due = d.toISOString().split('T')[0];
+    }
+    // Resolve assignees
+    var assignees = [];
+    var role = item.assignToRole||'';
+    if(role.slice(0,5)==='user:') {
+      assignees = [role.slice(5)];
+    } else if(role==='leaders') {
+      (eventTemplate.teams||[]).forEach(function(t){ assignees=assignees.concat(t.leaders||[]); });
+      assignees = assignees.filter(function(x,i,a){ return a.indexOf(x)===i; });
+    } else if(role==='all') {
+      assignees = (eventTemplate.users||[]).slice();
+    }
+    if(assignees.length) {
+      tasks.push({
+        id: S.nTask++,
+        assignees: assignees,
+        lead: assignees[0],
+        by: S.user.id,
+        title: item.title,
+        status: 'pending',
+        evId: null,
+        evDate: eventDate,
+        evTemplateId: tid,
+        dueDate: due,
+        overdueNotified: false
+      });
+    }
+  });
+  return tasks;
+}
+
 
 // -- RENDER -----------------------------------------------------------------
 function render(){
@@ -1318,22 +1507,6 @@ function eventsView(){
   if(isAdmin(S.user)) hdr.appendChild(BTN({cls:'btn bg bsm',click:safe(function(){S.modal='createEvent';render();})},'+ New Event'));
   w.appendChild(hdr);
 
-  // -- TEMP DEBUG --
-  var dbg=D({style:{background:'#1a0a0a',border:'1px solid #e8624a',borderRadius:'8px',padding:'10px',marginBottom:'10px',fontSize:'11px',color:'#f0ece4',lineHeight:'1.8',wordBreak:'break-all'}});
-  var uid=String(S.user.id||S.user.uid||'');
-  dbg.appendChild(P({},'MY UID: '+uid));
-  dbg.appendChild(P({},'USERS: '+USERS.map(function(u){return u.name+'='+String(u.id||u.uid);}).join(' | ')));
-  var td=TODAY(); var far=new Date(); far.setDate(far.getDate()+365);
-  var now2=new Date(); var ms=now2.getFullYear()+'-'+pad2(now2.getMonth()+1)+'-01';
-  var all=allInstances(ms,far.toISOString().split('T')[0]);
-  dbg.appendChild(P({},'ALL INSTANCES: '+all.length));
-  all.slice(0,5).forEach(function(ev){
-    var assigned=(ev.users||[]).some(function(x){return sameAvailId(x,uid);});
-    dbg.appendChild(P({},'  '+ev.title+' users:['+( ev.users||[]).join(',')+'] assigned:'+assigned));
-  });
-  dbg.appendChild(P({},'PENDING: '+pendingAvailEvents().length));
-  w.appendChild(dbg);
-  // -- END DEBUG --
 
   try{w.appendChild(availBanner());}catch(e){console.warn('availBanner:',e);}
   w.appendChild(calWidget());
@@ -1403,7 +1576,7 @@ function calWidget(){
 }
 
 function evList(){
-  var td=TODAY(), to=new Date(); to.setDate(to.getDate()+60);
+  var td=TODAY(), to=new Date(); to.setDate(to.getDate()+30);
   var toDs=to.toISOString().split('T')[0];
   var myListId=String(S.user.id||S.user.uid||''); var insts=allInstances(td,toDs).filter(function(e){return isAdmin(S.user)||(e.users||[]).some(function(x){return sameAvailId(x,myListId);});});
   var seen={}, deduped=[];
@@ -1451,8 +1624,8 @@ function assignView(){
     P({cls:'sec-t'},'My Assignments'),
     canAssignTasks(S.user)?BTN({cls:'btn bg bsm',click:function(){S.modal='addTask';render();}},'+ Add Task'):D({})
   ]));
-  var myTasks=S.tasks.filter(function(t){return taskAssignees(t).some(function(x){return sameId(x,u.id);})&&(t.evDate===null||t.evDate>=td);});
-  var adminTasks=isAdmin(u)?S.tasks.filter(function(t){return !taskAssignees(t).some(function(x){return sameId(x,u.id);})&&t.evId===null;}):[];
+  var myTasks=S.tasks.filter(function(t){return taskAssignees(t).some(function(x){return sameId(x,u.id);})&&t.status!=='done';});
+  var adminTasks=isAdmin(u)?S.tasks.filter(function(t){return !taskAssignees(t).some(function(x){return sameId(x,u.id);})&&!t.evTemplateId&&t.status!=='done';}):[];
 
   // Sort: overdue first, then by dueDate, then no date last
   function sortTasks(arr){
@@ -1472,11 +1645,32 @@ function assignView(){
     w.appendChild(HR());
   }
   if(myTasks.length){
-    w.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.4rem'}},'My Tasks'));
-    sortTasks(myTasks).forEach(function(t){w.appendChild(taskCard(t,false));});
+    // Group event-linked tasks by event template
+    var evTaskGroups={}, plainTasks=[];
+    sortTasks(myTasks).forEach(function(t){
+      if(t.evTemplateId){
+        var k=String(t.evTemplateId);
+        if(!evTaskGroups[k]) evTaskGroups[k]=[];
+        evTaskGroups[k].push(t);
+      } else { plainTasks.push(t); }
+    });
+    if(plainTasks.length){
+      w.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.4rem'}},'My Tasks'));
+      plainTasks.forEach(function(t){w.appendChild(taskCard(t,false));});
+    }
+    Object.keys(evTaskGroups).forEach(function(tid){
+      var evTmpl=S.templates.find(function(e){return String(e.id)===tid;});
+      var grpBox=D({cls:'card',style:{borderColor:'rgba(232,98,74,.4)',marginBottom:'.75rem'}});
+      var evTitle=evTmpl?evTmpl.title:'Event';
+      var evLoc=evTmpl?evTmpl.location:'';
+      var evDate=evTmpl?FD(evTmpl.date):'';
+      grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTitle));
+      grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},evLoc+(evDate?' \u00B7 '+evDate:'')));
+      evTaskGroups[tid].forEach(function(t){grpBox.appendChild(taskCard(t,false));});
+      w.appendChild(grpBox);
+    });
   }
-  var toFar=new Date(); toFar.setDate(toFar.getDate()+365);
-  var evs=allInstances(td,toFar.toISOString().split('T')[0]).filter(function(e){return (e.users||[]).some(function(x){return sameId(x,u.id);});});
+  // Upcoming events removed from here -- shown in calWidget evList instead
   // Sort event assignments by date
   evs.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
   var seenT={};
@@ -1588,7 +1782,7 @@ function adminView(){
   var w=D({});
   w.appendChild(P({cls:'sec-t'},'Admin'));
   var st=D({cls:'stabs'}), ct=D({});
-  var tabs=[{id:'users',label:'User Management'},{id:'groups',label:'Groups'},{id:'teams',label:'Common Teams'},{id:'audit',label:'Audit Trail'}];
+  var tabs=[{id:'users',label:'User Management'},{id:'groups',label:'Groups'},{id:'teams',label:'Common Teams'},{id:'taskTpl',label:'Task Templates'},{id:'audit',label:'Audit Trail'}];
   if(S.pendingDel.length) tabs.push({id:'deletions',label:'Pending Deletions ('+S.pendingDel.length+')'});
   var active=S.adminSub;
   function show(id){
@@ -1598,6 +1792,7 @@ function adminView(){
     if(id==='users') ct.appendChild(usersView());
     else if(id==='groups') ct.appendChild(groupsView());
     else if(id==='teams') ct.appendChild(commonTeamsView());
+    else if(id==='taskTpl') ct.appendChild(taskTemplatesView());
     else if(id==='audit') ct.appendChild(auditView());
     else ct.appendChild(deletionsView());
   }
@@ -2265,6 +2460,8 @@ function mDetail(mo,ev){
           Object.keys(S.avail||{}).forEach(function(k){
             if(k.indexOf(String(tid)+'_')===0) delete S.avail[k];
           });
+          // Remove tasks linked to this event
+          S.tasks=S.tasks.filter(function(t){return t.evTemplateId!==tid;});
         }
         save();closeM();
       }},'Delete This'));
@@ -2279,16 +2476,48 @@ function mCreateEvent(mo){
   var prefill=(S.modal&&S.modal.prefillDate)||'';
   var fs={title:'',date:prefill,isRec:false,recur:'weekly',recDay:0,recEnd:null,
     location:'',startTime:'',rtp:'',rtm:'',dcw:'',dcm:'',
-    users:[],food:false,carpool:false,foodItems:[],carpoolLoc:'',vehicles:[],teams:[],coordEnabled:false,extraDays:[]};
+    users:[],food:false,carpool:false,foodItems:[],carpoolLoc:'',vehicles:[],teams:[],coordEnabled:false,extraDays:[],taskTemplateId:null};
   var ct=D({}), err=P({cls:'err'});
   mo.appendChild(ct); mo.appendChild(err);
   mo.appendChild(D({cls:'mfooter'},[
     BTN({cls:'btn bo',click:closeM},'Cancel'),
     BTN({cls:'btn bg',click:safe(function(){
       if(!fs.title||(!fs.isRec&&!fs.date)||!fs.location){err.textContent='Title, location, and date/recurrence required.';return;}
-      var tmpl=Object.assign({},fs,{id:S.nEv++,teams:fs.teams.map(function(t){return Object.assign({},t,{members:t.members.slice(),leaders:t.leaders.slice()});})});
+      // Check if task template assignees are in the event
+      var tplWarn=[];
+      if(fs.taskTemplateId){
+        var selTpl2=S.taskTemplates.find(function(t){return String(t.id)===String(fs.taskTemplateId);});
+        if(selTpl2){
+          selTpl2.items.forEach(function(item){
+            var role=item.assignToRole||'';
+            if(role.slice(0,5)==='user:'){
+              var uid2=role.slice(5);
+              if(!fs.users.some(function(x){return sameId(x,uid2);})){
+                var uname=UN(uid2);
+                if(uname!=='?'&&tplWarn.indexOf(uid2)<0) tplWarn.push(uid2);
+              }
+            }
+          });
+        }
+      }
+      if(tplWarn.length){
+        var names=tplWarn.map(UN).join(', ');
+        var choice=confirm('These people are assigned tasks but not added to the event:\n'+names+'\n\nClick OK to add them automatically, or Cancel to go back and edit.');
+        if(!choice){err.textContent='Please add the missing people to the event attendees.';return;}
+        tplWarn.forEach(function(uid2){if(!fs.users.some(function(x){return sameId(x,uid2);}))fs.users.push(uid2);});
+      }
+      var newId=S.nEv++;
+      var tmpl=Object.assign({},fs,{id:newId,teams:fs.teams.map(function(t){return Object.assign({},t,{members:t.members.slice(),leaders:t.leaders.slice()});})});
       S.templates.push(tmpl);
-      fs.users.forEach(function(uid){if(uid!==S.user.id)addNotif(uid,'You have been added to: '+fs.title,{type:'info'});});
+      // Generate tasks from template
+      if(fs.taskTemplateId){
+        var selTpl3=S.taskTemplates.find(function(t){return String(t.id)===String(fs.taskTemplateId);});
+        if(selTpl3){
+          var newTasks=generateEventTasks(selTpl3,tmpl);
+          newTasks.forEach(function(task){S.tasks.push(task);});
+        }
+      }
+      fs.users.forEach(function(uid){if(uid!==S.user.id){var msg='You have been added to: '+fs.title;if(fs.coordEnabled)msg+=' -- please respond to availability request';addNotif(uid,msg,{type:'info'});}});
       audit('Event Created',fs.title+(fs.isRec?' (recurring)':''));
       showToast('Event created!', 'success');
       save(); closeM();
@@ -2361,6 +2590,26 @@ function buildCreateEventForm(ct,fs,rebuild){
   ct.appendChild(evAttRow); ct.appendChild(evAttPreview);
   ct.appendChild(HR());
   ct.appendChild(D({cls:'toggle-row'},[INP({type:'checkbox',checked:!!fs.coordEnabled,change:function(e){fs.coordEnabled=e.target.checked;rebuild();}}), 'Add to Availability Coordinator']));
+  // Task template selector
+  if((S.taskTemplates||[]).length){
+    ct.appendChild(HR());
+    ct.appendChild(P({style:{color:'#e8624a',fontSize:'13px',fontWeight:'500',marginBottom:'6px'}},'Task Template'));
+    var tplOpts=[{value:'',label:'None (no pre-built tasks)'}].concat((S.taskTemplates||[]).map(function(t){return {value:String(t.id),label:t.name+' ('+t.items.length+' tasks)'};}));
+    var tplBox=ComboBox('Select a task template...',tplOpts,function(val){fs.taskTemplateId=val||null;rebuild();});
+    if(fs.taskTemplateId){var sel=S.taskTemplates.find(function(t){return String(t.id)===String(fs.taskTemplateId);});if(sel){var prevInp=tplBox.querySelector('input');if(prevInp)prevInp.placeholder=sel.name;}}
+    ct.appendChild(tplBox);
+    if(fs.taskTemplateId){
+      var selTpl=S.taskTemplates.find(function(t){return String(t.id)===String(fs.taskTemplateId);});
+      if(selTpl){
+        var tplPreview=D({style:{background:'rgba(232,98,74,.06)',border:'1px solid rgba(232,98,74,.2)',borderRadius:'8px',padding:'10px',marginTop:'4px'}});
+        tplPreview.appendChild(P({style:{fontSize:'12px',color:'#e8624a',marginBottom:'6px'}},selTpl.name+' tasks:'));
+        selTpl.items.forEach(function(item){
+          tplPreview.appendChild(P({style:{fontSize:'11px',color:'#b0adc4',marginBottom:'3px'}},'\u2022 '+item.title+' -- '+( item.assignToRole||'?')+', due '+item.daysBefore+'d before event'));
+        });
+        ct.appendChild(tplPreview);
+      }
+    }
+  }
   ct.appendChild(D({cls:'toggle-row'},[INP({type:'checkbox',checked:fs.food,change:function(e){fs.food=e.target.checked;rebuild();}}), 'Food Required (Potluck)']));
   if(fs.food) ct.appendChild(buildFoodSection(fs,rebuild));
   ct.appendChild(D({cls:'toggle-row'},[INP({type:'checkbox',checked:fs.carpool,change:function(e){fs.carpool=e.target.checked;rebuild();}}), 'Carpool Required']));
@@ -2386,9 +2635,12 @@ function buildAttendeeSection(fs,rebuild){
   }});
   asel.style.cssText='width:100%;background:#fff;border:1px solid #ccc;border-radius:7px;padding:8px 12px;color:#1a1a1a;font-size:14px;font-family:sans-serif;outline:none';
   asel.appendChild(OPT({value:''},'Add person or group...'));
-  USERS.forEach(function(u){asel.appendChild(OPT({value:u.id},u.name));});
-  asel.appendChild(OPT({disabled:true},'-- Groups --'));
-  S.groups.forEach(function(g){asel.appendChild(OPT({value:'g:'+g.id},'Group: '+g.name));});
+  if(S.groups.length){
+    asel.appendChild(OPT({disabled:true},'-- Groups --'));
+    S.groups.forEach(function(g){asel.appendChild(OPT({value:'g:'+g.id},'Group: '+g.name));});
+    asel.appendChild(OPT({disabled:true},'-- Individuals --'));
+  }
+  USERS.filter(function(u){return u.name&&u.name!=='?';}).forEach(function(u){asel.appendChild(OPT({value:u.id},u.name));});
   w.appendChild(asel);
   var al=D({style:{display:'flex',flexWrap:'wrap',gap:'3px',marginTop:'5px'}});
   fs.users.forEach(function(id){
