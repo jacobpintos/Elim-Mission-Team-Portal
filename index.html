@@ -729,15 +729,7 @@ function getOrCreateOverride(tmplId,date){
 
 
 // -- AVAILABILITY HELPERS ------------------------------------------------------
-function sameAvailId(a,b){
-  if(String(a)===String(b)) return true;
-  // Resolve through USERS as fallback for numeric vs UID mismatches
-  var ua=USERS.find(function(u){return String(u.id)===String(a)||String(u.uid)===String(a);});
-  var ub=USERS.find(function(u){return String(u.id)===String(b)||String(u.uid)===String(b);});
-  var ra=ua?String(ua.uid||ua.id):String(a);
-  var rb=ub?String(ub.uid||ub.id):String(b);
-  return ra===rb;
-}
+function sameAvailId(a,b){ return String(a)===String(b); }
 
 function getAvail(ev,uid){
   if(!S||!S.avail||!ev) return null;
@@ -773,24 +765,22 @@ function pendingAvailEvents(){
   try{
     var uid=String(S.user.id||S.user.uid||'');
     if(!uid) return [];
-    // Use start of current month so events earlier this month still show
-    var now=new Date();
-    var monthStart=now.getFullYear()+'-'+pad2(now.getMonth()+1)+'-01';
-    var far=new Date(); far.setDate(far.getDate()+365);
-    var all=allInstances(monthStart,far.toISOString().split('T')[0]);
+    var td=TODAY(), far=new Date(); far.setDate(far.getDate()+365);
+    var all=allInstances(td,far.toISOString().split('T')[0]);
     var seen={};
-    var result=all.filter(function(ev){
+    return all.filter(function(ev){
       var assigned=(ev.users||[]).some(function(x){return sameAvailId(x,uid);});
       if(!assigned) return false;
       if(ev.coordEnabled===false) return false;
       var r=getAvail(ev,uid);
       if(r&&r.status&&r.status!=='tbd') return false;
+      // For extra days of multi-day events, each day needs its own response
+      // Use instanceKey as dedup key so each day appears separately
       var tk=ev._isExtraDay ? String(ev.instanceKey) : String(ev.templateId||ev.id);
       if(seen[tk]) return false;
       seen[tk]=true;
       return true;
     });
-    return result;
   }catch(e){ console.warn('pendingAvailEvents:',e); return []; }
 }
 
@@ -847,8 +837,7 @@ function availBanner(){
       var focusEv=null;
       try{
         var far0=new Date(); far0.setDate(far0.getDate()+365);
-        var now0=new Date(); var ms0=now0.getFullYear()+'-'+pad2(now0.getMonth()+1)+'-01';
-        var all0=allInstances(ms0,far0.toISOString().split('T')[0]);
+        var all0=allInstances(TODAY(),far0.toISOString().split('T')[0]);
         focusEv=all0.find(function(ev){return (ev.instanceKey||(ev.id+'_'+ev.date))===S.availFocusKey;});
       }catch(e){}
       if(focusEv){
@@ -870,8 +859,7 @@ function availBanner(){
       wrap.appendChild(pill);
       if(S.availExpanded){
         var far2=new Date(); far2.setDate(far2.getDate()+365);
-        var now2=new Date(); var ms2=now2.getFullYear()+'-'+pad2(now2.getMonth()+1)+'-01';
-        var allEvs=allInstances(ms2,far2.toISOString().split('T')[0]).filter(function(ev){
+        var allEvs=allInstances(TODAY(),far2.toISOString().split('T')[0]).filter(function(ev){
           return (ev.users||[]).some(function(x){return sameAvailId(x,uid);})||isAdmin(S.user);
         });
         var seen2={}; var chgList=allEvs.filter(function(ev){var k=String(ev.instanceKey||ev.id);if(seen2[k])return false;seen2[k]=true;return true;});
