@@ -729,6 +729,7 @@ function getOrCreateOverride(tmplId,date){
 
 
 // -- AVAILABILITY HELPERS ------------------------------------------------------
+function pad2(n){return String(n).padStart(2,'0');}
 function sameAvailId(a,b){
   if(String(a)===String(b)) return true;
   // Resolve through USERS as fallback for numeric vs UID mismatches
@@ -1355,7 +1356,6 @@ function calWidget(){
   var grid=D({cls:'cal-grid'});
   ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function(n){grid.appendChild(D({cls:'cdn'},n));});
   var first=new Date(y,m,1).getDay(), days=new Date(y,m+1,0).getDate(), now=new Date();
-  var pad2=function(n){return String(n).padStart(2,'0');};
   var fromDs=y+'-'+pad2(m+1)+'-01';
   var toDs=y+'-'+pad2(m+1)+'-'+pad2(days);
   var insts=allInstances(fromDs,toDs);
