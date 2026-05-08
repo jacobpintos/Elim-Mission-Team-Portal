@@ -2352,7 +2352,7 @@ function secAllView(){
 // -- MODAL ROUTER -----------------------------------------------------------
 function buildModal(mo){
   var m=S.modal, type=typeof m==='string'?m:m.type;
-  var noTitle=['detail','editInstance','editTemplate','addMerchItem','merchAdj','createAnnounce','secAckNote','editSetlist'];
+  var noTitle=['detail','editInstance','editTemplate','addMerchItem','merchAdj','createAnnounce','secAckNote','editSetlist','editTaskTemplate','availInstance'];
   if(noTitle.indexOf(type)<0){
     var titles={createEvent:'Create New Event',addTask:'Add Task',createGroup:'Create Group',editGroup:'Edit Group',createRoom:'New Chat Room',editRoom:'Manage Room',createUser:'Add New User',editUser:'Edit User',notifs:'Notifications',changePW:'Change Password'};
     mo.appendChild(P({cls:'modal-title'},titles[type]||type));
@@ -2374,6 +2374,8 @@ function buildModal(mo){
   else if(type==='createAnnounce') mCreateAnnounce(mo);
   else if(type==='secAckNote')   mSecAckNote(mo,m.report);
   else if(type==='editSetlist')  mEditSetlist(mo,m.setlist);
+  else if(type==='editTaskTemplate') mEditTaskTemplate(mo,m.tpl);
+  else if(type==='availInstance') mAvailInstance(mo,m.ev,m.uid);
 }
 function closeM(){S.modal=null;render();}
 
