@@ -774,7 +774,9 @@ function pendingAvailEvents(){
       if(ev.coordEnabled===false) return false;
       var r=getAvail(ev,uid);
       if(r&&r.status&&r.status!=='tbd') return false;
-      var tk=String(ev.templateId||ev.id);
+      // For extra days of multi-day events, each day needs its own response
+      // Use instanceKey as dedup key so each day appears separately
+      var tk=ev._isExtraDay ? String(ev.instanceKey) : String(ev.templateId||ev.id);
       if(seen[tk]) return false;
       seen[tk]=true;
       return true;
@@ -2217,8 +2219,23 @@ function mDetail(mo,ev){
       ft.appendChild(BTN({cls:'btn bo bsm',click:function(){S.modal={type:'editInstance',ev:ev2};render();}},'Edit This Instance'));
       if(ev2.isRec) ft.appendChild(BTN({cls:'btn bo bsm',click:function(){S.modal={type:'editTemplate',tId:ev2.templateId};render();}},'Edit All Future'));
       ft.appendChild(BTN({cls:'btn br bsm',click:function(){
-        if(ev2.instanceKey){var ov=getOrCreateOverride(ev2.templateId,ev2.date);if(ov)ov.deleted=true;}
-        else S.templates=S.templates.filter(function(t){return t.id!==ev2.id;});
+        if(ev2.isRec && ev2.instanceKey){
+          // Recurring: just mark this instance deleted
+          var ov=getOrCreateOverride(ev2.templateId,ev2.date);
+          if(ov) ov.deleted=true;
+        } else {
+          // Non-recurring (including extra days): delete entire template + all overrides
+          var tid=ev2.templateId||ev2.id;
+          S.templates=S.templates.filter(function(t){return t.id!==tid;});
+          // Remove all override keys for this template
+          Object.keys(S.overrides).forEach(function(k){
+            if(k.indexOf(String(tid)+'_')===0) delete S.overrides[k];
+          });
+          // Remove avail responses for this event
+          Object.keys(S.avail||{}).forEach(function(k){
+            if(k.indexOf(String(tid)+'_')===0) delete S.avail[k];
+          });
+        }
         save();closeM();
       }},'Delete This'));
     })(ev);
