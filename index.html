@@ -729,7 +729,15 @@ function getOrCreateOverride(tmplId,date){
 
 
 // -- AVAILABILITY HELPERS ------------------------------------------------------
-function sameAvailId(a,b){ return String(a)===String(b); }
+function sameAvailId(a,b){
+  if(String(a)===String(b)) return true;
+  // Resolve through USERS as fallback for numeric vs UID mismatches
+  var ua=USERS.find(function(u){return String(u.id)===String(a)||String(u.uid)===String(a);});
+  var ub=USERS.find(function(u){return String(u.id)===String(b)||String(u.uid)===String(b);});
+  var ra=ua?String(ua.uid||ua.id):String(a);
+  var rb=ub?String(ub.uid||ub.id):String(b);
+  return ra===rb;
+}
 
 function getAvail(ev,uid){
   if(!S||!S.avail||!ev) return null;
