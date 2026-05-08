@@ -4471,9 +4471,26 @@ auth.onAuthStateChanged(function(firebaseUser){
         USERS.push(profile);
         saveUsers(); // append only -- existing users untouched
       } else {
-        // Existing user -- just ensure uid is set as string
-        profile.uid = String(firebaseUser.uid);
-        profile.id  = String(profile.uid);
+        // Existing user -- update uid if it changed (e.g. Netlify -> GitHub Pages migration)
+        var oldUid = String(profile.uid||profile.id||'');
+        var newUid = String(firebaseUser.uid);
+        profile.uid = newUid;
+        profile.id  = newUid;
+        if(oldUid !== newUid) {
+          // UID changed -- update all event/group/room references from old to new
+          function swapUid(x){ return String(x)===oldUid ? newUid : x; }
+          (S.templates||[]).forEach(function(t){
+            t.users=(t.users||[]).map(swapUid);
+            (t.teams||[]).forEach(function(tm){
+              tm.members=(tm.members||[]).map(swapUid);
+              tm.leaders=(tm.leaders||[]).map(swapUid);
+            });
+          });
+          (S.groups||[]).forEach(function(g){ g.members=(g.members||[]).map(swapUid); });
+          (S.rooms||[]).forEach(function(r){ r.members=(r.members||[]).map(swapUid); });
+          saveUsers(); // persist corrected UID
+          // save() will be called later after full migration, persisting event fixes
+        }
       }
       S.user = profile;
       S.tab  = S.tab||'events';
