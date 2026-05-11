@@ -554,6 +554,14 @@ var STATE_LOADED = false; // guard: don't save until Firestore data is loaded
 function save(){
   // Never save before data is loaded from Firestore -- prevents overwriting real data
   if(!STATE_LOADED) return;
+  // Strip null/empty IDs from task assignees and group members before saving
+  (S.tasks||[]).forEach(function(t){
+    t.assignees=(t.assignees||[]).filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined';});
+    if(!t.lead||String(t.lead)==='null') t.lead=(t.assignees||[])[0]||null;
+  });
+  (S.groups||[]).forEach(function(g){
+    g.members=(g.members||[]).filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined';});
+  });
   // Debounce - if already saving, queue one more
   if(DB_SAVING){ SAVE_QUEUE=true; return; }
   DB_SAVING = true;
@@ -1863,7 +1871,13 @@ function taskCard(t,isAdminView){
   var status=t.status||'pending';
   var titleRow=D({cls:'ch'},[
     D({style:{display:'flex',alignItems:'center',gap:'8px'}},(over?[SP({style:{background:'#c0392b',color:'#fff',fontSize:'10px',padding:'2px 7px',borderRadius:'10px',flexShrink:'0'}},'OVERDUE')]:[]). concat([SP({cls:'ct'},t.title)])),
-    D({},[SP({cls:'sdot '+(status[0]||'p')}),SP({style:{color:'#b0adc4',fontSize:'12px'}},status)])
+    (function(s){
+    var statusLabels={pending:'Not Started',in_progress:'In Progress',behind:'Running Behind',done:'Completed'};
+    var statusColors={pending:'#b0adc4',in_progress:'#2980b9',behind:'#e67e22',done:'#27ae60'};
+    var lbl=statusLabels[s]||s;
+    var col=statusColors[s]||'#b0adc4';
+    return D({},[SP({style:{width:'8px',height:'8px',borderRadius:'50%',background:col,display:'inline-block',marginRight:'4px',flexShrink:'0'}}),SP({style:{color:col,fontSize:'12px'}},lbl)]);
+  })(status)
   ]);
   c.appendChild(titleRow);
   if(isAdminView||assigneeList.length>1){
@@ -1875,13 +1889,44 @@ function taskCard(t,isAdminView){
     c.appendChild(assignedTo);
   }
   if(t.dueDate) c.appendChild(P({style:{fontSize:'12px',color:over?'#e74c3c':'#b0adc4',marginTop:'3px'}},'Due: '+FD(t.dueDate)));
-  if(assigneeList.some(function(x){return sameId(x,u.id);})&&isLead){
-    var btns=D({style:{display:'flex',gap:'7px',marginTop:'8px'}});
-    if(t.status!=='in_progress') btns.appendChild(BTN({cls:'btn bo bsm',click:safe(function(){t.status='in_progress';t.overdueNotified=false;audit('Task In Progress',t.title);save();render();})},'In Progress'));
-    btns.appendChild(BTN({cls:'btn bG bsm',click:safe(function(){audit('Task Completed',t.title);S.tasks=S.tasks.filter(function(x){return x.id!==t.id;});save();render();})},'Mark Done'));
+  if(t.projectedDate) c.appendChild(P({style:{fontSize:'12px',color:'#e67e22',marginTop:'2px'}},'Projected: '+FD(t.projectedDate)));
+  if(assigneeList.some(function(x){return sameId(x,u.id);})||isAdminView){
+    var btns=D({style:{display:'flex',gap:'6px',marginTop:'8px',flexWrap:'wrap'}});
+    var statuses=[
+      {id:'pending',label:'Not Started',color:'#b0adc4'},
+      {id:'in_progress',label:'In Progress',color:'#2980b9'},
+      {id:'behind',label:'Running Behind',color:'#e67e22'},
+      {id:'done',label:'Completed',color:'#27ae60'}
+    ];
+    statuses.forEach(function(st){
+      var isCur=(t.status||'pending')===st.id;
+      var b=BTN({cls:'btn bsm'},st.label);
+      b.style.cssText='background:'+(isCur?st.color:'transparent')+';color:'+(isCur?'#fff':st.color)+';border:1px solid '+st.color+';font-size:11px;padding:4px 10px';
+      (function(sid){b.addEventListener('click',safe(function(){
+        if(sid==='done'){
+          audit('Task Completed',t.title);
+          S.tasks=S.tasks.filter(function(x){return x.id!==t.id;});
+          save();render();
+        } else {
+          t.status=sid; t.overdueNotified=false;
+          if(sid!=='behind') t.projectedDate=null;
+          audit('Task Status: '+sid,t.title);
+          save();render();
+        }
+      }));})(st.id);
+      btns.appendChild(b);
+    });
     c.appendChild(btns);
-  } else if(assigneeList.some(function(x){return sameId(x,u.id);})&&!isLead&&assigneeList.length>1){
-    c.appendChild(P({style:{fontSize:'11px',color:'#9090a8',marginTop:'6px',fontStyle:'italic'}},'Status changes managed by task lead: '+UN(t.lead)));
+    // Running Behind: projected completion date
+    if((t.status||'pending')==='behind'){
+      var projRow=D({style:{display:'flex',alignItems:'center',gap:'8px',marginTop:'6px'}});
+      projRow.appendChild(SP({style:{fontSize:'12px',color:'#e67e22'}},'Projected completion:'));
+      var projInp=INP({type:'date',value:t.projectedDate||''});
+      projInp.style.cssText='font-size:12px;background:#fff;border:1px solid #e67e22;border-radius:5px;padding:3px 8px;color:#1a1a1a';
+      (function(task){projInp.addEventListener('change',function(e){task.projectedDate=e.target.value||null;save();render();});})(t);
+      projRow.appendChild(projInp);
+      c.appendChild(projRow);
+    }
   }
   if(isAdminView){
     var adminRow=D({style:{display:'flex',gap:'7px',marginTop:'8px',flexWrap:'wrap',alignItems:'center'}});
@@ -5001,6 +5046,14 @@ auth.onAuthStateChanged(function(firebaseUser){
       S.coordAdminTab = S.coordAdminTab||'matrix';
       // Normalize all stored IDs to strings for consistent comparisons
       USERS.forEach(function(u){ u.id=String(u.uid||u.id); });
+      // Clean null/invalid members from all groups and save if anything changed
+      var groupsCleaned=false;
+      (S.groups||[]).forEach(function(g){
+        var before=g.members.length;
+        g.members=(g.members||[]).filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined';});
+        if(g.members.length!==before) groupsCleaned=true;
+      });
+      if(groupsCleaned) save();
       (S.groups||[]).forEach(function(g){
         g.members=(g.members||[]).map(function(x){return x==null?x:String(x);});
       });
