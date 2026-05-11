@@ -587,9 +587,15 @@ var DB_SAVING = false;
 var SAVE_QUEUE = false;
 var STATE_LOADED = false; // guard: don't save until Firestore data is loaded
 
+var _saveTimer=null;
+var _realSave=null;
 function save(){
-  // Never save before data is loaded from Firestore -- prevents overwriting real data
   if(!STATE_LOADED) return;
+  if(_saveTimer){ clearTimeout(_saveTimer); }
+  _saveTimer=setTimeout(function(){ _saveTimer=null; _doSave(); }, 250);
+}
+function _doSave(){
+  // Never save before data is loaded from Firestore -- prevents overwriting real data
   // Strip null/empty IDs from task assignees and group members before saving
   (S.tasks||[]).forEach(function(t){
     t.assignees=(t.assignees||[]).filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined';});
@@ -4109,6 +4115,91 @@ function mCreateGroup(mo){
   mo.appendChild(mc); mo.appendChild(err);
   mo.appendChild(D({cls:'mfooter'},[BTN({cls:'btn bo',click:closeM},'Cancel'),BTN({cls:'btn bg',click:function(){if(!name){err.textContent='Name required.';return;}S.groups.push({id:S.nGroup++,name:name,members:members.slice()});save();closeM();}},'Create')]));
 }
+
+// -- GROUP MEMBERSHIP SYNC --------------------------------------------------
+// Single source of truth for syncing group membership changes across events,
+// tasks, and message rooms. Call this whenever group members change.
+function syncGroupMembership(g, added, removed){
+  // Sync events: add/remove from template user lists and teams
+  S.templates.forEach(function(tmpl){
+    added.forEach(function(uid){
+      if(!tmpl.users.some(function(x){return sameId(x,uid);})){
+        tmpl.users.push(String(uid));
+        addNotif(uid,'You have been added to: '+tmpl.title);
+      }
+    });
+    removed.forEach(function(uid){
+      tmpl.users=tmpl.users.filter(function(x){return !sameId(x,uid);});
+      (tmpl.teams||[]).forEach(function(t){
+        t.members=t.members.filter(function(x){return !sameId(x,uid);});
+        t.leaders=t.leaders.filter(function(x){return !sameId(x,uid);});
+      });
+    });
+  });
+
+  // Sync group-sourced free tasks
+  added.forEach(function(uid){
+    S.tasks.forEach(function(t){
+      if(!(t.sourceGroupIds||[]).some(function(gid){return String(gid)===String(g.id);})) return;
+      if(!(t.assignees||[]).some(function(x){return sameId(x,uid);})){
+        t.assignees.push(String(uid));
+        addNotif(uid,'You have been added to task: "'+t.title+'"');
+      }
+    });
+  });
+  removed.forEach(function(uid){
+    S.tasks.forEach(function(t){
+      if(!(t.sourceGroupIds||[]).some(function(gid){return String(gid)===String(g.id);})) return;
+      t.assignees=t.assignees.filter(function(x){return !sameId(x,uid);});
+      if(sameId(t.lead,uid)) t.lead=t.assignees[0]||null;
+    });
+    S.tasks=S.tasks.filter(function(t){return (t.assignees||[]).length>0;});
+  });
+
+  // Sync event-template tasks for added members
+  added.forEach(function(uid){
+    S.templates.forEach(function(tmpl){
+      if(!tmpl.taskTemplateId) return;
+      if(!tmpl.users.some(function(x){return sameId(x,uid);})) return;
+      var tpl=S.taskTemplates.find(function(t){return String(t.id)===String(tmpl.taskTemplateId);});
+      if(!tpl) return;
+      (tpl.items||[]).forEach(function(item){
+        var roles=item.assignToRoles||(item.assignToRole?[item.assignToRole]:[]);
+        var shouldAssign=roles.some(function(r){
+          if(r==='all') return true;
+          if(r==='leaders') return (tmpl.teams||[]).some(function(t){return (t.leaders||[]).some(function(x){return sameId(x,uid);});});
+          if(r.slice(0,5)==='user:') return sameId(r.slice(5),uid);
+          return false;
+        });
+        if(!shouldAssign) return;
+        var alreadyHas=S.tasks.some(function(t){return t.evTemplateId===tmpl.id&&t.title===item.title&&(t.assignees||[]).some(function(x){return sameId(x,uid);});});
+        if(alreadyHas) return;
+        var due=null;
+        if(tmpl.date&&item.daysBefore){var d=new Date(tmpl.date+'T12:00:00');d.setDate(d.getDate()-(item.daysBefore||0));due=d.toISOString().split('T')[0];}
+        S.tasks.push({id:S.nTask++,assignees:[String(uid)],lead:String(uid),by:S.user.id,title:item.title,status:'pending',evId:null,evDate:tmpl.date,evTemplateId:tmpl.id,dueDate:due,overdueNotified:false,sourceGroupIds:[]});
+      });
+    });
+  });
+  removed.forEach(function(uid){
+    S.tasks.forEach(function(t){
+      if(t.assignees) t.assignees=t.assignees.filter(function(x){return !sameId(x,uid);});
+    });
+    S.tasks=S.tasks.filter(function(t){return (t.assignees||[]).length>0;});
+  });
+
+  // Sync message rooms
+  S.rooms.forEach(function(room){
+    var hasGroup=g.members.some(function(m){return (room.members||[]).some(function(rm){return sameId(rm,m);});});
+    if(!hasGroup) return;
+    added.forEach(function(uid){
+      if(!(room.members||[]).some(function(x){return sameId(x,uid);})) room.members.push(String(uid));
+    });
+    removed.forEach(function(uid){
+      room.members=room.members.filter(function(x){return !sameId(x,uid);});
+    });
+  });
+}
+
 function mEditGroup(mo,g){
   var members=g.members.slice(), mc=memberPicker(members);
   mo.appendChild(mc);
