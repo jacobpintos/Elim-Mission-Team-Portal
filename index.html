@@ -1290,16 +1290,14 @@ function mEditTaskTemplate(mo, tpl) {
       var row = D({style:{background:'rgba(255,255,255,.03)',border:'1px solid rgba(232,98,74,.15)',borderRadius:'8px',padding:'10px',marginBottom:'8px'}});
       row.appendChild(FLD('Task Title', INP({type:'text',value:item.title,input:function(e){ft.items[i].title=e.target.value;}})));
       // Who gets assigned - role selector
+      // Who gets assigned - combobox
       var roleOpts = [
-        {value:'',label:'Select role...'},
-        {value:'specific',label:'Specific person'},
         {value:'leaders',label:'All team leaders'},
         {value:'all',label:'All attendees'},
       ];
       USERS.filter(function(u){return u.name&&u.name!=='?';}).slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'');}).forEach(function(u){
         roleOpts.push({value:'user:'+u.id, label:u.name});
       });
-      var curRole = item.assignToRole||'';
       // Multi-select assignees using tags
       var curRoles=item.assignToRoles||(item.assignToRole?[item.assignToRole]:[]);
       var assignBox=D({style:{marginBottom:'.5rem'}});
@@ -1310,15 +1308,20 @@ function mEditTaskTemplate(mo, tpl) {
           if(rv.slice(0,5)==='user:'){var uu=USERS.find(function(x){return String(x.id)===rv.slice(5)||String(x.uid||'')===rv.slice(5);});return uu?uu.name:'?';}
           if(rv==='leaders') return 'All Leaders'; if(rv==='all') return 'All Attendees'; return rv;
         })(r);
-        var tag=SP({cls:'tag tagp',style:{cursor:'pointer'}},lbl+' x');
-        (function(ridx){tag.addEventListener('click',function(){ft.items[i].assignToRoles=curRoles.filter(function(_,j){return j!==ridx;});ft.items[i].assignToRole=ft.items[i].assignToRoles[0]||'';rebuild();});})(ri);
+        var tag=SP({cls:'tag tagp',style:{cursor:'pointer'}},lbl+' ×');
+        (function(ridx){tag.addEventListener('click',function(){ft.items[i].assignToRoles=curRoles.filter(function(_,j){return j!==ridx;});ft.items[i].assignToRole=ft.items[i].assignToRoles[0]||'';rebuild();});})(i*100+ri);
         assignTags.appendChild(tag);
       });
       assignBox.appendChild(assignTags);
-      var roleSelEl=SEL({change:(function(ii){return function(e){var v=e.target.value;if(!v)return;var cur2=ft.items[ii].assignToRoles||(ft.items[ii].assignToRole?[ft.items[ii].assignToRole]:[]);if(cur2.indexOf(v)<0){cur2.push(v);ft.items[ii].assignToRoles=cur2;ft.items[ii].assignToRole=cur2[0];}e.target.value='';rebuild();};})(i)},
-        roleOpts.map(function(o){return OPT({value:o.value},o.label);}));
-      roleSelEl.style.cssText='width:100%;background:#fff;border:1px solid #ccc;border-radius:7px;padding:6px 10px;color:#1a1a1a;font-size:13px;font-family:sans-serif;outline:none';
-      assignBox.appendChild(roleSelEl);
+      var cbWrap=(function(ii){
+        return ComboBox('Add person or group...', roleOpts, function(val){
+          if(!val) return;
+          var cur2=ft.items[ii].assignToRoles||(ft.items[ii].assignToRole?[ft.items[ii].assignToRole]:[]);
+          if(cur2.indexOf(val)<0){ cur2.push(val); ft.items[ii].assignToRoles=cur2; ft.items[ii].assignToRole=cur2[0]; }
+          rebuild();
+        });
+      })(i);
+      assignBox.appendChild(cbWrap);
       row.appendChild(assignBox);
       row.appendChild(FLD('Days Before Event (due date)', INP({type:'number',value:item.daysBefore||7,input:function(e){ft.items[i].daysBefore=parseInt(e.target.value)||7;}})));
       var rmBtn = BTN({cls:'btn br bsm', style:{marginTop:'4px'}}, 'Remove Task');
@@ -1662,73 +1665,120 @@ function evList(){
 
 // -- ASSIGNMENTS VIEW -------------------------------------------------------
 function assignView(){
-  var u=S.user, td=TODAY(), w=D({});
+  var u=S.user, w=D({});
   // Check for overdue tasks and send notifications
   S.tasks.forEach(function(t){
     if(isOverdue(t)&&!t.overdueNotified){
       taskAssignees(t).forEach(function(uid){addNotif(uid,'Overdue task: "'+t.title+'" was due '+FD(t.dueDate));});
-      if(t.by) addNotif(t.by,'Overdue: "'+t.title+'" assigned to '+taskAssignees(t).map(UN).join(', ')+' was due '+FD(t.dueDate));
+      if(t.by) addNotif(t.by,'Overdue: "'+t.title+'" assigned to '+taskAssignees(t).map(UN).join(', '));
       t.overdueNotified=true;
     }
   });
   w.appendChild(D({cls:'rh'},[
-    P({cls:'sec-t'},'My Assignments'),
+    P({cls:'sec-t'},'My Tasks'),
     canAssignTasks(S.user)?BTN({cls:'btn bg bsm',click:function(){S.modal='addTask';render();}},'+ Add Task'):D({})
   ]));
-  var myTasks=S.tasks.filter(function(t){return taskAssignees(t).some(function(x){return sameId(x,u.id);})&&t.status!=='done';});
-  var adminTasks=isAdmin(u)?S.tasks.filter(function(t){return !taskAssignees(t).some(function(x){return sameId(x,u.id);})&&!t.evTemplateId&&t.status!=='done';}):[];
 
-  // Sort: overdue first, then by dueDate, then no date last
+  // Sort helper
   function sortTasks(arr){
     return arr.slice().sort(function(a,b){
       var aOver=isOverdue(a), bOver=isOverdue(b);
-      if(aOver&&!bOver) return -1;
-      if(!aOver&&bOver) return 1;
-      var aD=a.dueDate||a.evDate||'9999';
-      var bD=b.dueDate||b.evDate||'9999';
+      if(aOver&&!bOver) return -1; if(!aOver&&bOver) return 1;
+      var aD=a.dueDate||a.evDate||'9999', bD=b.dueDate||b.evDate||'9999';
       return aD.localeCompare(bD);
     });
   }
 
-  if(adminTasks.length){
-    w.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.4rem'}},'All Tasks (Admin View)'));
-    sortTasks(adminTasks).forEach(function(t){try{var tc=taskCard(t,true);if(tc instanceof Node)w.appendChild(tc);}catch(e){console.warn('adminTaskCard:',e);}});
-    w.appendChild(HR());
+  if(!isAdmin(u)){
+    // Non-admin: just show their tasks
+    w.appendChild(myTasksPanel(u, sortTasks));
+    return w;
   }
-  if(myTasks.length){
-    // Group event-linked tasks by event template
-    var evTaskGroups={}, plainTasks=[];
-    sortTasks(myTasks).forEach(function(t){
-      if(t.evTemplateId){
-        var k=String(t.evTemplateId);
-        if(!evTaskGroups[k]) evTaskGroups[k]=[];
-        evTaskGroups[k].push(t);
-      } else { plainTasks.push(t); }
-    });
-    if(plainTasks.length){
-      w.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.4rem'}},'My Tasks'));
-      plainTasks.forEach(function(t){try{var tc=taskCard(t,false);if(tc instanceof Node)w.appendChild(tc);}catch(e){console.warn('plainTaskCard:',e);}});
-    }
-    Object.keys(evTaskGroups).forEach(function(tid){
-      var evTmpl=S.templates.find(function(e){return String(e.id)===tid;});
-      var grpBox=D({cls:'card',style:{borderColor:'rgba(232,98,74,.4)',marginBottom:'.75rem'}});
-      var evTitle=evTmpl?evTmpl.title:'Event';
-      var evLoc=evTmpl?evTmpl.location:'';
-      var evDate=evTmpl?FD(evTmpl.date):'';
-      grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTitle));
-      grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},evLoc+(evDate?' \u00B7 '+evDate:'')));
-      evTaskGroups[tid].forEach(function(t){
-        try{
-          var tc=taskCard(t,false);
-          if(tc instanceof Node) grpBox.appendChild(tc);
-        }catch(e){console.warn('taskCard error:',e,t);}
-      });
-      w.appendChild(grpBox);
-    });
+
+  // Admin: tabs for My Tasks / All Tasks
+  if(!S.assignTab) S.assignTab='mine';
+  var st=D({cls:'stabs'}), ct=D({});
+  [{id:'mine',label:'My Tasks'},{id:'all',label:'All Tasks'}].forEach(function(tab){
+    var b=BTN({cls:'stab'+(S.assignTab===tab.id?' on':'')}, tab.label);
+    b.setAttribute('data-id', tab.id);
+    b.addEventListener('click', function(){ S.assignTab=tab.id; render(); });
+    st.appendChild(b);
+  });
+  w.appendChild(st); w.appendChild(ct);
+  if(S.assignTab==='mine'){
+    ct.appendChild(myTasksPanel(u, sortTasks));
+  } else {
+    ct.appendChild(allTasksPanel(u, sortTasks));
   }
-  if(!myTasks.length&&!adminTasks.length) w.appendChild(D({cls:'empty'},'No current task assignments.'));
   return w;
 }
+
+function myTasksPanel(u, sortTasks){
+  var w=D({});
+  var myTasks=S.tasks.filter(function(t){return taskAssignees(t).some(function(x){return sameId(x,u.id);})&&t.status!=='done';});
+  if(!myTasks.length){ w.appendChild(D({cls:'empty'},'No tasks assigned to you.')); return w; }
+  var evTaskGroups={}, plainTasks=[];
+  sortTasks(myTasks).forEach(function(t){
+    if(t.evTemplateId){ var k=String(t.evTemplateId); if(!evTaskGroups[k])evTaskGroups[k]=[]; evTaskGroups[k].push(t); }
+    else { plainTasks.push(t); }
+  });
+  if(plainTasks.length){
+    w.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.4rem'}},'Tasks'));
+    plainTasks.forEach(function(t){try{var tc=taskCard(t,false);if(tc instanceof Node)w.appendChild(tc);}catch(e){console.warn(e);}});
+  }
+  Object.keys(evTaskGroups).forEach(function(tid){
+    var evTmpl=S.templates.find(function(e){return String(e.id)===tid;});
+    var grpBox=D({cls:'card',style:{borderColor:'rgba(232,98,74,.4)',marginBottom:'.75rem'}});
+    grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTmpl?evTmpl.title:'Event'));
+    grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},(evTmpl?evTmpl.location:'')+(evTmpl?' · '+FD(evTmpl.date):'')));
+    evTaskGroups[tid].forEach(function(t){try{var tc=taskCard(t,false);if(tc instanceof Node)grpBox.appendChild(tc);}catch(e){console.warn(e);}});
+    w.appendChild(grpBox);
+  });
+  return w;
+}
+
+function allTasksPanel(u, sortTasks){
+  var w=D({});
+  // All tasks including admin's own -- grouped by assignee, then by event
+  var allTasks=S.tasks.filter(function(t){return t.status!=='done';});
+  if(!allTasks.length){ w.appendChild(D({cls:'empty'},'No active tasks.')); return w; }
+
+  // Group by event template first, then unlinked tasks by person
+  var evGroups={}, unlinked=[];
+  sortTasks(allTasks).forEach(function(t){
+    if(t.evTemplateId){ var k=String(t.evTemplateId); if(!evGroups[k])evGroups[k]=[]; evGroups[k].push(t); }
+    else { unlinked.push(t); }
+  });
+
+  // Render event-linked groups
+  Object.keys(evGroups).forEach(function(tid){
+    var evTmpl=S.templates.find(function(e){return String(e.id)===tid;});
+    var grpBox=D({cls:'card',style:{borderColor:'rgba(232,98,74,.4)',marginBottom:'.75rem'}});
+    grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTmpl?evTmpl.title:'Event'));
+    grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},(evTmpl?evTmpl.location:'')+(evTmpl?' · '+FD(evTmpl.date):'')));
+    evGroups[tid].forEach(function(t){try{var tc=taskCard(t,true);if(tc instanceof Node)grpBox.appendChild(tc);}catch(e){console.warn(e);}});
+    w.appendChild(grpBox);
+  });
+
+  // Render unlinked tasks grouped by assignee
+  if(unlinked.length){
+    // Group by first assignee
+    var byPerson={};
+    unlinked.forEach(function(t){
+      var aid=String((taskAssignees(t)||[])[0]||'unknown');
+      if(!byPerson[aid])byPerson[aid]=[];
+      byPerson[aid].push(t);
+    });
+    Object.keys(byPerson).sort(function(a,b){return (UN(a)||'').localeCompare(UN(b)||'');}).forEach(function(aid){
+      var personBox=D({cls:'card',style:{marginBottom:'.65rem'}});
+      personBox.appendChild(P({style:{fontWeight:'600',fontSize:'13px',color:'#f0ece4',marginBottom:'8px'}},UN(aid)));
+      byPerson[aid].forEach(function(t){try{var tc=taskCard(t,true);if(tc instanceof Node)personBox.appendChild(tc);}catch(e){console.warn(e);}});
+      w.appendChild(personBox);
+    });
+  }
+  return w;
+}
+
 
 function taskCard(t,isAdminView){
   var u=S.user, c=D({cls:'card'});
