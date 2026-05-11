@@ -1692,7 +1692,7 @@ function assignView(){
 
   if(adminTasks.length){
     w.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.4rem'}},'All Tasks (Admin View)'));
-    sortTasks(adminTasks).forEach(function(t){w.appendChild(taskCard(t,true));});
+    sortTasks(adminTasks).forEach(function(t){try{var tc=taskCard(t,true);if(tc instanceof Node)w.appendChild(tc);}catch(e){console.warn('adminTaskCard:',e);}});
     w.appendChild(HR());
   }
   if(myTasks.length){
@@ -1707,7 +1707,7 @@ function assignView(){
     });
     if(plainTasks.length){
       w.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.4rem'}},'My Tasks'));
-      plainTasks.forEach(function(t){w.appendChild(taskCard(t,false));});
+      plainTasks.forEach(function(t){try{var tc=taskCard(t,false);if(tc instanceof Node)w.appendChild(tc);}catch(e){console.warn('plainTaskCard:',e);}});
     }
     Object.keys(evTaskGroups).forEach(function(tid){
       var evTmpl=S.templates.find(function(e){return String(e.id)===tid;});
@@ -1717,7 +1717,12 @@ function assignView(){
       var evDate=evTmpl?FD(evTmpl.date):'';
       grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTitle));
       grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},evLoc+(evDate?' \u00B7 '+evDate:'')));
-      evTaskGroups[tid].forEach(function(t){grpBox.appendChild(taskCard(t,false));});
+      evTaskGroups[tid].forEach(function(t){
+        try{
+          var tc=taskCard(t,false);
+          if(tc instanceof Node) grpBox.appendChild(tc);
+        }catch(e){console.warn('taskCard error:',e,t);}
+      });
       w.appendChild(grpBox);
     });
   }
@@ -1726,13 +1731,15 @@ function assignView(){
 
 function taskCard(t,isAdminView){
   var u=S.user, c=D({cls:'card'});
+  if(!t||!t.title) return c;
   var over=isOverdue(t);
   if(over) c.style.borderColor='rgba(192,57,43,0.6)';
   var assigneeList=taskAssignees(t);
   var isLead=isTaskLead(t,u.id);
+  var status=t.status||'pending';
   var titleRow=D({cls:'ch'},[
     D({style:{display:'flex',alignItems:'center',gap:'8px'}},(over?[SP({style:{background:'#c0392b',color:'#fff',fontSize:'10px',padding:'2px 7px',borderRadius:'10px',flexShrink:'0'}},'OVERDUE')]:[]). concat([SP({cls:'ct'},t.title)])),
-    D({},[SP({cls:'sdot '+t.status[0]}),SP({style:{color:'#b0adc4',fontSize:'12px'}},t.status)])
+    D({},[SP({cls:'sdot '+(status[0]||'p')}),SP({style:{color:'#b0adc4',fontSize:'12px'}},status)])
   ]);
   c.appendChild(titleRow);
   if(isAdminView||assigneeList.length>1){
