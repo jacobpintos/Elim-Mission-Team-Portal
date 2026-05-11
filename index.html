@@ -1321,7 +1321,7 @@ function mEditTaskTemplate(mo, tpl) {
           if(rv.slice(0,5)==='user:'){var uu=USERS.find(function(x){return String(x.id)===rv.slice(5)||String(x.uid||'')===rv.slice(5);});return uu?uu.name:'?';}
           if(rv==='leaders') return 'All Leaders'; if(rv==='all') return 'All Attendees'; return rv;
         })(r);
-        var tag=SP({cls:'tag tagp',style:{cursor:'pointer'}},lbl+' ×');
+        var tag=SP({cls:'tag tagp',style:{cursor:'pointer'}},lbl+' \u00D7');
         (function(ridx){tag.addEventListener('click',function(){ft.items[i].assignToRoles=curRoles.filter(function(_,j){return j!==ridx;});ft.items[i].assignToRole=ft.items[i].assignToRoles[0]||'';rebuild();});})(i*100+ri);
         assignTags.appendChild(tag);
       });
@@ -1695,9 +1695,15 @@ function assignView(){
   // Sort helper
   function sortTasks(arr){
     return arr.slice().sort(function(a,b){
-      var aOver=isOverdue(a), bOver=isOverdue(b);
-      if(aOver&&!bOver) return -1; if(!aOver&&bOver) return 1;
-      var aD=a.dueDate||a.evDate||'9999', bD=b.dueDate||b.evDate||'9999';
+      // Featured first (overdue and behind)
+      var aFeat=isOverdue(a)||(a.status==='behind');
+      var bFeat=isOverdue(b)||(b.status==='behind');
+      if(aFeat&&!bFeat) return -1; if(!aFeat&&bFeat) return 1;
+      // Then event date closest to today
+      var aEv=a.evDate||'9999', bEv=b.evDate||'9999';
+      if(aEv!==bEv) return aEv.localeCompare(bEv);
+      // Then task due date
+      var aD=a.dueDate||'9999', bD=b.dueDate||'9999';
       return aD.localeCompare(bD);
     });
   }
@@ -1747,19 +1753,28 @@ function taskMatchesSearch(t,q){
 
 function overdueSection(tasks,isAdmin){
   var overdueTasks=tasks.filter(function(t){return isOverdue(t);});
-  if(!overdueTasks.length) return null;
+  var behindTasks=tasks.filter(function(t){return !isOverdue(t)&&t.status==='behind';});
+  if(!overdueTasks.length&&!behindTasks.length) return null;
   var box=D({cls:'overdue-banner'});
-  var title=D({cls:'overdue-banner-title'});
-  title.innerHTML='⚠️ '+overdueTasks.length+' Overdue Task'+(overdueTasks.length===1?'':'s');
-  box.appendChild(title);
-  overdueTasks.forEach(function(t){
-    try{var tc=taskCard(t,isAdmin);if(tc instanceof Node)box.appendChild(tc);}catch(e){}
-  });
+  if(overdueTasks.length){
+    var t1=D({cls:'overdue-banner-title'});
+    t1.textContent='\u26A0 '+overdueTasks.length+' Overdue Task'+(overdueTasks.length===1?'':'s');
+    box.appendChild(t1);
+    overdueTasks.forEach(function(t){try{var tc=taskCard(t,isAdmin);if(tc instanceof Node)box.appendChild(tc);}catch(e){console.warn(e);}});
+  }
+  if(behindTasks.length){
+    var t2=D({cls:'overdue-banner-title'});
+    t2.style.color='#e67e22';
+    t2.style.marginTop=overdueTasks.length?'10px':'0';
+    t2.textContent='\u23F0 '+behindTasks.length+' Running Behind';
+    box.appendChild(t2);
+    behindTasks.forEach(function(t){try{var tc=taskCard(t,isAdmin);if(tc instanceof Node)box.appendChild(tc);}catch(e){console.warn(e);}});
+  }
   return box;
 }
 
 function renderTaskGroups(tasks,isAdmin,w,q){
-  var filtered=tasks.filter(function(t){return !isOverdue(t)&&taskMatchesSearch(t,q);});
+  var filtered=tasks.filter(function(t){return !isOverdue(t)&&t.status!=='behind'&&taskMatchesSearch(t,q);});
   var evTaskGroups={}, plainTasks=[];
   filtered.forEach(function(t){
     if(t.evTemplateId){var k=String(t.evTemplateId);if(!evTaskGroups[k])evTaskGroups[k]=[];evTaskGroups[k].push(t);}
@@ -1782,7 +1797,7 @@ function renderTaskGroups(tasks,isAdmin,w,q){
     }
     var grpBox=D({cls:'card',style:{borderColor:'rgba(232,98,74,.4)',marginBottom:'.75rem'}});
     grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTitle));
-    grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},evLoc+(evDate?' · '+evDate:'')));
+    grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},evLoc+(evDate?' \u00B7 '+evDate:'')));
     evTaskGroups[tid].forEach(function(t){try{var tc=taskCard(t,isAdmin);if(tc instanceof Node)grpBox.appendChild(tc);}catch(e){console.warn(e);}});
     w.appendChild(grpBox);
   });
@@ -1822,7 +1837,7 @@ function allTasksPanel(u,sortTasks){
 
 function renderAllGroups(allTasks,w,q){
   w.innerHTML='';
-  var nonOverdue=allTasks.filter(function(t){return !isOverdue(t);});
+  var nonOverdue=allTasks.filter(function(t){return !isOverdue(t)&&t.status!=='behind';});
   // Event groups
   var evGroups={}, unlinked=[];
   nonOverdue.forEach(function(t){
@@ -1838,7 +1853,7 @@ function renderAllGroups(allTasks,w,q){
     if(!filtered.length) return;
     var grpBox=D({cls:'card',style:{borderColor:'rgba(232,98,74,.4)',marginBottom:'.75rem'}});
     grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTitle));
-    grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},evLoc+(evDate?' · '+evDate:'')));
+    grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},evLoc+(evDate?' \u00B7 '+evDate:'')));
     filtered.forEach(function(t){try{var tc=taskCard(t,true);if(tc instanceof Node)grpBox.appendChild(tc);}catch(e){console.warn(e);}});
     w.appendChild(grpBox);
   });
@@ -5046,14 +5061,7 @@ auth.onAuthStateChanged(function(firebaseUser){
       S.coordAdminTab = S.coordAdminTab||'matrix';
       // Normalize all stored IDs to strings for consistent comparisons
       USERS.forEach(function(u){ u.id=String(u.uid||u.id); });
-      // Clean null/invalid members from all groups and save if anything changed
-      var groupsCleaned=false;
-      (S.groups||[]).forEach(function(g){
-        var before=g.members.length;
-        g.members=(g.members||[]).filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined';});
-        if(g.members.length!==before) groupsCleaned=true;
-      });
-      if(groupsCleaned) save();
+      // (group cleanup moved to after STATE_LOADED)
       (S.groups||[]).forEach(function(g){
         g.members=(g.members||[]).map(function(x){return x==null?x:String(x);});
       });
@@ -5104,8 +5112,15 @@ auth.onAuthStateChanged(function(firebaseUser){
       });
       S.notifs=newNotifs;
       // Save migrated data back so future loads are already correct
+      // Clean null/invalid members from all groups before saving
+      var groupsCleaned=false;
+      (S.groups||[]).forEach(function(g){
+        var before=(g.members||[]).length;
+        g.members=(g.members||[]).filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined';});
+        if(g.members.length!==before) groupsCleaned=true;
+      });
       STATE_LOADED = true; // data is now fully loaded -- safe to save
-      save(); // persist the migrated IDs
+      save(); // persist the migrated IDs + group cleanup
       startRealtimeListener();
       requestPushPermission();
       render();
