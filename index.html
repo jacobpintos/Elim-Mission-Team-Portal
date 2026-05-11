@@ -560,7 +560,7 @@ function save(){
     if(!t.lead||String(t.lead)==='null') t.lead=(t.assignees||[])[0]||null;
   });
   (S.groups||[]).forEach(function(g){
-    g.members=(g.members||[]).filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined';});
+    g.members=(g.members||[]).filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined'&&UN(x)!=='?';});
   });
   // Debounce - if already saving, queue one more
   if(DB_SAVING){ SAVE_QUEUE=true; return; }
@@ -660,6 +660,18 @@ function startRealtimeListener(){
         if(oldStr!==newStr){ S[k]=d[k]; needRender=true; }
       }
     });
+    // Clean null/invalid/unresolvable members from groups every time data arrives
+    var groupsDirty=false;
+    (S.groups||[]).forEach(function(g){
+      var before=(g.members||[]).length;
+      g.members=(g.members||[]).filter(function(x){
+        if(x==null||x===''||String(x)==='null'||String(x)==='undefined') return false;
+        // Also remove IDs that can't be resolved to a user
+        return UN(x)!=='?';
+      });
+      if(g.members.length!==before) groupsDirty=true;
+    });
+    if(groupsDirty){ needRender=true; save(); } // persist cleaned data back to Firestore
     if(d.COMMON_TEAMS){ COMMON_TEAMS=d.COMMON_TEAMS; }
     if(needRender) render();
   }, function(e){ console.warn('Listener error:',e); });
@@ -5116,7 +5128,7 @@ auth.onAuthStateChanged(function(firebaseUser){
       var groupsCleaned=false;
       (S.groups||[]).forEach(function(g){
         var before=(g.members||[]).length;
-        g.members=(g.members||[]).filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined';});
+        g.members=(g.members||[]).filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined'&&UN(x)!=='?';});
         if(g.members.length!==before) groupsCleaned=true;
       });
       STATE_LOADED = true; // data is now fully loaded -- safe to save
