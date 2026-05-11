@@ -1691,6 +1691,16 @@ function evList(){
 // -- ASSIGNMENTS VIEW -------------------------------------------------------
 function assignView(){
   var u=S.user, w=D({});
+  var td=TODAY();
+  // Auto-clear tasks linked to events whose date has passed
+  var beforeLen=S.tasks.length;
+  S.tasks=S.tasks.filter(function(t){
+    if(!t.evTemplateId) return true; // keep free tasks
+    var evDate=t.evDate||null;
+    if(!evDate) return true; // no date, keep
+    return evDate>=td; // keep if event hasn't passed yet
+  });
+  if(S.tasks.length!==beforeLen) save();
   // Check for overdue tasks and send notifications
   S.tasks.forEach(function(t){
     if(isOverdue(t)&&!t.overdueNotified){
