@@ -1727,6 +1727,7 @@ function assignView(){
     });
   }
   if(!myTasks.length&&!adminTasks.length) w.appendChild(D({cls:'empty'},'No current task assignments.'));
+  return w;
 }
 
 function taskCard(t,isAdminView){
