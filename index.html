@@ -128,8 +128,8 @@ body{font-family:sans-serif;background:#14141e;color:#f0ece4;min-height:100vh}
 #save-dot.saved{background:#27ae60;opacity:1}
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
 /* ── ONBOARDING OVERLAY ── */
-.ob-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem}
-.ob-card{background:#1f1f2e;border:1px solid rgba(232,98,74,.35);border-radius:16px;width:100%;max-width:480px;padding:2rem;position:relative}
+.ob-overlay{position:fixed;inset:0;background:transparent;z-index:10000;display:flex;align-items:flex-start;justify-content:flex-end;padding:1rem;pointer-events:none}
+.ob-card{background:#1f1f2e;border:2px solid rgba(232,98,74,.6);border-radius:16px;width:100%;max-width:320px;padding:1.25rem;position:relative;pointer-events:all;box-shadow:0 8px 40px rgba(0,0,0,.8);margin-top:4rem}
 .ob-step-dots{display:flex;gap:8px;justify-content:center;margin-bottom:1.5rem}
 .ob-dot{width:10px;height:10px;border-radius:50%;background:rgba(232,98,74,.25);transition:background .2s}
 .ob-dot.on{background:#e8624a}
@@ -314,49 +314,83 @@ var ONBOARDING_STEPS = [
   {
     icon: '\uD83D\uDC4B',
     title: 'Welcome to The Well Portal',
-    body: 'Your mission team hub for events, availability, tasks, messaging, and more -- all in one place.'
+    body: 'Your mission team hub for events, availability, tasks, messaging, and more -- all in one place. This tour will walk you through each section.',
+    tab: null
   },
   {
     icon: '\uD83D\uDCC5',
     title: 'Events & Calendar',
-    body: 'The Events tab shows a monthly calendar of all events you\'re assigned to. Click any event for full details -- teams, food, carpool, dress code, and attached files.'
+    body: 'The Events tab shows a monthly calendar of all events you\'re assigned to. Click any event for full details -- teams, food, carpool, and more. Admins can create events by clicking any empty day.',
+    tab: 'events'
   },
   {
     icon: '\u2713',
-    title: 'Availability Coordinator',
-    body: 'Above the calendar, you\'ll see pending availability requests. Answer each event one at a time with Yes, No, Partial, or TBD. Click any event on the calendar to jump straight to its availability card.'
+    title: 'Availability',
+    body: 'Above the calendar, you\'ll be asked for your availability one event at a time. Answer Yes, No, Partial, or TBD. Click any event on the calendar to jump to its availability card.',
+    tab: 'events'
   },
   {
     icon: '\u2705',
     title: 'My Tasks',
-    body: 'Tasks assigned to you appear under My Tasks. Event-linked tasks are grouped by event with the date shown. Mark tasks done individually -- your completion updates for everyone.'
+    body: 'Tasks assigned to you appear here, grouped by event, Kaizen item, or issue. Overdue and running-behind tasks appear in a prominent banner at the top. Use the search bar to filter by event or location.',
+    tab: 'assignments'
   },
   {
     icon: '\uD83D\uDCE3',
     title: 'Announcements',
-    body: 'Team-wide announcements appear in the Announce tab. Admins can send targeted announcements to specific people or groups.'
+    body: 'Team-wide announcements live here. Admins can send targeted announcements to specific people or groups.',
+    tab: 'announce'
   },
   {
     icon: '\uD83D\uDCAC',
     title: 'Messages',
-    body: 'Chat with your teams in real time under the Messages tab. Each room is a persistent group thread.'
+    body: 'Chat with your teams in real time. Each room is a persistent group thread. Admins can create and manage rooms.',
+    tab: 'messages'
+  },
+  {
+    icon: '\uD83C\uDF31',
+    title: 'Improve -- Production Issues',
+    body: 'Log production issues with a full 5-Why root cause analysis and corrective action. Track status from Open through CA In Progress to Resolved. Corrective actions appear as tasks in My Tasks.',
+    tab: 'issues'
+  },
+  {
+    icon: '\uD83D\uDCA1',
+    title: 'Improve -- Kaizen Board',
+    body: 'Submit and vote on improvement ideas. Admins move cards from Ideas through Under Review to an Action Plan (with assigned tasks), then to Completed. Full history is preserved on every card.',
+    tab: 'issues'
   },
   {
     icon: '\uD83D\uDD12',
     title: 'Security',
-    body: 'Use the Security tab to log incidents or concerns. Admins are notified and can acknowledge reports.'
+    body: 'Log safety incidents or concerns. Admins are notified and can acknowledge reports.',
+    tab: 'security'
   },
   {
     icon: '\u2699',
     title: 'Admin Panel',
-    body: 'Admins have access to User Management, Groups, Common Teams, Task Templates, and the Audit Trail. Task Templates let you attach pre-built assignment lists to events so tasks generate automatically.'
+    body: 'Admins manage users, groups, teams, task templates, and the audit trail here. Task Templates let you attach pre-built assignment lists to events so tasks generate automatically.',
+    tab: 'admin'
   },
   {
     icon: '\uD83D\uDCCB',
-    title: 'Availability Coordinator (Admin)',
-    body: 'Below the calendar, admins can view the Matrix (everyone\'s responses at a glance), Results (searchable by event/location/date), and Outstanding (who hasn\'t responded).'
+    title: 'Coordinator Admin View',
+    body: 'Below the Events calendar, admins see the Availability Coordinator -- Matrix, Results, and Outstanding views -- showing everyone\'s responses at a glance.',
+    tab: 'events'
+  }
+  ,{
+    icon: '\uD83D\uDC55',
+    title: 'Inventory & Merch',
+    body: 'Track merchandise -- shirts, hats, books, and more -- with sizes, quantities, and transaction history. Admins manage items; the merch team can log sales and adjustments.',
+    tab: 'inventory'
+  }
+  ,{
+    icon: '\uD83C\uDFB9',
+    title: 'Worship',
+    body: 'Build and publish setlists for Sunday services, events, and second venue. Each song can have a link and notes. Published setlists are visible to the worship team in their My Assignments view.',
+    tab: 'worship'
   }
 ];
+
 
 function showOnboarding(onDone){
   var step=0;
@@ -411,7 +445,7 @@ function showOnboarding(onDone){
     nextBtn.textContent=isLast ? 'Get Started ->' : 'Next ->';
     nextBtn.addEventListener('click', function(){
       if(isLast){ finishOnboarding(); }
-      else { step++; render_ob(); }
+      else { step++; var ns=ONBOARDING_STEPS[step]; if(ns&&ns.tab&&S.user){S.tab=ns.tab;if(ns.tab==='issues'&&ns.title.toLowerCase().indexOf('kaizen')>=0)S.improveTab='kaizen';else if(ns.tab==='issues')S.improveTab='issues';render();} render_ob(); }
     });
     footer.appendChild(nextBtn);
     card.appendChild(footer);
