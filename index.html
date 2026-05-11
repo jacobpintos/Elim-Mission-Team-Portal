@@ -1731,10 +1731,7 @@ function taskCard(t,isAdminView){
   var assigneeList=taskAssignees(t);
   var isLead=isTaskLead(t,u.id);
   var titleRow=D({cls:'ch'},[
-    D({style:{display:'flex',alignItems:'center',gap:'8px'}},[
-      over?SP({style:{background:'#c0392b',color:'#fff',fontSize:'10px',padding:'2px 7px',borderRadius:'10px',flexShrink:'0'}},'OVERDUE'):'',
-      SP({cls:'ct'},t.title)
-    ]),
+    D({style:{display:'flex',alignItems:'center',gap:'8px'}},(over?[SP({style:{background:'#c0392b',color:'#fff',fontSize:'10px',padding:'2px 7px',borderRadius:'10px',flexShrink:'0'}},'OVERDUE')]:[]). concat([SP({cls:'ct'},t.title)])),
     D({},[SP({cls:'sdot '+t.status[0]}),SP({style:{color:'#b0adc4',fontSize:'12px'}},t.status)])
   ]);
   c.appendChild(titleRow);
