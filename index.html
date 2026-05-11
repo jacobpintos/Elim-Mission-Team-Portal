@@ -53,6 +53,11 @@ body{font-family:sans-serif;background:#14141e;color:#f0ece4;min-height:100vh}
 .sdot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px}
 .sdot.p{background:#e67e22}.sdot.i{background:#3498db}.sdot.d,.sdot.a{background:#27ae60}
 .stabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:.9rem}
+.overdue-banner{background:rgba(192,57,43,.12);border:1px solid rgba(192,57,43,.4);border-radius:10px;padding:12px 14px;margin-bottom:1rem}
+.overdue-banner-title{font-size:12px;font-weight:600;color:#e74c3c;letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.task-search{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(232,98,74,.25);border-radius:8px;padding:9px 13px;color:#f0ece4;font-size:13px;font-family:sans-serif;outline:none;margin-bottom:1rem;box-sizing:border-box}
+.task-search::placeholder{color:#5a5a6a}
+
 .stab{padding:5px 12px;border-radius:20px;border:1px solid rgba(232,98,74,0.25);background:none;color:#b0adc4;font-size:12px;cursor:pointer;font-family:sans-serif}
 .stab.on{background:#e8624a;color:#fff;border-color:#e8624a;font-weight:600}
 .sbox{background:rgba(255,255,255,.04);border:1px solid rgba(232,98,74,0.2);border-radius:8px;padding:10px 12px;margin-bottom:.65rem;font-size:13px}
@@ -1713,58 +1718,126 @@ function assignView(){
   return w;
 }
 
-function myTasksPanel(u, sortTasks){
-  var w=D({});
-  var myTasks=S.tasks.filter(function(t){return taskAssignees(t).some(function(x){return sameId(x,u.id);})&&t.status!=='done';});
-  if(!myTasks.length){ w.appendChild(D({cls:'empty'},'No tasks assigned to you.')); return w; }
+function buildTaskSearch(onSearch){
+  var inp=document.createElement('input');
+  inp.type='text'; inp.placeholder='Search tasks by title, event, or location...';
+  inp.className='task-search';
+  inp.addEventListener('input',function(){onSearch(inp.value.toLowerCase().trim());});
+  return inp;
+}
+
+function taskMatchesSearch(t,q){
+  if(!q) return true;
+  if((t.title||'').toLowerCase().includes(q)) return true;
+  if(t.evTemplateId){
+    var ev=S.templates.find(function(e){return String(e.id)===String(t.evTemplateId);});
+    if(ev&&(ev.title||'').toLowerCase().includes(q)) return true;
+    if(ev&&(ev.location||'').toLowerCase().includes(q)) return true;
+  }
+  return false;
+}
+
+function overdueSection(tasks,isAdmin){
+  var overdueTasks=tasks.filter(function(t){return isOverdue(t);});
+  if(!overdueTasks.length) return null;
+  var box=D({cls:'overdue-banner'});
+  var title=D({cls:'overdue-banner-title'});
+  title.innerHTML='⚠️ '+overdueTasks.length+' Overdue Task'+(overdueTasks.length===1?'':'s');
+  box.appendChild(title);
+  overdueTasks.forEach(function(t){
+    try{var tc=taskCard(t,isAdmin);if(tc instanceof Node)box.appendChild(tc);}catch(e){}
+  });
+  return box;
+}
+
+function renderTaskGroups(tasks,isAdmin,w,q){
+  var filtered=tasks.filter(function(t){return !isOverdue(t)&&taskMatchesSearch(t,q);});
   var evTaskGroups={}, plainTasks=[];
-  sortTasks(myTasks).forEach(function(t){
-    if(t.evTemplateId){ var k=String(t.evTemplateId); if(!evTaskGroups[k])evTaskGroups[k]=[]; evTaskGroups[k].push(t); }
-    else { plainTasks.push(t); }
+  filtered.forEach(function(t){
+    if(t.evTemplateId){var k=String(t.evTemplateId);if(!evTaskGroups[k])evTaskGroups[k]=[];evTaskGroups[k].push(t);}
+    else{plainTasks.push(t);}
   });
   if(plainTasks.length){
-    w.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.4rem'}},'Tasks'));
-    plainTasks.forEach(function(t){try{var tc=taskCard(t,false);if(tc instanceof Node)w.appendChild(tc);}catch(e){console.warn(e);}});
+    w.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.4rem'}},isAdmin&&tasks[0]&&tasks[0].evTemplateId===undefined?'Unlinked Tasks':'Tasks'));
+    plainTasks.forEach(function(t){try{var tc=taskCard(t,isAdmin);if(tc instanceof Node)w.appendChild(tc);}catch(e){console.warn(e);}});
   }
   Object.keys(evTaskGroups).forEach(function(tid){
     var evTmpl=S.templates.find(function(e){return String(e.id)===tid;});
+    var evTitle=evTmpl?evTmpl.title:'Event';
+    var evLoc=evTmpl?evTmpl.location:'';
+    var evDate=evTmpl?FD(evTmpl.date):'';
+    // If searching by event/location and no match, skip the header but show matched tasks
+    if(q&&!evTitle.toLowerCase().includes(q)&&!evLoc.toLowerCase().includes(q)){
+      // Tasks already filtered above -- show without group header
+      evTaskGroups[tid].forEach(function(t){try{var tc=taskCard(t,isAdmin);if(tc instanceof Node)w.appendChild(tc);}catch(e){console.warn(e);}});
+      return;
+    }
     var grpBox=D({cls:'card',style:{borderColor:'rgba(232,98,74,.4)',marginBottom:'.75rem'}});
-    grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTmpl?evTmpl.title:'Event'));
-    grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},(evTmpl?evTmpl.location:'')+(evTmpl?' · '+FD(evTmpl.date):'')));
-    evTaskGroups[tid].forEach(function(t){try{var tc=taskCard(t,false);if(tc instanceof Node)grpBox.appendChild(tc);}catch(e){console.warn(e);}});
+    grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTitle));
+    grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},evLoc+(evDate?' · '+evDate:'')));
+    evTaskGroups[tid].forEach(function(t){try{var tc=taskCard(t,isAdmin);if(tc instanceof Node)grpBox.appendChild(tc);}catch(e){console.warn(e);}});
     w.appendChild(grpBox);
   });
+}
+
+function myTasksPanel(u,sortTasks){
+  var w=D({});
+  var myTasks=sortTasks(S.tasks.filter(function(t){return taskAssignees(t).some(function(x){return sameId(x,u.id);})&&t.status!=='done';}));
+  if(!myTasks.length){w.appendChild(D({cls:'empty'},'No tasks assigned to you.'));return w;}
+  // Overdue banner
+  var ob=overdueSection(myTasks,false);
+  if(ob) w.appendChild(ob);
+  // Search
+  var q='';
+  var ct=D({});
+  w.appendChild(buildTaskSearch(function(val){q=val;ct.innerHTML='';renderTaskGroups(myTasks,false,ct,q);}));
+  w.appendChild(ct);
+  renderTaskGroups(myTasks,false,ct,q);
   return w;
 }
 
-function allTasksPanel(u, sortTasks){
+function allTasksPanel(u,sortTasks){
   var w=D({});
-  // All tasks including admin's own -- grouped by assignee, then by event
-  var allTasks=S.tasks.filter(function(t){return t.status!=='done';});
-  if(!allTasks.length){ w.appendChild(D({cls:'empty'},'No active tasks.')); return w; }
+  var allTasks=sortTasks(S.tasks.filter(function(t){return t.status!=='done';}));
+  if(!allTasks.length){w.appendChild(D({cls:'empty'},'No active tasks.'));return w;}
+  // Overdue banner - all overdue across all users
+  var ob=overdueSection(allTasks,true);
+  if(ob) w.appendChild(ob);
+  // Search
+  var q='';
+  var ct=D({});
+  w.appendChild(buildTaskSearch(function(val){q=val;ct.innerHTML='';renderAllGroups(allTasks,ct,q);}));
+  w.appendChild(ct);
+  renderAllGroups(allTasks,ct,q);
+  return w;
+}
 
-  // Group by event template first, then unlinked tasks by person
+function renderAllGroups(allTasks,w,q){
+  w.innerHTML='';
+  var nonOverdue=allTasks.filter(function(t){return !isOverdue(t);});
+  // Event groups
   var evGroups={}, unlinked=[];
-  sortTasks(allTasks).forEach(function(t){
-    if(t.evTemplateId){ var k=String(t.evTemplateId); if(!evGroups[k])evGroups[k]=[]; evGroups[k].push(t); }
-    else { unlinked.push(t); }
+  nonOverdue.forEach(function(t){
+    if(t.evTemplateId){var k=String(t.evTemplateId);if(!evGroups[k])evGroups[k]=[];evGroups[k].push(t);}
+    else{unlinked.push(t);}
   });
-
-  // Render event-linked groups
   Object.keys(evGroups).forEach(function(tid){
     var evTmpl=S.templates.find(function(e){return String(e.id)===tid;});
+    var evTitle=evTmpl?evTmpl.title:'Event';
+    var evLoc=evTmpl?evTmpl.location:'';
+    var evDate=evTmpl?FD(evTmpl.date):'';
+    var filtered=evGroups[tid].filter(function(t){return taskMatchesSearch(t,q);});
+    if(!filtered.length) return;
     var grpBox=D({cls:'card',style:{borderColor:'rgba(232,98,74,.4)',marginBottom:'.75rem'}});
-    grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTmpl?evTmpl.title:'Event'));
-    grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},(evTmpl?evTmpl.location:'')+(evTmpl?' · '+FD(evTmpl.date):'')));
-    evGroups[tid].forEach(function(t){try{var tc=taskCard(t,true);if(tc instanceof Node)grpBox.appendChild(tc);}catch(e){console.warn(e);}});
+    grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTitle));
+    grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},evLoc+(evDate?' · '+evDate:'')));
+    filtered.forEach(function(t){try{var tc=taskCard(t,true);if(tc instanceof Node)grpBox.appendChild(tc);}catch(e){console.warn(e);}});
     w.appendChild(grpBox);
   });
-
-  // Render unlinked tasks grouped by assignee
+  // Unlinked by person
   if(unlinked.length){
-    // Group by first assignee
     var byPerson={};
-    unlinked.forEach(function(t){
+    unlinked.filter(function(t){return taskMatchesSearch(t,q);}).forEach(function(t){
       var aid=String((taskAssignees(t)||[])[0]||'unknown');
       if(!byPerson[aid])byPerson[aid]=[];
       byPerson[aid].push(t);
@@ -1776,7 +1849,7 @@ function allTasksPanel(u, sortTasks){
       w.appendChild(personBox);
     });
   }
-  return w;
+  if(!w.children.length) w.appendChild(D({cls:'empty'},'No tasks match your search.'));
 }
 
 
