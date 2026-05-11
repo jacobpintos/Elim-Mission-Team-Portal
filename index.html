@@ -1441,8 +1441,11 @@ function issuesView(){
   var closed=(S.issues||[]).filter(function(x){return x.status==='closed';});
   var inProg=(S.issues||[]).filter(function(x){return x.status==='in_progress';});
   var statsRow=D({style:{display:'flex',gap:'10px',flexWrap:'wrap',marginBottom:'1rem'}});
-  [[open.length,'Open','#e74c3c'],[inProg.length,'In Progress','#e67e22'],[closed.length,'Resolved','#27ae60']].forEach(function(s){
-    var box=D({style:{background:'rgba(255,255,255,.05)',border:'1px solid rgba(232,98,74,.2)',borderRadius:'8px',padding:'10px 16px',textAlign:'center',minWidth:'80px'}});
+  [[open.length,'Open','#e74c3c','open'],[inProg.length,'In Progress','#e67e22','in_progress'],[closed.length,'Resolved','#27ae60','closed']].forEach(function(s){
+    var box=D({style:{background:'rgba(255,255,255,.05)',border:'1px solid rgba(232,98,74,.2)',borderRadius:'8px',padding:'10px 16px',textAlign:'center',minWidth:'80px',cursor:'pointer',transition:'border-color .15s'}});
+    box.addEventListener('mouseover',function(){box.style.borderColor=s[2];});
+    box.addEventListener('mouseout',function(){box.style.borderColor='rgba(232,98,74,.2)';});
+    box.addEventListener('click',safe(function(){S.issueTab=s[3];render();}));
     box.appendChild(P({style:{fontSize:'22px',fontWeight:'700',color:s[2],marginBottom:'2px'}},String(s[0])));
     box.appendChild(P({style:{fontSize:'11px',color:'#b0adc4',textTransform:'uppercase',letterSpacing:'.5px'}},s[1]));
     statsRow.appendChild(box);
