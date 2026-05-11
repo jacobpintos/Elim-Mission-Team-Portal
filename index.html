@@ -528,7 +528,9 @@ var S = {
   nEv:2,nTask:2,nGroup:4,nRoom:3,nReport:2,nNotif:1,
   auditLog:[], announcements:[], reorderItems:[],
   setlists:[], inputLists:{sunday:[], event:[], wh2:[]}, avail:{},
-  taskTemplates:[]
+  taskTemplates:[],
+  issues:[],
+  kaizen:[]
 };
 
 // -- AUDIT TRAIL -----------------------------------------------------------
@@ -591,6 +593,8 @@ function save(){
     merch: S.merch,
     avail: S.avail||{},
     taskTemplates: S.taskTemplates||[],
+    issues: S.issues||[],
+    kaizen: S.kaizen||[],
     nEv: S.nEv,
     nTask: S.nTask,
     nGroup: S.nGroup,
@@ -652,7 +656,7 @@ function startRealtimeListener(){
     if(!doc.exists||!S.user) return;
     var d = doc.data();
     var needRender = false;
-    ['templates','overrides','groups','tasks','rooms','reports','notifs','pendingDel','merch','auditLog','announcements','reorderItems','setlists','inputLists','productionItems','avail','taskTemplates',
+    ['templates','overrides','groups','tasks','rooms','reports','notifs','pendingDel','merch','auditLog','announcements','reorderItems','setlists','inputLists','productionItems','avail','taskTemplates','issues','kaizen',
      'nEv','nTask','nGroup','nRoom','nReport','nNotif'].forEach(function(k){
       if(d[k]!==undefined){
         var oldStr = JSON.stringify(S[k]);
@@ -1406,7 +1410,558 @@ function generateEventTasks(tmpl, eventTemplate) {
 }
 
 
-// -- RENDER -----------------------------------------------------------------
+// -- ISSUES VIEW -------------------------------------------------------------
+function issuesView(){
+  var u=S.user, w=D({});
+  w.appendChild(P({cls:'sec-t'},'Improve'));
+  if(!S.improveTab) S.improveTab='issues';
+  var st2=D({cls:'stabs'}), ct2=D({});
+  [{id:'issues',label:'Production Issues'},{id:'kaizen',label:'Kaizen Board'}].forEach(function(tab){
+    var b=BTN({cls:'stab'+(S.improveTab===tab.id?' on':'')},tab.label);
+    b.addEventListener('click',safe(function(){S.improveTab=tab.id;render();}));
+    st2.appendChild(b);
+  });
+  w.appendChild(st2); w.appendChild(ct2);
+  if(S.improveTab==='kaizen'){ct2.appendChild(kaizenView());return w;}
+
+  // ---- Production Issues sub-view ----
+  var iw=D({});
+  ct2.appendChild(iw);
+  iw.appendChild(D({cls:'rh'},[
+    P({style:{fontSize:'14px',fontWeight:'600',color:'#f0ece4'}},'Production Issues'),
+    BTN({cls:'btn bg bsm',click:safe(function(){S.modal={type:'editIssue',issue:null};render();})},'+ New Issue')
+  ]));
+
+  if(!S.issues||!S.issues.length){
+    iw.appendChild(D({cls:'empty'},'No issues logged yet. Use this page to document and resolve production problems.'));
+    return w;
+  }
+
+  var open=(S.issues||[]).filter(function(x){return x.status!=='closed';});
+  var closed=(S.issues||[]).filter(function(x){return x.status==='closed';});
+  var inProg=(S.issues||[]).filter(function(x){return x.status==='in_progress';});
+  var statsRow=D({style:{display:'flex',gap:'10px',flexWrap:'wrap',marginBottom:'1rem'}});
+  [[open.length,'Open','#e74c3c'],[inProg.length,'In Progress','#e67e22'],[closed.length,'Resolved','#27ae60']].forEach(function(s){
+    var box=D({style:{background:'rgba(255,255,255,.05)',border:'1px solid rgba(232,98,74,.2)',borderRadius:'8px',padding:'10px 16px',textAlign:'center',minWidth:'80px'}});
+    box.appendChild(P({style:{fontSize:'22px',fontWeight:'700',color:s[2],marginBottom:'2px'}},String(s[0])));
+    box.appendChild(P({style:{fontSize:'11px',color:'#b0adc4',textTransform:'uppercase',letterSpacing:'.5px'}},s[1]));
+    statsRow.appendChild(box);
+  });
+  iw.appendChild(statsRow);
+
+  if(!S.issueTab) S.issueTab='open';
+  var st=D({cls:'stabs'}), ct=D({});
+  [{id:'open',label:'Open ('+open.length+')'},{id:'in_progress',label:'In Progress ('+inProg.length+')'},{id:'closed',label:'Resolved ('+closed.length+')'}].forEach(function(tab){
+    var b=BTN({cls:'stab'+(S.issueTab===tab.id?' on':'')},tab.label);
+    b.addEventListener('click',safe(function(){S.issueTab=tab.id;render();}));
+    st.appendChild(b);
+  });
+  iw.appendChild(st); iw.appendChild(ct);
+
+  var filtered=(S.issues||[]).filter(function(x){return x.status===S.issueTab;}).slice().reverse();
+  if(!filtered.length){ct.appendChild(D({cls:'empty'},'No issues in this category.'));return w;}
+
+  filtered.forEach(function(issue){
+    var card=D({cls:'card',style:{marginBottom:'.65rem',cursor:'pointer'}});
+    var statusColor={open:'#e74c3c',in_progress:'#e67e22',closed:'#27ae60'};
+    var statusLabel={open:'Open',in_progress:'In Progress',closed:'Resolved'};
+    var hdr=D({style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'8px',marginBottom:'6px'}});
+    var left=D({});
+    left.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#f0ece4',marginBottom:'3px'}},issue.title));
+    left.appendChild(P({cls:'cs'},(issue.eventTitle?issue.eventTitle+' \u00B7 ':'')+FD(issue.date)+' \u00B7 Reported by '+UN(issue.reporter)));
+    hdr.appendChild(left);
+    var badge=SP({style:{background:'rgba('+hexToRgb(statusColor[issue.status]||'#b0adc4')+',.15)',color:statusColor[issue.status]||'#b0adc4',border:'1px solid '+(statusColor[issue.status]||'#b0adc4'),borderRadius:'12px',padding:'2px 10px',fontSize:'11px',whiteSpace:'nowrap',flexShrink:'0'}},statusLabel[issue.status]||issue.status);
+    hdr.appendChild(badge);
+    card.appendChild(hdr);
+    if(issue.problem) card.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',lineHeight:'1.5'}},issue.problem.slice(0,120)+(issue.problem.length>120?'...':'')));
+    if(issue.ca) card.appendChild(P({style:{fontSize:'12px',color:'#2ecc71',marginTop:'4px'}},'\u2714 CA: '+issue.ca.slice(0,80)+(issue.ca.length>80?'...':'')));
+    card.addEventListener('click',safe(function(){S.modal={type:'editIssue',issue:issue};render();}));
+    ct.appendChild(card);
+  });
+  return w;
+}
+
+function hexToRgb(hex){
+  var r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return r?parseInt(r[1],16)+','+parseInt(r[2],16)+','+parseInt(r[3],16):'180,173,196';
+}
+
+// -- EDIT/CREATE ISSUE MODAL -------------------------------------------------
+function mEditIssue(mo, issue){
+  var isNew=!issue;
+  var fd=isNew?{title:'',date:TODAY(),eventTitle:'',problem:'',why1:'',why2:'',why3:'',why4:'',why5:'',ca:'',caOwner:'',caDueDate:'',caDueTaskId:null,status:'open',verif:'',verifDate:''}:Object.assign({},issue);
+  mo.appendChild(P({cls:'modal-title'},isNew?'New Production Issue':'Edit Issue'));
+  var err=P({cls:'err'});
+  var ct=D({});
+  mo.appendChild(ct); mo.appendChild(err);
+  mo.appendChild(D({cls:'mfooter'},[
+    BTN({cls:'btn bo',click:closeM},'Cancel'),
+    isNew?null:BTN({cls:'btn br bsm',click:safe(function(){
+      if(!confirm('Delete this issue?')) return;
+      S.issues=S.issues.filter(function(x){return x.id!==issue.id;});
+      save();closeM();
+    })},'Delete'),
+    BTN({cls:'btn bg',click:safe(function(){
+      if(!fd.title.trim()){err.textContent='Title required.';return;}
+      if(!fd.problem.trim()){err.textContent='Problem statement required.';return;}
+      if(isNew){
+        if(!S.issues) S.issues=[];
+        S.issues.push(Object.assign({},fd,{id:Date.now(),reporter:S.user.id,ts:Date.now()}));
+        // Notify admins
+        USERS.filter(function(u){return isAdmin(u);}).forEach(function(u){
+          if(!sameId(u.id,S.user.id)) addNotif(u.id,'New issue logged: "'+fd.title+'"');
+        });
+      } else {
+        var idx=S.issues.findIndex(function(x){return x.id===issue.id;});
+        if(idx>=0) S.issues[idx]=Object.assign({},fd,{id:issue.id,reporter:issue.reporter,ts:issue.ts});
+      }
+      // Generate or update CA task if owner and CA are set
+      if(fd.caOwner&&fd.ca){
+        var existingTask=fd.caDueTaskId?S.tasks.find(function(t){return t.id===fd.caDueTaskId;}):null;
+        if(existingTask){
+          existingTask.title='CA: '+fd.ca.slice(0,60);
+          existingTask.dueDate=fd.caDueDate||null;
+          existingTask.assignees=[String(fd.caOwner)];
+          existingTask.lead=String(fd.caOwner);
+        } else {
+          var newTask={id:S.nTask++,assignees:[String(fd.caOwner)],lead:String(fd.caOwner),
+            by:S.user.id,title:'CA: '+fd.ca.slice(0,60),status:'pending',
+            evId:null,evDate:null,evTemplateId:null,kaizenId:null,
+            issueId:fd.id||Date.now(),issueTitle:fd.title,
+            dueDate:fd.caDueDate||null,overdueNotified:false,sourceGroupIds:[]};
+          fd.caDueTaskId=newTask.id;
+          S.tasks.push(newTask);
+          addNotif(fd.caOwner,'New corrective action task for issue: "'+fd.title+'"');
+        }
+      }
+      audit(isNew?'Issue Created':'Issue Updated', fd.title);
+      save();closeM();
+    })},isNew?'Submit':'Save')
+  ].filter(Boolean)));
+
+  function rebuild(){
+    ct.innerHTML='';
+    ct.appendChild(FLD('Issue Title *',INP({type:'text',value:fd.title,input:function(e){fd.title=e.target.value;}})));
+    ct.appendChild(D({style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}},[
+      FLD('Date *',INP({type:'date',value:fd.date,input:function(e){fd.date=e.target.value;}})),
+      FLD('Related Event (optional)',INP({type:'text',value:fd.eventTitle,placeholder:'e.g. Sunday Service',input:function(e){fd.eventTitle=e.target.value;}}))
+    ]));
+    ct.appendChild(HR());
+    ct.appendChild(P({style:{fontSize:'13px',fontWeight:'600',color:'#e8624a',marginBottom:'6px'}},'Problem Statement'));
+    ct.appendChild(FLD('What happened? *',TA({value:fd.problem,rows:3,input:function(e){fd.problem=e.target.value;}})));
+    ct.appendChild(HR());
+    ct.appendChild(P({style:{fontSize:'13px',fontWeight:'600',color:'#e8624a',marginBottom:'2px'}},'5-Why Root Cause Analysis'));
+    ct.appendChild(P({style:{fontSize:'11px',color:'#b0adc4',marginBottom:'8px'}},'Ask "Why?" five times to find the root cause.'));
+    [['why1','Why did this happen?'],['why2','Why? (2nd level)'],['why3','Why? (3rd level)'],['why4','Why? (4th level)'],['why5','Why? (Root cause)']].forEach(function(row,i){
+      var num=D({style:{display:'flex',gap:'8px',alignItems:'flex-start',marginBottom:'8px'}});
+      num.appendChild(SP({style:{background:'rgba(232,98,74,.2)',color:'#e8624a',borderRadius:'50%',width:'22px',height:'22px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:'700',flexShrink:'0',marginTop:'26px'}},String(i+1)));
+      (function(key,lbl){
+        num.appendChild(FLD(lbl,TA({value:fd[key]||'',rows:2,input:function(e){fd[key]=e.target.value;}})));
+      })(row[0],row[1]);
+      ct.appendChild(num);
+    });
+    ct.appendChild(HR());
+    ct.appendChild(P({style:{fontSize:'13px',fontWeight:'600',color:'#e8624a',marginBottom:'6px'}},'Corrective Action'));
+    ct.appendChild(FLD('What will be done to prevent recurrence?',TA({value:fd.ca,rows:3,input:function(e){fd.ca=e.target.value;}})));
+    ct.appendChild(FLD('CA Owner',ComboBox('Assign responsibility...',[{value:'',label:'Unassigned'}].concat(USERS.filter(function(u){return u.name&&u.name!=='?';}).slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'');}).map(function(u){return {value:u.id,label:u.name};})),function(val){fd.caOwner=val;rebuild();})));
+    if(fd.caOwner){
+      var u2=USERS.find(function(u){return sameId(u.id,fd.caOwner);});
+      if(u2){var ownerTag=D({style:{marginTop:'-8px',marginBottom:'8px'}});ownerTag.appendChild(SP({cls:'tag tagp'},u2.name+' \u00d7'));ownerTag.querySelector('span').addEventListener('click',function(){fd.caOwner='';rebuild();});ct.appendChild(ownerTag);}
+      ct.appendChild(FLD('CA Due Date (appears in assignee\'s My Tasks)',INP({type:'date',value:fd.caDueDate||'',input:function(e){fd.caDueDate=e.target.value;}})));
+    }
+    ct.appendChild(HR());
+    ct.appendChild(P({style:{fontSize:'13px',fontWeight:'600',color:'#e8624a',marginBottom:'6px'}},'Verification'));
+    ct.appendChild(P({style:{fontSize:'11px',color:'#b0adc4',marginBottom:'8px'}},'Did the corrective action work? Complete this after the next event.'));
+    ct.appendChild(D({style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}},[
+      FLD('Verification Date',INP({type:'date',value:fd.verifDate||'',input:function(e){fd.verifDate=e.target.value;}})),
+      FLD('Status',SEL({change:function(e){fd.status=e.target.value;rebuild();}},[
+        OPT({value:'open',selected:fd.status==='open'},'Open'),
+        OPT({value:'in_progress',selected:fd.status==='in_progress'},'CA In Progress'),
+        OPT({value:'closed',selected:fd.status==='closed'},'Resolved / Closed')
+      ]))
+    ]));
+    ct.appendChild(FLD('Verification Notes (did it work?)',TA({value:fd.verif||'',rows:3,input:function(e){fd.verif=e.target.value;}})));
+  }
+  rebuild();
+}
+
+// -- KAIZEN / CI BOARD -------------------------------------------------------
+var KAIZEN_COLS = [
+  {id:'idea',     label:'Ideas',           color:'#2980b9'},
+  {id:'review',   label:'Under Review',    color:'#8e44ad'},
+  {id:'action',   label:'Action Plan',     color:'#e67e22'},
+  {id:'complete', label:'Completed',       color:'#27ae60'}
+];
+var KAIZEN_CATS = ['Equipment','Instruments','Sound Balance','Coordination','Tech','Stream / Capture','Other'];
+
+function kaizenView(){
+  var u=S.user, w=D({});
+  if(!S.kaizen) S.kaizen=[];
+  var hdr=D({cls:'rh'});
+  hdr.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#f0ece4'}},'Kaizen Board'));
+  hdr.appendChild(BTN({cls:'btn bg bsm',click:safe(function(){S.modal={type:'editKaizen',item:null};render();})},'+ Submit Idea'));
+  w.appendChild(hdr);
+  w.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'1rem'}},'Continuous improvement. Vote to surface the best ideas. Admins move cards through the pipeline.'));
+
+  var board=D({style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))',gap:'10px'}});
+  KAIZEN_COLS.forEach(function(col){
+    var col_el=D({style:{background:'rgba(255,255,255,.03)',border:'1px solid rgba(232,98,74,.15)',borderRadius:'10px',padding:'10px'}});
+    var col_hdr=D({style:{display:'flex',alignItems:'center',gap:'6px',marginBottom:'10px'}});
+    var dot=SP({style:{width:'10px',height:'10px',borderRadius:'50%',background:col.color,display:'inline-block',flexShrink:'0'}});
+    col_hdr.appendChild(dot);
+    col_hdr.appendChild(SP({style:{fontWeight:'600',fontSize:'13px',color:'#f0ece4'}},col.label));
+    var count=(S.kaizen||[]).filter(function(x){return x.stage===col.id;}).length;
+    if(count) col_hdr.appendChild(SP({style:{marginLeft:'auto',fontSize:'11px',color:'#b0adc4'}},String(count)));
+    col_el.appendChild(col_hdr);
+
+    var items=(S.kaizen||[]).filter(function(x){return x.stage===col.id;}).slice().sort(function(a,b){return (b.votes||0)-(a.votes||0);});
+    if(!items.length) col_el.appendChild(P({style:{fontSize:'11px',color:'#5a5a6a',textAlign:'center',padding:'12px 0',fontStyle:'italic'}},'No items'));
+
+    items.forEach(function(item){
+      var card=D({style:{background:'rgba(255,255,255,.05)',border:'1px solid rgba(232,98,74,.2)',borderRadius:'8px',padding:'9px 10px',marginBottom:'7px'}});
+      var catTag=SP({style:{fontSize:'10px',background:'rgba(232,98,74,.15)',color:'#e8624a',borderRadius:'4px',padding:'1px 6px',marginBottom:'5px',display:'inline-block'}},item.category||'Other');
+      card.appendChild(catTag);
+      card.appendChild(P({style:{fontSize:'13px',fontWeight:'500',color:'#f0ece4',marginBottom:'4px',lineHeight:'1.4'}},item.title));
+      if(item.description){
+        var descFull=item.description;
+        var descShort=descFull.slice(0,80);
+        var needsTrunc=descFull.length>80;
+        var descEl=P({style:{fontSize:'11px',color:'#b0adc4',marginBottom:'4px',lineHeight:'1.5'}},descShort+(needsTrunc?'...':''));
+        card.appendChild(descEl);
+        if(needsTrunc){
+          var expanded=false;
+          var toggleBtn=SP({style:{fontSize:'10px',color:'#e8624a',cursor:'pointer',display:'block',marginTop:'-2px',marginBottom:'4px'}},'Show more');
+          (function(el,full,short,btn){
+            btn.addEventListener('click',safe(function(e){
+              e.stopPropagation();
+              expanded=!expanded;
+              el.textContent=expanded?full:short+'...';
+              btn.textContent=expanded?'Show less':'Show more';
+            }));
+          })(descEl,descFull,descShort,toggleBtn);
+          card.appendChild(toggleBtn);
+        }
+      }
+      if(item.linkedIssueId){
+        var lnk=S.issues&&S.issues.find(function(x){return x.id===item.linkedIssueId;});
+        if(lnk) card.appendChild(P({style:{fontSize:'10px',color:'#b0adc4',marginBottom:'4px'}},'\u2197 From: '+lnk.title.slice(0,30)));
+      }
+      // Active action plan summary
+      var ap=kaizenActiveAP(item);
+      if(ap){
+        var apBox=D({style:{background:'rgba(232,152,0,.08)',border:'1px solid rgba(232,152,0,.2)',borderRadius:'6px',padding:'6px 8px',marginBottom:'6px',fontSize:'11px',color:'#f39c12'}});
+        apBox.appendChild(P({},'\u2022 Action Plan v'+String((item.actionPlans||[]).length)+': '+(ap.statement||'').slice(0,50)));
+        var done=(ap.steps||[]).filter(function(s){return s.done;}).length;
+        apBox.appendChild(P({},done+' / '+(ap.steps||[]).length+' steps complete'));
+        card.appendChild(apBox);
+      }
+      // Vote row
+      var voteRow=D({style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:'6px'}});
+      var votes=item.votes||0;
+      var myVote=(item.voters||[]).some(function(v){return sameId(v,u.id);});
+      var voteBtn=BTN({cls:'btn bsm'});
+      voteBtn.style.cssText='background:'+(myVote?'rgba(41,128,185,.3)':'transparent')+';color:'+(myVote?'#87b7e8':'#b0adc4')+';border:1px solid rgba(41,128,185,.3);font-size:11px;padding:3px 8px';
+      voteBtn.textContent='\u25b2 '+votes;
+      (function(it){voteBtn.addEventListener('click',safe(function(e){
+        e.stopPropagation();
+        if(!it.voters) it.voters=[];
+        var idx=it.voters.findIndex(function(v){return sameId(v,u.id);});
+        if(idx>=0){it.voters.splice(idx,1);it.votes=Math.max(0,(it.votes||0)-1);}
+        else{it.voters.push(String(u.id));it.votes=(it.votes||0)+1;}
+        save();render();
+      }));})(item);
+      voteRow.appendChild(voteBtn);
+      voteRow.appendChild(SP({style:{fontSize:'10px',color:'#5a5a6a'}},UN(item.submitter)));
+      card.appendChild(voteRow);
+
+      if(isAdmin(u)){
+        var adminRow=D({style:{display:'flex',gap:'4px',marginTop:'6px',flexWrap:'wrap'}});
+        var colIdx=KAIZEN_COLS.findIndex(function(c){return c.id===item.stage;});
+        // Back
+        if(colIdx>0&&item.stage!=='complete'){
+          var backBtn=BTN({cls:'btn bsm'});
+          backBtn.style.cssText='background:transparent;color:#b0adc4;border:1px solid rgba(255,255,255,.1);font-size:10px;padding:2px 6px';
+          backBtn.textContent='\u2190';
+          (function(it){backBtn.addEventListener('click',safe(function(e){
+            e.stopPropagation();
+            var ci=KAIZEN_COLS.findIndex(function(c){return c.id===it.stage;});
+            var hasAP=(it.actionPlans||[]).length>0;
+            if(hasAP){
+              if(!confirm('Moving this back will archive the current action plan and remove its tasks. The plan history will be preserved. Continue?')) return;
+              // Archive the active plan as 'archived' outcome
+              var ap=kaizenActiveAP(it);
+              if(ap){ap.outcome='archived';ap.outcomeNotes='Moved back before completion';ap.outcomeDate=TODAY();}
+              // Remove associated kaizen tasks
+              S.tasks=S.tasks.filter(function(t){return t.kaizenId!==it.id;});
+            }
+            it.stage=KAIZEN_COLS[ci-1].id;
+            save();render();
+          }));})(item);
+          adminRow.appendChild(backBtn);
+        }
+        // Forward
+        if(colIdx<KAIZEN_COLS.length-1){
+          var nextCol=KAIZEN_COLS[colIdx+1];
+          var fwdBtn=BTN({cls:'btn bsm'});
+          fwdBtn.style.cssText='background:rgba(39,174,96,.15);color:#2ecc71;border:1px solid rgba(39,174,96,.3);font-size:10px;padding:2px 6px';
+          // Moving to Action Plan opens AP modal; moving to Complete checks outcome
+          if(nextCol.id==='action'){
+            fwdBtn.textContent='\u2192 Plan';
+            (function(it){fwdBtn.addEventListener('click',safe(function(e){e.stopPropagation();S.modal={type:'kaizenActionPlan',item:it,mode:'new'};render();}));})(item);
+          } else if(nextCol.id==='complete'){
+            fwdBtn.textContent='\u2192 Complete';
+            (function(it){fwdBtn.addEventListener('click',safe(function(e){e.stopPropagation();S.modal={type:'kaizenOutcome',item:it,worked:true};render();}));})(item);
+          } else {
+            fwdBtn.textContent='\u2192 '+nextCol.label;
+            (function(it,nc){fwdBtn.addEventListener('click',safe(function(e){e.stopPropagation();it.stage=nc.id;save();render();}));})(item,nextCol);
+          }
+          adminRow.appendChild(fwdBtn);
+        }
+        // New action plan if already in action stage
+        if(item.stage==='action'){
+          var replanBtn=BTN({cls:'btn bsm'});
+          replanBtn.style.cssText='background:rgba(232,152,0,.15);color:#f39c12;border:1px solid rgba(232,152,0,.3);font-size:10px;padding:2px 6px';
+          replanBtn.textContent='New Plan';
+          (function(it){replanBtn.addEventListener('click',safe(function(e){e.stopPropagation();S.modal={type:'kaizenOutcome',item:it,worked:false};render();}));})(item);
+          adminRow.appendChild(replanBtn);
+        }
+        // Edit
+        var editBtn=BTN({cls:'btn bsm'});
+        editBtn.style.cssText='background:transparent;color:#b0adc4;border:1px solid rgba(255,255,255,.1);font-size:10px;padding:2px 6px';
+        editBtn.textContent='Edit';
+        (function(it){editBtn.addEventListener('click',safe(function(e){e.stopPropagation();S.modal={type:'editKaizen',item:it};render();}));})(item);
+        adminRow.appendChild(editBtn);
+        // Delete
+        var delBtn=BTN({cls:'btn bsm'});
+        delBtn.style.cssText='background:transparent;color:#e74c3c;border:1px solid rgba(231,76,60,.3);font-size:10px;padding:2px 6px';
+        delBtn.textContent='Delete';
+        (function(it){delBtn.addEventListener('click',safe(function(e){e.stopPropagation();S.modal={type:'kaizenDelete',item:it};render();}));})(item);
+        adminRow.appendChild(delBtn);
+        card.appendChild(adminRow);
+      }
+
+      // Completed: show AP history
+      if(item.stage==='complete'&&(item.actionPlans||[]).length){
+        var histBtn=BTN({cls:'btn bsm',style:{marginTop:'5px',width:'100%'}});
+        histBtn.style.cssText='background:transparent;color:#b0adc4;border:1px solid rgba(255,255,255,.1);font-size:10px;padding:3px 6px;width:100%';
+        histBtn.textContent='View History ('+item.actionPlans.length+' plan'+(item.actionPlans.length===1?'':'s')+')';
+        (function(it){histBtn.addEventListener('click',safe(function(e){e.stopPropagation();S.modal={type:'kaizenHistory',item:it};render();}));})(item);
+        card.appendChild(histBtn);
+      }
+      col_el.appendChild(card);
+    });
+    board.appendChild(col_el);
+  });
+  w.appendChild(board);
+  return w;
+}
+
+function kaizenActiveAP(item){
+  var plans=item.actionPlans||[];
+  return plans.length?plans[plans.length-1]:null;
+}
+
+// -- ACTION PLAN MODAL -------------------------------------------------------
+function mKaizenActionPlan(mo, item, mode){
+  var ap={statement:item.description||'',successCriteria:'',reviewDate:'',steps:[]};
+  mo.appendChild(P({cls:'modal-title'},'Action Plan'));
+  mo.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.75rem'}},'For: '+item.title));
+  var err=P({cls:'err'}), ct=D({});
+  mo.appendChild(ct); mo.appendChild(err);
+  mo.appendChild(D({cls:'mfooter'},[
+    BTN({cls:'btn bo',click:closeM},'Cancel'),
+    BTN({cls:'btn bg',click:safe(function(){
+      if(!ap.statement.trim()){err.textContent='Statement required.';return;}
+      if(!ap.steps.length){err.textContent='Add at least one action step.';return;}
+      // Save AP with timestamp
+      ap.ts=Date.now(); ap.version=(item.actionPlans||[]).length+1;
+      if(!item.actionPlans) item.actionPlans=[];
+      item.actionPlans.push(ap);
+      item.stage='action';
+      // Generate tasks for each step that has an assignee
+      ap.steps.forEach(function(step){
+        if(!step.assignee) return;
+        S.tasks.push({
+          id:S.nTask++, assignees:[String(step.assignee)], lead:String(step.assignee),
+          by:S.user.id, title:step.title, status:'pending',
+          evId:null, evDate:null, dueDate:step.dueDate||null,
+          evTemplateId:null, kaizenId:item.id, kaizenTitle:item.title,
+          overdueNotified:false, sourceGroupIds:[]
+        });
+        addNotif(step.assignee,'New Kaizen task: "'+step.title+'" for "'+item.title+'"');
+      });
+      audit('Kaizen Action Plan v'+ap.version, item.title);
+      save(); closeM();
+    })},'Save & Activate Plan')
+  ]));
+
+  function rebuild(){
+    ct.innerHTML='';
+    ct.appendChild(FLD('Opportunity / Problem Statement',TA({value:ap.statement,rows:3,input:function(e){ap.statement=e.target.value;}})));
+    ct.appendChild(FLD('Success Criteria',TA({value:ap.successCriteria,rows:2,placeholder:'How will we know this worked?',input:function(e){ap.successCriteria=e.target.value;}})));
+    ct.appendChild(FLD('Review Date',INP({type:'date',value:ap.reviewDate,input:function(e){ap.reviewDate=e.target.value;}})));
+    ct.appendChild(HR());
+    ct.appendChild(P({style:{fontSize:'13px',fontWeight:'600',color:'#e8624a',marginBottom:'6px'}},'Action Steps'));
+    ap.steps.forEach(function(step,i){
+      var row=D({style:{background:'rgba(255,255,255,.03)',border:'1px solid rgba(232,98,74,.15)',borderRadius:'8px',padding:'10px',marginBottom:'8px'}});
+      row.appendChild(FLD('Step '+(i+1)+' Description',INP({type:'text',value:step.title||'',input:function(e){ap.steps[i].title=e.target.value;}})));
+      var assigneeOpts=[{value:'',label:'Unassigned'}].concat(USERS.filter(function(u){return u.name&&u.name!=='?';}).sort(function(a,b){return (a.name||'').localeCompare(b.name||'');}).map(function(u){return {value:u.id,label:u.name};}));
+      row.appendChild(FLD('Assignee',D({},[ComboBox('Assign to...',assigneeOpts,(function(ii){return function(val){ap.steps[ii].assignee=val||null;rebuild();};})(i))])));
+      if(step.assignee){var u2=USERS.find(function(u){return sameId(u.id,step.assignee);});if(u2){var t2=SP({cls:'tag tagp',style:{marginTop:'-6px',marginBottom:'6px',display:'inline-block',cursor:'pointer'}},u2.name+' \u00d7');(function(ii){t2.addEventListener('click',function(){ap.steps[ii].assignee=null;rebuild();});})(i);row.appendChild(t2);}}
+      row.appendChild(FLD('Due Date',INP({type:'date',value:step.dueDate||'',input:function(e){ap.steps[i].dueDate=e.target.value||null;}})));
+      var rmBtn=BTN({cls:'btn br bsm',style:{marginTop:'4px'}},'Remove Step');
+      (function(ii){rmBtn.addEventListener('click',function(){ap.steps.splice(ii,1);rebuild();});})(i);
+      row.appendChild(rmBtn);
+      ct.appendChild(row);
+    });
+    var addStepBtn=BTN({cls:'btn bg bsm',style:{marginBottom:'1rem'}},'+ Add Step');
+    addStepBtn.addEventListener('click',function(){ap.steps.push({title:'',assignee:null,dueDate:null,done:false});rebuild();});
+    ct.appendChild(addStepBtn);
+  }
+  rebuild();
+}
+
+// -- OUTCOME MODAL -----------------------------------------------------------
+function mKaizenOutcome(mo, item, worked){
+  var title=worked?'Mark as Completed':'Initiate New Action Plan';
+  mo.appendChild(P({cls:'modal-title'},title));
+  var ap=kaizenActiveAP(item);
+  var notes='';
+  var ct=D({});
+  mo.appendChild(ct);
+  mo.appendChild(D({cls:'mfooter'},[
+    BTN({cls:'btn bo',click:closeM},'Cancel'),
+    BTN({cls:'btn bg',click:safe(function(){
+      if(ap){ap.outcome=worked?'worked':'failed';ap.outcomeNotes=notes;ap.outcomeDate=TODAY();}
+      // Remove kaizen tasks for this item
+      S.tasks=S.tasks.filter(function(t){return t.kaizenId!==item.id;});
+      if(worked){
+        item.stage='complete';
+        item.completedDate=TODAY();
+        audit('Kaizen Completed',item.title);
+        save();closeM();
+      } else {
+        // New action plan
+        save();closeM();
+        S.modal={type:'kaizenActionPlan',item:item,mode:'new'};render();
+      }
+    })},worked?'Mark Completed':'Start New Plan')
+  ]));
+  if(ap){
+    ct.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.5rem'}},'Current plan: v'+ap.version+(ap.statement?' -- '+ap.statement.slice(0,60):'')));
+    ct.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'.5rem'}},'Steps: '+(ap.steps||[]).filter(function(s){return s.done;}).length+' / '+(ap.steps||[]).length+' complete'));
+  }
+  ct.appendChild(FLD(worked?'What worked? (outcome notes)':'What failed? Why?',TA({value:'',rows:4,input:function(e){notes=e.target.value;}})));
+}
+
+// -- HISTORY MODAL -----------------------------------------------------------
+function mKaizenHistory(mo, item){
+  mo.appendChild(P({cls:'modal-title'},item.title+' -- History'));
+  var plans=item.actionPlans||[];
+  if(!plans.length){mo.appendChild(P({cls:'empty'},'No action plans logged.'));return;}
+  plans.forEach(function(ap){
+    var box=D({cls:'card',style:{marginBottom:'.65rem'}});
+    var outColor=ap.outcome==='worked'?'#27ae60':ap.outcome==='failed'?'#e74c3c':'#b0adc4';
+    var outLabel=ap.outcome==='worked'?'Worked':'failed'?'Did Not Work':'Pending';
+    box.appendChild(D({cls:'rh'},[
+      P({style:{fontWeight:'600',fontSize:'13px',color:'#f0ece4'}},'Plan v'+ap.version),
+      SP({style:{fontSize:'11px',color:outColor}},outLabel)
+    ]));
+    if(ap.statement) box.appendChild(P({cls:'cs',style:{marginBottom:'6px'}},ap.statement));
+    if(ap.successCriteria) box.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'4px'}},'Success criteria: '+ap.successCriteria));
+    if((ap.steps||[]).length){
+      box.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'4px'}},'Steps:'));
+      (ap.steps||[]).forEach(function(s){
+        box.appendChild(P({style:{fontSize:'12px',color:s.done?'#27ae60':'#f0ece4',marginLeft:'8px'}},
+          (s.done?'\u2714 ':'\u25cb ')+s.title+(s.assignee?' ('+UN(s.assignee)+')':'')+(s.dueDate?' -- due '+FD(s.dueDate):'')));
+      });
+    }
+    if(ap.outcomeNotes) box.appendChild(P({style:{fontSize:'12px',color:outColor,marginTop:'6px',fontStyle:'italic'}},'"'+ap.outcomeNotes+'"'));
+    if(ap.outcomeDate) box.appendChild(P({cls:'cs'},FD(ap.outcomeDate)));
+    mo.appendChild(box);
+  });
+  mo.appendChild(D({cls:'mfooter'},[BTN({cls:'btn bo',click:closeM},'Close')]));
+}
+
+// -- DELETE MODAL ------------------------------------------------------------
+function mKaizenDelete(mo, item){
+  mo.appendChild(P({cls:'modal-title'},'Delete Idea'));
+  mo.appendChild(P({style:{fontSize:'13px',color:'#b0adc4',marginBottom:'.75rem'}},'Deleting "'+item.title+'". The submitter will be notified.'));
+  var reason='';
+  mo.appendChild(FLD('Reason for deletion (required)',TA({value:'',rows:3,placeholder:'Explain why this idea is being removed...',input:function(e){reason=e.target.value.trim();}})));
+  var err=P({cls:'err'});
+  mo.appendChild(err);
+  mo.appendChild(D({cls:'mfooter'},[
+    BTN({cls:'btn bo',click:closeM},'Cancel'),
+    BTN({cls:'btn br',click:safe(function(){
+      if(!reason){err.textContent='Please provide a reason.';return;}
+      // Send message to submitter via Messages
+      var room=kaizenGetOrCreateDMRoom(item.submitter);
+      if(room){
+        var msg={uid:S.user.id,text:'Your idea "'+item.title+'" was removed by '+S.user.name+': '+reason,ts:Date.now()};
+        if(!room.msgs) room.msgs=[];
+        room.msgs.push(msg);
+      }
+      addNotif(item.submitter,'Your Kaizen idea "'+item.title+'" was removed: '+reason);
+      // Remove associated tasks
+      S.tasks=S.tasks.filter(function(t){return t.kaizenId!==item.id;});
+      S.kaizen=S.kaizen.filter(function(x){return x.id!==item.id;});
+      audit('Kaizen Deleted',item.title+' -- '+reason);
+      save();closeM();
+    })},'Delete & Notify')
+  ]));
+}
+
+function kaizenGetOrCreateDMRoom(submitterId){
+  // Find or create a DM room between admin and submitter
+  var adminId=String(S.user.id);
+  var subId=String(submitterId);
+  if(adminId===subId) return null;
+  var room=S.rooms.find(function(r){
+    return r.members&&r.members.length===2&&
+      r.members.some(function(x){return sameId(x,adminId);})&&
+      r.members.some(function(x){return sameId(x,subId);});
+  });
+  if(!room){
+    room={id:S.nRoom++,name:'Kaizen: '+UN(submitterId),members:[adminId,subId],msgs:[],call:false};
+    S.rooms.push(room);
+  }
+  return room;
+}
+
+
+function mEditKaizen(mo, item){
+  var isNew=!item;
+  var fd=isNew?{title:'',category:'Other',description:'',linkedIssueId:null,stage:'idea'}:Object.assign({},item);
+  mo.appendChild(P({cls:'modal-title'},isNew?'Submit Improvement Idea':'Edit Idea'));
+  var err=P({cls:'err'}), ct=D({});
+  mo.appendChild(ct); mo.appendChild(err);
+  mo.appendChild(D({cls:'mfooter'},[
+    BTN({cls:'btn bo',click:closeM},'Cancel'),
+    (!isNew&&isAdmin(S.user))?BTN({cls:'btn br bsm',click:safe(function(){S.modal={type:'kaizenDelete',item:item};render();})},'Delete'):null,
+    BTN({cls:'btn bg',click:safe(function(){
+      if(!fd.title.trim()){err.textContent='Title required.';return;}
+      if(isNew){
+        if(!S.kaizen) S.kaizen=[];
+        S.kaizen.push(Object.assign({},fd,{id:Date.now(),submitter:S.user.id,votes:0,voters:[],actionPlans:[],ts:Date.now()}));
+        USERS.filter(function(u){return isAdmin(u)&&!sameId(u.id,S.user.id);}).forEach(function(u){addNotif(u.id,'New improvement idea: "'+fd.title+'"');});
+      } else {
+        var idx=(S.kaizen||[]).findIndex(function(x){return x.id===item.id;});
+        if(idx>=0) S.kaizen[idx]=Object.assign({},S.kaizen[idx],{title:fd.title,category:fd.category,description:fd.description,linkedIssueId:fd.linkedIssueId});
+      }
+      audit(isNew?'Kaizen Created':'Kaizen Updated',fd.title);
+      save();closeM();
+    })},isNew?'Submit':'Save')
+  ].filter(Boolean)));
+  ct.appendChild(FLD('Idea Title *',INP({type:'text',value:fd.title,input:function(e){fd.title=e.target.value;}})));
+  ct.appendChild(FLD('Category',SEL({change:function(e){fd.category=e.target.value;}},KAIZEN_CATS.map(function(c){return OPT({value:c,selected:fd.category===c},c);}))));
+  ct.appendChild(FLD('Description',TA({value:fd.description||'',rows:4,placeholder:'Describe the improvement, why it matters, and how it could be done.',input:function(e){fd.description=e.target.value;}})));
+  var issueOpts=[{value:'',label:'None'}].concat((S.issues||[]).map(function(x){return {value:x.id,label:x.title.slice(0,50)};}));
+  ct.appendChild(FLD('Linked Issue (optional)',SEL({change:function(e){fd.linkedIssueId=e.target.value?Number(e.target.value):null;}},issueOpts.map(function(o){return OPT({value:String(o.value||''),selected:String(fd.linkedIssueId||'')===String(o.value||'')},o.label);}))));
+  if(isAdmin(S.user)&&!isNew) ct.appendChild(FLD('Stage',SEL({change:function(e){fd.stage=e.target.value;}},KAIZEN_COLS.map(function(c){return OPT({value:c.id,selected:fd.stage===c.id},c.label);}))));
+}
+
+
 function render(){
   var app=document.getElementById('app');
   app.innerHTML='';
@@ -1426,6 +1981,7 @@ function render(){
     else if(tab==='assignments') main.appendChild(assignView());
     else if(tab==='admin')  main.appendChild(adminView());
     else if(tab==='messages') main.appendChild(msgsView());
+    else if(tab==='issues')   main.appendChild(issuesView());
     else if(tab==='security') main.appendChild(secView());
     else if(tab==='inventory')  main.appendChild(inventoryView());
     else if(tab==='announce') main.appendChild(announceView());
@@ -1558,6 +2114,7 @@ function navBar(){
   var tabs=[
     {id:'events',label:'Events'},
     {id:'assignments',label:'My Tasks'},
+    {id:'issues',label:'Improve'},
     {id:'announce',label:'Announce'},
     {id:'messages',label:'Messages'},
     {id:'security',label:'Security'}
@@ -1571,9 +2128,11 @@ function navBar(){
     var secPend=t.id==='security'&&canSeeSecurity(u)&&S.reports.filter(function(r){return !r.ack;}).length>0;
     var adPend=t.id==='admin'&&S.pendingDel.length>0;
     var evPend=t.id==='events'&&S.user&&(function(){try{return pendingAvailEvents().length>0;}catch(e){return false;}})();
+    var issuePend=t.id==='issues'&&(S.issues||[]).filter(function(x){return x.status!=='closed';}).length>0;
     if(secPend) tb.appendChild(SP({cls:'nbadge'},String(S.reports.filter(function(r){return !r.ack;}).length)));
     if(adPend)  tb.appendChild(SP({cls:'nbadge'},String(S.pendingDel.length)));
     if(evPend)  tb.appendChild(SP({cls:'nbadge'},'!'));
+    if(issuePend) tb.appendChild(SP({cls:'nbadge'},String((S.issues||[]).filter(function(x){return x.status!=='closed';}).length)));
     nav.appendChild(tb);
   });
   return nav;
@@ -1799,7 +2358,9 @@ function renderTaskGroups(tasks,isAdmin,w,q){
   var filtered=tasks.filter(function(t){return !isOverdue(t)&&t.status!=='behind'&&taskMatchesSearch(t,q);});
   var evTaskGroups={}, plainTasks=[];
   filtered.forEach(function(t){
-    if(t.evTemplateId){var k=String(t.evTemplateId);if(!evTaskGroups[k])evTaskGroups[k]=[];evTaskGroups[k].push(t);}
+    if(t.kaizenId){ var kk='k_'+String(t.kaizenId); if(!evTaskGroups[kk])evTaskGroups[kk]=[]; evTaskGroups[kk].push(t); }
+    else if(t.issueId){ var ik='i_'+String(t.issueId); if(!evTaskGroups[ik])evTaskGroups[ik]=[]; evTaskGroups[ik].push(t); }
+    else if(t.evTemplateId){var k=String(t.evTemplateId);if(!evTaskGroups[k])evTaskGroups[k]=[];evTaskGroups[k].push(t);}
     else{plainTasks.push(t);}
   });
   if(plainTasks.length){
@@ -1807,19 +2368,20 @@ function renderTaskGroups(tasks,isAdmin,w,q){
     plainTasks.forEach(function(t){try{var tc=taskCard(t,isAdmin);if(tc instanceof Node)w.appendChild(tc);}catch(e){console.warn(e);}});
   }
   Object.keys(evTaskGroups).forEach(function(tid){
-    var evTmpl=S.templates.find(function(e){return String(e.id)===tid;});
-    var evTitle=evTmpl?evTmpl.title:'Event';
-    var evLoc=evTmpl?evTmpl.location:'';
-    var evDate=evTmpl?FD(evTmpl.date):'';
-    // If searching by event/location and no match, skip the header but show matched tasks
-    if(q&&!evTitle.toLowerCase().includes(q)&&!evLoc.toLowerCase().includes(q)){
-      // Tasks already filtered above -- show without group header
-      evTaskGroups[tid].forEach(function(t){try{var tc=taskCard(t,isAdmin);if(tc instanceof Node)w.appendChild(tc);}catch(e){console.warn(e);}});
-      return;
-    }
-    var grpBox=D({cls:'card',style:{borderColor:'rgba(232,98,74,.4)',marginBottom:'.75rem'}});
-    grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:'#e8624a',marginBottom:'2px'}},evTitle));
-    grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},evLoc+(evDate?' \u00B7 '+evDate:'')));
+    var isKz=tid.slice(0,2)==='k_';
+    var isIss=tid.slice(0,2)==='i_';
+    var rawId=tid.slice(2);
+    var evTmpl=(!isKz&&!isIss)?S.templates.find(function(e){return String(e.id)===tid;}):null;
+    var kzItem=isKz?(S.kaizen||[]).find(function(k){return String(k.id)===rawId;}):null;
+    var issItem=isIss?(S.issues||[]).find(function(x){return String(x.id)===rawId;}):null;
+    var grpTitle=isKz?('\uD83C\uDF31 Kaizen: '+(kzItem?kzItem.title:'Improvement')):isIss?('\u26A0 Issue CA: '+(issItem?issItem.title:'Issue')):evTmpl?evTmpl.title:'Event';
+    var grpSub=(!isKz&&!isIss&&evTmpl)?(evTmpl.location+(evTmpl.date?' \u00b7 '+FD(evTmpl.date):'')):'';
+    var borderColor=isKz?'rgba(41,128,185,.4)':isIss?'rgba(192,57,43,.4)':'rgba(232,98,74,.4)';
+    var titleColor=isKz?'#3498db':isIss?'#e74c3c':'#e8624a';
+    if(q&&!taskMatchesSearch({title:grpTitle,evDate:null},q)&&!evTaskGroups[tid].some(function(t){return taskMatchesSearch(t,q);})) return;
+    var grpBox=D({cls:'card',style:{borderColor:borderColor,marginBottom:'.75rem'}});
+    grpBox.appendChild(P({style:{fontWeight:'600',fontSize:'14px',color:titleColor,marginBottom:'2px'}},grpTitle));
+    if(grpSub) grpBox.appendChild(P({cls:'cs',style:{marginBottom:'10px'}},grpSub));
     evTaskGroups[tid].forEach(function(t){try{var tc=taskCard(t,isAdmin);if(tc instanceof Node)grpBox.appendChild(tc);}catch(e){console.warn(e);}});
     w.appendChild(grpBox);
   });
@@ -2554,7 +3116,7 @@ function secAllView(){
 // -- MODAL ROUTER -----------------------------------------------------------
 function buildModal(mo){
   var m=S.modal, type=typeof m==='string'?m:m.type;
-  var noTitle=['detail','editInstance','editTemplate','addMerchItem','merchAdj','createAnnounce','secAckNote','editSetlist','editTaskTemplate','availInstance','changeEmail'];
+  var noTitle=['detail','editInstance','editTemplate','addMerchItem','merchAdj','createAnnounce','secAckNote','editSetlist','editTaskTemplate','availInstance','changeEmail','editIssue','editKaizen','kaizenActionPlan','kaizenOutcome','kaizenHistory','kaizenDelete'];
   if(noTitle.indexOf(type)<0){
     var titles={createEvent:'Create New Event',addTask:'Add Task',createGroup:'Create Group',editGroup:'Edit Group',createRoom:'New Chat Room',editRoom:'Manage Room',createUser:'Add New User',editUser:'Edit User',notifs:'Notifications',changePW:'Change Password'};
     mo.appendChild(P({cls:'modal-title'},titles[type]||type));
@@ -2579,6 +3141,12 @@ function buildModal(mo){
   else if(type==='editTaskTemplate') mEditTaskTemplate(mo,m.tpl);
   else if(type==='availInstance') mAvailInstance(mo,m.ev,m.uid);
   else if(type==='changeEmail') mChangeEmail(mo);
+  else if(type==='editIssue') mEditIssue(mo,m.issue);
+  else if(type==='editKaizen') mEditKaizen(mo,m.item);
+  else if(type==='kaizenActionPlan') mKaizenActionPlan(mo,m.item,m.mode);
+  else if(type==='kaizenOutcome') mKaizenOutcome(mo,m.item,m.worked);
+  else if(type==='kaizenHistory') mKaizenHistory(mo,m.item);
+  else if(type==='kaizenDelete') mKaizenDelete(mo,m.item);
 }
 function closeM(){S.modal=null;render();}
 
@@ -5081,6 +5649,8 @@ auth.onAuthStateChanged(function(firebaseUser){
       S.availStepIdx = 0;
       S.availFocusKey = null;
       S.coordAdminTab = S.coordAdminTab||'matrix';
+      S.improveTab = S.improveTab||'issues';
+      S.issueTab = S.issueTab||'open';
       // Normalize all stored IDs to strings for consistent comparisons
       USERS.forEach(function(u){ u.id=String(u.uid||u.id); });
       // (group cleanup moved to after STATE_LOADED)
