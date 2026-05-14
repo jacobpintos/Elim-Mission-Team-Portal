@@ -19,6 +19,74 @@
   --mid:#1a1010;--muted:#9a9ab0;--bdr:rgba(232,98,74,0.25);
   --red:#c0392b;--grn:#27ae60;--blue:#2980b9;--txt:#f0ece4
 }
+
+body.light{background:#f0eff8;color:#1a1a2e !important}
+body.light #app{background:#f0eff8}
+body.light p{color:#1a1a2e !important}
+body.light span{color:#1a1a2e !important}
+body.light #main > div,body.light .card > div,body.light .modal > div{color:#1a1a2e}
+body.light .card{background:#fff;border-color:rgba(232,98,74,.2)}
+body.light .sec-t{color:#1a1a2e !important}
+body.light .cs{color:#4a4a6a !important}
+body.light .hint{color:#4a4a6a !important}
+body.light .mbs{color:#4a4a6a !important}
+body.light label{color:#4a4a6a !important}
+body.light .f label{color:#4a4a6a !important}
+body.light #navtabs{background:#fff;border-bottom-color:rgba(232,98,74,.2)}
+body.light .ntab{color:#4a4a6a !important}
+body.light .ntab.on{color:#e8624a !important;border-bottom-color:#e8624a}
+body.light #topbar{background:#fff;border-bottom-color:rgba(232,98,74,.15)}
+body.light .modal{background:#fff;border-color:rgba(232,98,74,.3)}
+body.light .modal-title{color:#e8624a !important}
+body.light .modal-bg{background:rgba(0,0,0,.45)}
+body.light input,body.light textarea,body.light select{background:#fff;border-color:rgba(74,74,106,.25);color:#1a1a2e !important}
+body.light input::placeholder,body.light textarea::placeholder{color:#8a8aaa !important}
+body.light .task-search{background:#fff;border-color:rgba(74,74,106,.25);color:#1a1a2e !important}
+body.light .msg-list{background:#f5f4fc}
+body.light .mb.theirs{background:#e4e3f0;color:#1a1a2e !important}
+body.light .mb.mine{background:#e8624a;color:#fff !important}
+body.light .overdue-banner{background:rgba(192,57,43,.05);border-color:rgba(192,57,43,.2)}
+body.light .overdue-banner-title{color:#c0392b !important}
+body.light .empty{color:#7a7a9a !important}
+body.light .tag{background:rgba(232,98,74,.1);color:#c44a34 !important;border-color:rgba(232,98,74,.25)}
+body.light .tagp{background:rgba(232,98,74,.1);color:#c44a34 !important;border-color:rgba(232,98,74,.25)}
+body.light .stab{color:#4a4a6a !important;border-color:rgba(74,74,106,.2);background:transparent}
+body.light .stab.on{background:#e8624a;color:#fff !important;border-color:#e8624a}
+body.light .btn.bo{color:#4a4a6a !important;border-color:rgba(74,74,106,.25);background:transparent}
+body.light .btn.bo:hover{background:rgba(74,74,106,.08)}
+body.light .btn.bg{color:#fff !important}
+body.light .btn.br{color:#fff !important}
+body.light .btn.bG{color:#fff !important}
+body.light .btn.bB{color:#fff !important}
+body.light #login-page{background:#e8e7f0}
+body.light .login-card{background:#fff;border-color:rgba(232,98,74,.25);box-shadow:0 4px 24px rgba(74,74,106,.15)}
+body.light .team-block{background:rgba(74,74,106,.06);border-color:rgba(74,74,106,.15)}
+body.light .call-bar{background:rgba(41,128,185,.08);border-color:rgba(41,128,185,.25)}
+body.light .warn-box{background:rgba(200,100,50,.06);border-color:rgba(200,100,50,.2)}
+body.light .notif-item{background:rgba(200,169,110,.06);border-color:rgba(232,98,74,.2)}
+body.light table td,body.light table th{color:#1a1a2e !important}
+body.light{--ob-bg:#fff}
+body.light .ob-card{background:#fff;box-shadow:0 8px 40px rgba(74,74,106,.2);color:#1a1a2e}
+body.light .ob-body{color:#4a4a6a}
+body.light .ob-step-dots .ob-dot{background:rgba(74,74,106,.2)}
+body.light .ob-step-dots .ob-dot.on{background:#e8624a}
+body.light .out-block{background:#f5f4fc;border-color:rgba(74,74,106,.15)}
+body.light .mfooter{border-top-color:rgba(74,74,106,.15)}
+/* Calendar light mode */
+body.light .cal-wrap{background:#fff;border-color:rgba(232,98,74,.2)}
+body.light .cal-month-hdr{background:#fff;border-bottom-color:rgba(232,98,74,.2)}
+body.light .cal-month-hdr span,body.light .cal-month-hdr p,body.light .cal-month-hdr div{color:#1a1a2e !important}
+body.light .cdn{background:rgba(74,74,106,.06);color:#4a4a6a !important}
+body.light .cd{border-right-color:rgba(74,74,106,.08);border-bottom-color:rgba(74,74,106,.08)}
+body.light .cd:hover{background:rgba(232,98,74,.06)}
+body.light .cd.tod{background:rgba(232,98,74,.08)}
+body.light .cnum{color:rgba(26,26,46,.4) !important}
+body.light .cd.tod .cnum{color:#e8624a !important}
+body.light .cd.om .cnum{color:rgba(26,26,46,.15) !important}
+body.light .cev{color:#fff !important}
+/* Availability card light mode */
+body.light .avail-card,body.light [class*="avail"]{background:#fff}
+
 body{font-family:sans-serif;background:#14141e;color:#f0ece4;min-height:100vh}
 #app{min-height:100vh;display:flex;flex-direction:column;background:#14141e}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-family:sans-serif;font-weight:500;transition:opacity .15s}
@@ -129,7 +197,7 @@ body{font-family:sans-serif;background:#14141e;color:#f0ece4;min-height:100vh}
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
 /* ── ONBOARDING OVERLAY ── */
 .ob-overlay{position:fixed;inset:0;background:transparent;z-index:10000;display:flex;align-items:flex-start;justify-content:flex-end;padding:1rem;pointer-events:none}
-.ob-card{background:#1f1f2e;border:2px solid rgba(232,98,74,.6);border-radius:16px;width:100%;max-width:320px;padding:1.25rem;position:relative;pointer-events:all;box-shadow:0 8px 40px rgba(0,0,0,.8);margin-top:4rem}
+.ob-card{background:var(--ob-bg,#1f1f2e);border:2px solid rgba(232,98,74,.6);border-radius:16px;width:100%;max-width:320px;padding:1.25rem;position:relative;pointer-events:all;box-shadow:0 8px 40px rgba(0,0,0,.5);margin-top:4rem}
 .ob-step-dots{display:flex;gap:8px;justify-content:center;margin-bottom:1.5rem}
 .ob-dot{width:10px;height:10px;border-radius:50%;background:rgba(232,98,74,.25);transition:background .2s}
 .ob-dot.on{background:#e8624a}
@@ -314,25 +382,31 @@ var ONBOARDING_STEPS = [
   {
     icon: '\uD83D\uDC4B',
     title: 'Welcome to The Well Portal',
-    body: 'Your mission team hub for events, availability, tasks, messaging, and more -- all in one place. This tour will walk you through each section.',
+    body: 'Your mission team hub for events, availability, tasks, messaging, and more -- all in one place. This tour walks you through each section. Tip: toggle light or dark mode anytime using the button in the top bar.',
     tab: null
+  },
+  {
+    icon: '\uD83C\uDFE0',
+    title: 'Home',
+    body: 'Your personal dashboard. See upcoming events you are assigned to, tasks due this week, new messages, recent announcements, and notifications -- all in one view. Worship users see upcoming setlists here too.',
+    tab: 'home'
   },
   {
     icon: '\uD83D\uDCC5',
     title: 'Events & Calendar',
-    body: 'The Events tab shows a monthly calendar of all events you\'re assigned to. Click any event for full details -- teams, food, carpool, and more. Admins can create events by clicking any empty day.',
+    body: 'The Events tab shows a monthly calendar of all events you\'re assigned to. Click any event for full details -- teams, food, carpool, setlist, planning boards, and more. Admins can create events by clicking any empty day.',
     tab: 'events'
   },
   {
     icon: '\u2713',
     title: 'Availability',
-    body: 'Above the calendar, you\'ll be asked for your availability one event at a time. Answer Yes, No, Partial, or TBD. Click any event on the calendar to jump to its availability card.',
+    body: 'Above the calendar, you\'ll be asked for your availability one event at a time. Answer Yes, No, Partial, or TBD. Admins see a full availability matrix and can send reminders to people who haven\'t responded.',
     tab: 'events'
   },
   {
     icon: '\u2705',
     title: 'My Tasks',
-    body: 'Tasks assigned to you appear here, grouped by event, Kaizen item, or issue. Overdue and running-behind tasks appear in a prominent banner at the top. Use the search bar to filter by event or location.',
+    body: 'Tasks assigned to you appear here, grouped by event, Kaizen item, or issue. Overdue and running-behind tasks appear in a banner at the top. Admins also see an All Tasks view and an Event Health dashboard with per-section progress bars.',
     tab: 'assignments'
   },
   {
@@ -344,31 +418,37 @@ var ONBOARDING_STEPS = [
   {
     icon: '\uD83D\uDCAC',
     title: 'Messages',
-    body: 'Chat with your teams in real time. Each room is a persistent group thread. Admins can create and manage rooms.',
+    body: 'Chat with your teams in real time. Anyone can create a room. If you see concerning behavior, use the Report button in the chat header -- all admins are notified and given silent review access.',
     tab: 'messages'
   },
   {
     icon: '\uD83C\uDF31',
     title: 'Operations -- Production Issues',
-    body: 'Log production issues with a full 5-Why root cause analysis and corrective action. Track status from Open through CA In Progress to Resolved. Corrective actions appear as tasks in My Tasks.',
+    body: 'Log production issues with a full 5-Why root cause analysis and corrective action. Track status from Open through CA In Progress to Resolved. Corrective actions generate tasks in My Tasks and send notifications when completed.',
     tab: 'issues'
   },
   {
     icon: '\uD83D\uDCA1',
     title: 'Operations -- Kaizen Board',
-    body: 'Submit and vote on improvement ideas. Admins move cards from Ideas through Under Review to an Action Plan (with assigned tasks), then to Completed. Full history is preserved on every card.',
+    body: 'Submit and vote on improvement ideas. Admins move cards from Ideas through Under Review to an Action Plan with assigned tasks, then to Completed. Full history is preserved. Ideas can be linked to production issues.',
+    tab: 'issues'
+  },
+  {
+    icon: '\uD83D\uDDD2',
+    title: 'Operations -- Planning Boards',
+    body: 'Create freeform Excalidraw whiteboards linked to events. All admins collaborate on the same live board. Completed boards appear in the event detail card.',
     tab: 'issues'
   },
   {
     icon: '\uD83D\uDD12',
     title: 'Security',
-    body: 'Log safety incidents or concerns. Admins are notified and can acknowledge reports.',
+    body: 'Log safety incidents or concerns. Admins are notified and can acknowledge reports. Security users see the queue by default on login.',
     tab: 'security'
   },
   {
     icon: '\u2699',
     title: 'Admin Panel',
-    body: 'Admins manage users, groups, teams, task templates, and the audit trail here. Task Templates let you attach pre-built assignment lists to events so tasks generate automatically.',
+    body: 'Admins manage users, groups, teams, task templates, and the audit log here. The audit log is searchable and paginated. Task Templates let you attach pre-built assignment lists to events so tasks generate automatically with section grouping.',
     tab: 'admin'
   },
   {
@@ -376,17 +456,17 @@ var ONBOARDING_STEPS = [
     title: 'Coordinator Admin View',
     body: 'Below the Events calendar, admins see the Availability Coordinator -- Matrix, Results, and Outstanding views -- showing everyone\'s responses at a glance.',
     tab: 'events'
-  }
-  ,{
+  },
+  {
     icon: '\uD83D\uDC55',
     title: 'Inventory & Merch',
     body: 'Track merchandise -- shirts, hats, books, and more -- with sizes, quantities, and transaction history. Admins manage items; the merch team can log sales and adjustments.',
     tab: 'inventory'
-  }
-  ,{
+  },
+  {
     icon: '\uD83C\uDFB9',
     title: 'Worship',
-    body: 'Build and publish setlists for Sunday services, events, and second venue. Each song can have a link and notes. Published setlists are visible to the worship team in their My Assignments view.',
+    body: 'Build and publish setlists linked to specific events. Each song has a key, link, and notes. Publishing automatically notifies assigned worship users. Setlists appear on the event detail card and in the Home view for worship team members.',
     tab: 'worship'
   }
 ];
@@ -445,7 +525,7 @@ function showOnboarding(onDone){
     nextBtn.textContent=isLast ? 'Get Started ->' : 'Next ->';
     nextBtn.addEventListener('click', function(){
       if(isLast){ finishOnboarding(); }
-      else { step++; var ns=ONBOARDING_STEPS[step]; if(ns&&ns.tab&&S.user){S.tab=ns.tab;if(ns.tab==='issues'&&ns.title.toLowerCase().indexOf('kaizen')>=0)S.improveTab='kaizen';else if(ns.tab==='issues')S.improveTab='issues';render();} render_ob(); }
+      else { step++; var ns=ONBOARDING_STEPS[step]; if(ns&&ns.tab&&S.user){S.tab=ns.tab;if(ns.tab==='issues'){if(ns.title.toLowerCase().indexOf('kaizen')>=0)S.improveTab='kaizen';else if(ns.title.toLowerCase().indexOf('planning')>=0)S.improveTab='planning';else S.improveTab='issues';}render();} render_ob(); }
     });
     footer.appendChild(nextBtn);
     card.appendChild(footer);
@@ -586,7 +666,9 @@ function isTaskLead(t,uid){ var suid=String(uid); return String(t.lead)===suid||
 
 var DB_SAVING = false;
 var SAVE_QUEUE = false;
-var STATE_LOADED = false; // guard: don't save until Firestore data is loaded
+var STATE_LOADED = false;
+var THEME = localStorage.getItem('mtp_theme')||'dark';
+function applyTheme(t){THEME=t;localStorage.setItem('mtp_theme',t);document.body.classList.toggle('light',t==='light');} // guard: don't save until Firestore data is loaded
 
 var _saveTimer=null;
 var _realSave=null;
@@ -614,7 +696,7 @@ function _doSave(){
 
   // Save the full state as a single document (simple, works well at this scale)
   var payload = {
-    tab: S.tab,
+    // tab is session state -- not saved to Firestore
     calY: S.calY,
     calM: S.calM,
     templates: S.templates,
@@ -676,6 +758,7 @@ function loadState(callback){
       Object.keys(d).forEach(function(k){
         if(k==='COMMON_TEAMS'){ COMMON_TEAMS=d[k]; return; }
         if(k==='updatedAt') return;
+        if(k==='tab') return; // tab is session state, not persisted
         S[k] = d[k];
       });
     }
@@ -877,11 +960,8 @@ function pendingAvailEvents(){
   try{
     var uid=String(S.user.id||S.user.uid||'');
     if(!uid) return [];
-    // Use start of current month so events earlier this month still show
-    var now=new Date();
-    var monthStart=now.getFullYear()+'-'+pad2(now.getMonth()+1)+'-01';
     var far=new Date(); far.setDate(far.getDate()+365);
-    var all=allInstances(monthStart,far.toISOString().split('T')[0]);
+    var all=allInstances(TODAY(),far.toISOString().split('T')[0]);
     var seen={};
     var result=all.filter(function(ev){
       var assigned=(ev.users||[]).some(function(x){return sameAvailId(x,uid);});
@@ -938,6 +1018,51 @@ function availRespCard(ev,uid){
   }
   return card;
 }
+// -- DASHBOARD AVAILABILITY MODAL --------------------------------------------
+function mDashAvail(mo, events, startIdx){
+  if(!events||!events.length){
+    mo.appendChild(P({cls:'modal-title'},'\u2713 Availability'));
+    mo.appendChild(D({cls:'empty',style:{padding:'1.5rem'}},'All caught up! No events need a response.'));
+    mo.appendChild(D({cls:'mfooter'},[BTN({cls:'btn bo',click:closeM},'Done')]));
+    return;
+  }
+  var idx=startIdx||0;
+  if(idx>=events.length){ closeM(); return; }
+  var ev=events[idx];
+  var uid=String(S.user.id||S.user.uid||'');
+  var hdr=D({style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem'}});
+  hdr.appendChild(P({cls:'modal-title',style:{margin:'0'}},'\u2713 Availability'));
+  hdr.appendChild(SP({style:{fontSize:'12px',color:'#b0adc4'}},(idx+1)+' of '+events.length));
+  mo.appendChild(hdr);
+  var card=availRespCard(ev,uid);
+  // Auto-advance after yes/no response (350ms delay lets setAvail fire first)
+  card.querySelectorAll('.btn').forEach(function(btn){
+    var txt=(btn.textContent||'').trim().toLowerCase();
+    if(txt.indexOf('yes')>=0||txt.indexOf('no')>=0){
+      (function(nextIdx){btn.addEventListener('click',function(){
+        setTimeout(function(){
+          if(nextIdx>=events.length){ closeM(); return; }
+          S.modal={type:'dashAvail',events:events,idx:nextIdx};render();
+        },350);
+      });})(idx+1);
+    }
+  });
+  mo.appendChild(card);
+  var footer=D({cls:'mfooter'});
+  footer.appendChild(BTN({cls:'btn bo',click:closeM},'Done'));
+  if(idx>0){
+    var prevBtn=BTN({cls:'btn bo bsm'});prevBtn.textContent='\u2190 Prev';
+    (function(i){prevBtn.addEventListener('click',safe(function(){S.modal={type:'dashAvail',events:events,idx:i-1};render();}));})(idx);
+    footer.appendChild(prevBtn);
+  }
+  if(idx<events.length-1){
+    var skipBtn=BTN({cls:'btn bo bsm'});skipBtn.textContent='Skip \u2192';
+    (function(i){skipBtn.addEventListener('click',safe(function(){S.modal={type:'dashAvail',events:events,idx:i+1};render();}));})(idx);
+    footer.appendChild(skipBtn);
+  }
+  mo.appendChild(footer);
+}
+
 
 function availBanner(){
   if(!S||!S.user) return D({});
@@ -2448,14 +2573,22 @@ function homeView(){
   var td=TODAY();
   var week=new Date(); week.setDate(week.getDate()+7);
   var weekStr=week.toISOString().split('T')[0];
+  var myUid=String(u.id||u.uid||'');
+  var roles=u.roles||[u.role||'regular'];
 
-  w.appendChild(D({style:{marginBottom:'1.25rem'}},[
-    P({style:{fontSize:'18px',fontWeight:'700',color:'#f0ece4',marginBottom:'2px'}},greeting+', '+((u.name||'').split(' ')[0]||'')+'!'),
+  // Greeting card
+  w.appendChild(D({style:{marginBottom:'1.25rem',background:'rgba(232,98,74,.06)',border:'1px solid rgba(232,98,74,.2)',borderRadius:'12px',padding:'14px 16px'}},[
+    P({style:{fontSize:'18px',fontWeight:'700',marginBottom:'2px'}},greeting+', '+((u.name||'').split(' ')[0]||'')+'!'),
     P({cls:'cs'},now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}))
   ]));
 
-  // -- Upcoming Events (next 7 days, assigned to me) -------------------------
-  var myUid=String(u.id||u.uid||'');
+  // Two-column grid (mirrors admin dashboard)
+  var grid=D({style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:'16px',marginBottom:'1.5rem'}});
+
+  // -- LEFT: Events + Tasks ----------------------------------------------------
+  var leftCol=D({});
+
+  // Upcoming Events
   var upcomingEvs=allInstances(td,weekStr).filter(function(ev){
     return (ev.users||[]).some(function(x){return sameAvailId(x,myUid);});
   }).slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
@@ -2463,100 +2596,195 @@ function homeView(){
   upcomingEvs=upcomingEvs.filter(function(ev){var k=String(ev.templateId||ev.id);if(seen[k])return false;seen[k]=true;return true;});
 
   if(upcomingEvs.length){
-    w.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px'}},'My Upcoming Events'));
+    leftCol.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px'}},'My Upcoming Events'));
     upcomingEvs.forEach(function(ev){
       var card=D({cls:'card',style:{marginBottom:'.5rem',cursor:'pointer'}});
       card.appendChild(D({style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}},[
         D({},[
-          P({style:{fontWeight:'600',fontSize:'13px',color:'#f0ece4',marginBottom:'2px'}},ev.title+(ev.isRec?' (r)':'')),
+          P({style:{fontWeight:'600',fontSize:'13px',marginBottom:'2px'}},ev.title+(ev.isRec?' (r)':'')),
           P({cls:'cs'},FD(ev.date)+(ev.startTime?' \u00b7 '+ev.startTime:'')+(ev.location?' \u00b7 '+ev.location:''))
         ]),
-        (function(ev2){var avail=getAvail(ev2,myUid);var badge=avail?SP({style:{fontSize:'10px',background:availColor(avail.status),color:'#fff',borderRadius:'4px',padding:'1px 6px'}},availLabel(avail.status)):SP({style:{fontSize:'10px',color:'#e8624a',border:'1px solid #e8624a',borderRadius:'4px',padding:'1px 6px'}},'Needs Response');return badge;})(ev)
+                (function(ev2){
+          var avail=getAvail(ev2,myUid);
+          var badge;
+          if(!avail||avail.status==='tbd'){
+            badge=SP({style:{fontSize:'10px',color:'#e8624a',border:'1px solid #e8624a',borderRadius:'4px',padding:'1px 6px',cursor:'pointer'}},avail?'TBD - Update':'Needs Response');
+            badge.addEventListener('click',safe(function(e){e.stopPropagation();var pending=pendingAvailEvents();var evIdx=pending.findIndex(function(p){return p.date===ev2.date&&(p.templateId||p.id)===(ev2.templateId||ev2.id);});S.modal={type:'dashAvail',events:pending.length?pending:[ev2],idx:Math.max(0,evIdx)};render();}));
+          } else {
+            badge=SP({style:{fontSize:'10px',background:availColor(avail.status),color:'#fff',borderRadius:'4px',padding:'1px 6px'}},availLabel(avail.status));
+          }
+          return badge;
+        })(ev)
       ]));
-      // Teams I'm on
       var myTeams=(ev.teams||[]).filter(function(t){return (t.members||[]).some(function(x){return sameAvailId(x,myUid);});});
       if(myTeams.length) card.appendChild(P({style:{fontSize:'11px',color:'#e8624a',marginTop:'3px'}},myTeams.map(function(t){return t.name;}).join(', ')));
       (function(ev2){card.addEventListener('click',safe(function(){S.modal={type:'detail',ev:ev2};render();}));})(ev);
-      w.appendChild(card);
+      leftCol.appendChild(card);
     });
   }
 
-  // -- Tasks: overdue, behind, and due in 7 days -----------------------------
+  // Tasks
   var myTasks=S.tasks.filter(function(t){return taskAssignees(t).some(function(x){return sameId(x,u.id);})&&t.status!=='done';});
   var overdueTasks=myTasks.filter(function(t){return isOverdue(t);});
   var behindTasks=myTasks.filter(function(t){return !isOverdue(t)&&t.status==='behind';});
   var dueSoonTasks=myTasks.filter(function(t){return !isOverdue(t)&&t.status!=='behind'&&t.dueDate&&t.dueDate>=td&&t.dueDate<=weekStr;});
 
   if(overdueTasks.length||behindTasks.length||dueSoonTasks.length){
-    w.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px',marginTop:'1rem'}},'My Tasks'));
+    leftCol.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px',marginTop:'1rem'}},'My Tasks'));
     if(overdueTasks.length){
       var oBanner=D({style:{background:'rgba(192,57,43,.1)',border:'1px solid rgba(192,57,43,.3)',borderRadius:'8px',padding:'10px 12px',marginBottom:'8px'}});
       oBanner.appendChild(P({style:{fontSize:'12px',fontWeight:'600',color:'#e74c3c',marginBottom:'6px'}},'\u26A0 '+overdueTasks.length+' Overdue'));
       overdueTasks.forEach(function(t){
         var row=D({style:{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:'1px solid rgba(192,57,43,.15)',fontSize:'12px'}});
-        row.appendChild(SP({style:{color:'#f0ece4'}},t.title));
+        row.appendChild(SP({},t.title));
         if(t.dueDate) row.appendChild(SP({style:{color:'#e74c3c',flexShrink:'0',marginLeft:'8px'}},'Due '+FD(t.dueDate)));
         oBanner.appendChild(row);
       });
-      w.appendChild(oBanner);
+      leftCol.appendChild(oBanner);
     }
     if(behindTasks.length){
       var bBanner=D({style:{background:'rgba(230,126,34,.08)',border:'1px solid rgba(230,126,34,.3)',borderRadius:'8px',padding:'10px 12px',marginBottom:'8px'}});
       bBanner.appendChild(P({style:{fontSize:'12px',fontWeight:'600',color:'#e67e22',marginBottom:'6px'}},'\u23F0 '+behindTasks.length+' Running Behind'));
       behindTasks.forEach(function(t){
         var row=D({style:{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:'1px solid rgba(230,126,34,.15)',fontSize:'12px'}});
-        row.appendChild(SP({style:{color:'#f0ece4'}},t.title));
+        row.appendChild(SP({},t.title));
         if(t.projectedDate) row.appendChild(SP({style:{color:'#e67e22',flexShrink:'0',marginLeft:'8px'}},'Proj '+FD(t.projectedDate)));
         bBanner.appendChild(row);
       });
-      w.appendChild(bBanner);
+      leftCol.appendChild(bBanner);
     }
     if(dueSoonTasks.length){
       var dCard=D({cls:'card',style:{marginBottom:'.75rem'}});
-      dCard.appendChild(P({style:{fontSize:'12px',fontWeight:'600',color:'#f0ece4',marginBottom:'6px'}},'Due This Week'));
+      dCard.appendChild(P({style:{fontSize:'12px',fontWeight:'600',marginBottom:'6px'}},'Due This Week'));
       dueSoonTasks.slice().sort(function(a,b){return (a.dueDate||'').localeCompare(b.dueDate||'');}).forEach(function(t){
         var row=D({style:{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:'1px solid rgba(232,98,74,.1)',fontSize:'12px'}});
-        row.appendChild(SP({style:{color:'#f0ece4'}},t.title));
+        row.appendChild(SP({},t.title));
         row.appendChild(SP({style:{color:'#b0adc4',flexShrink:'0',marginLeft:'8px'}},FD(t.dueDate)));
         dCard.appendChild(row);
       });
       dCard.appendChild(BTN({cls:'btn bo bsm',style:{marginTop:'6px',width:'100%'},click:safe(function(){S.tab='assignments';render();})},'View All Tasks'));
-      w.appendChild(dCard);
+      leftCol.appendChild(dCard);
     }
   }
 
-  // -- Worship: upcoming setlists --------------------------------------------
-  var roles=u.roles||[u.role||'regular'];
+  grid.appendChild(leftCol);
+
+  // -- RIGHT: Messages + Announcements + Notifications -------------------------
+  var rightCol=D({});
+
+  // New Messages
+  var roomsWithUnread=(S.rooms||[]).filter(function(r){
+    var isMember=r.members.some(function(x){return sameId(x,u.id);});
+    var isReviewer=(r.reviewers||[]).some(function(x){return sameId(x,u.id);});
+    if(!isMember&&!isReviewer) return false;
+    var lastMsg=(r.msgs||[]).filter(function(m){return m.uid&&!sameId(m.uid,u.id);}).pop();
+    if(!lastMsg) return false;
+    return !(lastMsg.readBy&&(lastMsg.readBy[myUid]||lastMsg.readBy[String(myUid)]));
+  });
+  if(roomsWithUnread.length){
+    rightCol.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px'}},'New Messages'));
+    var msgCard=D({cls:'card',style:{cursor:'pointer',marginBottom:'.75rem'}});
+    roomsWithUnread.slice(0,5).forEach(function(r){
+      var lastMsg=(r.msgs||[]).filter(function(m){return m.uid&&!sameId(m.uid,u.id);}).pop();
+      var row=D({style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',padding:'5px 0',borderBottom:'1px solid rgba(232,98,74,.08)',gap:'8px'}});
+      var left=D({style:{flex:'1',minWidth:'0'}});
+      left.appendChild(P({style:{fontWeight:'500',fontSize:'12px',marginBottom:'1px'}},r.name));
+      if(lastMsg) left.appendChild(P({style:{fontSize:'11px',color:'#b0adc4',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},UN(lastMsg.uid)+': '+lastMsg.text.slice(0,40)));
+      row.appendChild(left);
+      row.appendChild(SP({style:{fontSize:'10px',color:'#e8624a',flexShrink:'0',marginTop:'2px'}},'New'));
+      msgCard.appendChild(row);
+    });
+    msgCard.addEventListener('click',safe(function(){S.tab='messages';render();}));
+    if(roomsWithUnread.length>5) msgCard.appendChild(P({cls:'cs',style:{marginTop:'4px'}},'+' +(roomsWithUnread.length-5)+' more rooms'));
+    rightCol.appendChild(msgCard);
+  }
+
+  // Announcements
+  var loginTs=u.lastLogin||(Date.now()-7*24*60*60*1000);
+  var cutoff=Math.min(loginTs,Date.now()-7*24*60*60*1000);
+  var recentAnnounce=(S.announcements||[]).filter(function(a){
+    if(a.ts<cutoff) return false;
+    if((a.targets||[]).length&&!(a.targets||[]).some(function(x){return sameId(x,u.id);})) return false;
+    return true;
+  }).slice().sort(function(a,b){return b.ts-a.ts;});
+  if(recentAnnounce.length){
+    rightCol.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px',marginTop:roomsWithUnread.length?'1rem':'0'}},'Announcements'));
+    recentAnnounce.slice(0,3).forEach(function(a){
+      var card=D({cls:'card',style:{marginBottom:'.5rem'}});
+      card.appendChild(P({style:{fontWeight:'600',fontSize:'13px',marginBottom:'3px'}},a.title));
+      card.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',lineHeight:'1.5'}},a.body.slice(0,120)+(a.body.length>120?'...':'')));
+      card.appendChild(P({cls:'cs',style:{marginTop:'4px'}},FD(new Date(a.ts).toISOString().split('T')[0])+' \u00b7 '+UN(a.by)));
+      rightCol.appendChild(card);
+    });
+    if(recentAnnounce.length>3) rightCol.appendChild(BTN({cls:'btn bo bsm',click:safe(function(){S.tab='announce';render();})},'View All Announcements'));
+  }
+
+  // Notifications
+  var myNotifs=((S.notifs||{})[myUid]||[]).filter(function(n){return !n.read;}).slice().reverse().slice(0,6);
+  if(myNotifs.length){
+    rightCol.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px',marginTop:'1rem'}},'Notifications'));
+    var nCard=D({cls:'card'});
+    myNotifs.forEach(function(n){
+      var row=D({style:{display:'flex',gap:'8px',padding:'5px 0',borderBottom:'1px solid rgba(232,98,74,.08)',alignItems:'flex-start'}});
+      row.appendChild(SP({style:{fontSize:'11px',color:'#b0adc4',flexShrink:'0',marginTop:'1px'}},new Date(n.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})));
+      row.appendChild(SP({style:{fontSize:'12px',lineHeight:'1.5'}},n.msg));
+      nCard.appendChild(row);
+    });
+    rightCol.appendChild(nCard);
+  }
+
+
+  // Worship setlists in right column
+  if(roles.indexOf('worship')>=0){
+    var upcomingSetlistsR=(S.setlists||[]).filter(function(sl){return sl.published&&sl.date&&sl.date>=td&&sl.date<=weekStr;}).slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+    if(upcomingSetlistsR.length){
+      rightCol.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px',marginTop:'1rem'}},'Upcoming Setlists'));
+      upcomingSetlistsR.forEach(function(sl){
+        var card=D({cls:'card',style:{marginBottom:'.5rem'}});
+        var evTitle=''; if(sl.eventId){var ev=S.templates.find(function(t){return t.id===sl.eventId;});if(ev) evTitle=' \u00b7 '+ev.title;}
+        card.appendChild(P({style:{fontWeight:'600',fontSize:'13px',marginBottom:'4px'}},FD(sl.date)+evTitle));
+        (sl.songs||[]).forEach(function(sg){
+          var row=D({style:{display:'flex',gap:'8px',alignItems:'center',padding:'3px 0',borderBottom:'1px solid rgba(232,98,74,.08)',fontSize:'12px'}});
+          if(sg.key) row.appendChild(SP({style:{color:'#e8624a',fontWeight:'700',minWidth:'32px',flexShrink:'0'}},sg.key));
+          row.appendChild(SP({style:{flex:'1'}},sg.song||''));
+          if(sg.link){var a=document.createElement('a');a.href=sg.link;a.target='_blank';a.rel='noopener';a.textContent='Link';a.style.cssText='color:#87b7e8;font-size:11px;';row.appendChild(a);}
+          card.appendChild(row);
+        });
+        rightCol.appendChild(card);
+      });
+    }
+  }
+  grid.appendChild(rightCol);
+  w.appendChild(grid);
+
+  // -- BOTTOM: Worship setlists + Security (full width) -------------------------
   if(roles.indexOf('worship')>=0){
     var upcomingSetlists=(S.setlists||[]).filter(function(sl){return sl.published&&sl.date&&sl.date>=td&&sl.date<=weekStr;}).slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
     if(upcomingSetlists.length){
-      w.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px',marginTop:'1rem'}},'Upcoming Setlists'));
+      w.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px'}},'Upcoming Setlists'));
       upcomingSetlists.forEach(function(sl){
         var card=D({cls:'card',style:{marginBottom:'.5rem'}});
-        card.appendChild(P({style:{fontWeight:'600',fontSize:'13px',color:'#f0ece4',marginBottom:'2px'}},FD(sl.date)));
-        if((sl.songs||[]).length){
-          (sl.songs||[]).forEach(function(sg){
-            var row=D({style:{display:'flex',gap:'8px',alignItems:'center',padding:'3px 0',borderBottom:'1px solid rgba(232,98,74,.08)',fontSize:'12px'}});
-            if(sg.key) row.appendChild(SP({style:{color:'#e8624a',fontWeight:'700',minWidth:'32px',flexShrink:'0'}},sg.key));
-            row.appendChild(SP({style:{color:'#f0ece4',flex:'1'}},sg.song||''));
-            if(sg.link){var a=document.createElement('a');a.href=sg.link;a.target='_blank';a.rel='noopener';a.textContent='Link';a.style.cssText='color:#87b7e8;font-size:11px;';row.appendChild(a);}
-            if(sg.notes) row.appendChild(SP({style:{color:'#b0adc4',fontSize:'11px',fontStyle:'italic'}},sg.notes));
-            card.appendChild(row);
-          });
-        }
+        card.appendChild(P({style:{fontWeight:'600',fontSize:'13px',marginBottom:'4px'}},FD(sl.date)));
+        (sl.songs||[]).forEach(function(sg){
+          var row=D({style:{display:'flex',gap:'8px',alignItems:'center',padding:'3px 0',borderBottom:'1px solid rgba(232,98,74,.08)',fontSize:'12px'}});
+          if(sg.key) row.appendChild(SP({style:{color:'#e8624a',fontWeight:'700',minWidth:'32px',flexShrink:'0'}},sg.key));
+          row.appendChild(SP({style:{flex:'1'}},sg.song||''));
+          if(sg.link){var a=document.createElement('a');a.href=sg.link;a.target='_blank';a.rel='noopener';a.textContent='Link';a.style.cssText='color:#87b7e8;font-size:11px;';row.appendChild(a);}
+          if(sg.notes) row.appendChild(SP({style:{color:'#b0adc4',fontSize:'11px',fontStyle:'italic'}},sg.notes));
+          card.appendChild(row);
+        });
         w.appendChild(card);
       });
     }
   }
 
-  // -- Security: open reports ------------------------------------------------
   if(roles.indexOf('security')>=0){
     var openReports=S.reports.filter(function(r){return !r.ack;});
     if(openReports.length){
       w.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e74c3c',marginBottom:'8px',marginTop:'1rem'}},'\uD83D\uDEA8 Security Queue ('+openReports.length+' Open)'));
       openReports.slice(0,3).forEach(function(r){
         var card=D({cls:'card',style:{borderColor:'rgba(192,57,43,.4)',marginBottom:'.5rem',cursor:'pointer'}});
-        card.appendChild(P({style:{fontWeight:'600',fontSize:'13px',color:'#f0ece4',marginBottom:'2px'}},r.type));
+        card.appendChild(P({style:{fontWeight:'600',fontSize:'13px',marginBottom:'2px'}},r.type));
         card.appendChild(P({cls:'cs'},r.loc+' \u00b7 '+FD(new Date(r.ts).toISOString().split('T')[0])));
         card.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginTop:'3px'}},r.desc.slice(0,80)+(r.desc.length>80?'...':'')));
         card.addEventListener('click',safe(function(){S.tab='security';render();}));
@@ -2566,68 +2794,7 @@ function homeView(){
     }
   }
 
-  // -- New Messages ---------------------------------------------------------
-  var roomsWithUnread=(S.rooms||[]).filter(function(r){
-    var isMember=r.members.some(function(x){return sameId(x,u.id);});
-    var isReviewer=(r.reviewers||[]).some(function(x){return sameId(x,u.id);});
-    if(!isMember&&!isReviewer) return false;
-    var lastMsg=(r.msgs||[]).filter(function(m){return m.uid&&!sameId(m.uid,u.id);}).pop();
-    if(!lastMsg) return false;
-    // Unread = last message from someone else hasn't been read by me
-    return !(lastMsg.readBy&&(lastMsg.readBy[myUid]||lastMsg.readBy[String(myUid)]));
-  });
-  if(roomsWithUnread.length){
-    w.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px',marginTop:'1rem'}},'New Messages'));
-    var msgCard=D({cls:'card',style:{cursor:'pointer'}});
-    roomsWithUnread.slice(0,5).forEach(function(r){
-      var lastMsg=(r.msgs||[]).filter(function(m){return m.uid&&!sameId(m.uid,u.id);}).pop();
-      var row=D({style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',padding:'5px 0',borderBottom:'1px solid rgba(232,98,74,.08)',gap:'8px'}});
-      var left=D({style:{flex:'1',minWidth:'0'}});
-      left.appendChild(P({style:{fontWeight:'500',fontSize:'12px',color:'#f0ece4',marginBottom:'1px'}},r.name));
-      if(lastMsg) left.appendChild(P({style:{fontSize:'11px',color:'#b0adc4',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},UN(lastMsg.uid)+': '+lastMsg.text.slice(0,40)));
-      row.appendChild(left);
-      row.appendChild(SP({style:{fontSize:'10px',color:'#e8624a',flexShrink:'0',marginTop:'2px'}},'New'));
-      msgCard.appendChild(row);
-    });
-    msgCard.addEventListener('click',safe(function(){S.tab='messages';render();}));
-    if(roomsWithUnread.length>5) msgCard.appendChild(P({cls:'cs',style:{marginTop:'4px'}},'+' +(roomsWithUnread.length-5)+' more rooms'));
-    w.appendChild(msgCard);
-  }
-
-  // -- Announcements (last 7 days or since last login) -----------------------
-  var loginTs=u.lastLogin||(Date.now()-7*24*60*60*1000);
-  var cutoff=Math.min(loginTs, Date.now()-7*24*60*60*1000);
-  var recentAnnounce=(S.announcements||[]).filter(function(a){
-    if(a.ts<cutoff) return false;
-    if((a.targets||[]).length&&!(a.targets||[]).some(function(x){return sameId(x,u.id);})) return false;
-    return true;
-  }).slice().sort(function(a,b){return b.ts-a.ts;});
-  if(recentAnnounce.length){
-    w.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px',marginTop:'1rem'}},'Announcements'));
-    recentAnnounce.slice(0,3).forEach(function(a){
-      var card=D({cls:'card',style:{marginBottom:'.5rem'}});
-      card.appendChild(P({style:{fontWeight:'600',fontSize:'13px',color:'#f0ece4',marginBottom:'3px'}},a.title));
-      card.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',lineHeight:'1.5'}},a.body.slice(0,120)+(a.body.length>120?'...':'')));
-      card.appendChild(P({cls:'cs',style:{marginTop:'4px'}},FD(new Date(a.ts).toISOString().split('T')[0])+' \u00b7 '+UN(a.by)));
-      w.appendChild(card);
-    });
-    if(recentAnnounce.length>3) w.appendChild(BTN({cls:'btn bo bsm',click:safe(function(){S.tab='announce';render();})},'View All Announcements'));
-  }
-
-  // -- Notifications --------------------------------------------------------
-  var myNotifs=((S.notifs||{})[myUid]||[]).filter(function(n){return !n.read;}).slice().reverse().slice(0,6);
-  if(myNotifs.length){
-    w.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px',marginTop:'1rem'}},'Notifications'));
-    var nCard=D({cls:'card'});
-    myNotifs.forEach(function(n){
-      var row=D({style:{display:'flex',gap:'8px',padding:'5px 0',borderBottom:'1px solid rgba(232,98,74,.08)',alignItems:'flex-start'}});
-      row.appendChild(SP({style:{fontSize:'11px',color:'#b0adc4',flexShrink:'0',marginTop:'1px'}},new Date(n.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})));
-      row.appendChild(SP({style:{fontSize:'12px',color:'#f0ece4',lineHeight:'1.5'}},n.msg));
-      nCard.appendChild(row);
-    });
-    w.appendChild(nCard);
-  }
-
+  // All caught up
   if(!upcomingEvs.length&&!myTasks.length&&!roomsWithUnread.length&&!recentAnnounce.length&&!myNotifs.length){
     w.appendChild(D({cls:'card',style:{borderColor:'rgba(39,174,96,.3)',textAlign:'center',padding:'2rem'}},[
       P({style:{color:'#27ae60',fontSize:'16px',marginBottom:'4px'}},'\u2713 All caught up!'),
@@ -2637,7 +2804,6 @@ function homeView(){
 
   return w;
 }
-
 
 
 function dashboardView(){
@@ -2651,8 +2817,8 @@ function dashboardView(){
   var sixty=new Date(); sixty.setDate(sixty.getDate()+60);
   var sixtyStr=sixty.toISOString().split('T')[0];
 
-  w.appendChild(D({style:{marginBottom:'1.25rem'}},[
-    P({style:{fontSize:'18px',fontWeight:'700',color:'#f0ece4',marginBottom:'2px'}},greeting+', '+((u.name||'').split(' ')[0]||'Admin')+'!'),
+  w.appendChild(D({style:{marginBottom:'1.25rem',background:'rgba(232,98,74,.06)',border:'1px solid rgba(232,98,74,.2)',borderRadius:'12px',padding:'14px 16px'}},[
+    P({style:{fontSize:'18px',fontWeight:'700',marginBottom:'2px'}},greeting+', '+((u.name||'').split(' ')[0]||'Admin')+'!'),
     P({cls:'cs'},now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}))
   ]));
 
@@ -2675,7 +2841,7 @@ function dashboardView(){
       var acts=D({style:{display:'flex',gap:'4px',flexShrink:'0',flexWrap:'wrap',justifyContent:'flex-end'}});
       (function(t){
         acts.appendChild(BTN({cls:'btn bo bsm',click:safe(function(){S.modal={type:'detail',ev:t};render();})},'\uD83D\uDCC4'));
-        acts.appendChild(BTN({cls:'btn bo bsm',click:safe((function(t2){return function(){S.tab='events';S.availFocusKey=String(t2.id)+'_'+t2.date;render();};})(t))},'\u2713 Avail'));
+        acts.appendChild(BTN({cls:'btn bo bsm',click:safe((function(t2){return function(){var pending=pendingAvailEvents().filter(function(ev){return (ev.templateId||ev.id)===(t2.id)||(ev.templateId||ev.id)===Number(t2.id);});if(!pending.length)pending=pendingAvailEvents();S.modal={type:'dashAvail',events:pending,idx:0};render();};})(t))},'\u2713 Avail'));
         if(evTasks.length) acts.appendChild(BTN({cls:'btn bo bsm',click:safe(function(){var sh=buildSectionHealth(t,evTasks);S.modal={type:'eventHealthKanban',tmpl:t,sectionHealth:sh};render();})},'\u2713 Tasks'));
       })(tmpl);
       hdr.appendChild(acts);
@@ -2893,6 +3059,7 @@ function topBar(){
   if(canSeeSecurity(u)) right.appendChild(SP({style:{background:'#e8624a',color:'#fff',fontSize:'10px',padding:'2px 8px',borderRadius:'20px',fontWeight:'700'}},userRoleDisplay(u)));
   right.appendChild(BTN({cls:'btn bo bsm',click:safe(function(){S.modal='changePW';render();})},'Change PW'));
   right.appendChild(BTN({cls:'btn bo bsm',click:safe(function(){S.modal='changeEmail';render();})},'Change Email'));
+  right.appendChild(BTN({cls:'btn bo bsm',click:function(){applyTheme(THEME==='dark'?'light':'dark');render();}},THEME==='dark'?'\u2600 Light':'\uD83C\uDF19 Dark'));
   right.appendChild(BTN({cls:'btn bo bsm',click:safe(function(){
     if(unsubscribe) unsubscribe();
     auth.signOut().then(function(){S.user=null;USERS=[];render();});
@@ -3357,6 +3524,10 @@ function taskCard(t,isAdminView){
       (function(sid){b.addEventListener('click',safe(function(){
         if(sid==='done'){
           audit('Task Completed',t.title);
+          // Notify the person who assigned the task
+          if(t.by&&!sameId(t.by,S.user.id)){
+            addNotif(t.by,S.user.name+' completed: "'+t.title+'"');
+          }
           S.tasks=S.tasks.filter(function(x){return x.id!==t.id;});
           save();render();
         } else {
@@ -3683,27 +3854,89 @@ function reorderView(){
   return w;
 }
 
+// -- AVAILABILITY REMINDERS -------------------------------------------------
+function checkAvailReminders(){
+  // Notify users who haven't responded to events in the next 7 days
+  if(!S.user) return;
+  var td=TODAY();
+  var cutoff=new Date(); cutoff.setDate(cutoff.getDate()+7);
+  var cutoffStr=cutoff.toISOString().split('T')[0];
+  try{
+    var pending=allInstances(td,cutoffStr);
+    USERS.forEach(function(u){
+      pending.forEach(function(ev){
+        if(!(ev.users||[]).some(function(x){return sameId(x,u.id);})) return;
+        var r=getAvail(ev,u.id);
+        if(r&&r.status&&r.status!=='tbd') return; // already responded
+        // Check if we already sent a reminder recently (within 24hrs)
+        var reminderKey='avail_remind_'+String(u.id)+'_'+(ev.templateId||ev.id)+'_'+ev.date;
+        var lastRemind=parseInt(localStorage.getItem(reminderKey)||'0');
+        if(Date.now()-lastRemind < 24*60*60*1000) return;
+        // Only send reminder if admin is running this (admins see all users)
+        if(isAdmin(S.user)){
+          addNotif(u.id,'Reminder: Please respond to availability for "'+ev.title+'" on '+FD(ev.date));
+          localStorage.setItem(reminderKey,String(Date.now()));
+        }
+      });
+    });
+  }catch(e){ console.warn('checkAvailReminders:',e); }
+}
+
+
 function auditView(){
   var w=D({});
   var log=(S.auditLog||[]);
   w.appendChild(D({cls:'rh'},[
-    P({style:{fontSize:'14px',fontWeight:'500',color:'#f0ece4'}},'Audit Trail'),
+    P({style:{fontSize:'14px',fontWeight:'500',color:'#f0ece4'}},'Audit Trail ('+log.length+' entries)'),
     BTN({cls:'btn br bsm',click:function(){
       if(!confirm('Clear the entire audit log?')) return;
       S.auditLog=[];save();render();
     }},'Clear Log')
   ]));
   if(!log.length){w.appendChild(D({cls:'empty'},'No activity recorded yet.'));return w;}
-  log.forEach(function(entry){
-    var c=D({cls:'card'});
-    c.appendChild(D({cls:'ch'},[
-      SP({style:{fontWeight:'500',fontSize:'13px',color:'#f0ece4'}},entry.action),
-      SP({style:{fontSize:'11px',color:'#b0adc4'}},new Date(entry.ts).toLocaleString())
-    ]));
-    if(entry.detail) c.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginTop:'3px'}},entry.detail));
-    c.appendChild(P({style:{fontSize:'11px',color:'#9090a8',marginTop:'2px'}},'By: '+entry.name));
-    w.appendChild(c);
-  });
+  // Search
+  var q='', page=0, perPage=25;
+  var ct=D({});
+  var pageRow=D({style:{display:'flex',alignItems:'center',gap:'8px',marginTop:'8px'}});
+  function rebuild(){
+    ct.innerHTML=''; pageRow.innerHTML='';
+    var filtered=log.filter(function(e){
+      if(!q) return true;
+      return (e.action||'').toLowerCase().includes(q)||(e.detail||'').toLowerCase().includes(q)||(e.name||'').toLowerCase().includes(q);
+    });
+    var totalPages=Math.ceil(filtered.length/perPage)||1;
+    if(page>=totalPages) page=totalPages-1;
+    var slice=filtered.slice(page*perPage,(page+1)*perPage);
+    if(!slice.length){ct.appendChild(D({cls:'empty'},'No matching entries.'));return;}
+    slice.forEach(function(entry){
+      var c=D({cls:'card',style:{marginBottom:'.5rem'}});
+      c.appendChild(D({cls:'ch'},[
+        SP({style:{fontWeight:'500',fontSize:'13px',color:'#f0ece4'}},entry.action),
+        SP({style:{fontSize:'11px',color:'#b0adc4'}},new Date(entry.ts).toLocaleString())
+      ]));
+      if(entry.detail) c.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginTop:'3px'}},entry.detail));
+      c.appendChild(P({style:{fontSize:'11px',color:'#9090a8',marginTop:'2px'}},'By: '+(entry.name||'System')));
+      ct.appendChild(c);
+    });
+    // Pagination
+    if(totalPages>1){
+      var prevP=BTN({cls:'btn bo bsm'});prevP.textContent='\u2190';prevP.disabled=page===0;
+      prevP.addEventListener('click',function(){page--;rebuild();});
+      pageRow.appendChild(prevP);
+      pageRow.appendChild(SP({style:{fontSize:'12px',color:'#b0adc4'}},'Page '+(page+1)+' of '+totalPages+' ('+filtered.length+' results)'));
+      var nextP=BTN({cls:'btn bo bsm'});nextP.textContent='\u2192';nextP.disabled=page>=totalPages-1;
+      nextP.addEventListener('click',function(){page++;rebuild();});
+      pageRow.appendChild(nextP);
+    }
+  }
+  var searchInp=document.createElement('input');
+  searchInp.type='text'; searchInp.placeholder='Search by action, detail, or user...';
+  searchInp.className='task-search';
+  searchInp.addEventListener('input',function(){q=searchInp.value.toLowerCase().trim();page=0;rebuild();});
+  w.appendChild(searchInp);
+  w.appendChild(ct);
+  w.appendChild(pageRow);
+  rebuild();
   return w;
 }
 
@@ -3750,25 +3983,34 @@ function msgsView(){
     var w=D({});
     w.appendChild(BTN({style:{display:'flex',alignItems:'center',gap:'5px',color:'#b0adc4',fontSize:'13px',cursor:'pointer',border:'none',background:'none',marginBottom:'.85rem',padding:'0'},click:function(){S.activeRoom=null;render();}},'<- Back'));
     w.appendChild(P({cls:'sec-t'},room.name));
+    // Call bar
     if(room.call){
       var cb=D({cls:'call-bar'});
       cb.appendChild(SP({style:{color:'#87b7e8',fontSize:'14px'}},'Conference call in progress'));
       if(isAdmin(u)) cb.appendChild(BTN({cls:'btn br bsm',click:function(){room.call=false;room.msgs.push({uid:0,text:'[Call ended]',ts:Date.now()});save();render();}},'End Call'));
+      w.appendChild(cb);
+    }
     // Report button - visible to non-admin members
     if(!isAdmin(u)&&room.members.some(function(x){return sameId(x,u.id);})){
       var reportBtn=BTN({cls:'btn br bsm'});
       reportBtn.textContent='\u26A0 Report';
-      reportBtn.style.cssText='font-size:11px;padding:3px 8px;';
+      reportBtn.style.cssText='font-size:11px;padding:3px 8px;margin-bottom:6px;display:inline-block;';
       (function(rm){reportBtn.addEventListener('click',safe(function(){S.modal={type:'reportRoom',room:rm};render();}));})(room);
-      cb.appendChild(reportBtn);
+      w.appendChild(reportBtn);
     }
     // If admin is a reviewer show a silent review banner
     if(isAdmin(u)&&(room.reviewers||[]).some(function(x){return sameId(x,u.id);})){
-      var rvBanner=D({style:{background:'rgba(192,57,43,.1)',border:'1px solid rgba(192,57,43,.3)',borderRadius:'7px',padding:'6px 10px',marginBottom:'8px',fontSize:'12px',color:'#e74c3c'}});
-      rvBanner.textContent='You are silently reviewing this room following a safety report. Participants are not aware.';
+      var rvBanner=D({style:{background:'rgba(192,57,43,.1)',border:'1px solid rgba(192,57,43,.3)',borderRadius:'7px',padding:'6px 10px',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'8px'}});
+      rvBanner.appendChild(SP({style:{fontSize:'12px',color:'#e74c3c',flex:'1'}},'You are silently reviewing this room following a safety report. Participants are not aware.'));
+      var closeReviewBtn=BTN({cls:'btn bo bsm'});
+      closeReviewBtn.style.cssText='font-size:11px;padding:3px 8px;flex-shrink:0;color:#b0adc4;border-color:rgba(180,173,196,.4)';
+      closeReviewBtn.textContent='Close Review';
+      (function(rm){closeReviewBtn.addEventListener('click',safe(function(){
+        rm.reviewers=(rm.reviewers||[]).filter(function(x){return !sameId(x,u.id);});
+        save();render();
+      }));})(room);
+      rvBanner.appendChild(closeReviewBtn);
       w.appendChild(rvBanner);
-    }
-      w.appendChild(cb);
     }
     if(isAdmin(u)){
       var ab=D({style:{display:'flex',gap:'8px',marginBottom:'.75rem',flexWrap:'wrap'}});
@@ -3824,15 +4066,16 @@ function msgsView(){
     w.appendChild(ci);
     return w;
   }
+  var myUid=String(u.id||u.uid||'');
   var myRooms=S.rooms.filter(function(r){
-  var myRooms=S.rooms.filter(function(r){
-    // Admins only see rooms they are in or reviewing (not all rooms)
+    // Reviewers can see the room even if not a member
     if((r.reviewers||[]).some(function(x){return sameId(x,u.id);})) return true;
+    // Members can see their own rooms
+    return (r.members||[]).some(function(x){
       if(x==null) return false;
       var sx=String(x);
-      // Match by UID, by numeric id, or fallback to checking USERS list
+      if(sx===myUid) return true;
       if(sameId(sx,u.id)||sameId(sx,u.uid)) return true;
-      // Legacy: if stored as small number, find the user and compare
       if(sx.length<=6){
         var legacy=USERS.find(function(lu){return String(lu.id)===sx||String(lu.uid)===sx;});
         return legacy&&(sameId(legacy.id,u.id)||sameId(legacy.uid,u.uid||u.id));
@@ -3843,7 +4086,7 @@ function msgsView(){
   var w=D({});
   w.appendChild(D({cls:'rh'},[
     P({cls:'sec-t'},'Messages'),
-    isAdmin(u)?BTN({cls:'btn bg bsm',click:safe(function(){S.modal='createRoom';render();})},'+ New Room'):D({})
+    BTN({cls:'btn bg bsm',click:safe(function(){S.modal='createRoom';render();})},'+ New Room')
   ]));
   if(!myRooms.length){w.appendChild(D({cls:'empty'},'Not in any chat rooms.'));return w;}
   myRooms.forEach(function(room){
@@ -3882,18 +4125,7 @@ function mReportRoom(mo, room){
         addNotif(adminUser.id,'\u26A0 Safety report in room "'+room.name+'": '+desc.slice(0,80)+'. You have been given silent review access.');
         notifiedCount++;
       });
-      // Log security report
-      if(!S.reports) S.reports=[];
-      S.reports.push({
-        id:S.nReport++,
-        reporter:S.user.id,
-        type:'Chat Safety Report',
-        loc:'Room: '+room.name,
-        desc:desc,
-        ts:Date.now(),
-        ack:false,
-        roomId:room.id
-      });
+      // Log to audit trail only (not security queue)
       audit('Room Safety Report','Room: '+room.name+' -- '+desc.slice(0,60));
       save();
       closeM();
@@ -4025,7 +4257,7 @@ function secAllView(){
 // -- MODAL ROUTER -----------------------------------------------------------
 function buildModal(mo){
   var m=S.modal, type=typeof m==='string'?m:m.type;
-  var noTitle=['detail','editInstance','editTemplate','addMerchItem','merchAdj','createAnnounce','secAckNote','editSetlist','editTaskTemplate','availInstance','changeEmail','editIssue','editKaizen','reportRoom','kaizenActionPlan','kaizenOutcome','kaizenHistory','kaizenDelete','openPlanningBoard','eventHealthKanban','bulkAssignSection'];
+  var noTitle=['detail','editInstance','editTemplate','addMerchItem','merchAdj','createAnnounce','secAckNote','editSetlist','editTaskTemplate','availInstance','changeEmail','editIssue','editKaizen','reportRoom','kaizenActionPlan','kaizenOutcome','kaizenHistory','kaizenDelete','openPlanningBoard','eventHealthKanban','bulkAssignSection','dashAvail'];
   if(noTitle.indexOf(type)<0){
     var titles={createEvent:'Create New Event',addTask:'Add Task',createGroup:'Create Group',editGroup:'Edit Group',createRoom:'New Chat Room',editRoom:'Manage Room',createUser:'Add New User',editUser:'Edit User',notifs:'Notifications',changePW:'Change Password'};
     mo.appendChild(P({cls:'modal-title'},titles[type]||type));
@@ -4049,6 +4281,7 @@ function buildModal(mo){
   else if(type==='editSetlist')  mEditSetlist(mo,m.setlist);
   else if(type==='editTaskTemplate') mEditTaskTemplate(mo,m.tpl);
   else if(type==='editPlanningBoard') mEditPlanningBoard(mo,m.board);
+  else if(type==='dashAvail') mDashAvail(mo,m.events,m.idx||0);
   else if(type==='openPlanningBoard') mOpenPlanningBoard(mo,m.board);
   else if(type==='bulkAssignSection') mBulkAssignSection(mo,m.tpl,m.sectionId,m.singleItem,m.onDone);
   else if(type==='eventHealthKanban') mEventHealthKanban(mo,m.tmpl,m.sectionHealth);
@@ -4161,6 +4394,34 @@ function mDetail(mo,ev){
   if(evTemplId){
     var pbSum=planningBoardSummary(evTemplId);
     if(pbSum){ mo.appendChild(HR()); mo.appendChild(pbSum); }
+  }
+  // Published setlist for this event (worship users only)
+  // Published setlist (worship users and admins only)
+  var canViewSetlist=S.user&&(function(){var r=(S.user.roles||[S.user.role||'regular']);return r.indexOf('worship')>=0||r.indexOf('admin')>=0;}());
+  if(canViewSetlist){
+    var evDate=ev.date;
+    var linkedSetlist=(S.setlists||[]).find(function(sl){
+      return sl.published&&(sl.eventId===evTemplId||sl.eventId===Number(evTemplId)||(sl.date&&sl.date===evDate));
+    });
+    if(linkedSetlist){
+      mo.appendChild(HR());
+      mo.appendChild(P({style:{fontSize:'13px',fontWeight:'600',color:'#e8624a',marginBottom:'8px'}},'Setlist'));
+      var slTable=document.createElement('table');
+      slTable.style.cssText='width:100%;border-collapse:collapse;font-size:12px;';
+      var thead=slTable.createTHead();
+      thead.innerHTML='<tr style="border-bottom:1px solid rgba(232,98,74,.2)"><th style="text-align:left;padding:4px 8px;color:#b0adc4;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Song</th><th style="text-align:left;padding:4px 8px;color:#b0adc4;font-size:10px;text-transform:uppercase;letter-spacing:.5px;width:50px">Key</th><th style="text-align:left;padding:4px 8px;color:#b0adc4;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Link</th><th style="text-align:left;padding:4px 8px;color:#b0adc4;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Notes</th></tr>';
+      var tbody=slTable.createTBody();
+      (linkedSetlist.songs||[]).forEach(function(sg){
+        var tr=tbody.insertRow();
+        tr.style.borderBottom='1px solid rgba(232,98,74,.08)';
+        var songCell=tr.insertCell();songCell.style.cssText='padding:6px 8px;';songCell.textContent=sg.song||'';
+        var keyCell=tr.insertCell();keyCell.style.cssText='padding:6px 8px;color:#e8624a;font-weight:700;';keyCell.textContent=sg.key||'';
+        var linkCell=tr.insertCell();linkCell.style.cssText='padding:6px 8px;';
+        if(sg.link){var a=document.createElement('a');a.href=sg.link;a.target='_blank';a.rel='noopener';a.textContent='Link';a.style.cssText='color:#87b7e8;';linkCell.appendChild(a);}
+        var notesCell=tr.insertCell();notesCell.style.cssText='padding:6px 8px;color:#b0adc4;font-style:italic;';notesCell.textContent=sg.notes||'';
+      });
+      mo.appendChild(slTable);
+    }
   }
 }
 
@@ -5410,9 +5671,121 @@ function setlistView(){
   return w;
 }
 
+function renderSetlistCal(container, data, dateInp, onPick){
+  container.innerHTML='';
+  var now=new Date();
+  var calY=data._calY||now.getFullYear();
+  var calM=data._calM!==undefined?data._calM:now.getMonth();
+  var monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  // Get all event instances for this month (including recurring)
+  var monthStart=calY+'-'+(calM+1<10?'0':'')+(calM+1)+'-01';
+  var monthEnd=calY+'-'+(calM+1<10?'0':'')+(calM+1)+'-'+(new Date(calY,calM+1,0).getDate());
+  var monthEvs=allInstances(monthStart,monthEnd);
+  // Header
+  var hdr=D({style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}});
+  var prevBtn=BTN({cls:'btn bo bsm'});prevBtn.textContent='\u2190';
+  prevBtn.addEventListener('click',function(){
+    calM--;if(calM<0){calM=11;calY--;}
+    data._calY=calY;data._calM=calM;renderSetlistCal(container,data,dateInp,onPick);
+  });
+  var nextBtn=BTN({cls:'btn bo bsm'});nextBtn.textContent='\u2192';
+  nextBtn.addEventListener('click',function(){
+    calM++;if(calM>11){calM=0;calY++;}
+    data._calY=calY;data._calM=calM;renderSetlistCal(container,data,dateInp,onPick);
+  });
+  hdr.appendChild(prevBtn);
+  hdr.appendChild(SP({style:{fontWeight:'600',fontSize:'13px',color:'#f0ece4'}},monthNames[calM]+' '+calY));
+  hdr.appendChild(nextBtn);
+  container.appendChild(hdr);
+  // Day headers
+  var grid=D({style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'2px',textAlign:'center'}});
+  ['S','M','T','W','T','F','S'].forEach(function(d){
+    grid.appendChild(SP({style:{fontSize:'10px',color:'#5a5a6a',padding:'2px 0'}},d));
+  });
+  var firstDay=new Date(calY,calM,1).getDay();
+  for(var p=0;p<firstDay;p++) grid.appendChild(D({}));
+  var daysInMonth=new Date(calY,calM+1,0).getDate();
+  for(var d=1;d<=daysInMonth;d++){
+    var ds=calY+'-'+(calM+1<10?'0':'')+(calM+1)+'-'+(d<10?'0':'')+d;
+    var dayEvs=monthEvs.filter(function(ev){return ev.date===ds;});
+    var isSelected=data.date===ds;
+    var cell=D({style:{padding:'3px',borderRadius:'4px',cursor:dayEvs.length?'pointer':'default',background:dayEvs.length?'rgba(232,98,74,.15)':'transparent',border:isSelected?'1px solid #e8624a':'1px solid transparent'}});
+    cell.appendChild(SP({style:{fontSize:'12px',color:dayEvs.length?'#e8624a':'#b0adc4',display:'block',textAlign:'center'}},String(d)));
+    if(dayEvs.length){
+      cell.appendChild(SP({style:{fontSize:'9px',color:'#b0adc4',display:'block',textAlign:'center',lineHeight:'1.2',marginTop:'1px'}},dayEvs[0].title.slice(0,10)+(dayEvs[0].title.length>10?'...':'')));
+      // If multiple events on same day show count
+      if(dayEvs.length>1) cell.appendChild(SP({style:{fontSize:'9px',color:'#e8624a',display:'block',textAlign:'center'}},'+'+( dayEvs.length-1)+' more'));
+      (function(evs,dstr){cell.addEventListener('click',function(){
+        if(evs.length===1){
+          // Single event - pick it directly
+          var ev=evs[0];
+          data.eventId=ev.templateId||ev.id;
+          data.date=dstr;
+          if(dateInp) dateInp.value=dstr;
+          if(onPick) onPick();
+          renderSetlistCal(container,data,dateInp,onPick);
+        } else {
+          // Multiple events - show a small picker
+          var picker=D({style:{position:'absolute',background:'#1f1f2e',border:'1px solid rgba(232,98,74,.4)',borderRadius:'8px',padding:'6px',zIndex:'99',marginTop:'2px',minWidth:'160px',boxShadow:'0 4px 16px rgba(0,0,0,.5)'}});
+          evs.forEach(function(ev){
+            var opt=D({style:{padding:'5px 8px',cursor:'pointer',fontSize:'12px',color:'#f0ece4',borderRadius:'4px'}});
+            opt.textContent=ev.title;
+            opt.addEventListener('mouseover',function(){opt.style.background='rgba(232,98,74,.15)';});
+            opt.addEventListener('mouseout',function(){opt.style.background='transparent';});
+            opt.addEventListener('click',function(e){
+              e.stopPropagation();
+              data.eventId=ev.templateId||ev.id;
+              data.date=dstr;
+              if(dateInp) dateInp.value=dstr;
+              if(onPick) onPick();
+              picker.remove();
+              renderSetlistCal(container,data,dateInp,onPick);
+            });
+            picker.appendChild(opt);
+          });
+          cell.style.position='relative';
+          cell.appendChild(picker);
+          // Close on outside click
+          setTimeout(function(){
+            document.addEventListener('click',function removePicker(){picker.remove();document.removeEventListener('click',removePicker);},{once:true});
+          },0);
+        }
+      });})(dayEvs,ds);
+    }
+    grid.appendChild(cell);
+  }
+  container.appendChild(grid);
+  if(!monthEvs.length){
+    container.appendChild(P({style:{fontSize:'11px',color:'#5a5a6a',textAlign:'center',marginTop:'6px'}},'No events this month'));
+  }
+}
+
+function notifyWorshipUsers(setlist){
+  // If linked to an event, only notify worship users assigned to that event
+  var targetUids=null;
+  if(setlist.eventId){
+    var ev=S.templates.find(function(t){return t.id===setlist.eventId;});
+    if(ev){
+      targetUids=(ev.users||[]).map(function(x){return String(x);});
+    }
+  }
+  USERS.filter(function(u){
+    var roles=u.roles||[u.role||'regular'];
+    var isWorship=roles.indexOf('worship')>=0||roles.indexOf('admin')>=0;
+    if(!isWorship) return false;
+    if(sameId(u.id,S.user.id)) return false;
+    // If event-linked, only notify assigned users
+    if(targetUids) return targetUids.some(function(x){return sameId(x,u.id);});
+    return true;
+  }).forEach(function(u){
+    addNotif(u.id,'Setlist published for '+FD(setlist.date)+(setlist.songs&&setlist.songs.length?' \u00b7 '+setlist.songs.length+' song'+(setlist.songs.length===1?'':'s'):''));
+  });
+}
+
 function mEditSetlist(mo, existing){
   var isNew=!existing;
-  var data=existing?JSON.parse(JSON.stringify(existing)):{id:Date.now(),date:TODAY(),songs:[],published:false};
+  var data=existing?JSON.parse(JSON.stringify(existing)):{id:Date.now(),date:TODAY(),songs:[],published:true,eventId:null};
+  if(data.eventId===undefined) data.eventId=null;
   if(!data.songs) data.songs=[];
 
   mo.appendChild(P({cls:'modal-title'},isNew?'New Setlist':'Edit Setlist'));
@@ -5420,6 +5793,47 @@ function mEditSetlist(mo, existing){
 
   var dateInp=INP({type:'date',value:data.date,input:function(e){data.date=e.target.value;}});
   mo.appendChild(FLD('Date',dateInp));
+
+  // Linked Event: ComboBox + mini calendar toggle
+  var evLinkWrap=D({style:{marginBottom:'1rem'}});
+  evLinkWrap.appendChild(LBL({},'Linked Event (optional)'));
+  var evTagRow=D({style:{marginBottom:'6px',minHeight:'22px'}});
+  function renderEvTag(){
+    evTagRow.innerHTML='';
+    if(data.eventId){
+      var evFound=S.templates.find(function(t){return t.id===data.eventId;});
+      if(evFound){
+        var tag=SP({cls:'tag tagp',style:{cursor:'pointer'}},evFound.title+' \u00b7 '+FD(evFound.date)+' \u00d7');
+        tag.addEventListener('click',function(){data.eventId=null;renderEvTag();});
+        evTagRow.appendChild(tag);
+      }
+    } else {
+      evTagRow.appendChild(SP({style:{fontSize:'12px',color:'#5a5a6a',fontStyle:'italic'}},'No event linked'));
+    }
+  }
+  renderEvTag();
+  evLinkWrap.appendChild(evTagRow);
+  var evComboOpts=S.templates.slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');}).map(function(t){
+    return {value:String(t.id),label:t.title+' \u00b7 '+FD(t.date)};
+  });
+  evLinkWrap.appendChild(ComboBox('Search events\u2026',evComboOpts,function(val){
+    if(!val) return;
+    var evPicked=S.templates.find(function(t){return String(t.id)===val;});
+    if(evPicked){data.eventId=Number(val);if(evPicked.date){data.date=evPicked.date;dateInp.value=evPicked.date;}renderEvTag();}
+  }));
+  var calToggleBtn=BTN({cls:'btn bo bsm',style:{marginTop:'6px',fontSize:'11px'}});
+  calToggleBtn.textContent='\uD83D\uDCC5 Pick from Calendar';
+  var calIsOpen=false;
+  var calWrap=D({style:{display:'none',marginTop:'8px',background:'rgba(255,255,255,.03)',border:'1px solid rgba(232,98,74,.2)',borderRadius:'8px',padding:'10px',overflowX:'auto'}});
+  calToggleBtn.addEventListener('click',function(){
+    calIsOpen=!calIsOpen;
+    calWrap.style.display=calIsOpen?'block':'none';
+    calToggleBtn.textContent=calIsOpen?'\u00d7 Close Calendar':'\uD83D\uDCC5 Pick from Calendar';
+    if(calIsOpen) renderSetlistCal(calWrap,data,dateInp,renderEvTag);
+  });
+  evLinkWrap.appendChild(calToggleBtn);
+  evLinkWrap.appendChild(calWrap);
+  mo.appendChild(evLinkWrap);
 
   mo.appendChild(P({style:{fontSize:'12px',color:'#b0adc4',marginBottom:'4px',marginTop:'8px'}},'Songs'));
   var songsWrap=D({});
@@ -5460,7 +5874,7 @@ function mEditSetlist(mo, existing){
   pubCb.type='checkbox'; pubCb.checked=!!data.published;
   pubCb.addEventListener('change',function(){data.published=pubCb.checked;});
   pubLabel.appendChild(pubCb);
-  pubLabel.appendChild(SP({style:{fontSize:'13px',color:'#f0ece4'}},'Published (visible to Worship team in My Tasks)'));
+  pubLabel.appendChild(SP({style:{fontSize:'13px',color:'#b0adc4'}},'Published automatically on save'));
   mo.appendChild(pubLabel);
   mo.appendChild(err);
 
@@ -5470,16 +5884,21 @@ function mEditSetlist(mo, existing){
       if(!data.date){err.textContent='Date is required.';return;}
       var td=TODAY();
       if(data.date<td){err.textContent='Date cannot be in the past.';return;}
+      // Auto-publish on save
+      data.published=true;
       // Filter out empty songs
       data.songs=data.songs.filter(function(sg){return (sg.song||'').trim();});
       if(!S.setlists) S.setlists=[];
       if(isNew){
         S.setlists.push(data);
         audit('Setlist Created','for '+FD(data.date));
+        if(data.published) notifyWorshipUsers(data);
       } else {
         var idx=S.setlists.findIndex(function(x){return x.id===data.id;});
+        var wasPublished=idx>=0&&S.setlists[idx].published;
         if(idx>=0) S.setlists[idx]=data;
         audit('Setlist Updated','for '+FD(data.date));
+        if(data.published&&!wasPublished) notifyWorshipUsers(data);
       }
       save(); closeM();
     }},'Save')
@@ -6658,11 +7077,14 @@ auth.onAuthStateChanged(function(firebaseUser){
         }
       }
       S.user = profile;
-      if(!S.tab||S.tab==='events'){
-        var r2=(S.user.roles||[S.user.role||'regular']);
-        if(isAdmin(S.user)) S.tab='dashboard';
-        else if(r2.indexOf('security')>=0) S.tab='security';
-        else S.tab='home';
+      // Always set correct default tab based on role on each login
+      var r2=(S.user.roles||[S.user.role||'regular']);
+      if(isAdmin(S.user)){
+        if(!S.tab||S.tab==='events'||S.tab==='home') S.tab='dashboard';
+      } else if(r2.indexOf('security')>=0){
+        S.tab='security';
+      } else {
+        S.tab='home';
       }
       S.availExpanded = false;
       S.availStepIdx = 0;
@@ -6733,6 +7155,8 @@ auth.onAuthStateChanged(function(firebaseUser){
       });
       STATE_LOADED = true; // data is now fully loaded -- safe to save
       save(); // persist the migrated IDs + group cleanup
+      // Check for pending availability reminders
+      checkAvailReminders();
       startRealtimeListener();
       requestPushPermission();
       render();
