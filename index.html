@@ -161,9 +161,10 @@ body{font-family:sans-serif;background:#14141e;color:#f0ece4;min-height:100vh}
 #app-wrap{display:flex;flex-direction:row;min-height:100vh}
 #side-menu{position:fixed;top:0;left:0;height:100vh;width:260px;background:#1c1c2a;border-right:1px solid rgba(232,98,74,.2);z-index:5000;transform:translateX(-260px);display:flex;flex-direction:column;overflow:hidden}
 #side-menu.open{transform:translateX(0)}
-.menu-animated #content-wrap{transition:margin-left .25s}
+.menu-animated #content-wrap{transition:margin-left .25s}@media(max-width:600px){.menu-animated #content-wrap{transition:none}}
 .menu-animated #side-menu{transition:transform .25s}
 body.menu-open #content-wrap{margin-left:260px}
+@media(max-width:600px){body.menu-open #content-wrap{margin-left:0} #menu-overlay{display:block;z-index:4999}}
 body.menu-open #side-menu{transform:translateX(0)}
 #menu-overlay{position:fixed;inset:0;background:transparent;z-index:4999;display:none}
 body.menu-open #menu-overlay{display:block}
@@ -207,7 +208,7 @@ body.light .menu-section-label{color:#9090b0 !important}
 .notif-item{background:rgba(200,169,110,.08);border:1px solid rgba(232,98,74,0.25);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:13px}
 @media(max-width:480px){
   .dg{grid-template-columns:1fr}
-  #topbar{padding:0 .6rem;height:48px}
+  #topbar{padding:0 .6rem;min-height:48px;height:auto}
   #topbar .tb-name{display:none}
   #main{padding:.65rem}
   .modal{padding:1rem}
@@ -2631,7 +2632,7 @@ function musicView(){
 
   if(isAdm&&adminMode){
     // Admin build mode: add/edit songs
-    w.appendChild(P({style:{fontSize:'16px',fontWeight:'700',color:'#e8624a',marginBottom:'12px'}},'Music & Pods Database'));
+    w.appendChild(P({style:{fontSize:'16px',fontWeight:'700',color:'#e8624a',marginBottom:'12px'}},'Content Database'));
     w.appendChild(BTN({cls:'btn bg bsm',style:{marginBottom:'12px'},click:safe(function(){S.modal={type:'addSong'};render();})},'+ Add Song / Podcast'));
     if(!S.musicDb.length){
       w.appendChild(D({cls:'empty'},'Nothing yet. Click Add Song / Podcast to get started.'));
@@ -2641,7 +2642,7 @@ function musicView(){
         if(song.thumbnail) card.appendChild(D({style:{width:'48px',height:'48px',borderRadius:'6px',backgroundImage:'url('+song.thumbnail+')',backgroundSize:'cover',backgroundPosition:'center',flexShrink:'0'}}));
         var info=D({style:{flex:'1',minWidth:'0'}});
         var titleP=P({style:{fontWeight:'600',fontSize:'13px',marginBottom:'1px'}},song.title);
-        titleP.appendChild(SP({style:{fontSize:'10px',background:'rgba(232,98,74,.15)',color:'#e8624a',borderRadius:'4px',padding:'1px 5px',marginLeft:'5px'}},song.type==='podcast'?'PODCAST':'MUSIC'));
+        titleP.appendChild(SP({style:{fontSize:'10px',background:'rgba(232,98,74,.15)',color:'#e8624a',borderRadius:'4px',padding:'1px 5px',marginLeft:'5px'}},song.type==='podcast'?'PODCAST':song.type==='sermon'?'SERMON':'MUSIC'));
         if(song.isNew&&song.newUntil&&new Date()<new Date(song.newUntil)){titleP.appendChild(SP({style:{fontSize:'10px',background:'#e8624a',color:'#fff',borderRadius:'4px',padding:'1px 5px',marginLeft:'5px'}},'NEW'));}
         info.appendChild(titleP);
         if(song.album) info.appendChild(P({cls:'cs',style:{fontSize:'11px'}},song.album+(song.year?' \u00b7 '+song.year:'')));
@@ -2659,8 +2660,8 @@ function musicView(){
   }
 
   // View mode: search + featured + new
-  w.appendChild(P({style:{fontSize:'22px',fontWeight:'700',color:'#e8624a',marginBottom:'4px',textAlign:'center'}},'Music & Pods'));
-  w.appendChild(P({style:{fontSize:'13px',color:'#b0adc4',marginBottom:'1.2rem',textAlign:'center'}},'Music and podcasts from The Well of Iowa'));
+  w.appendChild(P({style:{fontSize:'22px',fontWeight:'700',color:'#e8624a',marginBottom:'4px',textAlign:'center'}},'Content'));
+  w.appendChild(P({style:{fontSize:'13px',color:'#b0adc4',marginBottom:'1.2rem',textAlign:'center'}},'Music, podcasts, and sermons from The Well of Iowa'));
 
   // Search bar
   var q='';
@@ -2679,37 +2680,90 @@ function musicView(){
   function renderMusicResults(){
     resultsWrap.innerHTML='';
     var now=new Date();
-    var db=S.musicDb||[];
-    function renderGrid(items,label,mb){
+    var db=(S.musicDb||[]).slice().reverse(); // latest added first
+    var ROW_LIMIT=6; // cards before "See All"
+
+    function renderRow(items,label,filterFn){
       if(!items.length) return;
-      resultsWrap.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'8px',marginTop:mb?'1.25rem':'0'}},label));
-      var g=D({style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:'10px',marginBottom:'1rem'}});
-      items.forEach(function(s){g.appendChild(buildSongCard(s));});
-      resultsWrap.appendChild(g);
+
+      // Row container with border
+      var section=D({style:{
+        borderTop:'1px solid rgba(232,98,74,.18)',
+        paddingTop:'14px',
+        marginBottom:'4px'
+      }});
+
+      // Header row: label + See All if needed
+      var hdr=D({style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}});
+      hdr.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',margin:'0'}},label));
+      if(items.length>ROW_LIMIT){
+        var seeAll=BTN({cls:'btn bo bsm',click:safe(function(){
+          resultsWrap.innerHTML='';
+          var backBtn=BTN({cls:'btn bo bsm',style:{marginBottom:'14px'},click:safe(function(){q='';renderMusicResults();})},'\u2190 Back');
+          resultsWrap.appendChild(backBtn);
+          resultsWrap.appendChild(P({style:{fontSize:'14px',fontWeight:'600',color:'#e8624a',marginBottom:'10px'}},label+' \u2014 All'));
+          var grid=D({style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'10px'}});
+          items.forEach(function(s){grid.appendChild(buildSongCard(s));});
+          resultsWrap.appendChild(grid);
+        })},'See All');
+        hdr.appendChild(seeAll);
+      }
+      section.appendChild(hdr);
+      var strip=D({style:{display:'flex',gap:'10px',overflowX:'auto',paddingBottom:'8px',scrollbarWidth:'thin',WebkitOverflowScrolling:'touch'}});
+      strip.style.cssText+=';-ms-overflow-style:none;';
+      var shownCount=[ROW_LIMIT];
+      function addCards(from,to){
+        items.slice(from,to).forEach(function(s){
+          var card=buildSongCard(s);
+          card.style.minWidth='140px'; card.style.maxWidth='140px'; card.style.flex='0 0 140px';
+          strip.appendChild(card);
+        });
+      }
+      addCards(0,ROW_LIMIT);
+      if(items.length>ROW_LIMIT){
+        var moreCard=D({style:{minWidth:'90px',maxWidth:'90px',flex:'0 0 90px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',border:'1px dashed rgba(232,98,74,.3)',borderRadius:'8px',padding:'8px',color:'#e8624a',fontSize:'12px',fontWeight:'600',textAlign:'center'}});
+        moreCard.textContent='See More';
+        moreCard.addEventListener('click',safe(function(){
+          strip.removeChild(moreCard);
+          addCards(shownCount[0],items.length);
+          shownCount[0]=items.length;
+        }));
+        strip.appendChild(moreCard);
+      }
+      section.appendChild(strip);
+      resultsWrap.appendChild(section);
     }
+
     if(q){
       var filtered=db.filter(function(s){
         return (s.title||'').toLowerCase().includes(q)||(s.album||'').toLowerCase().includes(q);
       });
       if(!filtered.length){resultsWrap.appendChild(D({cls:'empty'},'No results found.'));return;}
-      var music=filtered.filter(function(s){return s.type!=='podcast';});
+      var music=filtered.filter(function(s){return s.type!=='podcast'&&s.type!=='sermon';});
       var pods=filtered.filter(function(s){return s.type==='podcast';});
-      renderGrid(music,'Music',false);
-      renderGrid(pods,'Podcasts',music.length>0);
+      var sermons=filtered.filter(function(s){return s.type==='sermon';});
+      renderRow(music,'Music');
+      renderRow(pods,'Podcasts');
+      renderRow(sermons,'Sermons');
       return;
     }
+
     // New items
     var newItems=db.filter(function(s){return s.isNew&&s.newUntil&&new Date(s.newUntil)>=now;});
-    renderGrid(newItems,'\uD83D\uDD25 New',false);
+    renderRow(newItems,'\uD83D\uDD25 New');
     // Featured
     var featured=db.filter(function(s){return s.featured;});
-    renderGrid(featured,'Featured',newItems.length>0);
-    // Music section
-    var allMusic=db.filter(function(s){return s.type!=='podcast';});
-    renderGrid(allMusic,'Music',newItems.length>0||featured.length>0);
-    // Podcasts section
+    renderRow(featured,'Featured');
+    // Music
+    var allMusic=db.filter(function(s){return s.type!=='podcast'&&s.type!=='sermon';});
+    renderRow(allMusic,'Music');
+    // Podcasts
     var allPods=db.filter(function(s){return s.type==='podcast';});
-    renderGrid(allPods,'Podcasts',true);
+    renderRow(allPods,'Podcasts');
+    // Sermons
+    var allSermons=db.filter(function(s){return s.type==='sermon';});
+    renderRow(allSermons,'Sermons');
+
     if(!db.length){
       resultsWrap.appendChild(D({cls:'empty'},'Nothing in the database yet.'));
     }
@@ -2770,7 +2824,8 @@ function pageBuilderView(pageKey,pageTitle){
       {id:'timeline',label:'Timeline'},
       {id:'button',label:'Button'},
       {id:'divider',label:'Divider'},
-      {id:'meeting',label:'Meeting Request Form'}
+      {id:'meeting',label:'Meeting Request Form'},
+      {id:'social',label:'Social Links'}
     ];
     blockTypes.forEach(function(bt){
       (function(type){
@@ -3168,6 +3223,35 @@ function buildBlockEditor(block,onSave){
   } else if(block.type==='meeting'){
     inp('Heading (optional)','heading','e.g. Meet with Our Team');
     ta('Intro Text (optional)','intro',2);
+  } else if(block.type==='social'){
+    inp('Section Heading (optional)','heading','Follow us');
+    if(!d.links) d.links=[];
+    var linkList=D({});
+    function rebuildLinks(){
+      linkList.innerHTML='';
+      (d.links||[]).forEach(function(lnk,li){
+        var row=D({style:{display:'flex',gap:'6px',marginBottom:'6px',alignItems:'center'}});
+        var iconInp=INP({type:'text',value:lnk.icon||'',placeholder:'Emoji icon e.g. f'});
+        iconInp.style.cssText='width:60px;';
+        iconInp.addEventListener('input',function(e){d.links[li].icon=e.target.value;block.data=d;onSave();});
+        var labelInp=INP({type:'text',value:lnk.label||'',placeholder:'Label e.g. Facebook'});
+        labelInp.addEventListener('input',function(e){d.links[li].label=e.target.value;block.data=d;onSave();});
+        var urlInp=INP({type:'url',value:lnk.url||'',placeholder:'https://'});
+        urlInp.addEventListener('input',function(e){d.links[li].url=e.target.value;block.data=d;onSave();});
+        var rmBtn=BTN({cls:'btn br bsm'});
+        rmBtn.textContent='x';
+        (function(i){rmBtn.addEventListener('click',safe(function(){d.links.splice(i,1);block.data=d;onSave();rebuildLinks();}));})(li);
+        row.appendChild(iconInp);row.appendChild(labelInp);row.appendChild(urlInp);row.appendChild(rmBtn);
+        linkList.appendChild(row);
+      });
+    }
+    rebuildLinks();
+    c.appendChild(linkList);
+    c.appendChild(BTN({cls:'btn bg bsm',style:{marginTop:'4px'},click:safe(function(){
+      if(!d.links) d.links=[];
+      d.links.push({icon:'',label:'',url:''});
+      block.data=d;onSave();rebuildLinks();
+    })},'+ Add Link'));
   }
   return c;
 }
@@ -3240,6 +3324,21 @@ function renderBlock(block){
     return bw;
   } else if(block.type==='meeting'){
     return renderMeetingBlock(block.data||{});
+  } else if(block.type==='social'){
+    var sw=D({style:{marginBottom:'1.5rem',textAlign:'center'}});
+    if(d.heading) sw.appendChild(P({style:{fontSize:'16px',fontWeight:'600',color:'#e8624a',marginBottom:'12px'}},d.heading));
+    var srow=D({style:{display:'flex',flexWrap:'wrap',gap:'10px',justifyContent:'center'}});
+    (d.links||[]).forEach(function(lnk){
+      if(!lnk.url) return;
+      var sa=document.createElement('a');
+      sa.href=lnk.url;sa.target='_blank';sa.rel='noopener';
+      sa.style.cssText='display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:1px solid rgba(232,98,74,.3);border-radius:8px;text-decoration:none;color:#e8624a;font-size:13px;font-weight:500;';
+      if(lnk.icon) sa.appendChild(SP({style:{fontSize:'18px'}},lnk.icon));
+      sa.appendChild(SP({},lnk.label||lnk.url));
+      srow.appendChild(sa);
+    });
+    sw.appendChild(srow);
+    return sw;
   } else if(block.type==='divider'){
     var dv=document.createElement('hr');
     dv.style.cssText='border:none;border-top:1px solid rgba(232,98,74,.2);margin:1.5rem 0;';
@@ -4087,9 +4186,10 @@ function topBar(){
   for(var _i=0;_i<3;_i++){var _sp=document.createElement('span');hbtn.appendChild(_sp);}
   hbtn.addEventListener('click',function(){document.body.classList.contains('menu-open')?closeMenu():openMenu();});
   left.appendChild(hbtn);
-  left.appendChild(D({style:{lineHeight:'1.2'}},[
-    SP({style:{fontSize:'15px',color:'#e8624a',letterSpacing:'2px',fontWeight:'300',display:'block'}},'THE WELL OF IOWA'),
-    SP({style:{fontSize:'10px',color:'#b0adc4',fontStyle:'italic',letterSpacing:'1px'}},'Together for Jesus')
+  var isMobile=window.innerWidth<=480;
+  left.appendChild(D({style:{lineHeight:'1.25',overflow:'hidden'}},[
+    SP({style:{fontSize:isMobile?'12px':'15px',color:'#e8624a',letterSpacing:isMobile?'1px':'2px',fontWeight:'300',display:'block',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},'THE WELL OF IOWA'),
+    SP({style:{fontSize:'9px',color:'#b0adc4',fontStyle:'italic',letterSpacing:'1px',display:'block'}},'Together for Jesus')
   ]));
   bar.appendChild(left);
   var nr=unread(u.id);
@@ -4100,7 +4200,7 @@ function topBar(){
     _secBtn.title='Report a Safety Concern';
     right.appendChild(_secBtn);
   }
-  right.appendChild(SP({style:{fontSize:'12px',color:'#b0adc4'},cls:'tb-name'},u.name));
+  if(!isMobile) right.appendChild(SP({style:{fontSize:'12px',color:'#b0adc4'},cls:'tb-name'},u.name));
   right.appendChild(BTN({cls:'btn bo bsm',click:function(){applyTheme(THEME==='dark'?'light':'dark');render();}},THEME==='dark'?'Light':'Dark'));
   right.appendChild(BTN({cls:'btn bo bsm',click:safe(function(){
     if(unsubscribe) unsubscribe();
@@ -4158,7 +4258,7 @@ function render(){
     else if(tab==='giving')    main.appendChild(pageBuilderView('giving','Giving'));
     else if(tab==='posts')     main.appendChild(postsView());
     else if(tab==='pubhome')   main.appendChild(pubHomeView());
-    else if(tab==='music')     main.appendChild(D({cls:'empty'},'Music - Coming soon'));
+    else if(tab==='music')     main.appendChild(D({cls:'empty'},'Content - Coming soon'));
     else if(tab==='ourstory')  main.appendChild(D({cls:'empty'},'Our Story - Coming soon'));
     else if(tab==='connect')   main.appendChild(D({cls:'empty'},'Connect - Coming soon'));
     else if(tab==='giving')    main.appendChild(D({cls:'empty'},'Giving - Coming soon'));
@@ -4218,7 +4318,7 @@ function buildSideMenu(){
     var pubPrimary=[
       mBtn('Home','pubhome'),
       mBtn('Events','events'),
-      mBtn('Music & Pods','music'),
+      mBtn('Content','music'),
       mBtn('Our Story','ourstory'),
       mBtn('Connect','connect'),
       mBtn('Giving','giving'),
@@ -4276,7 +4376,7 @@ function buildSideMenu(){
     var adPend=S.pendingDel.length||null;
     var adminSec=mSection([mArrow('Admin Panel',function(){adminPanel.classList.add('open');},adPend)],'Admin');
     if(adminSec) mainPanel.appendChild(adminSec);
-    var pubSec=mSection([mBtn('Music & Pods','music'),mBtn('Our Story','ourstory'),mBtn('Connect','connect'),mBtn('Giving','giving'),mBtn('Posts','posts',hasUnseenPost()?'\u2022':null)],'Public Facing');
+    var pubSec=mSection([mBtn('Content','music'),mBtn('Our Story','ourstory'),mBtn('Connect','connect'),mBtn('Giving','giving'),mBtn('Posts','posts',hasUnseenPost()?'\u2022':null)],'Public Facing');
     if(pubSec) mainPanel.appendChild(pubSec);
   }
 
@@ -5402,9 +5502,9 @@ function mEditSong(mo,existing,idx){
 
   // Type selector
   var typeRow=D({style:{display:'flex',gap:'8px',marginBottom:'1rem'}});
-  ['music','podcast'].forEach(function(t){
+  ['music','podcast','sermon'].forEach(function(t){
     var btn=BTN({cls:'btn '+(d.type===t?'bg':'bo')+' bsm'});
-    btn.textContent=t==='music'?'Music':'Podcast';
+    btn.textContent=t==='music'?'Music':t==='podcast'?'Podcast':'Sermon';
     btn.addEventListener('click',function(){
       d.type=t;
       typeRow.querySelectorAll('.btn').forEach(function(b){b.className='btn bo bsm';});
@@ -5414,14 +5514,14 @@ function mEditSong(mo,existing,idx){
     typeRow.appendChild(btn);
   });
   mo.appendChild(FLD('Type',typeRow));
-  var titleLabel=document.createElement('label');titleLabel.textContent=d.type==='podcast'?'Episode Title *':'Song Title *';titleLabel.style.cssText='font-size:11px;color:#b0adc4;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;';
+  var titleLabel=document.createElement('label');titleLabel.textContent=d.type==='podcast'?'Episode Title *':d.type==='sermon'?'Sermon Title *':'Song Title *';titleLabel.style.cssText='font-size:11px;color:#b0adc4;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;';
   var titleInp=INP({type:'text',value:d.title,input:function(e){d.title=e.target.value;}});
   mo.appendChild(titleLabel);
   mo.appendChild(titleInp);
   mo.appendChild(FLD('YouTube URL *',INP({type:'url',value:d.youtubeUrl,placeholder:'https://youtube.com/watch?v=...',input:function(e){d.youtubeUrl=e.target.value;updateThumb();}})));
   mo.appendChild(thumbPreview);
   if(d.youtubeUrl) updateThumb();
-  mo.appendChild(FLD('Album / Series (optional)',INP({type:'text',value:d.album||'',placeholder:d.type==='podcast'?'Podcast series name':'Album name',input:function(e){d.album=e.target.value;}})));
+  mo.appendChild(FLD('Album / Series (optional)',INP({type:'text',value:d.album||'',placeholder:d.type==='podcast'?'Podcast series name':d.type==='sermon'?'Sermon series name':'Album name',input:function(e){d.album=e.target.value;}})));
   mo.appendChild(FLD('Year (optional)',INP({type:'text',value:d.year||'',placeholder:'e.g. 2024',input:function(e){d.year=e.target.value;}})));
 
   var featRow=D({cls:'toggle-row'});
