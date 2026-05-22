@@ -2,23 +2,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // STATE BOOTSTRAP & AUTH HANDLER
 // ─────────────────────────────────────────────────────────────────────────────
-//
-// This file replaces:
-//   1. The var USERS / var S = { … } block
-//   2. The saveUsers() and loadState() functions
-//   3. The auth.onAuthStateChanged() block at the bottom of the original file
-//   4. The onboarding Firestore calls
-//   5. The chat-room UI patches needed for subcollection messages
-//
-// All other functions (render, homeView, msgsView, etc.) remain in the
-// original file unchanged.  The only behavioural difference in msgsView is
-// that send() now calls sendMessage() + subscribeToRoom() instead of
-// mutating room.msgs directly and calling save().
-// ─────────────────────────────────────────────────────────────────────────────
 
 // ── Global runtime state ─────────────────────────────────────────────────────
 var USERS = [];
-var nextUID = 7; // fallback counter (real IDs come from Firebase Auth UID)
+var nextUID = 7;
 
 var COMMON_TEAMS = [
   'Greeting Team','Worship Team','Food Team','Setup Team','Teardown Team',
@@ -74,8 +61,19 @@ var S = {
   taskTemplates:[], issues:[], kaizen:[], planningBoards:[]
 };
 
-// ── audit() patches the in-memory array AND writes to Firestore ──────────────
-// (Overrides the function of the same name in the original file)
+// ── Safe wrappers for role helpers (guard against null user) ─────────────────
+// The original hasRole/isAdmin are defined in the inline script block.
+// We wrap them here so state.js can call them safely even if user is null.
+function _isAdmin(u) {
+  if (!u) return false;
+  try { return isAdmin(u); } catch(e) { return (u.roles||[]).indexOf('admin') >= 0; }
+}
+function _isPublicUser(u) {
+  if (!u) return false;
+  try { return isPublicUser(u); } catch(e) { return (u.roles||[]).indexOf('public') >= 0; }
+}
+
+// ── audit() writes in-memory + to Firestore ──────────────────────────────────
 function audit(action, detail) {
   if (!S.auditLog) S.auditLog = [];
   var entry = {
@@ -87,107 +85,51 @@ function audit(action, detail) {
   };
   S.auditLog.unshift(entry);
   if (S.auditLog.length > 500) S.auditLog = S.auditLog.slice(0, 500);
-  writeAuditEntry(entry); // durable write to auditLog collection
+  if (typeof writeAuditEntry === 'function') writeAuditEntry(entry);
 }
 
-// ── Onboarding: use dedicated collection instead of appState ─────────────────
-// These override the functions from the original file.
-
+// ── checkAndShowOnboarding: uses onboarding/{uid} collection ─────────────────
 function checkAndShowOnboarding(onDone) {
   if (!S.user) { if (onDone) onDone(); return; }
-  if (isPublicUser(S.user) || (S.user.roles || []).indexOf('unverified') >= 0) {
+  if (_isPublicUser(S.user) || (S.user.roles || []).indexOf('unverified') >= 0) {
     if (onDone) onDone(); return;
   }
   var uid = String(S.user.uid || S.user.id);
   loadOnboardingDismissed(uid)
     .then(function (dismissed) {
       if (dismissed) { if (onDone) onDone(); }
-      else           { showOnboarding(onDone); }
-    });
+      else           { if (typeof showOnboarding === 'function') showOnboarding(onDone); else if (onDone) onDone(); }
+    })
+    .catch(function() { if (onDone) onDone(); });
 }
 
-// finishOnboarding is called inside showOnboarding() in the original file.
-// We patch the Firestore write here by overriding saveOnboardingPref so the
-// original function calls our new collection-backed version.
-// (The original's db.collection('appState').doc('onboarding_…') call is
-//  replaced by the dedicated collection.)
-function _patchOnboarding() {
-  // Replace the save call inside finishOnboarding in the original showOnboarding.
-  // Because the original is a closure we can't reach it directly; instead we
-  // override the global onboarding save at the point it would be called.
-  // This is handled by state.js owning checkAndShowOnboarding and
-  // loadOnboardingDismissed / saveOnboardingDismissed from db.js.
-}
-
-// ── msgsView patches ─────────────────────────────────────────────────────────
-// The original msgsView() is fully preserved.  We extend it here so that:
-//   • Opening a room subscribes to its subcollection (real-time, last 50)
-//   • "Load More" button fetches older messages
-//   • send() writes to the subcollection instead of mutating room.msgs
-//
-// Strategy: override the two behaviours by monkey-patching the functions
-// the original msgsView calls.  This avoids editing the original render code.
-
-// Called by the original msgsView when the user clicks a room card.
-// The original does:  S.activeRoom = rm.id; render();
-// We intercept via startRoomSession (called in onAuthStateChanged bootstrap).
-
-function _openRoomSession(roomId) {
-  // Load initial messages into the in-memory room.msgs so the original
-  // msgsView renders them without any UI changes.
-  var room = S.rooms.find(function (r) { return r.id === roomId; });
-  if (!room) return;
-
-  subscribeToRoom(roomId, function (msgs) {
-    room.msgs = msgs;
-    if (S.activeRoom === roomId && !SUPPRESS_RENDER) render();
-  });
-}
-
-function _closeRoomSession() {
-  unsubscribeFromRoom();
-}
-
-// Patch the room send function.
-// The original msgsView calls room.msgs.push({…}); save(); render();
-// We replace this at the call site by exporting a sendRoomMessage() function
-// that the original send() closure should call.  Because we can't rewrite
-// the closure we use a global override flag checked in a wrapper.
-//
-// USAGE IN ORIGINAL msgsView send() – change these two lines:
-//   room.msgs.push({uid:u.id, text:ti.value.trim(), attachment:pendingAtt||null, ts:Date.now()});
-//   save();
-// TO:
-//   sendRoomMessage(room, {uid:u.id, text:ti.value.trim(), attachment:pendingAtt||null, ts:Date.now()});
-//
+// ── sendRoomMessage: writes to subcollection ─────────────────────────────────
 function sendRoomMessage(room, msg) {
   msg.ts = msg.ts || Date.now();
-  room.msgs.push(msg); // keep in-memory for immediate render
+  room.msgs.push(msg);
   sendMessage(room.id, msg)
-    .then(function () { saveRoom(room); }) // also persist metadata (call flag etc.)
+    .then(function () { saveRoom(room); })
     .catch(function (e) {
-      showToast('Message failed to send.', 'error');
+      if (typeof showToast === 'function') showToast('Message failed to send.', 'error');
       console.warn('sendMessage error:', e);
     });
-  render();
+  if (typeof render === 'function') render();
 }
 
-// "Load More" helper – called by a button injected into msgsView.
-// Appends older messages before the earliest message currently loaded.
 function loadMoreMessages(room, onDone) {
   var earliest = room.msgs.length ? room.msgs[0].ts : null;
   loadMessages(room.id, earliest).then(function (older) {
     if (!older.length) {
-      showToast('No more messages to load.', 'info');
+      if (typeof showToast === 'function') showToast('No more messages to load.', 'info');
     } else {
       room.msgs = older.concat(room.msgs);
     }
     if (onDone) onDone();
-    render();
+    if (typeof render === 'function') render();
   });
 }
 
-// ── UID migration (preserved from original) ───────────────────────────────────
+// ── UID migration helpers ────────────────────────────────────────────────────
 function _runUidMigration(oldUid, newUid) {
   function swapUid(x) { return String(x) === oldUid ? newUid : x; }
   (S.templates || []).forEach(function (t) {
@@ -242,34 +184,16 @@ function _migrateNumericIds() {
   S.notifs = newNotifs;
 }
 
-// ── Auth state handler (replaces the original auth.onAuthStateChanged block) ──
+// ── Auth state handler ───────────────────────────────────────────────────────
 auth.onAuthStateChanged(function (firebaseUser) {
   if (firebaseUser) {
-    // Show loading splash (same as original)
-    (function () {
-      var app = document.getElementById('app');
-      if (!app) return;
-      app.innerHTML = '';
-      var loading = document.createElement('div');
-      loading.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#14141e;gap:16px';
-      var svgNS = 'http://www.w3.org/2000/svg';
-      var svg = document.createElementNS(svgNS, 'svg');
-      svg.setAttribute('width','56'); svg.setAttribute('height','56'); svg.setAttribute('viewBox','0 0 72 72');
-      var circ = document.createElementNS(svgNS,'circle');
-      circ.setAttribute('cx','36'); circ.setAttribute('cy','36'); circ.setAttribute('r','34');
-      circ.setAttribute('fill','none'); circ.setAttribute('stroke','#e8624a'); circ.setAttribute('stroke-width','2.5');
-      svg.appendChild(circ);
-      loading.appendChild(svg);
-      loading.appendChild(document.createTextNode('Loading…'));
-      app.appendChild(loading);
-    })();
 
-    // Run migration (no-op after first time), then load state
-    runMigrationIfNeeded(function (/* alreadyMigrated */) {
+    runMigrationIfNeeded(function () {
       loadState(function () {
-        // ── same post-load logic as the original ──────────────────────────
+
         var profile = USERS.find(function (u) {
-          return sameId(u.uid, firebaseUser.uid) || u.email === firebaseUser.email;
+          try { return sameId(u.uid, firebaseUser.uid) || u.email === firebaseUser.email; }
+          catch(e) { return u.email === firebaseUser.email; }
         });
 
         if (!profile) {
@@ -281,7 +205,7 @@ auth.onAuthStateChanged(function (firebaseUser) {
             roles: USERS.length === 0
               ? ['admin']
               : (firebaseUser.emailVerified ? ['public'] : ['unverified']),
-            rec:   firebaseUser.email
+            rec: firebaseUser.email
           };
           USERS.push(profile);
           saveUsers();
@@ -292,17 +216,17 @@ auth.onAuthStateChanged(function (firebaseUser) {
           profile.id        = newUid;
           profile.lastLogin = Date.now();
 
-          // Upgrade unverified → public once email verified
           if (firebaseUser.emailVerified &&
               (profile.roles || []).indexOf('unverified') >= 0) {
             profile.roles = ['public'];
             saveUsers();
           }
 
-          // Block unverified accounts
           if ((profile.roles || []).indexOf('unverified') >= 0 &&
               !firebaseUser.emailVerified) {
-            auth.signOut(); render(); return;
+            auth.signOut();
+            if (typeof render === 'function') render();
+            return;
           }
 
           if (oldUid !== newUid) {
@@ -313,9 +237,9 @@ auth.onAuthStateChanged(function (firebaseUser) {
 
         S.user = profile;
 
-        // Default tab by role
+        // Default tab by role — use safe wrappers
         var r2 = S.user.roles || [S.user.role || 'regular'];
-        if (isAdmin(S.user)) {
+        if (_isAdmin(S.user)) {
           if (!S.tab || S.tab === 'events' || S.tab === 'home') S.tab = 'dashboard';
         } else if (r2.indexOf('security') >= 0) {
           S.tab = 'security';
@@ -325,22 +249,20 @@ auth.onAuthStateChanged(function (firebaseUser) {
           S.tab = 'home';
         }
 
-        // Reset transient UI state
         S.availExpanded   = false;
         S.availStepIdx    = 0;
         S.availFocusKey   = null;
-        S.coordAdminTab   = S.coordAdminTab  || 'matrix';
-        S.improveTab      = S.improveTab     || 'issues';
-        S.planningBoardId = S.planningBoardId|| null;
-        S.issueTab        = S.issueTab       || 'open';
+        S.coordAdminTab   = S.coordAdminTab   || 'matrix';
+        S.improveTab      = S.improveTab      || 'issues';
+        S.planningBoardId = S.planningBoardId || null;
+        S.issueTab        = S.issueTab        || 'open';
 
-        // Normalize all IDs to strings
         USERS.forEach(function (u) { u.id = String(u.uid || u.id); });
 
-        // Clean null members from groups
         (S.groups || []).forEach(function (g) {
           g.members = (g.members || []).filter(function (x) {
-            return x != null && x !== '' && String(x) !== 'null' && String(x) !== 'undefined' && UN(x) !== '?';
+            if (x == null || x === '' || String(x) === 'null' || String(x) === 'undefined') return false;
+            try { return (typeof UN === 'function') ? UN(x) !== '?' : true; } catch(e) { return true; }
           });
         });
         (S.rooms || []).forEach(function (r) {
@@ -351,41 +273,33 @@ auth.onAuthStateChanged(function (firebaseUser) {
 
         STATE_LOADED = true;
         save();
-        checkAvailReminders();
+        if (typeof checkAvailReminders === 'function') checkAvailReminders();
         startRealtimeListener();
-        requestPushPermission();
-        render();
+        if (typeof requestPushPermission === 'function') requestPushPermission();
+        if (typeof render === 'function') render();
         checkAndShowOnboarding(null);
       });
     });
 
   } else {
-    // Signed out
     S.user       = null;
     STATE_LOADED = false;
     stopRealtimeListeners();
     _closeRoomSession();
-    render();
+    if (typeof render === 'function') render();
   }
 });
 
-// ── Intercept room open / close to wire up the message subcollection ─────────
-// The original msgsView uses:
-//   c.addEventListener('click', function(){ S.activeRoom = rm.id; render(); })
-// We can't rewrite that closure, so we patch render() to detect room changes.
-
+// ── Room session patch — wires subcollection messages to msgsView ────────────
 var _lastActiveRoom = null;
-var _origRender     = null;
 
-// Called once the original render function is defined (at end of original file).
 function _installRoomSessionPatch() {
   if (typeof render !== 'function') {
     setTimeout(_installRoomSessionPatch, 50);
     return;
   }
-  _origRender = render;
+  var _origRender = render;
   render = function () {
-    // Detect room change
     if (S.activeRoom !== _lastActiveRoom) {
       if (_lastActiveRoom !== null) _closeRoomSession();
       if (S.activeRoom  !== null)  _openRoomSession(S.activeRoom);
