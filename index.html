@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>The Well of Iowa -- Elim Mission Portal</title>
+<title>The Well of Iowa -- Mission Team Portal</title>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -3852,7 +3852,7 @@ function homeView(){
       var _dr=D({cls:'cs',style:{display:'flex',flexWrap:'wrap',alignItems:'center',gap:'4px'}});
       _dr.appendChild(SP({},FD(ev.date)+(ev.startTime?' \u00b7 '+ev.startTime:'')));
       if(ev.isVirtual||(ev.location&&ev.location.toLowerCase()==='online')){
-        var _vEl;if(ev.signUpLink){_vEl=document.createElement('a');_vEl.href=ev.signUpLink;_vEl.target='_blank';_vEl.rel='noopener';_vEl.textContent='Link';_vEl.style.cssText='color:#87b7e8;text-decoration:underline;cursor:pointer;';_vEl.addEventListener('click',function(e){e.stopPropagation();});_vEl.addEventListener('touchend',function(e){e.stopPropagation();e.preventDefault();window.open(ev.signUpLink,'_blank');});}else{_vEl=document.createElement('span');_vEl.textContent='Virtual';_vEl.style.color='#87b7e8';}
+        var _vEl;if(ev.signUpLink){_vEl=document.createElement('a');_vEl.href=ev.signUpLink.match(/^https?:\/\//)?ev.signUpLink:'https://'+ev.signUpLink;_vEl.target='_blank';_vEl.rel='noopener';_vEl.textContent='Link';_vEl.style.cssText='color:#87b7e8;text-decoration:underline;cursor:pointer;';_vEl.addEventListener('click',function(e){e.stopPropagation();});_vEl.addEventListener('touchend',function(e){e.stopPropagation();e.preventDefault();window.open(ev.signUpLink.match(/^https?:\/\//)?ev.signUpLink:'https://'+ev.signUpLink,'_blank');});}else{_vEl=document.createElement('span');_vEl.textContent='Virtual';_vEl.style.color='#87b7e8';}
         _dr.appendChild(SP({},' \u00b7 '));_dr.appendChild(_vEl);
       } else if(ev.location||ev.city){
         var _ll2=makeLocationLink(ev.location,ev.city,ev.state,ev.address);
@@ -4106,11 +4106,11 @@ function dashboardView(){
       if(_isVirtDisplay){
         if(tmpl.signUpLink){
           var _vLink=document.createElement('a');
-          _vLink.href=tmpl.signUpLink;_vLink.target='_blank';_vLink.rel='noopener';
+          _vLink.href=tmpl.signUpLink.match(/^https?:\/\//)?tmpl.signUpLink:'https://'+tmpl.signUpLink;_vLink.target='_blank';_vLink.rel='noopener';
           _vLink.textContent='Link';
           _vLink.style.cssText='color:#87b7e8;text-decoration:underline;cursor:pointer;';
           _vLink.addEventListener('click',function(e){e.stopPropagation();});
-          _vLink.addEventListener('touchend',function(e){e.stopPropagation();e.preventDefault();window.open(tmpl.signUpLink,'_blank');});
+          _vLink.addEventListener('touchend',function(e){e.stopPropagation();e.preventDefault();window.open(tmpl.signUpLink.match(/^https?:\/\//)?tmpl.signUpLink:'https://'+tmpl.signUpLink,'_blank');});
           _dashLocRow.appendChild(SP({},' \u00b7 '));_dashLocRow.appendChild(_vLink);
         } else {
           _dashLocRow.appendChild(SP({style:{color:'#87b7e8'}},' \u00b7 Virtual'));
