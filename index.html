@@ -601,6 +601,7 @@ function hasRole(u,role){ if(!u)return false; var r=u.roles||[u.role||'regular']
 function isAdmin(u){ return hasRole(u,'admin'); }
 function isPublicUser(u){ return hasRole(u,'public'); }
 function isUnverified(u){ return hasRole(u,'unverified'); }
+function canSeeSecurity(u){ return !u ? false : (isAdmin(u) || hasRole(u,'security') || hasRole(u,'staff')); }
 function FD(d){ if(!d)return''; var dt=new Date(d+'T12:00:00'); return dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
 function TODAY(){ return new Date().toISOString().split('T')[0]; }
 function addNotif(uid,msg,opts){
