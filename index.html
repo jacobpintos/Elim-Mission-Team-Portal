@@ -604,6 +604,22 @@ function isUnverified(u){ return hasRole(u,'unverified'); }
 function canSeeSecurity(u){ return !u ? false : (isAdmin(u) || hasRole(u,'security') || hasRole(u,'staff')); }
 function canSeeMerch(u){ return !u ? false : (isAdmin(u) || hasRole(u,'merch')); }
 function canSeeWorship(u){ return !u ? false : (isAdmin(u) || hasRole(u,'worship')); }
+function isOverdue(t){ if(!t||!t.dueDate||t.status==='done') return false; return t.dueDate < TODAY(); }
+function userRoleDisplay(u){
+  if(!u) return 'Unknown';
+  var r=u.roles||[u.role||'regular'];
+  var labels={admin:'Admin',staff:'Staff',security:'Security',merch:'Merch',worship:'Worship',regular:'Member',public:'Public',unverified:'Unverified'};
+  return r.map(function(x){ return labels[x]||(x.charAt(0).toUpperCase()+x.slice(1)); }).join(', ');
+}
+// Sign-out calls `unsubscribe()` as a guard; alias to db.js stopRealtimeListeners
+var unsubscribe = typeof stopRealtimeListeners === 'function' ? stopRealtimeListeners : null;
+// sendRoomMessage: pushes message locally and persists via db.js sendMessage()
+function sendRoomMessage(room, msg){
+  if(!room) return;
+  if(!room.msgs) room.msgs=[];
+  room.msgs.push(msg);
+  if(typeof sendMessage === 'function') sendMessage(room.id, msg).catch(function(e){ console.warn('sendRoomMessage failed:',e); });
+}
 function FD(d){ if(!d)return''; var dt=new Date(d+'T12:00:00'); return dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
 function TODAY(){ return new Date().toISOString().split('T')[0]; }
 function addNotif(uid,msg,opts){
@@ -1032,11 +1048,11 @@ function coordMatrix(){
   var thead=document.createElement('thead');
   var hr=document.createElement('tr');
   var th0=document.createElement('th');
-  th0.style.cssText='background:#1c1c2a;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#b0adc4;position:sticky;left:0;z-index:2';
+  th0.style.cssText='background:'+(THEME==='light'?'#fff':'#1c1c2a')+';padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#b0adc4;position:sticky;left:0;z-index:2';
   th0.textContent='Name'; hr.appendChild(th0);
   evs.forEach(function(ev){
     var th=document.createElement('th');
-    th.style.cssText='background:#1c1c2a;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#b0adc4;max-width:80px;overflow:hidden;text-overflow:ellipsis';
+    th.style.cssText='background:'+(THEME==='light'?'#fff':'#1c1c2a')+';padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#b0adc4;max-width:80px;overflow:hidden;text-overflow:ellipsis';
     th.title=ev.title+' \u00b7 '+FD(ev.date); th.textContent=ev.title;
     if(ev.isRec){var rs=document.createElement('span');rs.style.cssText='color:#e8624a;font-size:9px;display:block';rs.textContent='recurring';th.appendChild(rs);}
     hr.appendChild(th);
@@ -1044,7 +1060,7 @@ function coordMatrix(){
   thead.appendChild(hr);
   var tbody=document.createElement('tbody');
   var totRow=document.createElement('tr'); totRow.style.background='rgba(0,0,0,.2)';
-  var totLbl=document.createElement('td'); totLbl.style.cssText='padding:5px 12px;font-size:10px;color:#b0adc4;font-weight:600;position:sticky;left:0;background:rgba(28,28,42,.95)';
+  var totLbl=document.createElement('td'); totLbl.style.cssText='padding:5px 12px;font-size:10px;color:#b0adc4;font-weight:600;position:sticky;left:0;background:'+(THEME==='light'?'rgba(240,239,248,.97)':'rgba(28,28,42,.95)');
   totLbl.textContent='Totals'; totRow.appendChild(totLbl);
   evs.forEach(function(ev){
     var counts={yes:0,no:0,partial:0,tbd:0};
@@ -1060,7 +1076,7 @@ function coordMatrix(){
   users.forEach(function(u){
     var uid=String(u.id||u.uid);
     var tr=document.createElement('tr');
-    var ntd=document.createElement('td'); ntd.style.cssText='padding:8px 12px;font-weight:500;color:#f0ece4;position:sticky;left:0;background:#14141e;z-index:1';
+    var ntd=document.createElement('td'); ntd.style.cssText='padding:8px 12px;font-weight:500;color:'+(THEME==='light'?'#1a1a2e':'#f0ece4')+';position:sticky;left:0;background:'+(THEME==='light'?'#f0eff8':'#14141e')+';z-index:1';
     ntd.textContent=u.name; tr.appendChild(ntd);
     evs.forEach(function(ev){
       var td3=document.createElement('td'); td3.style.cssText='padding:8px 12px;text-align:center;border-bottom:1px solid rgba(255,255,255,.04)';
