@@ -168,8 +168,13 @@ function _doSave() {
 // Each item MUST have a string/number `id` field.
 // Uses individual set() calls rather than a batch so we don't hit the
 // 500-write batch limit on large datasets.
+// Also deletes any Firestore docs whose IDs are no longer in `items`, so that
+// deletions from S.kaizen (etc.) actually propagate and don't snap back.
 function _saveCollection(collectionName, items) {
   var coll = db.collection(collectionName);
+  var keepIds = {};
+  items.forEach(function (item) { keepIds[String(item.id)] = true; });
+
   var writes = items.map(function (item) {
     var docId = String(item.id);
     return coll.doc(docId).set(
@@ -177,7 +182,19 @@ function _saveCollection(collectionName, items) {
       { merge: true }
     );
   });
-  return Promise.all(writes);
+
+  // Delete docs that exist in Firestore but are no longer in the in-memory array
+  var deleteOp = coll.get().then(function (snap) {
+    var deletes = [];
+    snap.forEach(function (d) {
+      if (!keepIds[d.id]) {
+        deletes.push(coll.doc(d.id).delete());
+      }
+    });
+    return Promise.all(deletes);
+  });
+
+  return Promise.all(writes.concat([deleteOp]));
 }
 
 // ── Overrides live inside event docs as a sub-field ─────────────────────────
