@@ -605,6 +605,8 @@ function canSeeSecurity(u){ return !u ? false : (isAdmin(u) || hasRole(u,'securi
 function canSeeMerch(u){ return !u ? false : (isAdmin(u) || hasRole(u,'merch')); }
 function canSeeWorship(u){ return !u ? false : (isAdmin(u) || hasRole(u,'worship')); }
 function isOverdue(t){ if(!t||!t.dueDate||t.status==='done') return false; return t.dueDate < TODAY(); }
+function taskAssignees(t){ return (t&&t.assignees)?t.assignees.filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined';}):[];}
+
 function userRoleDisplay(u){
   if(!u) return 'Unknown';
   var r=u.roles||[u.role||'regular'];
@@ -1698,6 +1700,9 @@ function mKaizenActionPlan(mo, item, mode){
       if(!item.actionPlans) item.actionPlans=[];
       item.actionPlans.push(ap);
       item.stage='action';
+      // Also update the canonical S.kaizen entry in case the listener replaced the reference
+      var kzIdx=S.kaizen.findIndex(function(k){return sameId(k.id,item.id);});
+      if(kzIdx>=0){S.kaizen[kzIdx].actionPlans=item.actionPlans;S.kaizen[kzIdx].stage='action';}
       // Generate tasks for each step that has an assignee
       ap.steps.forEach(function(step){
         if(!step.assignee) return;
@@ -4178,6 +4183,7 @@ function render(){
     main.appendChild(bg);
   } else {
     var tab=S.tab;
+    if(isPublicUser(S.user)&&(tab==='home'||tab==='dashboard')) tab='pubhome';
     if(tab==='dashboard')      main.appendChild(isAdmin(S.user)?dashboardView():homeView());
     else if(tab==='home')      main.appendChild(homeView());
     else if(tab==='events')    main.appendChild(eventsView());
