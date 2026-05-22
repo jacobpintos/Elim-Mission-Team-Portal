@@ -604,7 +604,22 @@ function isUnverified(u){ return hasRole(u,'unverified'); }
 function canSeeSecurity(u){ return !u ? false : (isAdmin(u) || hasRole(u,'security') || hasRole(u,'staff')); }
 function canSeeMerch(u){ return !u ? false : (isAdmin(u) || hasRole(u,'merch')); }
 function canSeeWorship(u){ return !u ? false : (isAdmin(u) || hasRole(u,'worship')); }
+function canAssignTasks(u){ return !u ? false : isAdmin(u); }
 function isOverdue(t){ if(!t||!t.dueDate||t.status==='done') return false; return t.dueDate < TODAY(); }
+
+// ── Room session hooks expected by state.js ──────────────────────────────────
+// state.js calls _openRoomSession(roomId) when S.activeRoom is set and
+// _closeRoomSession() when the room is closed.  They wire into the db.js
+// subscribeToRoom / unsubscribeFromRoom helpers.
+function _openRoomSession(roomId){
+  subscribeToRoom(roomId, function(msgs){
+    var room = S.rooms.find(function(r){ return sameId(r.id, roomId); });
+    if(room){ room.msgs = msgs; if(S.activeRoom !== null && sameId(S.activeRoom, roomId)) render(); }
+  });
+}
+function _closeRoomSession(){
+  unsubscribeFromRoom();
+}
 function taskAssignees(t){ return (t&&t.assignees)?t.assignees.filter(function(x){return x!=null&&x!==''&&String(x)!=='null'&&String(x)!=='undefined';}):[];}
 
 function userRoleDisplay(u){
