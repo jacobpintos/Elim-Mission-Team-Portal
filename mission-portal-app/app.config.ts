@@ -33,7 +33,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       '@sentry/react-native/expo',
       {
         url: 'https://sentry.io/',
-        // project and org set via environment at build time
+        organization: 'the-well-of-iowa',
+        project: 'react-native',
       },
     ],
   ],
