@@ -23,7 +23,7 @@ export const sendContactForm = onCall(
     await resend().emails.send({
       from: 'Mission Portal <noreply@yourdomain.com>',
       to: 'admin@yourdomain.com', // TODO: read from Firestore appSettings
-      replyTo: email,
+      reply_to: email,
       subject: `Contact form: ${name}`,
       html: `
         <p><strong>From:</strong> ${name} &lt;${email}&gt;</p>
