@@ -1,0 +1,66 @@
+name: Deploy Firebase
+
+on:
+  # Manual trigger from the GitHub Actions UI — checkboxes let you
+  # deploy functions, rules, or both independently.
+  workflow_dispatch:
+    inputs:
+      deploy_functions:
+        description: 'Deploy Cloud Functions'
+        type: boolean
+        default: true
+      deploy_rules:
+        description: 'Deploy Firestore Rules'
+        type: boolean
+        default: false
+
+  # Auto-deploy when the relevant source files land on main.
+  push:
+    branches: [main]
+    paths:
+      - 'mission-portal-app/functions/**'
+      - 'mission-portal-app/firestore.rules'
+
+jobs:
+  deploy:
+    name: Firebase Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Authenticate with Firebase using the service account JSON stored
+      # as a GitHub secret. Sets GOOGLE_APPLICATION_CREDENTIALS automatically.
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Install the functions' npm deps so the predeploy TypeScript build works.
+      - name: Install Functions dependencies
+        run: npm ci
+        working-directory: mission-portal-app/functions
+
+      # Deploy Cloud Functions.
+      # On manual trigger: runs only if the checkbox was checked.
+      # On push: runs if functions/** changed (path filter above).
+      - name: Deploy Cloud Functions
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.deploy_functions == true) ||
+          (github.event_name == 'push')
+        run: npx firebase-tools deploy --only functions --project ${{ secrets.FIREBASE_PROJECT_ID }}
+
+      # Deploy Firestore security rules.
+      # On manual trigger: runs only if the checkbox was checked.
+      # On push: runs automatically (path filter already scopes this).
+      - name: Deploy Firestore Rules
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.deploy_rules == true) ||
+          (github.event_name == 'push')
+        run: npx firebase-tools deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }}
