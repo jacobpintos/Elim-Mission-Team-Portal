@@ -1,27 +1,187 @@
 import { create } from 'zustand'
-
-// Skeleton store for events domain.
-// Phase 2+ wires Firestore subscriptions and fills in state.
+import {
+  collection,
+  onSnapshot,
+  doc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
+} from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { allInstances } from '@/lib/events'
+import { availKey } from '@/lib/availability'
+import { sameId } from '@/lib/ids'
+import { nextId } from '@/lib/counters'
+import type { EventTemplate, EventInstance, AvailResponse } from '@/types/events'
 
 interface EventsStore {
-  items: unknown[]
+  templates: EventTemplate[]
+  overrides: Record<string, Partial<EventTemplate>>
+  avail: Record<string, Record<string, AvailResponse>>
+  selectedInstanceKey: string | null
   loading: boolean
-  _unsub: (() => void) | null
+  _unsubTemplates: (() => void) | null
+  _unsubAvail: (() => void) | null
+  // selectors
+  instances: (from: string, to: string) => EventInstance[]
+  myInstances: (uid: string, from: string, to: string) => EventInstance[]
+  pendingAvailEvents: (uid: string) => EventInstance[]
+  // actions
   subscribe: () => void
   unsubscribe: () => void
+  selectEvent: (key: string | null) => void
+  createEvent: (data: Omit<EventTemplate, 'id'>) => Promise<void>
+  updateEvent: (id: string | number, patch: Partial<EventTemplate>) => Promise<void>
+  deleteEvent: (id: string | number) => Promise<void>
+  setOverride: (instanceKey: string, patch: Partial<EventTemplate>) => Promise<void>
+  setAvail: (
+    ev: EventInstance,
+    uid: string,
+    status: AvailResponse['status'] | null,
+    note?: string
+  ) => Promise<void>
 }
 
 export const useEventsStore = create<EventsStore>((set, get) => ({
-  items: [],
+  templates: [],
+  overrides: {},
+  avail: {},
+  selectedInstanceKey: null,
   loading: false,
-  _unsub: null,
+  _unsubTemplates: null,
+  _unsubAvail: null,
+
+  instances: (from, to) => {
+    const { templates, overrides } = get()
+    return allInstances(templates, overrides, from, to)
+  },
+
+  myInstances: (uid, from, to) => {
+    const { templates, overrides } = get()
+    const all = allInstances(templates, overrides, from, to)
+    return all.filter((ev) => ev.users?.some((x) => sameId(x, uid)))
+  },
+
+  pendingAvailEvents: (uid) => {
+    const today = new Date().toISOString().split('T')[0]
+    const in7 = new Date()
+    in7.setDate(in7.getDate() + 7)
+    const to = in7.toISOString().split('T')[0]
+    const { templates, overrides, avail } = get()
+    return allInstances(templates, overrides, today, to).filter((ev) => {
+      const response = avail[availKey(ev)]?.[uid]
+      return !response || response.status === 'tbd'
+    })
+  },
 
   subscribe: () => {
-    // Phase 2+ wires Firestore onSnapshot here (role-gated)
+    if (get()._unsubTemplates) return
+
+    set({ loading: true })
+
+    const unsubTemplates = onSnapshot(collection(db, 'events'), (snap) => {
+      const templates: EventTemplate[] = []
+      const overrides: Record<string, Partial<EventTemplate>> = {}
+      snap.docs.forEach((d) => {
+        const data = d.data() as EventTemplate & {
+          overrides?: Record<string, Partial<EventTemplate>>
+        }
+        const { overrides: docOverrides, ...tmpl } = data
+        templates.push({ ...tmpl, id: d.id })
+        if (docOverrides) {
+          Object.entries(docOverrides).forEach(([key, val]) => {
+            overrides[key] = val
+          })
+        }
+      })
+      set({ templates, overrides, loading: false })
+    })
+
+    const unsubAvail = onSnapshot(collection(db, 'avail'), (snap) => {
+      const avail: Record<string, Record<string, AvailResponse>> = {}
+      snap.docs.forEach((d) => {
+        const data = d.data() as { responses?: Record<string, AvailResponse> }
+        avail[d.id] = data.responses ?? {}
+      })
+      set({ avail })
+    })
+
+    set({ _unsubTemplates: unsubTemplates, _unsubAvail: unsubAvail })
   },
 
   unsubscribe: () => {
-    get()._unsub?.()
-    set({ _unsub: null })
+    get()._unsubTemplates?.()
+    get()._unsubAvail?.()
+    set({ _unsubTemplates: null, _unsubAvail: null, templates: [], avail: {}, overrides: {} })
+  },
+
+  selectEvent: (key) => set({ selectedInstanceKey: key }),
+
+  createEvent: async (data) => {
+    const id = await nextId('nEv')
+    await setDoc(doc(db, 'events', String(id)), {
+      ...data,
+      id,
+      _updatedAt: serverTimestamp(),
+    })
+  },
+
+  updateEvent: async (id, patch) => {
+    // Optimistic update
+    set((s) => ({
+      templates: s.templates.map((t) => (sameId(t.id, id) ? { ...t, ...patch } : t)),
+    }))
+    await updateDoc(doc(db, 'events', String(id)), {
+      ...patch,
+      _updatedAt: serverTimestamp(),
+    })
+  },
+
+  deleteEvent: async (id) => {
+    set((s) => ({ templates: s.templates.filter((t) => !sameId(t.id, id)) }))
+    await deleteDoc(doc(db, 'events', String(id)))
+  },
+
+  setOverride: async (instanceKey, patch) => {
+    // instanceKey = `${templateId}_${date}`, extract templateId
+    const parts = instanceKey.split('_')
+    const templateId = parts[0]
+    await updateDoc(doc(db, 'events', templateId), {
+      [`overrides.${instanceKey}`]: patch,
+      _updatedAt: serverTimestamp(),
+    })
+  },
+
+  setAvail: async (ev, uid, status, note = '') => {
+    const key = availKey(ev).replace(/\//g, '_')
+    if (!status) {
+      // Remove availability — use FieldValue.delete() equivalent: set field to null
+      set((s) => {
+        const avail = { ...s.avail }
+        if (avail[key]) {
+          const { [uid]: _removed, ...rest } = avail[key]
+          avail[key] = rest
+        }
+        return { avail }
+      })
+      await updateDoc(doc(db, 'avail', key), {
+        [`responses.${uid}`]: null,
+        updatedAt: serverTimestamp(),
+      })
+      return
+    }
+    const response: AvailResponse = { status, note, uid, ts: Date.now() }
+    // Optimistic
+    set((s) => ({
+      avail: {
+        ...s.avail,
+        [key]: { ...(s.avail[key] ?? {}), [uid]: response },
+      },
+    }))
+    await updateDoc(doc(db, 'avail', key), {
+      [`responses.${uid}`]: response,
+      updatedAt: serverTimestamp(),
+    })
   },
 }))
