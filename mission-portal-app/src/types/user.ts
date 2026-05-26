@@ -23,6 +23,13 @@ export interface UserProfile {
     android?: { token: string; deviceId: string; lastSeen: number }
     web?: { token: string; deviceId: string; lastSeen: number }
   }
+  locationPref?: {
+    city: string
+    state: string
+    radius: number // miles
+    lat?: number
+    lng?: number
+  }
   createdAt: unknown // Firestore Timestamp
   updatedAt: unknown
 }
