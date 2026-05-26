@@ -28,6 +28,65 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Phase 2+ adds more collections
+    // Phase 2 additions
+
+    match /events/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /avail/{key} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /tasks/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() ||
+        (isSignedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['status', 'overdueNotified', '_updatedAt']));
+    }
+
+    match /rooms/{id} {
+      allow read: if isSignedIn() && (isAdmin() ||
+        resource.data.members.hasAny([request.auth.uid]));
+      allow write: if isAdmin();
+      allow update: if isSignedIn() &&
+        resource.data.members.hasAny([request.auth.uid]) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['reviewers', 'updatedAt']);
+
+      match /messages/{msgId} {
+        allow read: if isSignedIn() &&
+          get(/databases/$(database)/documents/rooms/$(id)).data.members
+            .hasAny([request.auth.uid]);
+        allow create: if isSignedIn() &&
+          get(/databases/$(database)/documents/rooms/$(id)).data.members
+            .hasAny([request.auth.uid]);
+        allow update: if isSignedIn() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['readBy']);
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /announcements/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /notifs/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow write: if isSelf(uid) || isAdmin();
+    }
+
+    match /config/main {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() ||
+        (isSignedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['lastSeenPosts']));
+    }
   }
 }
