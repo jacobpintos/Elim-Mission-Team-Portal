@@ -1,0 +1,80 @@
+import { useEffect } from 'react'
+import { Slot, useRouter, useSegments } from 'expo-router'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import * as Sentry from '@sentry/react-native'
+import { DynamicThemeProvider } from '@/theme/DynamicThemeProvider'
+import { useAuthStore } from '@/stores/authStore'
+import { ToastContainer } from '@/components/ui/Toast'
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  debug: __DEV__,
+})
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+})
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const segments = useSegments()
+  const router = useRouter()
+  const { fbUser, profile, loading } = useAuthStore()
+
+  useEffect(() => {
+    if (loading) return
+    const inAuth = segments[0] === '(auth)'
+    const inOnboarding = segments[0] === '(onboarding)'
+
+    if (!fbUser && !inAuth) {
+      router.replace('/(auth)/login')
+    } else if (fbUser && !fbUser.emailVerified && !inAuth) {
+      router.replace('/(auth)/verify-email')
+    } else if (fbUser && fbUser.emailVerified && inAuth) {
+      router.replace('/')
+    } else if (
+      fbUser &&
+      fbUser.emailVerified &&
+      profile &&
+      !profile.onboardingComplete &&
+      !inOnboarding
+    ) {
+      router.replace('/(onboarding)')
+    } else if (fbUser && fbUser.emailVerified && profile?.onboardingComplete && inOnboarding) {
+      router.replace('/')
+    }
+  }, [fbUser, profile, loading, segments, router])
+
+  return <>{children}</>
+}
+
+export default function RootLayout() {
+  const init = useAuthStore((s) => s.init)
+  const teardown = useAuthStore((s) => s.teardown)
+  useEffect(() => {
+    init()
+    return () => teardown()
+  }, [init, teardown])
+
+  return (
+    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <QueryClientProvider client={queryClient}>
+            <DynamicThemeProvider>
+              <AuthGate>
+                <Slot />
+              </AuthGate>
+              <ToastContainer />
+            </DynamicThemeProvider>
+          </QueryClientProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </Sentry.ErrorBoundary>
+  )
+}
+
+function ErrorFallback() {
+  return null // TODO: render a Tamagui-styled error UI
+}

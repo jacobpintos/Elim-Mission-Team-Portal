@@ -1,0 +1,18 @@
+{
+  "hosting": [
+    {
+      "target": "new-app-staging",
+      "public": "mission-portal-app/dist",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "rewrites": [{ "source": "**", "destination": "/index.html" }]
+    }
+  ],
+  "functions": {
+    "source": "mission-portal-app/functions",
+    "predeploy": ["npm --prefix mission-portal-app/functions run build"]
+  },
+  "firestore": {
+    "rules": "mission-portal-app/firestore.rules",
+    "indexes": "mission-portal-app/firestore.indexes.json"
+  }
+}
