@@ -1,0 +1,18 @@
+# Expo / React Native (added for Phase 1+ work in mission-portal-app/)
+node_modules/
+.expo/
+.env
+.env.local
+dist/
+web-build/
+ios/Pods/
+android/.gradle/
+*.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Claude Code on the web
+.superpowers/
