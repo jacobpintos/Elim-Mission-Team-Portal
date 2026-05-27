@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.hasAny(['admin']);
+    }
+    function isSelf(uid) { return isSignedIn() && request.auth.uid == uid; }
+
+    match /appSettings/theme {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow create: if isSelf(uid);
+      allow update: if (isSelf(uid) &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['roles', 'createdAt'])) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /auditLog/{doc} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // Phase 2 additions
+
+    match /events/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /avail/{key} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /tasks/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() ||
+        (isSignedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['status', 'overdueNotified', '_updatedAt']));
+    }
+
+    match /rooms/{id} {
+      allow read: if isSignedIn() && (isAdmin() ||
+        resource.data.members.hasAny([request.auth.uid]));
+      allow write: if isAdmin();
+      allow update: if isSignedIn() &&
+        resource.data.members.hasAny([request.auth.uid]) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['reviewers', 'updatedAt']);
+
+      match /messages/{msgId} {
+        allow read: if isSignedIn() &&
+          get(/databases/$(database)/documents/rooms/$(id)).data.members
+            .hasAny([request.auth.uid]);
+        allow create: if isSignedIn() &&
+          get(/databases/$(database)/documents/rooms/$(id)).data.members
+            .hasAny([request.auth.uid]);
+        allow update: if isSignedIn() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['readBy']);
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /announcements/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /notifs/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow write: if isSelf(uid) || isAdmin();
+    }
+
+    match /config/main {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() ||
+        (isSignedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['lastSeenPosts']));
+    }
+
+    // Phase 3 additions
+
+    function hasRole(role) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.hasAny([role]);
+    }
+
+    // Security reports
+    match /reports/{reportId} {
+      allow create: if isSignedIn();
+      allow read, update: if isSignedIn() &&
+        (isAdmin() || hasRole('security') || hasRole('staff'));
+      allow delete: if isAdmin();
+    }
+
+    // Setlists
+    match /setlists/{setlistId} {
+      allow read: if isSignedIn() &&
+        (isAdmin() || hasRole('worship'));
+      allow write: if isSignedIn() &&
+        (isAdmin() || hasRole('worship'));
+    }
+
+    // Merch — single doc access
+    match /merch/{docId} {
+      allow read: if isSignedIn() &&
+        (isAdmin() || hasRole('merch'));
+      allow write: if isSignedIn() &&
+        (isAdmin() || hasRole('merch'));
+    }
+
+    // Inventory (production + reorder) — admin only
+    match /inventory/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Music — all authenticated can read, admin can write
+    match /music/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Input lists — worship + admin
+    match /config/inputLists {
+      allow read: if isSignedIn() &&
+        (isAdmin() || hasRole('worship'));
+      allow write: if isSignedIn() &&
+        (isAdmin() || hasRole('worship'));
+    }
+  }
+}
