@@ -1,12 +1,111 @@
+import { useState, useEffect } from 'react'
+import { FlatList, Alert } from 'react-native'
+import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
-import { YStack, H2, Paragraph } from 'tamagui'
+import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { TaskTemplateCard, type TaskTemplate } from '@/features/admin/TaskTemplateCard'
+import { EditTaskTemplateSheet } from '@/features/admin/EditTaskTemplateSheet'
+import { audit } from '@/lib/audit'
+import { useAuthStore } from '@/stores/authStore'
+import { useUIStore } from '@/stores/uiStore'
 
 export default function AdminTemplates() {
+  const { profile } = useAuthStore()
+  const { toast } = useUIStore()
+
+  const [templates, setTemplates] = useState<TaskTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showCreate, setShowCreate] = useState(false)
+  const [editTarget, setEditTarget] = useState<TaskTemplate | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    const unsub = onSnapshot(collection(db, 'taskTemplates'), (snap) => {
+      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TaskTemplate))
+      data.sort((a, b) => a.name.localeCompare(b.name))
+      setTemplates(data)
+      setLoading(false)
+    })
+    return () => unsub()
+  }, [])
+
+  const handleDelete = (template: TaskTemplate) => {
+    Alert.alert(
+      'Delete Template',
+      `Delete task template "${template.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'taskTemplates', template.id))
+              await audit(
+                'taskTemplate.deleted',
+                `Deleted task template "${template.name}"`,
+                profile?.displayName ?? ''
+              )
+              toast('Template deleted', 'success')
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : 'Failed to delete template'
+              toast(message, 'error')
+            }
+          },
+        },
+      ]
+    )
+  }
+
   return (
     <YStack flex={1} padding="$4" gap="$3">
-      <Stack.Screen options={{ title: 'Templates' }} />
-      <H2>Templates</H2>
-      <Paragraph>Coming in phase 2.</Paragraph>
+      <Stack.Screen options={{ title: 'Task Templates', headerShown: false }} />
+
+      <XStack alignItems="center" justifyContent="space-between">
+        <Text fontSize="$6" fontWeight="700">
+          Task Templates ({templates.length})
+        </Text>
+        <Button size="$3" onPress={() => setShowCreate(true)} theme="active">
+          + New Template
+        </Button>
+      </XStack>
+
+      {loading ? (
+        <YStack flex={1} alignItems="center" justifyContent="center">
+          <Spinner size="large" />
+        </YStack>
+      ) : (
+        <FlatList
+          data={templates}
+          keyExtractor={(t) => t.id}
+          renderItem={({ item }) => (
+            <YStack marginBottom="$2">
+              <TaskTemplateCard
+                template={item}
+                onEdit={(t) => setEditTarget(t)}
+                onDelete={handleDelete}
+              />
+            </YStack>
+          )}
+          ListEmptyComponent={
+            <Text color="$gray10" textAlign="center" paddingVertical="$4">
+              No templates yet. Create one to get started.
+            </Text>
+          }
+        />
+      )}
+
+      <EditTaskTemplateSheet
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        template={null}
+      />
+      <EditTaskTemplateSheet
+        open={editTarget !== null}
+        onClose={() => setEditTarget(null)}
+        template={editTarget}
+      />
     </YStack>
   )
 }

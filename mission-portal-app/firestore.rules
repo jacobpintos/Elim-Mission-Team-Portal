@@ -88,5 +88,26 @@ service cloud.firestore {
          request.resource.data.diff(resource.data).affectedKeys()
            .hasOnly(['lastSeenPosts']));
     }
+
+    match /digestStats/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /groups/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /taskTemplates/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /meetingRequests/{id} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
   }
 }

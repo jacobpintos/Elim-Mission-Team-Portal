@@ -1,0 +1,83 @@
+import { XStack, YStack, Text, Button } from 'tamagui'
+
+export const TASK_SECTIONS = [
+  { id: 'production', label: 'Production', color: '#e8624a' },
+  { id: 'setup', label: 'Setup', color: '#2980b9' },
+  { id: 'teardown', label: 'Teardown', color: '#27ae60' },
+  { id: 'food', label: 'Food', color: '#f39c12' },
+  { id: 'other', label: 'Other', color: '#9b59b6' },
+]
+
+export interface TaskItem {
+  title: string
+  assignees: string[]
+  daysBefore: number
+  section: string
+}
+
+export interface TaskTemplate {
+  id: string
+  name: string
+  tasks: TaskItem[]
+}
+
+interface TaskTemplateCardProps {
+  template: TaskTemplate
+  onEdit: (template: TaskTemplate) => void
+  onDelete: (template: TaskTemplate) => void
+}
+
+export function TaskTemplateCard({ template, onEdit, onDelete }: TaskTemplateCardProps) {
+  const usedSections = TASK_SECTIONS.filter((s) =>
+    template.tasks.some((t) => t.section === s.id)
+  )
+
+  return (
+    <YStack
+      backgroundColor="$background"
+      borderRadius="$3"
+      padding="$3"
+      borderWidth={1}
+      borderColor="$borderColor"
+      gap="$2"
+    >
+      <XStack alignItems="center" justifyContent="space-between">
+        <YStack flex={1} gap="$1">
+          <Text fontWeight="700" fontSize="$4">
+            {template.name}
+          </Text>
+          <Text fontSize="$2" color="$gray10">
+            {template.tasks.length} task{template.tasks.length !== 1 ? 's' : ''}
+          </Text>
+        </YStack>
+
+        <XStack gap="$2">
+          <Button size="$2" onPress={() => onEdit(template)} theme="active">
+            Edit
+          </Button>
+          <Button size="$2" onPress={() => onDelete(template)} theme="red">
+            Delete
+          </Button>
+        </XStack>
+      </XStack>
+
+      {usedSections.length > 0 && (
+        <XStack flexWrap="wrap" gap="$1">
+          {usedSections.map((s) => (
+            <XStack
+              key={s.id}
+              backgroundColor={s.color}
+              borderRadius="$4"
+              paddingHorizontal="$2"
+              paddingVertical="$0.5"
+            >
+              <Text fontSize="$1" color="white" fontWeight="600">
+                {s.label}
+              </Text>
+            </XStack>
+          ))}
+        </XStack>
+      )}
+    </YStack>
+  )
+}
