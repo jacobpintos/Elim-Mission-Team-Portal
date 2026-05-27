@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Slot, useRouter, useSegments } from 'expo-router'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import * as Sentry from '@sentry/react-native'
+import * as Notifications from 'expo-notifications'
 import { DynamicThemeProvider } from '@/theme/DynamicThemeProvider'
 import { useAuthStore } from '@/stores/authStore'
 import { ToastContainer } from '@/components/ui/Toast'
@@ -52,10 +53,32 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 export default function RootLayout() {
   const init = useAuthStore((s) => s.init)
   const teardown = useAuthStore((s) => s.teardown)
+  const router = useRouter()
+  const notifListener = useRef<Notifications.EventSubscription | null>(null)
+  const responseListener = useRef<Notifications.EventSubscription | null>(null)
+
   useEffect(() => {
     init()
     return () => teardown()
   }, [init, teardown])
+
+  useEffect(() => {
+    notifListener.current = Notifications.addNotificationReceivedListener((notification) => {
+      console.log('Notification received:', notification)
+    })
+
+    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as { type?: string; link?: string }
+      if (data.link) {
+        router.push(data.link as Parameters<typeof router.push>[0])
+      }
+    })
+
+    return () => {
+      notifListener.current?.remove()
+      responseListener.current?.remove()
+    }
+  }, [router])
 
   return (
     <Sentry.ErrorBoundary fallback={<ErrorFallback />}>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { FlatList, Alert } from 'react-native'
+import { Alert } from 'react-native'
+import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
 import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
@@ -90,7 +91,7 @@ export default function AdminGroups() {
           <Spinner size="large" />
         </YStack>
       ) : (
-        <FlatList
+        <FlashList
           data={groups}
           keyExtractor={(g) => g.id}
           renderItem={({ item }) => (

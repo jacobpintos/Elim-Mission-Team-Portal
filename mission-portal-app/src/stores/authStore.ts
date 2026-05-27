@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth'
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
+import { registerForPushNotifications, persistPushToken, clearPushToken, platformKey } from '@/lib/notifications'
 import type { UserProfile } from '@/types/user'
 
 interface AuthStore {
@@ -44,7 +45,16 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       }
       set({ fbUser, loading: true })
       const unsubProfile = onSnapshot(doc(db, 'users', fbUser.uid), (snap) => {
-        set({ profile: (snap.data() as UserProfile) ?? null, loading: false })
+        const userProfile = (snap.data() as UserProfile) ?? null
+        set({ profile: userProfile, loading: false })
+        if (userProfile && !get().profile) {
+          // First profile load after sign-in — register push token
+          registerForPushNotifications()
+            .then((result) => {
+              if (result) return persistPushToken(fbUser.uid, result.token, result.platform)
+            })
+            .catch(() => {})
+        }
       })
       set({ _unsubProfile: unsubProfile })
     })
@@ -78,6 +88,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   signOutNow: async () => {
+    const { fbUser } = get()
+    const key = platformKey()
+    if (fbUser && key !== 'web') {
+      await clearPushToken(fbUser.uid, key).catch(() => {})
+    }
     await signOut(auth)
   },
 

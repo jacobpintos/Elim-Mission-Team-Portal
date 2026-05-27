@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { FlatList, TextInput as RNTextInput } from 'react-native'
+import { TextInput as RNTextInput } from 'react-native'
+import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
 import { doc, updateDoc } from 'firebase/firestore'
@@ -86,7 +87,7 @@ export default function AdminTeams() {
         Edit team names inline. Changes save automatically on blur.
       </Text>
 
-      <FlatList
+      <FlashList
         data={teams}
         keyExtractor={(_, i) => String(i)}
         renderItem={({ item, index }) => (

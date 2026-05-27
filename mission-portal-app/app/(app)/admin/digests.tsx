@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { Alert, FlatList } from 'react-native'
+import { Alert } from 'react-native'
+import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useDigestStore, type DigestStatDoc } from '@/stores/digestStore'
@@ -150,7 +151,7 @@ export default function AdminDigests() {
             Send History
           </Text>
 
-          <FlatList
+          <FlashList
             data={stats}
             keyExtractor={(s) => s.id}
             renderItem={({ item }) => (

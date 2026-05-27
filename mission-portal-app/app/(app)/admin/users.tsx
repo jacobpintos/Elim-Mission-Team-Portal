@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { FlatList, Alert } from 'react-native'
+import { Alert } from 'react-native'
+import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Input, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useUsersStore } from '@/stores/usersStore'
@@ -220,7 +221,7 @@ export default function AdminUsers() {
         </YStack>
       )}
 
-      <FlatList
+      <FlashList
         data={filtered}
         keyExtractor={(u) => u.uid}
         renderItem={({ item }) => (

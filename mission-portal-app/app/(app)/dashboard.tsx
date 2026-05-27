@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, useWindowDimensions } from 'react-native'
-import { YStack, XStack, Text, H3 } from 'tamagui'
+import { YStack, XStack, Text, H3, Button } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -16,6 +16,7 @@ import { buildSectionHealth } from '@/features/events/buildSectionHealth'
 import { todayStr, dateStr } from '@/lib/events'
 import { FD, timeOfDay } from '@/lib/format'
 import { sameId } from '@/lib/ids'
+import { usePWAInstallPrompt } from '@/lib/pwaInstall'
 import type { EventInstance } from '@/types/events'
 
 export default function Dashboard() {
@@ -33,6 +34,7 @@ export default function Dashboard() {
 
   const [detailEvent, setDetailEvent] = useState<EventInstance | null>(null)
   const [availEvent, setAvailEvent] = useState<EventInstance | null>(null)
+  const { canInstall, install } = usePWAInstallPrompt()
 
   const uid = profile?.uid ?? ''
 
@@ -98,6 +100,25 @@ export default function Dashboard() {
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
       <Stack.Screen options={{ title: 'Dashboard' }} />
       <YStack padding="$4" gap="$4">
+        {/* PWA install banner — web only, shown when browser install prompt is available */}
+        {canInstall && (
+          <XStack
+            backgroundColor="$primary"
+            borderRadius="$3"
+            padding="$3"
+            alignItems="center"
+            justifyContent="space-between"
+            gap="$3"
+          >
+            <Text color="white" fontSize="$3" flex={1}>
+              Add Mission Portal to your home screen for the best experience.
+            </Text>
+            <Button size="$2" backgroundColor="white" color="$primary" onPress={install}>
+              Install
+            </Button>
+          </XStack>
+        )}
+
         {/* Header */}
         <YStack gap="$1">
           <Text color={colors.text} fontSize="$6" fontWeight="700">

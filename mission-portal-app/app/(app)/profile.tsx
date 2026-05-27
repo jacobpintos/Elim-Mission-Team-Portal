@@ -66,6 +66,21 @@ export default function ProfileScreen() {
     }
   }
 
+  const togglePushPref = async (key: NotifKey, value: boolean) => {
+    const updated = {
+      ...prefs,
+      [key]: { ...prefs[key], push: value },
+    }
+    try {
+      await updateDoc(doc(db, 'users', fbUser.uid), {
+        notificationPrefs: updated,
+      })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update preferences'
+      toast(message, 'error')
+    }
+  }
+
   const toggleDigest = async (key: 'weeklyDigest' | 'monthlyDigest', value: boolean) => {
     try {
       await updateDoc(doc(db, 'users', fbUser.uid), {
@@ -165,19 +180,14 @@ export default function ProfileScreen() {
               <XStack key={key} alignItems="center">
                 <Label flex={1}>{NOTIF_LABELS[key]}</Label>
                 <XStack gap="$4" width={120} alignItems="center">
-                  {/* Push — disabled with "Coming soon" */}
-                  <YStack flex={1} alignItems="center" gap="$1">
+                  {/* Push — functional */}
+                  <YStack flex={1} alignItems="center">
                     <Switch
                       checked={prefs[key].push}
-                      disabled
-                      opacity={0.4}
-                      onCheckedChange={() => {}}
+                      onCheckedChange={(v) => togglePushPref(key, v)}
                     >
                       <Switch.Thumb />
                     </Switch>
-                    <Text fontSize="$1" color="$colorMuted">
-                      Soon
-                    </Text>
                   </YStack>
                   {/* Email — functional */}
                   <YStack flex={1} alignItems="center">

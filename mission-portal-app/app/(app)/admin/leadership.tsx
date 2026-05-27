@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { FlatList, TextInput as RNTextInput } from 'react-native'
+import { TextInput as RNTextInput } from 'react-native'
+import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore'
@@ -101,7 +102,7 @@ export default function AdminLeadership() {
         Toggle members to add/remove from the leadership team. Edit titles inline.
       </Text>
 
-      <FlatList
+      <FlashList
         data={users}
         keyExtractor={(u) => u.uid}
         renderItem={({ item }) => {

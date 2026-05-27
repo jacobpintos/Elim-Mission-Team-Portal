@@ -2,6 +2,7 @@ import { onCall } from 'firebase-functions/v2/https'
 import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
 import { resend, RESEND_API_KEY } from './email/client'
+import { sendExpoPush } from './push/expoPush'
 
 function nanoid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
@@ -76,8 +77,25 @@ export const sendNotification = onCall(
       logger.info(`Email sent to ${profile.email as string} for ${type}`)
     }
 
-    // PHASE 6 STUB: push branch
-    // if (prefs?.push) { await sendPushToTokens(profile.pushTokens, type, data) }
+    // PHASE 6: push branch
+    if (prefs?.push && profile.pushTokens) {
+      const tokens = Object.values(profile.pushTokens as Record<string, string | null>)
+        .filter((t): t is string => typeof t === 'string' && t.length > 0)
+      if (tokens.length > 0) {
+        try {
+          await sendExpoPush(
+            tokens,
+            subjectFor(type, data),
+            inAppMessage(type, data),
+            { type, ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v ?? '')])) },
+          )
+          logger.info(`Push sent to ${tokens.length} token(s) for uid=${uid} type=${type}`)
+        } catch (err) {
+          logger.error('Push send failed', err)
+          // Non-fatal — email already sent above
+        }
+      }
+    }
 
     return { ok: true }
   }
