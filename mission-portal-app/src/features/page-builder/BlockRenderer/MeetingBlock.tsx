@@ -174,7 +174,7 @@ export function MeetingBlock({ data }: MeetingBlockProps) {
               Request Submitted!
             </Text>
             <Text color="$gray10" textAlign="center">
-              We'll be in touch to schedule your meeting.
+              {"We'll be in touch to schedule your meeting."}
             </Text>
           </YStack>
         ) : (
@@ -185,13 +185,13 @@ export function MeetingBlock({ data }: MeetingBlockProps) {
                   <Text fontSize="$2" color="$gray10">
                     Name
                   </Text>
-                  <Input value={profile.displayName} editable={false} size="$3" />
+                  <Input value={profile.displayName} size="$3" readOnly />
                 </YStack>
                 <YStack flex={1} gap="$1">
                   <Text fontSize="$2" color="$gray10">
                     Email
                   </Text>
-                  <Input value={profile.email} editable={false} size="$3" />
+                  <Input value={profile.email} size="$3" readOnly />
                 </YStack>
               </XStack>
             )}

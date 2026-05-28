@@ -32,7 +32,7 @@ export default function AdminUsers() {
   const [showCreate, setShowCreate] = useState(false)
   const [editTarget, setEditTarget] = useState<UserProfile | null>(null)
   const [pendingDel, setPendingDel] = useState<PendingDeletion[]>([])
-  const [adminCount, setAdminCount] = useState(1)
+  const adminCount = Math.max(users.filter((u) => u.roles?.includes('admin')).length, 1)
 
   useEffect(() => {
     subscribe()
@@ -47,12 +47,7 @@ export default function AdminUsers() {
     return () => unsub()
   }, [])
 
-  useEffect(() => {
-    const count = users.filter((u) => u.roles?.includes('admin')).length
-    setAdminCount(Math.max(count, 1))
-  }, [users])
-
-  const filtered = search.trim()
+const filtered = search.trim()
     ? users.filter(
         (u) =>
           u.displayName.toLowerCase().includes(search.toLowerCase()) ||

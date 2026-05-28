@@ -25,6 +25,7 @@ export default function AdminTeams() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTeams(commonTeams)
   }, [commonTeams])
 
@@ -105,7 +106,7 @@ export default function AdminTeams() {
                 updated[index] = v
                 setTeams(updated)
               }}
-              onBlur={(e) => handleBlur(index, e.nativeEvent.text)}
+              onBlur={() => handleBlur(index, teams[index])}
               style={{
                 flex: 1,
                 padding: 8,

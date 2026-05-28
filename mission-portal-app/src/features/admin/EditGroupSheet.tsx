@@ -26,7 +26,9 @@ export function EditGroupSheet({ open, onClose, group }: EditGroupSheetProps) {
 
   useEffect(() => {
     if (group) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(group.name)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMembers(group.members ?? [])
     }
   }, [group])

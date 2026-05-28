@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { TextInput as RNTextInput } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
@@ -22,6 +22,7 @@ export default function AdminLeadership() {
   const [leadershipTeam, setLeadershipTeam] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const titleDraft = useRef<Record<string, string>>({})
 
   useEffect(() => {
     subscribe()
@@ -29,7 +30,6 @@ export default function AdminLeadership() {
   }, [])
 
   useEffect(() => {
-    setLoading(true)
     const unsub = onSnapshot(doc(db, 'config', 'main'), (snap) => {
       const data = snap.data()
       const team = data?.connectConfig?.leadershipTeam ?? []
@@ -129,7 +129,8 @@ export default function AdminLeadership() {
                 <RNTextInput
                   placeholder="Title (e.g. Worship Leader)"
                   defaultValue={userWithTitle.title ?? ''}
-                  onBlur={(e) => saveTitle(item.uid, e.nativeEvent.text)}
+                  onChangeText={(v) => { titleDraft.current[item.uid] = v }}
+                  onBlur={() => saveTitle(item.uid, titleDraft.current[item.uid] ?? userWithTitle.title ?? '')}
                   style={{
                     fontSize: 13,
                     color: '#888',

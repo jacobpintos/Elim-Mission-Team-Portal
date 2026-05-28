@@ -29,7 +29,6 @@ export default function AdminGroups() {
   }, [])
 
   useEffect(() => {
-    setLoading(true)
     const unsub = onSnapshot(collection(db, 'groups'), (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
       // Sort: "All" first, then alphabetical

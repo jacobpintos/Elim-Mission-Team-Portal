@@ -21,7 +21,6 @@ export default function AdminTemplates() {
   const [editTarget, setEditTarget] = useState<TaskTemplate | null>(null)
 
   useEffect(() => {
-    setLoading(true)
     const unsub = onSnapshot(collection(db, 'taskTemplates'), (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TaskTemplate))
       data.sort((a, b) => a.name.localeCompare(b.name))

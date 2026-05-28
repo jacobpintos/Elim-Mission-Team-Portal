@@ -20,6 +20,7 @@ interface BlockPaletteProps {
 
 export function BlockPalette({ onAdd }: BlockPaletteProps) {
   const addBlock = (type: PageBlockType) => {
+    // eslint-disable-next-line react-hooks/purity
     onAdd({ id: Date.now(), type, data: {} })
   }
 

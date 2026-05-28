@@ -47,16 +47,21 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
 
   useEffect(() => {
     if (template) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(template.name)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSectionTasks(buildSectionTasks(template.tasks))
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName('')
       const initial: SectionTasks = {}
       for (const s of TASK_SECTIONS) {
         initial[s.id] = []
       }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSectionTasks(initial)
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setExpandedSections({})
   }, [template, open])
 

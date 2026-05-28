@@ -72,7 +72,6 @@ export function PageBuilderScreen({ pageKey, pageTitle }: PageBuilderScreenProps
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setLoading(true)
     const unsub = onSnapshot(doc(db, 'config', 'main'), (snap) => {
       const data = snap.data()
       const page = data?.publicPages?.[pageKey] as PageData | undefined
