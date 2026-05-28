@@ -10,6 +10,9 @@ on:
       - 'mission-portal-app/app.config.ts'
       - 'mission-portal-app/tamagui.config.ts'
       - 'mission-portal-app/package.json'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/deploy-web.yml'
 
 jobs:
   deploy:
