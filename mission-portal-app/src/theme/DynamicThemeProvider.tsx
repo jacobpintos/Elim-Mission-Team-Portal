@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { TamaguiProvider, type TamaguiProviderProps } from 'tamagui'
+import { TamaguiProvider, YStack, type TamaguiProviderProps } from 'tamagui'
 import { Platform } from 'react-native'
 import config from '../../tamagui.config'
 import { useThemeStore } from '@/stores/themeStore'
@@ -54,11 +54,16 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
     prevPrimaryRef.current = theme.primary
   }, [theme, mode])
 
-  const tamaguiProps: TamaguiProviderProps = {
+  const tamaguiProps: Omit<TamaguiProviderProps, 'children'> = {
     config,
     defaultTheme: mode,
-    children,
   }
 
-  return <TamaguiProvider {...tamaguiProps}>{children}</TamaguiProvider>
+  return (
+    <TamaguiProvider {...tamaguiProps}>
+      <YStack flex={1} backgroundColor="$background">
+        {children}
+      </YStack>
+    </TamaguiProvider>
+  )
 }
