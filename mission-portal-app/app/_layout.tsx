@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { Platform, Text } from 'react-native'
 import { Slot, useRouter, useSegments } from 'expo-router'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -63,6 +64,7 @@ export default function RootLayout() {
   }, [init, teardown])
 
   useEffect(() => {
+    if (Platform.OS === 'web') return
     notifListener.current = Notifications.addNotificationReceivedListener((notification) => {
       console.log('Notification received:', notification)
     })
@@ -99,5 +101,10 @@ export default function RootLayout() {
 }
 
 function ErrorFallback() {
-  return null // TODO: render a Tamagui-styled error UI
+  return (
+    <GestureHandlerRootView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>Something went wrong</Text>
+      <Text style={{ color: '#666', textAlign: 'center' }}>Please reload the page to try again.</Text>
+    </GestureHandlerRootView>
+  )
 }
