@@ -24,6 +24,7 @@ import { useThemeStore } from '@/stores/themeStore'
 export function DynamicThemeProvider({ children }: { children: React.ReactNode }) {
   const { theme, mode, subscribe, unsubscribe } = useThemeStore()
   const prevPrimaryRef = useRef<string | null>(null)
+  const palette = mode === 'dark' ? theme.dark : theme.light
 
   useEffect(() => {
     subscribe()
@@ -39,7 +40,6 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
     )
       return
 
-    const palette = mode === 'dark' ? theme.dark : theme.light
     const root = document.documentElement
 
     // Set body background directly so the page colour matches the theme
@@ -57,7 +57,7 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
     root.style.setProperty('--app-border', palette.border)
 
     prevPrimaryRef.current = theme.primary
-  }, [theme, mode])
+  }, [theme, mode, palette])
 
   const tamaguiProps: Omit<TamaguiProviderProps, 'children'> = {
     config,
@@ -66,7 +66,7 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
 
   return (
     <TamaguiProvider {...tamaguiProps}>
-      <YStack flex={1}>
+      <YStack flex={1} backgroundColor={palette.background}>
         {children}
       </YStack>
     </TamaguiProvider>
