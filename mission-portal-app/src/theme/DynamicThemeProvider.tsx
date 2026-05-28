@@ -3,6 +3,19 @@ import { TamaguiProvider, YStack, type TamaguiProviderProps } from 'tamagui'
 import { Platform } from 'react-native'
 import config from '../../tamagui.config'
 import { useThemeStore } from '@/stores/themeStore'
+import { defaults } from '@/theme/defaults'
+
+// In SPA mode (`web.output: 'single'`) Expo ignores `app/+html.tsx`, so there is
+// no way to set the <body> background in the served HTML. Paint it here at module
+// load — the earliest point JS can run — to avoid a flash of the browser-default
+// background before React mounts. `!important` beats Tamagui's runtime
+// @media(prefers-color-scheme) body{background} rule.
+if (typeof document !== 'undefined') {
+  const bg = defaults.dark.background
+  document.documentElement.style.setProperty('background-color', bg, 'important')
+  document.body.style.setProperty('background-color', bg, 'important')
+  document.body.style.margin = '0'
+}
 
 /**
  * DynamicThemeProvider
@@ -24,6 +37,7 @@ import { useThemeStore } from '@/stores/themeStore'
 export function DynamicThemeProvider({ children }: { children: React.ReactNode }) {
   const { theme, mode, subscribe, unsubscribe } = useThemeStore()
   const prevPrimaryRef = useRef<string | null>(null)
+  const palette = mode === 'dark' ? theme.dark : theme.light
 
   useEffect(() => {
     subscribe()
@@ -39,17 +53,17 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
     )
       return
 
-    const palette = mode === 'dark' ? theme.dark : theme.light
+    const p = mode === 'dark' ? theme.dark : theme.light
     const root = document.documentElement
 
     root.style.setProperty('--app-primary', theme.primary)
     root.style.setProperty('--app-primary-dark', theme.primaryDark)
     root.style.setProperty('--app-accent', theme.accent)
-    root.style.setProperty('--app-background', palette.background)
-    root.style.setProperty('--app-surface', palette.surface)
-    root.style.setProperty('--app-text', palette.text)
-    root.style.setProperty('--app-text-muted', palette.textMuted)
-    root.style.setProperty('--app-border', palette.border)
+    root.style.setProperty('--app-background', p.background)
+    root.style.setProperty('--app-surface', p.surface)
+    root.style.setProperty('--app-text', p.text)
+    root.style.setProperty('--app-text-muted', p.textMuted)
+    root.style.setProperty('--app-border', p.border)
 
     prevPrimaryRef.current = theme.primary
   }, [theme, mode])
@@ -61,7 +75,7 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
 
   return (
     <TamaguiProvider {...tamaguiProps}>
-      <YStack flex={1} backgroundColor="$background">
+      <YStack flex={1} backgroundColor={palette.background}>
         {children}
       </YStack>
     </TamaguiProvider>

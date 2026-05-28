@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Platform, Text } from 'react-native'
-import { Slot, useRouter, useSegments } from 'expo-router'
+import { Slot, useRouter, useSegments, ThemeProvider, DarkTheme, DefaultTheme } from 'expo-router'
 import '@tamagui/core/reset.css'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -9,6 +9,7 @@ import * as Sentry from '@sentry/react-native'
 import * as Notifications from 'expo-notifications'
 import { DynamicThemeProvider } from '@/theme/DynamicThemeProvider'
 import { useAuthStore } from '@/stores/authStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { ToastContainer } from '@/components/ui/Toast'
 
 Sentry.init({
@@ -57,8 +58,30 @@ export default function RootLayout() {
   const init = useAuthStore((s) => s.init)
   const teardown = useAuthStore((s) => s.teardown)
   const router = useRouter()
+  const theme = useThemeStore((s) => s.theme)
+  const mode = useThemeStore((s) => s.mode)
   const notifListener = useRef<Notifications.EventSubscription | null>(null)
   const responseListener = useRef<Notifications.EventSubscription | null>(null)
+
+  // React Navigation's <Screen> wraps every route in a <Background> that paints
+  // `colors.background` from the active navigation theme. The default is gray
+  // (rgb(242,242,242)), which shows through our transparent screens. Override
+  // the navigation theme so that Background paints the real palette colour.
+  const navTheme = useMemo(() => {
+    const palette = mode === 'dark' ? theme.dark : theme.light
+    const base = mode === 'dark' ? DarkTheme : DefaultTheme
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: theme.primary,
+        background: palette.background,
+        card: palette.surface,
+        text: palette.text,
+        border: palette.border,
+      },
+    }
+  }, [theme, mode])
 
   useEffect(() => {
     init()
@@ -90,10 +113,12 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
             <DynamicThemeProvider>
-              <AuthGate>
-                <Slot />
-              </AuthGate>
-              <ToastContainer />
+              <ThemeProvider value={navTheme}>
+                <AuthGate>
+                  <Slot />
+                </AuthGate>
+                <ToastContainer />
+              </ThemeProvider>
             </DynamicThemeProvider>
           </QueryClientProvider>
         </SafeAreaProvider>
