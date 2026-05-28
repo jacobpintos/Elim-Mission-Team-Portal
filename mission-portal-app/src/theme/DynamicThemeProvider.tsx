@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { TamaguiProvider, YStack, type TamaguiProviderProps } from 'tamagui'
-import { Platform } from 'react-native'
+import { View, Platform } from 'react-native'
+import { TamaguiProvider, type TamaguiProviderProps } from 'tamagui'
 import config from '../../tamagui.config'
 import { useThemeStore } from '@/stores/themeStore'
 import { defaults } from '@/theme/defaults'
@@ -80,9 +80,9 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
 
   return (
     <TamaguiProvider {...tamaguiProps}>
-      <YStack flex={1} backgroundColor={palette.background}>
+      <View style={{ flex: 1, backgroundColor: palette.background }}>
         {children}
-      </YStack>
+      </View>
     </TamaguiProvider>
   )
 }

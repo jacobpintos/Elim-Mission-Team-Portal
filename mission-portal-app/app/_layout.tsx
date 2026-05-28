@@ -9,6 +9,7 @@ import * as Sentry from '@sentry/react-native'
 import * as Notifications from 'expo-notifications'
 import { DynamicThemeProvider } from '@/theme/DynamicThemeProvider'
 import { useAuthStore } from '@/stores/authStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { ToastContainer } from '@/components/ui/Toast'
 
 Sentry.init({
@@ -59,6 +60,7 @@ export default function RootLayout() {
   const init = useAuthStore((s) => s.init)
   const teardown = useAuthStore((s) => s.teardown)
   const router = useRouter()
+  const bgColor = useThemeStore((s) => s.mode === 'dark' ? s.theme.dark.background : s.theme.light.background)
   const notifListener = useRef<Notifications.EventSubscription | null>(null)
   const responseListener = useRef<Notifications.EventSubscription | null>(null)
 
@@ -88,7 +90,7 @@ export default function RootLayout() {
 
   return (
     <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
-      <GestureHandlerRootView style={[{ flex: 1 }, Platform.OS === 'web' && { minHeight: '100vh' as unknown as number }]}>
+      <GestureHandlerRootView style={[{ flex: 1, backgroundColor: bgColor }, Platform.OS === 'web' && { minHeight: '100vh' as unknown as number }]}>
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
             <DynamicThemeProvider>
