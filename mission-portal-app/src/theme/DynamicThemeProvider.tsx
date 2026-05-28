@@ -3,6 +3,7 @@ import { TamaguiProvider, YStack, type TamaguiProviderProps } from 'tamagui'
 import { Platform } from 'react-native'
 import config from '../../tamagui.config'
 import { useThemeStore } from '@/stores/themeStore'
+import { defaults } from '@/theme/defaults'
 
 /**
  * DynamicThemeProvider
@@ -21,6 +22,18 @@ import { useThemeStore } from '@/stores/themeStore'
  * `@/theme/useThemeColors` rather than Tamagui theme tokens directly for
  * custom palette values (primary, surface, textMuted, etc.).
  */
+
+// Synchronously set the body background before React renders. Tamagui injects
+// `body { background: var(--background) }` inside `@media(prefers-color-scheme:dark)`,
+// which wins on the first paint when JS hasn't run yet. By overriding with !important
+// at module-load time we guarantee the correct colour from frame 0.
+if (typeof document !== 'undefined') {
+  const bg = defaults.dark.background
+  document.documentElement.style.setProperty('--background', bg)
+  document.body.style.setProperty('background-color', bg, 'important')
+  document.body.style.margin = '0'
+}
+
 export function DynamicThemeProvider({ children }: { children: React.ReactNode }) {
   const { theme, mode, subscribe, unsubscribe } = useThemeStore()
   const prevPrimaryRef = useRef<string | null>(null)
@@ -42,10 +55,11 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
 
     const root = document.documentElement
 
-    // Set body background directly so the page colour matches the theme
-    // regardless of flex/height chain issues in the component tree.
-    document.body.style.backgroundColor = palette.background
+    // Use setProperty with 'important' so the body background beats Tamagui's
+    // @media(prefers-color-scheme) rule that targets body { background: var(--background) }.
+    document.body.style.setProperty('background-color', palette.background, 'important')
     document.body.style.margin = '0'
+    root.style.setProperty('--background', palette.background)
 
     root.style.setProperty('--app-primary', theme.primary)
     root.style.setProperty('--app-primary-dark', theme.primaryDark)
