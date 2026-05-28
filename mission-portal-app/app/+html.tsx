@@ -1,13 +1,14 @@
 import { ScrollViewStyleReset } from 'expo-router/html'
 import type { PropsWithChildren } from 'react'
 
-// This file is only rendered on the server for the web build.
-// Sets the baseline HTML/body styles so that:
-//   1. html/body/root are 100% height → flex:1 children fill the viewport
-//   2. body has the dark-theme background from the start → no flash of wrong bg
+// Customises the HTML shell for the SPA web export.
+// React silently drops `style` props on <html>/<body> during SSG, so we use
+// a <style> tag (like ScrollViewStyleReset does) to force the dark background
+// before JavaScript loads. The !important ensures Tamagui's runtime-injected
+// @media(prefers-color-scheme) body{background:...} rule cannot override it.
 export default function Root({ children }: PropsWithChildren) {
   return (
-    <html lang="en" style={{ height: '100%' }}>
+    <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
@@ -18,18 +19,11 @@ export default function Root({ children }: PropsWithChildren) {
         <ScrollViewStyleReset />
         <style
           dangerouslySetInnerHTML={{
-            __html: `
-              html, body, #root {
-                height: 100%;
-                margin: 0;
-                padding: 0;
-                background-color: #1a1a2e;
-              }
-            `,
+            __html: `html,body,#root{background-color:#1a1a2e!important}`,
           }}
         />
       </head>
-      <body style={{ height: '100%' }}>{children}</body>
+      <body>{children}</body>
     </html>
   )
 }
