@@ -50,7 +50,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   web: {
     bundler: 'metro',
-    output: 'static',
+    output: 'single',
     favicon: './assets/favicon.png',
     themeColor: '#e8624a',
     backgroundColor: '#14141e',
