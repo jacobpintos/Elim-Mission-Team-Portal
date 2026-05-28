@@ -29,13 +29,14 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (loading) return
     const inAuth = segments[0] === '(auth)'
     const inOnboarding = segments[0] === '(onboarding)'
-    const inPublic = segments[0] === '(public)'
+    const atRoot = segments.length === 0
 
-    if (!fbUser && !inAuth && !inPublic) {
-      router.replace('/(public)')
+    if (!fbUser && !inAuth && !atRoot) {
+      // Protected route accessed without auth → send to landing page at root
+      router.replace('/')
     } else if (fbUser && !fbUser.emailVerified && !inAuth) {
       router.replace('/(auth)/verify-email')
-    } else if (fbUser && fbUser.emailVerified && (inAuth || inPublic)) {
+    } else if (fbUser && fbUser.emailVerified && inAuth) {
       router.replace('/')
     } else if (
       fbUser &&

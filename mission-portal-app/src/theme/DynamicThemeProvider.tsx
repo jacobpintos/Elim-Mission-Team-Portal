@@ -66,7 +66,7 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
 
   return (
     <TamaguiProvider {...tamaguiProps}>
-      <YStack flex={1} backgroundColor="$background">
+      <YStack flex={1}>
         {children}
       </YStack>
     </TamaguiProvider>
