@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { Platform, Text } from 'react-native'
-import { Slot, useRouter, useSegments } from 'expo-router'
+import { Slot, useNavigation, useRouter, useSegments } from 'expo-router'
 import '@tamagui/core/reset.css'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -60,7 +60,14 @@ export default function RootLayout() {
   const init = useAuthStore((s) => s.init)
   const teardown = useAuthStore((s) => s.teardown)
   const router = useRouter()
+  const navigation = useNavigation()
   const bgColor = useThemeStore((s) => s.mode === 'dark' ? s.theme.dark.background : s.theme.light.background)
+
+  // Remove the gray DefaultTheme background that expo-router's internal Stack
+  // applies to the root screen card via CardContainer's contentStyle.
+  useLayoutEffect(() => {
+    navigation.setOptions({ cardStyle: { backgroundColor: 'transparent' } })
+  }, [navigation])
   const notifListener = useRef<Notifications.EventSubscription | null>(null)
   const responseListener = useRef<Notifications.EventSubscription | null>(null)
 
