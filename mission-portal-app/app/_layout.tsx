@@ -27,9 +27,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading) return
-    const inAuth = segments[0] === '(auth)'
-    const inOnboarding = segments[0] === '(onboarding)'
-    const atRoot = segments.length === 0
+    const seg = segments as string[]
+    const inAuth = seg[0] === '(auth)'
+    const inOnboarding = seg[0] === '(onboarding)'
+    const atRoot = !seg[0]
 
     if (!fbUser && !inAuth && !atRoot) {
       // Protected route accessed without auth → send to landing page at root
