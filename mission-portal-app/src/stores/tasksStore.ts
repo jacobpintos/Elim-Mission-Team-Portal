@@ -1,0 +1,122 @@
+import { create } from 'zustand'
+import {
+  collection,
+  onSnapshot,
+  doc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
+} from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { isOverdue } from '@/lib/availability'
+import { sameId } from '@/lib/ids'
+import { nextId } from '@/lib/counters'
+import type { Task } from '@/types/events'
+
+const todayStr = () => new Date().toISOString().split('T')[0]
+const in7 = () => {
+  const d = new Date()
+  d.setDate(d.getDate() + 7)
+  return d.toISOString().split('T')[0]
+}
+
+interface TasksStore {
+  tasks: Task[]
+  loading: boolean
+  _unsub: (() => void) | null
+  // selectors
+  myTasks: (uid: string) => Task[]
+  eventTasks: (templateId: string | number) => Task[]
+  overdueTasks: (uid: string) => Task[]
+  behindTasks: (uid: string) => Task[]
+  dueThisWeekTasks: (uid: string) => Task[]
+  // actions
+  subscribe: () => void
+  unsubscribe: () => void
+  createTask: (data: Omit<Task, 'id'>) => Promise<void>
+  updateTask: (id: string | number, patch: Partial<Task>) => Promise<void>
+  deleteTask: (id: string | number) => Promise<void>
+  completeTask: (id: string | number) => Promise<void>
+  setStatus: (id: string | number, status: Task['status']) => Promise<void>
+}
+
+export const useTasksStore = create<TasksStore>((set, get) => ({
+  tasks: [],
+  loading: false,
+  _unsub: null,
+
+  myTasks: (uid) => get().tasks.filter((t) => t.assignees.some((a) => sameId(a, uid))),
+  eventTasks: (templateId) =>
+    get().tasks.filter((t) => sameId(t.evId ?? t.evTemplateId, templateId)),
+  overdueTasks: (uid) =>
+    get()
+      .myTasks(uid)
+      .filter((t) => isOverdue(t)),
+  behindTasks: (uid) =>
+    get()
+      .myTasks(uid)
+      .filter((t) => t.status === 'behind'),
+  dueThisWeekTasks: (uid) => {
+    const today = todayStr()
+    const end = in7()
+    return get()
+      .myTasks(uid)
+      .filter(
+        (t) => t.status === 'pending' && t.dueDate != null && t.dueDate >= today && t.dueDate <= end
+      )
+  },
+
+  subscribe: () => {
+    if (get()._unsub) return
+    set({ loading: true })
+    const unsub = onSnapshot(collection(db, 'tasks'), (snap) => {
+      const tasks = snap.docs.map((d) => ({ ...(d.data() as Task), id: d.id }))
+      set({ tasks, loading: false })
+    })
+    set({ _unsub: unsub })
+  },
+
+  unsubscribe: () => {
+    get()._unsub?.()
+    set({ _unsub: null, tasks: [] })
+  },
+
+  createTask: async (data) => {
+    const id = await nextId('nTask')
+    await setDoc(doc(db, 'tasks', String(id)), {
+      ...data,
+      id,
+      _updatedAt: serverTimestamp(),
+    })
+  },
+
+  updateTask: async (id, patch) => {
+    set((s) => ({
+      tasks: s.tasks.map((t) => (sameId(t.id, id) ? { ...t, ...patch } : t)),
+    }))
+    await updateDoc(doc(db, 'tasks', String(id)), {
+      ...patch,
+      _updatedAt: serverTimestamp(),
+    })
+  },
+
+  deleteTask: async (id) => {
+    set((s) => ({ tasks: s.tasks.filter((t) => !sameId(t.id, id)) }))
+    await deleteDoc(doc(db, 'tasks', String(id)))
+  },
+
+  completeTask: async (id) => {
+    await get().setStatus(id, 'done')
+  },
+
+  setStatus: async (id, status) => {
+    set((s) => ({
+      tasks: s.tasks.map((t) => (sameId(t.id, id) ? { ...t, status } : t)),
+    }))
+    await updateDoc(doc(db, 'tasks', String(id)), {
+      status,
+      _updatedAt: serverTimestamp(),
+    })
+  },
+}))

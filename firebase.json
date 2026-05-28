@@ -1,0 +1,39 @@
+{
+  "hosting": [
+    {
+      "target": "production",
+      "public": "mission-portal-app/dist",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "rewrites": [{ "source": "**", "destination": "/index.html" }],
+      "headers": [
+        {
+          "source": "**/*.@(js|css)",
+          "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        },
+        {
+          "source": "**",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        }
+      ]
+    },
+    {
+      "target": "legacy",
+      "public": "legacy",
+      "ignore": ["firebase.json", "**/.*"],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+        }
+      ]
+    }
+  ],
+  "functions": {
+    "source": "mission-portal-app/functions",
+    "predeploy": ["npm --prefix mission-portal-app/functions run build"]
+  },
+  "firestore": {
+    "rules": "mission-portal-app/firestore.rules",
+    "indexes": "mission-portal-app/firestore.indexes.json"
+  }
+}

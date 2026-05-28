@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Typecheck, Lint & Bundle Budget
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mission-portal-app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mission-portal-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Export web build
+        env:
+          EXPO_PUBLIC_FIREBASE_API_KEY: placeholder
+          EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: placeholder
+          EXPO_PUBLIC_FIREBASE_PROJECT_ID: placeholder
+          EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: placeholder
+          EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: placeholder
+          EXPO_PUBLIC_FIREBASE_APP_ID: placeholder
+          EXPO_PUBLIC_SENTRY_DSN: placeholder
+        run: npx expo export -p web --output-dir dist
+
+      - name: Bundle size budget check
+        run: |
+          echo "Checking bundle sizes..."
+          INITIAL_BUNDLE_SIZE=0
+          MAX_CHUNK_SIZE=256000  # 250 KB in bytes
+          MAX_INITIAL_SIZE=204800  # 200 KB in bytes
+          FAIL=0
+
+          if [ -d "dist/_expo/static/js" ]; then
+            for f in dist/_expo/static/js/*.js; do
+              SIZE=$(gzip -c "$f" | wc -c)
+              echo "  $(basename "$f"): ${SIZE} bytes compressed"
+              if [ "$SIZE" -gt "$MAX_CHUNK_SIZE" ]; then
+                echo "  ❌ EXCEEDS 250 KB limit!"
+                FAIL=1
+              fi
+              INITIAL_BUNDLE_SIZE=$((INITIAL_BUNDLE_SIZE + SIZE))
+            done
+          fi
+
+          echo "Total initial JS: ${INITIAL_BUNDLE_SIZE} bytes compressed"
+          if [ "$INITIAL_BUNDLE_SIZE" -gt "$MAX_INITIAL_SIZE" ]; then
+            echo "❌ Total initial bundle exceeds 200 KB compressed"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -eq 1 ]; then
+            exit 1
+          fi
+          echo "✅ Bundle size within budget"
