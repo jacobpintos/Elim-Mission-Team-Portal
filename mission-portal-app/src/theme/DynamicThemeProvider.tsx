@@ -42,6 +42,11 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
     const palette = mode === 'dark' ? theme.dark : theme.light
     const root = document.documentElement
 
+    // Set body background directly so the page colour matches the theme
+    // regardless of flex/height chain issues in the component tree.
+    document.body.style.backgroundColor = palette.background
+    document.body.style.margin = '0'
+
     root.style.setProperty('--app-primary', theme.primary)
     root.style.setProperty('--app-primary-dark', theme.primaryDark)
     root.style.setProperty('--app-accent', theme.accent)

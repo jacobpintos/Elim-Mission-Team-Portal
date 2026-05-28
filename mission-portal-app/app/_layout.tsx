@@ -86,7 +86,7 @@ export default function RootLayout() {
 
   return (
     <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
+      <GestureHandlerRootView style={[{ flex: 1 }, Platform.OS === 'web' && { minHeight: '100vh' as unknown as number }]}>
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
             <DynamicThemeProvider>
