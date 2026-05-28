@@ -84,7 +84,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
-    await sendEmailVerification(cred.user)
+    await sendEmailVerification(cred.user, {
+      url: process.env.EXPO_PUBLIC_APP_URL ?? 'https://mission-team-portal.web.app',
+      handleCodeInApp: false,
+    })
   },
 
   signOutNow: async () => {
@@ -101,7 +104,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   resendVerification: async () => {
-    if (auth.currentUser) await sendEmailVerification(auth.currentUser)
+    if (auth.currentUser)
+      await sendEmailVerification(auth.currentUser, {
+        url: process.env.EXPO_PUBLIC_APP_URL ?? 'https://mission-team-portal.web.app',
+        handleCodeInApp: false,
+      })
   },
 }))
 

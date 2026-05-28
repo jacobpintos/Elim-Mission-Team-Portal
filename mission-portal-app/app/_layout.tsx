@@ -29,12 +29,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (loading) return
     const inAuth = segments[0] === '(auth)'
     const inOnboarding = segments[0] === '(onboarding)'
+    const inPublic = segments[0] === '(public)'
 
-    if (!fbUser && !inAuth) {
-      router.replace('/(auth)/login')
+    if (!fbUser && !inAuth && !inPublic) {
+      router.replace('/(public)')
     } else if (fbUser && !fbUser.emailVerified && !inAuth) {
       router.replace('/(auth)/verify-email')
-    } else if (fbUser && fbUser.emailVerified && inAuth) {
+    } else if (fbUser && fbUser.emailVerified && (inAuth || inPublic)) {
       router.replace('/')
     } else if (
       fbUser &&
