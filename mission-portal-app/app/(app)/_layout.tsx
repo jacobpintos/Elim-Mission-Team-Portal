@@ -48,7 +48,7 @@ export default function AppLayout() {
         },
         headerStyle: { backgroundColor: bg },
         headerTintColor: text,
-        contentStyle: { backgroundColor: 'transparent' },
+        sceneStyle: { backgroundColor: 'transparent' },
       }}
     >
       {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
