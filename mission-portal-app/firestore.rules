@@ -86,7 +86,13 @@ service cloud.firestore {
       allow write: if isAdmin() ||
         (isSignedIn() &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['lastSeenPosts']));
+           .hasOnly(['lastSeenPosts'])) ||
+        (isSignedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['nReport'])) ||
+        (isSignedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['nKaizen']));
     }
 
     match /digestStats/{docId} {
@@ -108,6 +114,27 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
+    }
+
+    match /issues/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /kaizen/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isAdmin() ||
+        (isSignedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['upvotes', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    match /planningBoards/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }
