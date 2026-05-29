@@ -15,7 +15,7 @@ import Animated, {
   useAnimatedStyle,
   runOnJS,
 } from 'react-native-reanimated'
-import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Svg, { Polyline, Line } from 'react-native-svg'
 import { usePlanningStore } from '@/stores/planningStore'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -599,6 +599,7 @@ export function PlanningBoardCanvas({
       transparent={false}
       onRequestClose={onClose}
     >
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         {/* Toolbar */}
         {!readOnly && (
@@ -748,6 +749,7 @@ export function PlanningBoardCanvas({
           </Text>
         </Pressable>
       </View>
+      </GestureHandlerRootView>
 
       {/* Create / Edit modal */}
       <Modal
