@@ -3,10 +3,11 @@ import { useRouter, Link } from 'expo-router'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { YStack, XStack, H1, Paragraph, Button, Input, Text } from 'tamagui'
+import { YStack, XStack, Paragraph, Button, Input, Text } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { AppLogo } from '@/components/ui/AppLogo'
 
 const schema = z.object({
   email: z.string().email('Invalid email address'),
@@ -46,8 +47,10 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <YStack flex={1} padding="$6" justifyContent="center" gap="$4">
-        <H1>Welcome back</H1>
-        <Paragraph color="$colorMuted">Sign in to Mission Portal</Paragraph>
+        <YStack alignItems="center" marginBottom="$2">
+          <AppLogo size="lg" showSlogan />
+        </YStack>
+        <Paragraph color="$colorMuted" textAlign="center">Sign in to Mission Portal</Paragraph>
 
         <YStack gap="$3">
           <Controller

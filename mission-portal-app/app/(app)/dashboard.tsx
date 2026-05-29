@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ScrollView, useWindowDimensions } from 'react-native'
 import { YStack, XStack, Text, H3, Button } from 'tamagui'
 import { Stack } from 'expo-router'
+import { AppLogo } from '@/components/ui/AppLogo'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useTasksStore } from '@/stores/tasksStore'
@@ -120,14 +121,17 @@ export default function Dashboard() {
         )}
 
         {/* Header */}
-        <YStack gap="$1">
-          <Text color={colors.text} fontSize="$6" fontWeight="700">
-            {greeting}
-          </Text>
-          <Text color={colors.textMuted} fontSize="$3">
-            {todayLabel}
-          </Text>
-        </YStack>
+        <XStack alignItems="center" justifyContent="space-between" gap="$3">
+          <YStack flex={1} gap="$1">
+            <Text color={colors.text} fontSize="$5" fontWeight="700">
+              {greeting}
+            </Text>
+            <Text color={colors.textMuted} fontSize="$3">
+              {todayLabel}
+            </Text>
+          </YStack>
+          <AppLogo size="sm" showSlogan={false} />
+        </XStack>
 
         {/* Two-column layout on wide screens */}
         <XStack gap="$4" flexDirection={isWide ? 'row' : 'column'} alignItems="flex-start">

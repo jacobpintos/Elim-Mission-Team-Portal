@@ -13,6 +13,7 @@ import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
 import { EventDetailModal } from '@/features/events/EventDetailModal'
 import { AvailModal } from '@/features/events/AvailModal'
 import { isPublic } from '@/lib/roles'
+import { AppLogo } from '@/components/ui/AppLogo'
 import { todayStr, dateStr } from '@/lib/events'
 import { FD, timeOfDay } from '@/lib/format'
 import { haversineMiles, geocodeCity } from '@/lib/geocode'
@@ -89,13 +90,12 @@ function PubHomeContent() {
           padding="$4"
           borderWidth={1}
           borderColor={colors.border}
-          gap="$1"
+          gap="$3"
+          alignItems="center"
         >
-          <Text color={colors.text} fontSize="$5" fontWeight="700">
+          <AppLogo size="lg" showSlogan />
+          <Text color={colors.text} fontSize="$4" fontWeight="600" textAlign="center">
             Welcome, {profile?.displayName?.split(' ')[0] ?? 'friend'}!
-          </Text>
-          <Text color={colors.textMuted} fontSize="$3">
-            The Well of Iowa · Together for Jesus
           </Text>
         </YStack>
 
