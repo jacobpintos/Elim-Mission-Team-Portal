@@ -19,6 +19,9 @@ const TAB_LABELS: Record<Tab, string> = {
   admin: 'Admin',
   public: 'Public Facing',
   music: 'Content',
+  posts: 'Posts',
+  giving: 'Giving',
+  story: 'Our Story',
 }
 
 export default function AppLayout() {
@@ -72,7 +75,7 @@ export default function AppLayout() {
       <Tabs.Screen name="pages/our-story" options={{ href: null }} />
       <Tabs.Screen name="pages/connect" options={{ href: null }} />
       <Tabs.Screen name="pages/giving" options={{ href: null }} />
-      <Tabs.Screen name="posts" options={{ href: null }} />
+      {/* giving and story are top-level tabs for public users; hide from tab bar here since TAB_LABELS loop handles them */}
       <Tabs.Screen name="admin/index" options={{ href: null }} />
       <Tabs.Screen name="admin/users" options={{ href: null }} />
       <Tabs.Screen name="admin/groups" options={{ href: null }} />

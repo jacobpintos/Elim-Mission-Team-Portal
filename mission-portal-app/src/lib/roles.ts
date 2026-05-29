@@ -22,12 +22,15 @@ export type Tab =
   | 'admin'
   | 'public'
   | 'music'
+  | 'posts'
+  | 'giving'
+  | 'story'
 
 export function visibleTabs(u: UserProfile | null): Tab[] {
   if (!u || !isVerified(u)) return []
 
-  // Public (guest) role — read-only public content
-  if (isPublic(u)) return ['home', 'events', 'announce', 'music', 'public']
+  // Public (guest) role — individual top-level tabs
+  if (isPublic(u)) return ['home', 'events', 'announce', 'music', 'posts', 'giving', 'story']
 
   // Admin sees everything in a specific order matching the original design
   if (isAdmin(u)) {
