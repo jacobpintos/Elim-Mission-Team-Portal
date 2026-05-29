@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, Modal, View, TextInput, StyleSheet } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
 import { Stack } from 'expo-router'
+import { collection, onSnapshot } from 'firebase/firestore'
+import { db, functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -16,9 +18,15 @@ import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
 import { httpsCallable } from 'firebase/functions'
-import { functions } from '@/lib/firebase'
 import type { Task } from '@/types/events'
 import type { KaizenCard, KaizenVerificationResult } from '@/types/operations'
+import type { UserProfile } from '@/types/user'
+
+interface GroupDoc {
+  id: string
+  name: string
+  members: string[]
+}
 
 type EffectivenessKey = KaizenVerificationResult['effectiveness']
 
@@ -71,29 +79,45 @@ function CAVerificationModal({
           maxWidth={520}
         >
           <XStack justifyContent="space-between" alignItems="center">
-            <Text color={colors.text} fontSize="$5" fontWeight="700">CA Verification</Text>
+            <Text color={colors.text} fontSize="$5" fontWeight="700">
+              CA Verification
+            </Text>
             <Pressable onPress={onClose}>
-              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
             </Pressable>
           </XStack>
 
           {card?.actionPlan ? (
             <YStack gap="$2">
               <YStack gap="$1">
-                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">CORRECTIVE ACTION</Text>
-                <Text color={colors.text} fontSize="$3">{card.actionPlan.description}</Text>
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                  CORRECTIVE ACTION
+                </Text>
+                <Text color={colors.text} fontSize="$3">
+                  {card.actionPlan.description}
+                </Text>
               </YStack>
               <YStack gap="$1">
-                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">VERIFICATION METHOD</Text>
-                <Text color={colors.text} fontSize="$3">{card.actionPlan.verificationMethod}</Text>
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                  VERIFICATION METHOD
+                </Text>
+                <Text color={colors.text} fontSize="$3">
+                  {card.actionPlan.verificationMethod}
+                </Text>
               </YStack>
             </YStack>
           ) : (
-            <Text color={colors.textMuted} fontSize="$3">{task.title}</Text>
+            <Text color={colors.textMuted} fontSize="$3">
+              {task.title}
+            </Text>
           )}
 
           <YStack gap="$1">
-            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">EFFECTIVENESS</Text>
+            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+              EFFECTIVENESS
+            </Text>
             <XStack gap="$2" flexWrap="wrap">
               {EFFECTIVENESS_OPTIONS.map((opt) => (
                 <Pressable key={opt.key} onPress={() => setEffectiveness(opt.key)}>
@@ -120,9 +144,18 @@ function CAVerificationModal({
           </YStack>
 
           <YStack gap="$1">
-            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">NOTES</Text>
+            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+              NOTES
+            </Text>
             <TextInput
-              style={[caStyles.textarea, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+              style={[
+                caStyles.textarea,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
               value={notes}
               onChangeText={setNotes}
               placeholder="Observations, evidence, or additional notes…"
@@ -165,6 +198,364 @@ const caStyles = StyleSheet.create({
     fontSize: 14,
     minHeight: 90,
     textAlignVertical: 'top',
+  },
+})
+
+function CreateTaskModal({
+  visible,
+  onClose,
+  onSubmit,
+  users,
+  groups,
+  colors,
+}: {
+  visible: boolean
+  onClose: () => void
+  onSubmit: (
+    title: string,
+    assignees: string[],
+    lead: string | null,
+    dueDate: string
+  ) => Promise<void>
+  users: UserProfile[]
+  groups: GroupDoc[]
+  colors: ReturnType<typeof useThemeColors>
+}) {
+  const [title, setTitle] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [targetType, setTargetType] = useState<'individuals' | 'group'>('individuals')
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([])
+  const [selectedGroup, setSelectedGroup] = useState<string>('')
+  const [selectedLead, setSelectedLead] = useState<string>('')
+  const [saving, setSaving] = useState(false)
+
+  const toggleUser = (uid: string) => {
+    setSelectedUsers((prev) =>
+      prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]
+    )
+  }
+
+  const groupMembers = (() => {
+    if (targetType !== 'group' || !selectedGroup) return []
+    const g = groups.find((g) => g.id === selectedGroup)
+    return g
+      ? (g.members
+          .map((uid) => users.find((u) => sameId(u.uid, uid)))
+          .filter(Boolean) as UserProfile[])
+      : []
+  })()
+
+  const handleSubmit = async () => {
+    if (!title.trim()) return
+    const assignees =
+      targetType === 'group' ? groupMembers.map((u) => String(u.uid)) : selectedUsers
+    if (assignees.length === 0) return
+    const lead =
+      targetType === 'group' ? selectedLead || null : assignees.length === 1 ? assignees[0] : null
+    setSaving(true)
+    try {
+      await onSubmit(title.trim(), assignees, lead, dueDate)
+      setTitle('')
+      setDueDate('')
+      setSelectedUsers([])
+      setSelectedGroup('')
+      setSelectedLead('')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const canSubmit =
+    title.trim() &&
+    ((targetType === 'individuals' && selectedUsers.length > 0) ||
+      (targetType === 'group' && selectedGroup && (groupMembers.length < 2 || selectedLead)))
+
+  const nonPublicUsers = users.filter((u) => !u.roles?.includes('public'))
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={ctStyles.overlay}>
+        <YStack
+          backgroundColor={colors.surface}
+          borderRadius="$4"
+          padding="$5"
+          gap="$3"
+          width="92%"
+          maxWidth={560}
+          maxHeight="90%"
+        >
+          <XStack justifyContent="space-between" alignItems="center">
+            <Text color={colors.text} fontSize="$5" fontWeight="700">
+              Assign Task
+            </Text>
+            <Pressable onPress={onClose}>
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
+            </Pressable>
+          </XStack>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <YStack gap="$3">
+              <YStack gap="$1">
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                  TASK TITLE
+                </Text>
+                <TextInput
+                  style={[
+                    ctStyles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.background,
+                    },
+                  ]}
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder="Describe the task"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </YStack>
+
+              <YStack gap="$1">
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                  DUE DATE
+                </Text>
+                <TextInput
+                  style={[
+                    ctStyles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.background,
+                    },
+                  ]}
+                  value={dueDate}
+                  onChangeText={(v) => {
+                    const digits = v.replace(/\D/g, '').slice(0, 6)
+                    let formatted = digits.slice(0, 2)
+                    if (digits.length > 2) formatted += '/' + digits.slice(2, 4)
+                    if (digits.length > 4) formatted += '/' + digits.slice(4, 6)
+                    setDueDate(formatted)
+                  }}
+                  placeholder="mm/dd/yy"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="numeric"
+                  maxLength={8}
+                />
+              </YStack>
+
+              <YStack gap="$2">
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                  ASSIGN TO
+                </Text>
+                <XStack gap="$2">
+                  {(['individuals', 'group'] as const).map((t) => (
+                    <Pressable
+                      key={t}
+                      onPress={() => {
+                        setTargetType(t)
+                        setSelectedUsers([])
+                        setSelectedGroup('')
+                        setSelectedLead('')
+                      }}
+                    >
+                      <XStack
+                        paddingHorizontal="$3"
+                        paddingVertical="$1"
+                        borderRadius={99}
+                        backgroundColor={targetType === t ? colors.primary : 'transparent'}
+                        borderWidth={1}
+                        borderColor={targetType === t ? colors.primary : colors.border}
+                      >
+                        <Text
+                          color={targetType === t ? 'white' : colors.text}
+                          fontSize="$2"
+                          fontWeight="600"
+                        >
+                          {t.charAt(0).toUpperCase() + t.slice(1)}
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  ))}
+                </XStack>
+              </YStack>
+
+              {targetType === 'individuals' ? (
+                <YStack gap="$1">
+                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                    SELECT ASSIGNEES ({selectedUsers.length} selected)
+                  </Text>
+                  <ScrollView style={{ maxHeight: 220 }}>
+                    {nonPublicUsers.map((u) => {
+                      const sel = selectedUsers.includes(String(u.uid))
+                      return (
+                        <Pressable key={String(u.uid)} onPress={() => toggleUser(String(u.uid))}>
+                          <XStack
+                            paddingVertical="$2"
+                            paddingHorizontal="$2"
+                            gap="$3"
+                            alignItems="center"
+                            borderBottomWidth={1}
+                            borderBottomColor={colors.border}
+                            backgroundColor={sel ? colors.primary + '18' : 'transparent'}
+                          >
+                            <View
+                              style={{
+                                width: 18,
+                                height: 18,
+                                borderRadius: 4,
+                                borderWidth: 2,
+                                borderColor: sel ? colors.primary : colors.border,
+                                backgroundColor: sel ? colors.primary : 'transparent',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {sel ? (
+                                <Text color="white" fontSize={11}>
+                                  ✓
+                                </Text>
+                              ) : null}
+                            </View>
+                            <Text color={colors.text} fontSize="$3">
+                              {u.displayName}
+                            </Text>
+                          </XStack>
+                        </Pressable>
+                      )
+                    })}
+                  </ScrollView>
+                </YStack>
+              ) : (
+                <YStack gap="$2">
+                  <YStack gap="$1">
+                    <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                      SELECT GROUP
+                    </Text>
+                    <ScrollView style={{ maxHeight: 160 }}>
+                      {groups.map((g) => {
+                        const sel = selectedGroup === g.id
+                        return (
+                          <Pressable
+                            key={g.id}
+                            onPress={() => {
+                              setSelectedGroup(g.id)
+                              setSelectedLead('')
+                            }}
+                          >
+                            <XStack
+                              paddingVertical="$2"
+                              paddingHorizontal="$2"
+                              gap="$3"
+                              alignItems="center"
+                              borderBottomWidth={1}
+                              borderBottomColor={colors.border}
+                              backgroundColor={sel ? colors.primary + '18' : 'transparent'}
+                            >
+                              <View
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: 9,
+                                  borderWidth: 2,
+                                  borderColor: sel ? colors.primary : colors.border,
+                                  backgroundColor: sel ? colors.primary : 'transparent',
+                                }}
+                              />
+                              <YStack>
+                                <Text color={colors.text} fontSize="$3">
+                                  {g.name}
+                                </Text>
+                                <Text color={colors.textMuted} fontSize={11}>
+                                  {g.members.length} members
+                                </Text>
+                              </YStack>
+                            </XStack>
+                          </Pressable>
+                        )
+                      })}
+                    </ScrollView>
+                  </YStack>
+
+                  {selectedGroup && groupMembers.length >= 2 ? (
+                    <YStack gap="$1">
+                      <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                        DESIGNATED LEADER
+                      </Text>
+                      <ScrollView style={{ maxHeight: 160 }}>
+                        {groupMembers.map((u) => {
+                          const sel = selectedLead === String(u.uid)
+                          return (
+                            <Pressable
+                              key={String(u.uid)}
+                              onPress={() => setSelectedLead(String(u.uid))}
+                            >
+                              <XStack
+                                paddingVertical="$2"
+                                paddingHorizontal="$2"
+                                gap="$3"
+                                alignItems="center"
+                                borderBottomWidth={1}
+                                borderBottomColor={colors.border}
+                                backgroundColor={sel ? colors.primary + '18' : 'transparent'}
+                              >
+                                <View
+                                  style={{
+                                    width: 18,
+                                    height: 18,
+                                    borderRadius: 9,
+                                    borderWidth: 2,
+                                    borderColor: sel ? colors.primary : colors.border,
+                                    backgroundColor: sel ? colors.primary : 'transparent',
+                                  }}
+                                />
+                                <Text color={colors.text} fontSize="$3">
+                                  {u.displayName}
+                                </Text>
+                              </XStack>
+                            </Pressable>
+                          )
+                        })}
+                      </ScrollView>
+                    </YStack>
+                  ) : null}
+                </YStack>
+              )}
+
+              <Pressable onPress={handleSubmit} disabled={saving || !canSubmit}>
+                <XStack
+                  backgroundColor={colors.primary}
+                  borderRadius="$2"
+                  paddingVertical="$3"
+                  justifyContent="center"
+                  opacity={saving || !canSubmit ? 0.5 : 1}
+                >
+                  <Text color="white" fontWeight="700" fontSize="$3">
+                    {saving ? 'Assigning…' : 'Assign Task'}
+                  </Text>
+                </XStack>
+              </Pressable>
+            </YStack>
+          </ScrollView>
+        </YStack>
+      </View>
+    </Modal>
+  )
+}
+
+const ctStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
   },
 })
 
@@ -237,7 +628,12 @@ export default function Assignments() {
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
   const { templates, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
   const { users: allUsers } = useUsersStore()
-  const { cards: kaizenCards, subscribe: subKaizen, unsubscribe: unsubKaizen, submitVerification } = useKaizenStore()
+  const {
+    cards: kaizenCards,
+    subscribe: subKaizen,
+    unsubscribe: unsubKaizen,
+    submitVerification,
+  } = useKaizenStore()
   const displayName = (uid: string | number): string => {
     const u = allUsers.find((x) => String(x.uid) === String(uid))
     return u?.displayName ?? String(uid)
@@ -247,6 +643,8 @@ export default function Assignments() {
   const [adminView, setAdminView] = useState<AdminView>('mine')
   const [kanbanEvent, setKanbanEvent] = useState<{ title: string; tasks: Task[] } | null>(null)
   const [verifyTask, setVerifyTask] = useState<Task | null>(null)
+  const [showCreateTask, setShowCreateTask] = useState(false)
+  const [groups, setGroups] = useState<GroupDoc[]>([])
 
   const [filter, setFilter] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
@@ -263,6 +661,14 @@ export default function Assignments() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!admin) return
+    const unsub = onSnapshot(collection(db, 'groups'), (snap) => {
+      setGroups(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as GroupDoc))
+    })
+    return () => unsub()
+  }, [admin])
 
   const baseTasks = adminView === 'all' ? tasksStore.tasks : tasksStore.myTasks(uid)
 
@@ -329,9 +735,7 @@ export default function Assignments() {
   const getEventTitle = (t: Task): string | undefined => {
     if (!t.evId && !t.evTemplateId) return undefined
     const id = t.evId ?? t.evTemplateId
-    const ev = templates.find(
-      (e) => sameId(e.id, id) || sameId(e.taskTemplateId, id)
-    )
+    const ev = templates.find((e) => sameId(e.id, id) || sameId(e.taskTemplateId, id))
     return ev?.title
   }
 
@@ -340,20 +744,18 @@ export default function Assignments() {
   // --- Event Health view data ---
   const allTasks = tasksStore.tasks
   const eventHealthCards = (() => {
-    const result: Array<{
+    const result: {
       templateId: string | number
       title: string
       date?: string
       taskCount: number
       hasProblem: boolean
       tasks: Task[]
-    }> = []
+    }[] = []
 
     for (const ev of templates) {
       const evTasks = allTasks.filter(
-        (t) =>
-          sameId(t.evId ?? t.evTemplateId, ev.id) ||
-          sameId(t.evTemplateId, ev.taskTemplateId)
+        (t) => sameId(t.evId ?? t.evTemplateId, ev.id) || sameId(t.evTemplateId, ev.taskTemplateId)
       )
       if (evTasks.length === 0) continue
       const hasProblem = evTasks.some((t) => t.status === 'behind' || isOverdue(t))
@@ -388,7 +790,12 @@ export default function Assignments() {
 
       {/* Admin view switcher */}
       {admin ? (
-        <YStack padding="$3" paddingBottom="$2" borderBottomWidth={1} borderBottomColor={colors.border}>
+        <YStack
+          padding="$3"
+          paddingBottom="$2"
+          borderBottomWidth={1}
+          borderBottomColor={colors.border}
+        >
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <XStack gap="$2">
               {ADMIN_VIEWS.map((v) => (
@@ -590,6 +997,47 @@ export default function Assignments() {
         </ScrollView>
       )}
 
+      {/* Admin FAB to assign task */}
+      {admin ? (
+        <Pressable
+          onPress={() => setShowCreateTask(true)}
+          style={[fabStyle, { backgroundColor: colors.primary }]}
+        >
+          <Text color="white" fontWeight="700" fontSize="$3">
+            ⊕ Assign Task
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {/* Create Task Modal */}
+      {admin ? (
+        <CreateTaskModal
+          visible={showCreateTask}
+          onClose={() => setShowCreateTask(false)}
+          onSubmit={async (title, assignees, lead, dueDate) => {
+            // Convert mm/dd/yy to YYYY-MM-DD for storage
+            let storedDate: string | null = null
+            if (dueDate && dueDate.length === 8) {
+              const [mm, dd, yy] = dueDate.split('/')
+              storedDate = `20${yy}-${mm}-${dd}`
+            }
+            await tasksStore.createTask({
+              title,
+              assignees,
+              lead,
+              by: uid,
+              status: 'pending',
+              dueDate: storedDate,
+            })
+            toast('Task assigned!', 'success')
+            setShowCreateTask(false)
+          }}
+          users={allUsers}
+          groups={groups}
+          colors={colors}
+        />
+      ) : null}
+
       {/* EventKanban modal */}
       <EventKanban
         tasks={kanbanEvent?.tasks ?? []}
@@ -614,4 +1062,18 @@ export default function Assignments() {
       />
     </YStack>
   )
+}
+
+const fabStyle: import('react-native').ViewStyle = {
+  position: 'absolute',
+  bottom: 16,
+  right: 16,
+  borderRadius: 20,
+  paddingHorizontal: 16,
+  paddingVertical: 10,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.3,
+  shadowRadius: 4,
+  elevation: 5,
 }
