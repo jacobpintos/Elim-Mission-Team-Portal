@@ -27,6 +27,7 @@ const TAB_LABELS: Record<Tab, string> = {
   story: 'Our Story',
   connect: 'Connect',
   rolehub: 'Role-Specific',
+  settings: 'Settings',
 }
 
 function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {

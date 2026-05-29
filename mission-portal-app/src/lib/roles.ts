@@ -27,16 +27,17 @@ export type Tab =
   | 'story'
   | 'connect'
   | 'rolehub'
+  | 'settings'
 
 export function visibleTabs(u: UserProfile | null): Tab[] {
   if (!u || !isVerified(u)) return []
 
   // Public (guest) role — flat individual tabs
-  if (isPublic(u)) return ['home', 'events', 'announce', 'connect', 'music', 'giving', 'story', 'posts']
+  if (isPublic(u)) return ['home', 'events', 'announce', 'connect', 'music', 'giving', 'story', 'posts', 'settings']
 
   // Admin — all tools, role-specific grouped under rolehub
   if (isAdmin(u)) {
-    return ['dashboard', 'events', 'assignments', 'messages', 'announce', 'issues', 'security', 'rolehub', 'public']
+    return ['dashboard', 'events', 'assignments', 'messages', 'announce', 'issues', 'security', 'rolehub', 'public', 'settings']
   }
 
   // All other verified members share these base tabs
@@ -46,6 +47,6 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
   if (isSecurity(u)) tabs.push('security')
   if (isMerch(u)) tabs.push('inventory')
 
-  tabs.push('public')
+  tabs.push('public', 'settings')
   return tabs
 }
