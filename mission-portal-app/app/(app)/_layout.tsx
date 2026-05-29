@@ -1,9 +1,10 @@
 import { Tabs, Redirect } from 'expo-router'
 import { Platform, View, Pressable, Modal, TextInput, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
+import { useUsersStore } from '@/stores/usersStore'
 import { visibleTabs } from '@/lib/roles'
 import { useThemeColors } from '@/theme/useThemeColors'
 import type { Tab } from '@/lib/roles'
@@ -109,6 +110,13 @@ export default function AppLayout() {
   const { theme, mode } = useThemeStore()
   const colors = useThemeColors()
   const [reportOpen, setReportOpen] = useState(false)
+  const { subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
+
+  useEffect(() => {
+    subUsers()
+    return () => unsubUsers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (loading) return null
   if (!profile) return <Redirect href="/(auth)/login" />

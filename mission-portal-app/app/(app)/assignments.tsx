@@ -86,7 +86,7 @@ export default function Assignments() {
   const tasksStore = useTasksStore()
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
   const { templates, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
-  const { displayName, subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
+  const { displayName } = useUsersStore()
   const toast = useUIStore((s) => s.toast)
 
   const [adminView, setAdminView] = useState<AdminView>('mine')
@@ -99,11 +99,9 @@ export default function Assignments() {
   useEffect(() => {
     subTasks()
     subEvents()
-    subUsers()
     return () => {
       unsubTasks()
       unsubEvents()
-      unsubUsers()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
