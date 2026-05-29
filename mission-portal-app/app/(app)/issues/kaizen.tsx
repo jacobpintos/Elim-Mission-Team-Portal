@@ -627,7 +627,7 @@ export default function Kaizen() {
 
             {planCard ? (
               <Text color={colors.textMuted} fontSize="$3" marginBottom="$3">
-                "{planCard.title}"
+                &ldquo;{planCard.title}&rdquo;
               </Text>
             ) : null}
 
@@ -772,7 +772,7 @@ export default function Kaizen() {
 
             {deleteTarget ? (
               <Text color={colors.textMuted} fontSize="$3">
-                Deleting "{deleteTarget.title}". The creator
+                Deleting &ldquo;{deleteTarget.title}&rdquo;. The creator
                 {deleteTarget.upvotes.length > 0
                   ? ` and ${deleteTarget.upvotes.length} upvoter${deleteTarget.upvotes.length !== 1 ? 's' : ''}`
                   : ''}{' '}
