@@ -86,7 +86,11 @@ export default function Assignments() {
   const tasksStore = useTasksStore()
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
   const { templates, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
-  const { displayName } = useUsersStore()
+  const { users: allUsers } = useUsersStore()
+  const displayName = (uid: string | number): string => {
+    const u = allUsers.find((x) => String(x.uid) === String(uid))
+    return u?.displayName ?? String(uid)
+  }
   const toast = useUIStore((s) => s.toast)
 
   const [adminView, setAdminView] = useState<AdminView>('mine')
