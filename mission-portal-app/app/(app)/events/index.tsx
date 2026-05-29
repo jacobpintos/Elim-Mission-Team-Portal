@@ -5,6 +5,7 @@ import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useConfigStore } from '@/stores/configStore'
+import { sameId } from '@/lib/ids'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { EventDetailModal } from '@/features/events/EventDetailModal'
 import { AvailModal } from '@/features/events/AvailModal'
@@ -43,7 +44,7 @@ export default function EventsScreen() {
   const uid = profile?.uid ?? ''
   const admin = isAdmin(profile)
 
-  const { instances } = useEventsStore()
+  const { instances, templates } = useEventsStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
   const configStore = useConfigStore()
   const { subscribe: subConfig, unsubscribe: unsubConfig } = useConfigStore()
@@ -59,7 +60,12 @@ export default function EventsScreen() {
   const [detailEvent, setDetailEvent] = useState<EventInstance | null>(null)
   const [availEvent, setAvailEvent] = useState<EventInstance | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [editEventId, setEditEventId] = useState<string | null>(null)
   const [view, setView] = useState<'calendar' | 'list'>('calendar')
+
+  const editTemplate = editEventId
+    ? (templates.find((t) => sameId(t.id, editEventId)) ?? null)
+    : null
 
   useEffect(() => {
     subEvents()
@@ -358,6 +364,14 @@ export default function EventsScreen() {
           setAvailEvent(detailEvent)
           setDetailEvent(null)
         }}
+        onEdit={
+          admin
+            ? () => {
+                setEditEventId(detailEvent?.templateId ? String(detailEvent.templateId) : null)
+                setDetailEvent(null)
+              }
+            : undefined
+        }
       />
       <AvailModal
         event={availEvent}
@@ -366,7 +380,15 @@ export default function EventsScreen() {
         onClose={() => setAvailEvent(null)}
       />
       {admin ? (
-        <EventFormModal open={showCreateModal} onClose={() => setShowCreateModal(false)} />
+        <EventFormModal
+          key={editEventId ?? 'create'}
+          event={editTemplate}
+          open={showCreateModal || !!editEventId}
+          onClose={() => {
+            setShowCreateModal(false)
+            setEditEventId(null)
+          }}
+        />
       ) : null}
     </YStack>
   )
