@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ScrollView, Pressable, Linking } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
@@ -9,6 +10,9 @@ import { availKey } from '@/lib/availability'
 import { AvailBadge } from '@/components/ui/AvailBadge'
 import { useUIStore } from '@/stores/uiStore'
 import { useEventsStore } from '@/stores/eventsStore'
+import { usePlanningStore } from '@/stores/planningStore'
+import { sameId } from '@/lib/ids'
+import { PlanningBoardCanvas } from '@/features/planning/PlanningBoardCanvas'
 import type { EventInstance } from '@/types/events'
 
 interface EventDetailModalProps {
@@ -24,6 +28,11 @@ export function EventDetailModal({ event, uid, open, onClose, onAvail }: EventDe
   const toast = useUIStore((s) => s.toast)
   const { avail } = useEventsStore()
   const myAvail = event ? (avail[availKey(event)]?.[uid] ?? null) : null
+  const { boards } = usePlanningStore()
+  const linkedBoard = event?.planningBoardId
+    ? boards.find((b) => sameId(b.id, event.planningBoardId!))
+    : null
+  const [showBoard, setShowBoard] = useState(false)
 
   const handleExportICS = async () => {
     if (!event) return
@@ -44,6 +53,7 @@ export function EventDetailModal({ event, uid, open, onClose, onAvail }: EventDe
       }}
       title={event.title}
     >
+      <>
       <ScrollView style={{ maxHeight: 500 }}>
         <YStack gap="$3" paddingBottom="$4">
           {/* Date & Time */}
@@ -199,6 +209,35 @@ export function EventDetailModal({ event, uid, open, onClose, onAvail }: EventDe
             ) : null}
           </YStack>
 
+          {/* Planning Board */}
+          {linkedBoard ? (
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                PLANNING BOARD
+              </Text>
+              <Pressable onPress={() => setShowBoard(true)}>
+                <XStack
+                  backgroundColor={colors.surface}
+                  borderWidth={1}
+                  borderColor={colors.border}
+                  borderRadius="$2"
+                  paddingHorizontal="$3"
+                  paddingVertical="$2"
+                  alignSelf="flex-start"
+                  gap="$2"
+                >
+                  <Text>📋</Text>
+                  <Text color={colors.text} fontSize="$3">
+                    {linkedBoard.name}
+                  </Text>
+                  <Text color={colors.primary} fontSize="$3">
+                    →
+                  </Text>
+                </XStack>
+              </Pressable>
+            </YStack>
+          ) : null}
+
           {/* ICS Export */}
           <Pressable onPress={handleExportICS}>
             <XStack
@@ -219,6 +258,13 @@ export function EventDetailModal({ event, uid, open, onClose, onAvail }: EventDe
           </Pressable>
         </YStack>
       </ScrollView>
+      <PlanningBoardCanvas
+        boardId={linkedBoard?.id ?? null}
+        readOnly
+        visible={showBoard}
+        onClose={() => setShowBoard(false)}
+      />
+      </>
     </Modal>
   )
 }
