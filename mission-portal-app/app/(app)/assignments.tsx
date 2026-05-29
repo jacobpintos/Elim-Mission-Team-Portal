@@ -575,6 +575,7 @@ interface TaskGroupProps {
   onToggle?: () => void
   colors: TaskGroupColors
   onComplete: (task: Task) => void
+  onTaskPress?: (task: Task) => void
   getEventTitle: (task: Task) => string | undefined
   resolveUser: (uid: string | number) => string
 }
@@ -587,6 +588,7 @@ function TaskGroup({
   onToggle,
   colors,
   onComplete,
+  onTaskPress,
   getEventTitle,
   resolveUser,
 }: TaskGroupProps) {
@@ -609,6 +611,7 @@ function TaskGroup({
               key={String(t.id)}
               task={t}
               onComplete={() => onComplete(t)}
+              onPress={onTaskPress ? () => onTaskPress(t) : undefined}
               eventTitle={getEventTitle(t)}
               assigneeNames={t.assignees.map(resolveUser)}
             />
@@ -617,6 +620,180 @@ function TaskGroup({
     </YStack>
   )
 }
+
+function taskToDisplayDate(task: Task): string {
+  if (task.projectedDate && task.projectedDate.length === 10) {
+    const [yy, mm, dd] = task.projectedDate.split('-')
+    return `${mm}/${dd}/${yy.slice(2)}`
+  }
+  return ''
+}
+
+function TaskUpdateModalInner({
+  task,
+  onClose,
+  onSave,
+}: {
+  task: Task
+  onClose: () => void
+  onSave: (status: 'pending' | 'behind', projectedDate: string) => Promise<void>
+}) {
+  const colors = useThemeColors()
+  const [status, setStatus] = useState<'pending' | 'behind'>(
+    task.status === 'behind' ? 'behind' : 'pending'
+  )
+  const [projectedDate, setProjectedDate] = useState(() => taskToDisplayDate(task))
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await onSave(status, projectedDate)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const statusColors = {
+    pending: '#2980b9',
+    behind: '#e67e22',
+  }
+
+  return (
+    <View style={tuStyles.overlay}>
+      <YStack
+        backgroundColor={colors.surface}
+        borderRadius="$4"
+        padding="$5"
+        gap="$3"
+        width="90%"
+        maxWidth={440}
+      >
+        <XStack justifyContent="space-between" alignItems="center">
+          <Text color={colors.text} fontSize="$5" fontWeight="700">
+            Update Task
+          </Text>
+          <Pressable onPress={onClose}>
+            <Text color={colors.textMuted} fontSize="$4">
+              ✕
+            </Text>
+          </Pressable>
+        </XStack>
+
+        <Text color={colors.textMuted} fontSize="$3" numberOfLines={2}>
+          {task.title}
+        </Text>
+
+        <YStack gap="$2">
+          <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+            STATUS
+          </Text>
+          <XStack gap="$2">
+            {(['pending', 'behind'] as const).map((s) => {
+              const active = status === s
+              return (
+                <Pressable key={s} onPress={() => setStatus(s)}>
+                  <XStack
+                    paddingHorizontal="$3"
+                    paddingVertical="$1"
+                    borderRadius={99}
+                    borderWidth={1}
+                    borderColor={statusColors[s]}
+                    backgroundColor={active ? statusColors[s] : 'transparent'}
+                  >
+                    <Text color={active ? 'white' : statusColors[s]} fontSize="$2" fontWeight="600">
+                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                    </Text>
+                  </XStack>
+                </Pressable>
+              )
+            })}
+          </XStack>
+        </YStack>
+
+        {status === 'behind' ? (
+          <YStack gap="$1">
+            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+              PROJECTED DATE
+            </Text>
+            <TextInput
+              style={[
+                tuStyles.input,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
+              value={projectedDate}
+              onChangeText={(v) => {
+                const digits = v.replace(/\D/g, '').slice(0, 6)
+                let formatted = digits.slice(0, 2)
+                if (digits.length > 2) formatted += '/' + digits.slice(2, 4)
+                if (digits.length > 4) formatted += '/' + digits.slice(4, 6)
+                setProjectedDate(formatted)
+              }}
+              placeholder="mm/dd/yy"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+              maxLength={8}
+            />
+          </YStack>
+        ) : null}
+
+        <Pressable onPress={handleSave} disabled={saving}>
+          <XStack
+            backgroundColor={colors.primary}
+            borderRadius="$2"
+            paddingVertical="$3"
+            justifyContent="center"
+            opacity={saving ? 0.5 : 1}
+          >
+            <Text color="white" fontWeight="700" fontSize="$3">
+              {saving ? 'Saving…' : 'Save'}
+            </Text>
+          </XStack>
+        </Pressable>
+      </YStack>
+    </View>
+  )
+}
+
+function TaskUpdateModal({
+  task,
+  onClose,
+  onSave,
+}: {
+  task: Task | null
+  uid: string
+  onClose: () => void
+  onSave: (status: 'pending' | 'behind', projectedDate: string) => Promise<void>
+}) {
+  return (
+    <Modal visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
+      {task ? (
+        <TaskUpdateModalInner key={String(task.id)} task={task} onClose={onClose} onSave={onSave} />
+      ) : (
+        <View />
+      )}
+    </Modal>
+  )
+}
+
+const tuStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+  },
+})
 
 export default function Assignments() {
   const colors = useThemeColors()
@@ -643,6 +820,7 @@ export default function Assignments() {
   const [adminView, setAdminView] = useState<AdminView>('mine')
   const [kanbanEvent, setKanbanEvent] = useState<{ title: string; tasks: Task[] } | null>(null)
   const [verifyTask, setVerifyTask] = useState<Task | null>(null)
+  const [updateTaskItem, setUpdateTaskItem] = useState<Task | null>(null)
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [groups, setGroups] = useState<GroupDoc[]>([])
 
@@ -729,6 +907,25 @@ export default function Assignments() {
       }
     } catch {
       toast('Failed to complete task', 'error')
+    }
+  }
+
+  const handleUpdateTask = async (status: 'pending' | 'behind', projectedDate: string) => {
+    if (!updateTaskItem) return
+    let storedDate: string | undefined
+    if (projectedDate && projectedDate.length === 8) {
+      const [mm, dd, yy] = projectedDate.split('/')
+      storedDate = `20${yy}-${mm}-${dd}`
+    }
+    try {
+      await tasksStore.updateTask(updateTaskItem.id, {
+        status,
+        projectedDate: storedDate,
+      })
+      toast('Task updated', 'success')
+      setUpdateTaskItem(null)
+    } catch {
+      toast('Failed to update task', 'error')
     }
   }
 
@@ -932,6 +1129,17 @@ export default function Assignments() {
                 color="#c0392b"
                 colors={colors}
                 onComplete={handleComplete}
+                onTaskPress={(t) => {
+                  if (
+                    t.status !== 'done' &&
+                    t.assignees.some((a) => String(a) === String(uid)) &&
+                    t.taskType !== 'kaizen_verification' &&
+                    t.taskType !== 'kaizen_action' &&
+                    t.taskType !== 'issue_corrective'
+                  ) {
+                    setUpdateTaskItem(t)
+                  }
+                }}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -943,6 +1151,17 @@ export default function Assignments() {
                 color="#e67e22"
                 colors={colors}
                 onComplete={handleComplete}
+                onTaskPress={(t) => {
+                  if (
+                    t.status !== 'done' &&
+                    t.assignees.some((a) => String(a) === String(uid)) &&
+                    t.taskType !== 'kaizen_verification' &&
+                    t.taskType !== 'kaizen_action' &&
+                    t.taskType !== 'issue_corrective'
+                  ) {
+                    setUpdateTaskItem(t)
+                  }
+                }}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -954,6 +1173,17 @@ export default function Assignments() {
                 color="#2980b9"
                 colors={colors}
                 onComplete={handleComplete}
+                onTaskPress={(t) => {
+                  if (
+                    t.status !== 'done' &&
+                    t.assignees.some((a) => String(a) === String(uid)) &&
+                    t.taskType !== 'kaizen_verification' &&
+                    t.taskType !== 'kaizen_action' &&
+                    t.taskType !== 'issue_corrective'
+                  ) {
+                    setUpdateTaskItem(t)
+                  }
+                }}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -964,6 +1194,17 @@ export default function Assignments() {
                 tasks={allPending}
                 colors={colors}
                 onComplete={handleComplete}
+                onTaskPress={(t) => {
+                  if (
+                    t.status !== 'done' &&
+                    t.assignees.some((a) => String(a) === String(uid)) &&
+                    t.taskType !== 'kaizen_verification' &&
+                    t.taskType !== 'kaizen_action' &&
+                    t.taskType !== 'issue_corrective'
+                  ) {
+                    setUpdateTaskItem(t)
+                  }
+                }}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -977,6 +1218,17 @@ export default function Assignments() {
                 onToggle={filter === 'all' ? () => setShowDone((v) => !v) : undefined}
                 colors={colors}
                 onComplete={handleComplete}
+                onTaskPress={(t) => {
+                  if (
+                    t.status !== 'done' &&
+                    t.assignees.some((a) => String(a) === String(uid)) &&
+                    t.taskType !== 'kaizen_verification' &&
+                    t.taskType !== 'kaizen_action' &&
+                    t.taskType !== 'issue_corrective'
+                  ) {
+                    setUpdateTaskItem(t)
+                  }
+                }}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -1059,6 +1311,14 @@ export default function Assignments() {
           setVerifyTask(null)
           toast('Verification submitted — admin has been notified', 'success')
         }}
+      />
+
+      {/* Task status update modal for assignees */}
+      <TaskUpdateModal
+        task={updateTaskItem}
+        uid={uid}
+        onClose={() => setUpdateTaskItem(null)}
+        onSave={handleUpdateTask}
       />
     </YStack>
   )
