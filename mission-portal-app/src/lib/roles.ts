@@ -27,10 +27,7 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
   if (!u || !isVerified(u)) return []
   const tabs: Tab[] = ['home', 'events', 'messages', 'posts']
   if (!isPublic(u)) tabs.unshift('dashboard')
-  if (!isPublic(u)) tabs.push('assignments', 'issues')
-  if (isSecurity(u)) tabs.push('security')
-  if (isWorship(u)) tabs.push('worship', 'music')
-  if (isMerch(u)) tabs.push('inventory')
-  if (isAdmin(u)) tabs.push('announce', 'admin')
+  if (!isPublic(u)) tabs.push('assignments')
+  if (isAdmin(u)) tabs.push('admin')
   return tabs
 }

@@ -48,7 +48,7 @@ export default function AppLayout() {
         },
         headerStyle: { backgroundColor: bg },
         headerTintColor: text,
-        sceneStyle: { backgroundColor: 'transparent' },
+        sceneStyle: { backgroundColor: bg },
       }}
     >
       {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
@@ -77,6 +77,7 @@ export default function AppLayout() {
       <Tabs.Screen name="admin/theme" options={{ href: null }} />
       <Tabs.Screen name="admin/audit" options={{ href: null }} />
       <Tabs.Screen name="admin/digests" options={{ href: null }} />
+      <Tabs.Screen name="admin/leadership" options={{ href: null }} />
       <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   )
