@@ -19,15 +19,36 @@ export type Tab =
   | 'inventory'
   | 'announce'
   | 'worship'
-  | 'music'
-  | 'posts'
   | 'admin'
+  | 'public'
 
 export function visibleTabs(u: UserProfile | null): Tab[] {
   if (!u || !isVerified(u)) return []
-  const tabs: Tab[] = ['home', 'events', 'messages', 'posts']
-  if (!isPublic(u)) tabs.unshift('dashboard')
-  if (!isPublic(u)) tabs.push('assignments')
-  if (isAdmin(u)) tabs.push('admin')
+
+  // Public (guest) role: read-only view of public events/messages
+  if (isPublic(u)) return ['home', 'events', 'messages']
+
+  // Admin sees everything in a specific order matching the original design
+  if (isAdmin(u)) {
+    return [
+      'dashboard',
+      'events',
+      'messages',
+      'announce',
+      'assignments',
+      'admin',
+      'issues',      // rendered as "Operations"
+      'security',
+      'inventory',
+      'worship',
+      'public',      // Public Facing: Posts, Connect, Giving, Our Story
+    ]
+  }
+
+  // Regular verified team members
+  const tabs: Tab[] = ['home', 'events', 'messages', 'announce', 'assignments', 'issues']
+  if (isSecurity(u)) tabs.push('security')
+  if (isMerch(u)) tabs.push('inventory')
+  if (isWorship(u)) tabs.push('worship')
   return tabs
 }
