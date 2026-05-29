@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, Pressable } from 'react-native'
+import { ScrollView, Pressable, Modal, View, TextInput, StyleSheet } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -7,6 +7,7 @@ import { useTasksStore } from '@/stores/tasksStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useUIStore } from '@/stores/uiStore'
+import { useKaizenStore } from '@/stores/kaizenStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { TaskCard } from '@/components/ui/TaskCard'
 import { EventKanban } from '@/features/events/EventKanban'
@@ -17,6 +18,155 @@ import { FD } from '@/lib/format'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import type { Task } from '@/types/events'
+import type { KaizenCard, KaizenVerificationResult } from '@/types/operations'
+
+type EffectivenessKey = KaizenVerificationResult['effectiveness']
+
+const EFFECTIVENESS_OPTIONS: { key: EffectivenessKey; label: string; color: string }[] = [
+  { key: 'effective', label: 'Effective', color: '#27ae60' },
+  { key: 'partially_effective', label: 'Partially Effective', color: '#e67e22' },
+  { key: 'not_effective', label: 'Not Effective', color: '#c0392b' },
+]
+
+function CAVerificationModal({
+  task,
+  card,
+  uid,
+  onClose,
+  onSubmit,
+}: {
+  task: Task | null
+  card: KaizenCard | undefined
+  uid: string
+  onClose: () => void
+  onSubmit: (result: Omit<KaizenVerificationResult, 'completedAt'>) => Promise<void>
+}) {
+  const colors = useThemeColors()
+  const [effectiveness, setEffectiveness] = useState<EffectivenessKey>('effective')
+  const [notes, setNotes] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  if (!task) return null
+
+  const handleSubmit = async () => {
+    setSubmitting(true)
+    try {
+      await onSubmit({ effectiveness, notes, completedBy: uid })
+      setNotes('')
+      setEffectiveness('effective')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={caStyles.overlay}>
+        <YStack
+          backgroundColor={colors.surface}
+          borderRadius="$4"
+          padding="$5"
+          gap="$3"
+          width="90%"
+          maxWidth={520}
+        >
+          <XStack justifyContent="space-between" alignItems="center">
+            <Text color={colors.text} fontSize="$5" fontWeight="700">CA Verification</Text>
+            <Pressable onPress={onClose}>
+              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+            </Pressable>
+          </XStack>
+
+          {card?.actionPlan ? (
+            <YStack gap="$2">
+              <YStack gap="$1">
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">CORRECTIVE ACTION</Text>
+                <Text color={colors.text} fontSize="$3">{card.actionPlan.description}</Text>
+              </YStack>
+              <YStack gap="$1">
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">VERIFICATION METHOD</Text>
+                <Text color={colors.text} fontSize="$3">{card.actionPlan.verificationMethod}</Text>
+              </YStack>
+            </YStack>
+          ) : (
+            <Text color={colors.textMuted} fontSize="$3">{task.title}</Text>
+          )}
+
+          <YStack gap="$1">
+            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">EFFECTIVENESS</Text>
+            <XStack gap="$2" flexWrap="wrap">
+              {EFFECTIVENESS_OPTIONS.map((opt) => (
+                <Pressable key={opt.key} onPress={() => setEffectiveness(opt.key)}>
+                  <XStack
+                    borderRadius={99}
+                    paddingHorizontal="$3"
+                    paddingVertical="$1"
+                    backgroundColor={effectiveness === opt.key ? opt.color : 'transparent'}
+                    borderWidth={1}
+                    borderColor={opt.color}
+                    marginBottom="$1"
+                  >
+                    <Text
+                      color={effectiveness === opt.key ? 'white' : opt.color}
+                      fontSize="$2"
+                      fontWeight="600"
+                    >
+                      {opt.label}
+                    </Text>
+                  </XStack>
+                </Pressable>
+              ))}
+            </XStack>
+          </YStack>
+
+          <YStack gap="$1">
+            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">NOTES</Text>
+            <TextInput
+              style={[caStyles.textarea, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Observations, evidence, or additional notes…"
+              placeholderTextColor={colors.textMuted}
+              multiline
+              numberOfLines={4}
+            />
+          </YStack>
+
+          <Pressable onPress={handleSubmit} disabled={submitting}>
+            <XStack
+              backgroundColor={colors.primary}
+              borderRadius="$2"
+              paddingVertical="$3"
+              justifyContent="center"
+              opacity={submitting ? 0.5 : 1}
+            >
+              <Text color="white" fontWeight="700" fontSize="$3">
+                {submitting ? 'Submitting…' : 'Submit Verification'}
+              </Text>
+            </XStack>
+          </Pressable>
+        </YStack>
+      </View>
+    </Modal>
+  )
+}
+
+const caStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textarea: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    minHeight: 90,
+    textAlignVertical: 'top',
+  },
+})
 
 type FilterTab = 'all' | 'pending' | 'done' | 'behind' | 'overdue'
 type AdminView = 'mine' | 'all' | 'health'
@@ -87,6 +237,7 @@ export default function Assignments() {
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
   const { templates, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
   const { users: allUsers } = useUsersStore()
+  const { cards: kaizenCards, subscribe: subKaizen, unsubscribe: unsubKaizen, submitVerification } = useKaizenStore()
   const displayName = (uid: string | number): string => {
     const u = allUsers.find((x) => String(x.uid) === String(uid))
     return u?.displayName ?? String(uid)
@@ -95,6 +246,7 @@ export default function Assignments() {
 
   const [adminView, setAdminView] = useState<AdminView>('mine')
   const [kanbanEvent, setKanbanEvent] = useState<{ title: string; tasks: Task[] } | null>(null)
+  const [verifyTask, setVerifyTask] = useState<Task | null>(null)
 
   const [filter, setFilter] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
@@ -103,9 +255,11 @@ export default function Assignments() {
   useEffect(() => {
     subTasks()
     subEvents()
+    subKaizen()
     return () => {
       unsubTasks()
       unsubEvents()
+      unsubKaizen()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -151,6 +305,10 @@ export default function Assignments() {
   const done = filtered.filter((t) => t.status === 'done')
 
   const handleComplete = async (task: Task) => {
+    if (task.taskType === 'kaizen_verification') {
+      setVerifyTask(task)
+      return
+    }
     try {
       await tasksStore.completeTask(task.id)
       toast('Task completed!', 'success')
@@ -439,6 +597,20 @@ export default function Assignments() {
         visible={!!kanbanEvent}
         onClose={() => setKanbanEvent(null)}
         resolveUser={displayName}
+      />
+
+      {/* CA Verification modal for kaizen_verification tasks */}
+      <CAVerificationModal
+        task={verifyTask}
+        card={kaizenCards.find((c) => sameId(c.id, verifyTask?.kaizenId ?? ''))}
+        uid={uid}
+        onClose={() => setVerifyTask(null)}
+        onSubmit={async (result) => {
+          if (!verifyTask) return
+          await submitVerification(verifyTask.kaizenId!, result, verifyTask.id)
+          setVerifyTask(null)
+          toast('Verification submitted — admin has been notified', 'success')
+        }}
       />
     </YStack>
   )

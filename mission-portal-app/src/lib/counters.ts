@@ -1,7 +1,7 @@
 import { doc, runTransaction } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
-type CounterKey = 'nEv' | 'nTask' | 'nGroup' | 'nRoom' | 'nReport' | 'nNotif'
+type CounterKey = 'nEv' | 'nTask' | 'nGroup' | 'nRoom' | 'nReport' | 'nNotif' | 'nKaizen'
 
 export async function nextId(key: CounterKey): Promise<number> {
   const ref = doc(db, 'config', 'main')

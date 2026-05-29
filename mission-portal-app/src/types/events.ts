@@ -79,6 +79,9 @@ export interface Task {
   dueDate?: string | null
   projectedDate?: string | null
   overdueNotified?: boolean
+  taskType?: 'kaizen_verification' | 'kaizen_action' | 'issue_corrective'
+  kaizenId?: string | number
+  issueId?: string | number
   _updatedAt?: unknown
 }
 
