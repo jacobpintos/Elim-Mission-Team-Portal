@@ -40,6 +40,7 @@ export interface EventTemplate {
   taskTemplateId?: string
   extraDays?: ExtraDay[]
   overrides?: Record<string, Partial<EventTemplate>>
+  planningBoardId?: string | number
   _geocodeLat?: number
   _geocodeLng?: number
   _updatedAt?: unknown

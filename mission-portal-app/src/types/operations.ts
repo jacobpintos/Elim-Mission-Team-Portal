@@ -69,3 +69,34 @@ export interface KaizenCard {
   createdAt: unknown
   updatedAt: unknown
 }
+
+export type PlanningItemType = 'note' | 'goal' | 'checklist' | 'link' | 'draw' | 'connector'
+
+export interface DrawPoint { x: number; y: number }
+
+export interface PlanningItem {
+  id: string
+  type: PlanningItemType
+  x: number
+  y: number
+  width: number
+  height: number
+  content: string
+  color?: string
+  completed?: boolean
+  dueDate?: string
+  url?: string
+  fromId?: string   // connector source item id
+  toId?: string     // connector target item id
+  points?: DrawPoint[]  // draw path
+}
+
+export interface PlanningBoard {
+  id: string | number
+  name: string
+  eventId?: string | number
+  items: PlanningItem[]
+  createdBy: string | number
+  createdAt: unknown
+  updatedAt: unknown
+}
