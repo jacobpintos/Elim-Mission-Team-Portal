@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { View, TextInput as RNTextInput } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { useThemeColors } from '@/theme/useThemeColors'
 
 interface ColorPickerProps {
   label: string
@@ -59,6 +60,7 @@ function isValidHex(hex: string): boolean {
 }
 
 export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
+  const colors = useThemeColors()
   const safeHex = isValidHex(value) ? value : '#888888'
   const [hsl, setHsl] = useState<[number, number, number]>(() => hexToHsl(safeHex))
   const [hexInput, setHexInput] = useState(safeHex)
@@ -118,11 +120,12 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
               fontSize: 15,
               fontFamily: 'monospace',
               borderWidth: 1,
-              borderColor: '#ccc',
+              borderColor: colors.border,
               borderRadius: 6,
               paddingHorizontal: 8,
               paddingVertical: 6,
-              backgroundColor: 'white',
+              backgroundColor: colors.surface,
+              color: colors.text,
             }}
           />
         </YStack>
@@ -153,11 +156,12 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
               style={{
                 textAlign: 'center',
                 borderWidth: 1,
-                borderColor: '#ccc',
+                borderColor: colors.border,
                 borderRadius: 4,
                 paddingVertical: 4,
                 fontSize: 13,
-                backgroundColor: 'white',
+                backgroundColor: colors.surface,
+                color: colors.text,
               }}
             />
           </View>
@@ -192,11 +196,12 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
               style={{
                 textAlign: 'center',
                 borderWidth: 1,
-                borderColor: '#ccc',
+                borderColor: colors.border,
                 borderRadius: 4,
                 paddingVertical: 4,
                 fontSize: 13,
-                backgroundColor: 'white',
+                backgroundColor: colors.surface,
+                color: colors.text,
               }}
             />
           </View>
@@ -231,11 +236,12 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
               style={{
                 textAlign: 'center',
                 borderWidth: 1,
-                borderColor: '#ccc',
+                borderColor: colors.border,
                 borderRadius: 4,
                 paddingVertical: 4,
                 fontSize: 13,
-                backgroundColor: 'white',
+                backgroundColor: colors.surface,
+                color: colors.text,
               }}
             />
           </View>

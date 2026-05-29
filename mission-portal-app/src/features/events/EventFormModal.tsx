@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ScrollView, Pressable } from 'react-native'
-import { YStack, XStack, Text, Input, Switch, Label } from 'tamagui'
+import { YStack, XStack, Text, Input } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -138,11 +138,28 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
             />
           </YStack>
 
-          <XStack gap="$3" alignItems="center">
-            <Label color={colors.text} fontSize="$3" flex={1}>
+          <XStack gap="$3" alignItems="center" justifyContent="space-between">
+            <Text color={colors.text} fontSize="$3" flex={1}>
               Recurring
-            </Label>
-            <Switch checked={form.isRec} onCheckedChange={(v) => field('isRec')(v)} />
+            </Text>
+            <Pressable onPress={() => field('isRec')(!form.isRec)}>
+              <XStack
+                paddingHorizontal="$3"
+                paddingVertical="$1"
+                borderRadius={99}
+                backgroundColor={form.isRec ? colors.primary : colors.surface}
+                borderWidth={1}
+                borderColor={form.isRec ? colors.primary : colors.border}
+              >
+                <Text
+                  color={form.isRec ? 'white' : colors.textMuted}
+                  fontSize="$2"
+                  fontWeight="600"
+                >
+                  {form.isRec ? 'ON' : 'OFF'}
+                </Text>
+              </XStack>
+            </Pressable>
           </XStack>
 
           {form.isRec ? (
@@ -198,26 +215,35 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
             </>
           ) : null}
 
-          <XStack gap="$3" alignItems="center">
-            <Label color={colors.text} fontSize="$3" flex={1}>
-              Public event
-            </Label>
-            <Switch checked={form.isPublic} onCheckedChange={(v) => field('isPublic')(v)} />
-          </XStack>
-
-          <XStack gap="$3" alignItems="center">
-            <Label color={colors.text} fontSize="$3" flex={1}>
-              Food provided
-            </Label>
-            <Switch checked={form.food} onCheckedChange={(v) => field('food')(v)} />
-          </XStack>
-
-          <XStack gap="$3" alignItems="center">
-            <Label color={colors.text} fontSize="$3" flex={1}>
-              Carpool available
-            </Label>
-            <Switch checked={form.carpool} onCheckedChange={(v) => field('carpool')(v)} />
-          </XStack>
+          {(['isPublic', 'food', 'carpool'] as const).map((key) => {
+            const labels: Record<string, string> = {
+              isPublic: 'Public event',
+              food: 'Food provided',
+              carpool: 'Carpool available',
+            }
+            const val = form[key] as boolean
+            return (
+              <XStack key={key} gap="$3" alignItems="center" justifyContent="space-between">
+                <Text color={colors.text} fontSize="$3" flex={1}>
+                  {labels[key]}
+                </Text>
+                <Pressable onPress={() => field(key)(!val)}>
+                  <XStack
+                    paddingHorizontal="$3"
+                    paddingVertical="$1"
+                    borderRadius={99}
+                    backgroundColor={val ? colors.primary : colors.surface}
+                    borderWidth={1}
+                    borderColor={val ? colors.primary : colors.border}
+                  >
+                    <Text color={val ? 'white' : colors.textMuted} fontSize="$2" fontWeight="600">
+                      {val ? 'ON' : 'OFF'}
+                    </Text>
+                  </XStack>
+                </Pressable>
+              </XStack>
+            )
+          })}
 
           <XStack gap="$2" justifyContent="flex-end">
             <Pressable onPress={onClose}>

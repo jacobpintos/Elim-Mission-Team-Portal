@@ -1,5 +1,5 @@
 rules_version = '2';
-// Last updated: 2026-05-29 — added issues, kaizen, planningBoards rules
+// Last updated: 2026-05-29 — added issues, kaizen, planningBoards, music rules
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -134,6 +134,11 @@ service cloud.firestore {
     }
 
     match /planningBoards/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /music/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }

@@ -7,6 +7,7 @@ import {
   limit,
   getDocs,
   doc,
+  addDoc,
   updateDoc,
   setDoc,
   serverTimestamp,
@@ -33,6 +34,7 @@ interface MessagesStore {
   // actions
   subscribe: () => void
   unsubscribe: () => void
+  createRoom: (name: string, members: string[]) => Promise<void>
   openRoom: (roomId: string | number) => void
   closeRoom: () => void
   loadMore: () => Promise<void>
@@ -74,6 +76,16 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
     get()._unsubRooms?.()
     get()._unsubMessages?.()
     set({ _unsubRooms: null, _unsubMessages: null, rooms: [], messages: [], activeRoomId: null })
+  },
+
+  createRoom: async (name, members) => {
+    await addDoc(collection(db, 'rooms'), {
+      name: name.trim(),
+      members,
+      call: false,
+      reviewers: [],
+      updatedAt: serverTimestamp(),
+    })
   },
 
   openRoom: (roomId) => {

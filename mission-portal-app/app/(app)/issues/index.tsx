@@ -31,7 +31,7 @@ const STATUS_LABELS: Record<IssueStatus, string> = {
   root_cause_identified: "Root Cause ID'd",
   actions_assigned: 'Actions Assigned',
   resolved: 'Resolved',
-  closed: 'Closed',
+  closed: 'Resolved',
 }
 
 const STATUS_COLORS: Record<IssueStatus, string> = {
@@ -39,7 +39,7 @@ const STATUS_COLORS: Record<IssueStatus, string> = {
   root_cause_identified: '#f39c12',
   actions_assigned: '#2980b9',
   resolved: '#27ae60',
-  closed: '#7f8c8d',
+  closed: '#27ae60',
 }
 
 const CATEGORIES: IssueCategory[] = ['equipment', 'safety', 'facility', 'logistics', 'other']
@@ -52,7 +52,6 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'root_cause_identified', label: 'Root Cause' },
   { key: 'actions_assigned', label: 'Actions' },
   { key: 'resolved', label: 'Resolved' },
-  { key: 'closed', label: 'Closed' },
 ]
 
 export default function IssuesIndex() {
@@ -85,7 +84,11 @@ export default function IssuesIndex() {
   }
 
   const filtered = issues
-    .filter((i) => (filter === 'all' ? true : i.status === filter))
+    .filter((i) => {
+      if (filter === 'all') return true
+      if (filter === 'resolved') return i.status === 'resolved' || i.status === 'closed'
+      return i.status === filter
+    })
     .sort((a, b) => Number(b.id) - Number(a.id))
 
   const handleSubmitReport = async () => {
@@ -210,7 +213,8 @@ export default function IssuesIndex() {
                   ) : null}
                   {issue.correctiveActions?.length ? (
                     <Text color={colors.textMuted} fontSize="$2">
-                      {issue.correctiveActions.length} corrective action{issue.correctiveActions.length !== 1 ? 's' : ''}
+                      {issue.correctiveActions.length} corrective action
+                      {issue.correctiveActions.length !== 1 ? 's' : ''}
                     </Text>
                   ) : null}
                 </YStack>
@@ -226,7 +230,9 @@ export default function IssuesIndex() {
           onPress={() => setReportOpen(true)}
           style={[styles.fab, { backgroundColor: colors.primary }]}
         >
-          <Text color="white" fontWeight="700" fontSize="$3">⊕ Report Issue</Text>
+          <Text color="white" fontWeight="700" fontSize="$3">
+            ⊕ Report Issue
+          </Text>
         </Pressable>
       ) : null}
 
@@ -247,18 +253,31 @@ export default function IssuesIndex() {
             maxWidth={520}
           >
             <XStack justifyContent="space-between" alignItems="center">
-              <Text color={colors.text} fontSize="$5" fontWeight="700">Report an Issue</Text>
+              <Text color={colors.text} fontSize="$5" fontWeight="700">
+                Report an Issue
+              </Text>
               <Pressable onPress={() => setReportOpen(false)}>
-                <Text color={colors.textMuted} fontSize="$4">✕</Text>
+                <Text color={colors.textMuted} fontSize="$4">
+                  ✕
+                </Text>
               </Pressable>
             </XStack>
 
             <ScrollView>
               <YStack gap="$3">
                 <YStack gap="$1">
-                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">ISSUE TITLE</Text>
+                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                    ISSUE TITLE
+                  </Text>
                   <TextInput
-                    style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                    style={[
+                      styles.input,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
                     value={rTitle}
                     onChangeText={setRTitle}
                     placeholder="Brief title describing the issue"
@@ -267,7 +286,9 @@ export default function IssuesIndex() {
                 </YStack>
 
                 <YStack gap="$1">
-                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">CATEGORY</Text>
+                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                    CATEGORY
+                  </Text>
                   <XStack gap="$2" flexWrap="wrap">
                     {CATEGORIES.map((cat) => (
                       <Pressable key={cat} onPress={() => setRCategory(cat)}>
@@ -294,9 +315,18 @@ export default function IssuesIndex() {
                 </YStack>
 
                 <YStack gap="$1">
-                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">DESCRIPTION</Text>
+                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                    DESCRIPTION
+                  </Text>
                   <TextInput
-                    style={[styles.textarea, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                    style={[
+                      styles.textarea,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
                     value={rDescription}
                     onChangeText={setRDescription}
                     placeholder="Describe the issue in detail"
@@ -309,10 +339,19 @@ export default function IssuesIndex() {
                 <YStack gap="$1">
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     SUGGESTED ACTION{' '}
-                    <Text color={colors.textMuted} fontSize="$2" fontWeight="400">(optional)</Text>
+                    <Text color={colors.textMuted} fontSize="$2" fontWeight="400">
+                      (optional)
+                    </Text>
                   </Text>
                   <TextInput
-                    style={[styles.textarea, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                    style={[
+                      styles.textarea,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
                     value={rSuggested}
                     onChangeText={setRSuggested}
                     placeholder="What do you think should be done?"

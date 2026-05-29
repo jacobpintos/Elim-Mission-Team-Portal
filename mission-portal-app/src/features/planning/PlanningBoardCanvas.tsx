@@ -10,11 +10,7 @@ import {
   Linking,
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  runOnJS,
-} from 'react-native-reanimated'
+import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Svg, { Polyline, Line } from 'react-native-svg'
 import { usePlanningStore } from '@/stores/planningStore'
@@ -25,7 +21,16 @@ import type { PlanningItem, PlanningItemType, DrawPoint } from '@/types/operatio
 const CANVAS_W = 4000
 const CANVAS_H = 4000
 
-type ToolType = 'pan' | 'select' | 'note' | 'goal' | 'checklist' | 'link' | 'draw' | 'connector' | 'eraser'
+type ToolType =
+  | 'pan'
+  | 'select'
+  | 'note'
+  | 'goal'
+  | 'checklist'
+  | 'link'
+  | 'draw'
+  | 'connector'
+  | 'eraser'
 
 const TOOL_BUTTONS: { type: ToolType; label: string; icon: string }[] = [
   { type: 'select', label: 'Select', icon: '✦' },
@@ -122,9 +127,8 @@ function ItemCard({
 
   const dragGesture = Gesture.Pan()
     .onStart(() => {
-      // eslint-disable-next-line react-hooks/immutability
       startX.value = dragX.value
-      // eslint-disable-next-line react-hooks/immutability
+
       startY.value = dragY.value
     })
     .onUpdate((e) => {
@@ -386,11 +390,7 @@ export function PlanningBoardCanvas({
 
   // Animated canvas transform
   const canvasTransformStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: tx.value },
-      { translateY: ty.value },
-      { scale: sc.value },
-    ],
+    transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: sc.value }],
   }))
 
   // JS callbacks for gestures
@@ -510,7 +510,6 @@ export function PlanningBoardCanvas({
       sc.value = Math.min(4, Math.max(0.2, savedSc.value * e.scale))
     })
     .onEnd(() => {
-      // eslint-disable-next-line react-hooks/immutability
       savedSc.value = sc.value
     })
 
@@ -525,9 +524,8 @@ export function PlanningBoardCanvas({
       ty.value = savedTy.value + e.translationY
     })
     .onEnd(() => {
-      // eslint-disable-next-line react-hooks/immutability
       savedTx.value = tx.value
-      // eslint-disable-next-line react-hooks/immutability
+
       savedTy.value = ty.value
     })
 
@@ -540,7 +538,7 @@ export function PlanningBoardCanvas({
   })
 
   // Draw gesture (records points on canvas)
-  // eslint-disable-next-line react-hooks/refs
+
   const drawPan = Gesture.Pan()
     // eslint-disable-next-line react-hooks/refs
     .onStart((e) => {
@@ -564,7 +562,7 @@ export function PlanningBoardCanvas({
     })
 
   // 1-finger pan (pan tool)
-  // eslint-disable-next-line react-hooks/refs
+
   const panToolGesture = Gesture.Pan()
     .minPointers(1)
     .maxPointers(1)
@@ -579,9 +577,9 @@ export function PlanningBoardCanvas({
     // eslint-disable-next-line react-hooks/refs
     .onEnd(() => {
       if (toolRef.current !== 'pan') return
-      // eslint-disable-next-line react-hooks/immutability
+
       savedTx.value = tx.value
-      // eslint-disable-next-line react-hooks/immutability
+
       savedTy.value = ty.value
     })
 
@@ -593,162 +591,157 @@ export function PlanningBoardCanvas({
   const nonSvgItems = items.filter((i) => i.type !== 'draw' && i.type !== 'connector')
 
   return (
-    <Modal
-      visible={visible}
-      animationType="fade"
-      transparent={false}
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
-        {/* Toolbar */}
-        {!readOnly && (
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              backgroundColor: colors.surface,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border,
-              paddingHorizontal: 4,
-              paddingVertical: 4,
-              gap: 2,
-            }}
-          >
-            {TOOL_BUTTONS.map((btn) => (
-              <Pressable
-                key={btn.type}
-                onPress={() => {
-                  updateTool(btn.type)
-                  setConnectorFrom(null)
-                  setSelectedId(null)
-                }}
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 6,
-                  backgroundColor: tool === btn.type ? colors.primary : 'transparent',
-                  alignItems: 'center',
-                  minWidth: 52,
-                }}
-              >
-                <Text fontSize={16}>{btn.icon}</Text>
-                <Text
-                  fontSize={10}
-                  color={tool === btn.type ? colors.onPrimary : colors.textMuted}
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          {/* Toolbar */}
+          {!readOnly && (
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                backgroundColor: colors.surface,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+                paddingHorizontal: 4,
+                paddingVertical: 4,
+                gap: 2,
+              }}
+            >
+              {TOOL_BUTTONS.map((btn) => (
+                <Pressable
+                  key={btn.type}
+                  onPress={() => {
+                    updateTool(btn.type)
+                    setConnectorFrom(null)
+                    setSelectedId(null)
+                  }}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 6,
+                    backgroundColor: tool === btn.type ? colors.primary : 'transparent',
+                    alignItems: 'center',
+                    minWidth: 52,
+                  }}
                 >
-                  {btn.label}
-                </Text>
-              </Pressable>
-            ))}
-            {connectorFrom !== null && (
-              <View style={{ justifyContent: 'center', paddingHorizontal: 8 }}>
-                <Text color={colors.primary} fontSize={11}>
-                  Tap target item
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Canvas area */}
-        <View style={{ flex: 1 }} collapsable={false}>
-          <GestureDetector gesture={viewportGesture}>
-            <Animated.View style={[StyleSheet.absoluteFill, canvasTransformStyle]}>
-              <GestureDetector gesture={bgGesture}>
-                <View style={{ width: CANVAS_W, height: CANVAS_H }}>
-                  {/* SVG overlay */}
-                  <Svg
-                    width={CANVAS_W}
-                    height={CANVAS_H}
-                    style={StyleSheet.absoluteFill}
-                    pointerEvents="none"
+                  <Text fontSize={16}>{btn.icon}</Text>
+                  <Text
+                    fontSize={10}
+                    color={tool === btn.type ? colors.onPrimary : colors.textMuted}
                   >
-                    {items
-                      .filter((i) => i.type === 'draw' && i.points)
-                      .map((item) => (
+                    {btn.label}
+                  </Text>
+                </Pressable>
+              ))}
+              {connectorFrom !== null && (
+                <View style={{ justifyContent: 'center', paddingHorizontal: 8 }}>
+                  <Text color={colors.primary} fontSize={11}>
+                    Tap target item
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Canvas area */}
+          <View style={{ flex: 1, overflow: 'hidden' }} collapsable={false}>
+            <GestureDetector gesture={viewportGesture}>
+              <Animated.View style={[StyleSheet.absoluteFill, canvasTransformStyle]}>
+                <GestureDetector gesture={bgGesture}>
+                  <View style={{ width: CANVAS_W, height: CANVAS_H }}>
+                    {/* SVG overlay */}
+                    <Svg
+                      width={CANVAS_W}
+                      height={CANVAS_H}
+                      style={StyleSheet.absoluteFill}
+                      pointerEvents="none"
+                    >
+                      {items
+                        .filter((i) => i.type === 'draw' && i.points)
+                        .map((item) => (
+                          <Polyline
+                            key={item.id}
+                            points={item.points!.map((p) => `${p.x},${p.y}`).join(' ')}
+                            stroke={item.color ?? '#333'}
+                            strokeWidth={2}
+                            fill="none"
+                          />
+                        ))}
+                      {drawPoints.length > 1 && (
                         <Polyline
-                          key={item.id}
-                          points={item.points!.map((p) => `${p.x},${p.y}`).join(' ')}
-                          stroke={item.color ?? '#333'}
+                          points={drawPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                          stroke="#333"
                           strokeWidth={2}
                           fill="none"
                         />
-                      ))}
-                    {drawPoints.length > 1 && (
-                      <Polyline
-                        points={drawPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                        stroke="#333"
-                        strokeWidth={2}
-                        fill="none"
+                      )}
+                      {items
+                        .filter((i) => i.type === 'connector')
+                        .map((connector) => {
+                          const from = items.find((i) => i.id === connector.fromId)
+                          const to = items.find((i) => i.id === connector.toId)
+                          if (!from || !to) return null
+                          return (
+                            <Line
+                              key={connector.id}
+                              x1={from.x + from.width / 2}
+                              y1={from.y + from.height / 2}
+                              x2={to.x + to.width / 2}
+                              y2={to.y + to.height / 2}
+                              stroke={colors.textMuted}
+                              strokeWidth={2}
+                            />
+                          )
+                        })}
+                    </Svg>
+
+                    {/* Item cards */}
+                    {nonSvgItems.map((item) => (
+                      <ItemCard
+                        key={item.id}
+                        item={item}
+                        boardId={boardId}
+                        sc={sc}
+                        tool={tool}
+                        readOnly={readOnly}
+                        selectedId={selectedId}
+                        connectorFrom={connectorFrom}
+                        colors={colors}
+                        onSelectId={setSelectedId}
+                        onConnectorTap={handleConnectorTap}
+                        onEditItem={handleEditItem}
+                        onDeleteItem={deleteItem}
+                        onUpdateItem={updateItem}
                       />
-                    )}
-                    {items
-                      .filter((i) => i.type === 'connector')
-                      .map((connector) => {
-                        const from = items.find((i) => i.id === connector.fromId)
-                        const to = items.find((i) => i.id === connector.toId)
-                        if (!from || !to) return null
-                        return (
-                          <Line
-                            key={connector.id}
-                            x1={from.x + from.width / 2}
-                            y1={from.y + from.height / 2}
-                            x2={to.x + to.width / 2}
-                            y2={to.y + to.height / 2}
-                            stroke={colors.textMuted}
-                            strokeWidth={2}
-                          />
-                        )
-                      })}
-                  </Svg>
+                    ))}
+                  </View>
+                </GestureDetector>
+              </Animated.View>
+            </GestureDetector>
+          </View>
 
-                  {/* Item cards */}
-                  {nonSvgItems.map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      boardId={boardId}
-                      sc={sc}
-                      tool={tool}
-                      readOnly={readOnly}
-                      selectedId={selectedId}
-                      connectorFrom={connectorFrom}
-                      colors={colors}
-                      onSelectId={setSelectedId}
-                      onConnectorTap={handleConnectorTap}
-                      onEditItem={handleEditItem}
-                      onDeleteItem={deleteItem}
-                      onUpdateItem={updateItem}
-                    />
-                  ))}
-                </View>
-              </GestureDetector>
-            </Animated.View>
-          </GestureDetector>
+          {/* Close button */}
+          <Pressable
+            onPress={onClose}
+            style={{
+              position: 'absolute',
+              top: readOnly ? 12 : 60,
+              right: 12,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 20,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              zIndex: 100,
+            }}
+          >
+            <Text color={colors.text} fontSize={13}>
+              ✕ Close
+            </Text>
+          </Pressable>
         </View>
-
-        {/* Close button */}
-        <Pressable
-          onPress={onClose}
-          style={{
-            position: 'absolute',
-            top: readOnly ? 12 : 60,
-            right: 12,
-            backgroundColor: colors.surface,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: 20,
-            paddingHorizontal: 14,
-            paddingVertical: 8,
-            zIndex: 100,
-          }}
-        >
-          <Text color={colors.text} fontSize={13}>
-            ✕ Close
-          </Text>
-        </Pressable>
-      </View>
       </GestureHandlerRootView>
 
       {/* Create / Edit modal */}
@@ -758,10 +751,7 @@ export function PlanningBoardCanvas({
         transparent
         onRequestClose={() => setCreateModal(defaultCreateModal)}
       >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setCreateModal(defaultCreateModal)}
-        >
+        <Pressable style={styles.modalBackdrop} onPress={() => setCreateModal(defaultCreateModal)}>
           <Pressable
             style={[
               styles.modalSheet,
