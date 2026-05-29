@@ -242,8 +242,6 @@ export default function SettingsScreen() {
     } catch { toast('Failed', 'error') }
   }
 
-<<<<<<< HEAD
-=======
   const togglePublicPushPref = async (key: PublicNotifKey, value: boolean) => {
     try {
       await updateDoc(doc(db, 'users', fbUser.uid), {
@@ -260,7 +258,6 @@ export default function SettingsScreen() {
     } catch { toast('Failed', 'error') }
   }
 
->>>>>>> claude/landing-page-email-verify-BwUwq
   // ── Sign out ──────────────────────────────────────────────────────────────
   const handleSignOut = async () => {
     await signOutNow()
@@ -472,10 +469,6 @@ export default function SettingsScreen() {
           </XStack>
         </Section>
 
-<<<<<<< HEAD
-        {/* Notifications — not shown to public users */}
-        {!pub ? (
-=======
         {/* Notifications */}
         {pub ? (
           <Section title="Notifications">
@@ -511,7 +504,6 @@ export default function SettingsScreen() {
             </XStack>
           </Section>
         ) : (
->>>>>>> claude/landing-page-email-verify-BwUwq
           <Section title="Notifications">
             <XStack marginBottom="$1">
               <Text flex={1} color={colors.textMuted} fontSize="$2" fontWeight="700">Event</Text>
@@ -553,11 +545,7 @@ export default function SettingsScreen() {
               </Switch>
             </XStack>
           </Section>
-<<<<<<< HEAD
-        ) : null}
-=======
         )}
->>>>>>> claude/landing-page-email-verify-BwUwq
 
         {/* Sign out */}
         <Pressable onPress={handleSignOut}>
