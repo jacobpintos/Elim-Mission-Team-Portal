@@ -1,21 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { TamaguiProvider, YStack, type TamaguiProviderProps } from 'tamagui'
-import { Platform } from 'react-native'
+import { View, Platform } from 'react-native'
+import { TamaguiProvider, type TamaguiProviderProps } from 'tamagui'
 import config from '../../tamagui.config'
 import { useThemeStore } from '@/stores/themeStore'
 import { defaults } from '@/theme/defaults'
-
-// In SPA mode (`web.output: 'single'`) Expo ignores `app/+html.tsx`, so there is
-// no way to set the <body> background in the served HTML. Paint it here at module
-// load — the earliest point JS can run — to avoid a flash of the browser-default
-// background before React mounts. `!important` beats Tamagui's runtime
-// @media(prefers-color-scheme) body{background} rule.
-if (typeof document !== 'undefined') {
-  const bg = defaults.dark.background
-  document.documentElement.style.setProperty('background-color', bg, 'important')
-  document.body.style.setProperty('background-color', bg, 'important')
-  document.body.style.margin = '0'
-}
 
 /**
  * DynamicThemeProvider
@@ -34,6 +22,18 @@ if (typeof document !== 'undefined') {
  * `@/theme/useThemeColors` rather than Tamagui theme tokens directly for
  * custom palette values (primary, surface, textMuted, etc.).
  */
+
+// Synchronously set the body background before React renders. Tamagui injects
+// `body { background: var(--background) }` inside `@media(prefers-color-scheme:dark)`,
+// which wins on the first paint when JS hasn't run yet. By overriding with !important
+// at module-load time we guarantee the correct colour from frame 0.
+if (typeof document !== 'undefined') {
+  const bg = defaults.dark.background
+  document.documentElement.style.setProperty('--background', bg)
+  document.body.style.setProperty('background-color', bg, 'important')
+  document.body.style.margin = '0'
+}
+
 export function DynamicThemeProvider({ children }: { children: React.ReactNode }) {
   const { theme, mode, subscribe, unsubscribe } = useThemeStore()
   const prevPrimaryRef = useRef<string | null>(null)
@@ -53,20 +53,25 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
     )
       return
 
-    const p = mode === 'dark' ? theme.dark : theme.light
     const root = document.documentElement
+
+    // Use setProperty with 'important' so the body background beats Tamagui's
+    // @media(prefers-color-scheme) rule that targets body { background: var(--background) }.
+    document.body.style.setProperty('background-color', palette.background, 'important')
+    document.body.style.margin = '0'
+    root.style.setProperty('--background', palette.background)
 
     root.style.setProperty('--app-primary', theme.primary)
     root.style.setProperty('--app-primary-dark', theme.primaryDark)
     root.style.setProperty('--app-accent', theme.accent)
-    root.style.setProperty('--app-background', p.background)
-    root.style.setProperty('--app-surface', p.surface)
-    root.style.setProperty('--app-text', p.text)
-    root.style.setProperty('--app-text-muted', p.textMuted)
-    root.style.setProperty('--app-border', p.border)
+    root.style.setProperty('--app-background', palette.background)
+    root.style.setProperty('--app-surface', palette.surface)
+    root.style.setProperty('--app-text', palette.text)
+    root.style.setProperty('--app-text-muted', palette.textMuted)
+    root.style.setProperty('--app-border', palette.border)
 
     prevPrimaryRef.current = theme.primary
-  }, [theme, mode])
+  }, [theme, mode, palette])
 
   const tamaguiProps: Omit<TamaguiProviderProps, 'children'> = {
     config,
@@ -75,9 +80,9 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
 
   return (
     <TamaguiProvider {...tamaguiProps}>
-      <YStack flex={1} backgroundColor={palette.background}>
+      <View style={{ flex: 1, backgroundColor: palette.background }}>
         {children}
-      </YStack>
+      </View>
     </TamaguiProvider>
   )
 }

@@ -2,13 +2,10 @@ import { ScrollViewStyleReset } from 'expo-router/html'
 import type { PropsWithChildren } from 'react'
 
 // Customises the HTML shell for the SPA web export.
-// React silently drops `style` props on <html>/<body> during SSG, so we use
-// a <style> tag (like ScrollViewStyleReset does) to force the dark background
-// before JavaScript loads. The !important ensures Tamagui's runtime-injected
-// @media(prefers-color-scheme) body{background:...} rule cannot override it.
+// Inline styles on <html>/<body> beat any external stylesheet.
 export default function Root({ children }: PropsWithChildren) {
   return (
-    <html lang="en">
+    <html lang="en" style={{ height: '100%' }}>
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
@@ -17,13 +14,20 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, shrink-to-fit=no"
         />
         <ScrollViewStyleReset />
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `html,body,#root{background-color:#1a1a2e!important}`,
-          }}
-        />
       </head>
-      <body>{children}</body>
+      <body
+        style={{
+          height: '100%',
+          margin: 0,
+          padding: 0,
+          // Default dark palette background so there's no flash of white/gray
+          // before JS loads and DynamicThemeProvider injects the real colour.
+          backgroundColor: '#1a1a2e',
+        }}
+      >
+        {children}
+      </body>
     </html>
   )
 }
+

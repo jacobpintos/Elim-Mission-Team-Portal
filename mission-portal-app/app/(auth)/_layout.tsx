@@ -9,6 +9,7 @@ export default function AuthLayout() {
         headerStyle: { backgroundColor: mode === 'dark' ? '#1a1a2e' : '#f8f8fc' },
         headerTintColor: mode === 'dark' ? '#ffffff' : '#1a1a2e',
         headerShown: false,
+        contentStyle: { backgroundColor: 'transparent' },
       }}
     />
   )

@@ -25,35 +25,27 @@ export type Tab =
   | 'posts'
   | 'giving'
   | 'story'
+  | 'connect'
+  | 'rolehub'
 
 export function visibleTabs(u: UserProfile | null): Tab[] {
   if (!u || !isVerified(u)) return []
 
-  // Public (guest) role — individual top-level tabs
-  if (isPublic(u)) return ['home', 'events', 'announce', 'music', 'posts', 'giving', 'story']
+  // Public (guest) role — flat individual tabs
+  if (isPublic(u)) return ['home', 'events', 'announce', 'connect', 'music', 'giving', 'story', 'posts']
 
-  // Admin sees everything in a specific order matching the original design
+  // Admin — all tools, role-specific grouped under rolehub
   if (isAdmin(u)) {
-    return [
-      'dashboard',
-      'events',
-      'messages',
-      'announce',
-      'assignments',
-      'admin',
-      'issues',      // rendered as "Operations"
-      'security',
-      'inventory',
-      'worship',
-      'music',       // Content: music, podcasts, sermons (YouTube embeds)
-      'public',      // Public Facing: Posts, Connect, Giving, Our Story
-    ]
+    return ['dashboard', 'events', 'assignments', 'messages', 'announce', 'issues', 'security', 'rolehub', 'public']
   }
 
-  // Regular verified team members — music visible to all
-  const tabs: Tab[] = ['home', 'events', 'messages', 'announce', 'assignments', 'issues', 'music']
+  // All other verified members share these base tabs
+  const tabs: Tab[] = ['dashboard', 'events', 'assignments', 'messages', 'announce', 'issues']
+
+  if (isWorship(u)) tabs.push('worship')
   if (isSecurity(u)) tabs.push('security')
   if (isMerch(u)) tabs.push('inventory')
-  if (isWorship(u)) tabs.push('worship')
+
+  tabs.push('public')
   return tabs
 }

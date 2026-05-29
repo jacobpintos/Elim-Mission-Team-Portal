@@ -6,7 +6,7 @@ export default function Inventory() {
     <YStack flex={1} padding="$4" gap="$3">
       <Stack.Screen options={{ title: 'Inventory' }} />
       <H2>Inventory</H2>
-      <Paragraph>Coming in phase 2.</Paragraph>
+      <Paragraph color="$colorMuted">Merch inventory, reorder, and production coming soon.</Paragraph>
     </YStack>
   )
 }
