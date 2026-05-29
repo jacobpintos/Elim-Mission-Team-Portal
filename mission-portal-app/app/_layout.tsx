@@ -28,15 +28,16 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading) return
-    const inAuth = segments[0] === '(auth)'
-    const inOnboarding = segments[0] === '(onboarding)'
-    const inPublic = segments[0] === '(public)'
+    const seg = segments as string[]
+    const inAuth = seg[0] === '(auth)'
+    const inOnboarding = seg[0] === '(onboarding)'
+    const atRoot = !seg[0]
 
-    if (!fbUser && !inAuth && !inPublic) {
-      router.replace('/(public)')
+    if (!fbUser && !inAuth && !atRoot) {
+      router.replace('/')
     } else if (fbUser && !fbUser.emailVerified && !inAuth) {
       router.replace('/(auth)/verify-email')
-    } else if (fbUser && fbUser.emailVerified && (inAuth || inPublic)) {
+    } else if (fbUser && fbUser.emailVerified && inAuth) {
       router.replace('/')
     } else if (
       fbUser &&
