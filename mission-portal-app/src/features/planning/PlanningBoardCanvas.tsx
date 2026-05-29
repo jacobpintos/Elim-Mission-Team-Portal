@@ -31,6 +31,8 @@ type ToolType =
   | 'draw'
   | 'connector'
   | 'eraser'
+  | 'shape'
+  | 'textbox'
 
 const TOOL_BUTTONS: { type: ToolType; label: string; icon: string }[] = [
   { type: 'select', label: 'Select', icon: '✦' },
@@ -42,6 +44,8 @@ const TOOL_BUTTONS: { type: ToolType; label: string; icon: string }[] = [
   { type: 'draw', label: 'Draw', icon: '✏' },
   { type: 'connector', label: 'Connect', icon: '⟷' },
   { type: 'eraser', label: 'Erase', icon: '⌫' },
+  { type: 'textbox', label: 'Text', icon: 'T' },
+  { type: 'shape', label: 'Shape', icon: '▭' },
 ]
 
 const NOTE_COLORS = ['#FFF176', '#B3E5FC', '#C8E6C9', '#F8BBD0', '#E1BEE7']
@@ -51,6 +55,8 @@ const DEFAULT_SIZES: Record<string, { width: number; height: number }> = {
   goal: { width: 220, height: 90 },
   checklist: { width: 220, height: 60 },
   link: { width: 240, height: 70 },
+  textbox: { width: 200, height: 60 },
+  shape: { width: 120, height: 80 },
 }
 
 interface PlanningBoardCanvasProps {
@@ -169,7 +175,12 @@ function ItemCard({
   }
 
   const isConnectorSource = connectorFrom === item.id
-  const cardBg = item.type === 'note' ? (item.color ?? '#FFF176') : colors.surface
+  const cardBg =
+    item.type === 'note'
+      ? (item.color ?? '#FFF176')
+      : item.type === 'textbox' || item.type === 'shape'
+        ? 'transparent'
+        : colors.surface
 
   return (
     <GestureDetector gesture={itemGesture}>
@@ -179,7 +190,14 @@ function ItemCard({
           {
             backgroundColor: cardBg,
             borderRadius: 6,
-            borderWidth: isSelected || isConnectorSource ? 2 : 1,
+            borderWidth:
+              item.type === 'shape' || item.type === 'textbox'
+                ? isSelected
+                  ? 2
+                  : 0
+                : isSelected || isConnectorSource
+                  ? 2
+                  : 1,
             borderColor: isConnectorSource
               ? colors.primary
               : isSelected
@@ -291,6 +309,22 @@ function ItemCard({
             </Pressable>
           </YStack>
         )}
+        {item.type === 'textbox' && (
+          <Text color={colors.text} fontSize={14} numberOfLines={6}>
+            {item.content}
+          </Text>
+        )}
+        {item.type === 'shape' && (
+          <View
+            style={{
+              flex: 1,
+              borderWidth: 2,
+              borderColor: item.color ?? colors.primary,
+              borderRadius: item.shapeType === 'circle' ? 9999 : 4,
+              backgroundColor: 'transparent',
+            }}
+          />
+        )}
 
         {/* Selection action bar */}
         {isSelected && !readOnly && tool === 'select' && (
@@ -387,6 +421,7 @@ export function PlanningBoardCanvas({
   const [createContent, setCreateContent] = useState('')
   const [createUrl, setCreateUrl] = useState('')
   const [createColor, setCreateColor] = useState(NOTE_COLORS[0])
+  const [createShapeType, setCreateShapeType] = useState<'rect' | 'circle'>('rect')
 
   // Animated canvas transform
   const canvasTransformStyle = useAnimatedStyle(() => ({
@@ -428,6 +463,7 @@ export function PlanningBoardCanvas({
     setCreateContent('')
     setCreateUrl('')
     setCreateColor(NOTE_COLORS[0])
+    setCreateShapeType('rect')
     setCreateModal({ visible: true, type, vx, vy })
   }
 
@@ -435,7 +471,7 @@ export function PlanningBoardCanvas({
     const currentTool = toolRef.current
     const vx = (absX - tx.value) / sc.value
     const vy = (absY - ty.value) / sc.value
-    if (['note', 'goal', 'checklist', 'link'].includes(currentTool)) {
+    if (['note', 'goal', 'checklist', 'link', 'textbox', 'shape'].includes(currentTool)) {
       openCreateModal(currentTool as PlanningItemType, vx, vy)
     } else {
       setSelectedId(null)
@@ -467,6 +503,7 @@ export function PlanningBoardCanvas({
     setCreateContent(item.content)
     setCreateUrl(item.url ?? '')
     setCreateColor(item.color ?? NOTE_COLORS[0])
+    setCreateShapeType((item.shapeType as 'rect' | 'circle') ?? 'rect')
     setCreateModal({
       visible: true,
       type: item.type,
@@ -486,6 +523,7 @@ export function PlanningBoardCanvas({
         content: createContent,
         ...(type === 'link' ? { url: createUrl } : {}),
         ...(type === 'note' ? { color: createColor } : {}),
+        ...(type === 'shape' ? { shapeType: createShapeType, color: createColor } : {}),
       })
     } else {
       addItem(boardId, {
@@ -497,6 +535,7 @@ export function PlanningBoardCanvas({
         content: createContent,
         ...(type === 'link' ? { url: createUrl } : {}),
         ...(type === 'note' ? { color: createColor } : {}),
+        ...(type === 'shape' ? { shapeType: createShapeType, color: createColor } : {}),
       })
     }
     setCreateModal(defaultCreateModal)
@@ -760,7 +799,13 @@ export function PlanningBoardCanvas({
             onPress={(e) => e.stopPropagation()}
           >
             <Text color={colors.text} fontWeight="700" fontSize={16} marginBottom={12}>
-              {createModal.editItemId ? 'Edit Item' : `Add ${createModal.type}`}
+              {createModal.editItemId
+                ? 'Edit Item'
+                : createModal.type === 'textbox'
+                  ? 'Add Text'
+                  : createModal.type === 'shape'
+                    ? 'Add Shape'
+                    : `Add ${createModal.type}`}
             </Text>
 
             <TextInput
@@ -820,6 +865,53 @@ export function PlanningBoardCanvas({
                   />
                 ))}
               </XStack>
+            )}
+            {createModal.type === 'shape' && (
+              <>
+                <XStack gap={8} marginTop={10} alignItems="center">
+                  <Text color={colors.textMuted} fontSize={12}>
+                    Shape:
+                  </Text>
+                  {(['rect', 'circle'] as const).map((st) => (
+                    <Pressable key={st} onPress={() => setCreateShapeType(st)}>
+                      <XStack
+                        paddingHorizontal={12}
+                        paddingVertical={4}
+                        borderRadius={6}
+                        borderWidth={1}
+                        borderColor={createShapeType === st ? colors.primary : colors.border}
+                        backgroundColor={createShapeType === st ? colors.primary : 'transparent'}
+                      >
+                        <Text
+                          color={createShapeType === st ? colors.onPrimary : colors.text}
+                          fontSize={13}
+                        >
+                          {st === 'rect' ? '▭ Rect' : '○ Circle'}
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  ))}
+                </XStack>
+                <XStack gap={8} marginTop={8} alignItems="center">
+                  <Text color={colors.textMuted} fontSize={12}>
+                    Color:
+                  </Text>
+                  {NOTE_COLORS.map((c) => (
+                    <Pressable key={c} onPress={() => setCreateColor(c)}>
+                      <View
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 12,
+                          backgroundColor: c,
+                          borderWidth: createColor === c ? 3 : 1,
+                          borderColor: createColor === c ? colors.primary : colors.border,
+                        }}
+                      />
+                    </Pressable>
+                  ))}
+                </XStack>
+              </>
             )}
 
             <XStack gap={10} marginTop={14} justifyContent="flex-end">
