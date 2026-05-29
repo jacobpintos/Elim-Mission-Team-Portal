@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, TextInput, Pressable, StyleSheet, Platform, Modal, View } from 'react-native'
+import { ScrollView, TextInput, Pressable, StyleSheet, Modal, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -32,24 +32,12 @@ function YouTubeEmbed({ url }: { url: string }) {
   if (!id) return null
   const embedUrl = `https://www.youtube.com/embed/${id}?autoplay=1`
 
-  if (Platform.OS === 'web') {
-    return (
-      <iframe
-        src={embedUrl}
-        style={{ width: '100%', height: '100%', border: 'none' }}
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-      />
-    )
-  }
-  // Native: dynamic import of WebView to avoid web bundle errors
-  const { WebView } = require('react-native-webview')
   return (
-    <WebView
-      source={{ uri: embedUrl }}
-      style={{ flex: 1 }}
-      allowsFullscreenVideo
-      mediaPlaybackRequiresUserAction={false}
+    <iframe
+      src={embedUrl}
+      style={{ width: '100%', height: '100%', border: 'none' }}
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowFullScreen
     />
   )
 }
@@ -73,25 +61,16 @@ function Thumbnail({ url, size = 120 }: { url: string; size?: number }) {
       </View>
     )
   }
-  if (Platform.OS === 'web') {
-    return (
-      <img
-        src={thumb}
-        alt="thumbnail"
-        style={{
-          width: size,
-          height: Math.round(size * 0.56),
-          objectFit: 'cover',
-          borderRadius: 6,
-        }}
-      />
-    )
-  }
-  const { Image } = require('react-native')
   return (
-    <Image
-      source={{ uri: thumb }}
-      style={{ width: size, height: Math.round(size * 0.56), borderRadius: 6 }}
+    <img
+      src={thumb}
+      alt="thumbnail"
+      style={{
+        width: size,
+        height: Math.round(size * 0.56),
+        objectFit: 'cover',
+        borderRadius: 6,
+      }}
     />
   )
 }
