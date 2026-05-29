@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack, useLocalSearchParams } from 'expo-router'
@@ -11,7 +11,6 @@ import { useUIStore } from '@/stores/uiStore'
 import { isAdmin } from '@/lib/roles'
 import { FD } from '@/lib/format'
 import type { IssueCategory, IssueStatus } from '@/types/operations'
-import type { UserProfile } from '@/types/user'
 
 const CATEGORY_COLORS: Record<IssueCategory, string> = {
   equipment: '#e67e22',
@@ -75,8 +74,8 @@ export default function IssueDetail() {
   const { users } = useUsersStore()
   const { tasks } = useTasksStore()
 
-  const [whys, setWhys] = useState<string[]>(['', '', '', '', ''])
-  const [rootCause, setRootCause] = useState('')
+  const [localWhys, setLocalWhys] = useState<string[] | null>(null)
+  const [localRootCause, setLocalRootCause] = useState<string | null>(null)
   const [savingWhys, setSavingWhys] = useState(false)
 
   const [caDesc, setCaDesc] = useState('')
@@ -93,15 +92,14 @@ export default function IssueDetail() {
 
   const issue = issues.find((i) => String(i.id) === String(id))
 
-  useEffect(() => {
-    if (!issue) return
-    if (issue.whys?.length) {
-      const padded = [...issue.whys]
-      while (padded.length < 5) padded.push('')
-      setWhys(padded.slice(0, 5))
-    }
-    if (issue.rootCause) setRootCause(issue.rootCause)
-  }, [issue?.id])
+  const issueWhys = useMemo(() => {
+    const padded = [...(issue?.whys ?? [])]
+    while (padded.length < 5) padded.push('')
+    return padded.slice(0, 5)
+  }, [issue?.whys])
+
+  const whys = localWhys ?? issueWhys
+  const rootCause = localRootCause ?? (issue?.rootCause ?? '')
 
   const displayName = (uid: string | number) => {
     const u = users.find((x) => String(x.uid) === String(uid))
@@ -115,6 +113,8 @@ export default function IssueDetail() {
     setSavingWhys(true)
     try {
       await saveRootCause(issue!.id, whys, rootCause.trim(), uid)
+      setLocalWhys(null)
+      setLocalRootCause(null)
       toast('Root cause saved', 'success')
     } catch {
       toast('Failed to save root cause', 'error')
@@ -234,7 +234,7 @@ export default function IssueDetail() {
                       { color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
                     ]}
                     value={whys[i]}
-                    onChangeText={(v) => setWhys((w) => w.map((x, j) => (j === i ? v : x)))}
+                    onChangeText={(v) => setLocalWhys((w) => (w ?? issueWhys).map((x, j) => (j === i ? v : x)))}
                     placeholder={`Why ${i + 1}…`}
                     placeholderTextColor={colors.textMuted}
                   />
@@ -249,7 +249,7 @@ export default function IssueDetail() {
                     { color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
                   ]}
                   value={rootCause}
-                  onChangeText={setRootCause}
+                  onChangeText={setLocalRootCause}
                   placeholder="State the root cause identified through the 5 Whys analysis"
                   placeholderTextColor={colors.textMuted}
                   multiline
