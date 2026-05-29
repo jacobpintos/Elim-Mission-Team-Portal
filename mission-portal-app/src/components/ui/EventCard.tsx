@@ -11,12 +11,30 @@ interface EventCardProps {
   myAvail?: AvailResponse | null
   onDetail?: () => void
   onAvail?: () => void
-  showHealth?: boolean
+  healthStatus?: 'on-track' | 'behind' | 'no-tasks'
+  onShowTasks?: () => void
   mini?: boolean
 }
 
-export function EventCard({ event, myAvail, onDetail, onAvail, mini }: EventCardProps) {
+export function EventCard({
+  event,
+  myAvail,
+  onDetail,
+  onAvail,
+  healthStatus,
+  onShowTasks,
+  mini,
+}: EventCardProps) {
   const colors = useThemeColors()
+
+  const healthBadge =
+    healthStatus === 'on-track'
+      ? { label: '✓ On Track', bg: '#27ae60', text: 'white' }
+      : healthStatus === 'behind'
+        ? { label: '⚠ Behind', bg: '#c0392b', text: 'white' }
+        : healthStatus === 'no-tasks'
+          ? { label: 'No Tasks', bg: colors.border, text: colors.textMuted }
+          : null
 
   return (
     <YStack
@@ -51,8 +69,25 @@ export function EventCard({ event, myAvail, onDetail, onAvail, mini }: EventCard
         </YStack>
         {myAvail ? <AvailBadge status={myAvail.status} size="sm" /> : null}
       </XStack>
+
+      {/* Health badge */}
+      {healthBadge ? (
+        <XStack>
+          <XStack
+            backgroundColor={healthBadge.bg}
+            borderRadius={99}
+            paddingHorizontal={10}
+            paddingVertical={3}
+          >
+            <Text color={healthBadge.text} fontSize={11} fontWeight="600">
+              {healthBadge.label}
+            </Text>
+          </XStack>
+        </XStack>
+      ) : null}
+
       {!mini ? (
-        <XStack gap="$2" marginTop="$1">
+        <XStack gap="$2" marginTop="$1" flexWrap="wrap">
           {onDetail ? (
             <Pressable onPress={onDetail}>
               <XStack
@@ -80,6 +115,22 @@ export function EventCard({ event, myAvail, onDetail, onAvail, mini }: EventCard
               >
                 <Text color={colors.primary} fontSize="$2" fontWeight="600">
                   {myAvail ? '✓ Change Avail' : '✓ Set Avail'}
+                </Text>
+              </XStack>
+            </Pressable>
+          ) : null}
+          {onShowTasks ? (
+            <Pressable onPress={onShowTasks}>
+              <XStack
+                borderWidth={1}
+                borderColor={colors.primary}
+                borderRadius="$2"
+                paddingHorizontal="$3"
+                paddingVertical="$1"
+                alignItems="center"
+              >
+                <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                  Show Tasks
                 </Text>
               </XStack>
             </Pressable>

@@ -8,6 +8,10 @@ export interface NotificationPrefs {
   issueAssigned: { push: boolean; email: boolean }
   weeklyDigest: boolean
   monthlyDigest: boolean
+  // Public-user specific
+  publicAnnouncement: { push: boolean; email: boolean }
+  publicEvent: { push: boolean; email: boolean }
+  contentFeatured: { push: boolean; email: boolean }
 }
 
 export interface UserProfile {

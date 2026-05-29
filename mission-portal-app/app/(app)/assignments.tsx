@@ -5,17 +5,21 @@ import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useEventsStore } from '@/stores/eventsStore'
+import { useUsersStore } from '@/stores/usersStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { TaskCard } from '@/components/ui/TaskCard'
+import { EventKanban } from '@/features/events/EventKanban'
 import { isAdmin } from '@/lib/roles'
 import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
+import { FD } from '@/lib/format'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import type { Task } from '@/types/events'
 
 type FilterTab = 'all' | 'pending' | 'done' | 'behind' | 'overdue'
+type AdminView = 'mine' | 'all' | 'health'
 
 interface TaskGroupColors {
   text: string
@@ -31,6 +35,7 @@ interface TaskGroupProps {
   colors: TaskGroupColors
   onComplete: (task: Task) => void
   getEventTitle: (task: Task) => string | undefined
+  resolveUser: (uid: string | number) => string
 }
 
 function TaskGroup({
@@ -42,6 +47,7 @@ function TaskGroup({
   colors,
   onComplete,
   getEventTitle,
+  resolveUser,
 }: TaskGroupProps) {
   if (tasks.length === 0) return null
   return (
@@ -63,6 +69,7 @@ function TaskGroup({
               task={t}
               onComplete={() => onComplete(t)}
               eventTitle={getEventTitle(t)}
+              assigneeNames={t.assignees.map(resolveUser)}
             />
           ))
         : null}
@@ -78,8 +85,12 @@ export default function Assignments() {
 
   const tasksStore = useTasksStore()
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
-  const { instances, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
+  const { templates, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
+  const { displayName, subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
   const toast = useUIStore((s) => s.toast)
+
+  const [adminView, setAdminView] = useState<AdminView>('mine')
+  const [kanbanEvent, setKanbanEvent] = useState<{ title: string; tasks: Task[] } | null>(null)
 
   const [filter, setFilter] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
@@ -88,17 +99,24 @@ export default function Assignments() {
   useEffect(() => {
     subTasks()
     subEvents()
+    subUsers()
     return () => {
       unsubTasks()
       unsubEvents()
+      unsubUsers()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const baseTasks = admin ? tasksStore.tasks : tasksStore.myTasks(uid)
+  const baseTasks = adminView === 'all' ? tasksStore.tasks : tasksStore.myTasks(uid)
 
   const filtered = baseTasks.filter((t) => {
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false
+    if (search) {
+      const q = search.toLowerCase()
+      const titleMatch = t.title.toLowerCase().includes(q)
+      const eventMatch = (getEventTitle(t) ?? '').toLowerCase().includes(q)
+      if (!titleMatch && !eventMatch) return false
+    }
     if (filter === 'pending') return t.status === 'pending'
     if (filter === 'done') return t.status === 'done'
     if (filter === 'behind') return t.status === 'behind'
@@ -148,129 +166,278 @@ export default function Assignments() {
     }
   }
 
-  const getEventTitle = (t: Task) => {
+  const getEventTitle = (t: Task): string | undefined => {
     if (!t.evId && !t.evTemplateId) return undefined
     const id = t.evId ?? t.evTemplateId
-    const today2 = new Date().toISOString().split('T')[0]
-    const in90 = (() => {
-      const d = new Date()
-      d.setDate(d.getDate() + 90)
-      return d.toISOString().split('T')[0]
-    })()
-    const evs = instances(today2, in90)
-    const ev = evs.find((e) => sameId(e.templateId, id))
+    const ev = templates.find(
+      (e) => sameId(e.id, id) || sameId(e.taskTemplateId, id)
+    )
     return ev?.title
   }
 
   const FILTER_TABS: FilterTab[] = ['all', 'pending', 'done', 'behind', 'overdue']
 
+  // --- Event Health view data ---
+  const allTasks = tasksStore.tasks
+  const eventHealthCards = (() => {
+    const result: Array<{
+      templateId: string | number
+      title: string
+      date?: string
+      taskCount: number
+      hasProblem: boolean
+      tasks: Task[]
+    }> = []
+
+    for (const ev of templates) {
+      const evTasks = allTasks.filter(
+        (t) =>
+          sameId(t.evId ?? t.evTemplateId, ev.id) ||
+          sameId(t.evTemplateId, ev.taskTemplateId)
+      )
+      if (evTasks.length === 0) continue
+      const hasProblem = evTasks.some((t) => t.status === 'behind' || isOverdue(t))
+      result.push({
+        templateId: ev.id,
+        title: ev.title,
+        date: ev.date,
+        taskCount: evTasks.length,
+        hasProblem,
+        tasks: evTasks,
+      })
+    }
+
+    // Sort by date ascending, events without dates go last
+    return result.sort((a, b) => {
+      if (!a.date && !b.date) return 0
+      if (!a.date) return 1
+      if (!b.date) return -1
+      return a.date < b.date ? -1 : a.date > b.date ? 1 : 0
+    })
+  })()
+
+  const ADMIN_VIEWS: { key: AdminView; label: string }[] = [
+    { key: 'mine', label: 'My Tasks' },
+    { key: 'all', label: 'All Tasks' },
+    { key: 'health', label: 'Event Health' },
+  ]
+
   return (
     <YStack flex={1} backgroundColor={colors.background}>
       <Stack.Screen options={{ title: 'Assignments' }} />
 
-      {/* Search + filter */}
-      <YStack padding="$3" gap="$2" borderBottomWidth={1} borderBottomColor={colors.border}>
-        <Input
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search tasks…"
-          backgroundColor={colors.surface}
-          color={colors.text}
-          borderColor={colors.border}
-        />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <XStack gap="$1">
-            {FILTER_TABS.map((f) => (
-              <Pressable key={f} onPress={() => setFilter(f)}>
-                <XStack
-                  paddingHorizontal="$3"
-                  paddingVertical="$1"
-                  borderRadius={99}
-                  backgroundColor={filter === f ? colors.primary : 'transparent'}
-                  borderWidth={1}
-                  borderColor={filter === f ? colors.primary : colors.border}
-                >
-                  <Text
-                    color={filter === f ? 'white' : colors.text}
-                    fontSize="$2"
-                    fontWeight={filter === f ? '600' : '400'}
+      {/* Admin view switcher */}
+      {admin ? (
+        <YStack padding="$3" paddingBottom="$2" borderBottomWidth={1} borderBottomColor={colors.border}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <XStack gap="$2">
+              {ADMIN_VIEWS.map((v) => (
+                <Pressable key={v.key} onPress={() => setAdminView(v.key)}>
+                  <XStack
+                    paddingHorizontal="$3"
+                    paddingVertical="$2"
+                    borderRadius={99}
+                    backgroundColor={adminView === v.key ? colors.primary : 'transparent'}
+                    borderWidth={1}
+                    borderColor={adminView === v.key ? colors.primary : colors.border}
                   >
-                    {f.charAt(0).toUpperCase() + f.slice(1)}
-                  </Text>
-                </XStack>
-              </Pressable>
-            ))}
+                    <Text
+                      color={adminView === v.key ? 'white' : colors.text}
+                      fontSize="$3"
+                      fontWeight={adminView === v.key ? '700' : '400'}
+                    >
+                      {v.label}
+                    </Text>
+                  </XStack>
+                </Pressable>
+              ))}
+            </XStack>
+          </ScrollView>
+        </YStack>
+      ) : null}
+
+      {/* Search + filter — only for task views */}
+      {adminView !== 'health' ? (
+        <YStack padding="$3" gap="$2" borderBottomWidth={1} borderBottomColor={colors.border}>
+          <Input
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search tasks…"
+            backgroundColor={colors.surface}
+            color={colors.text}
+            borderColor={colors.border}
+          />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <XStack gap="$1">
+              {FILTER_TABS.map((f) => (
+                <Pressable key={f} onPress={() => setFilter(f)}>
+                  <XStack
+                    paddingHorizontal="$3"
+                    paddingVertical="$1"
+                    borderRadius={99}
+                    backgroundColor={filter === f ? colors.primary : 'transparent'}
+                    borderWidth={1}
+                    borderColor={filter === f ? colors.primary : colors.border}
+                  >
+                    <Text
+                      color={filter === f ? 'white' : colors.text}
+                      fontSize="$2"
+                      fontWeight={filter === f ? '600' : '400'}
+                    >
+                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                    </Text>
+                  </XStack>
+                </Pressable>
+              ))}
+            </XStack>
+          </ScrollView>
+        </YStack>
+      ) : null}
+
+      {/* Event Health view */}
+      {adminView === 'health' ? (
+        <ScrollView style={{ flex: 1 }}>
+          <XStack padding="$3" gap="$3" flexWrap="wrap" alignItems="flex-start">
+            {eventHealthCards.length === 0 ? (
+              <YStack
+                backgroundColor={colors.surface}
+                borderRadius="$3"
+                padding="$4"
+                borderWidth={1}
+                borderColor={colors.border}
+                alignItems="center"
+                flex={1}
+              >
+                <Text color={colors.textMuted}>No events with tasks found.</Text>
+              </YStack>
+            ) : (
+              eventHealthCards.map((card) => (
+                <Pressable
+                  key={String(card.templateId)}
+                  onPress={() => setKanbanEvent({ title: card.title, tasks: card.tasks })}
+                  style={{ width: 300 }}
+                >
+                  <YStack
+                    backgroundColor={colors.surface}
+                    borderRadius="$3"
+                    padding="$3"
+                    gap="$2"
+                    borderWidth={1}
+                    borderColor={colors.border}
+                  >
+                    <Text color={colors.text} fontWeight="700" fontSize="$4" numberOfLines={2}>
+                      {card.title}
+                    </Text>
+                    {card.date ? (
+                      <Text color={colors.textMuted} fontSize="$2">
+                        {FD(card.date, { weekday: true })}
+                      </Text>
+                    ) : null}
+                    <Text color={colors.textMuted} fontSize="$2">
+                      {card.taskCount} task{card.taskCount !== 1 ? 's' : ''}
+                    </Text>
+                    <XStack>
+                      <XStack
+                        backgroundColor={card.hasProblem ? '#c0392b' : '#27ae60'}
+                        borderRadius={99}
+                        paddingHorizontal={10}
+                        paddingVertical={3}
+                      >
+                        <Text color="white" fontSize={11} fontWeight="600">
+                          {card.hasProblem ? '⚠ Behind' : '✓ On Track'}
+                        </Text>
+                      </XStack>
+                    </XStack>
+                  </YStack>
+                </Pressable>
+              ))
+            )}
           </XStack>
         </ScrollView>
-      </YStack>
+      ) : (
+        /* Task list view */
+        <ScrollView style={{ flex: 1 }}>
+          <YStack padding="$3" gap="$3">
+            {filter === 'all' || filter === 'overdue' ? (
+              <TaskGroup
+                title={`⚠ Overdue (${overdue.length})`}
+                tasks={overdue}
+                color="#c0392b"
+                colors={colors}
+                onComplete={handleComplete}
+                getEventTitle={getEventTitle}
+                resolveUser={displayName}
+              />
+            ) : null}
+            {filter === 'all' || filter === 'behind' ? (
+              <TaskGroup
+                title={`⏰ Behind (${behind.length})`}
+                tasks={behind}
+                color="#e67e22"
+                colors={colors}
+                onComplete={handleComplete}
+                getEventTitle={getEventTitle}
+                resolveUser={displayName}
+              />
+            ) : null}
+            {filter === 'all' || filter === 'pending' ? (
+              <TaskGroup
+                title={`📅 Due This Week (${upcoming.length})`}
+                tasks={upcoming}
+                color="#2980b9"
+                colors={colors}
+                onComplete={handleComplete}
+                getEventTitle={getEventTitle}
+                resolveUser={displayName}
+              />
+            ) : null}
+            {filter === 'all' || filter === 'pending' ? (
+              <TaskGroup
+                title={`Pending (${allPending.length})`}
+                tasks={allPending}
+                colors={colors}
+                onComplete={handleComplete}
+                getEventTitle={getEventTitle}
+                resolveUser={displayName}
+              />
+            ) : null}
+            {filter === 'all' || filter === 'done' ? (
+              <TaskGroup
+                title={`✓ Done (${done.length})`}
+                tasks={done}
+                color="#27ae60"
+                collapsed={filter === 'all' && !showDone}
+                onToggle={filter === 'all' ? () => setShowDone((v) => !v) : undefined}
+                colors={colors}
+                onComplete={handleComplete}
+                getEventTitle={getEventTitle}
+                resolveUser={displayName}
+              />
+            ) : null}
+            {filtered.length === 0 ? (
+              <YStack
+                backgroundColor={colors.surface}
+                borderRadius="$3"
+                padding="$4"
+                borderWidth={1}
+                borderColor={colors.border}
+                alignItems="center"
+              >
+                <Text color={colors.textMuted}>No tasks found.</Text>
+              </YStack>
+            ) : null}
+          </YStack>
+        </ScrollView>
+      )}
 
-      <ScrollView style={{ flex: 1 }}>
-        <YStack padding="$3" gap="$3">
-          {filter === 'all' || filter === 'overdue' ? (
-            <TaskGroup
-              title={`⚠ Overdue (${overdue.length})`}
-              tasks={overdue}
-              color="#c0392b"
-              colors={colors}
-              onComplete={handleComplete}
-              getEventTitle={getEventTitle}
-            />
-          ) : null}
-          {filter === 'all' || filter === 'behind' ? (
-            <TaskGroup
-              title={`⏰ Behind (${behind.length})`}
-              tasks={behind}
-              color="#e67e22"
-              colors={colors}
-              onComplete={handleComplete}
-              getEventTitle={getEventTitle}
-            />
-          ) : null}
-          {filter === 'all' || filter === 'pending' ? (
-            <TaskGroup
-              title={`📅 Due This Week (${upcoming.length})`}
-              tasks={upcoming}
-              color="#2980b9"
-              colors={colors}
-              onComplete={handleComplete}
-              getEventTitle={getEventTitle}
-            />
-          ) : null}
-          {filter === 'all' || filter === 'pending' ? (
-            <TaskGroup
-              title={`Pending (${allPending.length})`}
-              tasks={allPending}
-              colors={colors}
-              onComplete={handleComplete}
-              getEventTitle={getEventTitle}
-            />
-          ) : null}
-          {filter === 'all' || filter === 'done' ? (
-            <TaskGroup
-              title={`✓ Done (${done.length})`}
-              tasks={done}
-              color="#27ae60"
-              collapsed={filter === 'all' && !showDone}
-              onToggle={filter === 'all' ? () => setShowDone((v) => !v) : undefined}
-              colors={colors}
-              onComplete={handleComplete}
-              getEventTitle={getEventTitle}
-            />
-          ) : null}
-          {filtered.length === 0 ? (
-            <YStack
-              backgroundColor={colors.surface}
-              borderRadius="$3"
-              padding="$4"
-              borderWidth={1}
-              borderColor={colors.border}
-              alignItems="center"
-            >
-              <Text color={colors.textMuted}>No tasks found.</Text>
-            </YStack>
-          ) : null}
-        </YStack>
-      </ScrollView>
+      {/* EventKanban modal */}
+      <EventKanban
+        tasks={kanbanEvent?.tasks ?? []}
+        eventTitle={kanbanEvent?.title ?? ''}
+        visible={!!kanbanEvent}
+        onClose={() => setKanbanEvent(null)}
+        resolveUser={displayName}
+      />
     </YStack>
   )
 }

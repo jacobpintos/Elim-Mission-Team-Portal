@@ -33,6 +33,17 @@ const NOTIF_LABELS: Record<NotifKey, string> = {
   issueAssigned: 'Issue assigned',
 }
 
+type PublicNotifKey = keyof Pick<
+  NotificationPrefs,
+  'publicAnnouncement' | 'publicEvent' | 'contentFeatured'
+>
+
+const PUBLIC_NOTIF_LABELS: Record<PublicNotifKey, string> = {
+  publicAnnouncement: 'Public announcements',
+  publicEvent: 'Nearby & virtual events',
+  contentFeatured: 'New & featured content',
+}
+
 async function compressImage(dataUrl: string, maxDim = 512, quality = 0.78): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new window.Image()
@@ -231,6 +242,25 @@ export default function SettingsScreen() {
     } catch { toast('Failed', 'error') }
   }
 
+<<<<<<< HEAD
+=======
+  const togglePublicPushPref = async (key: PublicNotifKey, value: boolean) => {
+    try {
+      await updateDoc(doc(db, 'users', fbUser.uid), {
+        notificationPrefs: { ...prefs, [key]: { ...prefs[key], push: value } },
+      })
+    } catch { toast('Failed', 'error') }
+  }
+
+  const togglePublicEmailPref = async (key: PublicNotifKey, value: boolean) => {
+    try {
+      await updateDoc(doc(db, 'users', fbUser.uid), {
+        notificationPrefs: { ...prefs, [key]: { ...prefs[key], email: value } },
+      })
+    } catch { toast('Failed', 'error') }
+  }
+
+>>>>>>> claude/landing-page-email-verify-BwUwq
   // ── Sign out ──────────────────────────────────────────────────────────────
   const handleSignOut = async () => {
     await signOutNow()
@@ -442,8 +472,46 @@ export default function SettingsScreen() {
           </XStack>
         </Section>
 
+<<<<<<< HEAD
         {/* Notifications — not shown to public users */}
         {!pub ? (
+=======
+        {/* Notifications */}
+        {pub ? (
+          <Section title="Notifications">
+            <XStack marginBottom="$1">
+              <Text flex={1} color={colors.textMuted} fontSize="$2" fontWeight="700">Type</Text>
+              <XStack gap="$3" width={110}>
+                <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">Push</Text>
+                <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">Email</Text>
+              </XStack>
+            </XStack>
+            {(Object.keys(PUBLIC_NOTIF_LABELS) as PublicNotifKey[]).map((key) => (
+              <XStack key={key} alignItems="center">
+                <Label flex={1} fontSize="$3">{PUBLIC_NOTIF_LABELS[key]}</Label>
+                <XStack gap="$3" width={110} alignItems="center">
+                  <YStack flex={1} alignItems="center">
+                    <Switch size="$2" checked={prefs[key]?.push ?? true} onCheckedChange={(v) => togglePublicPushPref(key, v)}>
+                      <Switch.Thumb />
+                    </Switch>
+                  </YStack>
+                  <YStack flex={1} alignItems="center">
+                    <Switch size="$2" checked={prefs[key]?.email ?? false} onCheckedChange={(v) => togglePublicEmailPref(key, v)}>
+                      <Switch.Thumb />
+                    </Switch>
+                  </YStack>
+                </XStack>
+              </XStack>
+            ))}
+            <XStack alignItems="center" justifyContent="space-between">
+              <Label fontSize="$3">Monthly digest</Label>
+              <Switch size="$2" checked={prefs.monthlyDigest} onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}>
+                <Switch.Thumb />
+              </Switch>
+            </XStack>
+          </Section>
+        ) : (
+>>>>>>> claude/landing-page-email-verify-BwUwq
           <Section title="Notifications">
             <XStack marginBottom="$1">
               <Text flex={1} color={colors.textMuted} fontSize="$2" fontWeight="700">Event</Text>
@@ -485,7 +553,11 @@ export default function SettingsScreen() {
               </Switch>
             </XStack>
           </Section>
+<<<<<<< HEAD
         ) : null}
+=======
+        )}
+>>>>>>> claude/landing-page-email-verify-BwUwq
 
         {/* Sign out */}
         <Pressable onPress={handleSignOut}>
