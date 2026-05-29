@@ -5,6 +5,7 @@ import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useEventsStore } from '@/stores/eventsStore'
+import { useUsersStore } from '@/stores/usersStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { TaskCard } from '@/components/ui/TaskCard'
@@ -31,6 +32,7 @@ interface TaskGroupProps {
   colors: TaskGroupColors
   onComplete: (task: Task) => void
   getEventTitle: (task: Task) => string | undefined
+  resolveUser: (uid: string | number) => string
 }
 
 function TaskGroup({
@@ -42,6 +44,7 @@ function TaskGroup({
   colors,
   onComplete,
   getEventTitle,
+  resolveUser,
 }: TaskGroupProps) {
   if (tasks.length === 0) return null
   return (
@@ -63,6 +66,7 @@ function TaskGroup({
               task={t}
               onComplete={() => onComplete(t)}
               eventTitle={getEventTitle(t)}
+              assigneeNames={t.assignees.map(resolveUser)}
             />
           ))
         : null}
@@ -78,7 +82,8 @@ export default function Assignments() {
 
   const tasksStore = useTasksStore()
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
-  const { instances, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
+  const { templates, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
+  const { displayName, subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
   const toast = useUIStore((s) => s.toast)
 
   const [filter, setFilter] = useState<FilterTab>('all')
@@ -88,9 +93,11 @@ export default function Assignments() {
   useEffect(() => {
     subTasks()
     subEvents()
+    subUsers()
     return () => {
       unsubTasks()
       unsubEvents()
+      unsubUsers()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -98,7 +105,12 @@ export default function Assignments() {
   const baseTasks = admin ? tasksStore.tasks : tasksStore.myTasks(uid)
 
   const filtered = baseTasks.filter((t) => {
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false
+    if (search) {
+      const q = search.toLowerCase()
+      const titleMatch = t.title.toLowerCase().includes(q)
+      const eventMatch = (getEventTitle(t) ?? '').toLowerCase().includes(q)
+      if (!titleMatch && !eventMatch) return false
+    }
     if (filter === 'pending') return t.status === 'pending'
     if (filter === 'done') return t.status === 'done'
     if (filter === 'behind') return t.status === 'behind'
@@ -148,17 +160,12 @@ export default function Assignments() {
     }
   }
 
-  const getEventTitle = (t: Task) => {
+  const getEventTitle = (t: Task): string | undefined => {
     if (!t.evId && !t.evTemplateId) return undefined
     const id = t.evId ?? t.evTemplateId
-    const today2 = new Date().toISOString().split('T')[0]
-    const in90 = (() => {
-      const d = new Date()
-      d.setDate(d.getDate() + 90)
-      return d.toISOString().split('T')[0]
-    })()
-    const evs = instances(today2, in90)
-    const ev = evs.find((e) => sameId(e.templateId, id))
+    const ev = templates.find(
+      (e) => sameId(e.id, id) || sameId(e.taskTemplateId, id)
+    )
     return ev?.title
   }
 
@@ -214,6 +221,7 @@ export default function Assignments() {
               colors={colors}
               onComplete={handleComplete}
               getEventTitle={getEventTitle}
+              resolveUser={displayName}
             />
           ) : null}
           {filter === 'all' || filter === 'behind' ? (
@@ -224,6 +232,7 @@ export default function Assignments() {
               colors={colors}
               onComplete={handleComplete}
               getEventTitle={getEventTitle}
+              resolveUser={displayName}
             />
           ) : null}
           {filter === 'all' || filter === 'pending' ? (
@@ -234,6 +243,7 @@ export default function Assignments() {
               colors={colors}
               onComplete={handleComplete}
               getEventTitle={getEventTitle}
+              resolveUser={displayName}
             />
           ) : null}
           {filter === 'all' || filter === 'pending' ? (
@@ -243,6 +253,7 @@ export default function Assignments() {
               colors={colors}
               onComplete={handleComplete}
               getEventTitle={getEventTitle}
+              resolveUser={displayName}
             />
           ) : null}
           {filter === 'all' || filter === 'done' ? (
@@ -255,6 +266,7 @@ export default function Assignments() {
               colors={colors}
               onComplete={handleComplete}
               getEventTitle={getEventTitle}
+              resolveUser={displayName}
             />
           ) : null}
           {filtered.length === 0 ? (

@@ -10,6 +10,7 @@ interface TaskCardProps {
   onComplete?: () => void
   onPress?: () => void
   eventTitle?: string
+  assigneeNames?: string[]
 }
 
 const STATUS_COLORS: Record<Task['status'], string> = {
@@ -18,7 +19,7 @@ const STATUS_COLORS: Record<Task['status'], string> = {
   behind: '#e67e22',
 }
 
-export function TaskCard({ task, onComplete, onPress, eventTitle }: TaskCardProps) {
+export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames }: TaskCardProps) {
   const colors = useThemeColors()
   const overdue = isOverdue(task)
 
@@ -43,6 +44,11 @@ export function TaskCard({ task, onComplete, onPress, eventTitle }: TaskCardProp
                 Due {FD(task.dueDate)}
               </Text>
             ) : null}
+            {task.status === 'behind' && task.projectedDate ? (
+              <Text color="#e67e22" fontSize="$2">
+                · Projected {FD(task.projectedDate)}
+              </Text>
+            ) : null}
             {eventTitle ? (
               <Text color={colors.textMuted} fontSize="$2">
                 · {eventTitle}
@@ -59,6 +65,11 @@ export function TaskCard({ task, onComplete, onPress, eventTitle }: TaskCardProp
               </Text>
             </XStack>
           </XStack>
+          {assigneeNames && assigneeNames.length > 0 ? (
+            <Text color={colors.textMuted} fontSize="$2">
+              {assigneeNames.join(', ')}
+            </Text>
+          ) : null}
         </YStack>
         {onComplete && task.status !== 'done' ? (
           <Pressable onPress={onComplete}>
