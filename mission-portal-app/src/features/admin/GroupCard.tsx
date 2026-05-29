@@ -1,5 +1,6 @@
 import { XStack, YStack, Text, Button } from 'tamagui'
 import { useUsersStore } from '@/stores/usersStore'
+import { sameId } from '@/lib/ids'
 
 interface GroupDoc {
   id: string
@@ -14,7 +15,8 @@ interface GroupCardProps {
 }
 
 export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
-  const { getUser } = useUsersStore()
+  const users = useUsersStore((s) => s.users)
+  const loading = useUsersStore((s) => s.loading)
   const isAllGroup = group.name === 'All'
 
   return (
@@ -58,8 +60,7 @@ export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
       {group.members.length > 0 && (
         <XStack flexWrap="wrap" gap="$1">
           {group.members.slice(0, 20).map((uid) => {
-            const user = getUser(uid)
-            const name = user?.displayName ?? uid
+            const name = loading ? '…' : (users.find((u) => sameId(u.uid, uid))?.displayName ?? uid)
             return (
               <XStack
                 key={uid}

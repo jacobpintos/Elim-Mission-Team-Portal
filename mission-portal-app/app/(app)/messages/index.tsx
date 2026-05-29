@@ -38,6 +38,11 @@ export default function MessagesIndex() {
 
   // Only show rooms the current user is a member of
   const myRooms = rooms.filter((r) => r.members.some((m) => sameId(m, uid)))
+  // Admins see all rooms; flagged rooms (with reviewers) highlighted separately
+  const displayRooms = admin ? rooms : myRooms
+  const flaggedRooms = admin ? rooms.filter((r) => r.reviewers && r.reviewers.length > 0) : []
+  const flaggedIds = new Set(flaggedRooms.map((r) => String(r.id)))
+  const unflaggedRooms = displayRooms.filter((r) => !flaggedIds.has(String(r.id)))
 
   const toggleMember = (memberId: string) => {
     setSelectedMembers((prev) =>
@@ -78,7 +83,7 @@ export default function MessagesIndex() {
         <YStack flex={1} alignItems="center" justifyContent="center">
           <Text color={colors.textMuted}>Loading rooms…</Text>
         </YStack>
-      ) : myRooms.length === 0 ? (
+      ) : displayRooms.length === 0 ? (
         <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
           <Text color={colors.textMuted} textAlign="center">
             You are not in any message rooms.
@@ -87,7 +92,71 @@ export default function MessagesIndex() {
       ) : (
         <ScrollView style={{ flex: 1 }}>
           <YStack>
-            {myRooms.map((room) => (
+            {flaggedRooms.length > 0 ? (
+              <>
+                <XStack
+                  padding="$3"
+                  paddingBottom="$1"
+                  backgroundColor={colors.surface}
+                  borderBottomWidth={1}
+                  borderBottomColor={colors.border}
+                >
+                  <Text color="#c0392b" fontWeight="700" fontSize="$2">
+                    🚩 FLAGGED FOR REVIEW
+                  </Text>
+                </XStack>
+                {flaggedRooms.map((room) => (
+                  <Pressable
+                    key={String(room.id)}
+                    onPress={() => router.push(`/messages/${room.id}`)}
+                  >
+                    <XStack
+                      padding="$3"
+                      gap="$3"
+                      alignItems="center"
+                      borderBottomWidth={1}
+                      borderBottomColor={colors.border}
+                      backgroundColor="#c0392b18"
+                    >
+                      <YStack
+                        width={46}
+                        height={46}
+                        borderRadius={23}
+                        backgroundColor="#c0392b33"
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <Text color="#c0392b" fontWeight="700" fontSize="$4">
+                          🚩
+                        </Text>
+                      </YStack>
+                      <YStack flex={1} gap={2}>
+                        <Text color={colors.text} fontWeight="700" fontSize="$4">
+                          {room.name}
+                        </Text>
+                        <Text color={colors.textMuted} fontSize="$2">
+                          {room.members.length} members · Flagged by {room.reviewers.length}
+                        </Text>
+                      </YStack>
+                    </XStack>
+                  </Pressable>
+                ))}
+                {unflaggedRooms.length > 0 ? (
+                  <XStack
+                    padding="$3"
+                    paddingBottom="$1"
+                    backgroundColor={colors.surface}
+                    borderBottomWidth={1}
+                    borderBottomColor={colors.border}
+                  >
+                    <Text color={colors.textMuted} fontWeight="700" fontSize="$2">
+                      ALL ROOMS
+                    </Text>
+                  </XStack>
+                ) : null}
+              </>
+            ) : null}
+            {unflaggedRooms.map((room) => (
               <Pressable key={String(room.id)} onPress={() => router.push(`/messages/${room.id}`)}>
                 <XStack
                   padding="$3"
@@ -97,7 +166,6 @@ export default function MessagesIndex() {
                   borderBottomColor={colors.border}
                   backgroundColor={colors.background}
                 >
-                  {/* Room icon */}
                   <YStack
                     width={46}
                     height={46}
@@ -110,7 +178,6 @@ export default function MessagesIndex() {
                       {(room.name ?? '?').charAt(0).toUpperCase()}
                     </Text>
                   </YStack>
-
                   <YStack flex={1} gap={2}>
                     <XStack justifyContent="space-between" alignItems="center">
                       <Text color={colors.text} fontWeight="700" fontSize="$4">

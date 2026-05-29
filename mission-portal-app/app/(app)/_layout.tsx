@@ -7,6 +7,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { visibleTabs } from '@/lib/roles'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { AppLogo } from '@/components/ui/AppLogo'
 import type { Tab } from '@/lib/roles'
 
 const TAB_LABELS: Record<Tab, string> = {
@@ -59,9 +60,13 @@ function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => vo
           maxWidth={480}
         >
           <XStack justifyContent="space-between" alignItems="center">
-            <Text color={colors.text} fontSize="$5" fontWeight="700">Report a Concern</Text>
+            <Text color={colors.text} fontSize="$5" fontWeight="700">
+              Report a Concern
+            </Text>
             <Pressable onPress={onClose}>
-              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
             </Pressable>
           </XStack>
           <Text color={colors.textMuted} fontSize="$3">
@@ -69,14 +74,20 @@ function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => vo
           </Text>
           {submitted ? (
             <YStack alignItems="center" padding="$3">
-              <Text color={colors.primary} fontSize="$4" fontWeight="700">Submitted ✓</Text>
+              <Text color={colors.primary} fontSize="$4" fontWeight="700">
+                Submitted ✓
+              </Text>
             </YStack>
           ) : (
             <>
               <TextInput
                 style={[
                   styles.reportInput,
-                  { color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
                 ]}
                 value={text}
                 onChangeText={setText}
@@ -94,7 +105,9 @@ function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => vo
                   justifyContent="center"
                   opacity={text.trim() ? 1 : 0.5}
                 >
-                  <Text color="white" fontWeight="700" fontSize="$3">Submit Report</Text>
+                  <Text color="white" fontWeight="700" fontSize="$3">
+                    Submit Report
+                  </Text>
                 </XStack>
               </Pressable>
             </>
@@ -108,7 +121,6 @@ function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => vo
 export default function AppLayout() {
   const { profile, loading } = useAuthStore()
   const { theme, mode } = useThemeStore()
-  const colors = useThemeColors()
   const [reportOpen, setReportOpen] = useState(false)
   const { subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
 
@@ -131,6 +143,23 @@ export default function AppLayout() {
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Header banner — web only */}
+      {isWeb ? (
+        <View
+          style={{
+            backgroundColor: bg,
+            borderBottomWidth: 1,
+            borderBottomColor: border,
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <AppLogo size="sm" showSlogan={false} />
+        </View>
+      ) : null}
       <Tabs
         screenOptions={{
           tabBarPosition: isWeb ? 'top' : 'bottom',
@@ -197,7 +226,9 @@ export default function AppLayout() {
           onPress={() => setReportOpen(true)}
           style={[styles.reportFab, { backgroundColor: theme.primary }]}
         >
-          <Text color="white" fontSize="$2" fontWeight="700">⚑ Report</Text>
+          <Text color="white" fontSize="$2" fontWeight="700">
+            ⚑ Report
+          </Text>
         </Pressable>
       ) : null}
 
