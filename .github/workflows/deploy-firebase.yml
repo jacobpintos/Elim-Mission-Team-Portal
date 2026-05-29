@@ -41,13 +41,6 @@ jobs:
           echo "functions=$(grep -c 'mission-portal-app/functions/' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
           echo "rules=$(grep -c 'mission-portal-app/firestore.rules' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
 
-      # Authenticate with Firebase using the service account JSON stored
-      # as a GitHub secret. Sets GOOGLE_APPLICATION_CREDENTIALS automatically.
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
@@ -62,16 +55,27 @@ jobs:
         run: npm ci
         working-directory: mission-portal-app/functions
 
-      # Deploy Cloud Functions only when functions source changed (or manually requested).
+      # Deploy Cloud Functions — uses service account auth (needs Cloud Functions IAM role).
+      - name: Authenticate to Google Cloud (for Functions)
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.deploy_functions == true) ||
+          (github.event_name == 'push' && steps.changed.outputs.functions != '0')
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
       - name: Deploy Cloud Functions
         if: |
           (github.event_name == 'workflow_dispatch' && inputs.deploy_functions == true) ||
           (github.event_name == 'push' && steps.changed.outputs.functions != '0')
         run: npx firebase-tools deploy --only functions --project ${{ secrets.FIREBASE_PROJECT_ID }}
 
-      # Deploy Firestore security rules only when the rules file changed (or manually requested).
+      # Deploy Firestore security rules — uses FIREBASE_TOKEN (CI token from `firebase login:ci`).
+      # This avoids the serviceusage.googleapis.com permission check that blocks service accounts.
       - name: Deploy Firestore Rules
         if: |
           (github.event_name == 'workflow_dispatch' && inputs.deploy_rules == true) ||
           (github.event_name == 'push' && steps.changed.outputs.rules != '0')
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: npx firebase-tools deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }}
