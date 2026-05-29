@@ -9,13 +9,13 @@ import { useNotifsStore } from '@/stores/notifsStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { EventCard } from '@/components/ui/EventCard'
 import { NotificationRow } from '@/components/ui/NotificationRow'
-import { MiniHealthBars } from '@/components/ui/MiniHealthBars'
 import { EventDetailModal } from '@/features/events/EventDetailModal'
 import { AvailModal } from '@/features/events/AvailModal'
-import { buildSectionHealth } from '@/features/events/buildSectionHealth'
+import { EventKanban } from '@/features/events/EventKanban'
 import { todayStr, dateStr } from '@/lib/events'
-import { FD, timeOfDay } from '@/lib/format'
+import { timeOfDay } from '@/lib/format'
 import { sameId } from '@/lib/ids'
+import { isOverdue } from '@/lib/availability'
 import { usePWAInstallPrompt } from '@/lib/pwaInstall'
 import type { EventInstance } from '@/types/events'
 
@@ -34,6 +34,7 @@ export default function Dashboard() {
 
   const [detailEvent, setDetailEvent] = useState<EventInstance | null>(null)
   const [availEvent, setAvailEvent] = useState<EventInstance | null>(null)
+  const [kanbanEvent, setKanbanEvent] = useState<EventInstance | null>(null)
   const { canInstall, install } = usePWAInstallPrompt()
 
   const uid = profile?.uid ?? ''
@@ -51,24 +52,11 @@ export default function Dashboard() {
   }, [uid])
 
   const today = todayStr()
-  const in7 = dateStr(7)
   const in60 = dateStr(60)
 
-  // Upcoming events (7 days) — dedupe by templateId
-  const upcoming7 = (() => {
-    const all = instances(today, in7)
-    const seen = new Set<string>()
-    return all.filter((ev) => {
-      const key = String(ev.templateId)
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  })()
-
-  // Event task health (60 days)
-  const health60 = (() => {
-    const all = instances(today, in60).filter((ev) => ev.taskTemplateId)
+  // Upcoming events (60 days) — dedupe by templateId
+  const upcoming60 = (() => {
+    const all = instances(today, in60)
     const seen = new Set<string>()
     return all.filter((ev) => {
       const key = String(ev.templateId)
@@ -95,6 +83,24 @@ export default function Dashboard() {
     const key = String(ev.instanceKey ?? `${ev.templateId}_${ev.date}`)
     return avail[key]?.[uid] ?? null
   }
+
+  const getEventHealthStatus = (ev: EventInstance): 'on-track' | 'behind' | 'no-tasks' => {
+    const evTasks = tasks.filter(
+      (t) =>
+        sameId(t.evId ?? t.evTemplateId, ev.templateId) ||
+        sameId(t.evTemplateId, ev.taskTemplateId)
+    )
+    if (evTasks.length === 0) return 'no-tasks'
+    const hasProblem = evTasks.some((t) => t.status === 'behind' || isOverdue(t))
+    return hasProblem ? 'behind' : 'on-track'
+  }
+
+  const getKanbanTasks = (ev: EventInstance) =>
+    tasks.filter(
+      (t) =>
+        sameId(t.evId ?? t.evTemplateId, ev.templateId) ||
+        sameId(t.evTemplateId, ev.taskTemplateId)
+    )
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
@@ -131,10 +137,10 @@ export default function Dashboard() {
 
         {/* Two-column layout on wide screens */}
         <XStack gap="$4" flexDirection={isWide ? 'row' : 'column'} alignItems="flex-start">
-          {/* Left column: Upcoming Events */}
+          {/* Left column: Upcoming Events (60 days) */}
           <YStack flex={1} gap="$3">
-            <H3 color={colors.text}>Upcoming Events (7 Days)</H3>
-            {upcoming7.length === 0 ? (
+            <H3 color={colors.text}>Upcoming Events (Next 60 Days)</H3>
+            {upcoming60.length === 0 ? (
               <YStack
                 backgroundColor={colors.surface}
                 borderRadius="$3"
@@ -143,22 +149,24 @@ export default function Dashboard() {
                 borderColor={colors.border}
                 alignItems="center"
               >
-                <Text color={colors.textMuted}>No events in the next 7 days</Text>
+                <Text color={colors.textMuted}>No events in the next 60 days</Text>
               </YStack>
             ) : (
-              upcoming7.map((ev) => (
+              upcoming60.map((ev) => (
                 <EventCard
                   key={ev.instanceKey}
                   event={ev}
                   myAvail={myAvail(ev)}
                   onDetail={() => setDetailEvent(ev)}
                   onAvail={() => setAvailEvent(ev)}
+                  healthStatus={getEventHealthStatus(ev)}
+                  onShowTasks={() => setKanbanEvent(ev)}
                 />
               ))
             )}
           </YStack>
 
-          {/* Right column: Alerts + Notifications */}
+          {/* Right column: Notifications */}
           <YStack width={isWide ? 320 : '100%'} gap="$3">
             <H3 color={colors.text}>Notifications</H3>
             {unreadNotifs.length === 0 ? (
@@ -192,40 +200,6 @@ export default function Dashboard() {
             )}
           </YStack>
         </XStack>
-
-        {/* Event Task Health */}
-        {health60.length > 0 ? (
-          <YStack gap="$3">
-            <H3 color={colors.text}>Event Task Health (Next 60 Days)</H3>
-            <XStack gap="$3" flexWrap="wrap">
-              {health60.map((ev) => {
-                const evTasks = tasks.filter((t) => sameId(t.evId ?? t.evTemplateId, ev.templateId))
-                const sections = buildSectionHealth(ev, evTasks, [])
-                const anyBehind = sections.some((s) => s.isLagging)
-                return (
-                  <YStack
-                    key={ev.instanceKey}
-                    backgroundColor={colors.surface}
-                    borderRadius="$3"
-                    padding="$3"
-                    borderWidth={2}
-                    borderColor={anyBehind ? '#c0392b' : '#27ae60'}
-                    width={isWide ? 280 : '100%'}
-                    gap="$2"
-                  >
-                    <Text color={colors.text} fontWeight="700" fontSize="$3">
-                      {ev.title}
-                    </Text>
-                    <Text color={colors.textMuted} fontSize="$2">
-                      {FD(ev.date, { weekday: true })}
-                    </Text>
-                    <MiniHealthBars sections={sections} compact />
-                  </YStack>
-                )
-              })}
-            </XStack>
-          </YStack>
-        ) : null}
       </YStack>
 
       <EventDetailModal
@@ -243,6 +217,12 @@ export default function Dashboard() {
         uid={uid}
         open={!!availEvent}
         onClose={() => setAvailEvent(null)}
+      />
+      <EventKanban
+        tasks={kanbanEvent ? getKanbanTasks(kanbanEvent) : []}
+        eventTitle={kanbanEvent?.title ?? ''}
+        visible={!!kanbanEvent}
+        onClose={() => setKanbanEvent(null)}
       />
     </ScrollView>
   )
