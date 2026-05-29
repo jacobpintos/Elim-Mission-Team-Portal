@@ -418,7 +418,7 @@ export default function Kaizen() {
     if (!deleteTarget || !deleteReason.trim()) return
     setDeleting(true)
     try {
-      await deleteCard(deleteTarget.id, deleteReason.trim())
+      await deleteCard(deleteTarget.id, deleteReason.trim(), uid)
       toast('Card deleted and notifications sent', 'success')
       setDeleteTarget(null)
       setDeleteReason('')

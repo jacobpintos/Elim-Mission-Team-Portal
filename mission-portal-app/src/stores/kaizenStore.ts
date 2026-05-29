@@ -13,6 +13,7 @@ import { db } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
 import { sameId } from '@/lib/ids'
 import { useTasksStore } from '@/stores/tasksStore'
+import { sendMessageAs } from '@/stores/messagesStore'
 import type {
   KaizenCard,
   KaizenStatus,
@@ -48,7 +49,7 @@ interface KaizenStore {
     result: Omit<KaizenVerificationResult, 'completedAt'>,
     taskId: string | number
   ) => Promise<void>
-  deleteCard: (id: string | number, reason: string) => Promise<void>
+  deleteCard: (id: string | number, reason: string, deletedBy: string | number) => Promise<void>
   prerequisitesMet: (id: string | number) => { ok: boolean; message?: string }
 }
 
@@ -178,21 +179,33 @@ export const useKaizenStore = create<KaizenStore>((set, get) => ({
     await notifyUser(adminUid, notif)
   },
 
-  deleteCard: async (id, reason) => {
+  deleteCard: async (id, reason, deletedBy) => {
     const card = get().cards.find((c) => sameId(c.id, id))
     if (!card) return
 
-    const recipients = new Set([String(card.createdBy), ...card.upvotes.map(String)])
-    for (const uid of recipients) {
-      const notif: InAppNotif = {
-        id: `kz_del_${id}_${Date.now()}_${uid}`,
-        msg: `Kaizen card "${card.title}" was deleted. Reason: ${reason}`,
-        ts: Date.now(),
-        type: 'kaizen_delete',
-        read: false,
-      }
-      await notifyUser(uid, notif)
-    }
+    // Build unique member list: deleter + creator + all upvoters
+    const memberSet = new Set([
+      String(deletedBy),
+      String(card.createdBy),
+      ...card.upvotes.map(String),
+    ])
+    const members = [...memberSet]
+
+    // Create a group room so the message appears in everyone's Messages tab
+    const roomId = await nextId('nRoom')
+    const roomName = `Kaizen Deletion: ${card.title}`
+    await setDoc(doc(db, 'rooms', String(roomId)), {
+      id: roomId,
+      name: roomName,
+      members,
+      call: false,
+      reviewers: [],
+      updatedAt: serverTimestamp(),
+    })
+
+    const msgText =
+      `The kaizen card "${card.title}" has been deleted.\n\nReason: ${reason}`
+    await sendMessageAs(roomId, String(deletedBy), msgText)
 
     await deleteDoc(doc(db, 'kaizen', String(id)))
   },
