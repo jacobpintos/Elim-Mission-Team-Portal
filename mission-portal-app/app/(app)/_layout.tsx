@@ -11,14 +11,14 @@ const TAB_LABELS: Record<Tab, string> = {
   events: 'Events',
   assignments: 'Assignments',
   messages: 'Messages',
-  issues: 'Issues',
+  issues: 'Operations',
   security: 'Security',
   inventory: 'Inventory',
-  announce: 'Announce',
+  announce: 'Announcements',
   worship: 'Worship',
-  music: 'Music',
-  posts: 'Posts',
   admin: 'Admin',
+  public: 'Public Facing',
+  music: 'Content',
 }
 
 export default function AppLayout() {
@@ -48,6 +48,7 @@ export default function AppLayout() {
         },
         headerStyle: { backgroundColor: bg },
         headerTintColor: text,
+        sceneStyle: { backgroundColor: bg },
       }}
     >
       {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
@@ -60,7 +61,7 @@ export default function AppLayout() {
           }}
         />
       ))}
-      {/* Sub-routes that are not tabs */}
+      {/* Sub-routes that are not top-level tabs */}
       <Tabs.Screen name="events/index" options={{ href: null }} />
       <Tabs.Screen name="events/[id]" options={{ href: null }} />
       <Tabs.Screen name="messages/index" options={{ href: null }} />
@@ -68,6 +69,10 @@ export default function AppLayout() {
       <Tabs.Screen name="issues/index" options={{ href: null }} />
       <Tabs.Screen name="issues/[id]" options={{ href: null }} />
       <Tabs.Screen name="pages/[slug]" options={{ href: null }} />
+      <Tabs.Screen name="pages/our-story" options={{ href: null }} />
+      <Tabs.Screen name="pages/connect" options={{ href: null }} />
+      <Tabs.Screen name="pages/giving" options={{ href: null }} />
+      <Tabs.Screen name="posts" options={{ href: null }} />
       <Tabs.Screen name="admin/index" options={{ href: null }} />
       <Tabs.Screen name="admin/users" options={{ href: null }} />
       <Tabs.Screen name="admin/groups" options={{ href: null }} />
@@ -76,6 +81,12 @@ export default function AppLayout() {
       <Tabs.Screen name="admin/theme" options={{ href: null }} />
       <Tabs.Screen name="admin/audit" options={{ href: null }} />
       <Tabs.Screen name="admin/digests" options={{ href: null }} />
+      <Tabs.Screen name="admin/leadership" options={{ href: null }} />
+      <Tabs.Screen name="public/index" options={{ href: null }} />
+      <Tabs.Screen name="public/posts" options={{ href: null }} />
+      <Tabs.Screen name="public/connect" options={{ href: null }} />
+      <Tabs.Screen name="public/giving" options={{ href: null }} />
+      <Tabs.Screen name="public/story" options={{ href: null }} />
       <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   )

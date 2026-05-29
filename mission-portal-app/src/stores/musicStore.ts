@@ -1,27 +1,84 @@
 import { create } from 'zustand'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 
-// Skeleton store for music domain.
-// Phase 2+ wires Firestore subscriptions and fills in state.
+export interface MusicItem {
+  id: string
+  type: 'music' | 'podcast' | 'sermon'
+  title: string
+  youtubeUrl: string
+  thumbnail?: string
+  album?: string
+  year?: number
+  featured?: boolean
+  isNew?: boolean
+  newDays?: number
+  newUntil?: string // ISO date string YYYY-MM-DD
+}
 
 interface MusicStore {
-  items: unknown[]
+  items: MusicItem[]
   loading: boolean
-  _unsub: (() => void) | null
-  subscribe: () => void
-  unsubscribe: () => void
+  load: () => Promise<void>
+  addItem: (item: MusicItem) => Promise<void>
+  updateItem: (id: string, patch: Partial<MusicItem>) => Promise<void>
+  deleteItem: (id: string) => Promise<void>
+  _save: (items: MusicItem[]) => Promise<void>
 }
+
+const REF = () => doc(db, 'music', 'db')
 
 export const useMusicStore = create<MusicStore>((set, get) => ({
   items: [],
   loading: false,
-  _unsub: null,
 
-  subscribe: () => {
-    // Phase 2+ wires Firestore onSnapshot here (role-gated)
+  load: async () => {
+    set({ loading: true })
+    try {
+      const snap = await getDoc(REF())
+      const items = (snap.data()?.items as MusicItem[] | undefined) ?? []
+      set({ items, loading: false })
+    } catch {
+      set({ loading: false })
+    }
   },
 
-  unsubscribe: () => {
-    get()._unsub?.()
-    set({ _unsub: null })
+  _save: async (items: MusicItem[]) => {
+    await setDoc(REF(), { items }, { merge: true })
+    set({ items })
+  },
+
+  addItem: async (item) => {
+    const items = [...get().items, item]
+    await get()._save(items)
+  },
+
+  updateItem: async (id, patch) => {
+    const items = get().items.map((it) => (it.id === id ? { ...it, ...patch } : it))
+    await get()._save(items)
+  },
+
+  deleteItem: async (id) => {
+    const items = get().items.filter((it) => it.id !== id)
+    await get()._save(items)
   },
 }))
+
+export function extractYouTubeId(url: string): string | null {
+  const patterns = [
+    /youtu\.be\/([^?&]+)/,
+    /youtube\.com\/watch\?v=([^&]+)/,
+    /youtube\.com\/embed\/([^?&]+)/,
+    /youtube\.com\/shorts\/([^?&]+)/,
+  ]
+  for (const p of patterns) {
+    const m = url.match(p)
+    if (m) return m[1]
+  }
+  return null
+}
+
+export function youtubeThumbnail(url: string): string {
+  const id = extractYouTubeId(url)
+  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : ''
+}
