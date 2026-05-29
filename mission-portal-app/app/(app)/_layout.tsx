@@ -68,6 +68,9 @@ export default function AppLayout() {
       <Tabs.Screen name="issues/index" options={{ href: null }} />
       <Tabs.Screen name="issues/[id]" options={{ href: null }} />
       <Tabs.Screen name="pages/[slug]" options={{ href: null }} />
+      <Tabs.Screen name="pages/our-story" options={{ href: null }} />
+      <Tabs.Screen name="pages/connect" options={{ href: null }} />
+      <Tabs.Screen name="pages/giving" options={{ href: null }} />
       <Tabs.Screen name="posts" options={{ href: null }} />
       <Tabs.Screen name="admin/index" options={{ href: null }} />
       <Tabs.Screen name="admin/users" options={{ href: null }} />
