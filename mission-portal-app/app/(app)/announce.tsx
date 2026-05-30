@@ -26,6 +26,7 @@ export default function AnnounceScreen() {
   const toast = useUIStore((s) => s.toast)
 
   const {
+    announcements,
     loading,
     subscribe,
     unsubscribe,
@@ -46,7 +47,11 @@ export default function AnnounceScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin])
 
-  const visible = publicUser ? publicAnnouncements() : myAnnouncements(uid)
+  const visible = publicUser
+    ? publicAnnouncements()
+    : admin
+      ? [...announcements].sort((a, b) => b.ts - a.ts)
+      : myAnnouncements(uid)
 
   // Create modal state
   const [showCreate, setShowCreate] = useState(false)

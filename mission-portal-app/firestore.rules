@@ -59,12 +59,12 @@ service cloud.firestore {
           .hasOnly(['reviewers', 'updatedAt']);
 
       match /messages/{msgId} {
-        allow read: if isSignedIn() &&
+        allow read: if isSignedIn() && (isAdmin() ||
           get(/databases/$(database)/documents/rooms/$(id)).data.members
-            .hasAny([request.auth.uid]);
-        allow create: if isSignedIn() &&
+            .hasAny([request.auth.uid]));
+        allow create: if isSignedIn() && (isAdmin() ||
           get(/databases/$(database)/documents/rooms/$(id)).data.members
-            .hasAny([request.auth.uid]);
+            .hasAny([request.auth.uid]));
         allow update: if isSignedIn() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['readBy']);
