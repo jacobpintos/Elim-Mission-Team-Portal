@@ -115,6 +115,30 @@ export default function AnnounceScreen() {
     <YStack flex={1} backgroundColor={colors.background}>
       <Stack.Screen options={{ title: 'Announcements' }} />
 
+      {admin ? (
+        <XStack
+          padding="$3"
+          borderBottomWidth={1}
+          borderBottomColor={colors.border}
+          justifyContent="flex-end"
+        >
+          <Pressable onPress={() => setShowCreate(true)}>
+            <XStack
+              backgroundColor={colors.primary}
+              borderRadius="$3"
+              paddingHorizontal="$3"
+              paddingVertical="$2"
+              alignItems="center"
+              gap="$1"
+            >
+              <Text color="white" fontWeight="700" fontSize="$3">
+                ⊕ Post Announcement
+              </Text>
+            </XStack>
+          </Pressable>
+        </XStack>
+      ) : null}
+
       {loading ? (
         <YStack flex={1} alignItems="center" justifyContent="center">
           <Text color={colors.textMuted}>Loading…</Text>
@@ -178,18 +202,6 @@ export default function AnnounceScreen() {
           </YStack>
         </ScrollView>
       )}
-
-      {/* Admin FAB */}
-      {admin ? (
-        <Pressable
-          onPress={() => setShowCreate(true)}
-          style={[styles.fab, { backgroundColor: colors.primary }]}
-        >
-          <Text color="white" fontWeight="700" fontSize="$3">
-            ⊕ Post Announcement
-          </Text>
-        </Pressable>
-      ) : null}
 
       {/* Create Modal */}
       <Modal
@@ -368,19 +380,6 @@ export default function AnnounceScreen() {
 }
 
 const styles = StyleSheet.create({
-  fab: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
