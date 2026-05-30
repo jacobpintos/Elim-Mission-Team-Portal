@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { ScrollView, Pressable } from 'react-native'
+import { ScrollView, Pressable, Linking } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -14,6 +14,8 @@ import { AvailQueueBanner } from '@/features/events/AvailQueueBanner'
 import { isAdmin, isPublic } from '@/lib/roles'
 import { FD } from '@/lib/format'
 import type { EventInstance } from '@/types/events'
+
+const VIRTUAL_COLOR = '#8e44ad'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = [
@@ -246,7 +248,7 @@ export default function EventsScreen() {
                                 width={6}
                                 height={6}
                                 borderRadius={3}
-                                backgroundColor={colors.primary}
+                                backgroundColor={ev.isVirtual ? VIRTUAL_COLOR : colors.primary}
                               />
                             ))}
                           </XStack>
@@ -278,7 +280,7 @@ export default function EventsScreen() {
                       <YStack
                         width={4}
                         alignSelf="stretch"
-                        backgroundColor={colors.primary}
+                        backgroundColor={ev.isVirtual ? VIRTUAL_COLOR : colors.primary}
                         borderRadius={2}
                       />
                       <YStack flex={1}>
@@ -293,6 +295,11 @@ export default function EventsScreen() {
                         {ev.location ? (
                           <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
                             {ev.location}
+                          </Text>
+                        ) : null}
+                        {ev.isVirtual ? (
+                          <Text color={VIRTUAL_COLOR} fontSize="$2">
+                            🖥 Virtual
                           </Text>
                         ) : null}
                       </YStack>
@@ -314,46 +321,65 @@ export default function EventsScreen() {
                 No events this month.
               </Text>
             ) : (
-              monthEvents.map((ev) => (
-                <Pressable key={ev.instanceKey} onPress={() => setDetailEvent(ev)}>
-                  <XStack
-                    backgroundColor={colors.surface}
-                    borderRadius="$3"
-                    padding="$3"
-                    borderWidth={1}
-                    borderColor={colors.border}
-                    gap="$2"
-                    alignItems="center"
-                  >
-                    <YStack
-                      width={44}
-                      height={44}
-                      borderRadius="$2"
-                      backgroundColor={colors.primary + '22'}
+              monthEvents.map((ev) => {
+                const evColor = ev.isVirtual ? VIRTUAL_COLOR : colors.primary
+                return (
+                  <Pressable key={ev.instanceKey} onPress={() => setDetailEvent(ev)}>
+                    <XStack
+                      backgroundColor={colors.surface}
+                      borderRadius="$3"
+                      padding="$3"
+                      borderWidth={1}
+                      borderColor={colors.border}
+                      gap="$2"
                       alignItems="center"
-                      justifyContent="center"
                     >
-                      <Text color={colors.primary} fontWeight="700" fontSize={15}>
-                        {ev.date.split('-')[2]}
-                      </Text>
-                    </YStack>
-                    <YStack flex={1}>
-                      <Text color={colors.text} fontWeight="600">
-                        {ev.title}
-                      </Text>
-                      <Text color={colors.textMuted} fontSize="$2">
-                        {FD(ev.date, { weekday: true })}
-                        {ev.startTime ? ` · ${ev.startTime}` : ''}
-                      </Text>
-                      {ev.location ? (
-                        <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
-                          {ev.location}
+                      <YStack
+                        width={44}
+                        height={44}
+                        borderRadius="$2"
+                        backgroundColor={evColor + '22'}
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <Text color={evColor} fontWeight="700" fontSize={15}>
+                          {ev.date.split('-')[2]}
                         </Text>
-                      ) : null}
-                    </YStack>
-                  </XStack>
-                </Pressable>
-              ))
+                      </YStack>
+                      <YStack flex={1}>
+                        <Text color={colors.text} fontWeight="600">
+                          {ev.title}
+                        </Text>
+                        <Text color={colors.textMuted} fontSize="$2">
+                          {FD(ev.date, { weekday: true })}
+                          {ev.startTime ? ` · ${ev.startTime}` : ''}
+                        </Text>
+                        {ev.location ? (
+                          <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                            {ev.location}
+                          </Text>
+                        ) : null}
+                        {ev.isVirtual && ev.virtualLink ? (
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation()
+                              Linking.openURL(ev.virtualLink!)
+                            }}
+                          >
+                            <Text
+                              color={VIRTUAL_COLOR}
+                              fontSize="$2"
+                              textDecorationLine="underline"
+                            >
+                              Join Here
+                            </Text>
+                          </Pressable>
+                        ) : null}
+                      </YStack>
+                    </XStack>
+                  </Pressable>
+                )
+              })
             )}
           </YStack>
         )}

@@ -1,4 +1,4 @@
-import { Pressable } from 'react-native'
+import { Pressable, Linking } from 'react-native'
 import { XStack, YStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { FD } from '@/lib/format'
@@ -63,6 +63,13 @@ export function EventCard({
                 numberOfLines={1}
               >
                 {event.location}
+              </Text>
+            </Pressable>
+          ) : null}
+          {event.isVirtual && event.virtualLink ? (
+            <Pressable onPress={() => Linking.openURL(event.virtualLink!)}>
+              <Text color={colors.primary} fontSize="$2" textDecorationLine="underline">
+                Join Here
               </Text>
             </Pressable>
           ) : null}

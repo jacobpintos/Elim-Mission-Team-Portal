@@ -100,10 +100,27 @@ export function EventDetailModal({
                     {event.location}
                   </Text>
                 </Pressable>
-                {event.isVirtual ? (
-                  <Text color={colors.textMuted} fontSize="$2">
-                    🖥 Virtual Event
+              </YStack>
+            ) : null}
+
+            {/* Virtual join link */}
+            {event.isVirtual ? (
+              <YStack gap="$1">
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                  VIRTUAL EVENT
+                </Text>
+                <XStack gap="$2" alignItems="center">
+                  <Text fontSize="$3">🖥</Text>
+                  <Text color={colors.text} fontSize="$3">
+                    Virtual Event
                   </Text>
+                </XStack>
+                {event.virtualLink ? (
+                  <Pressable onPress={() => Linking.openURL(event.virtualLink!)}>
+                    <Text color={colors.primary} textDecorationLine="underline" fontSize="$3">
+                      {event.virtualLink}
+                    </Text>
+                  </Pressable>
                 ) : null}
               </YStack>
             ) : null}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, useWindowDimensions, Pressable } from 'react-native'
+import { ScrollView, useWindowDimensions, Pressable, Linking } from 'react-native'
 import { YStack, XStack, Text, H3, Input } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -206,6 +206,13 @@ function PubHomeContent() {
                   <Text color={colors.textMuted} fontSize="$2">
                     {ev.location}
                   </Text>
+                ) : null}
+                {ev.isVirtual && ev.virtualLink ? (
+                  <Pressable onPress={() => Linking.openURL(ev.virtualLink!)}>
+                    <Text color="#8e44ad" fontSize="$2" textDecorationLine="underline">
+                      Join Here
+                    </Text>
+                  </Pressable>
                 ) : null}
               </YStack>
             ))

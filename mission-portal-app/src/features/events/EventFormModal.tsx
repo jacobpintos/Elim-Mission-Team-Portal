@@ -24,6 +24,8 @@ type FormData = {
   isPublic: boolean
   food: boolean
   carpool: boolean
+  isVirtual: boolean
+  virtualLink: string
 }
 
 export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
@@ -42,6 +44,8 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
     isPublic: event?.isPublic ?? false,
     food: event?.food ?? false,
     carpool: event?.carpool ?? false,
+    isVirtual: event?.isVirtual ?? false,
+    virtualLink: event?.virtualLink ?? '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -215,9 +219,10 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
             </>
           ) : null}
 
-          {(['isPublic', 'food', 'carpool'] as const).map((key) => {
+          {(['isPublic', 'isVirtual', 'food', 'carpool'] as const).map((key) => {
             const labels: Record<string, string> = {
               isPublic: 'Public event',
+              isVirtual: 'Virtual event',
               food: 'Food provided',
               carpool: 'Carpool available',
             }
@@ -244,6 +249,22 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
               </XStack>
             )
           })}
+
+          {form.isVirtual ? (
+            <YStack gap="$1">
+              <Text color={colors.text} fontSize="$3">
+                Meeting Link
+              </Text>
+              <Input
+                value={form.virtualLink}
+                onChangeText={field('virtualLink')}
+                placeholder="https://zoom.us/j/..."
+                backgroundColor={colors.surface}
+                color={colors.text}
+                borderColor={colors.border}
+              />
+            </YStack>
+          ) : null}
 
           <XStack gap="$2" justifyContent="flex-end">
             <Pressable onPress={onClose}>
