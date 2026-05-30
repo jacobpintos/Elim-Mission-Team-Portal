@@ -8,8 +8,11 @@ import Animated, {
   withTiming,
   runOnJS,
 } from 'react-native-reanimated'
+import { getDocs, collection } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
-import { functions } from '@/lib/firebase'
+import { db, functions } from '@/lib/firebase'
+import { allInstances, todayStr } from '@/lib/events'
+import type { EventTemplate } from '@/types/events'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -89,6 +92,7 @@ export default function AppLayout() {
   const router = useRouter()
   const [reportOpen, setReportOpen] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  const [hasPublicEventToday, setHasPublicEventToday] = useState(false)
   const { subscribe: subUsers, unsubscribe: unsubUsers, users } = useUsersStore()
   const { createReport } = useSecurityStore()
   const toast = useUIStore((s) => s.toast)
@@ -112,11 +116,24 @@ export default function AppLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    if (!profile || !isPublic(profile)) return
+    const today = todayStr()
+    getDocs(collection(db, 'events'))
+      .then((snap) => {
+        const templates = snap.docs.map((d) => ({ ...(d.data() as EventTemplate), id: d.id }))
+        const todayEvents = allInstances(templates, {}, today, today)
+        setHasPublicEventToday(todayEvents.some((ev) => ev.isPublic))
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   if (loading) return null
   if (!profile) return <Redirect href="/(auth)/login" />
 
   const tabs = visibleTabs(profile)
-  const showReportButton = !isPublic(profile)
+  const showReportButton = !isPublic(profile) || hasPublicEventToday
 
   const securityUsers = users.filter((u) => isSecurity(u))
 
