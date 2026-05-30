@@ -30,13 +30,13 @@ export type Tab =
   | 'settings'
 
 export function visibleTabs(u: UserProfile | null): Tab[] {
-  if (!u || !isVerified(u)) return []
+  if (!u) return []
 
   const MEMBER_ROLES: Role[] = ['admin', 'security', 'regular', 'merch', 'worship']
   const isMember = u.roles?.some((r) => MEMBER_ROLES.includes(r)) ?? false
 
-  // Public (guest) role, or no recognized member role → public tabs only
-  if (isPublic(u) || !isMember)
+  // Any user without a member role (public, unverified, empty, etc.) gets public tabs
+  if (!isMember)
     return [
       'home',
       'events',
