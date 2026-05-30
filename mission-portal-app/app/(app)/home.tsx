@@ -462,8 +462,8 @@ function PubHomeContent() {
                     {ev.location}
                   </Text>
                 ) : null}
-                {ev.isVirtual && ev.virtualLink ? (
-                  <Pressable onPress={() => Linking.openURL(ev.virtualLink!)}>
+                {ev.isVirtual && ev.signUpLink ? (
+                  <Pressable onPress={() => Linking.openURL(ev.signUpLink!)}>
                     <Text color="#8e44ad" fontSize="$2" textDecorationLine="underline">
                       Join Here
                     </Text>
