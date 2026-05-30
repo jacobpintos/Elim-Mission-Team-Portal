@@ -142,5 +142,15 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
+
+    match /setLists/{id} {
+      function isWorshipOrAdmin() {
+        return isSignedIn() &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+            .hasAny(['admin', 'worship']);
+      }
+      allow read: if isWorshipOrAdmin();
+      allow write: if isWorshipOrAdmin();
+    }
   }
 }

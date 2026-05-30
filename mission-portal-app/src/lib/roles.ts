@@ -33,11 +33,34 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
   if (!u || !isVerified(u)) return []
 
   // Public (guest) role — flat individual tabs
-  if (isPublic(u)) return ['home', 'events', 'announce', 'connect', 'music', 'giving', 'story', 'posts', 'settings']
+  if (isPublic(u))
+    return [
+      'home',
+      'events',
+      'announce',
+      'connect',
+      'music',
+      'giving',
+      'story',
+      'posts',
+      'settings',
+    ]
 
   // Admin — all tools, role-specific grouped under rolehub
   if (isAdmin(u)) {
-    return ['dashboard', 'events', 'assignments', 'messages', 'announce', 'issues', 'security', 'rolehub', 'public', 'settings']
+    return [
+      'dashboard',
+      'events',
+      'assignments',
+      'messages',
+      'announce',
+      'issues',
+      'security',
+      'worship',
+      'rolehub',
+      'public',
+      'settings',
+    ]
   }
 
   // All other verified members share these base tabs

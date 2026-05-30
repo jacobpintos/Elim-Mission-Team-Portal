@@ -80,9 +80,10 @@ export interface Task {
   dueDate?: string | null
   projectedDate?: string | null
   overdueNotified?: boolean
-  taskType?: 'kaizen_verification' | 'kaizen_action' | 'issue_corrective'
+  taskType?: 'kaizen_verification' | 'kaizen_action' | 'issue_corrective' | 'worship_setlist_ack'
   kaizenId?: string | number
   issueId?: string | number
+  setListId?: string | number
   _updatedAt?: unknown
 }
 

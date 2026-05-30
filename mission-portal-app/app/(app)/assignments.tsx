@@ -10,9 +10,11 @@ import { useEventsStore } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useKaizenStore } from '@/stores/kaizenStore'
+import { useWorshipStore } from '@/stores/worshipStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { TaskCard } from '@/components/ui/TaskCard'
 import { EventKanban } from '@/features/events/EventKanban'
+import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
 import { isAdmin } from '@/lib/roles'
 import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
@@ -811,6 +813,7 @@ export default function Assignments() {
     unsubscribe: unsubKaizen,
     submitVerification,
   } = useKaizenStore()
+  const { setLists, subscribe: subWorship, unsubscribe: unsubWorship } = useWorshipStore()
   const displayName = (uid: string | number): string => {
     const u = allUsers.find((x) => String(x.uid) === String(uid))
     return u?.displayName ?? String(uid)
@@ -821,6 +824,7 @@ export default function Assignments() {
   const [kanbanEvent, setKanbanEvent] = useState<{ title: string; tasks: Task[] } | null>(null)
   const [verifyTask, setVerifyTask] = useState<Task | null>(null)
   const [updateTaskItem, setUpdateTaskItem] = useState<Task | null>(null)
+  const [setListAckTask, setSetListAckTask] = useState<Task | null>(null)
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [groups, setGroups] = useState<GroupDoc[]>([])
 
@@ -832,10 +836,12 @@ export default function Assignments() {
     subTasks()
     subEvents()
     subKaizen()
+    subWorship()
     return () => {
       unsubTasks()
       unsubEvents()
       unsubKaizen()
+      unsubWorship()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -891,6 +897,10 @@ export default function Assignments() {
   const handleComplete = async (task: Task) => {
     if (task.taskType === 'kaizen_verification') {
       setVerifyTask(task)
+      return
+    }
+    if (task.taskType === 'worship_setlist_ack') {
+      setSetListAckTask(task)
       return
     }
     try {
@@ -1137,7 +1147,11 @@ export default function Assignments() {
                     t.taskType !== 'kaizen_action' &&
                     t.taskType !== 'issue_corrective'
                   ) {
-                    setUpdateTaskItem(t)
+                    if (t.taskType === 'worship_setlist_ack') {
+                      setSetListAckTask(t)
+                    } else {
+                      setUpdateTaskItem(t)
+                    }
                   }
                 }}
                 getEventTitle={getEventTitle}
@@ -1159,7 +1173,11 @@ export default function Assignments() {
                     t.taskType !== 'kaizen_action' &&
                     t.taskType !== 'issue_corrective'
                   ) {
-                    setUpdateTaskItem(t)
+                    if (t.taskType === 'worship_setlist_ack') {
+                      setSetListAckTask(t)
+                    } else {
+                      setUpdateTaskItem(t)
+                    }
                   }
                 }}
                 getEventTitle={getEventTitle}
@@ -1181,7 +1199,11 @@ export default function Assignments() {
                     t.taskType !== 'kaizen_action' &&
                     t.taskType !== 'issue_corrective'
                   ) {
-                    setUpdateTaskItem(t)
+                    if (t.taskType === 'worship_setlist_ack') {
+                      setSetListAckTask(t)
+                    } else {
+                      setUpdateTaskItem(t)
+                    }
                   }
                 }}
                 getEventTitle={getEventTitle}
@@ -1202,7 +1224,11 @@ export default function Assignments() {
                     t.taskType !== 'kaizen_action' &&
                     t.taskType !== 'issue_corrective'
                   ) {
-                    setUpdateTaskItem(t)
+                    if (t.taskType === 'worship_setlist_ack') {
+                      setSetListAckTask(t)
+                    } else {
+                      setUpdateTaskItem(t)
+                    }
                   }
                 }}
                 getEventTitle={getEventTitle}
@@ -1226,7 +1252,11 @@ export default function Assignments() {
                     t.taskType !== 'kaizen_action' &&
                     t.taskType !== 'issue_corrective'
                   ) {
-                    setUpdateTaskItem(t)
+                    if (t.taskType === 'worship_setlist_ack') {
+                      setSetListAckTask(t)
+                    } else {
+                      setUpdateTaskItem(t)
+                    }
                   }
                 }}
                 getEventTitle={getEventTitle}
@@ -1319,6 +1349,17 @@ export default function Assignments() {
         uid={uid}
         onClose={() => setUpdateTaskItem(null)}
         onSave={handleUpdateTask}
+      />
+
+      {/* Set list acknowledgment modal */}
+      <SetListDetailModal
+        setList={
+          setListAckTask?.setListId != null
+            ? (setLists.find((sl) => sameId(sl.id, setListAckTask.setListId!)) ?? null)
+            : null
+        }
+        ackTask={setListAckTask}
+        onClose={() => setSetListAckTask(null)}
       />
     </YStack>
   )
