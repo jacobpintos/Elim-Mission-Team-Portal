@@ -1,5 +1,5 @@
 import { Tabs, Redirect, usePathname, useRouter } from 'expo-router'
-import { ScrollView, View, Pressable, Modal, TextInput, StyleSheet } from 'react-native'
+import { ScrollView, View, Pressable, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useState, useEffect } from 'react'
 import Animated, {
@@ -8,12 +8,17 @@ import Animated, {
   withTiming,
   runOnJS,
 } from 'react-native-reanimated'
+import { httpsCallable } from 'firebase/functions'
+import { functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { useUsersStore } from '@/stores/usersStore'
-import { visibleTabs } from '@/lib/roles'
+import { useSecurityStore } from '@/stores/securityStore'
+import { useUIStore } from '@/stores/uiStore'
+import { visibleTabs, isSecurity, isPublic } from '@/lib/roles'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AppLogo } from '@/components/ui/AppLogo'
+import { ReportFormModal } from '@/features/security/ReportFormModal'
 import type { Tab } from '@/lib/roles'
 
 const DRAWER_W = 260
@@ -76,91 +81,6 @@ function MenuIcon({ color }: { color: string }) {
   )
 }
 
-function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const colors = useThemeColors()
-  const [text, setText] = useState('')
-  const [submitted, setSubmitted] = useState(false)
-
-  const handleSubmit = () => {
-    if (!text.trim()) return
-    setSubmitted(true)
-    setTimeout(() => {
-      setSubmitted(false)
-      setText('')
-      onClose()
-    }, 1500)
-  }
-
-  return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <YStack
-          backgroundColor={colors.surface}
-          borderRadius="$4"
-          padding="$5"
-          gap="$3"
-          width="90%"
-          maxWidth={480}
-        >
-          <XStack justifyContent="space-between" alignItems="center">
-            <Text color={colors.text} fontSize="$5" fontWeight="700">
-              Report a Concern
-            </Text>
-            <Pressable onPress={onClose}>
-              <Text color={colors.textMuted} fontSize="$4">
-                ✕
-              </Text>
-            </Pressable>
-          </XStack>
-          <Text color={colors.textMuted} fontSize="$3">
-            Describe your concern and someone from the security team will follow up.
-          </Text>
-          {submitted ? (
-            <YStack alignItems="center" padding="$3">
-              <Text color={colors.primary} fontSize="$4" fontWeight="700">
-                Submitted ✓
-              </Text>
-            </YStack>
-          ) : (
-            <>
-              <TextInput
-                style={[
-                  styles.reportInput,
-                  {
-                    color: colors.text,
-                    borderColor: colors.border,
-                    backgroundColor: colors.background,
-                  },
-                ]}
-                value={text}
-                onChangeText={setText}
-                placeholder="Describe the concern…"
-                placeholderTextColor={colors.textMuted}
-                multiline
-                numberOfLines={4}
-              />
-              <Pressable onPress={handleSubmit} disabled={!text.trim()}>
-                <XStack
-                  backgroundColor={colors.primary}
-                  borderRadius="$2"
-                  paddingHorizontal="$4"
-                  paddingVertical="$2"
-                  justifyContent="center"
-                  opacity={text.trim() ? 1 : 0.5}
-                >
-                  <Text color="white" fontWeight="700" fontSize="$3">
-                    Submit Report
-                  </Text>
-                </XStack>
-              </Pressable>
-            </>
-          )}
-        </YStack>
-      </View>
-    </Modal>
-  )
-}
-
 export default function AppLayout() {
   const { profile, loading } = useAuthStore()
   const { theme } = useThemeStore()
@@ -169,7 +89,9 @@ export default function AppLayout() {
   const router = useRouter()
   const [reportOpen, setReportOpen] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
-  const { subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
+  const { subscribe: subUsers, unsubscribe: unsubUsers, users } = useUsersStore()
+  const { createReport } = useSecurityStore()
+  const toast = useUIStore((s) => s.toast)
 
   // Drawer + content animation (must be before early returns)
   const drawerX = useSharedValue(-DRAWER_W)
@@ -194,7 +116,44 @@ export default function AppLayout() {
   if (!profile) return <Redirect href="/(auth)/login" />
 
   const tabs = visibleTabs(profile)
-  const showReportButton = !tabs.includes('security')
+  const showReportButton = !isPublic(profile)
+
+  const securityUsers = users.filter((u) => isSecurity(u))
+
+  const handleReportSubmit = async (data: {
+    description: string
+    location: string
+    witnesses: string
+    photoFile: File | null
+  }) => {
+    try {
+      await createReport(
+        {
+          description: data.description,
+          location: data.location,
+          witnesses: data.witnesses,
+          reportedBy: String(profile?.uid ?? ''),
+          reporterName: profile?.displayName ?? 'Unknown',
+        },
+        data.photoFile
+      )
+      const sendNotif = httpsCallable(functions, 'sendNotification')
+      securityUsers.forEach((u) => {
+        sendNotif({
+          uid: String(u.uid),
+          type: 'announcement',
+          data: {
+            title: '🚨 Security Report',
+            body: `New incident at ${data.location}: ${data.description.slice(0, 80)}${data.description.length > 80 ? '…' : ''}`,
+          },
+        }).catch(() => {})
+      })
+      toast('Report submitted', 'success')
+      setReportOpen(false)
+    } catch {
+      toast('Failed to submit report', 'error')
+    }
+  }
 
   // Determine current screen title from pathname
   const firstSeg = pathname.split('/').filter(Boolean)[0] as Tab | undefined
@@ -424,24 +383,11 @@ export default function AppLayout() {
         <Pressable onPress={closeDrawer} style={[StyleSheet.absoluteFill, { zIndex: 10 }]} />
       ) : null}
 
-      <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} />
+      <ReportFormModal
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        onSubmit={handleReportSubmit}
+      />
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  reportInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 14,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-})
