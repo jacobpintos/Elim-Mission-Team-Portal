@@ -59,8 +59,8 @@ export const onPublicEventCreated = onDocumentCreated('events/{id}', async (even
   if (!data || !data.isPublic) return
 
   const isVirtual = !!data.isVirtual
-  const eventLat = data.lat as number | undefined
-  const eventLng = data.lng as number | undefined
+  const eventLat = (data._geocodeLat ?? data.lat) as number | undefined
+  const eventLng = (data._geocodeLng ?? data.lng) as number | undefined
 
   const snap = await admin.firestore()
     .collection('users')

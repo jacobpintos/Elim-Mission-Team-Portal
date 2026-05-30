@@ -1,13 +1,20 @@
+const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? ''
+
 export async function geocodeCity(
   city: string,
   state: string
 ): Promise<{ lat: number; lng: number } | null> {
-  const url = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&country=US&format=json&limit=1`
+  const query = encodeURIComponent(`${city}, ${state}`)
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?country=US&types=place&limit=1&access_token=${MAPBOX_TOKEN}`
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'mission-portal/2.0' } })
-    const data = (await res.json()) as { lat: string; lon: string }[]
-    if (!data.length) return null
-    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const data = (await res.json()) as {
+      features: { geometry: { coordinates: [number, number] } }[]
+    }
+    if (!data.features?.length) return null
+    const [lng, lat] = data.features[0].geometry.coordinates
+    return { lat, lng }
   } catch {
     return null
   }

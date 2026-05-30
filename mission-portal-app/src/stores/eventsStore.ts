@@ -9,6 +9,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { geocodeCity } from '@/lib/geocode'
 import { allInstances } from '@/lib/events'
 import { availKey } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
@@ -41,6 +42,13 @@ interface EventsStore {
     status: AvailResponse['status'] | null,
     note?: string
   ) => Promise<void>
+}
+
+async function resolveGeo(city?: string, state?: string) {
+  if (!city || !state) return {}
+  const coords = await geocodeCity(city, state)
+  if (!coords) return {}
+  return { lat: coords.lat, lng: coords.lng, _geocodeLat: coords.lat, _geocodeLng: coords.lng }
 }
 
 export const useEventsStore = create<EventsStore>((set, get) => ({
@@ -121,20 +129,23 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
 
   createEvent: async (data) => {
     const id = await nextId('nEv')
+    const geoFields = await resolveGeo(data.city, data.state)
     await setDoc(doc(db, 'events', String(id)), {
       ...data,
+      ...geoFields,
       id,
       _updatedAt: serverTimestamp(),
     })
   },
 
   updateEvent: async (id, patch) => {
-    // Optimistic update
     set((s) => ({
       templates: s.templates.map((t) => (sameId(t.id, id) ? { ...t, ...patch } : t)),
     }))
+    const geoFields = await resolveGeo(patch.city, patch.state)
     await updateDoc(doc(db, 'events', String(id)), {
       ...patch,
+      ...geoFields,
       _updatedAt: serverTimestamp(),
     })
   },

@@ -17,6 +17,9 @@ type FormData = {
   title: string
   date: string
   location: string
+  address: string
+  city: string
+  state: string
   startTime: string
   isRec: boolean
   recur: EventTemplate['recur']
@@ -37,6 +40,9 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
     title: event?.title ?? '',
     date: event?.date ?? '',
     location: event?.location ?? '',
+    address: event?.address ?? '',
+    city: event?.city ?? '',
+    state: event?.state ?? '',
     startTime: event?.startTime ?? '',
     isRec: event?.isRec ?? false,
     recur: event?.recur ?? 'weekly',
@@ -55,6 +61,10 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
   const handleSave = async () => {
     if (!form.title.trim()) {
       toast('Title is required', 'error')
+      return
+    }
+    if (!form.isVirtual && (!form.city.trim() || !form.state.trim())) {
+      toast('City and state are required for in-person events', 'error')
       return
     }
     setSaving(true)
@@ -116,17 +126,60 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
 
           <YStack gap="$1">
             <Text color={colors.text} fontSize="$3">
-              Location
+              Venue Name
             </Text>
             <Input
               value={form.location}
               onChangeText={field('location')}
-              placeholder="Venue name or address"
+              placeholder="First Baptist Church"
               backgroundColor={colors.surface}
               color={colors.text}
               borderColor={colors.border}
             />
           </YStack>
+
+          <YStack gap="$1">
+            <Text color={colors.text} fontSize="$3">
+              Street Address
+            </Text>
+            <Input
+              value={form.address}
+              onChangeText={field('address')}
+              placeholder="123 Main St"
+              backgroundColor={colors.surface}
+              color={colors.text}
+              borderColor={colors.border}
+            />
+          </YStack>
+
+          <XStack gap="$2">
+            <YStack flex={1} gap="$1">
+              <Text color={colors.text} fontSize="$3">
+                City {!form.isVirtual ? '*' : ''}
+              </Text>
+              <Input
+                value={form.city}
+                onChangeText={field('city')}
+                placeholder="Dallas"
+                backgroundColor={colors.surface}
+                color={colors.text}
+                borderColor={colors.border}
+              />
+            </YStack>
+            <YStack width={80} gap="$1">
+              <Text color={colors.text} fontSize="$3">
+                State {!form.isVirtual ? '*' : ''}
+              </Text>
+              <Input
+                value={form.state}
+                onChangeText={field('state')}
+                placeholder="TX"
+                backgroundColor={colors.surface}
+                color={colors.text}
+                borderColor={colors.border}
+              />
+            </YStack>
+          </XStack>
 
           <YStack gap="$1">
             <Text color={colors.text} fontSize="$3">

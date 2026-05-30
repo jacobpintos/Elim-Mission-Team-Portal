@@ -4,7 +4,7 @@ import { YStack, XStack, Text } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { FD } from '@/lib/format'
-import { openLocationInMaps } from '@/lib/location'
+import { openLocationInMaps, eventMapQuery } from '@/lib/location'
 import { downloadICS } from '@/lib/icsExport'
 import { availKey } from '@/lib/availability'
 import { AvailBadge } from '@/components/ui/AvailBadge'
@@ -90,14 +90,30 @@ export function EventDetailModal({
             </YStack>
 
             {/* Location */}
-            {event.location ? (
+            {event.location || event.address || event.city ? (
               <YStack gap="$1">
                 <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                   LOCATION
                 </Text>
-                <Pressable onPress={() => openLocationInMaps(event.location!)}>
-                  <Text color={colors.primary} textDecorationLine="underline">
+                {event.location ? (
+                  <Text color={colors.text} fontSize="$3">
                     {event.location}
+                  </Text>
+                ) : null}
+                {event.address ? (
+                  <Text color={colors.text} fontSize="$3">
+                    {event.address}
+                  </Text>
+                ) : null}
+                {event.city ? (
+                  <Text color={colors.text} fontSize="$3">
+                    {event.city}
+                    {event.state ? `, ${event.state}` : ''}
+                  </Text>
+                ) : null}
+                <Pressable onPress={() => openLocationInMaps(eventMapQuery(event))}>
+                  <Text color={colors.primary} textDecorationLine="underline" fontSize="$2">
+                    Get Directions →
                   </Text>
                 </Pressable>
               </YStack>
