@@ -34,6 +34,7 @@ export interface UserProfile {
     lat?: number
     lng?: number
   }
+  lastLoginAt?: number
   createdAt: unknown // Firestore Timestamp
   updatedAt: unknown
 }

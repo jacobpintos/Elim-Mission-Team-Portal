@@ -8,14 +8,20 @@ import {
   sendEmailVerification,
   type User as FBUser,
 } from 'firebase/auth'
-import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
-import { registerForPushNotifications, persistPushToken, clearPushToken, platformKey } from '@/lib/notifications'
+import {
+  registerForPushNotifications,
+  persistPushToken,
+  clearPushToken,
+  platformKey,
+} from '@/lib/notifications'
 import type { UserProfile } from '@/types/user'
 
 interface AuthStore {
   fbUser: FBUser | null
   profile: UserProfile | null
+  prevLoginAt: number | null
   loading: boolean
   _unsubAuth: (() => void) | null
   _unsubProfile: (() => void) | null
@@ -32,6 +38,7 @@ interface AuthStore {
 export const useAuthStore = create<AuthStore>((set, get) => ({
   fbUser: null,
   profile: null,
+  prevLoginAt: null,
   loading: true,
   _unsubAuth: null,
   _unsubProfile: null,
@@ -44,17 +51,20 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         return
       }
       set({ fbUser, loading: true })
+      let loginAtWritten = false
       const unsubProfile = onSnapshot(doc(db, 'users', fbUser.uid), (snap) => {
         const userProfile = (snap.data() as UserProfile) ?? null
-        set({ profile: userProfile, loading: false })
-        if (userProfile && !get().profile) {
-          // First profile load after sign-in — register push token
+        if (!loginAtWritten && userProfile) {
+          loginAtWritten = true
+          set({ prevLoginAt: userProfile.lastLoginAt ?? null })
+          updateDoc(doc(db, 'users', fbUser.uid), { lastLoginAt: Date.now() }).catch(() => {})
           registerForPushNotifications()
             .then((result) => {
               if (result) return persistPushToken(fbUser.uid, result.token, result.platform)
             })
             .catch(() => {})
         }
+        set({ profile: userProfile, loading: false })
       })
       set({ _unsubProfile: unsubProfile })
     })
