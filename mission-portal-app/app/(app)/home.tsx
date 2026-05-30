@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
-import { ScrollView, useWindowDimensions, Pressable } from 'react-native'
+import { useEffect, useMemo, useState } from 'react'
+import { ScrollView, useWindowDimensions, Pressable, Linking, Image } from 'react-native'
 import { YStack, XStack, Text, H3, Input } from 'tamagui'
-import { Stack } from 'expo-router'
+import { Stack, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useAnnounceStore } from '@/stores/announceStore'
+import { useConfigStore } from '@/stores/configStore'
+import { useMusicStore, youtubeThumbnail } from '@/stores/musicStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { EventCard } from '@/components/ui/EventCard'
 import { TaskCard } from '@/components/ui/TaskCard'
@@ -18,16 +20,26 @@ import { FD, timeOfDay } from '@/lib/format'
 import { haversineMiles, geocodeCity } from '@/lib/geocode'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { EventInstance } from '@/types/events'
+import type { EventInstance, PostPage } from '@/types/events'
+import type { MusicItem } from '@/stores/musicStore'
+
+function isItemNew(item: MusicItem): boolean {
+  if (!item.isNew) return false
+  if (item.newUntil) return new Date(item.newUntil) >= new Date()
+  return true
+}
 
 // Public Home sub-component
 function PubHomeContent() {
   const colors = useThemeColors()
-  const { profile } = useAuthStore()
+  const router = useRouter()
+  const { profile, prevLoginAt } = useAuthStore()
   const { instances } = useEventsStore()
   const { publicAnnouncements } = useAnnounceStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
   const { subscribe: subAnnounce, unsubscribe: unsubAnnounce } = useAnnounceStore()
+  const configStore = useConfigStore()
+  const musicStore = useMusicStore()
 
   const [city, setCity] = useState(profile?.locationPref?.city ?? '')
   const [stateVal, setStateVal] = useState(profile?.locationPref?.state ?? '')
@@ -38,21 +50,29 @@ function PubHomeContent() {
   useEffect(() => {
     subEvents()
     subAnnounce()
+    configStore.subscribe()
+    musicStore.load()
     return () => {
       unsubEvents()
       unsubAnnounce()
+      configStore.unsubscribe()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const uid = profile?.uid ?? ''
   const today = todayStr()
   const in60 = dateStr(60)
-  const allPublic = instances(today, in60).filter((ev) => ev.isPublic)
+  const in30 = dateStr(30)
 
+  const allPublic60 = instances(today, in60).filter((ev) => ev.isPublic)
+  const allPublic30 = instances(today, in30).filter((ev) => ev.isPublic)
+
+  // Events Near Me — virtual events always included, physical filtered by radius
   const nearMe = (() => {
     const locPref = profile?.locationPref
     if (!locPref?.lat || !locPref?.lng) return []
-    return allPublic.filter((ev) => {
+    return allPublic60.filter((ev) => {
       if (ev.isVirtual) return true
       if (!ev._geocodeLat || !ev._geocodeLng) return false
       return (
@@ -61,8 +81,28 @@ function PubHomeContent() {
     })
   })()
 
-  const publicAnns = publicAnnouncements()
-  const uid = profile?.uid ?? ''
+  const nearMeKeys = new Set(nearMe.map((ev) => ev.instanceKey))
+
+  // Upcoming Stops: public events not in nearMe, within 30 days
+  const upcomingStops = allPublic30.filter((ev) => !nearMeKeys.has(ev.instanceKey))
+
+  // Announcements: public, within last 30 days OR newer than previous login
+  const thirtyDaysAgo = useMemo(() => +new Date() - 30 * 24 * 60 * 60 * 1000, [])
+  const cutoff = prevLoginAt ?? thirtyDaysAgo
+  const unseenAnns = publicAnnouncements().filter(
+    (ann) => ann.ts >= thirtyDaysAgo || ann.ts > cutoff
+  )
+
+  // New & Featured Releases
+  const featuredItems = musicStore.items.filter((item) => isItemNew(item) || item.featured)
+
+  // New Posts
+  const pages: PostPage[] = configStore.postsConfig.pages
+  const hasUnseen = (page: PostPage): boolean => {
+    if (!uid) return false
+    const lastSeen = configStore.lastSeenPosts[`${uid}_${page.id}`] ?? 0
+    return page.posts.some((p) => p.ts > lastSeen)
+  }
 
   const handleSaveLocation = async () => {
     if (!uid) return
@@ -99,13 +139,48 @@ function PubHomeContent() {
           </Text>
         </YStack>
 
+        {/* Announcements */}
+        <YStack gap="$2">
+          <H3 color={colors.text}>Announcements</H3>
+          {unseenAnns.length === 0 ? (
+            <YStack
+              backgroundColor={colors.surface}
+              borderRadius="$3"
+              padding="$3"
+              borderWidth={1}
+              borderColor={colors.border}
+            >
+              <Text color={colors.textMuted}>No recent announcements.</Text>
+            </YStack>
+          ) : unseenAnns.length <= 3 ? (
+            unseenAnns.map((ann) => <AnnouncementCard key={String(ann.id)} announcement={ann} />)
+          ) : (
+            <Pressable onPress={() => router.push('/announce')}>
+              <AnnouncementCard announcement={unseenAnns[0]} />
+              <YStack
+                backgroundColor={colors.surface}
+                borderRadius="$3"
+                padding="$3"
+                borderWidth={1}
+                borderColor={colors.primary}
+                marginTop="$1"
+                alignItems="center"
+              >
+                <Text color={colors.primary} fontWeight="600">
+                  {unseenAnns.length - 1} more Unseen Announcements
+                </Text>
+              </YStack>
+            </Pressable>
+          )}
+        </YStack>
+
         {/* Events Near Me */}
         <YStack gap="$2">
           <XStack justifyContent="space-between" alignItems="center">
             <H3 color={colors.text}>Events Near Me</H3>
             <Pressable onPress={() => setShowLocForm((v) => !v)}>
               <Text color={colors.primary} fontSize="$3">
-                Set Location
+                {profile?.locationPref ? 'Edit Location' : 'Set Location'}
               </Text>
             </Pressable>
           </XStack>
@@ -212,27 +287,161 @@ function PubHomeContent() {
           )}
         </YStack>
 
-        {/* Public Announcements */}
+        {/* New & Featured Releases */}
         <YStack gap="$2">
-          <H3 color={colors.text}>Announcements</H3>
-          {publicAnns.length === 0 ? (
-            <Text color={colors.textMuted} fontSize="$3">
-              No announcements.
-            </Text>
+          <H3 color={colors.text}>New &amp; Featured Releases</H3>
+          {featuredItems.length === 0 ? (
+            <YStack
+              backgroundColor={colors.surface}
+              borderRadius="$3"
+              padding="$3"
+              borderWidth={1}
+              borderColor={colors.border}
+            >
+              <Text color={colors.textMuted}>No new or featured releases.</Text>
+            </YStack>
           ) : (
-            publicAnns.map((ann) => <AnnouncementCard key={String(ann.id)} announcement={ann} />)
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
+              <XStack gap="$3" paddingVertical="$1">
+                {featuredItems.map((item) => {
+                  const thumb = youtubeThumbnail(item.youtubeUrl)
+                  const itemIsNew = isItemNew(item)
+                  return (
+                    <Pressable key={item.id} onPress={() => Linking.openURL(item.youtubeUrl)}>
+                      <YStack width={140} gap="$1">
+                        <YStack borderRadius="$2" overflow="hidden" position="relative">
+                          {thumb ? (
+                            <Image
+                              source={{ uri: thumb }}
+                              style={{ width: 140, height: 90 }}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <YStack
+                              width={140}
+                              height={90}
+                              backgroundColor={colors.surface}
+                              borderWidth={1}
+                              borderColor={colors.border}
+                              alignItems="center"
+                              justifyContent="center"
+                            >
+                              <Text color={colors.textMuted} fontSize="$2">
+                                No preview
+                              </Text>
+                            </YStack>
+                          )}
+                          {itemIsNew ? (
+                            <YStack
+                              position="absolute"
+                              top={4}
+                              left={4}
+                              backgroundColor={colors.primary}
+                              borderRadius="$1"
+                              paddingHorizontal={6}
+                              paddingVertical={2}
+                            >
+                              <Text color="white" fontSize={10} fontWeight="700">
+                                NEW
+                              </Text>
+                            </YStack>
+                          ) : null}
+                          {item.featured ? (
+                            <YStack
+                              position="absolute"
+                              top={4}
+                              right={4}
+                              backgroundColor="#f39c12"
+                              borderRadius="$1"
+                              paddingHorizontal={6}
+                              paddingVertical={2}
+                            >
+                              <Text color="white" fontSize={10} fontWeight="700">
+                                ★
+                              </Text>
+                            </YStack>
+                          ) : null}
+                        </YStack>
+                        <Text color={colors.text} fontSize="$2" numberOfLines={2}>
+                          {item.title}
+                        </Text>
+                      </YStack>
+                    </Pressable>
+                  )
+                })}
+              </XStack>
+            </ScrollView>
           )}
         </YStack>
 
-        {/* All Public Events */}
+        {/* New Posts */}
         <YStack gap="$2">
-          <H3 color={colors.text}>All Public Events (60 Days)</H3>
-          {allPublic.length === 0 ? (
-            <Text color={colors.textMuted} fontSize="$3">
-              No upcoming public events.
-            </Text>
+          <H3 color={colors.text}>Posts</H3>
+          {pages.length === 0 ? (
+            <YStack
+              backgroundColor={colors.surface}
+              borderRadius="$3"
+              padding="$3"
+              borderWidth={1}
+              borderColor={colors.border}
+            >
+              <Text color={colors.textMuted}>No post directories configured.</Text>
+            </YStack>
           ) : (
-            allPublic.map((ev) => (
+            <XStack gap="$2" flexWrap="wrap">
+              {pages.map((page) => {
+                const unseen = hasUnseen(page)
+                return (
+                  <Pressable key={page.id} onPress={() => router.push('/posts')}>
+                    <YStack
+                      backgroundColor={colors.surface}
+                      borderRadius="$3"
+                      padding="$3"
+                      borderWidth={1}
+                      borderColor={unseen ? colors.primary : colors.border}
+                      minWidth={100}
+                      alignItems="center"
+                      gap="$1"
+                    >
+                      {unseen ? (
+                        <XStack gap="$1" alignItems="center">
+                          <YStack
+                            width={8}
+                            height={8}
+                            borderRadius={4}
+                            backgroundColor={colors.primary}
+                          />
+                          <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                            New Posts
+                          </Text>
+                        </XStack>
+                      ) : null}
+                      <Text color={colors.text} fontWeight="600">
+                        {page.label}
+                      </Text>
+                    </YStack>
+                  </Pressable>
+                )
+              })}
+            </XStack>
+          )}
+        </YStack>
+
+        {/* Upcoming Stops */}
+        <YStack gap="$2">
+          <H3 color={colors.text}>Upcoming Stops</H3>
+          {upcomingStops.length === 0 ? (
+            <YStack
+              backgroundColor={colors.surface}
+              borderRadius="$3"
+              padding="$3"
+              borderWidth={1}
+              borderColor={colors.border}
+            >
+              <Text color={colors.textMuted}>No upcoming stops in the next 30 days.</Text>
+            </YStack>
+          ) : (
+            upcomingStops.map((ev) => (
               <YStack
                 key={ev.instanceKey}
                 backgroundColor={colors.surface}
@@ -252,6 +461,13 @@ function PubHomeContent() {
                   <Text color={colors.textMuted} fontSize="$2">
                     {ev.location}
                   </Text>
+                ) : null}
+                {ev.isVirtual && ev.virtualLink ? (
+                  <Pressable onPress={() => Linking.openURL(ev.virtualLink!)}>
+                    <Text color="#8e44ad" fontSize="$2" textDecorationLine="underline">
+                      Join Here
+                    </Text>
+                  </Pressable>
                 ) : null}
               </YStack>
             ))
