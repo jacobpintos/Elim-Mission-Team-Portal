@@ -87,7 +87,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       uid: cred.user.uid,
       email: cred.user.email,
       displayName,
-      roles: ['unverified'],
+      roles: ['public'],
       onboardingComplete: false,
       notificationPrefs: defaultNotificationPrefs(),
       pushTokens: {},
