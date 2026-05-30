@@ -186,8 +186,12 @@ export default function AppLayout() {
   }
 
   // Block direct URL access to unauthorized routes (href:null only hides the tab, doesn't block navigation)
+  // 'admin/*' screens are owned by the 'rolehub' tab — allow them when rolehub is accessible
+  const SUB_ROUTE_OWNERS: Partial<Record<string, Tab>> = { admin: 'rolehub' }
   const pathSeg = pathname.split('/').filter(Boolean)[0] ?? ''
-  if (pathSeg && pathSeg !== 'profile' && !tabs.includes(pathSeg as Tab)) {
+  const owner = SUB_ROUTE_OWNERS[pathSeg]
+  const allowed = tabs.includes(pathSeg as Tab) || (!!owner && tabs.includes(owner))
+  if (pathSeg && pathSeg !== 'profile' && !allowed) {
     return <Redirect href={`/${tabs[0]}`} />
   }
 
