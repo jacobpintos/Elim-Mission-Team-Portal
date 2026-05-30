@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Pressable, TextInput, StyleSheet } from 'react-native'
+import { Pressable, TextInput, ScrollView, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -16,14 +16,137 @@ interface AvailQueueBannerProps {
   uid: string
 }
 
-export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
+// Inline RSVP form shared by both queue mode and pick mode
+function RsvpForm({
+  event,
+  uid,
+  queueCount,
+  onSaved,
+}: {
+  event: EventInstance
+  uid: string
+  queueCount: number
+  onSaved: () => void
+}) {
   const colors = useThemeColors()
-  const { templates, overrides, avail, setAvail } = useEventsStore()
+  const { avail, setAvail } = useEventsStore()
   const toast = useUIStore((s) => s.toast)
 
-  const [collapsed, setCollapsed] = useState(false)
+  const existing = avail[availKey(event)]?.[uid] ?? null
+  const [lastKey, setLastKey] = useState<string | undefined>(undefined)
+  const [status, setStatus] = useState<AvailResponse['status']>(existing?.status ?? 'yes')
+  const [note, setNote] = useState(existing?.note ?? '')
   const [saving, setSaving] = useState(false)
 
+  if (event.instanceKey !== lastKey) {
+    setLastKey(event.instanceKey)
+    const r = avail[availKey(event)]?.[uid] ?? null
+    setStatus(r?.status ?? 'yes')
+    setNote(r?.note ?? '')
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await setAvail(event, uid, status, note)
+      onSaved()
+    } catch {
+      toast('Failed to save RSVP', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <YStack padding="$3" gap="$3" borderTopWidth={1} borderTopColor={colors.border}>
+      <XStack justifyContent="space-between" alignItems="flex-start">
+        <YStack flex={1} gap="$0.5">
+          <Text color={colors.text} fontWeight="700" fontSize="$4">
+            {event.title}
+          </Text>
+          <Text color={colors.textMuted} fontSize="$2">
+            {FD(event.date, { weekday: true })}
+            {event.startTime ? ` · ${event.startTime}` : ''}
+            {event.location ? ` · ${event.location}` : ''}
+          </Text>
+        </YStack>
+        {queueCount > 1 ? (
+          <XStack
+            backgroundColor={colors.primary + '18'}
+            borderRadius="$4"
+            paddingHorizontal="$2"
+            paddingVertical={2}
+          >
+            <Text color={colors.primary} fontSize={11} fontWeight="600">
+              1 of {queueCount}
+            </Text>
+          </XStack>
+        ) : null}
+      </XStack>
+
+      <XStack gap="$2" flexWrap="wrap">
+        {STATUSES.map((s) => (
+          <Pressable key={s} onPress={() => setStatus(s)}>
+            <XStack
+              backgroundColor={status === s ? AVAIL_COLORS[s] : 'transparent'}
+              borderWidth={2}
+              borderColor={AVAIL_COLORS[s]}
+              borderRadius="$2"
+              paddingHorizontal="$3"
+              paddingVertical="$1"
+            >
+              <Text color={status === s ? 'white' : AVAIL_COLORS[s]} fontWeight="600" fontSize="$2">
+                {AVAIL_LABELS[s]}
+              </Text>
+            </XStack>
+          </Pressable>
+        ))}
+      </XStack>
+
+      <TextInput
+        style={[
+          styles.noteInput,
+          {
+            color: colors.text,
+            borderColor: colors.border,
+            backgroundColor: colors.background,
+          },
+        ]}
+        value={note}
+        onChangeText={setNote}
+        placeholder="Note (optional)"
+        placeholderTextColor={colors.textMuted}
+      />
+
+      <XStack justifyContent="flex-end">
+        <Pressable onPress={handleSave} disabled={saving}>
+          <XStack
+            backgroundColor={AVAIL_COLORS[status]}
+            borderRadius="$2"
+            paddingHorizontal="$4"
+            paddingVertical="$2"
+            opacity={saving ? 0.6 : 1}
+          >
+            <Text color="white" fontWeight="700" fontSize="$3">
+              {saving ? 'Saving…' : queueCount > 1 ? 'Save & Next' : 'Save'}
+            </Text>
+          </XStack>
+        </Pressable>
+      </XStack>
+    </YStack>
+  )
+}
+
+export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
+  const colors = useThemeColors()
+  const { templates, overrides, avail } = useEventsStore()
+
+  const [collapsed, setCollapsed] = useState(false)
+  // pick mode: shown when queue is empty and user wants to edit an existing response
+  const [pickMode, setPickMode] = useState(false)
+  const [selectedEvent, setSelectedEvent] = useState<EventInstance | null>(null)
+
+  // Events with missing/TBD responses (the queue)
   const queue: EventInstance[] = useMemo(() => {
     const today = todayStr()
     const to = dateStr(60)
@@ -34,32 +157,26 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
     })
   }, [templates, overrides, avail, uid])
 
-  const current = queue[0] ?? null
+  // All upcoming assigned events (for the picker)
+  const allAssigned: EventInstance[] = useMemo(() => {
+    const today = todayStr()
+    const to = dateStr(60)
+    return allInstances(templates, overrides, today, to).filter((ev) =>
+      ev.users?.some((x) => sameId(x, uid))
+    )
+  }, [templates, overrides, uid])
 
-  // Derive initial values from existing response; reset when current event changes
-  const existingResponse = current ? (avail[availKey(current)]?.[uid] ?? null) : null
-  const [lastKey, setLastKey] = useState<string | undefined>(undefined)
-  const [status, setStatus] = useState<AvailResponse['status']>(existingResponse?.status ?? 'yes')
-  const [note, setNote] = useState(existingResponse?.note ?? '')
+  const hasQueue = queue.length > 0
+  const accentColor = hasQueue ? '#f39c12' : '#27ae60'
 
-  if (current?.instanceKey !== lastKey) {
-    setLastKey(current?.instanceKey)
-    setStatus(existingResponse?.status ?? 'yes')
-    setNote(existingResponse?.note ?? '')
-  }
-
-  if (queue.length === 0) return null
-
-  const handleSave = async () => {
-    if (!current) return
-    setSaving(true)
-    try {
-      await setAvail(current, uid, status, note)
-      // queue auto-updates via store; no manual advance needed
-    } catch {
-      toast('Failed to save RSVP', 'error')
-    } finally {
-      setSaving(false)
+  // When queue drains to zero while in collapsed state, reset collapsed
+  const [lastHadQueue, setLastHadQueue] = useState(hasQueue)
+  if (hasQueue !== lastHadQueue) {
+    setLastHadQueue(hasQueue)
+    if (!hasQueue) {
+      setCollapsed(false)
+      setPickMode(false)
+      setSelectedEvent(null)
     }
   }
 
@@ -69,112 +186,142 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
       borderBottomColor={colors.border}
       backgroundColor={colors.surface}
     >
-      {/* Header row */}
-      <Pressable onPress={() => setCollapsed((v) => !v)}>
+      {/* Header row — always visible */}
+      <Pressable
+        onPress={() => {
+          if (hasQueue) {
+            setCollapsed((v) => !v)
+          } else {
+            setPickMode((v) => !v)
+            setSelectedEvent(null)
+          }
+        }}
+      >
         <XStack
           paddingHorizontal="$3"
           paddingVertical="$2"
           alignItems="center"
           justifyContent="space-between"
           borderLeftWidth={3}
-          borderLeftColor="#f39c12"
+          borderLeftColor={accentColor}
         >
           <XStack gap="$2" alignItems="center">
-            <Text fontSize={14}>📋</Text>
+            <Text fontSize={14}>{hasQueue ? '📋' : '✓'}</Text>
             <Text color={colors.text} fontWeight="700" fontSize="$3">
-              {queue.length} event{queue.length !== 1 ? 's' : ''} need your RSVP
+              {hasQueue
+                ? `${queue.length} event${queue.length !== 1 ? 's' : ''} need your RSVP`
+                : 'All RSVPs up to date'}
             </Text>
           </XStack>
           <Text color={colors.textMuted} fontSize="$3">
-            {collapsed ? '▼' : '▲'}
+            {hasQueue ? (collapsed ? '▼' : '▲') : pickMode ? '▲' : 'Update availability ›'}
           </Text>
         </XStack>
       </Pressable>
 
-      {!collapsed && current ? (
-        <YStack padding="$3" gap="$3" borderTopWidth={1} borderTopColor={colors.border}>
-          {/* Event info */}
-          <XStack justifyContent="space-between" alignItems="flex-start">
-            <YStack flex={1} gap="$0.5">
-              <Text color={colors.text} fontWeight="700" fontSize="$4">
-                {current.title}
-              </Text>
-              <Text color={colors.textMuted} fontSize="$2">
-                {FD(current.date, { weekday: true })}
-                {current.startTime ? ` · ${current.startTime}` : ''}
-                {current.location ? ` · ${current.location}` : ''}
-              </Text>
-            </YStack>
-            {queue.length > 1 ? (
-              <XStack
-                backgroundColor={colors.primary + '18'}
-                borderRadius="$4"
-                paddingHorizontal="$2"
-                paddingVertical={2}
-              >
-                <Text color={colors.primary} fontSize={11} fontWeight="600">
-                  1 of {queue.length}
-                </Text>
-              </XStack>
-            ) : null}
-          </XStack>
+      {/* Queue mode: show first pending event */}
+      {hasQueue && !collapsed && queue[0] ? (
+        <RsvpForm
+          event={queue[0]}
+          uid={uid}
+          queueCount={queue.length}
+          onSaved={() => {
+            /* queue auto-updates; nothing to do */
+          }}
+        />
+      ) : null}
 
-          {/* Response buttons */}
-          <XStack gap="$2" flexWrap="wrap">
-            {STATUSES.map((s) => (
-              <Pressable key={s} onPress={() => setStatus(s)}>
+      {/* All-clear mode: event picker */}
+      {!hasQueue && pickMode ? (
+        <YStack borderTopWidth={1} borderTopColor={colors.border}>
+          {selectedEvent ? (
+            <>
+              <Pressable onPress={() => setSelectedEvent(null)}>
                 <XStack
-                  backgroundColor={status === s ? AVAIL_COLORS[s] : 'transparent'}
-                  borderWidth={2}
-                  borderColor={AVAIL_COLORS[s]}
-                  borderRadius="$2"
                   paddingHorizontal="$3"
-                  paddingVertical="$1"
+                  paddingVertical="$2"
+                  gap="$2"
+                  alignItems="center"
+                  borderBottomWidth={1}
+                  borderBottomColor={colors.border}
                 >
-                  <Text
-                    color={status === s ? 'white' : AVAIL_COLORS[s]}
-                    fontWeight="600"
-                    fontSize="$2"
-                  >
-                    {AVAIL_LABELS[s]}
+                  <Text color={colors.primary} fontSize="$3">
+                    ‹ Back
                   </Text>
                 </XStack>
               </Pressable>
-            ))}
-          </XStack>
-
-          {/* Note input */}
-          <TextInput
-            style={[
-              styles.noteInput,
-              {
-                color: colors.text,
-                borderColor: colors.border,
-                backgroundColor: colors.background,
-              },
-            ]}
-            value={note}
-            onChangeText={setNote}
-            placeholder="Note (optional)"
-            placeholderTextColor={colors.textMuted}
-          />
-
-          {/* Save button */}
-          <XStack justifyContent="flex-end">
-            <Pressable onPress={handleSave} disabled={saving}>
-              <XStack
-                backgroundColor={AVAIL_COLORS[status]}
-                borderRadius="$2"
-                paddingHorizontal="$4"
-                paddingVertical="$2"
-                opacity={saving ? 0.6 : 1}
-              >
-                <Text color="white" fontWeight="700" fontSize="$3">
-                  {saving ? 'Saving…' : queue.length > 1 ? 'Save & Next' : 'Save'}
-                </Text>
-              </XStack>
-            </Pressable>
-          </XStack>
+              <RsvpForm
+                event={selectedEvent}
+                uid={uid}
+                queueCount={0}
+                onSaved={() => setSelectedEvent(null)}
+              />
+            </>
+          ) : (
+            <ScrollView style={{ maxHeight: 260 }}>
+              <YStack>
+                {allAssigned.length === 0 ? (
+                  <YStack alignItems="center" padding="$4">
+                    <Text color={colors.textMuted} fontSize="$3">
+                      No upcoming assigned events.
+                    </Text>
+                  </YStack>
+                ) : (
+                  allAssigned.map((ev) => {
+                    const r = avail[availKey(ev)]?.[uid] ?? null
+                    return (
+                      <Pressable key={ev.instanceKey} onPress={() => setSelectedEvent(ev)}>
+                        <XStack
+                          paddingHorizontal="$3"
+                          paddingVertical="$3"
+                          gap="$3"
+                          alignItems="center"
+                          borderBottomWidth={1}
+                          borderBottomColor={colors.border}
+                        >
+                          <YStack flex={1} gap="$0.5">
+                            <Text color={colors.text} fontWeight="600" fontSize="$3">
+                              {ev.title}
+                            </Text>
+                            <Text color={colors.textMuted} fontSize="$2">
+                              {FD(ev.date, { weekday: true })}
+                              {ev.startTime ? ` · ${ev.startTime}` : ''}
+                            </Text>
+                          </YStack>
+                          {r ? (
+                            <XStack
+                              backgroundColor={AVAIL_COLORS[r.status] + '22'}
+                              borderRadius="$4"
+                              paddingHorizontal="$2"
+                              paddingVertical={2}
+                            >
+                              <Text color={AVAIL_COLORS[r.status]} fontSize={11} fontWeight="600">
+                                {AVAIL_LABELS[r.status]}
+                              </Text>
+                            </XStack>
+                          ) : (
+                            <XStack
+                              backgroundColor="#aaa2"
+                              borderRadius="$4"
+                              paddingHorizontal="$2"
+                              paddingVertical={2}
+                            >
+                              <Text color="#aaa" fontSize={11} fontWeight="600">
+                                No response
+                              </Text>
+                            </XStack>
+                          )}
+                          <Text color={colors.textMuted} fontSize="$3">
+                            ›
+                          </Text>
+                        </XStack>
+                      </Pressable>
+                    )
+                  })
+                )}
+              </YStack>
+            </ScrollView>
+          )}
         </YStack>
       ) : null}
     </YStack>
