@@ -133,6 +133,13 @@ export default function AppLayout() {
   if (!profile) return <Redirect href="/(auth)/login" />
 
   const tabs = visibleTabs(profile)
+
+  // Block direct URL access to unauthorized routes (href:null only hides the tab, doesn't block navigation)
+  const pathSeg = pathname.split('/').filter(Boolean)[0] ?? ''
+  if (pathSeg && pathSeg !== 'profile' && !tabs.includes(pathSeg as Tab)) {
+    return <Redirect href={`/${tabs[0] ?? 'home'}`} />
+  }
+
   const showReportButton = !isPublic(profile) || hasPublicEventToday
 
   const securityUsers = users.filter((u) => isSecurity(u))
