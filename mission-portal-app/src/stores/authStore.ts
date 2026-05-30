@@ -94,10 +94,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
-    await sendEmailVerification(cred.user, {
+    // Fire-and-forget — resend button on verify-email screen handles retries
+    sendEmailVerification(cred.user, {
       url: process.env.EXPO_PUBLIC_APP_URL ?? 'https://mission-team-portal.web.app',
       handleCodeInApp: false,
-    })
+    }).catch(() => {})
   },
 
   signOutNow: async () => {
