@@ -373,6 +373,7 @@ export default function AppLayout() {
             <Tabs.Screen name="posts" options={{ href: null }} />
             <Tabs.Screen name="admin/index" options={{ href: null }} />
             <Tabs.Screen name="admin/users" options={{ href: null }} />
+            <Tabs.Screen name="admin/avail" options={{ href: null }} />
             <Tabs.Screen name="admin/groups" options={{ href: null }} />
             <Tabs.Screen name="admin/teams" options={{ href: null }} />
             <Tabs.Screen name="admin/templates" options={{ href: null }} />

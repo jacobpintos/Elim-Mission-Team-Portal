@@ -10,7 +10,8 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { EventDetailModal } from '@/features/events/EventDetailModal'
 import { AvailModal } from '@/features/events/AvailModal'
 import { EventFormModal } from '@/features/events/EventFormModal'
-import { isAdmin } from '@/lib/roles'
+import { AvailQueueBanner } from '@/features/events/AvailQueueBanner'
+import { isAdmin, isPublic } from '@/lib/roles'
 import { FD } from '@/lib/format'
 import type { EventInstance } from '@/types/events'
 
@@ -41,8 +42,9 @@ function monthRange(y: number, m: number) {
 export default function EventsScreen() {
   const colors = useThemeColors()
   const { profile } = useAuthStore()
-  const uid = profile?.uid ?? ''
+  const uid = String(profile?.uid ?? '')
   const admin = isAdmin(profile)
+  const publicUser = isPublic(profile)
 
   const { instances, templates } = useEventsStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
@@ -181,6 +183,8 @@ export default function EventsScreen() {
           </Pressable>
         ) : null}
       </XStack>
+
+      {!publicUser ? <AvailQueueBanner uid={uid} /> : null}
 
       <ScrollView style={{ flex: 1 }}>
         {view === 'calendar' ? (
