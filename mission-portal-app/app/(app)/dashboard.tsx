@@ -17,6 +17,7 @@ import { todayStr, dateStr } from '@/lib/events'
 import { timeOfDay } from '@/lib/format'
 import { sameId } from '@/lib/ids'
 import { isOverdue } from '@/lib/availability'
+import { isAdmin } from '@/lib/roles'
 import { usePWAInstallPrompt } from '@/lib/pwaInstall'
 import type { EventInstance } from '@/types/events'
 
@@ -39,6 +40,7 @@ export default function Dashboard() {
   const { canInstall, install } = usePWAInstallPrompt()
 
   const uid = profile?.uid ?? ''
+  const admin = isAdmin(profile)
 
   useEffect(() => {
     subEvents()
@@ -55,9 +57,11 @@ export default function Dashboard() {
   const today = todayStr()
   const in60 = dateStr(60)
 
-  // Upcoming events (60 days) — dedupe by templateId
+  // Upcoming events (60 days) — visibility-filtered, dedupe by templateId
   const upcoming60 = (() => {
-    const all = instances(today, in60)
+    const all = instances(today, in60).filter(
+      (ev) => ev.isPublic || admin || ev.users?.some((x) => sameId(x, uid))
+    )
     const seen = new Set<string>()
     return all.filter((ev) => {
       const key = String(ev.templateId)
@@ -88,8 +92,7 @@ export default function Dashboard() {
   const getEventHealthStatus = (ev: EventInstance): 'on-track' | 'behind' | 'no-tasks' => {
     const evTasks = tasks.filter(
       (t) =>
-        sameId(t.evId ?? t.evTemplateId, ev.templateId) ||
-        sameId(t.evTemplateId, ev.taskTemplateId)
+        sameId(t.evId ?? t.evTemplateId, ev.templateId) || sameId(t.evTemplateId, ev.taskTemplateId)
     )
     if (evTasks.length === 0) return 'no-tasks'
     const hasProblem = evTasks.some((t) => t.status === 'behind' || isOverdue(t))
@@ -99,8 +102,7 @@ export default function Dashboard() {
   const getKanbanTasks = (ev: EventInstance) =>
     tasks.filter(
       (t) =>
-        sameId(t.evId ?? t.evTemplateId, ev.templateId) ||
-        sameId(t.evTemplateId, ev.taskTemplateId)
+        sameId(t.evId ?? t.evTemplateId, ev.templateId) || sameId(t.evTemplateId, ev.taskTemplateId)
     )
 
   return (
@@ -163,8 +165,8 @@ export default function Dashboard() {
                   myAvail={myAvail(ev)}
                   onDetail={() => setDetailEvent(ev)}
                   onAvail={() => setAvailEvent(ev)}
-                  healthStatus={getEventHealthStatus(ev)}
-                  onShowTasks={() => setKanbanEvent(ev)}
+                  healthStatus={ev.taskTemplateId ? getEventHealthStatus(ev) : undefined}
+                  onShowTasks={ev.taskTemplateId ? () => setKanbanEvent(ev) : undefined}
                 />
               ))
             )}

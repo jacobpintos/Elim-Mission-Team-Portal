@@ -48,7 +48,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     ) {
       router.replace('/(onboarding)')
     } else if (fbUser && fbUser.emailVerified && profile?.onboardingComplete && inOnboarding) {
-      router.replace('/')
+      router.replace('/(app)/home')
     }
   }, [fbUser, profile, loading, segments, router])
 
@@ -130,9 +130,15 @@ export default function RootLayout() {
 
 function ErrorFallback() {
   return (
-    <GestureHandlerRootView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>Something went wrong</Text>
-      <Text style={{ color: '#666', textAlign: 'center' }}>Please reload the page to try again.</Text>
+    <GestureHandlerRootView
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}
+    >
+      <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>
+        Something went wrong
+      </Text>
+      <Text style={{ color: '#666', textAlign: 'center' }}>
+        Please reload the page to try again.
+      </Text>
     </GestureHandlerRootView>
   )
 }

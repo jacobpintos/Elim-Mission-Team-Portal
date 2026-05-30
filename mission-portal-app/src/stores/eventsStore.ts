@@ -191,9 +191,10 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
         [key]: { ...(s.avail[key] ?? {}), [uid]: response },
       },
     }))
-    await updateDoc(doc(db, 'avail', key), {
-      [`responses.${uid}`]: response,
-      updatedAt: serverTimestamp(),
-    })
+    await setDoc(
+      doc(db, 'avail', key),
+      { [`responses.${uid}`]: response, updatedAt: serverTimestamp() },
+      { merge: true }
+    )
   },
 }))

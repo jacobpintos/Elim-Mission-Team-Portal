@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useRouter } from 'expo-router'
 import { YStack, XStack, H1, H2, Paragraph, Button, Switch, Text, Label } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { doc, setDoc } from 'firebase/firestore'
@@ -11,7 +10,6 @@ import type { NotificationPrefs } from '@/types/user'
 const STEP_COUNT = 3
 
 export default function OnboardingScreen() {
-  const router = useRouter()
   const { fbUser, profile } = useAuthStore()
   const { toast } = useUIStore()
   const [step, setStep] = useState(0)
@@ -40,7 +38,6 @@ export default function OnboardingScreen() {
         },
         { merge: true }
       )
-      router.replace('/')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to complete onboarding'
       toast(message, 'error')

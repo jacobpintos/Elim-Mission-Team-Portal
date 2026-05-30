@@ -82,7 +82,9 @@ export default function EventsScreen() {
   }, [])
 
   const { from, to } = monthRange(calY, calM)
-  const monthEvents = instances(from, to)
+  const monthEvents = instances(from, to).filter(
+    (ev) => ev.isPublic || admin || ev.users?.some((x) => sameId(x, uid))
+  )
 
   // Group events by date string
   const byDate = useMemo(() => {
