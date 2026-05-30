@@ -1,4 +1,4 @@
-import { Tabs, Redirect } from 'expo-router'
+import { Tabs, Redirect, usePathname } from 'expo-router'
 import { Platform, View, Pressable, Modal, TextInput, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useState } from 'react'
@@ -27,6 +27,7 @@ const TAB_LABELS: Record<Tab, string> = {
   story: 'Our Story',
   connect: 'Connect',
   rolehub: 'Role-Specific',
+  settings: 'Settings',
 }
 
 function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -57,9 +58,13 @@ function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => vo
           maxWidth={480}
         >
           <XStack justifyContent="space-between" alignItems="center">
-            <Text color={colors.text} fontSize="$5" fontWeight="700">Report a Concern</Text>
+            <Text color={colors.text} fontSize="$5" fontWeight="700">
+              Report a Concern
+            </Text>
             <Pressable onPress={onClose}>
-              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
             </Pressable>
           </XStack>
           <Text color={colors.textMuted} fontSize="$3">
@@ -67,14 +72,20 @@ function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => vo
           </Text>
           {submitted ? (
             <YStack alignItems="center" padding="$3">
-              <Text color={colors.primary} fontSize="$4" fontWeight="700">Submitted ✓</Text>
+              <Text color={colors.primary} fontSize="$4" fontWeight="700">
+                Submitted ✓
+              </Text>
             </YStack>
           ) : (
             <>
               <TextInput
                 style={[
                   styles.reportInput,
-                  { color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
                 ]}
                 value={text}
                 onChangeText={setText}
@@ -92,7 +103,9 @@ function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => vo
                   justifyContent="center"
                   opacity={text.trim() ? 1 : 0.5}
                 >
-                  <Text color="white" fontWeight="700" fontSize="$3">Submit Report</Text>
+                  <Text color="white" fontWeight="700" fontSize="$3">
+                    Submit Report
+                  </Text>
                 </XStack>
               </Pressable>
             </>
@@ -106,13 +119,19 @@ function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => vo
 export default function AppLayout() {
   const { profile, loading } = useAuthStore()
   const { theme, mode } = useThemeStore()
-  const colors = useThemeColors()
   const [reportOpen, setReportOpen] = useState(false)
+  const pathname = usePathname()
 
   if (loading) return null
   if (!profile) return <Redirect href="/(auth)/login" />
 
   const tabs = visibleTabs(profile)
+
+  // Block direct URL access to routes the user's role can't see
+  const pathSeg = pathname.split('/').filter(Boolean)[0] ?? ''
+  if (pathSeg && pathSeg !== 'profile' && !tabs.includes(pathSeg as Tab)) {
+    return <Redirect href={`/${tabs[0] ?? 'home'}`} />
+  }
   const isWeb = Platform.OS === 'web'
   const showReportButton = !tabs.includes('security')
 
@@ -160,7 +179,6 @@ export default function AppLayout() {
         <Tabs.Screen name="pages/our-story" options={{ href: null }} />
         <Tabs.Screen name="pages/connect" options={{ href: null }} />
         <Tabs.Screen name="pages/giving" options={{ href: null }} />
-        <Tabs.Screen name="posts" options={{ href: null }} />
         <Tabs.Screen name="admin/index" options={{ href: null }} />
         <Tabs.Screen name="admin/users" options={{ href: null }} />
         <Tabs.Screen name="admin/groups" options={{ href: null }} />
@@ -188,7 +206,9 @@ export default function AppLayout() {
           onPress={() => setReportOpen(true)}
           style={[styles.reportFab, { backgroundColor: theme.primary }]}
         >
-          <Text color="white" fontSize="$2" fontWeight="700">⚑ Report</Text>
+          <Text color="white" fontSize="$2" fontWeight="700">
+            ⚑ Report
+          </Text>
         </Pressable>
       ) : null}
 
