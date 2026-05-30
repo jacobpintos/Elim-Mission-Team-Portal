@@ -30,6 +30,9 @@ export default function OnboardingScreen() {
         doc(db, 'users', fbUser.uid),
         {
           onboardingComplete: true,
+          // Promote from unverified → public so the user can access the app.
+          // Admins can later assign a team role which supersedes this.
+          roles: ['public'],
           notificationPrefs: {
             ...(profile?.notificationPrefs ?? {}),
             weeklyDigest: notifPrefs.weeklyDigest,

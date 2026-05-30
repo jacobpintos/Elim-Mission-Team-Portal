@@ -17,9 +17,14 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isSelf(uid) || isAdmin();
       allow create: if isSelf(uid);
-      allow update: if (isSelf(uid) &&
-        !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['roles', 'createdAt'])) || isAdmin();
+      allow update: if isAdmin()
+        || (isSelf(uid) &&
+            !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['roles', 'createdAt']))
+        || (isSelf(uid) &&
+            resource.data.roles.hasOnly(['unverified']) &&
+            request.resource.data.roles.hasOnly(['public']) &&
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt']));
       allow delete: if isAdmin();
     }
 
