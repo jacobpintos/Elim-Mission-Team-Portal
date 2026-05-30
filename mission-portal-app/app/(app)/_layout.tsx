@@ -85,7 +85,7 @@ function MenuIcon({ color }: { color: string }) {
 }
 
 export default function AppLayout() {
-  const { profile, loading } = useAuthStore()
+  const { profile, loading, signOutNow } = useAuthStore()
   const { theme } = useThemeStore()
   const colors = useThemeColors()
   const pathname = usePathname()
@@ -134,10 +134,61 @@ export default function AppLayout() {
 
   const tabs = visibleTabs(profile)
 
+  // Unverified users who completed onboarding are awaiting role assignment — show holding screen
+  if (tabs.length === 0) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 32,
+        }}
+      >
+        <Text
+          style={{
+            color: colors.text,
+            fontSize: 20,
+            fontWeight: '700',
+            marginBottom: 12,
+            textAlign: 'center',
+          }}
+        >
+          Account Pending
+        </Text>
+        <Text
+          style={{
+            color: colors.textMuted,
+            fontSize: 14,
+            textAlign: 'center',
+            lineHeight: 22,
+            marginBottom: 32,
+          }}
+        >
+          Your account is awaiting role assignment by an admin.{'\n'}You&apos;ll be notified once
+          access is granted.
+        </Text>
+        <Pressable
+          onPress={() => signOutNow()}
+          style={{
+            paddingVertical: 10,
+            paddingHorizontal: 24,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Text style={{ color: colors.primary, fontWeight: '600' }}>Sign out</Text>
+        </Pressable>
+      </View>
+    )
+  }
+
   // Block direct URL access to unauthorized routes (href:null only hides the tab, doesn't block navigation)
   const pathSeg = pathname.split('/').filter(Boolean)[0] ?? ''
   if (pathSeg && pathSeg !== 'profile' && !tabs.includes(pathSeg as Tab)) {
-    return <Redirect href={`/${tabs[0] ?? 'home'}`} />
+    return <Redirect href={`/${tabs[0]}`} />
   }
 
   const showReportButton = !isPublic(profile) || hasPublicEventToday
