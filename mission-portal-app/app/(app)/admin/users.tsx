@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Alert } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
-import { YStack, XStack, Text, Button, Input, Spinner } from 'tamagui'
+import { YStack, XStack, Text, Button, Input } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useUsersStore } from '@/stores/usersStore'
 import { useAuthStore } from '@/stores/authStore'
-import { isAdmin } from '@/lib/roles'
 import { UserCard } from '@/features/admin/UserCard'
 import { CreateUserSheet } from '@/features/admin/CreateUserSheet'
 import { EditUserSheet } from '@/features/admin/EditUserSheet'
@@ -19,6 +18,8 @@ import {
   writeBatch,
   collection,
   getDocs,
+  query,
+  where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { UserProfile } from '@/types/user'
@@ -37,6 +38,7 @@ export default function AdminUsers() {
   useEffect(() => {
     subscribe()
     return () => unsubscribe()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export default function AdminUsers() {
     return () => unsub()
   }, [])
 
-const filtered = search.trim()
+  const filtered = search.trim()
     ? users.filter(
         (u) =>
           u.displayName.toLowerCase().includes(search.toLowerCase()) ||
@@ -160,6 +162,56 @@ const filtered = search.trim()
     }
   }
 
+  const handleMigrateUnverified = () => {
+    Alert.alert(
+      'Migrate Unverified Users',
+      'This will change all users with role "unverified" to "public". Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Migrate',
+          onPress: async () => {
+            try {
+              const snap = await getDocs(
+                query(collection(db, 'users'), where('roles', 'array-contains', 'unverified'))
+              )
+              if (snap.empty) {
+                toast('No unverified users found', 'info')
+                return
+              }
+              const LIMIT = 500
+              let batch = writeBatch(db)
+              let count = 0
+              let total = 0
+              for (const docSnap of snap.docs) {
+                const roles: string[] = docSnap.data().roles ?? []
+                const next = roles.filter((r) => r !== 'unverified')
+                if (!next.includes('public')) next.push('public')
+                batch.update(docSnap.ref, { roles: next })
+                count++
+                total++
+                if (count >= LIMIT) {
+                  await batch.commit()
+                  batch = writeBatch(db)
+                  count = 0
+                }
+              }
+              if (count > 0) await batch.commit()
+              await audit(
+                'user.bulkRoleUpdate',
+                `Migrated ${total} unverified users to public`,
+                profile?.displayName ?? ''
+              )
+              toast(`Migrated ${total} users to public`, 'success')
+            } catch {
+              toast('Migration failed', 'error')
+            }
+          },
+        },
+      ]
+    )
+  }
+
   const handleCancelDeletion = async (deletion: PendingDeletion) => {
     Alert.alert('Cancel Deletion Request', `Cancel deletion request for "${deletion.name}"?`, [
       { text: 'No', style: 'cancel' },
@@ -188,9 +240,14 @@ const filtered = search.trim()
         <Text fontSize="$6" fontWeight="700">
           Users ({users.length})
         </Text>
-        <Button size="$3" onPress={() => setShowCreate(true)} theme="active">
-          + Add User
-        </Button>
+        <XStack gap="$2">
+          <Button size="$3" onPress={handleMigrateUnverified} theme="yellow">
+            Fix Unverified
+          </Button>
+          <Button size="$3" onPress={() => setShowCreate(true)} theme="active">
+            + Add User
+          </Button>
+        </XStack>
       </XStack>
 
       <Input
