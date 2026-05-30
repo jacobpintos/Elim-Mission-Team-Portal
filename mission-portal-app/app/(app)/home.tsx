@@ -14,7 +14,7 @@ import { TaskCard } from '@/components/ui/TaskCard'
 import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
 import { EventDetailModal } from '@/features/events/EventDetailModal'
 import { AvailModal } from '@/features/events/AvailModal'
-import { isPublic } from '@/lib/roles'
+import { isAdmin, isSecurity, isMerch, isWorship } from '@/lib/roles'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { todayStr, dateStr } from '@/lib/events'
 import { FD, timeOfDay } from '@/lib/format'
@@ -683,7 +683,14 @@ function TeamHomeContent() {
 export default function Home() {
   const { profile } = useAuthStore()
 
-  if (isPublic(profile)) {
+  const isMember =
+    isAdmin(profile) ||
+    isSecurity(profile) ||
+    isWorship(profile) ||
+    isMerch(profile) ||
+    profile?.roles?.includes('regular')
+
+  if (!isMember) {
     return (
       <>
         <Stack.Screen options={{ title: 'Home' }} />
