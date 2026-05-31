@@ -135,7 +135,7 @@ function PubHomeContent() {
         >
           <AppLogo size="lg" showSlogan />
           <Text color={colors.text} fontSize="$4" fontWeight="600" textAlign="center">
-            Welcome, {profile?.displayName?.split(' ')[0] ?? 'friend'}!
+            Welcome{profile?.displayName ? `, ${profile.displayName.split(' ')[0]}` : ''}!
           </Text>
         </YStack>
 

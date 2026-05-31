@@ -77,7 +77,8 @@ export default function Dashboard() {
     .sort((a, b) => b.ts - a.ts)
     .slice(0, 6)
 
-  const greeting = `Good ${timeOfDay()}, ${profile?.displayName?.split(' ')[0] ?? 'there'}!`
+  const firstName = profile?.displayName?.split(' ')[0]
+  const greeting = firstName ? `Good ${timeOfDay()}, ${firstName}!` : `Good ${timeOfDay()}!`
   const todayLabel = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',

@@ -50,7 +50,9 @@ export default function LoginScreen() {
         <YStack alignItems="center" marginBottom="$2">
           <AppLogo size="lg" showSlogan />
         </YStack>
-        <Paragraph color="$colorMuted" textAlign="center">Sign in to Mission Portal</Paragraph>
+        <Paragraph color="$colorMuted" textAlign="center">
+          Sign in to Mission Portal
+        </Paragraph>
 
         <YStack gap="$3">
           <Controller
@@ -111,12 +113,9 @@ export default function LoginScreen() {
           {loading ? 'Signing in…' : 'Sign in'}
         </Button>
 
-        <XStack justifyContent="center" gap="$2">
-          <Paragraph color="$colorMuted">Don&apos;t have an account?</Paragraph>
-          <Link href="/(auth)/register">
-            <Text color="$primary">Register</Text>
-          </Link>
-        </XStack>
+        <Button variant="outlined" size="$5" onPress={() => router.push('/(auth)/register')}>
+          Create Account
+        </Button>
 
         <XStack justifyContent="center">
           <Link href="/(auth)/reset-password">
