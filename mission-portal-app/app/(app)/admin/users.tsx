@@ -52,8 +52,8 @@ export default function AdminUsers() {
   const filtered = search.trim()
     ? users.filter(
         (u) =>
-          u.displayName.toLowerCase().includes(search.toLowerCase()) ||
-          u.email.toLowerCase().includes(search.toLowerCase())
+          (u.displayName ?? '').toLowerCase().includes(search.toLowerCase()) ||
+          (u.email ?? '').toLowerCase().includes(search.toLowerCase())
       )
     : users
 
