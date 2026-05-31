@@ -31,14 +31,14 @@ export function Modal({ title, children, open, onOpenChange, ...props }: ModalPr
   return (
     <Sheet open={open} onOpenChange={onOpenChange} snapPoints={[85]} dismissOnSnapToBottom modal>
       <Sheet.Overlay backgroundColor="rgba(0,0,0,0.5)" />
-      <Sheet.Frame padding="$4" gap="$4">
+      <Sheet.Frame padding="$4" gap="$2">
         <Sheet.Handle />
         {title && (
           <Text fontSize="$6" fontWeight="600">
             {title}
           </Text>
         )}
-        {children}
+        <Sheet.ScrollView showsVerticalScrollIndicator={false}>{children}</Sheet.ScrollView>
       </Sheet.Frame>
     </Sheet>
   )
