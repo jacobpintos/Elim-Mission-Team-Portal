@@ -1,4 +1,4 @@
-import { Dialog, Sheet, type DialogProps, useWindowDimensions } from 'tamagui'
+import { Dialog, Sheet, Text, type DialogProps, useWindowDimensions } from 'tamagui'
 
 interface ModalProps extends Omit<DialogProps, 'children'> {
   title?: string
@@ -34,9 +34,9 @@ export function Modal({ title, children, open, onOpenChange, ...props }: ModalPr
       <Sheet.Frame padding="$4" gap="$4">
         <Sheet.Handle />
         {title && (
-          <Dialog.Title fontSize="$6" fontWeight="600">
+          <Text fontSize="$6" fontWeight="600">
             {title}
-          </Dialog.Title>
+          </Text>
         )}
         {children}
       </Sheet.Frame>

@@ -295,6 +295,7 @@ export default function AdminUsers() {
 
       <CreateUserSheet open={showCreate} onClose={() => setShowCreate(false)} />
       <EditUserSheet
+        key={editTarget?.uid ?? 'none'}
         open={editTarget !== null}
         onClose={() => setEditTarget(null)}
         user={editTarget}
