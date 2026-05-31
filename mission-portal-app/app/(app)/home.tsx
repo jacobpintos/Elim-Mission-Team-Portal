@@ -663,6 +663,7 @@ function TeamHomeContent() {
       <EventDetailModal
         event={detailEvent}
         uid={uid}
+        isMember
         open={!!detailEvent}
         onClose={() => setDetailEvent(null)}
         onAvail={() => {

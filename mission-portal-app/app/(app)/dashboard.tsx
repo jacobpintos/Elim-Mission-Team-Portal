@@ -212,6 +212,7 @@ export default function Dashboard() {
       <EventDetailModal
         event={detailEvent}
         uid={uid}
+        isMember
         open={!!detailEvent}
         onClose={() => setDetailEvent(null)}
         onAvail={() => {

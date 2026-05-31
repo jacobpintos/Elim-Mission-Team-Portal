@@ -148,6 +148,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /carpool/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
     match /setLists/{id} {
       function isWorshipOrAdmin() {
         return isSignedIn() &&

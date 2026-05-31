@@ -47,6 +47,7 @@ export default function EventsScreen() {
   const uid = String(profile?.uid ?? '')
   const admin = isAdmin(profile)
   const publicUser = isPublic(profile)
+  const isMember = !publicUser
 
   const { instances, templates } = useEventsStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
@@ -390,12 +391,17 @@ export default function EventsScreen() {
       <EventDetailModal
         event={detailEvent}
         uid={uid}
+        isMember={isMember}
         open={!!detailEvent}
         onClose={() => setDetailEvent(null)}
-        onAvail={() => {
-          setAvailEvent(detailEvent)
-          setDetailEvent(null)
-        }}
+        onAvail={
+          isMember
+            ? () => {
+                setAvailEvent(detailEvent)
+                setDetailEvent(null)
+              }
+            : undefined
+        }
         onEdit={
           admin
             ? () => {
