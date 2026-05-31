@@ -213,6 +213,7 @@ export default function Dashboard() {
         event={detailEvent}
         uid={uid}
         isMember
+        isAdmin={admin}
         open={!!detailEvent}
         onClose={() => setDetailEvent(null)}
         onAvail={() => {

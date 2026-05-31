@@ -664,6 +664,7 @@ function TeamHomeContent() {
         event={detailEvent}
         uid={uid}
         isMember
+        isAdmin={false}
         open={!!detailEvent}
         onClose={() => setDetailEvent(null)}
         onAvail={() => {

@@ -392,6 +392,7 @@ export default function EventsScreen() {
         event={detailEvent}
         uid={uid}
         isMember={isMember}
+        isAdmin={admin}
         open={!!detailEvent}
         onClose={() => setDetailEvent(null)}
         onAvail={
