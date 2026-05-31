@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { ScrollView } from 'react-native'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
 import { MemberPicker } from './MemberPicker'
@@ -62,33 +61,26 @@ export function EditGroupSheet({ open, onClose, group }: EditGroupSheetProps) {
   }
 
   return (
-    <Modal open={open} onOpenChange={(v) => !v && onClose()} title="Edit Group">
-      <ScrollView>
-        <YStack gap="$3" padding="$2">
-          <YStack gap="$1">
-            <Text fontSize="$3" fontWeight="600">
-              Group Name *
-            </Text>
-            <Input
-              placeholder="Group Name"
-              value={name}
-              onChangeText={setName}
-              size="$3"
-            />
-          </YStack>
-
-          <MemberPicker selected={members} onChange={setMembers} label="Members" />
-
-          <XStack gap="$2" justifyContent="flex-end">
-            <Button size="$3" onPress={onClose} theme="gray">
-              Cancel
-            </Button>
-            <Button size="$3" onPress={handleSave} disabled={saving} theme="active">
-              {saving ? <Spinner size="small" /> : 'Save'}
-            </Button>
-          </XStack>
+    <Modal open={open} onOpenChange={(v) => !v && onClose()} title="Edit Group" scrollable>
+      <YStack gap="$3" padding="$2">
+        <YStack gap="$1">
+          <Text fontSize="$3" fontWeight="600">
+            Group Name *
+          </Text>
+          <Input placeholder="Group Name" value={name} onChangeText={setName} size="$3" />
         </YStack>
-      </ScrollView>
+
+        <MemberPicker selected={members} onChange={setMembers} label="Members" />
+
+        <XStack gap="$2" justifyContent="flex-end">
+          <Button size="$3" onPress={onClose} theme="gray">
+            Cancel
+          </Button>
+          <Button size="$3" onPress={handleSave} disabled={saving} theme="active">
+            {saving ? <Spinner size="small" /> : 'Save'}
+          </Button>
+        </XStack>
+      </YStack>
     </Modal>
   )
 }
