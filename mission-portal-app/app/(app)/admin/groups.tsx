@@ -93,7 +93,6 @@ export default function AdminGroups() {
         <FlashList
           data={groups}
           keyExtractor={(g) => g.id}
-          estimatedItemSize={80}
           renderItem={({ item }) => (
             <YStack marginBottom="$2">
               <GroupCard

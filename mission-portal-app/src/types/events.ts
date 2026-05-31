@@ -23,6 +23,7 @@ export interface EventTemplate {
   state?: string
   address?: string
   isVirtual?: boolean
+  virtualLink?: string
   signUpLink?: string
   startTime?: string // '10:00 AM'
   rtp?: string
