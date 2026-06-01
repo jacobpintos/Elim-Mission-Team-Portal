@@ -1,9 +1,24 @@
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? ''
 
 export async function geocodeCity(
   city: string,
   state: string
 ): Promise<{ lat: number; lng: number } | null> {
+  const key = `${city.trim().toLowerCase()}_${state.trim().toLowerCase()}`
+
+  try {
+    const cached = await getDoc(doc(db, 'geocodeCache', key))
+    if (cached.exists()) {
+      const { lat, lng } = cached.data() as { lat: number; lng: number }
+      return { lat, lng }
+    }
+  } catch {
+    // cache miss — fall through to API
+  }
+
   const query = encodeURIComponent(`${city}, ${state}`)
   const base = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?country=US&limit=1&access_token=${MAPBOX_TOKEN}`
 
@@ -16,7 +31,9 @@ export async function geocodeCity(
       }
       if (data.features?.length) {
         const [lng, lat] = data.features[0].geometry.coordinates
-        return { lat, lng }
+        const coords = { lat, lng }
+        setDoc(doc(db, 'geocodeCache', key), coords).catch(() => {})
+        return coords
       }
     } catch {
       // try next
