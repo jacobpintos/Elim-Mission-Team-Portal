@@ -154,8 +154,8 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
     }
     setSaving(true)
     try {
-      // Check geocoding so we can warn the admin if it fails
-      const geoCheck = form.isVirtual ? true : !!(await geocodeCity(form.city, form.state))
+      // Geocode the location so Events Near Me can filter by distance
+      const coords = form.isVirtual ? null : await geocodeCity(form.city, form.state)
       const payload = {
         title: form.title,
         date: form.date,
@@ -177,6 +177,7 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
         users: form.users,
         teams: event?.teams ?? [],
         ...(form.taskTemplateId ? { taskTemplateId: form.taskTemplateId } : {}),
+        ...(coords ? { _geocodeLat: coords.lat, _geocodeLng: coords.lng } : {}),
       }
       if (event) {
         await updateEvent(event.id, payload)
@@ -185,7 +186,7 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
         await createEvent(payload)
         toast('Event created', 'success')
       }
-      if (!geoCheck) {
+      if (!form.isVirtual && !coords) {
         toast(
           `Location "${form.city}, ${form.state}" could not be geocoded — event won't appear in Events Near Me.`,
           'error'
