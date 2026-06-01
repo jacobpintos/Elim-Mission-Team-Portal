@@ -9,7 +9,33 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
-import type { ChordSheet } from '@/types/chordSheet'
+import type { ChordSheet, ChordSheetSection } from '@/types/chordSheet'
+
+// Firestore does not support nested arrays.
+// chordTokens (string[][]) is serialized as string[] on write
+// (each row JSON-encoded) and deserialized on read.
+
+function serializeSection(s: ChordSheetSection): object {
+  return {
+    ...s,
+    chordTokens: s.chordTokens.map((row) => JSON.stringify(row)),
+  }
+}
+
+function deserializeSection(raw: Record<string, unknown>): ChordSheetSection {
+  const tokens = raw.chordTokens
+  return {
+    ...(raw as unknown as ChordSheetSection),
+    chordTokens: Array.isArray(tokens)
+      ? tokens.map((row) => {
+          if (typeof row === 'string') {
+            try { return JSON.parse(row) as string[] } catch { return [] }
+          }
+          return Array.isArray(row) ? (row as string[]) : []
+        })
+      : [],
+  }
+}
 
 interface ChordSheetsStore {
   chordSheets: ChordSheet[]
@@ -32,7 +58,16 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
     if (get()._unsub) return
     set({ loading: true })
     const unsub = onSnapshot(collection(db, 'chordSheets'), (snap) => {
-      const chordSheets = snap.docs.map((d) => ({ ...(d.data() as ChordSheet), id: d.id }))
+      const chordSheets = snap.docs.map((d) => {
+        const raw = d.data() as Record<string, unknown>
+        return {
+          ...raw,
+          id: d.id,
+          sections: Array.isArray(raw.sections)
+            ? (raw.sections as Record<string, unknown>[]).map(deserializeSection)
+            : [],
+        } as ChordSheet
+      })
       set({ chordSheets, loading: false })
     })
     set({ _unsub: unsub })
@@ -48,6 +83,7 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
     await setDoc(doc(db, 'chordSheets', String(id)), {
       ...data,
       id,
+      sections: data.sections.map(serializeSection),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
