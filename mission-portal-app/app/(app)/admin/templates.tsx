@@ -21,7 +21,7 @@ export default function AdminTemplates() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'taskTemplates'), (snap) => {
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as TaskTemplate)
+      const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TaskTemplate)
       data.sort((a, b) => a.name.localeCompare(b.name))
       setTemplates(data)
       setLoading(false)
@@ -31,7 +31,7 @@ export default function AdminTemplates() {
 
   const handleDelete = async (template: TaskTemplate) => {
     try {
-      await deleteDoc(doc(db, 'taskTemplates', template.id))
+      await deleteDoc(doc(db, 'taskTemplates', String(template.id)))
       await audit(
         'taskTemplate.deleted',
         `Deleted task template "${template.name}"`,
