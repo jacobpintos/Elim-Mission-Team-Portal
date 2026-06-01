@@ -77,6 +77,7 @@ export function ChordSheetEditor({
   const [bpm, setBpm] = useState('')
   const [sections, setSections] = useState<ChordSheetSection[]>([makeSection('verse')])
   const [saving, setSaving] = useState(false)
+  const [showChordHelp, setShowChordHelp] = useState(false)
 
   useEffect(() => {
     if (visible) {
@@ -368,14 +369,72 @@ export function ChordSheetEditor({
                     />
 
                     {/* Chord inputs */}
-                    <Text
-                      color={colors.textMuted}
-                      fontSize="$1"
-                      fontWeight="600"
-                      marginTop="$1"
-                    >
-                      CHORDS (Nashville Numbers)
-                    </Text>
+                    <XStack alignItems="center" gap="$1" marginTop="$1">
+                      <Text color={colors.textMuted} fontSize="$1" fontWeight="600">
+                        CHORDS (Nashville Numbers)
+                      </Text>
+                      <Pressable onPress={() => setShowChordHelp((v) => !v)}>
+                        <XStack
+                          width={16}
+                          height={16}
+                          borderRadius={99}
+                          borderWidth={1}
+                          borderColor={colors.textMuted}
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          <Text color={colors.textMuted} fontSize={10} lineHeight={14}>
+                            ?
+                          </Text>
+                        </XStack>
+                      </Pressable>
+                    </XStack>
+
+                    {showChordHelp ? (
+                      <YStack
+                        backgroundColor={colors.surface}
+                        borderRadius="$3"
+                        borderWidth={1}
+                        borderColor={colors.border}
+                        padding="$3"
+                        gap="$2"
+                      >
+                        <Text color={colors.text} fontSize="$2" fontWeight="700">
+                          Token format: [b or #][number][quality]
+                        </Text>
+                        <YStack gap="$1">
+                          {[
+                            ['1', 'Plain chord (the 1 chord)'],
+                            ['b7', 'Flat 7'],
+                            ['#4', 'Sharp 4'],
+                            ['5m', 'Minor chord'],
+                            ['4maj7', 'Major 7'],
+                            ['17', 'Dominant 7 (or two boxes: 1 and 7)'],
+                            ['b7m', 'Flat 7 minor'],
+                            ['2sus4', 'Sus 4'],
+                            ['7dim', 'Diminished'],
+                            ['5aug', 'Augmented'],
+                          ].map(([token, desc]) => (
+                            <XStack key={token} gap="$2" alignItems="center">
+                              <Text
+                                style={{ fontFamily: 'Courier New', fontSize: 12 }}
+                                color={colors.primary}
+                                fontWeight="700"
+                              >
+                                {token}
+                              </Text>
+                              <Text color={colors.textMuted} fontSize="$1" flex={1}>
+                                {desc}
+                              </Text>
+                            </XStack>
+                          ))}
+                        </YStack>
+                        <Text color={colors.textMuted} fontSize="$1">
+                          The Major/Minor toggle in the viewer affects scale degrees, not chord
+                          quality. Add m yourself for minor chords (e.g. 5m).
+                        </Text>
+                      </YStack>
+                    ) : null}
 
                     {!hasLyrics ? (
                       /* Instrumental: individual add/remove chord boxes */
