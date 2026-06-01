@@ -80,19 +80,20 @@ export function ChordSheetEditor({
   const [showChordHelp, setShowChordHelp] = useState(false)
 
   useEffect(() => {
-    if (visible) {
-      if (editSheet) {
-        setTitle(editSheet.title)
-        setArtist(editSheet.artist ?? '')
-        setBpm(editSheet.bpm != null ? String(editSheet.bpm) : '')
-        setSections(editSheet.sections.length > 0 ? editSheet.sections : [makeSection('verse')])
-      } else {
-        setTitle('')
-        setArtist('')
-        setBpm('')
-        setSections([makeSection('verse')])
-      }
+    if (!visible) return
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (editSheet) {
+      setTitle(editSheet.title)
+      setArtist(editSheet.artist ?? '')
+      setBpm(editSheet.bpm != null ? String(editSheet.bpm) : '')
+      setSections(editSheet.sections.length > 0 ? editSheet.sections : [makeSection('verse')])
+    } else {
+      setTitle('')
+      setArtist('')
+      setBpm('')
+      setSections([makeSection('verse')])
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [visible, editSheet])
 
   const reset = () => {

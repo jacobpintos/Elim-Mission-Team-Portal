@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -48,18 +48,10 @@ interface ChordSheetViewerProps {
 
 export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
   const colors = useThemeColors()
-  const [selectedKey, setSelectedKey] = useState('')
-  const [isMinor, setIsMinor] = useState(false)
+  const [selectedKey, setSelectedKey] = useState(() => getKeyPrefs().key)
+  const [isMinor, setIsMinor] = useState(() => getKeyPrefs().isMinor)
   const [chordsOnly, setChordsOnly] = useState(false)
   const [showKeyDropdown, setShowKeyDropdown] = useState(false)
-
-  useEffect(() => {
-    if (sheet) {
-      const prefs = getKeyPrefs()
-      setSelectedKey(prefs.key)
-      setIsMinor(prefs.isMinor)
-    }
-  }, [sheet])
 
   if (!sheet) return null
 
