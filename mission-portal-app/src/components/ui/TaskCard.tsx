@@ -14,9 +14,17 @@ interface TaskCardProps {
 }
 
 const STATUS_COLORS: Record<Task['status'], string> = {
-  pending: '#2980b9',
+  pending: '#7f8c8d',
+  in_progress: '#2980b9',
   done: '#27ae60',
   behind: '#e67e22',
+}
+
+const STATUS_LABELS: Record<Task['status'], string> = {
+  pending: 'Not Started',
+  in_progress: 'In Progress',
+  done: 'Completed',
+  behind: 'Behind',
 }
 
 export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames }: TaskCardProps) {
@@ -61,7 +69,7 @@ export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames 
               paddingVertical={2}
             >
               <Text color="white" fontSize={10} fontWeight="600">
-                {overdue ? 'Overdue' : task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                {overdue ? 'Overdue' : STATUS_LABELS[task.status] ?? task.status}
               </Text>
             </XStack>
           </XStack>

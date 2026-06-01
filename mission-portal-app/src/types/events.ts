@@ -84,7 +84,7 @@ export interface Task {
   lead: string | number | null
   by: string | number
   title: string
-  status: 'pending' | 'done' | 'behind'
+  status: 'pending' | 'in_progress' | 'done' | 'behind'
   evId?: string | number | null
   evDate?: string | null
   evTemplateId?: string | number | null

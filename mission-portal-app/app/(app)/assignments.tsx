@@ -562,7 +562,7 @@ const ctStyles = StyleSheet.create({
   },
 })
 
-type FilterTab = 'all' | 'pending' | 'done' | 'behind' | 'overdue'
+type FilterTab = 'all' | 'pending' | 'in_progress' | 'done' | 'behind' | 'overdue'
 type AdminView = 'mine' | 'all' | 'health'
 
 interface TaskGroupColors {
@@ -639,11 +639,11 @@ function TaskUpdateModalInner({
 }: {
   task: Task
   onClose: () => void
-  onSave: (status: 'pending' | 'behind', projectedDate: string) => Promise<void>
+  onSave: (status: 'pending' | 'in_progress' | 'behind', projectedDate: string) => Promise<void>
 }) {
   const colors = useThemeColors()
-  const [status, setStatus] = useState<'pending' | 'behind'>(
-    task.status === 'behind' ? 'behind' : 'pending'
+  const [status, setStatus] = useState<'pending' | 'in_progress' | 'behind'>(
+    task.status === 'behind' ? 'behind' : task.status === 'in_progress' ? 'in_progress' : 'pending'
   )
   const [projectedDate, setProjectedDate] = useState(() => taskToDisplayDate(task))
   const [saving, setSaving] = useState(false)
@@ -657,9 +657,16 @@ function TaskUpdateModalInner({
     }
   }
 
-  const statusColors = {
-    pending: '#2980b9',
+  const statusColors: Record<'pending' | 'in_progress' | 'behind', string> = {
+    pending: '#7f8c8d',
+    in_progress: '#2980b9',
     behind: '#e67e22',
+  }
+
+  const statusLabels: Record<'pending' | 'in_progress' | 'behind', string> = {
+    pending: 'Not Started',
+    in_progress: 'In Progress',
+    behind: 'Behind',
   }
 
   return (
@@ -692,7 +699,7 @@ function TaskUpdateModalInner({
             STATUS
           </Text>
           <XStack gap="$2">
-            {(['pending', 'behind'] as const).map((s) => {
+            {(['pending', 'in_progress', 'behind'] as const).map((s) => {
               const active = status === s
               return (
                 <Pressable key={s} onPress={() => setStatus(s)}>
@@ -705,7 +712,7 @@ function TaskUpdateModalInner({
                     backgroundColor={active ? statusColors[s] : 'transparent'}
                   >
                     <Text color={active ? 'white' : statusColors[s]} fontSize="$2" fontWeight="600">
-                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                      {statusLabels[s]}
                     </Text>
                   </XStack>
                 </Pressable>
@@ -770,7 +777,7 @@ function TaskUpdateModal({
   task: Task | null
   uid: string
   onClose: () => void
-  onSave: (status: 'pending' | 'behind', projectedDate: string) => Promise<void>
+  onSave: (status: 'pending' | 'in_progress' | 'behind', projectedDate: string) => Promise<void>
 }) {
   return (
     <Modal visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
@@ -871,6 +878,7 @@ export default function Assignments() {
       if (!titleMatch && !eventMatch) return false
     }
     if (filter === 'pending') return t.status === 'pending'
+    if (filter === 'in_progress') return t.status === 'in_progress'
     if (filter === 'done') return t.status === 'done'
     if (filter === 'behind') return t.status === 'behind'
     if (filter === 'overdue') return isOverdue(t)
@@ -879,6 +887,7 @@ export default function Assignments() {
 
   const overdue = filtered.filter((t) => isOverdue(t))
   const behind = filtered.filter((t) => t.status === 'behind' && !isOverdue(t))
+  const inProgress = filtered.filter((t) => t.status === 'in_progress' && !isOverdue(t))
   const today = new Date().toISOString().split('T')[0]
   const in7 = (() => {
     const d = new Date()
@@ -927,7 +936,7 @@ export default function Assignments() {
     }
   }
 
-  const handleUpdateTask = async (status: 'pending' | 'behind', projectedDate: string) => {
+  const handleUpdateTask = async (status: 'pending' | 'in_progress' | 'behind', projectedDate: string) => {
     if (!updateTaskItem) return
     let storedDate: string | undefined
     if (projectedDate && projectedDate.length === 8) {
@@ -953,7 +962,16 @@ export default function Assignments() {
     return ev?.title
   }
 
-  const FILTER_TABS: FilterTab[] = ['all', 'pending', 'done', 'behind', 'overdue']
+  const FILTER_TABS: FilterTab[] = ['all', 'pending', 'in_progress', 'done', 'behind', 'overdue']
+
+  const FILTER_LABELS: Record<FilterTab, string> = {
+    all: 'All',
+    pending: 'Not Started',
+    in_progress: 'In Progress',
+    done: 'Completed',
+    behind: 'Behind',
+    overdue: 'Overdue',
+  }
 
   // --- Event Health view data ---
   const allTasks = tasksStore.tasks
@@ -1112,7 +1130,7 @@ export default function Assignments() {
                       fontSize="$2"
                       fontWeight={filter === f ? '600' : '400'}
                     >
-                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                      {FILTER_LABELS[f]}
                     </Text>
                   </XStack>
                 </Pressable>
@@ -1274,10 +1292,10 @@ export default function Assignments() {
                 resolveUser={displayName}
               />
             ) : null}
-            {filter === 'all' || filter === 'pending' ? (
+            {filter === 'all' || filter === 'in_progress' ? (
               <TaskGroup
-                title={`📅 Due This Week (${upcoming.length})`}
-                tasks={upcoming}
+                title={`▶ In Progress (${inProgress.length})`}
+                tasks={inProgress}
                 color="#2980b9"
                 colors={colors}
                 onComplete={handleComplete}
@@ -1302,8 +1320,35 @@ export default function Assignments() {
             ) : null}
             {filter === 'all' || filter === 'pending' ? (
               <TaskGroup
-                title={`Pending (${allPending.length})`}
+                title={`📅 Due This Week (${upcoming.length})`}
+                tasks={upcoming}
+                color="#7f8c8d"
+                colors={colors}
+                onComplete={handleComplete}
+                onTaskPress={(t) => {
+                  if (
+                    t.status !== 'done' &&
+                    t.assignees.some((a) => String(a) === String(uid)) &&
+                    t.taskType !== 'kaizen_verification' &&
+                    t.taskType !== 'kaizen_action' &&
+                    t.taskType !== 'issue_corrective'
+                  ) {
+                    if (t.taskType === 'worship_setlist_ack') {
+                      setSetListAckTask(t)
+                    } else {
+                      setUpdateTaskItem(t)
+                    }
+                  }
+                }}
+                getEventTitle={getEventTitle}
+                resolveUser={displayName}
+              />
+            ) : null}
+            {filter === 'all' || filter === 'pending' ? (
+              <TaskGroup
+                title={`Not Started (${allPending.length})`}
                 tasks={allPending}
+                color="#7f8c8d"
                 colors={colors}
                 onComplete={handleComplete}
                 onTaskPress={(t) => {
@@ -1327,7 +1372,7 @@ export default function Assignments() {
             ) : null}
             {filter === 'all' || filter === 'done' ? (
               <TaskGroup
-                title={`✓ Done (${done.length})`}
+                title={`✓ Completed (${done.length})`}
                 tasks={done}
                 color="#27ae60"
                 collapsed={filter === 'all' && !showDone}
