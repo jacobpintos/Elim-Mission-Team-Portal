@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ScrollView, Pressable, TextInput, StyleSheet, Alert } from 'react-native'
+import { ScrollView, Pressable, TextInput, StyleSheet, Alert, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
@@ -14,7 +14,7 @@ interface ChordSheetsTabProps {
 
 export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
   const colors = useThemeColors()
-  const { chordSheets, createChordSheet, deleteChordSheet } = useChordSheetsStore()
+  const { chordSheets, createChordSheet, updateChordSheet, deleteChordSheet } = useChordSheetsStore()
   const toast = useUIStore((s) => s.toast)
 
   const [search, setSearch] = useState('')
@@ -35,8 +35,13 @@ export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
 
   const handleSave = async (data: Omit<ChordSheet, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      await createChordSheet(data)
-      toast('Chord sheet saved!', 'success')
+      if (editSheet) {
+        await updateChordSheet(editSheet.id, data)
+        toast('Chord sheet updated!', 'success')
+      } else {
+        await createChordSheet(data)
+        toast('Chord sheet saved!', 'success')
+      }
       setShowEditor(false)
       setEditSheet(null)
     } catch (err) {
@@ -69,6 +74,11 @@ export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
 
   const openNew = () => {
     setEditSheet(null)
+    setShowEditor(true)
+  }
+
+  const openEdit = (sheet: ChordSheet) => {
+    setEditSheet(sheet)
     setShowEditor(true)
   }
 
@@ -123,52 +133,49 @@ export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
         <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
           <YStack padding="$3" paddingBottom="$8" gap="$2">
             {filtered.map((sheet) => (
-              <Pressable key={String(sheet.id)} onPress={() => setViewSheet(sheet)}>
-                <YStack
-                  backgroundColor={colors.surface}
-                  borderRadius="$3"
-                  padding="$3"
-                  borderWidth={1}
-                  borderColor={colors.border}
-                  gap="$1"
-                >
-                  <XStack justifyContent="space-between" alignItems="flex-start">
-                    <YStack flex={1} gap="$0.5">
-                      <Text color={colors.text} fontWeight="700" fontSize="$4" numberOfLines={1}>
-                        {sheet.title}
+              <View
+                key={String(sheet.id)}
+                style={[
+                  styles.card,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                {/* Content area — tappable to view */}
+                <Pressable style={styles.cardContent} onPress={() => setViewSheet(sheet)}>
+                  <Text color={colors.text} fontWeight="700" fontSize={16} numberOfLines={1}>
+                    {sheet.title}
+                  </Text>
+                  {sheet.artist ? (
+                    <Text color={colors.textMuted} fontSize={13} numberOfLines={1}>
+                      {sheet.artist}
+                    </Text>
+                  ) : null}
+                  <XStack gap={8} marginTop={2}>
+                    {sheet.bpm != null ? (
+                      <Text color={colors.textMuted} fontSize={11}>
+                        ♩ {sheet.bpm} BPM
                       </Text>
-                      {sheet.artist ? (
-                        <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
-                          {sheet.artist}
-                        </Text>
-                      ) : null}
-                      <XStack gap="$2">
-                        {sheet.bpm != null ? (
-                          <Text color={colors.textMuted} fontSize="$1">
-                            ♩ {sheet.bpm} BPM
-                          </Text>
-                        ) : null}
-                        <Text color={colors.textMuted} fontSize="$1">
-                          {sheet.sections.length} section{sheet.sections.length !== 1 ? 's' : ''}
-                        </Text>
-                      </XStack>
-                    </YStack>
-                    <Pressable onPress={() => handleDelete(sheet)}>
-                      <XStack
-                        backgroundColor="#c0392b18"
-                        borderRadius="$2"
-                        paddingHorizontal="$2"
-                        paddingVertical="$1"
-                        marginLeft="$2"
-                      >
-                        <Text color="#c0392b" fontSize="$2">
-                          Delete
-                        </Text>
-                      </XStack>
-                    </Pressable>
+                    ) : null}
+                    <Text color={colors.textMuted} fontSize={11}>
+                      {sheet.sections.length} section{sheet.sections.length !== 1 ? 's' : ''}
+                    </Text>
                   </XStack>
-                </YStack>
-              </Pressable>
+                </Pressable>
+
+                {/* Action buttons — siblings of the content Pressable */}
+                <XStack gap={4} alignItems="center" paddingRight={8}>
+                  <Pressable onPress={() => openEdit(sheet)}>
+                    <View style={[styles.actionBtn, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '44' }]}>
+                      <Text style={[styles.actionBtnText, { color: colors.primary }]}>Edit</Text>
+                    </View>
+                  </Pressable>
+                  <Pressable onPress={() => handleDelete(sheet)}>
+                    <View style={[styles.actionBtn, { backgroundColor: '#c0392b18', borderColor: '#c0392b44' }]}>
+                      <Text style={[styles.actionBtnText, { color: '#c0392b' }]}>Delete</Text>
+                    </View>
+                  </Pressable>
+                </XStack>
+              </View>
             ))}
           </YStack>
         </ScrollView>
@@ -205,5 +212,27 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 9,
+  },
+  card: {
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  cardContent: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  actionBtn: {
+    borderRadius: 6,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  actionBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 })

@@ -4,6 +4,7 @@ import {
   onSnapshot,
   doc,
   setDoc,
+  updateDoc,
   deleteDoc,
   serverTimestamp,
 } from 'firebase/firestore'
@@ -27,7 +28,7 @@ function deserializeSection(raw: Record<string, unknown>): ChordSheetSection {
   return {
     ...(raw as unknown as ChordSheetSection),
     chordTokens: Array.isArray(tokens)
-      ? tokens.map((row) => {
+      ? tokens.map((row: unknown) => {
           if (typeof row === 'string') {
             try { return JSON.parse(row) as string[] } catch { return [] }
           }
@@ -46,6 +47,10 @@ interface ChordSheetsStore {
   createChordSheet: (
     data: Omit<ChordSheet, 'id' | 'createdAt' | 'updatedAt'>,
   ) => Promise<string | number>
+  updateChordSheet: (
+    id: string | number,
+    data: Omit<ChordSheet, 'id' | 'createdAt' | 'updatedAt'>,
+  ) => Promise<void>
   deleteChordSheet: (id: string | number) => Promise<void>
 }
 
@@ -91,6 +96,17 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
     )
     await setDoc(doc(db, 'chordSheets', String(id)), payload)
     return id
+  },
+
+  updateChordSheet: async (id, data) => {
+    const payload = Object.fromEntries(
+      Object.entries({
+        ...data,
+        sections: data.sections.map(serializeSection),
+        updatedAt: serverTimestamp(),
+      }).filter(([, v]) => v !== undefined),
+    )
+    await updateDoc(doc(db, 'chordSheets', String(id)), payload)
   },
 
   deleteChordSheet: async (id) => {
