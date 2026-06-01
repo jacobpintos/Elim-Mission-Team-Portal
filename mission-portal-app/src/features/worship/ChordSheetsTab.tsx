@@ -39,7 +39,8 @@ export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
       toast('Chord sheet saved!', 'success')
       setShowEditor(false)
       setEditSheet(null)
-    } catch {
+    } catch (err) {
+      console.error('[ChordSheetsTab] save failed:', err)
       toast('Failed to save chord sheet', 'error')
     }
   }
