@@ -6,17 +6,24 @@ import { NNS_KEYS, convertChordLine } from '@/lib/nashvilleNumbers'
 import { SECTION_LABELS } from '@/types/chordSheet'
 import type { ChordSheet } from '@/types/chordSheet'
 
-const getLastKey = (): string => {
+interface KeyPrefs { key: string; isMinor: boolean }
+
+const getKeyPrefs = (): KeyPrefs => {
   try {
-    return (typeof window !== 'undefined' && window.localStorage?.getItem('chordsheet_last_key')) || ''
+    if (typeof window === 'undefined') return { key: '', isMinor: false }
+    const raw = window.localStorage?.getItem('chordsheet_key_prefs')
+    if (!raw) return { key: '', isMinor: false }
+    return JSON.parse(raw) as KeyPrefs
   } catch {
-    return ''
+    return { key: '', isMinor: false }
   }
 }
 
-const saveLastKey = (key: string) => {
+const saveKeyPrefs = (prefs: KeyPrefs) => {
   try {
-    if (typeof window !== 'undefined') window.localStorage?.setItem('chordsheet_last_key', key)
+    if (typeof window !== 'undefined') {
+      window.localStorage?.setItem('chordsheet_key_prefs', JSON.stringify(prefs))
+    }
   } catch {}
 }
 
@@ -40,12 +47,15 @@ interface ChordSheetViewerProps {
 export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
   const colors = useThemeColors()
   const [selectedKey, setSelectedKey] = useState('')
+  const [isMinor, setIsMinor] = useState(false)
   const [chordsOnly, setChordsOnly] = useState(false)
   const [showKeyDropdown, setShowKeyDropdown] = useState(false)
 
   useEffect(() => {
     if (sheet) {
-      setSelectedKey(getLastKey())
+      const prefs = getKeyPrefs()
+      setSelectedKey(prefs.key)
+      setIsMinor(prefs.isMinor)
     }
   }, [sheet])
 
@@ -56,8 +66,14 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
 
   const handleSelectKey = (key: string) => {
     setSelectedKey(key)
-    saveLastKey(key)
+    saveKeyPrefs({ key, isMinor })
     setShowKeyDropdown(false)
+  }
+
+  const handleToggleMinor = () => {
+    const newIsMinor = !isMinor
+    setIsMinor(newIsMinor)
+    saveKeyPrefs({ key: selectedKey, isMinor: newIsMinor })
   }
 
   return (
@@ -154,6 +170,28 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
               ) : null}
             </YStack>
 
+            {/* Major / Minor toggle — only when a key is active */}
+            {selectedKey !== '' ? (
+              <Pressable onPress={handleToggleMinor}>
+                <XStack
+                  backgroundColor={isMinor ? colors.primary : colors.primary + '18'}
+                  borderRadius={99}
+                  borderWidth={1}
+                  borderColor={colors.primary}
+                  paddingHorizontal="$3"
+                  paddingVertical="$1"
+                >
+                  <Text
+                    color={isMinor ? 'white' : colors.primary}
+                    fontSize="$2"
+                    fontWeight="600"
+                  >
+                    {isMinor ? 'Minor' : 'Major'}
+                  </Text>
+                </XStack>
+              </Pressable>
+            ) : null}
+
             {/* Chords only toggle */}
             <Pressable onPress={() => setChordsOnly((v) => !v)}>
               <XStack
@@ -187,7 +225,7 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                     .flatMap((line) => line.trim().split(/\s+/).filter(Boolean))
                     .map((token) =>
                       keyIdx >= 0
-                        ? convertChordLine(token, keyIdx)
+                        ? convertChordLine(token, keyIdx, isMinor)
                         : token,
                     )
                     .join('  ')
@@ -231,7 +269,7 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                       const chordLine = section.chordLines[i] ?? ''
                       const lyricLine = lyricsLines[i] ?? ''
                       if (!chordLine.trim() && !lyricLine.trim()) return null
-                      const displayChord = convertChordLine(chordLine, keyIdx)
+                      const displayChord = convertChordLine(chordLine, keyIdx, isMinor)
                       return (
                         <YStack key={i} gap={0}>
                           {chordLine.trim() ? (
