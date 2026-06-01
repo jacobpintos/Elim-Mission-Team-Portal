@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Modal, View, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { Modal, View, TextInput, Pressable, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import type { InventoryItem, InventoryCategory } from '@/types/inventory'
@@ -22,6 +22,7 @@ export function ItemFormModal({ visible, onClose, onSave, editItem, categories }
 
   useEffect(() => {
     if (visible) {
+      /* eslint-disable react-hooks/set-state-in-effect */
       if (editItem) {
         setForm({
           name: editItem.name,
@@ -32,6 +33,7 @@ export function ItemFormModal({ visible, onClose, onSave, editItem, categories }
       } else {
         setForm(EMPTY)
       }
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [visible, editItem])
 

@@ -26,10 +26,13 @@ function ReorderFormModal({ visible, onClose, onSave, editItem }: ReorderFormMod
 
   useEffect(() => {
     if (visible) {
-      setForm(editItem
-        ? { name: editItem.name, price: editItem.price != null ? String(editItem.price) : '', link: editItem.link }
-        : EMPTY_FORM,
+      /* eslint-disable react-hooks/set-state-in-effect */
+      setForm(
+        editItem
+          ? { name: editItem.name, price: editItem.price != null ? String(editItem.price) : '', link: editItem.link }
+          : EMPTY_FORM,
       )
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [visible, editItem])
 

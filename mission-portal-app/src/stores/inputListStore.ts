@@ -15,9 +15,6 @@ export const INPUT_LIST_ROW_COUNTS: Record<InputListLocation, number> = {
   wh2: 32,
 }
 
-function emptyRows(loc: InputListLocation): InputListRow[] {
-  return Array.from({ length: INPUT_LIST_ROW_COUNTS[loc] }, () => ({ input: '', output: '' }))
-}
 
 interface InputListStore {
   rows: Record<InputListLocation, InputListRow[] | null>
