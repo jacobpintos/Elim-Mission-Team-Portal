@@ -309,7 +309,7 @@ function PubHomeContent() {
                         ev._geocodeLat,
                         ev._geocodeLng
                       )
-                    )}
+                    )} (est.)
                   </Text>
                 ) : null}
                 {ev.isVirtual && ev.virtualLink ? (
