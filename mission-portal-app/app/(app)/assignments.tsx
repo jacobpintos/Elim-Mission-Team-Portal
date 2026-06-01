@@ -20,6 +20,7 @@ import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
 import { httpsCallable } from 'firebase/functions'
+import { TASK_SECTIONS, type TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import type { Task } from '@/types/events'
 import type { KaizenCard, KaizenVerificationResult } from '@/types/operations'
 import type { UserProfile } from '@/types/user'
@@ -831,17 +832,22 @@ export default function Assignments() {
   const [filter, setFilter] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
   const [showDone, setShowDone] = useState(false)
+  const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([])
 
   useEffect(() => {
     subTasks()
     subEvents()
     subKaizen()
     subWorship()
+    const unsub = onSnapshot(collection(db, 'taskTemplates'), (snap) => {
+      setTaskTemplates(snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TaskTemplate))
+    })
     return () => {
       unsubTasks()
       unsubEvents()
       unsubKaizen()
       unsubWorship()
+      unsub()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -958,6 +964,7 @@ export default function Assignments() {
       taskCount: number
       hasProblem: boolean
       tasks: Task[]
+      sectionStatus: { id: string; label: string; color: string; hasProblem: boolean }[]
     }[] = []
 
     for (const ev of templates) {
@@ -966,6 +973,15 @@ export default function Assignments() {
       )
       if (evTasks.length === 0) continue
       const hasProblem = evTasks.some((t) => t.status === 'behind' || isOverdue(t))
+      const tpl = taskTemplates.find((tt) => sameId(tt.id, ev.taskTemplateId))
+      const sectionStatus = TASK_SECTIONS.flatMap((s) => {
+        if (!tpl) return []
+        const sectionTitles = (tpl.tasks ?? []).filter((t) => t.section === s.id).map((t) => t.title)
+        if (sectionTitles.length === 0) return []
+        const sTasks = evTasks.filter((t) => sectionTitles.includes(t.title))
+        if (sTasks.length === 0) return []
+        return [{ id: s.id, label: s.label, color: s.color, hasProblem: sTasks.some((t) => t.status === 'behind' || isOverdue(t)) }]
+      })
       result.push({
         templateId: ev.id,
         title: ev.title,
@@ -973,6 +989,7 @@ export default function Assignments() {
         taskCount: evTasks.length,
         hasProblem,
         tasks: evTasks,
+        sectionStatus,
       })
     }
 
@@ -1110,18 +1127,36 @@ export default function Assignments() {
                     <Text color={colors.textMuted} fontSize="$2">
                       {card.taskCount} task{card.taskCount !== 1 ? 's' : ''}
                     </Text>
-                    <XStack>
-                      <XStack
-                        backgroundColor={card.hasProblem ? '#c0392b' : '#27ae60'}
-                        borderRadius={99}
-                        paddingHorizontal={10}
-                        paddingVertical={3}
-                      >
-                        <Text color="white" fontSize={11} fontWeight="600">
-                          {card.hasProblem ? '⚠ Behind' : '✓ On Track'}
-                        </Text>
+                    {card.sectionStatus.length > 0 ? (
+                      <XStack flexWrap="wrap" gap="$1">
+                        {card.sectionStatus.map((s) => (
+                          <XStack
+                            key={s.id}
+                            backgroundColor={s.hasProblem ? '#c0392b' : '#27ae60'}
+                            borderRadius={99}
+                            paddingHorizontal={8}
+                            paddingVertical={2}
+                          >
+                            <Text color="white" fontSize={10} fontWeight="600">
+                              {s.hasProblem ? `⚠ ${s.label}` : `✓ ${s.label}`}
+                            </Text>
+                          </XStack>
+                        ))}
                       </XStack>
-                    </XStack>
+                    ) : (
+                      <XStack>
+                        <XStack
+                          backgroundColor={card.hasProblem ? '#c0392b' : '#27ae60'}
+                          borderRadius={99}
+                          paddingHorizontal={10}
+                          paddingVertical={3}
+                        >
+                          <Text color="white" fontSize={11} fontWeight="600">
+                            {card.hasProblem ? '⚠ Behind' : '✓ On Track'}
+                          </Text>
+                        </XStack>
+                      </XStack>
+                    )}
                   </YStack>
                 </Pressable>
               ))
