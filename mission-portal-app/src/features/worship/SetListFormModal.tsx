@@ -3,11 +3,20 @@ import { Modal, View, ScrollView, Pressable, TextInput, StyleSheet } from 'react
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { EventPickerModal } from './EventPickerModal'
+import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import type { SetList, SetListSong } from '@/types/worship'
+import type { ChordSheet } from '@/types/chordSheet'
 import type { EventInstance } from '@/types/events'
 
 function makeSong(): SetListSong {
-  return { id: String(Date.now() + Math.random()), name: '', key: '', link: '', notes: '' }
+  return {
+    id: String(Date.now() + Math.random()),
+    name: '',
+    key: '',
+    link: '',
+    notes: '',
+    chordSheetId: null,
+  }
 }
 
 interface SetListFormModalProps {
@@ -17,8 +26,109 @@ interface SetListFormModalProps {
   createdBy: string | number
 }
 
+interface ChordSheetPickerProps {
+  chordSheets: ChordSheet[]
+  selectedId: string | number | null | undefined
+  onSelect: (id: string | number | null) => void
+  colors: ReturnType<typeof useThemeColors>
+}
+
+function ChordSheetPicker({ chordSheets, selectedId, onSelect, colors }: ChordSheetPickerProps) {
+  const [open, setOpen] = useState(false)
+  const selected = chordSheets.find((c) => String(c.id) === String(selectedId))
+  return (
+    <YStack gap="$1">
+      <Text color={colors.textMuted} fontSize={11} fontWeight="600">
+        CHORD SHEET
+      </Text>
+      <Pressable onPress={() => setOpen((v) => !v)}>
+        <XStack
+          backgroundColor={colors.surface}
+          borderRadius="$2"
+          borderWidth={1}
+          borderColor={colors.border}
+          paddingHorizontal="$3"
+          paddingVertical="$2"
+          alignItems="center"
+          justifyContent="space-between"
+        >
+          <Text
+            color={selected ? colors.primary : colors.textMuted}
+            fontSize={13}
+            numberOfLines={1}
+            flex={1}
+          >
+            {selected
+              ? `${selected.title}${selected.artist ? ` — ${selected.artist}` : ''}`
+              : 'None'}
+          </Text>
+          <Text color={colors.textMuted} fontSize={11}>
+            {open ? '▲' : '▼'}
+          </Text>
+        </XStack>
+      </Pressable>
+      {open ? (
+        <YStack
+          backgroundColor={colors.surface}
+          borderRadius="$2"
+          borderWidth={1}
+          borderColor={colors.border}
+          maxHeight={160}
+          overflow="hidden"
+        >
+          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+            <Pressable
+              onPress={() => {
+                onSelect(null)
+                setOpen(false)
+              }}
+            >
+              <XStack
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                backgroundColor={selectedId == null ? colors.primary + '22' : 'transparent'}
+              >
+                <Text color={selectedId == null ? colors.primary : colors.textMuted} fontSize={13}>
+                  None
+                </Text>
+              </XStack>
+            </Pressable>
+            {chordSheets.map((cs) => (
+              <Pressable
+                key={String(cs.id)}
+                onPress={() => {
+                  onSelect(cs.id)
+                  setOpen(false)
+                }}
+              >
+                <XStack
+                  paddingHorizontal="$3"
+                  paddingVertical="$2"
+                  backgroundColor={
+                    String(selectedId) === String(cs.id) ? colors.primary + '22' : 'transparent'
+                  }
+                >
+                  <Text
+                    color={String(selectedId) === String(cs.id) ? colors.primary : colors.text}
+                    fontSize={13}
+                    numberOfLines={1}
+                  >
+                    {cs.title}
+                    {cs.artist ? ` — ${cs.artist}` : ''}
+                  </Text>
+                </XStack>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </YStack>
+      ) : null}
+    </YStack>
+  )
+}
+
 export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetListFormModalProps) {
   const colors = useThemeColors()
+  const chordSheets = useChordSheetsStore((s) => s.chordSheets)
   const [title, setTitle] = useState('')
   const [songs, setSongs] = useState<SetListSong[]>([makeSong()])
   const [selectedEvent, setSelectedEvent] = useState<EventInstance | null>(null)
@@ -36,8 +146,24 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
     onClose()
   }
 
-  const updateSong = (id: string, field: keyof SetListSong, value: string) => {
+  const updateSong = (id: string, field: keyof SetListSong, value: string | number | null) => {
     setSongs((prev) => prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)))
+  }
+
+  const autoLinkChordSheet = (songId: string, songName: string) => {
+    if (!songName.trim()) {
+      updateSong(songId, 'chordSheetId', null)
+      return
+    }
+    const lower = songName.toLowerCase()
+    const matches = chordSheets.filter((cs) => cs.title.toLowerCase() === lower)
+    if (matches.length === 1) {
+      updateSong(songId, 'chordSheetId', matches[0].id)
+    } else if (matches.length === 0) {
+      // No exact match — clear any auto-linked sheet
+      updateSong(songId, 'chordSheetId', null)
+    }
+    // Multiple matches: leave existing selection for user to resolve manually
   }
 
   const addSong = () => {
@@ -193,7 +319,10 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
                           },
                         ]}
                         value={song.name}
-                        onChangeText={(v) => updateSong(song.id, 'name', v)}
+                        onChangeText={(v) => {
+                          updateSong(song.id, 'name', v)
+                          autoLinkChordSheet(song.id, v)
+                        }}
                         placeholder="Song name"
                         placeholderTextColor={colors.textMuted}
                       />
@@ -244,6 +373,13 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
                         placeholderTextColor={colors.textMuted}
                         multiline
                         numberOfLines={2}
+                      />
+
+                      <ChordSheetPicker
+                        chordSheets={chordSheets}
+                        selectedId={song.chordSheetId}
+                        onSelect={(id) => updateSong(song.id, 'chordSheetId', id)}
+                        colors={colors}
                       />
                     </YStack>
                   ))}

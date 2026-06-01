@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { useRouter } from 'expo-router'
-import { ScrollView } from 'react-native'
+import { ScrollView, Pressable, View } from 'react-native'
 import { YStack, XStack, H2, H3, Text, Button, Input, Switch, Label, Separator } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import * as ImagePicker from 'expo-image-picker'
+import { db, storage } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { useUIStore } from '@/stores/uiStore'
+import { useThemeColors } from '@/theme/useThemeColors'
 import { Avatar } from '@/components/ui/Avatar'
 import { isPublic } from '@/lib/roles'
 import type { NotificationPrefs } from '@/types/user'
@@ -30,11 +33,38 @@ export default function ProfileScreen() {
   const { fbUser, profile, signOutNow } = useAuthStore()
   const { mode, setMode } = useThemeStore()
   const { toast } = useUIStore()
+  const colors = useThemeColors()
 
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '')
   const [saving, setSaving] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
 
   if (!profile || !fbUser) return null
+
+  const pickAndUploadPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    })
+    if (result.canceled || !result.assets[0]) return
+    setUploadingPhoto(true)
+    try {
+      const asset = result.assets[0]
+      const response = await fetch(asset.uri)
+      const blob = await response.blob()
+      const storageRef = ref(storage, `avatars/${fbUser.uid}`)
+      await uploadBytes(storageRef, blob)
+      const downloadURL = await getDownloadURL(storageRef)
+      await updateDoc(doc(db, 'users', fbUser.uid), { photoURL: downloadURL })
+      toast('Photo updated', 'success')
+    } catch {
+      toast('Failed to upload photo', 'error')
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
 
   const prefs = profile.notificationPrefs
 
@@ -113,7 +143,30 @@ export default function ProfileScreen() {
 
           {/* Avatar + name */}
           <YStack gap="$3" alignItems="center">
-            <Avatar uri={profile.photoURL} displayName={profile.displayName} size={80} />
+            <Pressable onPress={pickAndUploadPhoto} disabled={uploadingPhoto}>
+              <View style={{ position: 'relative' }}>
+                <Avatar uri={profile.photoURL} displayName={profile.displayName} size={80} />
+                <View
+                  style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    right: 0,
+                    width: 26,
+                    height: 26,
+                    borderRadius: 13,
+                    backgroundColor: colors.primary,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 2,
+                    borderColor: colors.background,
+                  }}
+                >
+                  <Text color="white" fontSize={13} lineHeight={16}>
+                    {uploadingPhoto ? '…' : '📷'}
+                  </Text>
+                </View>
+              </View>
+            </Pressable>
             <YStack gap="$2" width="100%">
               <Label htmlFor="displayName">Display name</Label>
               <XStack gap="$2">

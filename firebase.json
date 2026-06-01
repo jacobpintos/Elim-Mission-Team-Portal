@@ -21,5 +21,8 @@
   "firestore": {
     "rules": "mission-portal-app/firestore.rules",
     "indexes": "mission-portal-app/firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "mission-portal-app/storage.rules"
   }
 }

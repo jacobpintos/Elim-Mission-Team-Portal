@@ -4,6 +4,7 @@ export interface SetListSong {
   key: string
   link: string
   notes: string
+  chordSheetId?: string | number | null
 }
 
 export interface SetList {
