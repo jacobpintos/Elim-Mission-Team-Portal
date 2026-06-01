@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { ScrollView } from 'react-native'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
 import { RoleCheckboxes } from './RoleCheckboxes'
@@ -20,17 +19,10 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
   const { toast } = useUIStore()
   const { profile } = useAuthStore()
 
+  // Initialized from user prop — parent must pass key={user.uid} to reset on user change
   const [email, setEmail] = useState(user?.email ?? '')
   const [roles, setRoles] = useState<string[]>(user?.roles ?? ['regular'])
   const [saving, setSaving] = useState(false)
-
-  // Sync with incoming user
-  const handleOpen = () => {
-    if (user) {
-      setEmail(user.email)
-      setRoles(user.roles ?? ['regular'])
-    }
-  }
 
   const handleSave = async () => {
     if (!user) return
@@ -67,50 +59,47 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
     <Modal
       open={open}
       onOpenChange={(v) => {
-        if (v) handleOpen()
-        else onClose()
+        if (!v) onClose()
       }}
       title="Edit User"
     >
-      <ScrollView>
-        <YStack gap="$3" padding="$2">
-          {user && (
-            <Text fontSize="$4" fontWeight="700">
-              {user.displayName}
-            </Text>
-          )}
+      <YStack gap="$3" padding="$2">
+        {user && (
+          <Text fontSize="$4" fontWeight="700">
+            {user.displayName}
+          </Text>
+        )}
 
-          <YStack gap="$1">
-            <Text fontSize="$3" fontWeight="600">
-              Email
-            </Text>
-            <Input
-              placeholder="Email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              size="$3"
-            />
-          </YStack>
-
-          <YStack gap="$1">
-            <Text fontSize="$3" fontWeight="600">
-              Roles
-            </Text>
-            <RoleCheckboxes selected={roles} onChange={setRoles} />
-          </YStack>
-
-          <XStack gap="$2" justifyContent="flex-end">
-            <Button size="$3" onPress={onClose} theme="gray">
-              Cancel
-            </Button>
-            <Button size="$3" onPress={handleSave} disabled={saving} theme="active">
-              {saving ? <Spinner size="small" /> : 'Save'}
-            </Button>
-          </XStack>
+        <YStack gap="$1">
+          <Text fontSize="$3" fontWeight="600">
+            Email
+          </Text>
+          <Input
+            placeholder="Email"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            size="$3"
+          />
         </YStack>
-      </ScrollView>
+
+        <YStack gap="$1">
+          <Text fontSize="$3" fontWeight="600">
+            Roles
+          </Text>
+          <RoleCheckboxes selected={roles} onChange={setRoles} />
+        </YStack>
+
+        <XStack gap="$2" justifyContent="flex-end">
+          <Button size="$3" onPress={onClose} theme="gray">
+            Cancel
+          </Button>
+          <Button size="$3" onPress={handleSave} disabled={saving} theme="active">
+            {saving ? <Spinner size="small" /> : 'Save'}
+          </Button>
+        </XStack>
+      </YStack>
     </Modal>
   )
 }

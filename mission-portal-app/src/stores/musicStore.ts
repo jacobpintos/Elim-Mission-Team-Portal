@@ -10,6 +10,10 @@ export interface MusicItem {
   thumbnail?: string
   album?: string
   year?: number
+  month?: number
+  host?: string
+  guest?: string
+  preacher?: string
   featured?: boolean
   isNew?: boolean
   newDays?: number

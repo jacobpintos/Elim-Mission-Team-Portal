@@ -1,8 +1,8 @@
-import { Pressable } from 'react-native'
+import { Pressable, Linking } from 'react-native'
 import { XStack, YStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { FD } from '@/lib/format'
-import { openLocationInMaps } from '@/lib/location'
+import { openLocationInMaps, eventMapQuery } from '@/lib/location'
 import { AvailBadge } from './AvailBadge'
 import type { EventInstance, AvailResponse } from '@/types/events'
 
@@ -54,15 +54,22 @@ export function EventCard({
             {FD(event.date, { weekday: true })}
             {event.startTime ? ` · ${event.startTime}` : ''}
           </Text>
-          {event.location ? (
-            <Pressable onPress={() => openLocationInMaps(event.location!)}>
+          {event.location || event.city ? (
+            <Pressable onPress={() => openLocationInMaps(eventMapQuery(event))}>
               <Text
                 color={colors.primary}
                 fontSize="$2"
                 textDecorationLine="underline"
                 numberOfLines={1}
               >
-                {event.location}
+                {event.location ?? `${event.city}${event.state ? `, ${event.state}` : ''}`}
+              </Text>
+            </Pressable>
+          ) : null}
+          {event.isVirtual && event.virtualLink ? (
+            <Pressable onPress={() => Linking.openURL(event.virtualLink!)}>
+              <Text color={colors.primary} fontSize="$2" textDecorationLine="underline">
+                Join Here
               </Text>
             </Pressable>
           ) : null}

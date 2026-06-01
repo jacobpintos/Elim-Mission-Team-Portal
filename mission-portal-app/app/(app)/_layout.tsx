@@ -1,12 +1,30 @@
-import { Tabs, Redirect, usePathname } from 'expo-router'
-import { Platform, View, Pressable, Modal, TextInput, StyleSheet } from 'react-native'
+import { Tabs, Redirect, usePathname, useRouter } from 'expo-router'
+import { ScrollView, View, Pressable, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+} from 'react-native-reanimated'
+import { getDocs, collection } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
+import { allInstances, todayStr } from '@/lib/events'
+import type { EventTemplate } from '@/types/events'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
-import { visibleTabs } from '@/lib/roles'
+import { useUsersStore } from '@/stores/usersStore'
+import { useSecurityStore } from '@/stores/securityStore'
+import { useUIStore } from '@/stores/uiStore'
+import { visibleTabs, isSecurity, isPublic } from '@/lib/roles'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { AppLogo } from '@/components/ui/AppLogo'
+import { ReportFormModal } from '@/features/security/ReportFormModal'
 import type { Tab } from '@/lib/roles'
+
+const DRAWER_W = 260
 
 const TAB_LABELS: Record<Tab, string> = {
   dashboard: 'Dashboard',
@@ -30,219 +48,425 @@ const TAB_LABELS: Record<Tab, string> = {
   settings: 'Settings',
 }
 
-function ReportModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const colors = useThemeColors()
-  const [text, setText] = useState('')
-  const [submitted, setSubmitted] = useState(false)
+const TAB_ICONS: Record<Tab, string> = {
+  dashboard: '📊',
+  home: '🏠',
+  events: '📅',
+  assignments: '✅',
+  messages: '💬',
+  issues: '⚠',
+  security: '🔒',
+  inventory: '📦',
+  announce: '📢',
+  worship: '🎵',
+  admin: '⚙',
+  public: '🌐',
+  music: '🎶',
+  posts: '📝',
+  giving: '💝',
+  story: '📖',
+  connect: '🤝',
+  rolehub: '🏷',
+  settings: '⚙',
+}
 
-  const handleSubmit = () => {
-    if (!text.trim()) return
-    // TODO: wire to securityStore / Firestore
-    setSubmitted(true)
-    setTimeout(() => {
-      setSubmitted(false)
-      setText('')
-      onClose()
-    }, 1500)
-  }
-
+// Vertical bar + three horizontal bars — clearly a menu icon
+function MenuIcon({ color }: { color: string }) {
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <YStack
-          backgroundColor={colors.surface}
-          borderRadius="$4"
-          padding="$5"
-          gap="$3"
-          width="90%"
-          maxWidth={480}
-        >
-          <XStack justifyContent="space-between" alignItems="center">
-            <Text color={colors.text} fontSize="$5" fontWeight="700">
-              Report a Concern
-            </Text>
-            <Pressable onPress={onClose}>
-              <Text color={colors.textMuted} fontSize="$4">
-                ✕
-              </Text>
-            </Pressable>
-          </XStack>
-          <Text color={colors.textMuted} fontSize="$3">
-            Describe your concern and someone from the security team will follow up.
-          </Text>
-          {submitted ? (
-            <YStack alignItems="center" padding="$3">
-              <Text color={colors.primary} fontSize="$4" fontWeight="700">
-                Submitted ✓
-              </Text>
-            </YStack>
-          ) : (
-            <>
-              <TextInput
-                style={[
-                  styles.reportInput,
-                  {
-                    color: colors.text,
-                    borderColor: colors.border,
-                    backgroundColor: colors.background,
-                  },
-                ]}
-                value={text}
-                onChangeText={setText}
-                placeholder="Describe the concern…"
-                placeholderTextColor={colors.textMuted}
-                multiline
-                numberOfLines={4}
-              />
-              <Pressable onPress={handleSubmit} disabled={!text.trim()}>
-                <XStack
-                  backgroundColor={colors.primary}
-                  borderRadius="$2"
-                  paddingHorizontal="$4"
-                  paddingVertical="$2"
-                  justifyContent="center"
-                  opacity={text.trim() ? 1 : 0.5}
-                >
-                  <Text color="white" fontWeight="700" fontSize="$3">
-                    Submit Report
-                  </Text>
-                </XStack>
-              </Pressable>
-            </>
-          )}
-        </YStack>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+      <View style={{ width: 2, height: 20, backgroundColor: color, borderRadius: 1 }} />
+      <View style={{ gap: 4 }}>
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={{ width: 18, height: 2, backgroundColor: color, borderRadius: 1 }} />
+        ))}
       </View>
-    </Modal>
+    </View>
   )
 }
 
 export default function AppLayout() {
-  const { profile, loading } = useAuthStore()
-  const { theme, mode } = useThemeStore()
-  const [reportOpen, setReportOpen] = useState(false)
+  const { profile, loading, signOutNow } = useAuthStore()
+  const { theme } = useThemeStore()
+  const colors = useThemeColors()
   const pathname = usePathname()
+  const router = useRouter()
+  const [reportOpen, setReportOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
+  const [hasPublicEventToday, setHasPublicEventToday] = useState(false)
+  const { subscribe: subUsers, unsubscribe: unsubUsers, users } = useUsersStore()
+  const { createReport } = useSecurityStore()
+  const toast = useUIStore((s) => s.toast)
+
+  // Drawer + content animation (must be before early returns)
+  const drawerX = useSharedValue(-DRAWER_W)
+  const contentX = useSharedValue(0)
+
+  const drawerAnim = useAnimatedStyle(() => ({
+    transform: [{ translateX: drawerX.value }],
+  }))
+  const contentAnim = useAnimatedStyle(() => ({
+    transform: [{ translateX: contentX.value }],
+    flex: 1,
+    zIndex: 1,
+  }))
+
+  useEffect(() => {
+    subUsers()
+    return () => unsubUsers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!profile || !isPublic(profile)) return
+    const today = todayStr()
+    getDocs(collection(db, 'events'))
+      .then((snap) => {
+        const templates = snap.docs.map((d) => ({ ...(d.data() as EventTemplate), id: d.id }))
+        const todayEvents = allInstances(templates, {}, today, today)
+        setHasPublicEventToday(todayEvents.some((ev) => ev.isPublic))
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (loading) return null
   if (!profile) return <Redirect href="/(auth)/login" />
 
   const tabs = visibleTabs(profile)
 
-  // Block direct URL access to routes the user's role can't see
-  const pathSeg = pathname.split('/').filter(Boolean)[0] ?? ''
-  if (pathSeg && pathSeg !== 'profile' && !tabs.includes(pathSeg as Tab)) {
-    return <Redirect href={`/${tabs[0] ?? 'home'}`} />
-  }
-  const isWeb = Platform.OS === 'web'
-  const showReportButton = !tabs.includes('security')
-
-  const bg = mode === 'dark' ? theme.dark.background : theme.light.background
-  const text = mode === 'dark' ? theme.dark.text : theme.light.text
-  const border = mode === 'dark' ? theme.dark.border : theme.light.border
-
-  return (
-    <View style={{ flex: 1 }}>
-      <Tabs
-        screenOptions={{
-          tabBarPosition: isWeb ? 'top' : 'bottom',
-          tabBarActiveTintColor: theme.primary,
-          tabBarInactiveTintColor: mode === 'dark' ? theme.dark.textMuted : theme.light.textMuted,
-          tabBarStyle: {
-            backgroundColor: bg,
-            borderTopColor: border,
-            borderBottomColor: border,
-          },
-          headerStyle: { backgroundColor: bg },
-          headerTintColor: text,
-          sceneStyle: { backgroundColor: bg },
+  // Unverified users who completed onboarding are awaiting role assignment — show holding screen
+  if (tabs.length === 0) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 32,
         }}
       >
-        {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
-          <Tabs.Screen
-            key={tab}
-            name={tab}
-            options={{
-              title: TAB_LABELS[tab],
-              href: tabs.includes(tab) ? undefined : null,
-            }}
-          />
-        ))}
-        {/* Sub-routes hidden from tab bar */}
-        <Tabs.Screen name="events/index" options={{ href: null }} />
-        <Tabs.Screen name="events/[id]" options={{ href: null }} />
-        <Tabs.Screen name="messages/index" options={{ href: null }} />
-        <Tabs.Screen name="messages/[threadId]" options={{ href: null }} />
-        <Tabs.Screen name="issues/index" options={{ href: null }} />
-        <Tabs.Screen name="issues/[id]" options={{ href: null }} />
-        <Tabs.Screen name="issues/kaizen" options={{ href: null }} />
-        <Tabs.Screen name="issues/planning" options={{ href: null }} />
-        <Tabs.Screen name="pages/[slug]" options={{ href: null }} />
-        <Tabs.Screen name="pages/our-story" options={{ href: null }} />
-        <Tabs.Screen name="pages/connect" options={{ href: null }} />
-        <Tabs.Screen name="pages/giving" options={{ href: null }} />
-        <Tabs.Screen name="admin/index" options={{ href: null }} />
-        <Tabs.Screen name="admin/users" options={{ href: null }} />
-        <Tabs.Screen name="admin/groups" options={{ href: null }} />
-        <Tabs.Screen name="admin/teams" options={{ href: null }} />
-        <Tabs.Screen name="admin/templates" options={{ href: null }} />
-        <Tabs.Screen name="admin/theme" options={{ href: null }} />
-        <Tabs.Screen name="admin/audit" options={{ href: null }} />
-        <Tabs.Screen name="admin/digests" options={{ href: null }} />
-        <Tabs.Screen name="admin/leadership" options={{ href: null }} />
-        <Tabs.Screen name="public/index" options={{ href: null }} />
-        <Tabs.Screen name="public/posts" options={{ href: null }} />
-        <Tabs.Screen name="public/connect" options={{ href: null }} />
-        <Tabs.Screen name="public/giving" options={{ href: null }} />
-        <Tabs.Screen name="public/story" options={{ href: null }} />
-        <Tabs.Screen name="public/music" options={{ href: null }} />
-        <Tabs.Screen name="rolehub/index" options={{ href: null }} />
-        <Tabs.Screen name="rolehub/inventory" options={{ href: null }} />
-        <Tabs.Screen name="rolehub/worship" options={{ href: null }} />
-        <Tabs.Screen name="rolehub/admin" options={{ href: null }} />
-        <Tabs.Screen name="profile" options={{ href: null }} />
-      </Tabs>
-
-      {showReportButton ? (
-        <Pressable
-          onPress={() => setReportOpen(true)}
-          style={[styles.reportFab, { backgroundColor: theme.primary }]}
+        <Text
+          style={{
+            color: colors.text,
+            fontSize: 20,
+            fontWeight: '700',
+            marginBottom: 12,
+            textAlign: 'center',
+          }}
         >
-          <Text color="white" fontSize="$2" fontWeight="700">
-            ⚑ Report
-          </Text>
+          Account Pending
+        </Text>
+        <Text
+          style={{
+            color: colors.textMuted,
+            fontSize: 14,
+            textAlign: 'center',
+            lineHeight: 22,
+            marginBottom: 32,
+          }}
+        >
+          Your account is awaiting role assignment by an admin.{'\n'}You&apos;ll be notified once
+          access is granted.
+        </Text>
+        <Pressable
+          onPress={() => signOutNow()}
+          style={{
+            paddingVertical: 10,
+            paddingHorizontal: 24,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Text style={{ color: colors.primary, fontWeight: '600' }}>Sign out</Text>
         </Pressable>
+      </View>
+    )
+  }
+
+  // Block direct URL access to unauthorized routes (href:null only hides the tab, doesn't block navigation)
+  // 'admin/*' screens are owned by the 'rolehub' tab — allow them when rolehub is accessible
+  const SUB_ROUTE_OWNERS: Partial<Record<string, Tab>> = { admin: 'rolehub' }
+  const pathSeg = pathname.split('/').filter(Boolean)[0] ?? ''
+  const owner = SUB_ROUTE_OWNERS[pathSeg]
+  const allowed = tabs.includes(pathSeg as Tab) || (!!owner && tabs.includes(owner))
+  if (pathSeg && pathSeg !== 'profile' && !allowed) {
+    return <Redirect href={`/${tabs[0]}`} />
+  }
+
+  const showReportButton = !isPublic(profile) || hasPublicEventToday
+
+  const securityUsers = users.filter((u) => isSecurity(u))
+
+  const handleReportSubmit = async (data: {
+    description: string
+    location: string
+    witnesses: string
+    photoFile: File | null
+  }) => {
+    try {
+      await createReport(
+        {
+          description: data.description,
+          location: data.location,
+          witnesses: data.witnesses,
+          reportedBy: String(profile?.uid ?? ''),
+          reporterName: profile?.displayName ?? 'Unknown',
+        },
+        data.photoFile
+      )
+      const sendNotif = httpsCallable(functions, 'sendNotification')
+      securityUsers.forEach((u) => {
+        sendNotif({
+          uid: String(u.uid),
+          type: 'announcement',
+          data: {
+            title: '🚨 Security Report',
+            body: `New incident at ${data.location}: ${data.description.slice(0, 80)}${data.description.length > 80 ? '…' : ''}`,
+          },
+        }).catch(() => {})
+      })
+      toast('Report submitted', 'success')
+      setReportOpen(false)
+    } catch {
+      toast('Failed to submit report', 'error')
+    }
+  }
+
+  // Determine current screen title from pathname
+  const firstSeg = pathname.split('/').filter(Boolean)[0] as Tab | undefined
+  const currentTitle = firstSeg && firstSeg in TAB_LABELS ? TAB_LABELS[firstSeg as Tab] : 'Menu'
+
+  function openDrawer() {
+    setIsOpen(true)
+    // eslint-disable-next-line react-hooks/immutability
+    drawerX.value = withTiming(0, { duration: 260 })
+    // eslint-disable-next-line react-hooks/immutability
+    contentX.value = withTiming(DRAWER_W, { duration: 260 })
+  }
+
+  function closeDrawer() {
+    // eslint-disable-next-line react-hooks/immutability
+    drawerX.value = withTiming(-DRAWER_W, { duration: 260 })
+    // eslint-disable-next-line react-hooks/immutability
+    contentX.value = withTiming(0, { duration: 260 }, (done) => {
+      'worklet'
+      if (done) runOnJS(setIsOpen)(false)
+    })
+  }
+
+  return (
+    <View style={{ flex: 1, overflow: 'hidden', backgroundColor: colors.background }}>
+      {/* Drawer panel — slides in from left, always rendered */}
+      <Animated.View
+        style={[
+          {
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: DRAWER_W,
+            backgroundColor: colors.background,
+            borderRightWidth: 1,
+            borderRightColor: colors.border,
+            zIndex: 20,
+          },
+          drawerAnim,
+        ]}
+      >
+        <YStack flex={1}>
+          {/* Logo header */}
+          <YStack
+            padding="$4"
+            paddingTop="$6"
+            borderBottomWidth={1}
+            borderBottomColor={colors.border}
+            alignItems="center"
+          >
+            <AppLogo size="sm" showSlogan={false} />
+          </YStack>
+
+          {/* Nav items */}
+          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+            <YStack paddingVertical="$2">
+              {tabs.map((tab) => {
+                const isActive = pathname === `/${tab}` || pathname.startsWith(`/${tab}/`)
+                return (
+                  <Pressable
+                    key={tab}
+                    onPress={() => {
+                      closeDrawer()
+                      router.push(`/${tab}`)
+                    }}
+                  >
+                    <XStack
+                      paddingHorizontal="$4"
+                      paddingVertical="$3"
+                      gap="$3"
+                      alignItems="center"
+                      backgroundColor={isActive ? colors.primary + '22' : 'transparent'}
+                      borderLeftWidth={3}
+                      borderLeftColor={isActive ? colors.primary : 'transparent'}
+                    >
+                      <Text fontSize={16}>{TAB_ICONS[tab]}</Text>
+                      <Text
+                        color={isActive ? colors.primary : colors.text}
+                        fontWeight={isActive ? '700' : '400'}
+                        fontSize="$3"
+                      >
+                        {TAB_LABELS[tab]}
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                )
+              })}
+
+              {/* Profile */}
+              <Pressable
+                onPress={() => {
+                  closeDrawer()
+                  router.push('/profile')
+                }}
+              >
+                <XStack
+                  paddingHorizontal="$4"
+                  paddingVertical="$3"
+                  gap="$3"
+                  alignItems="center"
+                  backgroundColor={pathname === '/profile' ? colors.primary + '22' : 'transparent'}
+                  borderLeftWidth={3}
+                  borderLeftColor={pathname === '/profile' ? colors.primary : 'transparent'}
+                >
+                  <Text fontSize={16}>👤</Text>
+                  <Text
+                    color={pathname === '/profile' ? colors.primary : colors.text}
+                    fontWeight={pathname === '/profile' ? '700' : '400'}
+                    fontSize="$3"
+                  >
+                    Profile
+                  </Text>
+                </XStack>
+              </Pressable>
+            </YStack>
+          </ScrollView>
+
+          {/* Report a Concern */}
+          {showReportButton ? (
+            <Pressable
+              onPress={() => {
+                closeDrawer()
+                setReportOpen(true)
+              }}
+            >
+              <XStack
+                padding="$4"
+                gap="$3"
+                alignItems="center"
+                borderTopWidth={1}
+                borderTopColor={colors.border}
+              >
+                <Text fontSize={14}>⚑</Text>
+                <Text color={colors.textMuted} fontSize="$3">
+                  Report a Concern
+                </Text>
+              </XStack>
+            </Pressable>
+          ) : null}
+        </YStack>
+      </Animated.View>
+
+      {/* Content area — shifts right when drawer opens */}
+      <Animated.View style={contentAnim}>
+        {/* Custom header bar */}
+        <View
+          style={{
+            backgroundColor: colors.background,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 14,
+          }}
+        >
+          <Pressable onPress={openDrawer} style={{ padding: 4 }}>
+            <MenuIcon color={colors.text} />
+          </Pressable>
+          <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700', flex: 1 }}>
+            {currentTitle}
+          </Text>
+        </View>
+
+        {/* Tabs with hidden bar — handles all routing */}
+        <View style={{ flex: 1 }}>
+          <Tabs
+            screenOptions={{
+              headerShown: false,
+              tabBarStyle: { display: 'none', height: 0 },
+              tabBarActiveTintColor: theme.primary,
+              sceneStyle: { backgroundColor: colors.background },
+            }}
+          >
+            {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
+              <Tabs.Screen
+                key={tab}
+                name={tab}
+                options={{
+                  title: TAB_LABELS[tab],
+                  href: tabs.includes(tab) ? undefined : null,
+                }}
+              />
+            ))}
+            {/* Sub-routes hidden from tab bar */}
+            <Tabs.Screen name="events/index" options={{ href: null }} />
+            <Tabs.Screen name="events/[id]" options={{ href: null }} />
+            <Tabs.Screen name="messages/index" options={{ href: null }} />
+            <Tabs.Screen name="messages/[threadId]" options={{ href: null }} />
+            <Tabs.Screen name="issues/index" options={{ href: null }} />
+            <Tabs.Screen name="issues/[id]" options={{ href: null }} />
+            <Tabs.Screen name="issues/kaizen" options={{ href: null }} />
+            <Tabs.Screen name="issues/planning" options={{ href: null }} />
+            <Tabs.Screen name="pages/[slug]" options={{ href: null }} />
+            <Tabs.Screen name="pages/our-story" options={{ href: null }} />
+            <Tabs.Screen name="pages/connect" options={{ href: null }} />
+            <Tabs.Screen name="pages/giving" options={{ href: null }} />
+            <Tabs.Screen name="admin/index" options={{ href: null }} />
+            <Tabs.Screen name="admin/users" options={{ href: null }} />
+            <Tabs.Screen name="admin/avail" options={{ href: null }} />
+            <Tabs.Screen name="admin/groups" options={{ href: null }} />
+            <Tabs.Screen name="admin/teams" options={{ href: null }} />
+            <Tabs.Screen name="admin/templates" options={{ href: null }} />
+            <Tabs.Screen name="admin/theme" options={{ href: null }} />
+            <Tabs.Screen name="admin/audit" options={{ href: null }} />
+            <Tabs.Screen name="admin/digests" options={{ href: null }} />
+            <Tabs.Screen name="admin/leadership" options={{ href: null }} />
+            <Tabs.Screen name="public/index" options={{ href: null }} />
+            <Tabs.Screen name="public/posts" options={{ href: null }} />
+            <Tabs.Screen name="public/connect" options={{ href: null }} />
+            <Tabs.Screen name="public/giving" options={{ href: null }} />
+            <Tabs.Screen name="public/story" options={{ href: null }} />
+            <Tabs.Screen name="public/music" options={{ href: null }} />
+            <Tabs.Screen name="rolehub/index" options={{ href: null }} />
+            <Tabs.Screen name="rolehub/inventory" options={{ href: null }} />
+            <Tabs.Screen name="rolehub/worship" options={{ href: null }} />
+            <Tabs.Screen name="rolehub/admin" options={{ href: null }} />
+            <Tabs.Screen name="profile" options={{ href: null }} />
+          </Tabs>
+        </View>
+      </Animated.View>
+
+      {/* Backdrop — tap anywhere to close drawer */}
+      {isOpen ? (
+        <Pressable onPress={closeDrawer} style={[StyleSheet.absoluteFill, { zIndex: 10 }]} />
       ) : null}
 
-      <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} />
+      <ReportFormModal
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        onSubmit={handleReportSubmit}
+      />
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  reportFab: {
-    position: 'absolute',
-    bottom: 80,
-    right: 16,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  reportInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 14,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-})

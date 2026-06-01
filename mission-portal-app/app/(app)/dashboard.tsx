@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ScrollView, useWindowDimensions } from 'react-native'
 import { YStack, XStack, Text, H3, Button } from 'tamagui'
 import { Stack } from 'expo-router'
+import { AppLogo } from '@/components/ui/AppLogo'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useTasksStore } from '@/stores/tasksStore'
@@ -16,6 +17,7 @@ import { todayStr, dateStr } from '@/lib/events'
 import { timeOfDay } from '@/lib/format'
 import { sameId } from '@/lib/ids'
 import { isOverdue } from '@/lib/availability'
+import { isAdmin } from '@/lib/roles'
 import { usePWAInstallPrompt } from '@/lib/pwaInstall'
 import type { EventInstance } from '@/types/events'
 
@@ -38,6 +40,7 @@ export default function Dashboard() {
   const { canInstall, install } = usePWAInstallPrompt()
 
   const uid = profile?.uid ?? ''
+  const admin = isAdmin(profile)
 
   useEffect(() => {
     subEvents()
@@ -54,9 +57,11 @@ export default function Dashboard() {
   const today = todayStr()
   const in60 = dateStr(60)
 
-  // Upcoming events (60 days) — dedupe by templateId
+  // Upcoming events (60 days) — visibility-filtered, dedupe by templateId
   const upcoming60 = (() => {
-    const all = instances(today, in60)
+    const all = instances(today, in60).filter(
+      (ev) => ev.isPublic || admin || ev.users?.some((x) => sameId(x, uid))
+    )
     const seen = new Set<string>()
     return all.filter((ev) => {
       const key = String(ev.templateId)
@@ -72,7 +77,8 @@ export default function Dashboard() {
     .sort((a, b) => b.ts - a.ts)
     .slice(0, 6)
 
-  const greeting = `Good ${timeOfDay()}, ${profile?.displayName?.split(' ')[0] ?? 'there'}!`
+  const firstName = profile?.displayName?.split(' ')[0]
+  const greeting = firstName ? `Good ${timeOfDay()}, ${firstName}!` : `Good ${timeOfDay()}!`
   const todayLabel = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -87,8 +93,7 @@ export default function Dashboard() {
   const getEventHealthStatus = (ev: EventInstance): 'on-track' | 'behind' | 'no-tasks' => {
     const evTasks = tasks.filter(
       (t) =>
-        sameId(t.evId ?? t.evTemplateId, ev.templateId) ||
-        sameId(t.evTemplateId, ev.taskTemplateId)
+        sameId(t.evId ?? t.evTemplateId, ev.templateId) || sameId(t.evTemplateId, ev.taskTemplateId)
     )
     if (evTasks.length === 0) return 'no-tasks'
     const hasProblem = evTasks.some((t) => t.status === 'behind' || isOverdue(t))
@@ -98,8 +103,7 @@ export default function Dashboard() {
   const getKanbanTasks = (ev: EventInstance) =>
     tasks.filter(
       (t) =>
-        sameId(t.evId ?? t.evTemplateId, ev.templateId) ||
-        sameId(t.evTemplateId, ev.taskTemplateId)
+        sameId(t.evId ?? t.evTemplateId, ev.templateId) || sameId(t.evTemplateId, ev.taskTemplateId)
     )
 
   return (
@@ -126,14 +130,17 @@ export default function Dashboard() {
         )}
 
         {/* Header */}
-        <YStack gap="$1">
-          <Text color={colors.text} fontSize="$6" fontWeight="700">
-            {greeting}
-          </Text>
-          <Text color={colors.textMuted} fontSize="$3">
-            {todayLabel}
-          </Text>
-        </YStack>
+        <XStack alignItems="center" justifyContent="space-between" gap="$3">
+          <YStack flex={1} gap="$1">
+            <Text color={colors.text} fontSize="$5" fontWeight="700">
+              {greeting}
+            </Text>
+            <Text color={colors.textMuted} fontSize="$3">
+              {todayLabel}
+            </Text>
+          </YStack>
+          <AppLogo size="sm" showSlogan={false} />
+        </XStack>
 
         {/* Two-column layout on wide screens */}
         <XStack gap="$4" flexDirection={isWide ? 'row' : 'column'} alignItems="flex-start">
@@ -159,8 +166,8 @@ export default function Dashboard() {
                   myAvail={myAvail(ev)}
                   onDetail={() => setDetailEvent(ev)}
                   onAvail={() => setAvailEvent(ev)}
-                  healthStatus={getEventHealthStatus(ev)}
-                  onShowTasks={() => setKanbanEvent(ev)}
+                  healthStatus={ev.taskTemplateId ? getEventHealthStatus(ev) : undefined}
+                  onShowTasks={ev.taskTemplateId ? () => setKanbanEvent(ev) : undefined}
                 />
               ))
             )}
@@ -205,6 +212,8 @@ export default function Dashboard() {
       <EventDetailModal
         event={detailEvent}
         uid={uid}
+        isMember
+        isAdmin={admin}
         open={!!detailEvent}
         onClose={() => setDetailEvent(null)}
         onAvail={() => {

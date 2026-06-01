@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router'
 import { ScrollView } from 'react-native'
 import { YStack, XStack, H2, H3, Text, Button, Input, Switch, Label, Separator } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { doc, updateDoc } from 'firebase/firestore'
+import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
@@ -39,9 +39,22 @@ export default function ProfileScreen() {
   const prefs = profile.notificationPrefs
 
   const saveDisplayName = async () => {
+    const trimmed = displayName.trim()
+    if (!trimmed) {
+      toast('Name cannot be empty', 'error')
+      return
+    }
     setSaving(true)
     try {
-      await updateDoc(doc(db, 'users', fbUser.uid), { displayName })
+      const snap = await getDocs(
+        query(collection(db, 'users'), where('displayName', '==', trimmed))
+      )
+      const taken = snap.docs.some((d) => d.id !== fbUser.uid)
+      if (taken) {
+        toast('That display name is already taken', 'error')
+        return
+      }
+      await updateDoc(doc(db, 'users', fbUser.uid), { displayName: trimmed })
       toast('Name updated', 'success')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to update name'

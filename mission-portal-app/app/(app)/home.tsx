@@ -4,6 +4,7 @@ import { YStack, XStack, Text, H3, Input } from 'tamagui'
 import { Stack, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
+import { useGroupsStore } from '@/stores/groupsStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useAnnounceStore } from '@/stores/announceStore'
@@ -15,10 +16,11 @@ import { TaskCard } from '@/components/ui/TaskCard'
 import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
 import { EventDetailModal } from '@/features/events/EventDetailModal'
 import { AvailModal } from '@/features/events/AvailModal'
-import { isPublic } from '@/lib/roles'
+import { isAdmin, isSecurity, isMerch, isWorship } from '@/lib/roles'
+import { AppLogo } from '@/components/ui/AppLogo'
 import { todayStr, dateStr } from '@/lib/events'
 import { FD, timeOfDay } from '@/lib/format'
-import { haversineMiles, geocodeCity } from '@/lib/geocode'
+import { haversineMiles, geocodeCity, estimatedDriveTime } from '@/lib/geocode'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { EventInstance, PostPage } from '@/types/events'
@@ -111,13 +113,17 @@ function PubHomeContent() {
     setSaving(true)
     try {
       const coords = await geocodeCity(city, stateVal)
-      const locationPref = { city, state: stateVal, radius, ...(coords ?? {}) }
+      const prevCoords =
+        profile?.locationPref?.lat !== undefined
+          ? { lat: profile.locationPref.lat, lng: profile.locationPref.lng }
+          : {}
+      const locationPref = { city, state: stateVal, radius, ...prevCoords, ...(coords ?? {}) }
       await updateDoc(doc(db, 'users', uid), { locationPref })
       setShowLocForm(false)
       if (coords) {
         toast('Location saved — nearby events will appear below.', 'success')
       } else {
-        toast(`Could not find "${city}, ${stateVal}". Location saved without map coordinates.`, 'error')
+        toast('Location saved. Could not geocode city — Events Near Me may not update until a valid city/state is set.', 'error')
       }
     } catch {
       toast('Failed to save location', 'error')
@@ -136,13 +142,12 @@ function PubHomeContent() {
           padding="$4"
           borderWidth={1}
           borderColor={colors.border}
-          gap="$1"
+          gap="$3"
+          alignItems="center"
         >
-          <Text color={colors.text} fontSize="$5" fontWeight="700">
-            Welcome, {profile?.displayName?.split(' ')[0] || 'friend'}!
-          </Text>
-          <Text color={colors.textMuted} fontSize="$3">
-            The Well of Iowa · Together for Jesus
+          <AppLogo size="lg" showSlogan />
+          <Text color={colors.text} fontSize="$4" fontWeight="600" textAlign="center">
+            Welcome{profile?.displayName ? `, ${profile.displayName.split(' ')[0]}` : ', friend'}!
           </Text>
         </YStack>
 
@@ -288,6 +293,32 @@ function PubHomeContent() {
                   <Text color={colors.textMuted} fontSize="$2">
                     {ev.location}
                   </Text>
+                ) : null}
+                {!ev.isVirtual && ev._geocodeLat && ev._geocodeLng && profile?.locationPref?.lat ? (
+                  <Text color={colors.textMuted} fontSize="$2">
+                    {Math.round(
+                      haversineMiles(
+                        profile.locationPref.lat,
+                        profile.locationPref.lng!,
+                        ev._geocodeLat,
+                        ev._geocodeLng
+                      )
+                    )} mi · {estimatedDriveTime(
+                      haversineMiles(
+                        profile.locationPref.lat,
+                        profile.locationPref.lng!,
+                        ev._geocodeLat,
+                        ev._geocodeLng
+                      )
+                    )} (est.)
+                  </Text>
+                ) : null}
+                {ev.isVirtual && ev.virtualLink ? (
+                  <Pressable onPress={() => Linking.openURL(ev.virtualLink!)}>
+                    <Text color="#8e44ad" fontSize="$2" textDecorationLine="underline">
+                      Join Here
+                    </Text>
+                  </Pressable>
                 ) : null}
               </YStack>
             ))
@@ -499,6 +530,7 @@ function TeamHomeContent() {
   const tasksStore = useTasksStore()
   const announceStore = useAnnounceStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
+  const { subscribe: subGroups, unsubscribe: unsubGroups } = useGroupsStore()
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
   const { subscribe: subAnnounce, unsubscribe: unsubAnnounce } = useAnnounceStore()
 
@@ -507,10 +539,12 @@ function TeamHomeContent() {
 
   useEffect(() => {
     subEvents()
+    subGroups()
     subTasks()
     subAnnounce()
     return () => {
       unsubEvents()
+      unsubGroups()
       unsubTasks()
       unsubAnnounce()
     }
@@ -663,6 +697,8 @@ function TeamHomeContent() {
       <EventDetailModal
         event={detailEvent}
         uid={uid}
+        isMember
+        isAdmin={false}
         open={!!detailEvent}
         onClose={() => setDetailEvent(null)}
         onAvail={() => {
@@ -683,7 +719,14 @@ function TeamHomeContent() {
 export default function Home() {
   const { profile } = useAuthStore()
 
-  if (isPublic(profile)) {
+  const isMember =
+    isAdmin(profile) ||
+    isSecurity(profile) ||
+    isWorship(profile) ||
+    isMerch(profile) ||
+    profile?.roles?.includes('regular')
+
+  if (!isMember) {
     return (
       <>
         <Stack.Screen options={{ title: 'Home' }} />

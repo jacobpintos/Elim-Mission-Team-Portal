@@ -29,6 +29,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # Determine which files changed so we can deploy selectively on push.
+      - name: Detect changed paths
+        id: changed
+        if: github.event_name == 'push'
+        run: |
+          git diff --name-only HEAD~1 HEAD > /tmp/changed.txt
+          echo "functions=$(grep -c 'mission-portal-app/functions/' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
+          echo "rules=$(grep -c 'mission-portal-app/firestore.rules' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
 
       # Authenticate with Firebase using the service account JSON stored
       # as a GitHub secret. Sets GOOGLE_APPLICATION_CREDENTIALS automatically.
@@ -43,24 +54,24 @@ jobs:
           node-version: '20'
 
       # Install the functions' npm deps so the predeploy TypeScript build works.
+      # Only needed when functions are being deployed.
       - name: Install Functions dependencies
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.deploy_functions == true) ||
+          (github.event_name == 'push' && steps.changed.outputs.functions != '0')
         run: npm ci
         working-directory: mission-portal-app/functions
 
-      # Deploy Cloud Functions.
-      # On manual trigger: runs only if the checkbox was checked.
-      # On push: runs if functions/** changed (path filter above).
+      # Deploy Cloud Functions only when functions source changed (or manually requested).
       - name: Deploy Cloud Functions
         if: |
           (github.event_name == 'workflow_dispatch' && inputs.deploy_functions == true) ||
-          (github.event_name == 'push')
+          (github.event_name == 'push' && steps.changed.outputs.functions != '0')
         run: npx firebase-tools deploy --only functions --project ${{ secrets.FIREBASE_PROJECT_ID }}
 
-      # Deploy Firestore security rules.
-      # On manual trigger: runs only if the checkbox was checked.
-      # On push: runs automatically (path filter already scopes this).
+      # Deploy Firestore security rules only when the rules file changed (or manually requested).
       - name: Deploy Firestore Rules
         if: |
           (github.event_name == 'workflow_dispatch' && inputs.deploy_rules == true) ||
-          (github.event_name == 'push')
+          (github.event_name == 'push' && steps.changed.outputs.rules != '0')
         run: npx firebase-tools deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }}

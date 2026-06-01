@@ -34,7 +34,7 @@ interface TasksStore {
   // actions
   subscribe: () => void
   unsubscribe: () => void
-  createTask: (data: Omit<Task, 'id'>) => Promise<void>
+  createTask: (data: Omit<Task, 'id'>) => Promise<string | number>
   updateTask: (id: string | number, patch: Partial<Task>) => Promise<void>
   deleteTask: (id: string | number) => Promise<void>
   completeTask: (id: string | number) => Promise<void>
@@ -89,6 +89,7 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
       id,
       _updatedAt: serverTimestamp(),
     })
+    return id
   },
 
   updateTask: async (id, patch) => {

@@ -9,10 +9,12 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { geocodeCity } from '@/lib/geocode'
 import { allInstances } from '@/lib/events'
 import { availKey } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { nextId } from '@/lib/counters'
+import { useGroupsStore } from '@/stores/groupsStore'
 import type { EventTemplate, EventInstance, AvailResponse } from '@/types/events'
 
 interface EventsStore {
@@ -43,6 +45,13 @@ interface EventsStore {
   ) => Promise<void>
 }
 
+async function resolveGeo(city?: string, state?: string) {
+  if (!city || !state) return {}
+  const coords = await geocodeCity(city, state)
+  if (!coords) return {}
+  return { lat: coords.lat, lng: coords.lng, _geocodeLat: coords.lat, _geocodeLng: coords.lng }
+}
+
 export const useEventsStore = create<EventsStore>((set, get) => ({
   templates: [],
   overrides: {},
@@ -60,16 +69,26 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   myInstances: (uid, from, to) => {
     const { templates, overrides } = get()
     const all = allInstances(templates, overrides, from, to)
-    return all.filter((ev) => ev.users?.some((x) => sameId(x, uid)))
+    const { getMemberUids } = useGroupsStore.getState()
+    return all.filter((ev) => {
+      if (ev.users?.some((x) => sameId(x, uid))) return true
+      if (ev.groups?.length) return getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid))
+      return false
+    })
   },
 
   pendingAvailEvents: (uid) => {
     const today = new Date().toISOString().split('T')[0]
-    const in7 = new Date()
-    in7.setDate(in7.getDate() + 7)
-    const to = in7.toISOString().split('T')[0]
+    const in60 = new Date()
+    in60.setDate(in60.getDate() + 60)
+    const to = in60.toISOString().split('T')[0]
     const { templates, overrides, avail } = get()
+    const { getMemberUids } = useGroupsStore.getState()
     return allInstances(templates, overrides, today, to).filter((ev) => {
+      const isAssigned =
+        ev.users?.some((x) => sameId(x, uid)) ||
+        (ev.groups?.length ? getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)) : false)
+      if (!isAssigned) return false
       const response = avail[availKey(ev)]?.[uid]
       return !response || response.status === 'tbd'
     })
@@ -120,20 +139,23 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
 
   createEvent: async (data) => {
     const id = await nextId('nEv')
+    const geoFields = await resolveGeo(data.city, data.state)
     await setDoc(doc(db, 'events', String(id)), {
       ...data,
+      ...geoFields,
       id,
       _updatedAt: serverTimestamp(),
     })
   },
 
   updateEvent: async (id, patch) => {
-    // Optimistic update
     set((s) => ({
       templates: s.templates.map((t) => (sameId(t.id, id) ? { ...t, ...patch } : t)),
     }))
+    const geoFields = await resolveGeo(patch.city, patch.state)
     await updateDoc(doc(db, 'events', String(id)), {
       ...patch,
+      ...geoFields,
       _updatedAt: serverTimestamp(),
     })
   },
@@ -179,9 +201,10 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
         [key]: { ...(s.avail[key] ?? {}), [uid]: response },
       },
     }))
-    await updateDoc(doc(db, 'avail', key), {
-      [`responses.${uid}`]: response,
-      updatedAt: serverTimestamp(),
-    })
+    await setDoc(
+      doc(db, 'avail', key),
+      { [`responses.${uid}`]: response, updatedAt: serverTimestamp() },
+      { merge: true }
+    )
   },
 }))

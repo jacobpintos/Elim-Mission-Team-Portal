@@ -1,3 +1,11 @@
+export interface CarpoolCarData {
+  id: string
+  label: string
+  seats?: number
+  driver: string
+  riders: string[]
+}
+
 export interface EventTeam {
   name: string
   leaders: (string | number)[]
@@ -31,16 +39,19 @@ export interface EventTemplate {
   dcw?: string
   dcm?: string
   users?: (string | number)[]
+  groups?: string[]
   food?: boolean
   carpool?: boolean
   foodItems?: string[]
   carpoolLoc?: string
+  carpoolCars?: CarpoolCarData[]
   vehicles?: unknown[]
   teams?: EventTeam[]
   isPublic?: boolean
   taskTemplateId?: string
   extraDays?: ExtraDay[]
   overrides?: Record<string, Partial<EventTemplate>>
+  planningBoardId?: string | number
   _geocodeLat?: number
   _geocodeLng?: number
   _updatedAt?: unknown
@@ -80,6 +91,10 @@ export interface Task {
   dueDate?: string | null
   projectedDate?: string | null
   overdueNotified?: boolean
+  taskType?: 'kaizen_verification' | 'kaizen_action' | 'issue_corrective' | 'worship_setlist_ack'
+  kaizenId?: string | number
+  issueId?: string | number
+  setListId?: string | number
   _updatedAt?: unknown
 }
 

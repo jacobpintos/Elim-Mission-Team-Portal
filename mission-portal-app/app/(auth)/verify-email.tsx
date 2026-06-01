@@ -48,7 +48,9 @@ export default function VerifyEmailScreen() {
         <H1>Verify your email</H1>
         <Paragraph color="$colorMuted">
           We sent a verification link to <Paragraph fontWeight="bold">{fbUser?.email}</Paragraph>.
-          Please check your inbox and click the link to continue.
+          {'\n\n'}Check your inbox and your{' '}
+          <Paragraph fontWeight="bold">spam/junk folder</Paragraph> if you don&apos;t see it within
+          a minute. The email comes from a Firebase no-reply address.
         </Paragraph>
 
         <Button

@@ -28,7 +28,7 @@ function deserializeSection(raw: Record<string, unknown>): ChordSheetSection {
   return {
     ...(raw as unknown as ChordSheetSection),
     chordTokens: Array.isArray(tokens)
-      ? tokens.map((row) => {
+      ? tokens.map((row: unknown) => {
           if (typeof row === 'string') {
             try { return JSON.parse(row) as string[] } catch { return [] }
           }

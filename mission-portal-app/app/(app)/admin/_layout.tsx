@@ -9,6 +9,7 @@ import { db } from '@/lib/firebase'
 
 const BASE_TABS = [
   { key: 'users', label: 'User Management', path: '/(app)/admin/users' },
+  { key: 'avail', label: 'Availability', path: '/(app)/admin/avail' },
   { key: 'groups', label: 'Groups', path: '/(app)/admin/groups' },
   { key: 'teams', label: 'Common Teams', path: '/(app)/admin/teams' },
   { key: 'templates', label: 'Task Templates', path: '/(app)/admin/templates' },
@@ -28,6 +29,7 @@ export default function AdminLayout() {
     if (!isAdmin(profile)) {
       router.replace('/(app)/dashboard')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile])
 
   useEffect(() => {
@@ -59,11 +61,7 @@ export default function AdminLayout() {
 
   return (
     <YStack flex={1}>
-      <View
-        backgroundColor="$background"
-        borderBottomWidth={1}
-        borderBottomColor="$borderColor"
-      >
+      <View backgroundColor="$background" borderBottomWidth={1} borderBottomColor="$borderColor">
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

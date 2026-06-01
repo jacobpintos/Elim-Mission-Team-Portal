@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { collection, onSnapshot } from 'firebase/firestore'
+import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { sameId } from '@/lib/ids'
 import type { Announcement } from '@/types/events'
@@ -12,6 +12,8 @@ interface AnnounceStore {
   myAnnouncements: (uid: string) => Announcement[]
   subscribe: () => void
   unsubscribe: () => void
+  createAnnouncement: (data: Omit<Announcement, 'id'>) => Promise<void>
+  deleteAnnouncement: (id: string | number) => Promise<void>
 }
 
 export const useAnnounceStore = create<AnnounceStore>((set, get) => ({
@@ -47,5 +49,13 @@ export const useAnnounceStore = create<AnnounceStore>((set, get) => ({
   unsubscribe: () => {
     get()._unsub?.()
     set({ _unsub: null, announcements: [] })
+  },
+
+  createAnnouncement: async (data) => {
+    await addDoc(collection(db, 'announcements'), data)
+  },
+
+  deleteAnnouncement: async (id) => {
+    await deleteDoc(doc(db, 'announcements', String(id)))
   },
 }))

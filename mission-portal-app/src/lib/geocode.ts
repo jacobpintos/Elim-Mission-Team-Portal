@@ -1,23 +1,45 @@
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? ''
 
 export async function geocodeCity(
   city: string,
   state: string
 ): Promise<{ lat: number; lng: number } | null> {
-  const query = encodeURIComponent(`${city}, ${state}`)
-  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?country=US&types=place,locality,neighborhood,district&limit=1&access_token=${MAPBOX_TOKEN}`
+  const key = `${city.trim().toLowerCase()}_${state.trim().toLowerCase()}`
+
   try {
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const data = (await res.json()) as {
-      features: { geometry: { coordinates: [number, number] } }[]
+    const cached = await getDoc(doc(db, 'geocodeCache', key))
+    if (cached.exists()) {
+      const { lat, lng } = cached.data() as { lat: number; lng: number }
+      return { lat, lng }
     }
-    if (!data.features?.length) return null
-    const [lng, lat] = data.features[0].geometry.coordinates
-    return { lat, lng }
   } catch {
-    return null
+    // cache miss — fall through to API
   }
+
+  const query = encodeURIComponent(`${city}, ${state}`)
+  const base = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?country=US&limit=1&access_token=${MAPBOX_TOKEN}`
+
+  for (const extra of ['&types=place,locality,neighborhood,district', '']) {
+    try {
+      const res = await fetch(base + extra)
+      if (!res.ok) continue
+      const data = (await res.json()) as {
+        features: { geometry: { coordinates: [number, number] } }[]
+      }
+      if (data.features?.length) {
+        const [lng, lat] = data.features[0].geometry.coordinates
+        const coords = { lat, lng }
+        setDoc(doc(db, 'geocodeCache', key), coords).catch(() => {})
+        return coords
+      }
+    } catch {
+      // try next
+    }
+  }
+  return null
 }
 
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -32,4 +54,12 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
 
 export function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   return haversineKm(lat1, lng1, lat2, lng2) * 0.621371
+}
+
+export function estimatedDriveTime(miles: number): string {
+  const minutes = Math.round((miles / 55) * 60)
+  if (minutes < 60) return `~${minutes} min`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m >= 5 ? `~${h}h ${m}m` : `~${h}h`
 }

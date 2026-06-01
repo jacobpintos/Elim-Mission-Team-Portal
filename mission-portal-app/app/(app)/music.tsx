@@ -119,7 +119,9 @@ function ContentCard({
               borderTopRightRadius: 6,
             }}
           >
-            <Text fontSize="$6" color="white">▶</Text>
+            <Text fontSize="$6" color="white">
+              ▶
+            </Text>
           </View>
           {isNew ? (
             <View
@@ -133,7 +135,9 @@ function ContentCard({
                 paddingVertical: 2,
               }}
             >
-              <Text color="white" fontSize={10} fontWeight="700">NEW</Text>
+              <Text color="white" fontSize={10} fontWeight="700">
+                NEW
+              </Text>
             </View>
           ) : null}
           {item.featured ? (
@@ -148,7 +152,9 @@ function ContentCard({
                 paddingVertical: 2,
               }}
             >
-              <Text color="white" fontSize={10} fontWeight="700">★</Text>
+              <Text color="white" fontSize={10} fontWeight="700">
+                ★
+              </Text>
             </View>
           ) : null}
         </YStack>
@@ -161,6 +167,17 @@ function ContentCard({
         {item.album ? (
           <Text color={colors.textMuted} fontSize={11} numberOfLines={1}>
             {item.album}
+          </Text>
+        ) : null}
+        {item.type === 'podcast' && item.host ? (
+          <Text color={colors.textMuted} fontSize={11} numberOfLines={1}>
+            {item.host}
+            {item.guest ? ` ft. ${item.guest}` : ''}
+          </Text>
+        ) : null}
+        {item.type === 'sermon' && item.preacher ? (
+          <Text color={colors.textMuted} fontSize={11} numberOfLines={1}>
+            {item.preacher}
           </Text>
         ) : null}
         {item.year ? (
@@ -178,10 +195,14 @@ function ContentCard({
           justifyContent="space-between"
         >
           <Pressable onPress={() => onEdit(item)}>
-            <Text color={colors.primary} fontSize="$2" paddingHorizontal="$2">Edit</Text>
+            <Text color={colors.primary} fontSize="$2" paddingHorizontal="$2">
+              Edit
+            </Text>
           </Pressable>
           <Pressable onPress={() => onDelete(item.id)}>
-            <Text color="#c0392b" fontSize="$2" paddingHorizontal="$2">Delete</Text>
+            <Text color="#c0392b" fontSize="$2" paddingHorizontal="$2">
+              Delete
+            </Text>
           </Pressable>
         </XStack>
       ) : null}
@@ -208,12 +229,7 @@ function Section({
   if (items.length === 0) return null
   return (
     <YStack gap="$2" marginBottom="$4">
-      <Text
-        color={colors.text}
-        fontSize="$5"
-        fontWeight="700"
-        paddingHorizontal="$4"
-      >
+      <Text color={colors.text} fontSize="$5" fontWeight="700" paddingHorizontal="$4">
         {title}
       </Text>
       <ScrollView
@@ -242,6 +258,10 @@ interface EditForm {
   youtubeUrl: string
   album: string
   year: string
+  month: string
+  host: string
+  guest: string
+  preacher: string
   featured: boolean
   isNew: boolean
   newUntil: string
@@ -253,6 +273,10 @@ const BLANK_FORM: EditForm = {
   youtubeUrl: '',
   album: '',
   year: '',
+  month: '',
+  host: '',
+  guest: '',
+  preacher: 'Pastor Ajai Prakash',
   featured: false,
   isNew: false,
   newUntil: '',
@@ -266,6 +290,10 @@ function formToItem(form: EditForm, id: string): MusicItem {
     youtubeUrl: form.youtubeUrl.trim(),
     album: form.album.trim() || undefined,
     year: form.year ? parseInt(form.year, 10) : undefined,
+    month: form.month ? parseInt(form.month, 10) : undefined,
+    host: form.host.trim() || undefined,
+    guest: form.guest.trim() || undefined,
+    preacher: form.preacher.trim() || undefined,
     featured: form.featured,
     isNew: form.isNew,
     newUntil: form.newUntil.trim() || undefined,
@@ -279,6 +307,10 @@ function itemToForm(item: MusicItem): EditForm {
     youtubeUrl: item.youtubeUrl,
     album: item.album ?? '',
     year: item.year?.toString() ?? '',
+    month: item.month?.toString() ?? '',
+    host: item.host ?? '',
+    guest: item.guest ?? '',
+    preacher: item.preacher ?? 'Pastor Ajai Prakash',
     featured: item.featured ?? false,
     isNew: item.isNew ?? false,
     newUntil: item.newUntil ?? '',
@@ -301,6 +333,7 @@ export default function MusicScreen() {
 
   useEffect(() => {
     load().catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const newItems = items.filter(isItemNew)
@@ -377,7 +410,9 @@ export default function MusicScreen() {
                 borderRadius="$2"
                 backgroundColor={colors.primary}
               >
-                <Text color="white" fontSize="$2" fontWeight="600">+ Add Item</Text>
+                <Text color="white" fontSize="$2" fontWeight="600">
+                  + Add Item
+                </Text>
               </XStack>
             </Pressable>
           ) : null}
@@ -481,10 +516,14 @@ export default function MusicScreen() {
                   </YStack>
                   <XStack gap="$2">
                     <Pressable onPress={() => openEdit(item)}>
-                      <Text color={colors.primary} fontSize="$3">Edit</Text>
+                      <Text color={colors.primary} fontSize="$3">
+                        Edit
+                      </Text>
                     </Pressable>
                     <Pressable onPress={() => handleDelete(item.id)}>
-                      <Text color="#c0392b" fontSize="$3">Delete</Text>
+                      <Text color="#c0392b" fontSize="$3">
+                        Delete
+                      </Text>
                     </Pressable>
                   </XStack>
                 </XStack>
@@ -502,7 +541,9 @@ export default function MusicScreen() {
       >
         <View style={[styles.playModal, { backgroundColor: '#000' }]}>
           <Pressable onPress={() => setPlayingItem(null)} style={styles.closeBtn}>
-            <Text color="white" fontSize="$5" fontWeight="700">✕</Text>
+            <Text color="white" fontSize="$5" fontWeight="700">
+              ✕
+            </Text>
           </Pressable>
           {playingItem ? (
             <YStack flex={1} gap="$2">
@@ -542,7 +583,9 @@ export default function MusicScreen() {
               {editingId ? 'Edit Item' : 'Add Item'}
             </Text>
             <Pressable onPress={() => setShowEditModal(false)}>
-              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
             </Pressable>
           </XStack>
 
@@ -574,7 +617,10 @@ export default function MusicScreen() {
 
             <Text style={[styles.label, { color: colors.textMuted }]}>Title *</Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}
               value={form.title}
               onChangeText={(v) => setForm((f) => ({ ...f, title: v }))}
               placeholder="Title"
@@ -583,7 +629,10 @@ export default function MusicScreen() {
 
             <Text style={[styles.label, { color: colors.textMuted }]}>YouTube URL *</Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}
               value={form.youtubeUrl}
               onChangeText={(v) => setForm((f) => ({ ...f, youtubeUrl: v }))}
               placeholder="https://youtu.be/..."
@@ -593,7 +642,10 @@ export default function MusicScreen() {
 
             <Text style={[styles.label, { color: colors.textMuted }]}>Album / Series</Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}
               value={form.album}
               onChangeText={(v) => setForm((f) => ({ ...f, album: v }))}
               placeholder="Optional"
@@ -602,13 +654,84 @@ export default function MusicScreen() {
 
             <Text style={[styles.label, { color: colors.textMuted }]}>Year</Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}
               value={form.year}
               onChangeText={(v) => setForm((f) => ({ ...f, year: v }))}
               placeholder="2024"
               placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
+
+            <Text style={[styles.label, { color: colors.textMuted }]}>Month (1–12)</Text>
+            <TextInput
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}
+              value={form.month}
+              onChangeText={(v) => setForm((f) => ({ ...f, month: v }))}
+              placeholder="Optional"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+            />
+
+            {form.type === 'podcast' ? (
+              <>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Host</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                    },
+                  ]}
+                  value={form.host}
+                  onChangeText={(v) => setForm((f) => ({ ...f, host: v }))}
+                  placeholder="Host name"
+                  placeholderTextColor={colors.textMuted}
+                />
+                <Text style={[styles.label, { color: colors.textMuted }]}>Guest</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                    },
+                  ]}
+                  value={form.guest}
+                  onChangeText={(v) => setForm((f) => ({ ...f, guest: v }))}
+                  placeholder="Guest name (optional)"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </>
+            ) : null}
+
+            {form.type === 'sermon' ? (
+              <>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Preacher</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                    },
+                  ]}
+                  value={form.preacher}
+                  onChangeText={(v) => setForm((f) => ({ ...f, preacher: v }))}
+                  placeholder="Preacher name"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </>
+            ) : null}
 
             {/* Toggles */}
             <XStack gap="$4" marginTop="$2">
@@ -623,7 +746,9 @@ export default function MusicScreen() {
                       },
                     ]}
                   />
-                  <Text color={colors.text} fontSize="$3">Featured</Text>
+                  <Text color={colors.text} fontSize="$3">
+                    Featured
+                  </Text>
                 </XStack>
               </Pressable>
 
@@ -638,16 +763,27 @@ export default function MusicScreen() {
                       },
                     ]}
                   />
-                  <Text color={colors.text} fontSize="$3">Mark as New</Text>
+                  <Text color={colors.text} fontSize="$3">
+                    Mark as New
+                  </Text>
                 </XStack>
               </Pressable>
             </XStack>
 
             {form.isNew ? (
               <YStack marginTop="$2" gap="$1">
-                <Text style={[styles.label, { color: colors.textMuted }]}>New Until (YYYY-MM-DD)</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>
+                  New Until (YYYY-MM-DD)
+                </Text>
                 <TextInput
-                  style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                    },
+                  ]}
                   value={form.newUntil}
                   onChangeText={(v) => setForm((f) => ({ ...f, newUntil: v }))}
                   placeholder="Leave blank to always show as new"
@@ -673,7 +809,9 @@ export default function MusicScreen() {
                 borderWidth={1}
                 borderColor={colors.border}
               >
-                <Text color={colors.text} fontSize="$3">Cancel</Text>
+                <Text color={colors.text} fontSize="$3">
+                  Cancel
+                </Text>
               </XStack>
             </Pressable>
             <Pressable onPress={handleSave} disabled={saving}>

@@ -1,4 +1,5 @@
 rules_version = '2';
+// Last updated: 2026-06-01 — added chordSheets collection and nChordSheet counter rule
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -7,6 +8,11 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.hasAny(['admin']);
     }
     function isSelf(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function isWorshipOrAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+          .hasAny(['admin', 'worship']);
+    }
 
     match /appSettings/theme {
       allow read: if true;
@@ -16,9 +22,14 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isSelf(uid) || isAdmin();
       allow create: if isSelf(uid);
-      allow update: if (isSelf(uid) &&
-        !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['roles', 'createdAt'])) || isAdmin();
+      allow update: if isAdmin()
+        || (isSelf(uid) &&
+            !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['roles', 'createdAt']))
+        || (isSelf(uid) &&
+            resource.data.roles.hasOnly(['unverified']) &&
+            request.resource.data.roles.hasOnly(['public']) &&
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt']));
       allow delete: if isAdmin();
     }
 
@@ -58,12 +69,12 @@ service cloud.firestore {
           .hasOnly(['reviewers', 'updatedAt']);
 
       match /messages/{msgId} {
-        allow read: if isSignedIn() &&
+        allow read: if isSignedIn() && (isAdmin() ||
           get(/databases/$(database)/documents/rooms/$(id)).data.members
-            .hasAny([request.auth.uid]);
-        allow create: if isSignedIn() &&
+            .hasAny([request.auth.uid]));
+        allow create: if isSignedIn() && (isAdmin() ||
           get(/databases/$(database)/documents/rooms/$(id)).data.members
-            .hasAny([request.auth.uid]);
+            .hasAny([request.auth.uid]));
         allow update: if isSignedIn() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['readBy']);
@@ -86,7 +97,16 @@ service cloud.firestore {
       allow write: if isAdmin() ||
         (isSignedIn() &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['lastSeenPosts']));
+           .hasOnly(['lastSeenPosts'])) ||
+        (isSignedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['nReport'])) ||
+        (isSignedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['nKaizen'])) ||
+        (isWorshipOrAdmin() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['nChordSheet']));
     }
 
     match /digestStats/{docId} {
@@ -108,6 +128,59 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
+    }
+
+    match /issues/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /kaizen/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isAdmin() ||
+        (isSignedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['upvotes', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    match /planningBoards/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /music/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /carpool/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /setLists/{id} {
+      allow read: if isWorshipOrAdmin();
+      allow write: if isWorshipOrAdmin();
+    }
+
+    match /chordSheets/{id} {
+      allow read: if isWorshipOrAdmin();
+      allow write: if isWorshipOrAdmin();
+    }
+
+    match /securityReports/{id} {
+      function isSecurityOrAdmin() {
+        return isSignedIn() &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+            .hasAny(['admin', 'security']);
+      }
+      allow create: if isSignedIn();
+      allow read: if isSecurityOrAdmin();
+      allow update: if isSecurityOrAdmin();
+      allow delete: if isAdmin();
     }
   }
 }

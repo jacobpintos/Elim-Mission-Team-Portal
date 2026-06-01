@@ -119,7 +119,18 @@ export default function SettingsScreen() {
   if (!profile || !fbUser) return null
 
   const pub = isPublic(profile)
-  const prefs = profile.notificationPrefs
+  const prefs: NonNullable<typeof profile.notificationPrefs> = profile.notificationPrefs ?? {
+    newAssignment: { push: true, email: false },
+    newMessage: { push: true, email: false },
+    eventReminder: { push: true, email: true },
+    announcement: { push: true, email: false },
+    issueAssigned: { push: true, email: false },
+    weeklyDigest: true,
+    monthlyDigest: false,
+    publicAnnouncement: { push: true, email: false },
+    publicEvent: { push: true, email: false },
+    contentFeatured: { push: true, email: false },
+  }
 
   // ── Photo upload ────────────────────────────────────────────────────────────
   const handlePickPhoto = () => {
@@ -498,7 +509,7 @@ export default function SettingsScreen() {
             ))}
             <XStack alignItems="center" justifyContent="space-between">
               <Label fontSize="$3">Monthly digest</Label>
-              <Switch size="$2" checked={prefs.monthlyDigest} onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}>
+              <Switch size="$2" checked={prefs.monthlyDigest ?? false} onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}>
                 <Switch.Thumb />
               </Switch>
             </XStack>
@@ -520,12 +531,12 @@ export default function SettingsScreen() {
                 <Label flex={1} fontSize="$3">{NOTIF_LABELS[key]}</Label>
                 <XStack gap="$3" width={110} alignItems="center">
                   <YStack flex={1} alignItems="center">
-                    <Switch size="$2" checked={prefs[key].push} onCheckedChange={(v) => togglePushPref(key, v)}>
+                    <Switch size="$2" checked={prefs[key]?.push ?? false} onCheckedChange={(v) => togglePushPref(key, v)}>
                       <Switch.Thumb />
                     </Switch>
                   </YStack>
                   <YStack flex={1} alignItems="center">
-                    <Switch size="$2" checked={prefs[key].email} onCheckedChange={(v) => toggleEmailPref(key, v)}>
+                    <Switch size="$2" checked={prefs[key]?.email ?? false} onCheckedChange={(v) => toggleEmailPref(key, v)}>
                       <Switch.Thumb />
                     </Switch>
                   </YStack>
@@ -534,13 +545,13 @@ export default function SettingsScreen() {
             ))}
             <XStack alignItems="center" justifyContent="space-between">
               <Label fontSize="$3">Weekly digest</Label>
-              <Switch size="$2" checked={prefs.weeklyDigest} onCheckedChange={(v) => toggleDigest('weeklyDigest', v)}>
+              <Switch size="$2" checked={prefs.weeklyDigest ?? false} onCheckedChange={(v) => toggleDigest('weeklyDigest', v)}>
                 <Switch.Thumb />
               </Switch>
             </XStack>
             <XStack alignItems="center" justifyContent="space-between">
               <Label fontSize="$3">Monthly digest</Label>
-              <Switch size="$2" checked={prefs.monthlyDigest} onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}>
+              <Switch size="$2" checked={prefs.monthlyDigest ?? false} onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}>
                 <Switch.Thumb />
               </Switch>
             </XStack>
