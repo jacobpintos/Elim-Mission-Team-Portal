@@ -38,6 +38,6 @@ export const useUsersStore = create<UsersStore>((set, get) => ({
 
   displayName: (uid) => {
     const u = get().getUser(uid)
-    return u?.displayName ?? String(uid)
+    return u?.displayName || u?.email || String(uid)
   },
 }))
