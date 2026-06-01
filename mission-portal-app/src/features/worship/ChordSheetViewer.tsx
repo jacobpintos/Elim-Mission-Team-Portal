@@ -71,8 +71,10 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
     saveKeyPrefs({ key: selectedKey, isMinor: newIsMinor })
   }
 
-  const displayToken = (raw: string) =>
-    raw && keyIdx >= 0 ? nashvilleToChord(raw, keyIdx, isMinor) : raw
+  const displayToken = (raw: string) => {
+    if (!raw || keyIdx < 0) return raw
+    return raw.split('/').map((t) => nashvilleToChord(t.trim(), keyIdx, isMinor)).join('/')
+  }
 
   return (
     <Modal visible={!!sheet} animationType="slide" transparent onRequestClose={onClose}>
