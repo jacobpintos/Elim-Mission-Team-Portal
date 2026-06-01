@@ -12,7 +12,7 @@ import { geocodeCity } from '@/lib/geocode'
 import { isPublic } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
-import type { EventTemplate } from '@/types/events'
+import type { EventTemplate, CarpoolCarData } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 
 interface EventFormModalProps {
@@ -36,6 +36,7 @@ type FormData = {
   food: boolean
   foodItems: string[]
   carpool: boolean
+  carpoolCars: CarpoolCarData[]
   isVirtual: boolean
   virtualLink: string
   taskTemplateId: string
@@ -75,6 +76,7 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
     food: event?.food ?? false,
     foodItems: event?.foodItems ?? [],
     carpool: event?.carpool ?? false,
+    carpoolCars: event?.carpoolCars ?? [],
     isVirtual: event?.isVirtual ?? false,
     virtualLink: event?.virtualLink ?? '',
     taskTemplateId: event?.taskTemplateId ?? '',
@@ -82,14 +84,48 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
   })
   const [saving, setSaving] = useState(false)
 
+  const [carpoolPicker, setCarpoolPicker] = useState<{ carId: string; role: 'driver' | 'rider' } | null>(null)
+  const [carpoolSearch, setCarpoolSearch] = useState('')
+
   const field = (key: keyof FormData) => (val: string | boolean | number) =>
     setForm((f) => {
       const next = { ...f, [key]: val } as FormData
       if (key === 'food' && val === true && next.foodItems.length === 0) {
         next.foodItems = ['']
       }
+      if (key === 'carpool' && val === true && next.carpoolCars.length === 0) {
+        next.carpoolCars = [{ id: Date.now().toString(), label: '', seats: 3, driver: '', riders: [] }]
+      }
       return next
     })
+
+  const addCar = () =>
+    setForm((f) => ({
+      ...f,
+      carpoolCars: [
+        ...f.carpoolCars,
+        { id: Date.now().toString(), label: '', seats: 3, driver: '', riders: [] },
+      ],
+    }))
+
+  const removeCar = (carId: string) =>
+    setForm((f) => ({ ...f, carpoolCars: f.carpoolCars.filter((c) => c.id !== carId) }))
+
+  const updateCarField = (carId: string, key: keyof CarpoolCarData, val: unknown) =>
+    setForm((f) => ({
+      ...f,
+      carpoolCars: f.carpoolCars.map((c) => (c.id === carId ? { ...c, [key]: val } : c)),
+    }))
+
+  const toggleCarRider = (carId: string, uid: string) =>
+    setForm((f) => ({
+      ...f,
+      carpoolCars: f.carpoolCars.map((c) => {
+        if (c.id !== carId) return c
+        const has = c.riders.includes(uid)
+        return { ...c, riders: has ? c.riders.filter((r) => r !== uid) : [...c.riders, uid] }
+      }),
+    }))
 
   const addFoodItem = () => setForm((f) => ({ ...f, foodItems: [...f.foodItems, ''] }))
   const removeFoodItem = (i: number) =>
@@ -135,6 +171,7 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
         food: form.food,
         foodItems: form.food ? form.foodItems.filter((s) => s.trim()) : [],
         carpool: form.carpool,
+        carpoolCars: form.carpool ? form.carpoolCars : [],
         isVirtual: form.isVirtual,
         virtualLink: form.virtualLink,
         users: form.users,
@@ -523,9 +560,244 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
           </Pressable>
         </XStack>
         {form.carpool ? (
-          <Text color={colors.textMuted} fontSize="$2" paddingLeft="$1">
-            Car assignments are managed in the event detail view.
-          </Text>
+          <YStack gap="$3">
+            {form.carpoolCars.map((car) => {
+              const usedUids = new Set(
+                form.carpoolCars.flatMap((c) => [c.driver, ...c.riders].filter(Boolean))
+              )
+              const isPicking = carpoolPicker?.carId === car.id
+
+              return (
+                <YStack
+                  key={car.id}
+                  gap="$2"
+                  backgroundColor={colors.surface}
+                  borderRadius="$2"
+                  padding="$3"
+                  borderWidth={1}
+                  borderColor={colors.border}
+                >
+                  <XStack gap="$2" alignItems="center">
+                    <Input
+                      flex={1}
+                      value={car.label}
+                      onChangeText={(v) => updateCarField(car.id, 'label', v)}
+                      placeholder="Car name (e.g. Jacob's Van)"
+                      backgroundColor={colors.surface}
+                      color={colors.text}
+                      borderColor={colors.border}
+                    />
+                    <Pressable onPress={() => removeCar(car.id)}>
+                      <Text color="$red10" fontSize="$3">
+                        ✕
+                      </Text>
+                    </Pressable>
+                  </XStack>
+
+                  <XStack gap="$2" alignItems="center">
+                    <Text color={colors.textMuted} fontSize="$2">
+                      Passenger seats:
+                    </Text>
+                    <XStack gap="$1">
+                      {[1, 2, 3, 4, 5, 6].map((n) => (
+                        <Pressable key={n} onPress={() => updateCarField(car.id, 'seats', n)}>
+                          <XStack
+                            width={28}
+                            height={28}
+                            borderRadius={14}
+                            borderWidth={1}
+                            borderColor={car.seats === n ? colors.primary : colors.border}
+                            backgroundColor={car.seats === n ? colors.primary : 'transparent'}
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            <Text color={car.seats === n ? 'white' : colors.text} fontSize={11}>
+                              {n}
+                            </Text>
+                          </XStack>
+                        </Pressable>
+                      ))}
+                    </XStack>
+                  </XStack>
+
+                  <YStack gap="$1">
+                    <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                      DRIVER
+                    </Text>
+                    {car.driver ? (
+                      <XStack gap="$2" alignItems="center">
+                        <Text color={colors.text} fontSize="$3">
+                          🚗 {allUsers.find((u) => u.uid === car.driver)?.displayName ?? car.driver}
+                        </Text>
+                        <Pressable onPress={() => updateCarField(car.id, 'driver', '')}>
+                          <Text color="$red10" fontSize="$2">
+                            ✕
+                          </Text>
+                        </Pressable>
+                      </XStack>
+                    ) : (
+                      <Pressable
+                        onPress={() => {
+                          setCarpoolPicker(
+                            isPicking && carpoolPicker?.role === 'driver'
+                              ? null
+                              : { carId: car.id, role: 'driver' }
+                          )
+                          setCarpoolSearch('')
+                        }}
+                      >
+                        <XStack
+                          borderWidth={1}
+                          borderColor={colors.border}
+                          borderRadius="$2"
+                          paddingHorizontal="$3"
+                          paddingVertical="$1"
+                          alignSelf="flex-start"
+                        >
+                          <Text color={colors.primary} fontSize="$3">
+                            + Assign Driver
+                          </Text>
+                        </XStack>
+                      </Pressable>
+                    )}
+                  </YStack>
+
+                  <YStack gap="$1">
+                    <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                      RIDERS
+                    </Text>
+                    {car.riders.length > 0 && (
+                      <XStack flexWrap="wrap" gap="$1">
+                        {car.riders.map((rUid) => (
+                          <XStack
+                            key={rUid}
+                            backgroundColor="$gray4"
+                            borderRadius="$4"
+                            paddingHorizontal="$2"
+                            paddingVertical="$0.5"
+                            gap="$1"
+                            alignItems="center"
+                          >
+                            <Text fontSize="$2" color="$gray11">
+                              {allUsers.find((u) => u.uid === rUid)?.displayName ?? rUid}
+                            </Text>
+                            <Pressable onPress={() => toggleCarRider(car.id, rUid)}>
+                              <Text color="$gray10" fontSize="$1">
+                                ✕
+                              </Text>
+                            </Pressable>
+                          </XStack>
+                        ))}
+                      </XStack>
+                    )}
+                    {car.riders.length < car.seats && (
+                      <Pressable
+                        onPress={() => {
+                          setCarpoolPicker(
+                            isPicking && carpoolPicker?.role === 'rider'
+                              ? null
+                              : { carId: car.id, role: 'rider' }
+                          )
+                          setCarpoolSearch('')
+                        }}
+                      >
+                        <XStack
+                          borderWidth={1}
+                          borderColor={colors.border}
+                          borderRadius="$2"
+                          paddingHorizontal="$3"
+                          paddingVertical="$1"
+                          alignSelf="flex-start"
+                        >
+                          <Text color={colors.primary} fontSize="$3">
+                            + Add Rider
+                          </Text>
+                        </XStack>
+                      </Pressable>
+                    )}
+                  </YStack>
+
+                  {isPicking && (
+                    <YStack
+                      gap="$1"
+                      backgroundColor={colors.background}
+                      borderRadius="$2"
+                      padding="$2"
+                      borderWidth={1}
+                      borderColor={colors.primary}
+                    >
+                      <Input
+                        value={carpoolSearch}
+                        onChangeText={setCarpoolSearch}
+                        placeholder="Search…"
+                        backgroundColor={colors.surface}
+                        color={colors.text}
+                        borderColor={colors.border}
+                        size="$3"
+                      />
+                      {allUsers
+                        .filter((u) => {
+                          if (carpoolPicker?.role === 'driver' && u.uid === car.driver) return false
+                          if (carpoolPicker?.role === 'rider' && car.riders.includes(u.uid))
+                            return false
+                          if (
+                            usedUids.has(u.uid) &&
+                            u.uid !== car.driver &&
+                            !car.riders.includes(u.uid)
+                          )
+                            return false
+                          if (carpoolSearch.trim())
+                            return (u.displayName ?? '')
+                              .toLowerCase()
+                              .includes(carpoolSearch.toLowerCase())
+                          return true
+                        })
+                        .slice(0, 8)
+                        .map((u) => (
+                          <Pressable
+                            key={u.uid}
+                            onPress={() => {
+                              if (carpoolPicker?.role === 'driver') {
+                                updateCarField(car.id, 'driver', u.uid)
+                              } else {
+                                toggleCarRider(car.id, u.uid)
+                              }
+                              setCarpoolPicker(null)
+                              setCarpoolSearch('')
+                            }}
+                          >
+                            <XStack
+                              padding="$2"
+                              borderRadius="$1"
+                              backgroundColor={colors.surface}
+                            >
+                              <Text color={colors.text} fontSize="$3">
+                                {u.displayName}
+                              </Text>
+                            </XStack>
+                          </Pressable>
+                        ))}
+                    </YStack>
+                  )}
+                </YStack>
+              )
+            })}
+
+            <Pressable onPress={addCar}>
+              <XStack
+                borderWidth={1}
+                borderColor={colors.primary}
+                borderRadius="$2"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                alignSelf="flex-start"
+              >
+                <Text color={colors.primary} fontSize="$3">
+                  + Add Car
+                </Text>
+              </XStack>
+            </Pressable>
+          </YStack>
         ) : null}
 
         {/* Task Template selector */}

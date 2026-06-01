@@ -112,13 +112,17 @@ function PubHomeContent() {
     setSaving(true)
     try {
       const coords = await geocodeCity(city, stateVal)
-      const locationPref = { city, state: stateVal, radius, ...(coords ?? {}) }
+      const prevCoords =
+        profile?.locationPref?.lat !== undefined
+          ? { lat: profile.locationPref.lat, lng: profile.locationPref.lng }
+          : {}
+      const locationPref = { city, state: stateVal, radius, ...prevCoords, ...(coords ?? {}) }
       await updateDoc(doc(db, 'users', uid), { locationPref })
       setShowLocForm(false)
       if (coords) {
         toast('Location saved — nearby events will appear below.', 'success')
       } else {
-        toast(`Could not find "${city}, ${stateVal}". Location saved without map coordinates.`, 'error')
+        toast('Location saved. Could not geocode city — Events Near Me may not update until a valid city/state is set.', 'error')
       }
     } catch {
       toast('Failed to save location', 'error')

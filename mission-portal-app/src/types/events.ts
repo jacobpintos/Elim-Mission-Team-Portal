@@ -1,3 +1,11 @@
+export interface CarpoolCarData {
+  id: string
+  label: string
+  seats: number
+  driver: string
+  riders: string[]
+}
+
 export interface EventTeam {
   name: string
   leaders: (string | number)[]
@@ -35,6 +43,7 @@ export interface EventTemplate {
   carpool?: boolean
   foodItems?: string[]
   carpoolLoc?: string
+  carpoolCars?: CarpoolCarData[]
   vehicles?: unknown[]
   teams?: EventTeam[]
   isPublic?: boolean

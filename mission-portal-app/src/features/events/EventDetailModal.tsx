@@ -144,6 +144,61 @@ function FoodPanel({
   )
 }
 
+function CarpoolReadOnly({ event, uid }: { event: EventInstance; uid: string }) {
+  const colors = useThemeColors()
+  const { users } = useUsersStore()
+  const getName = (u: string) => users.find((x) => sameId(x.uid, u))?.displayName ?? u
+  const cars = event.carpoolCars ?? []
+  const myCar = cars.find((c) => c.driver === uid || c.riders.includes(uid))
+
+  return (
+    <YStack gap="$3">
+      <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+        CARPOOL
+      </Text>
+      {cars.map((car, idx) => {
+        const isMycar = car.driver === uid || car.riders.includes(uid)
+        return (
+          <YStack
+            key={car.id}
+            backgroundColor={colors.surface}
+            borderRadius="$2"
+            padding="$3"
+            borderWidth={1}
+            borderColor={isMycar ? colors.primary : colors.border}
+            gap="$1"
+          >
+            <Text color={colors.text} fontWeight="700" fontSize="$3">
+              {car.label || `Car ${idx + 1}`}
+              {isMycar ? ' ← Your car' : ''}
+            </Text>
+            {car.driver ? (
+              <Text color={colors.text} fontSize="$3">
+                🚗 {getName(car.driver)}
+              </Text>
+            ) : null}
+            {car.riders.length > 0 ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                Riders: {car.riders.map(getName).join(', ')}
+              </Text>
+            ) : null}
+            {!car.driver && car.riders.length === 0 ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                No one assigned yet
+              </Text>
+            ) : null}
+          </YStack>
+        )
+      })}
+      {!myCar && (
+        <Text color={colors.textMuted} fontSize="$3">
+          You have not been assigned to a car yet.
+        </Text>
+      )}
+    </YStack>
+  )
+}
+
 interface CarpoolCar {
   id: string
   driver: string
@@ -652,9 +707,13 @@ export function EventDetailModal({
           <FoodPanel event={event} uid={uid} myDisplayName={myDisplayName} />
         ) : null}
 
-        {/* Carpool — members only, admin-managed */}
+        {/* Carpool — members only */}
         {isMember && event.carpool ? (
-          <CarpoolPanel event={event} uid={uid} isAdmin={isAdmin} />
+          event.carpoolCars && event.carpoolCars.length > 0 ? (
+            <CarpoolReadOnly event={event} uid={uid} />
+          ) : (
+            <CarpoolPanel event={event} uid={uid} isAdmin={isAdmin} />
+          )
         ) : null}
 
         {/* Teams — members only */}
