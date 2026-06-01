@@ -28,9 +28,8 @@ interface TaskTemplateCardProps {
 }
 
 export function TaskTemplateCard({ template, onEdit, onDelete }: TaskTemplateCardProps) {
-  const usedSections = TASK_SECTIONS.filter((s) =>
-    template.tasks.some((t) => t.section === s.id)
-  )
+  const tasks = template.tasks ?? []
+  const usedSections = TASK_SECTIONS.filter((s) => tasks.some((t) => t.section === s.id))
 
   return (
     <YStack
@@ -47,7 +46,7 @@ export function TaskTemplateCard({ template, onEdit, onDelete }: TaskTemplateCar
             {template.name}
           </Text>
           <Text fontSize="$2" color="$gray10">
-            {template.tasks.length} task{template.tasks.length !== 1 ? 's' : ''}
+            {tasks.length} task{tasks.length !== 1 ? 's' : ''}
           </Text>
         </YStack>
 
