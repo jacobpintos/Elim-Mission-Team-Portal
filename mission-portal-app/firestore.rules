@@ -1,5 +1,5 @@
 rules_version = '2';
-// Last updated: 2026-06-01 — added chordSheets collection and nChordSheet counter rule
+// Last updated: 2026-06-01 — added inventory, reorder, and inputList collections
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -167,6 +167,26 @@ service cloud.firestore {
     }
 
     match /chordSheets/{id} {
+      allow read: if isWorshipOrAdmin();
+      allow write: if isWorshipOrAdmin();
+    }
+
+    match /inventoryCategories/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /inventoryItems/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /reorderItems/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /inputList/{location} {
       allow read: if isWorshipOrAdmin();
       allow write: if isWorshipOrAdmin();
     }
