@@ -18,6 +18,132 @@ import { sameId } from '@/lib/ids'
 import { PlanningBoardCanvas } from '@/features/planning/PlanningBoardCanvas'
 import type { EventInstance } from '@/types/events'
 
+interface FoodSignupEntry {
+  uid: string
+  displayName: string
+}
+
+function FoodPanel({
+  event,
+  uid,
+  myDisplayName,
+}: {
+  event: EventInstance
+  uid: string
+  myDisplayName: string
+}) {
+  const colors = useThemeColors()
+  const toast = useUIStore((s) => s.toast)
+  const [signups, setSignups] = useState<Record<string, FoodSignupEntry>>({})
+
+  const foodKey = `${event.templateId}_${event.date}`
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'foodSignups', foodKey), (snap) => {
+      setSignups((snap.data()?.signups as Record<string, FoodSignupEntry>) ?? {})
+    })
+    return () => unsub()
+  }, [foodKey])
+
+  const handleToggle = async (itemIndex: number, itemName: string) => {
+    const existing = signups[String(itemIndex)]
+    if (existing) {
+      if (existing.uid !== uid) {
+        toast(`${existing.displayName} is already signed up for "${itemName}"`, 'error')
+        return
+      }
+      const updated = { ...signups }
+      delete updated[String(itemIndex)]
+      try {
+        await setDoc(doc(db, 'foodSignups', foodKey), { signups: updated })
+      } catch {
+        toast('Failed to update sign-up', 'error')
+      }
+      return
+    }
+    Alert.alert(`Sign up to bring "${itemName}"?`, '', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Up',
+        onPress: async () => {
+          try {
+            await setDoc(doc(db, 'foodSignups', foodKey), {
+              signups: {
+                ...signups,
+                [String(itemIndex)]: { uid, displayName: myDisplayName },
+              },
+            })
+          } catch {
+            toast('Failed to sign up', 'error')
+          }
+        },
+      },
+    ])
+  }
+
+  const items = event.foodItems ?? []
+
+  return (
+    <YStack gap="$2">
+      <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+        FOOD
+      </Text>
+      {items.length === 0 ? (
+        <XStack gap="$1" alignItems="center">
+          <Text>🍽</Text>
+          <Text color={colors.text} fontSize="$3">
+            Food provided
+          </Text>
+        </XStack>
+      ) : (
+        items.map((item, i) => {
+          const signup = signups[String(i)]
+          const isMine = signup?.uid === uid
+          const isTaken = !!signup && !isMine
+          return (
+            <XStack
+              key={i}
+              alignItems="center"
+              backgroundColor={colors.surface}
+              borderRadius="$2"
+              padding="$2"
+              borderWidth={1}
+              borderColor={isMine ? colors.primary : colors.border}
+              gap="$2"
+            >
+              <YStack flex={1}>
+                <Text color={colors.text} fontSize="$3">
+                  {item}
+                </Text>
+                {signup ? (
+                  <Text color={isMine ? colors.primary : colors.textMuted} fontSize="$2">
+                    {isMine ? '✓ You are bringing this' : `${signup.displayName} is bringing this`}
+                  </Text>
+                ) : null}
+              </YStack>
+              {!isTaken ? (
+                <Pressable onPress={() => handleToggle(i, item)}>
+                  <XStack
+                    borderWidth={1}
+                    borderColor={isMine ? '$red10' : colors.primary}
+                    borderRadius="$2"
+                    paddingHorizontal="$2"
+                    paddingVertical="$1"
+                  >
+                    <Text color={isMine ? '$red10' : colors.primary} fontSize="$2">
+                      {isMine ? 'Cancel' : 'Sign up'}
+                    </Text>
+                  </XStack>
+                </Pressable>
+              ) : null}
+            </XStack>
+          )
+        })
+      )}
+    </YStack>
+  )
+}
+
 interface CarpoolCar {
   id: string
   driver: string
@@ -396,6 +522,8 @@ export function EventDetailModal({
   const toast = useUIStore((s) => s.toast)
   const { avail } = useEventsStore()
   const myAvail = event ? (avail[availKey(event)]?.[uid] ?? null) : null
+  const { users } = useUsersStore()
+  const myDisplayName = users.find((u) => sameId(u.uid, uid))?.displayName ?? ''
   const { boards } = usePlanningStore()
   const linkedBoard = event?.planningBoardId
     ? boards.find((b) => sameId(b.id, event.planningBoardId!))
@@ -521,12 +649,7 @@ export function EventDetailModal({
 
         {/* Food — members only */}
         {isMember && event.food ? (
-          <XStack gap="$1" alignItems="center">
-            <Text>🍽</Text>
-            <Text color={colors.text} fontSize="$3">
-              Food provided
-            </Text>
-          </XStack>
+          <FoodPanel event={event} uid={uid} myDisplayName={myDisplayName} />
         ) : null}
 
         {/* Carpool — members only, admin-managed */}

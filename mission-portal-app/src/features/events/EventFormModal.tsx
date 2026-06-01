@@ -34,9 +34,8 @@ type FormData = {
   recDay: number
   isPublic: boolean
   food: boolean
-  foodItems: string
+  foodItems: string[]
   carpool: boolean
-  carpoolLoc: string
   isVirtual: boolean
   virtualLink: string
   taskTemplateId: string
@@ -74,9 +73,8 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
     recDay: event?.recDay ?? 0,
     isPublic: event?.isPublic ?? false,
     food: event?.food ?? false,
-    foodItems: event?.foodItems?.[0] ?? '',
+    foodItems: event?.foodItems ?? [],
     carpool: event?.carpool ?? false,
-    carpoolLoc: event?.carpoolLoc ?? '',
     isVirtual: event?.isVirtual ?? false,
     virtualLink: event?.virtualLink ?? '',
     taskTemplateId: event?.taskTemplateId ?? '',
@@ -85,7 +83,19 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
   const [saving, setSaving] = useState(false)
 
   const field = (key: keyof FormData) => (val: string | boolean | number) =>
-    setForm((f) => ({ ...f, [key]: val }) as FormData)
+    setForm((f) => {
+      const next = { ...f, [key]: val } as FormData
+      if (key === 'food' && val === true && next.foodItems.length === 0) {
+        next.foodItems = ['']
+      }
+      return next
+    })
+
+  const addFoodItem = () => setForm((f) => ({ ...f, foodItems: [...f.foodItems, ''] }))
+  const removeFoodItem = (i: number) =>
+    setForm((f) => ({ ...f, foodItems: f.foodItems.filter((_, idx) => idx !== i) }))
+  const updateFoodItem = (i: number, val: string) =>
+    setForm((f) => ({ ...f, foodItems: f.foodItems.map((x, idx) => (idx === i ? val : x)) }))
 
   const toggleUser = (uid: string) => {
     setForm((f) => {
@@ -123,9 +133,8 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
         recDay: form.recDay,
         isPublic: form.isPublic,
         food: form.food,
-        foodItems: form.food && form.foodItems.trim() ? [form.foodItems.trim()] : [],
+        foodItems: form.food ? form.foodItems.filter((s) => s.trim()) : [],
         carpool: form.carpool,
-        carpoolLoc: form.carpoolLoc,
         isVirtual: form.isVirtual,
         virtualLink: form.virtualLink,
         users: form.users,
@@ -450,18 +459,42 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
           </Pressable>
         </XStack>
         {form.food ? (
-          <YStack gap="$1" paddingLeft="$3" borderLeftWidth={2} borderLeftColor={colors.primary}>
+          <YStack gap="$2" paddingLeft="$3" borderLeftWidth={2} borderLeftColor={colors.primary}>
             <Text color={colors.text} fontSize="$3">
-              Food description
+              Food items
             </Text>
-            <Input
-              value={form.foodItems}
-              onChangeText={field('foodItems')}
-              placeholder="Pizza, salad, drinks"
-              backgroundColor={colors.surface}
-              color={colors.text}
-              borderColor={colors.border}
-            />
+            {form.foodItems.map((item, i) => (
+              <XStack key={i} gap="$2" alignItems="center">
+                <Input
+                  flex={1}
+                  value={item}
+                  onChangeText={(v) => updateFoodItem(i, v)}
+                  placeholder={`Item ${i + 1}`}
+                  backgroundColor={colors.surface}
+                  color={colors.text}
+                  borderColor={colors.border}
+                />
+                <Pressable onPress={() => removeFoodItem(i)}>
+                  <Text color="$red10" fontSize="$3">
+                    ✕
+                  </Text>
+                </Pressable>
+              </XStack>
+            ))}
+            <Pressable onPress={addFoodItem}>
+              <XStack
+                borderWidth={1}
+                borderColor={colors.primary}
+                borderRadius="$2"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                alignSelf="flex-start"
+              >
+                <Text color={colors.primary} fontSize="$3">
+                  + Add item
+                </Text>
+              </XStack>
+            </Pressable>
           </YStack>
         ) : null}
 
@@ -490,19 +523,9 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
           </Pressable>
         </XStack>
         {form.carpool ? (
-          <YStack gap="$1" paddingLeft="$3" borderLeftWidth={2} borderLeftColor={colors.primary}>
-            <Text color={colors.text} fontSize="$3">
-              Pickup location
-            </Text>
-            <Input
-              value={form.carpoolLoc}
-              onChangeText={field('carpoolLoc')}
-              placeholder="Elim Church parking lot"
-              backgroundColor={colors.surface}
-              color={colors.text}
-              borderColor={colors.border}
-            />
-          </YStack>
+          <Text color={colors.textMuted} fontSize="$2" paddingLeft="$1">
+            Car assignments are managed in the event detail view.
+          </Text>
         ) : null}
 
         {/* Task Template selector */}

@@ -5,19 +5,24 @@ export async function geocodeCity(
   state: string
 ): Promise<{ lat: number; lng: number } | null> {
   const query = encodeURIComponent(`${city}, ${state}`)
-  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?country=US&types=place,locality,neighborhood,district&limit=1&access_token=${MAPBOX_TOKEN}`
-  try {
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const data = (await res.json()) as {
-      features: { geometry: { coordinates: [number, number] } }[]
+  const base = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?country=US&limit=1&access_token=${MAPBOX_TOKEN}`
+
+  for (const extra of ['&types=place,locality,neighborhood,district', '']) {
+    try {
+      const res = await fetch(base + extra)
+      if (!res.ok) continue
+      const data = (await res.json()) as {
+        features: { geometry: { coordinates: [number, number] } }[]
+      }
+      if (data.features?.length) {
+        const [lng, lat] = data.features[0].geometry.coordinates
+        return { lat, lng }
+      }
+    } catch {
+      // try next
     }
-    if (!data.features?.length) return null
-    const [lng, lat] = data.features[0].geometry.coordinates
-    return { lat, lng }
-  } catch {
-    return null
   }
+  return null
 }
 
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
