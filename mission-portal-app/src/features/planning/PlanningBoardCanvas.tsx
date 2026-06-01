@@ -50,6 +50,12 @@ const TOOL_BUTTONS: { type: ToolType; label: string; icon: string }[] = [
 
 const NOTE_COLORS = ['#FFF176', '#B3E5FC', '#C8E6C9', '#F8BBD0', '#E1BEE7']
 
+const PALETTE = [
+  '#1a1a1a', '#6b7280', '#ef4444', '#f97316',
+  '#eab308', '#22c55e', '#06b6d4', '#3b82f6',
+  '#8b5cf6', '#ec4899', '#ffffff', '#92400e',
+]
+
 const DEFAULT_SIZES: Record<string, { width: number; height: number }> = {
   note: { width: 200, height: 150 },
   goal: { width: 220, height: 90 },
@@ -74,15 +80,10 @@ interface CreateModalState {
   editItemId?: string
 }
 
-const defaultCreateModal: CreateModalState = {
-  visible: false,
-  type: 'note',
-  vx: 0,
-  vy: 0,
-}
+const defaultCreateModal: CreateModalState = { visible: false, type: 'note', vx: 0, vy: 0 }
 
 // ---------------------------------------------------------------------------
-// ItemCard — separate component to avoid nested hook issues
+// ItemCard
 // ---------------------------------------------------------------------------
 interface ItemCardProps {
   item: PlanningItem
@@ -101,40 +102,41 @@ interface ItemCardProps {
 }
 
 function ItemCard({
-  item,
-  boardId,
-  sc,
-  tool,
-  readOnly,
-  selectedId,
-  connectorFrom,
-  colors,
-  onSelectId,
-  onConnectorTap,
-  onEditItem,
-  onDeleteItem,
-  onUpdateItem,
+  item, boardId, sc, tool, readOnly, selectedId, connectorFrom,
+  colors, onSelectId, onConnectorTap, onEditItem, onDeleteItem, onUpdateItem,
 }: ItemCardProps) {
   'use no memo'
 
   const isSelected = selectedId === item.id
+
   const dragX = useSharedValue(item.x)
   const dragY = useSharedValue(item.y)
   const startX = useSharedValue(item.x)
   const startY = useSharedValue(item.y)
 
+  const sizeW = useSharedValue(item.width)
+  const sizeH = useSharedValue(item.height)
+  const startW = useSharedValue(item.width)
+  const startH = useSharedValue(item.height)
+  const isResizing = useSharedValue(false)
+
+  // Sync dimensions if updated externally (Firestore) and not mid-resize
+  if (!isResizing.value && (sizeW.value !== item.width || sizeH.value !== item.height)) {
+    sizeW.value = item.width
+    sizeH.value = item.height
+  }
+
   const itemStyle = useAnimatedStyle(() => ({
     position: 'absolute',
     left: dragX.value,
     top: dragY.value,
-    width: item.width,
-    height: item.height,
+    width: sizeW.value,
+    height: sizeH.value,
   }))
 
   const dragGesture = Gesture.Pan()
     .onStart(() => {
       startX.value = dragX.value
-
       startY.value = dragY.value
     })
     .onUpdate((e) => {
@@ -146,6 +148,24 @@ function ItemCard({
     .onEnd(() => {
       if (!boardId) return
       runOnJS(onUpdateItem)(boardId, item.id, { x: dragX.value, y: dragY.value })
+    })
+
+  const resizeGesture = Gesture.Pan()
+    .onStart(() => {
+      startW.value = sizeW.value
+      startH.value = sizeH.value
+      isResizing.value = true
+    })
+    .onUpdate((e) => {
+      // eslint-disable-next-line react-hooks/immutability
+      sizeW.value = Math.max(80, startW.value + e.translationX / sc.value)
+      // eslint-disable-next-line react-hooks/immutability
+      sizeH.value = Math.max(36, startH.value + e.translationY / sc.value)
+    })
+    .onEnd(() => {
+      isResizing.value = false
+      if (!boardId) return
+      runOnJS(onUpdateItem)(boardId, item.id, { width: sizeW.value, height: sizeH.value })
     })
 
   const eraserTap = Gesture.Tap().onEnd(() => {
@@ -182,6 +202,9 @@ function ItemCard({
         ? 'transparent'
         : colors.surface
 
+  const canResize = !readOnly && tool === 'select' &&
+    (item.type === 'textbox' || item.type === 'shape')
+
   return (
     <GestureDetector gesture={itemGesture}>
       <Animated.View
@@ -192,26 +215,20 @@ function ItemCard({
             borderRadius: 6,
             borderWidth:
               item.type === 'shape' || item.type === 'textbox'
-                ? isSelected
-                  ? 2
-                  : 0
-                : isSelected || isConnectorSource
-                  ? 2
-                  : 1,
+                ? isSelected ? 2 : 0
+                : isSelected || isConnectorSource ? 2 : 1,
             borderColor: isConnectorSource
               ? colors.primary
               : isSelected
                 ? colors.accent
                 : colors.border,
             padding: 8,
-            overflow: 'hidden',
+            overflow: 'visible',
           },
         ]}
       >
         {item.type === 'note' && (
-          <Text color="#333" fontSize={13} numberOfLines={6}>
-            {item.content}
-          </Text>
+          <Text color="#333" fontSize={13} numberOfLines={6}>{item.content}</Text>
         )}
         {item.type === 'goal' && (
           <XStack gap={6} alignItems="flex-start">
@@ -222,37 +239,24 @@ function ItemCard({
                 }
               }}
               style={{
-                width: 20,
-                height: 20,
-                borderRadius: 10,
-                borderWidth: 2,
+                width: 20, height: 20, borderRadius: 10, borderWidth: 2,
                 borderColor: colors.primary,
                 backgroundColor: item.completed ? colors.primary : 'transparent',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginTop: 2,
+                alignItems: 'center', justifyContent: 'center', marginTop: 2,
               }}
             >
-              {item.completed ? (
-                <Text color="#fff" fontSize={10}>
-                  ✓
-                </Text>
-              ) : null}
+              {item.completed ? <Text color="#fff" fontSize={10}>✓</Text> : null}
             </Pressable>
             <YStack flex={1}>
               <Text
-                color={colors.text}
-                fontSize={13}
-                fontWeight="600"
+                color={colors.text} fontSize={13} fontWeight="600"
                 textDecorationLine={item.completed ? 'line-through' : 'none'}
                 numberOfLines={2}
               >
                 {item.content}
               </Text>
               {item.dueDate ? (
-                <Text color={colors.textMuted} fontSize={11}>
-                  Due: {item.dueDate}
-                </Text>
+                <Text color={colors.textMuted} fontSize={11}>Due: {item.dueDate}</Text>
               ) : null}
             </YStack>
           </XStack>
@@ -266,28 +270,18 @@ function ItemCard({
                 }
               }}
               style={{
-                width: 18,
-                height: 18,
-                borderRadius: 3,
-                borderWidth: 2,
+                width: 18, height: 18, borderRadius: 3, borderWidth: 2,
                 borderColor: colors.primary,
                 backgroundColor: item.completed ? colors.primary : 'transparent',
-                alignItems: 'center',
-                justifyContent: 'center',
+                alignItems: 'center', justifyContent: 'center',
               }}
             >
-              {item.completed ? (
-                <Text color="#fff" fontSize={10}>
-                  ✓
-                </Text>
-              ) : null}
+              {item.completed ? <Text color="#fff" fontSize={10}>✓</Text> : null}
             </Pressable>
             <Text
-              color={colors.text}
-              fontSize={13}
+              color={colors.text} fontSize={13}
               textDecorationLine={item.completed ? 'line-through' : 'none'}
-              numberOfLines={2}
-              style={{ flex: 1 }}
+              numberOfLines={2} style={{ flex: 1 }}
             >
               {item.content}
             </Text>
@@ -298,19 +292,13 @@ function ItemCard({
             <Text color={colors.text} fontSize={12} numberOfLines={2}>
               {item.content || item.url}
             </Text>
-            <Pressable
-              onPress={() => {
-                if (item.url) Linking.openURL(item.url)
-              }}
-            >
-              <Text color={colors.primary} fontSize={12}>
-                Open →
-              </Text>
+            <Pressable onPress={() => { if (item.url) Linking.openURL(item.url) }}>
+              <Text color={colors.primary} fontSize={12}>Open →</Text>
             </Pressable>
           </YStack>
         )}
         {item.type === 'textbox' && (
-          <Text color={colors.text} fontSize={14} numberOfLines={6}>
+          <Text color={item.color ?? colors.text} fontSize={14} numberOfLines={6}>
             {item.content}
           </Text>
         )}
@@ -328,45 +316,40 @@ function ItemCard({
 
         {/* Selection action bar */}
         {isSelected && !readOnly && tool === 'select' && (
-          <View
-            style={{
-              position: 'absolute',
-              top: -32,
-              left: 0,
-              flexDirection: 'row',
-              gap: 6,
-            }}
-          >
+          <View style={{ position: 'absolute', top: -32, left: 0, flexDirection: 'row', gap: 6 }}>
             <Pressable
               onPress={() => onEditItem(item)}
-              style={{
-                backgroundColor: colors.primary,
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 4,
-              }}
+              style={{ backgroundColor: colors.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}
             >
-              <Text color={colors.onPrimary} fontSize={11}>
-                Edit
-              </Text>
+              <Text color={colors.onPrimary} fontSize={11}>Edit</Text>
             </Pressable>
             <Pressable
-              onPress={() => {
-                if (boardId) onDeleteItem(boardId, item.id)
-                onSelectId(null)
-              }}
-              style={{
-                backgroundColor: '#e53935',
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 4,
-              }}
+              onPress={() => { if (boardId) onDeleteItem(boardId, item.id); onSelectId(null) }}
+              style={{ backgroundColor: '#e53935', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}
             >
-              <Text color="#fff" fontSize={11}>
-                Delete
-              </Text>
+              <Text color="#fff" fontSize={11}>Delete</Text>
             </Pressable>
           </View>
+        )}
+
+        {/* Resize handle */}
+        {canResize && (
+          <GestureDetector gesture={resizeGesture}>
+            <View
+              style={{
+                position: 'absolute',
+                right: -7,
+                bottom: -7,
+                width: 14,
+                height: 14,
+                borderRadius: 3,
+                backgroundColor: colors.primary,
+                borderWidth: 2,
+                borderColor: '#fff',
+                zIndex: 10,
+              }}
+            />
+          </GestureDetector>
         )}
       </Animated.View>
     </GestureDetector>
@@ -374,14 +357,9 @@ function ItemCard({
 }
 
 // ---------------------------------------------------------------------------
-// Main PlanningBoardCanvas component
+// Main PlanningBoardCanvas
 // ---------------------------------------------------------------------------
-export function PlanningBoardCanvas({
-  boardId,
-  readOnly = false,
-  visible,
-  onClose,
-}: PlanningBoardCanvasProps) {
+export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClose }: PlanningBoardCanvasProps) {
   'use no memo'
 
   const colors = useThemeColors()
@@ -389,7 +367,6 @@ export function PlanningBoardCanvas({
   const { boards, addItem, updateItem, deleteItem } = usePlanningStore()
   const board = boards.find((b) => sameId(b.id, boardId ?? ''))
 
-  // Viewport transform (Reanimated shared values)
   const tx = useSharedValue(-(CANVAS_W / 2 - screenW / 2))
   const ty = useSharedValue(-(CANVAS_H / 2 - screenH / 2))
   const sc = useSharedValue(1)
@@ -400,23 +377,37 @@ export function PlanningBoardCanvas({
   // Tool state
   const [tool, setTool] = useState<ToolType>('pan')
   const toolRef = useRef<ToolType>('pan')
+  function updateTool(t: ToolType) { toolRef.current = t; setTool(t) }
 
-  function updateTool(t: ToolType) {
-    toolRef.current = t
-    setTool(t)
-  }
+  // Color
+  const [activeColor, setActiveColor] = useState(PALETTE[0])
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const activeColorRef = useRef(PALETTE[0])
+  function updateActiveColor(c: string) { activeColorRef.current = c; setActiveColor(c) }
 
-  // Draw state
+  // Shape mode
+  const [shapeMode, setShapeMode] = useState<'rect' | 'circle'>('rect')
+  const shapeModeRef = useRef<'rect' | 'circle'>('rect')
+  function updateShapeMode(m: 'rect' | 'circle') { shapeModeRef.current = m; setShapeMode(m) }
+
+  // Draw
   const [drawPoints, setDrawPoints] = useState<DrawPoint[]>([])
   const isDrawing = useRef(false)
 
-  // Connector state
-  const [connectorFrom, setConnectorFrom] = useState<string | null>(null)
+  // Shape drag preview
+  const shapeDragStartX = useSharedValue(0)
+  const shapeDragStartY = useSharedValue(0)
+  const shapeDragCurX = useSharedValue(0)
+  const shapeDragCurY = useSharedValue(0)
+  const isDraggingShape = useSharedValue(false)
+  const shapePreviewColor = useSharedValue(PALETTE[0])
+  const shapePreviewRadius = useSharedValue(4)
 
-  // Selected item
+  // Connector / selection
+  const [connectorFrom, setConnectorFrom] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  // Create modal state
+  // Create / edit modal
   const [createModal, setCreateModal] = useState<CreateModalState>(defaultCreateModal)
   const [createContent, setCreateContent] = useState('')
   const [createUrl, setCreateUrl] = useState('')
@@ -428,35 +419,61 @@ export function PlanningBoardCanvas({
     transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: sc.value }],
   }))
 
-  // JS callbacks for gestures
+  // Shape drag preview style
+  const shapePreviewStyle = useAnimatedStyle(() => {
+    if (!isDraggingShape.value) return { display: 'none' as const }
+    const x = Math.min(shapeDragStartX.value, shapeDragCurX.value)
+    const y = Math.min(shapeDragStartY.value, shapeDragCurY.value)
+    const w = Math.abs(shapeDragCurX.value - shapeDragStartX.value)
+    const h = Math.abs(shapeDragCurY.value - shapeDragStartY.value)
+    return {
+      display: 'flex' as const,
+      position: 'absolute' as const,
+      left: x,
+      top: y,
+      width: Math.max(w, 4),
+      height: Math.max(h, 4),
+      borderWidth: 2,
+      borderColor: shapePreviewColor.value,
+      borderRadius: shapePreviewRadius.value,
+      backgroundColor: 'transparent' as const,
+    }
+  })
+
   function addPoint(x: number, y: number) {
     setDrawPoints((prev) => [...prev, { x, y }])
   }
 
   function finalizeDraw(pts: DrawPoint[]) {
-    if (!boardId || pts.length < 2) {
-      setDrawPoints([])
-      isDrawing.current = false
-      return
-    }
-    const xs = pts.map((p) => p.x)
-    const ys = pts.map((p) => p.y)
-    const minX = Math.min(...xs)
-    const minY = Math.min(...ys)
-    const maxX = Math.max(...xs)
-    const maxY = Math.max(...ys)
+    if (!boardId || pts.length < 2) { setDrawPoints([]); isDrawing.current = false; return }
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y)
+    const minX = Math.min(...xs), minY = Math.min(...ys)
     addItem(boardId, {
       type: 'draw',
-      x: minX,
-      y: minY,
-      width: Math.max(maxX - minX, 1),
-      height: Math.max(maxY - minY, 1),
+      x: minX, y: minY,
+      width: Math.max(Math.max(...xs) - minX, 1),
+      height: Math.max(Math.max(...ys) - minY, 1),
       content: '',
       points: pts,
-      color: '#333',
+      color: activeColorRef.current,
     })
     setDrawPoints([])
     isDrawing.current = false
+  }
+
+  function finalizeShape(sx: number, sy: number, ex: number, ey: number) {
+    if (!boardId) return
+    const x = Math.min(sx, ex)
+    const y = Math.min(sy, ey)
+    const width = Math.max(Math.abs(ex - sx), 30)
+    const height = Math.max(Math.abs(ey - sy), 30)
+    addItem(boardId, {
+      type: 'shape',
+      x, y, width, height,
+      content: '',
+      shapeType: shapeModeRef.current,
+      color: activeColorRef.current,
+    })
   }
 
   function openCreateModal(type: PlanningItemType, vx: number, vy: number) {
@@ -471,7 +488,7 @@ export function PlanningBoardCanvas({
     const currentTool = toolRef.current
     const vx = (absX - tx.value) / sc.value
     const vy = (absY - ty.value) / sc.value
-    if (['note', 'goal', 'checklist', 'link', 'textbox', 'shape'].includes(currentTool)) {
+    if (['note', 'goal', 'checklist', 'link', 'textbox'].includes(currentTool)) {
       openCreateModal(currentTool as PlanningItemType, vx, vy)
     } else {
       setSelectedId(null)
@@ -483,16 +500,7 @@ export function PlanningBoardCanvas({
     if (connectorFrom === null) {
       setConnectorFrom(itemId)
     } else if (connectorFrom !== itemId) {
-      addItem(boardId, {
-        type: 'connector',
-        x: 0,
-        y: 0,
-        width: 1,
-        height: 1,
-        content: '',
-        fromId: connectorFrom,
-        toId: itemId,
-      })
+      addItem(boardId, { type: 'connector', x: 0, y: 0, width: 1, height: 1, content: '', fromId: connectorFrom, toId: itemId })
       setConnectorFrom(null)
     } else {
       setConnectorFrom(null)
@@ -502,15 +510,9 @@ export function PlanningBoardCanvas({
   function handleEditItem(item: PlanningItem) {
     setCreateContent(item.content)
     setCreateUrl(item.url ?? '')
-    setCreateColor(item.color ?? NOTE_COLORS[0])
+    setCreateColor(item.color ?? (item.type === 'note' ? NOTE_COLORS[0] : PALETTE[0]))
     setCreateShapeType((item.shapeType as 'rect' | 'circle') ?? 'rect')
-    setCreateModal({
-      visible: true,
-      type: item.type,
-      vx: item.x,
-      vy: item.y,
-      editItemId: item.id,
-    })
+    setCreateModal({ visible: true, type: item.type, vx: item.x, vy: item.y, editItemId: item.id })
   }
 
   function handleCreateSubmit() {
@@ -524,6 +526,7 @@ export function PlanningBoardCanvas({
         ...(type === 'link' ? { url: createUrl } : {}),
         ...(type === 'note' ? { color: createColor } : {}),
         ...(type === 'shape' ? { shapeType: createShapeType, color: createColor } : {}),
+        ...(type === 'textbox' ? { color: createColor } : {}),
       })
     } else {
       addItem(boardId, {
@@ -535,24 +538,21 @@ export function PlanningBoardCanvas({
         content: createContent,
         ...(type === 'link' ? { url: createUrl } : {}),
         ...(type === 'note' ? { color: createColor } : {}),
-        ...(type === 'shape' ? { shapeType: createShapeType, color: createColor } : {}),
+        ...(type === 'textbox' ? { color: activeColorRef.current } : {}),
       })
     }
     setCreateModal(defaultCreateModal)
     setSelectedId(null)
   }
 
-  // Pinch gesture
+  // Gestures
   const pinch = Gesture.Pinch()
     .onUpdate((e) => {
       // eslint-disable-next-line react-hooks/immutability
       sc.value = Math.min(4, Math.max(0.2, savedSc.value * e.scale))
     })
-    .onEnd(() => {
-      savedSc.value = sc.value
-    })
+    .onEnd(() => { savedSc.value = sc.value })
 
-  // Viewport 2-finger pan
   const viewportPan = Gesture.Pan()
     .minPointers(readOnly ? 1 : 2)
     .maxPointers(readOnly ? 2 : 2)
@@ -562,26 +562,19 @@ export function PlanningBoardCanvas({
       // eslint-disable-next-line react-hooks/immutability
       ty.value = savedTy.value + e.translationY
     })
-    .onEnd(() => {
-      savedTx.value = tx.value
-
-      savedTy.value = ty.value
-    })
+    .onEnd(() => { savedTx.value = tx.value; savedTy.value = ty.value })
 
   const viewportGesture = Gesture.Simultaneous(pinch, viewportPan)
 
-  // Background tap (creation tools)
   // eslint-disable-next-line react-hooks/refs
-  const bgTap = Gesture.Tap().onEnd((e) => {
-    runOnJS(handleBgTap)(e.absoluteX, e.absoluteY)
-  })
-
-  // Draw gesture (records points on canvas)
+  const bgTap = Gesture.Tap()
+    .enabled(!readOnly)
+    .onEnd((e) => { runOnJS(handleBgTap)(e.absoluteX, e.absoluteY) })
 
   const drawPan = Gesture.Pan()
+    .enabled(tool === 'draw')
     // eslint-disable-next-line react-hooks/refs
     .onStart((e) => {
-      if (toolRef.current !== 'draw') return
       isDrawing.current = true
       const vx = (e.absoluteX - tx.value) / sc.value
       const vy = (e.absoluteY - ty.value) / sc.value
@@ -595,36 +588,53 @@ export function PlanningBoardCanvas({
       runOnJS(addPoint)(vx, vy)
     })
     // eslint-disable-next-line react-hooks/refs
+    .onEnd(() => { if (isDrawing.current) runOnJS(finalizeDraw)(drawPoints) })
+
+  const shapeDragPan = Gesture.Pan()
+    .enabled(tool === 'shape')
+    .onStart((e) => {
+      const vx = (e.absoluteX - tx.value) / sc.value
+      const vy = (e.absoluteY - ty.value) / sc.value
+      shapeDragStartX.value = vx
+      shapeDragStartY.value = vy
+      shapeDragCurX.value = vx
+      shapeDragCurY.value = vy
+      shapePreviewColor.value = activeColorRef.current
+      shapePreviewRadius.value = shapeModeRef.current === 'circle' ? 9999 : 4
+      isDraggingShape.value = true
+    })
+    .onUpdate((e) => {
+      const vx = (e.absoluteX - tx.value) / sc.value
+      const vy = (e.absoluteY - ty.value) / sc.value
+      // eslint-disable-next-line react-hooks/immutability
+      shapeDragCurX.value = vx
+      // eslint-disable-next-line react-hooks/immutability
+      shapeDragCurY.value = vy
+    })
     .onEnd(() => {
-      if (!isDrawing.current) return
-      runOnJS(finalizeDraw)(drawPoints)
+      isDraggingShape.value = false
+      runOnJS(finalizeShape)(
+        shapeDragStartX.value, shapeDragStartY.value,
+        shapeDragCurX.value, shapeDragCurY.value,
+      )
     })
 
-  // 1-finger pan (pan tool)
-
   const panToolGesture = Gesture.Pan()
-    .minPointers(1)
-    .maxPointers(1)
+    .enabled(tool === 'pan')
+    .minPointers(1).maxPointers(1)
     // eslint-disable-next-line react-hooks/refs
     .onUpdate((e) => {
-      if (toolRef.current !== 'pan') return
       // eslint-disable-next-line react-hooks/immutability
       tx.value = savedTx.value + e.translationX
       // eslint-disable-next-line react-hooks/immutability
       ty.value = savedTy.value + e.translationY
     })
     // eslint-disable-next-line react-hooks/refs
-    .onEnd(() => {
-      if (toolRef.current !== 'pan') return
-
-      savedTx.value = tx.value
-
-      savedTy.value = ty.value
-    })
+    .onEnd(() => { savedTx.value = tx.value; savedTy.value = ty.value })
 
   const bgGesture = readOnly
     ? (Gesture.Exclusive(bgTap) as ReturnType<typeof Gesture.Exclusive>)
-    : Gesture.Race(drawPan, panToolGesture, bgTap)
+    : Gesture.Race(shapeDragPan, drawPan, panToolGesture, bgTap)
 
   const items = board?.items ?? []
   const nonSvgItems = items.filter((i) => i.type !== 'draw' && i.type !== 'connector')
@@ -635,49 +645,90 @@ export function PlanningBoardCanvas({
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           {/* Toolbar */}
           {!readOnly && (
-            <View
-              style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                backgroundColor: colors.surface,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border,
-                paddingHorizontal: 4,
-                paddingVertical: 4,
-                gap: 2,
-              }}
-            >
-              {TOOL_BUTTONS.map((btn) => (
+            <View style={{ backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+              {/* Tool buttons row */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 4, paddingTop: 4, paddingBottom: 2, gap: 2 }}>
+                {TOOL_BUTTONS.map((btn) => (
+                  <Pressable
+                    key={btn.type}
+                    onPress={() => {
+                      updateTool(btn.type)
+                      setConnectorFrom(null)
+                      setSelectedId(null)
+                      setShowColorPicker(false)
+                    }}
+                    style={{
+                      paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6,
+                      backgroundColor: tool === btn.type ? colors.primary : 'transparent',
+                      alignItems: 'center', minWidth: 52,
+                    }}
+                  >
+                    <Text fontSize={16}>{btn.icon}</Text>
+                    <Text fontSize={10} color={tool === btn.type ? colors.onPrimary : colors.textMuted}>
+                      {btn.label}
+                    </Text>
+                  </Pressable>
+                ))}
+
+                {/* Color swatch button */}
                 <Pressable
-                  key={btn.type}
-                  onPress={() => {
-                    updateTool(btn.type)
-                    setConnectorFrom(null)
-                    setSelectedId(null)
-                  }}
+                  onPress={() => setShowColorPicker((v) => !v)}
                   style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                    borderRadius: 6,
-                    backgroundColor: tool === btn.type ? colors.primary : 'transparent',
-                    alignItems: 'center',
-                    minWidth: 52,
+                    paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6,
+                    backgroundColor: showColorPicker ? colors.primary + '22' : 'transparent',
+                    alignItems: 'center', minWidth: 44,
                   }}
                 >
-                  <Text fontSize={16}>{btn.icon}</Text>
-                  <Text
-                    fontSize={10}
-                    color={tool === btn.type ? colors.onPrimary : colors.textMuted}
-                  >
-                    {btn.label}
-                  </Text>
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 11,
+                    backgroundColor: activeColor,
+                    borderWidth: 2,
+                    borderColor: showColorPicker ? colors.primary : colors.border,
+                  }} />
+                  <Text fontSize={10} color={colors.textMuted}>Color</Text>
                 </Pressable>
-              ))}
-              {connectorFrom !== null && (
-                <View style={{ justifyContent: 'center', paddingHorizontal: 8 }}>
-                  <Text color={colors.primary} fontSize={11}>
-                    Tap target item
-                  </Text>
+
+                {connectorFrom !== null && (
+                  <View style={{ justifyContent: 'center', paddingHorizontal: 8 }}>
+                    <Text color={colors.primary} fontSize={11}>Tap target item</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Color picker panel */}
+              {showColorPicker && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, paddingBottom: 8, gap: 8 }}>
+                  {PALETTE.map((c) => (
+                    <Pressable key={c} onPress={() => { updateActiveColor(c); setShowColorPicker(false) }}>
+                      <View style={{
+                        width: 28, height: 28, borderRadius: 14,
+                        backgroundColor: c,
+                        borderWidth: activeColor === c ? 3 : 1,
+                        borderColor: activeColor === c ? colors.primary : colors.border,
+                      }} />
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              {/* Shape submenu */}
+              {tool === 'shape' && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 6, gap: 8 }}>
+                  <Text color={colors.textMuted} fontSize={12}>Shape:</Text>
+                  {(['rect', 'circle'] as const).map((m) => (
+                    <Pressable key={m} onPress={() => updateShapeMode(m)}>
+                      <View style={{
+                        paddingHorizontal: 14, paddingVertical: 5, borderRadius: 6, borderWidth: 1,
+                        borderColor: shapeMode === m ? colors.primary : colors.border,
+                        backgroundColor: shapeMode === m ? colors.primary + '18' : 'transparent',
+                      }}>
+                        <Text color={shapeMode === m ? colors.primary : colors.text} fontSize={13} fontWeight={shapeMode === m ? '700' : '400'}>
+                          {m === 'rect' ? '▭ Rect' : '○ Circle'}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                  <Text color={colors.textMuted} fontSize={11}>Drag canvas to draw</Text>
                 </View>
               )}
             </View>
@@ -690,50 +741,41 @@ export function PlanningBoardCanvas({
                 <GestureDetector gesture={bgGesture}>
                   <View style={{ width: CANVAS_W, height: CANVAS_H }}>
                     {/* SVG overlay */}
-                    <Svg
-                      width={CANVAS_W}
-                      height={CANVAS_H}
-                      style={StyleSheet.absoluteFill}
-                      pointerEvents="none"
-                    >
-                      {items
-                        .filter((i) => i.type === 'draw' && i.points)
-                        .map((item) => (
-                          <Polyline
-                            key={item.id}
-                            points={item.points!.map((p) => `${p.x},${p.y}`).join(' ')}
-                            stroke={item.color ?? '#333'}
-                            strokeWidth={2}
-                            fill="none"
-                          />
-                        ))}
+                    <Svg width={CANVAS_W} height={CANVAS_H} style={StyleSheet.absoluteFill} pointerEvents="none">
+                      {items.filter((i) => i.type === 'draw' && i.points).map((item) => (
+                        <Polyline
+                          key={item.id}
+                          points={item.points!.map((p) => `${p.x},${p.y}`).join(' ')}
+                          stroke={item.color ?? '#333'}
+                          strokeWidth={2}
+                          fill="none"
+                        />
+                      ))}
                       {drawPoints.length > 1 && (
                         <Polyline
                           points={drawPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                          stroke="#333"
+                          stroke={activeColor}
                           strokeWidth={2}
                           fill="none"
                         />
                       )}
-                      {items
-                        .filter((i) => i.type === 'connector')
-                        .map((connector) => {
-                          const from = items.find((i) => i.id === connector.fromId)
-                          const to = items.find((i) => i.id === connector.toId)
-                          if (!from || !to) return null
-                          return (
-                            <Line
-                              key={connector.id}
-                              x1={from.x + from.width / 2}
-                              y1={from.y + from.height / 2}
-                              x2={to.x + to.width / 2}
-                              y2={to.y + to.height / 2}
-                              stroke={colors.textMuted}
-                              strokeWidth={2}
-                            />
-                          )
-                        })}
+                      {items.filter((i) => i.type === 'connector').map((connector) => {
+                        const from = items.find((i) => i.id === connector.fromId)
+                        const to = items.find((i) => i.id === connector.toId)
+                        if (!from || !to) return null
+                        return (
+                          <Line
+                            key={connector.id}
+                            x1={from.x + from.width / 2} y1={from.y + from.height / 2}
+                            x2={to.x + to.width / 2} y2={to.y + to.height / 2}
+                            stroke={colors.textMuted} strokeWidth={2}
+                          />
+                        )
+                      })}
                     </Svg>
+
+                    {/* Shape drag preview */}
+                    <Animated.View style={shapePreviewStyle} pointerEvents="none" />
 
                     {/* Item cards */}
                     {nonSvgItems.map((item) => (
@@ -764,21 +806,12 @@ export function PlanningBoardCanvas({
           <Pressable
             onPress={onClose}
             style={{
-              position: 'absolute',
-              top: readOnly ? 12 : 60,
-              right: 12,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 20,
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              zIndex: 100,
+              position: 'absolute', top: readOnly ? 12 : 60, right: 12,
+              backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+              borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, zIndex: 100,
             }}
           >
-            <Text color={colors.text} fontSize={13}>
-              ✕ Close
-            </Text>
+            <Text color={colors.text} fontSize={13}>✕ Close</Text>
           </Pressable>
         </View>
       </GestureHandlerRootView>
@@ -792,20 +825,14 @@ export function PlanningBoardCanvas({
       >
         <Pressable style={styles.modalBackdrop} onPress={() => setCreateModal(defaultCreateModal)}>
           <Pressable
-            style={[
-              styles.modalSheet,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
+            style={[styles.modalSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={(e) => e.stopPropagation()}
           >
             <Text color={colors.text} fontWeight="700" fontSize={16} marginBottom={12}>
               {createModal.editItemId
                 ? 'Edit Item'
-                : createModal.type === 'textbox'
-                  ? 'Add Text'
-                  : createModal.type === 'shape'
-                    ? 'Add Shape'
-                    : `Add ${createModal.type}`}
+                : createModal.type === 'textbox' ? 'Add Text'
+                  : `Add ${createModal.type}`}
             </Text>
 
             <TextInput
@@ -813,14 +840,7 @@ export function PlanningBoardCanvas({
               placeholderTextColor={colors.textMuted}
               value={createContent}
               onChangeText={setCreateContent}
-              style={[
-                styles.input,
-                {
-                  borderColor: colors.border,
-                  color: colors.text,
-                  backgroundColor: colors.background,
-                },
-              ]}
+              style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background }]}
               multiline={createModal.type === 'note'}
               numberOfLines={createModal.type === 'note' ? 4 : 1}
             />
@@ -831,15 +851,7 @@ export function PlanningBoardCanvas({
                 placeholderTextColor={colors.textMuted}
                 value={createUrl}
                 onChangeText={setCreateUrl}
-                style={[
-                  styles.input,
-                  {
-                    borderColor: colors.border,
-                    color: colors.text,
-                    backgroundColor: colors.background,
-                    marginTop: 8,
-                  },
-                ]}
+                style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background, marginTop: 8 }]}
                 autoCapitalize="none"
                 keyboardType="url"
               />
@@ -847,99 +859,80 @@ export function PlanningBoardCanvas({
 
             {createModal.type === 'note' && (
               <XStack gap={8} marginTop={10} alignItems="center">
-                <Text color={colors.textMuted} fontSize={12}>
-                  Color:
-                </Text>
+                <Text color={colors.textMuted} fontSize={12}>Color:</Text>
                 {NOTE_COLORS.map((c) => (
-                  <Pressable
-                    key={c}
-                    onPress={() => setCreateColor(c)}
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 12,
-                      backgroundColor: c,
+                  <Pressable key={c} onPress={() => setCreateColor(c)}>
+                    <View style={{
+                      width: 24, height: 24, borderRadius: 12, backgroundColor: c,
                       borderWidth: createColor === c ? 3 : 1,
                       borderColor: createColor === c ? colors.primary : colors.border,
-                    }}
-                  />
+                    }} />
+                  </Pressable>
                 ))}
               </XStack>
             )}
+
             {createModal.type === 'shape' && (
               <>
                 <XStack gap={8} marginTop={10} alignItems="center">
-                  <Text color={colors.textMuted} fontSize={12}>
-                    Shape:
-                  </Text>
+                  <Text color={colors.textMuted} fontSize={12}>Shape:</Text>
                   {(['rect', 'circle'] as const).map((st) => (
                     <Pressable key={st} onPress={() => setCreateShapeType(st)}>
                       <XStack
-                        paddingHorizontal={12}
-                        paddingVertical={4}
-                        borderRadius={6}
-                        borderWidth={1}
+                        paddingHorizontal={12} paddingVertical={4} borderRadius={6} borderWidth={1}
                         borderColor={createShapeType === st ? colors.primary : colors.border}
                         backgroundColor={createShapeType === st ? colors.primary : 'transparent'}
                       >
-                        <Text
-                          color={createShapeType === st ? colors.onPrimary : colors.text}
-                          fontSize={13}
-                        >
+                        <Text color={createShapeType === st ? colors.onPrimary : colors.text} fontSize={13}>
                           {st === 'rect' ? '▭ Rect' : '○ Circle'}
                         </Text>
                       </XStack>
                     </Pressable>
                   ))}
                 </XStack>
-                <XStack gap={8} marginTop={8} alignItems="center">
-                  <Text color={colors.textMuted} fontSize={12}>
-                    Color:
-                  </Text>
-                  {NOTE_COLORS.map((c) => (
+                <XStack gap={8} marginTop={8} flexWrap="wrap" alignItems="center">
+                  <Text color={colors.textMuted} fontSize={12}>Color:</Text>
+                  {PALETTE.map((c) => (
                     <Pressable key={c} onPress={() => setCreateColor(c)}>
-                      <View
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 12,
-                          backgroundColor: c,
-                          borderWidth: createColor === c ? 3 : 1,
-                          borderColor: createColor === c ? colors.primary : colors.border,
-                        }}
-                      />
+                      <View style={{
+                        width: 24, height: 24, borderRadius: 12, backgroundColor: c,
+                        borderWidth: createColor === c ? 3 : 1,
+                        borderColor: createColor === c ? colors.primary : colors.border,
+                      }} />
                     </Pressable>
                   ))}
                 </XStack>
               </>
             )}
 
+            {createModal.type === 'textbox' && createModal.editItemId && (
+              <XStack gap={8} marginTop={10} flexWrap="wrap" alignItems="center">
+                <Text color={colors.textMuted} fontSize={12}>Text color:</Text>
+                {PALETTE.map((c) => (
+                  <Pressable key={c} onPress={() => setCreateColor(c)}>
+                    <View style={{
+                      width: 24, height: 24, borderRadius: 12, backgroundColor: c,
+                      borderWidth: createColor === c ? 3 : 1,
+                      borderColor: createColor === c ? colors.primary : colors.border,
+                    }} />
+                  </Pressable>
+                ))}
+              </XStack>
+            )}
+
             <XStack gap={10} marginTop={14} justifyContent="flex-end">
               <Pressable
                 onPress={() => setCreateModal(defaultCreateModal)}
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
+                style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: colors.border }}
               >
-                <Text color={colors.textMuted} fontSize={13}>
-                  Cancel
-                </Text>
+                <Text color={colors.textMuted} fontSize={13}>Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={handleCreateSubmit}
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 6,
-                  backgroundColor: colors.primary,
-                }}
+                style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6, backgroundColor: colors.primary }}
               >
                 <Text color={colors.onPrimary} fontSize={13} fontWeight="600">
-                  Add
+                  {createModal.editItemId ? 'Update' : 'Add'}
                 </Text>
               </Pressable>
             </XStack>
@@ -952,22 +945,13 @@ export function PlanningBoardCanvas({
 
 const styles = StyleSheet.create({
   modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
   },
   modalSheet: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderWidth: 1,
-    padding: 20,
-    paddingBottom: 32,
+    borderTopLeftRadius: 16, borderTopRightRadius: 16,
+    borderWidth: 1, padding: 20, paddingBottom: 32,
   },
   input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
+    borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 14,
   },
 })
