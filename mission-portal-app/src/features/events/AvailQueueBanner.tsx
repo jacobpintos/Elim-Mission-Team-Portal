@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { Pressable, TextInput, ScrollView, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useEventsStore } from '@/stores/eventsStore'
+import { useGroupsStore } from '@/stores/groupsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AVAIL_LABELS, AVAIL_COLORS, availKey } from '@/lib/availability'
@@ -140,31 +141,43 @@ function RsvpForm({
 export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
   const colors = useThemeColors()
   const { templates, overrides, avail } = useEventsStore()
+  const { groups } = useGroupsStore()
 
   const [collapsed, setCollapsed] = useState(false)
   // pick mode: shown when queue is empty and user wants to edit an existing response
   const [pickMode, setPickMode] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<EventInstance | null>(null)
 
+  const isAssignedToEvent = (ev: EventInstance) => {
+    if (ev.users?.some((x) => sameId(x, uid))) return true
+    if (ev.groups?.length) {
+      return ev.groups.some((gid) => {
+        const group = groups.find((g) => g.id === gid)
+        return group?.members.some((m) => sameId(m, uid))
+      })
+    }
+    return false
+  }
+
   // Events with missing/TBD responses (the queue)
   const queue: EventInstance[] = useMemo(() => {
     const today = todayStr()
     const to = dateStr(60)
     return allInstances(templates, overrides, today, to).filter((ev) => {
-      if (!ev.users?.some((x) => sameId(x, uid))) return false
+      if (!isAssignedToEvent(ev)) return false
       const r = avail[availKey(ev)]?.[uid]
       return !r || r.status === 'tbd'
     })
-  }, [templates, overrides, avail, uid])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates, overrides, avail, uid, groups])
 
   // All upcoming assigned events (for the picker)
   const allAssigned: EventInstance[] = useMemo(() => {
     const today = todayStr()
     const to = dateStr(60)
-    return allInstances(templates, overrides, today, to).filter((ev) =>
-      ev.users?.some((x) => sameId(x, uid))
-    )
-  }, [templates, overrides, uid])
+    return allInstances(templates, overrides, today, to).filter((ev) => isAssignedToEvent(ev))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates, overrides, uid, groups])
 
   const hasQueue = queue.length > 0
   const accentColor = hasQueue ? '#f39c12' : '#27ae60'

@@ -4,6 +4,7 @@ import { YStack, XStack, Text, H3, Input } from 'tamagui'
 import { Stack, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
+import { useGroupsStore } from '@/stores/groupsStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useAnnounceStore } from '@/stores/announceStore'
@@ -529,6 +530,7 @@ function TeamHomeContent() {
   const tasksStore = useTasksStore()
   const announceStore = useAnnounceStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
+  const { subscribe: subGroups, unsubscribe: unsubGroups } = useGroupsStore()
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
   const { subscribe: subAnnounce, unsubscribe: unsubAnnounce } = useAnnounceStore()
 
@@ -537,10 +539,12 @@ function TeamHomeContent() {
 
   useEffect(() => {
     subEvents()
+    subGroups()
     subTasks()
     subAnnounce()
     return () => {
       unsubEvents()
+      unsubGroups()
       unsubTasks()
       unsubAnnounce()
     }

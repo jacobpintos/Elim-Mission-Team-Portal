@@ -14,6 +14,7 @@ import { allInstances } from '@/lib/events'
 import { availKey } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { nextId } from '@/lib/counters'
+import { useGroupsStore } from '@/stores/groupsStore'
 import type { EventTemplate, EventInstance, AvailResponse } from '@/types/events'
 
 interface EventsStore {
@@ -68,7 +69,12 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   myInstances: (uid, from, to) => {
     const { templates, overrides } = get()
     const all = allInstances(templates, overrides, from, to)
-    return all.filter((ev) => ev.users?.some((x) => sameId(x, uid)))
+    const { getMemberUids } = useGroupsStore.getState()
+    return all.filter((ev) => {
+      if (ev.users?.some((x) => sameId(x, uid))) return true
+      if (ev.groups?.length) return getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid))
+      return false
+    })
   },
 
   pendingAvailEvents: (uid) => {
@@ -77,8 +83,12 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     in60.setDate(in60.getDate() + 60)
     const to = in60.toISOString().split('T')[0]
     const { templates, overrides, avail } = get()
+    const { getMemberUids } = useGroupsStore.getState()
     return allInstances(templates, overrides, today, to).filter((ev) => {
-      if (!ev.users?.some((x) => sameId(x, uid))) return false
+      const isAssigned =
+        ev.users?.some((x) => sameId(x, uid)) ||
+        (ev.groups?.length ? getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)) : false)
+      if (!isAssigned) return false
       const response = avail[availKey(ev)]?.[uid]
       return !response || response.status === 'tbd'
     })

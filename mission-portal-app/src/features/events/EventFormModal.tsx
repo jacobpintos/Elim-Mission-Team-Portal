@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Pressable } from 'react-native'
+import { Pressable, Alert } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { Modal } from '@/components/ui/Modal'
@@ -13,17 +13,23 @@ import { isPublic } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import type { EventTemplate, CarpoolCarData } from '@/types/events'
-import type { UserProfile } from '@/types/user'
+
+interface GroupDoc {
+  id: string
+  name: string
+  members: string[]
+}
 
 interface EventFormModalProps {
   event?: EventTemplate | null
   open: boolean
   onClose: () => void
+  selectedDate?: string // YYYY-MM-DD, pre-populates date field when creating
 }
 
 type FormData = {
   title: string
-  date: string
+  date: string // stored as MM/DD/YY in form state
   location: string
   address: string
   city: string
@@ -41,29 +47,68 @@ type FormData = {
   virtualLink: string
   taskTemplateId: string
   users: (string | number)[]
+  groups: string[]
 }
 
-export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
+function isoToDisplay(iso: string): string {
+  if (!iso) return ''
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return iso
+  const [, y, m, d] = match
+  return `${m}/${d}/${y.slice(2)}`
+}
+
+function displayToIso(display: string): string {
+  if (!display) return ''
+  const match = display.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (!match) return display
+  const [, m, d, y] = match
+  const fullYear = y.length <= 2 ? `20${y.padStart(2, '0')}` : y
+  return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+}
+
+export function EventFormModal({ event, open, onClose, selectedDate }: EventFormModalProps) {
   const colors = useThemeColors()
-  const { createEvent, updateEvent } = useEventsStore()
+  const { createEvent, updateEvent, deleteEvent } = useEventsStore()
   const { users: allStoreUsers } = useUsersStore()
   const toast = useUIStore((s) => s.toast)
 
   const allUsers = allStoreUsers.filter((u) => !isPublic(u) && !!u.displayName)
 
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([])
+  const [allGroups, setAllGroups] = useState<GroupDoc[]>([])
   const [userSearch, setUserSearch] = useState('')
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'taskTemplates'), (snap) => {
+    const unsubTemplates = onSnapshot(collection(db, 'taskTemplates'), (snap) => {
       setTaskTemplates(snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TaskTemplate))
     })
-    return unsub
+    const unsubGroups = onSnapshot(collection(db, 'groups'), (snap) => {
+      setAllGroups(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
+          .sort((a, b) => {
+            if (a.name === 'All') return -1
+            if (b.name === 'All') return 1
+            return a.name.localeCompare(b.name)
+          })
+      )
+    })
+    return () => {
+      unsubTemplates()
+      unsubGroups()
+    }
   }, [])
+
+  const initDate = event?.date
+    ? isoToDisplay(event.date)
+    : selectedDate
+      ? isoToDisplay(selectedDate)
+      : ''
 
   const [form, setForm] = useState<FormData>({
     title: event?.title ?? '',
-    date: event?.date ?? '',
+    date: initDate,
     location: event?.location ?? '',
     address: event?.address ?? '',
     city: event?.city ?? '',
@@ -81,6 +126,7 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
     virtualLink: event?.virtualLink ?? '',
     taskTemplateId: event?.taskTemplateId ?? '',
     users: event?.users ?? [],
+    groups: event?.groups ?? [],
   })
   const [saving, setSaving] = useState(false)
 
@@ -94,7 +140,7 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
         next.foodItems = ['']
       }
       if (key === 'carpool' && val === true && next.carpoolCars.length === 0) {
-        next.carpoolCars = [{ id: Date.now().toString(), label: '', seats: 3, driver: '', riders: [] }]
+        next.carpoolCars = [{ id: Date.now().toString(), label: '', driver: '', riders: [] }]
       }
       return next
     })
@@ -104,7 +150,7 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
       ...f,
       carpoolCars: [
         ...f.carpoolCars,
-        { id: Date.now().toString(), label: '', seats: 3, driver: '', riders: [] },
+        { id: Date.now().toString(), label: '', driver: '', riders: [] },
       ],
     }))
 
@@ -143,6 +189,16 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
     })
   }
 
+  const toggleGroup = (gid: string) => {
+    setForm((f) => {
+      const has = f.groups.includes(gid)
+      return {
+        ...f,
+        groups: has ? f.groups.filter((g) => g !== gid) : [...f.groups, gid],
+      }
+    })
+  }
+
   const handleSave = async () => {
     if (!form.title.trim()) {
       toast('Title is required', 'error')
@@ -154,11 +210,10 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
     }
     setSaving(true)
     try {
-      // Geocode the location so Events Near Me can filter by distance
       const coords = form.isVirtual ? null : await geocodeCity(form.city, form.state)
       const payload = {
         title: form.title,
-        date: form.date,
+        date: form.isRec ? '' : displayToIso(form.date),
         location: form.location,
         address: form.address,
         city: form.city,
@@ -175,6 +230,7 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
         isVirtual: form.isVirtual,
         virtualLink: form.virtualLink,
         users: form.users,
+        groups: form.groups,
         teams: event?.teams ?? [],
         ...(form.taskTemplateId ? { taskTemplateId: form.taskTemplateId } : {}),
         ...(coords ? { _geocodeLat: coords.lat, _geocodeLng: coords.lng } : {}),
@@ -200,6 +256,29 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
     }
   }
 
+  const handleDelete = () => {
+    if (!event) return
+    Alert.alert(
+      'Delete Event',
+      `Delete "${event.title}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteEvent(event.id)
+              onClose()
+            } catch {
+              toast('Failed to delete event', 'error')
+            }
+          },
+        },
+      ]
+    )
+  }
+
   const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
   const templateOptions: { id: string; name: string }[] = [
@@ -217,6 +296,9 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
         )
         .slice(0, 10)
     : []
+
+  const assignedGroups = allGroups.filter((g) => form.groups.includes(g.id))
+  const availableGroups = allGroups.filter((g) => !form.groups.includes(g.id))
 
   return (
     <Modal
@@ -246,12 +328,12 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
         {/* Date */}
         <YStack gap="$1">
           <Text color={colors.text} fontSize="$3">
-            Date (YYYY-MM-DD)
+            Date (MM/DD/YY)
           </Text>
           <Input
             value={form.date}
             onChangeText={field('date')}
-            placeholder="2026-04-06"
+            placeholder="04/06/26"
             backgroundColor={colors.surface}
             color={colors.text}
             borderColor={colors.border}
@@ -476,7 +558,7 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
           </YStack>
         ) : null}
 
-        {/* Food toggle + sub-field */}
+        {/* Food toggle + items */}
         <XStack gap="$3" alignItems="center" justifyContent="space-between">
           <Text color={colors.text} fontSize="$3" flex={1}>
             Food provided
@@ -536,7 +618,7 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
           </YStack>
         ) : null}
 
-        {/* Carpool toggle + sub-field */}
+        {/* Carpool toggle + cars */}
         <XStack gap="$3" alignItems="center" justifyContent="space-between">
           <Text color={colors.text} fontSize="$3" flex={1}>
             Carpool available
@@ -593,32 +675,6 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
                         ✕
                       </Text>
                     </Pressable>
-                  </XStack>
-
-                  <XStack gap="$2" alignItems="center">
-                    <Text color={colors.textMuted} fontSize="$2">
-                      Passenger seats:
-                    </Text>
-                    <XStack gap="$1">
-                      {[1, 2, 3, 4, 5, 6].map((n) => (
-                        <Pressable key={n} onPress={() => updateCarField(car.id, 'seats', n)}>
-                          <XStack
-                            width={28}
-                            height={28}
-                            borderRadius={14}
-                            borderWidth={1}
-                            borderColor={car.seats === n ? colors.primary : colors.border}
-                            backgroundColor={car.seats === n ? colors.primary : 'transparent'}
-                            alignItems="center"
-                            justifyContent="center"
-                          >
-                            <Text color={car.seats === n ? 'white' : colors.text} fontSize={11}>
-                              {n}
-                            </Text>
-                          </XStack>
-                        </Pressable>
-                      ))}
-                    </XStack>
                   </XStack>
 
                   <YStack gap="$1">
@@ -691,31 +747,29 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
                         ))}
                       </XStack>
                     )}
-                    {car.riders.length < car.seats && (
-                      <Pressable
-                        onPress={() => {
-                          setCarpoolPicker(
-                            isPicking && carpoolPicker?.role === 'rider'
-                              ? null
-                              : { carId: car.id, role: 'rider' }
-                          )
-                          setCarpoolSearch('')
-                        }}
+                    <Pressable
+                      onPress={() => {
+                        setCarpoolPicker(
+                          isPicking && carpoolPicker?.role === 'rider'
+                            ? null
+                            : { carId: car.id, role: 'rider' }
+                        )
+                        setCarpoolSearch('')
+                      }}
+                    >
+                      <XStack
+                        borderWidth={1}
+                        borderColor={colors.border}
+                        borderRadius="$2"
+                        paddingHorizontal="$3"
+                        paddingVertical="$1"
+                        alignSelf="flex-start"
                       >
-                        <XStack
-                          borderWidth={1}
-                          borderColor={colors.border}
-                          borderRadius="$2"
-                          paddingHorizontal="$3"
-                          paddingVertical="$1"
-                          alignSelf="flex-start"
-                        >
-                          <Text color={colors.primary} fontSize="$3">
-                            + Add Rider
-                          </Text>
-                        </XStack>
-                      </Pressable>
-                    )}
+                        <Text color={colors.primary} fontSize="$3">
+                          + Add Rider
+                        </Text>
+                      </XStack>
+                    </Pressable>
                   </YStack>
 
                   {isPicking && (
@@ -833,6 +887,76 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
           </YStack>
         ) : null}
 
+        {/* Assigned Groups */}
+        <YStack gap="$1">
+          <Text color={colors.text} fontSize="$3">
+            Assigned Groups
+          </Text>
+          {assignedGroups.length > 0 ? (
+            <XStack flexWrap="wrap" gap="$1">
+              {assignedGroups.map((g) => (
+                <Pressable key={g.id} onPress={() => toggleGroup(g.id)}>
+                  <XStack
+                    borderWidth={1}
+                    borderColor={colors.primary}
+                    backgroundColor={colors.primary + '22'}
+                    borderRadius={99}
+                    paddingHorizontal="$2"
+                    paddingVertical="$1"
+                    gap="$1"
+                    alignItems="center"
+                  >
+                    <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                      {g.name}
+                    </Text>
+                    <Text color={colors.primary} fontSize="$1">
+                      ✕
+                    </Text>
+                  </XStack>
+                </Pressable>
+              ))}
+            </XStack>
+          ) : null}
+          {availableGroups.length > 0 ? (
+            <YStack
+              backgroundColor={colors.surface}
+              borderWidth={1}
+              borderColor={colors.border}
+              borderRadius="$2"
+              overflow="hidden"
+            >
+              {availableGroups.map((g) => (
+                <Pressable key={g.id} onPress={() => toggleGroup(g.id)}>
+                  <XStack
+                    padding="$2"
+                    borderBottomWidth={1}
+                    borderBottomColor={colors.border}
+                    alignItems="center"
+                    gap="$2"
+                  >
+                    <Text color={colors.primary} fontSize="$2">
+                      +
+                    </Text>
+                    <YStack flex={1}>
+                      <Text color={colors.text} fontSize="$3">
+                        {g.name}
+                      </Text>
+                      <Text color={colors.textMuted} fontSize="$1">
+                        {g.members.length} member{g.members.length !== 1 ? 's' : ''}
+                      </Text>
+                    </YStack>
+                  </XStack>
+                </Pressable>
+              ))}
+            </YStack>
+          ) : null}
+          {allGroups.length === 0 ? (
+            <Text color={colors.textMuted} fontSize="$2">
+              No groups created yet.
+            </Text>
+          ) : null}
+        </YStack>
+
         {/* Assigned Members */}
         <YStack gap="$1">
           <Text color={colors.text} fontSize="$3">
@@ -903,32 +1027,51 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
           ) : null}
         </YStack>
 
-        {/* Save / Cancel */}
-        <XStack gap="$2" justifyContent="flex-end">
-          <Pressable onPress={onClose}>
-            <XStack
-              borderWidth={1}
-              borderColor={colors.border}
-              borderRadius="$2"
-              paddingHorizontal="$4"
-              paddingVertical="$2"
-            >
-              <Text color={colors.textMuted}>Cancel</Text>
-            </XStack>
-          </Pressable>
-          <Pressable onPress={handleSave} disabled={saving}>
-            <XStack
-              backgroundColor={colors.primary}
-              borderRadius="$2"
-              paddingHorizontal="$4"
-              paddingVertical="$2"
-              opacity={saving ? 0.6 : 1}
-            >
-              <Text color="white" fontWeight="600">
-                {saving ? 'Saving…' : event ? 'Update' : 'Create'}
-              </Text>
-            </XStack>
-          </Pressable>
+        {/* Save / Cancel / Delete */}
+        <XStack gap="$2" justifyContent="space-between" alignItems="center">
+          {event ? (
+            <Pressable onPress={handleDelete} disabled={saving}>
+              <XStack
+                backgroundColor="$red10"
+                borderRadius="$2"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                opacity={saving ? 0.6 : 1}
+              >
+                <Text color="white" fontWeight="600">
+                  Delete
+                </Text>
+              </XStack>
+            </Pressable>
+          ) : (
+            <YStack />
+          )}
+          <XStack gap="$2">
+            <Pressable onPress={onClose}>
+              <XStack
+                borderWidth={1}
+                borderColor={colors.border}
+                borderRadius="$2"
+                paddingHorizontal="$4"
+                paddingVertical="$2"
+              >
+                <Text color={colors.textMuted}>Cancel</Text>
+              </XStack>
+            </Pressable>
+            <Pressable onPress={handleSave} disabled={saving}>
+              <XStack
+                backgroundColor={colors.primary}
+                borderRadius="$2"
+                paddingHorizontal="$4"
+                paddingVertical="$2"
+                opacity={saving ? 0.6 : 1}
+              >
+                <Text color="white" fontWeight="600">
+                  {saving ? 'Saving…' : event ? 'Update' : 'Create'}
+                </Text>
+              </XStack>
+            </Pressable>
+          </XStack>
         </XStack>
       </YStack>
     </Modal>

@@ -144,20 +144,31 @@ function FoodPanel({
   )
 }
 
-function CarpoolReadOnly({ event, uid }: { event: EventInstance; uid: string }) {
+function CarpoolReadOnly({
+  event,
+  uid,
+  isAdmin,
+}: {
+  event: EventInstance
+  uid: string
+  isAdmin: boolean
+}) {
   const colors = useThemeColors()
   const { users } = useUsersStore()
   const getName = (u: string) => users.find((x) => sameId(x.uid, u))?.displayName ?? u
   const cars = event.carpoolCars ?? []
   const myCar = cars.find((c) => c.driver === uid || c.riders.includes(uid))
 
+  const carsToShow = isAdmin ? cars : myCar ? [myCar] : []
+
   return (
     <YStack gap="$3">
       <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
         CARPOOL
       </Text>
-      {cars.map((car, idx) => {
+      {carsToShow.map((car, idx) => {
         const isMycar = car.driver === uid || car.riders.includes(uid)
+        const carIdx = isAdmin ? idx : cars.indexOf(car)
         return (
           <YStack
             key={car.id}
@@ -169,7 +180,7 @@ function CarpoolReadOnly({ event, uid }: { event: EventInstance; uid: string }) 
             gap="$1"
           >
             <Text color={colors.text} fontWeight="700" fontSize="$3">
-              {car.label || `Car ${idx + 1}`}
+              {car.label || `Car ${carIdx + 1}`}
               {isMycar ? ' ← Your car' : ''}
             </Text>
             {car.driver ? (
@@ -710,7 +721,7 @@ export function EventDetailModal({
         {/* Carpool — members only */}
         {isMember && event.carpool ? (
           event.carpoolCars && event.carpoolCars.length > 0 ? (
-            <CarpoolReadOnly event={event} uid={uid} />
+            <CarpoolReadOnly event={event} uid={uid} isAdmin={isAdmin} />
           ) : (
             <CarpoolPanel event={event} uid={uid} isAdmin={isAdmin} />
           )

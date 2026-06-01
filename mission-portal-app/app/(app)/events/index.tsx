@@ -12,6 +12,7 @@ import { AvailModal } from '@/features/events/AvailModal'
 import { EventFormModal } from '@/features/events/EventFormModal'
 import { AvailQueueBanner } from '@/features/events/AvailQueueBanner'
 import { isAdmin, isPublic } from '@/lib/roles'
+import { useGroupsStore } from '@/stores/groupsStore'
 import { FD } from '@/lib/format'
 import type { EventInstance } from '@/types/events'
 
@@ -53,6 +54,7 @@ export default function EventsScreen() {
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
   const configStore = useConfigStore()
   const { subscribe: subConfig, unsubscribe: unsubConfig } = useConfigStore()
+  const { subscribe: subGroups, unsubscribe: unsubGroups } = useGroupsStore()
 
   // Admin uses Firestore-synced cal; non-admin uses local state
   const [localY, setLocalY] = useState(() => new Date().getFullYear())
@@ -75,9 +77,11 @@ export default function EventsScreen() {
   useEffect(() => {
     subEvents()
     subConfig()
+    subGroups()
     return () => {
       unsubEvents()
       unsubConfig()
+      unsubGroups()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -427,6 +431,7 @@ export default function EventsScreen() {
             setShowCreateModal(false)
             setEditEventId(null)
           }}
+          selectedDate={!editEventId && selectedDay ? selectedDay : undefined}
         />
       ) : null}
     </YStack>

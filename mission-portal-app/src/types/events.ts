@@ -1,7 +1,7 @@
 export interface CarpoolCarData {
   id: string
   label: string
-  seats: number
+  seats?: number
   driver: string
   riders: string[]
 }
@@ -39,6 +39,7 @@ export interface EventTemplate {
   dcw?: string
   dcm?: string
   users?: (string | number)[]
+  groups?: string[]
   food?: boolean
   carpool?: boolean
   foodItems?: string[]
