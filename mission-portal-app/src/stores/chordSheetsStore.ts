@@ -80,13 +80,16 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
 
   createChordSheet: async (data) => {
     const id = await nextId('nChordSheet')
-    await setDoc(doc(db, 'chordSheets', String(id)), {
-      ...data,
-      id,
-      sections: data.sections.map(serializeSection),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })
+    const payload = Object.fromEntries(
+      Object.entries({
+        ...data,
+        id,
+        sections: data.sections.map(serializeSection),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }).filter(([, v]) => v !== undefined),
+    )
+    await setDoc(doc(db, 'chordSheets', String(id)), payload)
     return id
   },
 
