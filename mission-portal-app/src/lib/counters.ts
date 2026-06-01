@@ -11,6 +11,7 @@ type CounterKey =
   | 'nKaizen'
   | 'nPlan'
   | 'nSetList'
+  | 'nChordSheet'
 
 export async function nextId(key: CounterKey): Promise<number> {
   const ref = doc(db, 'config', 'main')
