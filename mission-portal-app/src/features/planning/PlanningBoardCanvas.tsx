@@ -569,6 +569,7 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
   // eslint-disable-next-line react-hooks/refs
   const bgTap = Gesture.Tap()
     .enabled(!readOnly)
+    // eslint-disable-next-line react-hooks/refs
     .onEnd((e) => { runOnJS(handleBgTap)(e.absoluteX, e.absoluteY) })
 
   const drawPan = Gesture.Pan()
@@ -590,6 +591,7 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
     // eslint-disable-next-line react-hooks/refs
     .onEnd(() => { if (isDrawing.current) runOnJS(finalizeDraw)(drawPoints) })
 
+  /* eslint-disable react-hooks/refs, react-hooks/immutability */
   const shapeDragPan = Gesture.Pan()
     .enabled(tool === 'shape')
     .onStart((e) => {
@@ -606,9 +608,7 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
     .onUpdate((e) => {
       const vx = (e.absoluteX - tx.value) / sc.value
       const vy = (e.absoluteY - ty.value) / sc.value
-      // eslint-disable-next-line react-hooks/immutability
       shapeDragCurX.value = vx
-      // eslint-disable-next-line react-hooks/immutability
       shapeDragCurY.value = vy
     })
     .onEnd(() => {
@@ -618,6 +618,7 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
         shapeDragCurX.value, shapeDragCurY.value,
       )
     })
+  /* eslint-enable react-hooks/refs, react-hooks/immutability */
 
   const panToolGesture = Gesture.Pan()
     .enabled(tool === 'pan')
