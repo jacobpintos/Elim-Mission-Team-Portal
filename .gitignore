@@ -16,3 +16,4 @@ android/.gradle/
 
 # Claude Code on the web
 .superpowers/
+.claude/
