@@ -139,7 +139,7 @@ function PubHomeContent() {
           gap="$1"
         >
           <Text color={colors.text} fontSize="$5" fontWeight="700">
-            Welcome, {profile?.displayName?.split(' ')[0] ?? 'friend'}!
+            Welcome, {profile?.displayName?.split(' ')[0] || 'friend'}!
           </Text>
           <Text color={colors.textMuted} fontSize="$3">
             The Well of Iowa · Together for Jesus

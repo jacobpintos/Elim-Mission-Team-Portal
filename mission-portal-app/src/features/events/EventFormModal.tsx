@@ -8,6 +8,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useUIStore } from '@/stores/uiStore'
+import { geocodeCity } from '@/lib/geocode'
 import { isPublic } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
@@ -105,6 +106,8 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
     }
     setSaving(true)
     try {
+      // Check geocoding so we can warn the admin if it fails
+      const geoCheck = form.isVirtual ? true : !!(await geocodeCity(form.city, form.state))
       const payload = {
         title: form.title,
         date: form.date,
@@ -133,6 +136,9 @@ export function EventFormModal({ event, open, onClose }: EventFormModalProps) {
       } else {
         await createEvent(payload)
         toast('Event created', 'success')
+      }
+      if (!geoCheck) {
+        toast(`Location "${form.city}, ${form.state}" could not be geocoded — event won't appear in Events Near Me.`, 'error')
       }
       onClose()
     } catch {

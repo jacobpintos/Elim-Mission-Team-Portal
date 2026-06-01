@@ -36,7 +36,19 @@ export default function LoginScreen() {
       await signIn(data.email, data.password)
       router.replace('/')
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Sign in failed'
+      const code = (err as { code?: string }).code ?? ''
+      const message =
+        code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+          ? 'Incorrect email or password.'
+          : code === 'auth/user-not-found'
+            ? 'No account found with that email.'
+            : code === 'auth/too-many-requests'
+              ? 'Too many attempts. Try again later.'
+              : code === 'auth/network-request-failed'
+                ? 'Network error. Check your connection.'
+                : code === 'auth/user-disabled'
+                  ? 'This account has been disabled.'
+                  : 'Sign in failed. Please try again.'
       toast(message, 'error')
     } finally {
       setLoading(false)
