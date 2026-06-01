@@ -18,6 +18,7 @@ export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
   const users = useUsersStore((s) => s.users)
   const loading = useUsersStore((s) => s.loading)
   const isAllGroup = group.name === 'All'
+  const members = group.members ?? []
 
   return (
     <YStack
@@ -40,7 +41,7 @@ export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
             paddingVertical="$0.5"
           >
             <Text fontSize="$2" color="$gray11">
-              {group.members.length} members
+              {members.length} members
             </Text>
           </XStack>
         </XStack>
@@ -57,9 +58,9 @@ export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
         </XStack>
       </XStack>
 
-      {group.members.length > 0 && (
+      {members.length > 0 && (
         <XStack flexWrap="wrap" gap="$1">
-          {group.members.slice(0, 20).map((uid) => {
+          {members.slice(0, 20).map((uid) => {
             const name = loading ? '…' : (users.find((u) => sameId(u.uid, uid))?.displayName ?? uid)
             return (
               <XStack
@@ -75,7 +76,7 @@ export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
               </XStack>
             )
           })}
-          {group.members.length > 20 && (
+          {members.length > 20 && (
             <XStack
               backgroundColor="$gray4"
               borderRadius="$4"
@@ -83,7 +84,7 @@ export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
               paddingVertical="$0.5"
             >
               <Text fontSize="$1" color="$gray10">
-                +{group.members.length - 20} more
+                +{members.length - 20} more
               </Text>
             </XStack>
           )}

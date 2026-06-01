@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useTasksStore } from '@/stores/tasksStore'
+import { useUIStore } from '@/stores/uiStore'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useConfigStore } from '@/stores/configStore'
 import { useMusicStore, youtubeThumbnail } from '@/stores/musicStore'
@@ -34,6 +35,7 @@ function isItemNew(item: MusicItem): boolean {
 function PubHomeContent() {
   const colors = useThemeColors()
   const router = useRouter()
+  const toast = useUIStore((s) => s.toast)
   const { profile, prevLoginAt } = useAuthStore()
   const { instances } = useEventsStore()
   const { publicAnnouncements } = useAnnounceStore()
@@ -113,8 +115,13 @@ function PubHomeContent() {
       const locationPref = { city, state: stateVal, radius, ...(coords ?? {}) }
       await updateDoc(doc(db, 'users', uid), { locationPref })
       setShowLocForm(false)
+      if (coords) {
+        toast('Location saved — nearby events will appear below.', 'success')
+      } else {
+        toast(`Could not find "${city}, ${stateVal}". Location saved without map coordinates.`, 'error')
+      }
     } catch {
-      // ignore
+      toast('Failed to save location', 'error')
     } finally {
       setSaving(false)
     }
@@ -135,7 +142,7 @@ function PubHomeContent() {
         >
           <AppLogo size="lg" showSlogan />
           <Text color={colors.text} fontSize="$4" fontWeight="600" textAlign="center">
-            Welcome{profile?.displayName ? `, ${profile.displayName.split(' ')[0]}` : ''}!
+            Welcome{profile?.displayName ? `, ${profile.displayName.split(' ')[0]}` : ', friend'}!
           </Text>
         </YStack>
 
