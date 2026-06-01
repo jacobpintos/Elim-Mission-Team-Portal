@@ -13,6 +13,7 @@ interface MemberPickerProps {
 export function MemberPicker({ selected, onChange, label }: MemberPickerProps) {
   const [search, setSearch] = useState('')
   const { users } = useUsersStore()
+  const safeSelected = selected ?? []
 
   const filtered = search.trim()
     ? users.filter(
@@ -23,15 +24,15 @@ export function MemberPicker({ selected, onChange, label }: MemberPickerProps) {
     : users
 
   const toggle = (uid: string) => {
-    if (selected.includes(uid)) onChange(selected.filter((id) => id !== uid))
-    else onChange([...selected, uid])
+    if (safeSelected.includes(uid)) onChange(safeSelected.filter((id) => id !== uid))
+    else onChange([...safeSelected, uid])
   }
 
   const removeSelected = (uid: string) => {
-    onChange(selected.filter((id) => id !== uid))
+    onChange(safeSelected.filter((id) => id !== uid))
   }
 
-  const selectedUsers = users.filter((u) => selected.includes(u.uid))
+  const selectedUsers = users.filter((u) => safeSelected.includes(u.uid))
 
   return (
     <YStack gap="$2">
@@ -78,7 +79,7 @@ export function MemberPicker({ selected, onChange, label }: MemberPickerProps) {
       {/* User list */}
       <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
         {filtered.slice(0, 50).map((u) => {
-          const isSelected = selected.includes(u.uid)
+          const isSelected = safeSelected.includes(u.uid)
           return (
             <Pressable key={u.uid} onPress={() => toggle(u.uid)}>
               <XStack
