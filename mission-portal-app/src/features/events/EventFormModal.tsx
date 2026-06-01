@@ -7,6 +7,8 @@ import { db } from '@/lib/firebase'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
+import { useTasksStore } from '@/stores/tasksStore'
+import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { geocodeCity } from '@/lib/geocode'
 import { isPublic } from '@/lib/roles'
@@ -71,6 +73,8 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
   const colors = useThemeColors()
   const { createEvent, updateEvent, deleteEvent } = useEventsStore()
   const { users: allStoreUsers } = useUsersStore()
+  const { createTask } = useTasksStore()
+  const { profile } = useAuthStore()
   const toast = useUIStore((s) => s.toast)
 
   const allUsers = allStoreUsers.filter((u) => !isPublic(u) && !!u.displayName)
@@ -239,7 +243,32 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
         await updateEvent(event.id, payload)
         toast('Event updated', 'success')
       } else {
-        await createEvent(payload)
+        const newEventId = await createEvent(payload)
+        if (form.taskTemplateId && newEventId) {
+          const tpl = taskTemplates.find((tt) => String(tt.id) === form.taskTemplateId)
+          if (tpl) {
+            const eventDate = form.isRec ? null : displayToIso(form.date) || null
+            for (const taskItem of tpl.tasks ?? []) {
+              if (!taskItem.title.trim()) continue
+              let dueDate: string | null = null
+              if (eventDate && taskItem.daysBefore > 0) {
+                const d = new Date(eventDate)
+                d.setDate(d.getDate() - taskItem.daysBefore)
+                dueDate = d.toISOString().split('T')[0]
+              }
+              await createTask({
+                title: taskItem.title,
+                assignees: taskItem.assignees ?? [],
+                lead: (taskItem.assignees ?? [])[0] ?? null,
+                by: profile?.uid ?? '',
+                status: 'pending',
+                evTemplateId: newEventId,
+                evDate: eventDate,
+                dueDate,
+              })
+            }
+          }
+        }
         toast('Event created', 'success')
       }
       if (!form.isVirtual && !coords) {

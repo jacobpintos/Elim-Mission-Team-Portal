@@ -833,6 +833,7 @@ export default function Assignments() {
   const [search, setSearch] = useState('')
   const [showDone, setShowDone] = useState(false)
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([])
+  const [spawning, setSpawning] = useState<string | number | null>(null)
 
   useEffect(() => {
     subTasks()
@@ -956,6 +957,7 @@ export default function Assignments() {
 
   // --- Event Health view data ---
   const allTasks = tasksStore.tasks
+  const { createTask } = useTasksStore()
   const eventHealthCards = (() => {
     const result: {
       templateId: string | number
@@ -965,17 +967,18 @@ export default function Assignments() {
       hasProblem: boolean
       tasks: Task[]
       sectionStatus: { id: string; label: string; color: string; hasProblem: boolean }[]
+      canSpawn: boolean
     }[] = []
 
     for (const ev of templates) {
+      if (!ev.taskTemplateId) continue
       const evTasks = allTasks.filter(
         (t) => sameId(t.evId ?? t.evTemplateId, ev.id) || sameId(t.evTemplateId, ev.taskTemplateId)
       )
-      if (evTasks.length === 0) continue
       const hasProblem = evTasks.some((t) => t.status === 'behind' || isOverdue(t))
       const tpl = taskTemplates.find((tt) => sameId(tt.id, ev.taskTemplateId))
       const sectionStatus = TASK_SECTIONS.flatMap((s) => {
-        if (!tpl) return []
+        if (!tpl || evTasks.length === 0) return []
         const sectionTitles = (tpl.tasks ?? []).filter((t) => t.section === s.id).map((t) => t.title)
         if (sectionTitles.length === 0) return []
         const sTasks = evTasks.filter((t) => sectionTitles.includes(t.title))
@@ -990,6 +993,7 @@ export default function Assignments() {
         hasProblem,
         tasks: evTasks,
         sectionStatus,
+        canSpawn: evTasks.length === 0 && !!tpl,
       })
     }
 
@@ -1001,6 +1005,39 @@ export default function Assignments() {
       return a.date < b.date ? -1 : a.date > b.date ? 1 : 0
     })
   })()
+
+  const spawnTasksForEvent = async (card: (typeof eventHealthCards)[0]) => {
+    const ev = templates.find((t) => sameId(t.id, card.templateId))
+    const tpl = taskTemplates.find((tt) => sameId(tt.id, ev?.taskTemplateId))
+    if (!ev || !tpl) return
+    setSpawning(card.templateId)
+    try {
+      for (const taskItem of tpl.tasks ?? []) {
+        if (!taskItem.title.trim()) continue
+        let dueDate: string | null = null
+        if (ev.date && taskItem.daysBefore > 0) {
+          const d = new Date(ev.date)
+          d.setDate(d.getDate() - taskItem.daysBefore)
+          dueDate = d.toISOString().split('T')[0]
+        }
+        await createTask({
+          title: taskItem.title,
+          assignees: taskItem.assignees ?? [],
+          lead: (taskItem.assignees ?? [])[0] ?? null,
+          by: profile?.uid ?? '',
+          status: 'pending',
+          evTemplateId: ev.id,
+          evDate: ev.date ?? null,
+          dueDate,
+        })
+      }
+      toast('Tasks spawned', 'success')
+    } catch {
+      toast('Failed to spawn tasks', 'error')
+    } finally {
+      setSpawning(null)
+    }
+  }
 
   const ADMIN_VIEWS: { key: AdminView; label: string }[] = [
     { key: 'mine', label: 'My Tasks' },
@@ -1099,13 +1136,13 @@ export default function Assignments() {
                 alignItems="center"
                 flex={1}
               >
-                <Text color={colors.textMuted}>No events with tasks found.</Text>
+                <Text color={colors.textMuted}>No events with a task template found.</Text>
               </YStack>
             ) : (
               eventHealthCards.map((card) => (
                 <Pressable
                   key={String(card.templateId)}
-                  onPress={() => setKanbanEvent({ title: card.title, tasks: card.tasks })}
+                  onPress={card.canSpawn ? undefined : () => setKanbanEvent({ title: card.title, tasks: card.tasks })}
                   style={{ width: 300 }}
                 >
                   <YStack
@@ -1124,38 +1161,56 @@ export default function Assignments() {
                         {FD(card.date, { weekday: true })}
                       </Text>
                     ) : null}
-                    <Text color={colors.textMuted} fontSize="$2">
-                      {card.taskCount} task{card.taskCount !== 1 ? 's' : ''}
-                    </Text>
-                    {card.sectionStatus.length > 0 ? (
-                      <XStack flexWrap="wrap" gap="$1">
-                        {card.sectionStatus.map((s) => (
-                          <XStack
-                            key={s.id}
-                            backgroundColor={s.hasProblem ? '#c0392b' : '#27ae60'}
-                            borderRadius={99}
-                            paddingHorizontal={8}
-                            paddingVertical={2}
-                          >
-                            <Text color="white" fontSize={10} fontWeight="600">
-                              {s.hasProblem ? `⚠ ${s.label}` : `✓ ${s.label}`}
-                            </Text>
-                          </XStack>
-                        ))}
-                      </XStack>
-                    ) : (
-                      <XStack>
+                    {card.canSpawn ? (
+                      <Pressable onPress={() => spawnTasksForEvent(card)}>
                         <XStack
-                          backgroundColor={card.hasProblem ? '#c0392b' : '#27ae60'}
+                          backgroundColor={spawning === card.templateId ? colors.border : colors.primary}
                           borderRadius={99}
                           paddingHorizontal={10}
-                          paddingVertical={3}
+                          paddingVertical={4}
+                          alignSelf="flex-start"
                         >
                           <Text color="white" fontSize={11} fontWeight="600">
-                            {card.hasProblem ? '⚠ Behind' : '✓ On Track'}
+                            {spawning === card.templateId ? 'Spawning…' : '+ Spawn Tasks'}
                           </Text>
                         </XStack>
-                      </XStack>
+                      </Pressable>
+                    ) : (
+                      <>
+                        <Text color={colors.textMuted} fontSize="$2">
+                          {card.taskCount} task{card.taskCount !== 1 ? 's' : ''}
+                        </Text>
+                        {card.sectionStatus.length > 0 ? (
+                          <XStack flexWrap="wrap" gap="$1">
+                            {card.sectionStatus.map((s) => (
+                              <XStack
+                                key={s.id}
+                                backgroundColor={s.hasProblem ? '#c0392b' : '#27ae60'}
+                                borderRadius={99}
+                                paddingHorizontal={8}
+                                paddingVertical={2}
+                              >
+                                <Text color="white" fontSize={10} fontWeight="600">
+                                  {s.hasProblem ? `⚠ ${s.label}` : `✓ ${s.label}`}
+                                </Text>
+                              </XStack>
+                            ))}
+                          </XStack>
+                        ) : (
+                          <XStack>
+                            <XStack
+                              backgroundColor={card.hasProblem ? '#c0392b' : '#27ae60'}
+                              borderRadius={99}
+                              paddingHorizontal={10}
+                              paddingVertical={3}
+                            >
+                              <Text color="white" fontSize={11} fontWeight="600">
+                                {card.hasProblem ? '⚠ Behind' : '✓ On Track'}
+                              </Text>
+                            </XStack>
+                          </XStack>
+                        )}
+                      </>
                     )}
                   </YStack>
                 </Pressable>

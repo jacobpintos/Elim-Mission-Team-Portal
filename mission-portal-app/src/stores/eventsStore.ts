@@ -33,7 +33,7 @@ interface EventsStore {
   subscribe: () => void
   unsubscribe: () => void
   selectEvent: (key: string | null) => void
-  createEvent: (data: Omit<EventTemplate, 'id'>) => Promise<void>
+  createEvent: (data: Omit<EventTemplate, 'id'>) => Promise<string | number>
   updateEvent: (id: string | number, patch: Partial<EventTemplate>) => Promise<void>
   deleteEvent: (id: string | number) => Promise<void>
   setOverride: (instanceKey: string, patch: Partial<EventTemplate>) => Promise<void>
@@ -146,6 +146,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       id,
       _updatedAt: serverTimestamp(),
     })
+    return id
   },
 
   updateEvent: async (id, patch) => {
