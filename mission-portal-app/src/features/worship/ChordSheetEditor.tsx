@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { getWordSlots } from '@/lib/nashvilleNumbers'
 import {
   SECTION_TYPES,
   SECTION_LABELS,
@@ -22,7 +23,7 @@ function makeSection(type: SectionType): ChordSheetSection {
     id: String(Date.now() + Math.random()),
     type,
     lyrics: '',
-    chordLines: [''],
+    chordTokens: [[]],
   }
 }
 
@@ -35,23 +36,23 @@ function getSectionLabel(sections: ChordSheetSection[], id: string): string {
   return `${base} ${ofType.findIndex((s) => s.id === id) + 1}`
 }
 
-/**
- * Sync chordLines array length to match the number of lyrics lines.
- * When lyrics is empty, ensure a single chord line exists.
- */
-function syncChordLines(lyrics: string, chordLines: string[]): string[] {
+function syncSectionTokens(lyrics: string, existing: string[][]): string[][] {
   if (!lyrics.trim()) {
-    return chordLines.length > 0 ? [chordLines[0] ?? ''] : ['']
+    return [existing[0] ?? []]
   }
-  const linesCount = lyrics.split('\n').length
-  if (linesCount === chordLines.length) return chordLines
-  if (linesCount > chordLines.length) {
-    return [
-      ...chordLines,
-      ...Array(linesCount - chordLines.length).fill(''),
-    ]
-  }
-  return chordLines.slice(0, linesCount)
+  const lines = lyrics.split('\n')
+  return lines.map((line, i) => {
+    const count = getWordSlots(line).length
+    const prev = existing[i] ?? []
+    if (count === prev.length) return prev
+    if (count > prev.length) return [...prev, ...Array(count - prev.length).fill('')]
+    return prev.slice(0, count)
+  })
+}
+
+// Estimate column width from word character count (Courier New 13px ≈ 8px/char)
+function colWidth(word: string, minW = 40): number {
+  return Math.max(word.length * 9 + 8, minW)
 }
 
 interface ChordSheetEditorProps {
@@ -77,7 +78,6 @@ export function ChordSheetEditor({
   const [sections, setSections] = useState<ChordSheetSection[]>([makeSection('verse')])
   const [saving, setSaving] = useState(false)
 
-  // Populate form when editing
   useEffect(() => {
     if (visible) {
       if (editSheet) {
@@ -114,7 +114,13 @@ export function ChordSheetEditor({
         title: title.trim(),
         artist: artist.trim() || undefined,
         bpm: bpm ? parseInt(bpm, 10) || undefined : undefined,
-        sections,
+        sections: sections.map((s) => ({
+          ...s,
+          // Strip trailing empty tokens from instrumentals
+          chordTokens: !s.lyrics.trim()
+            ? [(s.chordTokens[0] ?? []).filter(Boolean)]
+            : s.chordTokens,
+        })),
         createdBy,
       })
       reset()
@@ -139,30 +145,53 @@ export function ChordSheetEditor({
     setSections((prev) =>
       prev.map((s) => {
         if (s.id !== id) return s
-        const newChordLines = syncChordLines(lyrics, s.chordLines)
-        return { ...s, lyrics, chordLines: newChordLines }
+        return { ...s, lyrics, chordTokens: syncSectionTokens(lyrics, s.chordTokens) }
       }),
     )
   }
 
-  const updateChordLine = (sectionId: string, lineIdx: number, value: string) => {
+  const updateChordToken = (
+    sectionId: string,
+    lineIdx: number,
+    wordIdx: number,
+    value: string,
+  ) => {
     setSections((prev) =>
       prev.map((s) => {
         if (s.id !== sectionId) return s
-        const newChordLines = [...s.chordLines]
-        newChordLines[lineIdx] = value
-        return { ...s, chordLines: newChordLines }
+        const newTokens = s.chordTokens.map((row, ri) => {
+          if (ri !== lineIdx) return row
+          const newRow = [...row]
+          newRow[wordIdx] = value
+          return newRow
+        })
+        return { ...s, chordTokens: newTokens }
+      }),
+    )
+  }
+
+  const addInstrumentalSlot = (sectionId: string) => {
+    setSections((prev) =>
+      prev.map((s) =>
+        s.id !== sectionId
+          ? s
+          : { ...s, chordTokens: [[...(s.chordTokens[0] ?? []), '']] },
+      ),
+    )
+  }
+
+  const removeInstrumentalSlot = (sectionId: string, idx: number) => {
+    setSections((prev) =>
+      prev.map((s) => {
+        if (s.id !== sectionId) return s
+        const newRow = (s.chordTokens[0] ?? []).filter((_, i) => i !== idx)
+        return { ...s, chordTokens: [newRow] }
       }),
     )
   }
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={handleClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={styles.overlay}>
         <YStack
           backgroundColor={colors.surface}
@@ -268,8 +297,8 @@ export function ChordSheetEditor({
 
               {/* Sections */}
               {sections.map((section) => {
-                const lyricsLines = section.lyrics ? section.lyrics.split('\n') : []
                 const hasLyrics = section.lyrics.trim().length > 0
+                const lyricsLines = hasLyrics ? section.lyrics.split('\n') : []
                 return (
                   <YStack
                     key={section.id}
@@ -321,73 +350,162 @@ export function ChordSheetEditor({
                     </XStack>
 
                     {/* Lyrics */}
-                    <YStack gap="$1">
-                      <TextInput
-                        style={[
-                          styles.textarea,
-                          {
-                            color: colors.text,
-                            borderColor: colors.border,
-                            backgroundColor: colors.surface,
-                          },
-                        ]}
-                        value={section.lyrics}
-                        onChangeText={(v) => updateSectionLyrics(section.id, v)}
-                        placeholder="Enter lyrics… leave blank for instrumental"
-                        placeholderTextColor={colors.textMuted}
-                        multiline
-                        numberOfLines={4}
-                      />
-                    </YStack>
+                    <TextInput
+                      style={[
+                        styles.textarea,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surface,
+                        },
+                      ]}
+                      value={section.lyrics}
+                      onChangeText={(v) => updateSectionLyrics(section.id, v)}
+                      placeholder="Enter lyrics… leave blank for instrumental"
+                      placeholderTextColor={colors.textMuted}
+                      multiline
+                      numberOfLines={4}
+                    />
 
-                    {/* Chord lines */}
-                    <Text color={colors.textMuted} fontSize="$1" fontWeight="600" marginTop="$1">
+                    {/* Chord inputs */}
+                    <Text
+                      color={colors.textMuted}
+                      fontSize="$1"
+                      fontWeight="600"
+                      marginTop="$1"
+                    >
                       CHORDS (Nashville Numbers)
                     </Text>
 
                     {!hasLyrics ? (
-                      // Single chord line for instrumental
-                      <TextInput
-                        style={[
-                          styles.chordInput,
-                          {
-                            color: colors.primary,
-                            borderColor: colors.primary,
-                            backgroundColor: colors.surface,
-                          },
-                        ]}
-                        value={section.chordLines[0] ?? ''}
-                        onChangeText={(v) => updateChordLine(section.id, 0, v)}
-                        placeholder="e.g.  1   4   5m"
-                        placeholderTextColor={colors.textMuted}
-                      />
-                    ) : (
-                      lyricsLines.map((lyricLine, idx) => (
-                        <YStack key={idx} gap={0}>
-                          <TextInput
-                            style={[
-                              styles.chordInput,
-                              {
-                                color: colors.primary,
-                                borderColor: colors.primary,
-                                backgroundColor: colors.surface,
-                              },
-                            ]}
-                            value={section.chordLines[idx] ?? ''}
-                            onChangeText={(v) => updateChordLine(section.id, idx, v)}
-                            placeholder="e.g.  1       4    5m"
-                            placeholderTextColor={colors.textMuted}
-                          />
-                          <Text
-                            style={[
-                              styles.lyricsLineDisplay,
-                              { color: colors.textMuted },
-                            ]}
+                      /* Instrumental: individual add/remove chord boxes */
+                      <XStack flexWrap="wrap" gap="$1" alignItems="center">
+                        {(section.chordTokens[0] ?? []).map((token, wi) => (
+                          <YStack key={wi} alignItems="center" gap={2}>
+                            <Pressable onPress={() => removeInstrumentalSlot(section.id, wi)}>
+                              <Text
+                                color={colors.textMuted}
+                                fontSize="$1"
+                                style={{ textAlign: 'center' }}
+                              >
+                                ×
+                              </Text>
+                            </Pressable>
+                            <TextInput
+                              style={[
+                                styles.chordBox,
+                                {
+                                  color: colors.primary,
+                                  borderColor: colors.primary,
+                                  backgroundColor: colors.surface,
+                                },
+                              ]}
+                              value={token}
+                              onChangeText={(v) =>
+                                updateChordToken(section.id, 0, wi, v)
+                              }
+                              placeholder="—"
+                              placeholderTextColor={colors.textMuted}
+                            />
+                          </YStack>
+                        ))}
+                        <Pressable onPress={() => addInstrumentalSlot(section.id)}>
+                          <XStack
+                            backgroundColor={colors.primary + '18'}
+                            borderRadius="$2"
+                            borderWidth={1}
+                            borderColor={colors.primary}
+                            paddingHorizontal="$2"
+                            paddingVertical="$1"
                           >
-                            {lyricLine}
-                          </Text>
-                        </YStack>
-                      ))
+                            <Text color={colors.primary} fontSize="$1" fontWeight="600">
+                              + Add
+                            </Text>
+                          </XStack>
+                        </Pressable>
+                      </XStack>
+                    ) : (
+                      /* Lyrics sections: per-word chord boxes per line */
+                      <YStack gap="$2">
+                        {lyricsLines.map((lyricLine, lineIdx) => {
+                          const slots = getWordSlots(lyricLine)
+                          if (!slots.length) {
+                            return <View key={lineIdx} style={{ height: 6 }} />
+                          }
+                          return (
+                            <ScrollView
+                              key={lineIdx}
+                              horizontal
+                              showsHorizontalScrollIndicator={false}
+                            >
+                              <XStack alignItems="flex-end" gap={0}>
+                                {slots.map((slot, wi) => {
+                                  const token =
+                                    section.chordTokens[lineIdx]?.[wi] ?? ''
+                                  const cw = colWidth(slot.text)
+                                  return (
+                                    <XStack key={wi} alignItems="flex-end">
+                                      <YStack
+                                        width={cw}
+                                        alignItems="center"
+                                        gap={2}
+                                      >
+                                        <TextInput
+                                          style={[
+                                            styles.chordBox,
+                                            {
+                                              width: cw - 4,
+                                              color: colors.primary,
+                                              borderColor: colors.primary,
+                                              backgroundColor: colors.surface,
+                                            },
+                                          ]}
+                                          value={token}
+                                          onChangeText={(v) =>
+                                            updateChordToken(
+                                              section.id,
+                                              lineIdx,
+                                              wi,
+                                              v,
+                                            )
+                                          }
+                                          placeholder=""
+                                          placeholderTextColor={colors.textMuted}
+                                        />
+                                        <Text
+                                          style={[
+                                            styles.wordLabel,
+                                            { color: colors.text },
+                                          ]}
+                                          numberOfLines={1}
+                                        >
+                                          {slot.text}
+                                        </Text>
+                                      </YStack>
+                                      {slot.trailing === '-' ? (
+                                        <Text
+                                          style={[
+                                            styles.wordLabel,
+                                            {
+                                              color: colors.text,
+                                              alignSelf: 'flex-end',
+                                              paddingHorizontal: 1,
+                                            },
+                                          ]}
+                                        >
+                                          -
+                                        </Text>
+                                      ) : slot.trailing === ' ' ? (
+                                        <View style={{ width: 8 }} />
+                                      ) : null}
+                                    </XStack>
+                                  )
+                                })}
+                              </XStack>
+                            </ScrollView>
+                          )
+                        })}
+                      </YStack>
                     )}
                   </YStack>
                 )
@@ -451,17 +569,20 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
   },
-  chordInput: {
+  chordBox: {
     borderWidth: 1,
-    borderRadius: 6,
-    padding: 8,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
     fontSize: 13,
     fontFamily: 'Courier New',
+    textAlign: 'center',
+    height: 28,
+    minWidth: 36,
   },
-  lyricsLineDisplay: {
-    fontSize: 13,
+  wordLabel: {
     fontFamily: 'Courier New',
-    paddingHorizontal: 8,
-    paddingBottom: 6,
+    fontSize: 13,
+    paddingHorizontal: 2,
   },
 })

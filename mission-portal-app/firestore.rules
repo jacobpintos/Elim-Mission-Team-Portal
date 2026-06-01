@@ -1,5 +1,5 @@
 rules_version = '2';
-// Last updated: 2026-05-29 — added issues, kaizen, planningBoards, music rules
+// Last updated: 2026-06-01 — added chordSheets collection and nChordSheet counter rule
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -8,6 +8,11 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.hasAny(['admin']);
     }
     function isSelf(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function isWorshipOrAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+          .hasAny(['admin', 'worship']);
+    }
 
     match /appSettings/theme {
       allow read: if true;
@@ -98,7 +103,10 @@ service cloud.firestore {
            .hasOnly(['nReport'])) ||
         (isSignedIn() &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['nKaizen']));
+           .hasOnly(['nKaizen'])) ||
+        (isWorshipOrAdmin() &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['nChordSheet']));
     }
 
     match /digestStats/{docId} {
@@ -154,11 +162,11 @@ service cloud.firestore {
     }
 
     match /setLists/{id} {
-      function isWorshipOrAdmin() {
-        return isSignedIn() &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
-            .hasAny(['admin', 'worship']);
-      }
+      allow read: if isWorshipOrAdmin();
+      allow write: if isWorshipOrAdmin();
+    }
+
+    match /chordSheets/{id} {
       allow read: if isWorshipOrAdmin();
       allow write: if isWorshipOrAdmin();
     }

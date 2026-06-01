@@ -23,8 +23,8 @@ export const SECTION_LABELS: Record<SectionType, string> = {
 export interface ChordSheetSection {
   id: string
   type: SectionType
-  lyrics: string        // raw multiline text; empty for instrumentals
-  chordLines: string[]  // one string per lyrics line; single entry if no lyrics
+  lyrics: string            // raw multiline text; empty for instrumentals
+  chordTokens: string[][]  // [lineIdx][wordIdx] = NNS token or ''; one row for instrumentals
 }
 
 export interface ChordSheet {

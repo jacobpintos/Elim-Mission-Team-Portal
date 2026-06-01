@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { NNS_KEYS, convertChordLine } from '@/lib/nashvilleNumbers'
+import { NNS_KEYS, nashvilleToChord, getWordSlots } from '@/lib/nashvilleNumbers'
 import { SECTION_LABELS } from '@/types/chordSheet'
 import type { ChordSheet } from '@/types/chordSheet'
 
@@ -27,16 +27,18 @@ const saveKeyPrefs = (prefs: KeyPrefs) => {
   } catch {}
 }
 
-function getSectionLabel(
-  sections: ChordSheet['sections'],
-  id: string,
-): string {
+function getSectionLabel(sections: ChordSheet['sections'], id: string): string {
   const section = sections.find((s) => s.id === id)
   if (!section) return ''
   const ofType = sections.filter((s) => s.type === section.type)
   const base = SECTION_LABELS[section.type]
   if (ofType.length <= 1) return base
   return `${base} ${ofType.findIndex((s) => s.id === id) + 1}`
+}
+
+// Estimate column width in logical px from word length (Courier New 13px ≈ 9px/char)
+function colWidth(word: string, chordLen = 0): number {
+  return Math.max(word.length * 9 + 8, chordLen * 9 + 8, 36)
 }
 
 interface ChordSheetViewerProps {
@@ -62,7 +64,8 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
   if (!sheet) return null
 
   const keyOptions: string[] = ['', ...NNS_KEYS]
-  const keyIdx = selectedKey === '' ? -1 : NNS_KEYS.indexOf(selectedKey as (typeof NNS_KEYS)[number])
+  const keyIdx =
+    selectedKey === '' ? -1 : NNS_KEYS.indexOf(selectedKey as (typeof NNS_KEYS)[number])
 
   const handleSelectKey = (key: string) => {
     setSelectedKey(key)
@@ -75,6 +78,9 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
     setIsMinor(newIsMinor)
     saveKeyPrefs({ key: selectedKey, isMinor: newIsMinor })
   }
+
+  const displayToken = (raw: string) =>
+    raw && keyIdx >= 0 ? nashvilleToChord(raw, keyIdx, isMinor) : raw
 
   return (
     <Modal visible={!!sheet} animationType="slide" transparent onRequestClose={onClose}>
@@ -112,7 +118,7 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
             </Pressable>
           </XStack>
 
-          {/* Controls bar */}
+          {/* Controls */}
           <XStack gap="$2" alignItems="flex-start" flexWrap="wrap">
             {/* Key selector */}
             <YStack>
@@ -135,8 +141,6 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                   </Text>
                 </XStack>
               </Pressable>
-
-              {/* Inline dropdown */}
               {showKeyDropdown ? (
                 <YStack
                   backgroundColor={colors.surface}
@@ -147,14 +151,14 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                   overflow="hidden"
                 >
                   {keyOptions.map((k) => (
-                    <Pressable key={k === '' ? '__none__' : k} onPress={() => handleSelectKey(k)}>
+                    <Pressable
+                      key={k === '' ? '__none__' : k}
+                      onPress={() => handleSelectKey(k)}
+                    >
                       <XStack
                         paddingHorizontal="$3"
                         paddingVertical="$2"
-                        backgroundColor={
-                          selectedKey === k ? colors.primary + '22' : 'transparent'
-                        }
-                        alignItems="center"
+                        backgroundColor={selectedKey === k ? colors.primary + '22' : 'transparent'}
                       >
                         <Text
                           color={selectedKey === k ? colors.primary : colors.text}
@@ -170,7 +174,7 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
               ) : null}
             </YStack>
 
-            {/* Major / Minor toggle — only when a key is active */}
+            {/* Major/Minor toggle — only when a key is selected */}
             {selectedKey !== '' ? (
               <Pressable onPress={handleToggleMinor}>
                 <XStack
@@ -192,7 +196,7 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
               </Pressable>
             ) : null}
 
-            {/* Chords only toggle */}
+            {/* Chords Only toggle */}
             <Pressable onPress={() => setChordsOnly((v) => !v)}>
               <XStack
                 backgroundColor={chordsOnly ? colors.primary : colors.primary + '18'}
@@ -218,32 +222,21 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
             <YStack gap="$3" paddingBottom="$4">
               {sheet.sections.map((section) => {
                 const label = getSectionLabel(sheet.sections, section.id)
+                const hasLyrics = section.lyrics.trim().length > 0
 
                 if (chordsOnly) {
-                  // Gather all non-whitespace tokens from chordLines and convert
-                  const allTokens = section.chordLines
-                    .flatMap((line) => line.trim().split(/\s+/).filter(Boolean))
-                    .map((token) =>
-                      keyIdx >= 0
-                        ? convertChordLine(token, keyIdx, isMinor)
-                        : token,
-                    )
+                  const allTokens = (section.chordTokens ?? [])
+                    .flat()
+                    .filter(Boolean)
+                    .map(displayToken)
                     .join('  ')
-
                   return (
                     <YStack key={section.id} gap="$0.5">
-                      <Text
-                        color={colors.primary}
-                        fontWeight="700"
-                        fontSize="$3"
-                      >
+                      <Text color={colors.primary} fontWeight="700" fontSize="$3">
                         {label}
                       </Text>
                       {allTokens ? (
-                        <Text
-                          style={styles.mono}
-                          color={colors.text}
-                        >
+                        <Text style={styles.mono} color={colors.text}>
                           {allTokens}
                         </Text>
                       ) : null}
@@ -251,12 +244,35 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                   )
                 }
 
-                // Full mode
-                const lyricsLines = section.lyrics ? section.lyrics.split('\n') : []
-                const lineCount = Math.max(section.chordLines.length, lyricsLines.length)
+                // Full mode — instrumental
+                if (!hasLyrics) {
+                  const tokens = (section.chordTokens?.[0] ?? []).filter(Boolean)
+                  return (
+                    <YStack key={section.id} gap="$1">
+                      <Text color={colors.primary} fontWeight="700" fontSize="$3">
+                        {label}
+                      </Text>
+                      {tokens.length > 0 ? (
+                        <XStack flexWrap="wrap" gap="$2">
+                          {tokens.map((t, i) => (
+                            <Text
+                              key={i}
+                              style={[styles.mono, styles.chordText]}
+                              color={colors.primary}
+                            >
+                              {displayToken(t)}
+                            </Text>
+                          ))}
+                        </XStack>
+                      ) : null}
+                    </YStack>
+                  )
+                }
 
+                // Full mode — lyrics section with per-word chord alignment
+                const lyricsLines = section.lyrics.split('\n')
                 return (
-                  <YStack key={section.id} gap="$0.5">
+                  <YStack key={section.id} gap="$1">
                     <Text
                       color={colors.primary}
                       fontWeight="700"
@@ -265,27 +281,58 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                     >
                       {label}
                     </Text>
-                    {Array.from({ length: lineCount }, (_, i) => {
-                      const chordLine = section.chordLines[i] ?? ''
-                      const lyricLine = lyricsLines[i] ?? ''
-                      if (!chordLine.trim() && !lyricLine.trim()) return null
-                      const displayChord = convertChordLine(chordLine, keyIdx, isMinor)
+                    {lyricsLines.map((lyricLine, lineIdx) => {
+                      const slots = getWordSlots(lyricLine)
+                      if (!slots.length) return <View key={lineIdx} style={{ height: 8 }} />
+                      const lineTokens = section.chordTokens?.[lineIdx] ?? []
                       return (
-                        <YStack key={i} gap={0}>
-                          {chordLine.trim() ? (
-                            <Text
-                              style={[styles.mono, styles.chordText]}
-                              color={colors.primary}
-                            >
-                              {displayChord}
-                            </Text>
-                          ) : null}
-                          {lyricLine.trim() ? (
-                            <Text style={styles.mono} color={colors.text}>
-                              {lyricLine}
-                            </Text>
-                          ) : null}
-                        </YStack>
+                        <ScrollView
+                          key={lineIdx}
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                        >
+                          <XStack alignItems="flex-end" gap={0}>
+                            {slots.map((slot, wi) => {
+                              const raw = lineTokens[wi] ?? ''
+                              const chord = displayToken(raw)
+                              const cw = colWidth(slot.text, chord.length)
+                              return (
+                                <XStack key={wi} alignItems="flex-end">
+                                  <YStack width={cw} alignItems="center" gap={0}>
+                                    <Text
+                                      style={[styles.mono, styles.chordText]}
+                                      color={chord ? colors.primary : 'transparent'}
+                                      numberOfLines={1}
+                                    >
+                                      {chord || ' '}
+                                    </Text>
+                                    <Text
+                                      style={[styles.mono, styles.lyricText]}
+                                      color={colors.text}
+                                      numberOfLines={1}
+                                    >
+                                      {slot.text}
+                                    </Text>
+                                  </YStack>
+                                  {slot.trailing === '-' ? (
+                                    <Text
+                                      style={[
+                                        styles.mono,
+                                        styles.lyricText,
+                                        { alignSelf: 'flex-end' },
+                                      ]}
+                                      color={colors.text}
+                                    >
+                                      -
+                                    </Text>
+                                  ) : slot.trailing === ' ' ? (
+                                    <View style={{ width: 8 }} />
+                                  ) : null}
+                                </XStack>
+                              )
+                            })}
+                          </XStack>
+                        </ScrollView>
                       )
                     })}
                   </YStack>
@@ -316,5 +363,9 @@ const styles = StyleSheet.create({
   },
   chordText: {
     fontWeight: '700',
+    fontSize: 13,
+  },
+  lyricText: {
+    fontSize: 13,
   },
 })

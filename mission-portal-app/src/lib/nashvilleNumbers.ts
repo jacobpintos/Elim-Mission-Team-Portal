@@ -74,3 +74,31 @@ export function convertChordLine(line: string, keyIdx: number, isMinor = false):
   if (keyIdx < 0) return line
   return line.replace(/[^\s]+/g, (token) => nashvilleToChord(token, keyIdx, isMinor))
 }
+
+export interface WordSlot {
+  text: string
+  trailing: '-' | ' ' | ''
+}
+
+/**
+ * Split a lyrics line into word slots for per-word chord alignment.
+ * Spaces between words and hyphens within words both create slot boundaries.
+ * Each slot carries a `trailing` character ('-', ' ', or '') indicating
+ * the separator that follows it in the original text.
+ */
+export function getWordSlots(line: string): WordSlot[] {
+  const slots: WordSlot[] = []
+  const spaceSegs = line.split(' ')
+  spaceSegs.forEach((seg, si) => {
+    if (!seg) return
+    const parts = seg.split('-').filter((p) => p.length > 0)
+    if (!parts.length) return
+    parts.forEach((part, pi) => {
+      slots.push({
+        text: part,
+        trailing: pi < parts.length - 1 ? '-' : si < spaceSegs.length - 1 ? ' ' : '',
+      })
+    })
+  })
+  return slots
+}
