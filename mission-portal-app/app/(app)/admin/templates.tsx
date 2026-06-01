@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { Alert } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
@@ -22,7 +21,7 @@ export default function AdminTemplates() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'taskTemplates'), (snap) => {
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TaskTemplate))
+      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as TaskTemplate)
       data.sort((a, b) => a.name.localeCompare(b.name))
       setTemplates(data)
       setLoading(false)
@@ -30,32 +29,19 @@ export default function AdminTemplates() {
     return () => unsub()
   }, [])
 
-  const handleDelete = (template: TaskTemplate) => {
-    Alert.alert(
-      'Delete Template',
-      `Delete task template "${template.name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'taskTemplates', template.id))
-              await audit(
-                'taskTemplate.deleted',
-                `Deleted task template "${template.name}"`,
-                profile?.displayName ?? ''
-              )
-              toast('Template deleted', 'success')
-            } catch (err: unknown) {
-              const message = err instanceof Error ? err.message : 'Failed to delete template'
-              toast(message, 'error')
-            }
-          },
-        },
-      ]
-    )
+  const handleDelete = async (template: TaskTemplate) => {
+    try {
+      await deleteDoc(doc(db, 'taskTemplates', template.id))
+      await audit(
+        'taskTemplate.deleted',
+        `Deleted task template "${template.name}"`,
+        profile?.displayName ?? ''
+      )
+      toast('Template deleted', 'success')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete template'
+      toast(message, 'error')
+    }
   }
 
   return (

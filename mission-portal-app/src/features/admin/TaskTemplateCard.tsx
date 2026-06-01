@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { XStack, YStack, Text, Button } from 'tamagui'
 
 export const TASK_SECTIONS = [
@@ -30,6 +31,7 @@ interface TaskTemplateCardProps {
 export function TaskTemplateCard({ template, onEdit, onDelete }: TaskTemplateCardProps) {
   const tasks = template.tasks ?? []
   const usedSections = TASK_SECTIONS.filter((s) => tasks.some((t) => t.section === s.id))
+  const [confirming, setConfirming] = useState(false)
 
   return (
     <YStack
@@ -51,12 +53,32 @@ export function TaskTemplateCard({ template, onEdit, onDelete }: TaskTemplateCar
         </YStack>
 
         <XStack gap="$2">
-          <Button size="$2" onPress={() => onEdit(template)} theme="active">
-            Edit
-          </Button>
-          <Button size="$2" onPress={() => onDelete(template)} theme="red">
-            Delete
-          </Button>
+          {confirming ? (
+            <>
+              <Button size="$2" onPress={() => setConfirming(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="$2"
+                theme="red"
+                onPress={() => {
+                  setConfirming(false)
+                  onDelete(template)
+                }}
+              >
+                Confirm
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="$2" onPress={() => onEdit(template)} theme="active">
+                Edit
+              </Button>
+              <Button size="$2" onPress={() => setConfirming(true)} theme="red">
+                Delete
+              </Button>
+            </>
+          )}
         </XStack>
       </XStack>
 
