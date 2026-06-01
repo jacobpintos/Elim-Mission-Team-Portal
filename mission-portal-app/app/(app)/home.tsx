@@ -19,7 +19,7 @@ import { isAdmin, isSecurity, isMerch, isWorship } from '@/lib/roles'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { todayStr, dateStr } from '@/lib/events'
 import { FD, timeOfDay } from '@/lib/format'
-import { haversineMiles, geocodeCity } from '@/lib/geocode'
+import { haversineMiles, geocodeCity, estimatedDriveTime } from '@/lib/geocode'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { EventInstance, PostPage } from '@/types/events'
@@ -291,6 +291,25 @@ function PubHomeContent() {
                 {ev.location ? (
                   <Text color={colors.textMuted} fontSize="$2">
                     {ev.location}
+                  </Text>
+                ) : null}
+                {!ev.isVirtual && ev._geocodeLat && ev._geocodeLng && profile?.locationPref?.lat ? (
+                  <Text color={colors.textMuted} fontSize="$2">
+                    {Math.round(
+                      haversineMiles(
+                        profile.locationPref.lat,
+                        profile.locationPref.lng!,
+                        ev._geocodeLat,
+                        ev._geocodeLng
+                      )
+                    )} mi · {estimatedDriveTime(
+                      haversineMiles(
+                        profile.locationPref.lat,
+                        profile.locationPref.lng!,
+                        ev._geocodeLat,
+                        ev._geocodeLng
+                      )
+                    )}
                   </Text>
                 ) : null}
                 {ev.isVirtual && ev.virtualLink ? (

@@ -55,3 +55,11 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
 export function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   return haversineKm(lat1, lng1, lat2, lng2) * 0.621371
 }
+
+export function estimatedDriveTime(miles: number): string {
+  const minutes = Math.round((miles / 55) * 60)
+  if (minutes < 60) return `~${minutes} min`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m >= 5 ? `~${h}h ${m}m` : `~${h}h`
+}
