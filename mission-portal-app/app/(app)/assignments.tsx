@@ -624,6 +624,290 @@ function TaskGroup({
   )
 }
 
+function isoToDisplay(iso: string | null | undefined): string {
+  if (!iso || iso.length < 10) return ''
+  const [yy, mm, dd] = iso.split('-')
+  return `${mm}/${dd}/${yy.slice(2)}`
+}
+
+function displayToIso(display: string): string | null {
+  if (display.length < 8) return null
+  const [mm, dd, yy] = display.split('/')
+  return `20${yy}-${mm}-${dd}`
+}
+
+function AdminTaskEditModal({
+  task,
+  onClose,
+  onSave,
+  onDelete,
+  users,
+}: {
+  task: Task
+  onClose: () => void
+  onSave: (patch: Partial<Task>) => Promise<void>
+  onDelete: () => Promise<void>
+  users: UserProfile[]
+}) {
+  const colors = useThemeColors()
+  const [title, setTitle] = useState(task.title)
+  const [status, setStatus] = useState<Task['status']>(task.status)
+  const [dueDate, setDueDate] = useState(() => isoToDisplay(task.dueDate))
+  const [projectedDate, setProjectedDate] = useState(() => isoToDisplay(task.projectedDate))
+  const [assignees, setAssignees] = useState<string[]>(task.assignees.map(String))
+  const [confirming, setConfirming] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const statusOptions: { value: Task['status']; label: string; color: string }[] = [
+    { value: 'pending', label: 'Not Started', color: '#7f8c8d' },
+    { value: 'in_progress', label: 'In Progress', color: '#2980b9' },
+    { value: 'behind', label: 'Behind', color: '#e67e22' },
+    { value: 'done', label: 'Completed', color: '#27ae60' },
+  ]
+
+  const formatDateInput = (v: string): string => {
+    const digits = v.replace(/\D/g, '').slice(0, 6)
+    let out = digits.slice(0, 2)
+    if (digits.length > 2) out += '/' + digits.slice(2, 4)
+    if (digits.length > 4) out += '/' + digits.slice(4, 6)
+    return out
+  }
+
+  const nonPublicUsers = users.filter((u) => !u.roles?.includes('public'))
+
+  const handleSave = async () => {
+    if (!title.trim()) return
+    setSaving(true)
+    try {
+      const patch: Partial<Task> = {
+        title: title.trim(),
+        status,
+        assignees,
+        lead: assignees[0] ?? null,
+        dueDate: displayToIso(dueDate),
+        projectedDate: status === 'behind' ? displayToIso(projectedDate) : null,
+      }
+      await onSave(patch)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await onDelete()
+    } finally {
+      setDeleting(false)
+      setConfirming(false)
+    }
+  }
+
+  return (
+    <View style={ctStyles.overlay}>
+      <YStack
+        backgroundColor={colors.surface}
+        borderRadius="$4"
+        padding="$4"
+        gap="$3"
+        width="92%"
+        maxWidth={520}
+        maxHeight="90%"
+      >
+        <XStack justifyContent="space-between" alignItems="center">
+          <Text color={colors.text} fontSize="$5" fontWeight="700">Edit Task</Text>
+          <Pressable onPress={onClose}>
+            <Text color={colors.textMuted} fontSize="$4">✕</Text>
+          </Pressable>
+        </XStack>
+
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <YStack gap="$3">
+            {/* Title */}
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">TITLE</Text>
+              <TextInput
+                style={[ctStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Task title"
+                placeholderTextColor={colors.textMuted}
+              />
+            </YStack>
+
+            {/* Status */}
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">STATUS</Text>
+              <XStack gap="$2" flexWrap="wrap">
+                {statusOptions.map((s) => {
+                  const active = status === s.value
+                  return (
+                    <Pressable key={s.value} onPress={() => setStatus(s.value)}>
+                      <XStack
+                        paddingHorizontal="$3"
+                        paddingVertical="$1"
+                        borderRadius={99}
+                        borderWidth={1}
+                        borderColor={s.color}
+                        backgroundColor={active ? s.color : 'transparent'}
+                      >
+                        <Text color={active ? 'white' : s.color} fontSize="$2" fontWeight="600">
+                          {s.label}
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  )
+                })}
+              </XStack>
+            </YStack>
+
+            {/* Due date */}
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">DUE DATE</Text>
+              <TextInput
+                style={[ctStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                value={dueDate}
+                onChangeText={(v) => setDueDate(formatDateInput(v))}
+                placeholder="mm/dd/yy"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                maxLength={8}
+              />
+            </YStack>
+
+            {/* Projected date — only when Behind */}
+            {status === 'behind' ? (
+              <YStack gap="$1">
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">PROJECTED DATE</Text>
+                <TextInput
+                  style={[ctStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                  value={projectedDate}
+                  onChangeText={(v) => setProjectedDate(formatDateInput(v))}
+                  placeholder="mm/dd/yy"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="numeric"
+                  maxLength={8}
+                />
+              </YStack>
+            ) : null}
+
+            {/* Assignees */}
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                ASSIGNEES ({assignees.length} selected)
+              </Text>
+              <ScrollView style={{ maxHeight: 200 }}>
+                {nonPublicUsers.map((u) => {
+                  const sel = assignees.includes(String(u.uid))
+                  return (
+                    <Pressable
+                      key={String(u.uid)}
+                      onPress={() =>
+                        setAssignees((prev) =>
+                          sel ? prev.filter((id) => id !== String(u.uid)) : [...prev, String(u.uid)]
+                        )
+                      }
+                    >
+                      <XStack
+                        paddingVertical="$2"
+                        paddingHorizontal="$2"
+                        gap="$3"
+                        alignItems="center"
+                        borderBottomWidth={1}
+                        borderBottomColor={colors.border}
+                        backgroundColor={sel ? colors.primary + '18' : 'transparent'}
+                      >
+                        <View
+                          style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: 4,
+                            borderWidth: 2,
+                            borderColor: sel ? colors.primary : colors.border,
+                            backgroundColor: sel ? colors.primary : 'transparent',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {sel ? <Text color="white" fontSize={11}>✓</Text> : null}
+                        </View>
+                        <Text color={colors.text} fontSize="$3">
+                          {u.displayName || u.email || String(u.uid)}
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  )
+                })}
+              </ScrollView>
+            </YStack>
+          </YStack>
+        </ScrollView>
+
+        {/* Delete */}
+        {confirming ? (
+          <XStack gap="$2">
+            <Pressable onPress={() => setConfirming(false)} style={{ flex: 1 }}>
+              <XStack borderWidth={1} borderColor={colors.border} borderRadius="$2" paddingVertical="$2" justifyContent="center">
+                <Text color={colors.text} fontWeight="600" fontSize="$3">Cancel</Text>
+              </XStack>
+            </Pressable>
+            <Pressable onPress={handleDelete} disabled={deleting} style={{ flex: 1 }}>
+              <XStack backgroundColor="#c0392b" borderRadius="$2" paddingVertical="$2" justifyContent="center" opacity={deleting ? 0.5 : 1}>
+                <Text color="white" fontWeight="600" fontSize="$3">{deleting ? 'Deleting…' : 'Confirm Delete'}</Text>
+              </XStack>
+            </Pressable>
+          </XStack>
+        ) : (
+          <XStack gap="$2">
+            <Pressable onPress={() => setConfirming(true)} style={{ flex: 1 }}>
+              <XStack borderWidth={1} borderColor="#c0392b" borderRadius="$2" paddingVertical="$2" justifyContent="center">
+                <Text color="#c0392b" fontWeight="600" fontSize="$3">Delete</Text>
+              </XStack>
+            </Pressable>
+            <Pressable onPress={handleSave} disabled={saving || !title.trim()} style={{ flex: 2 }}>
+              <XStack backgroundColor={colors.primary} borderRadius="$2" paddingVertical="$2" justifyContent="center" opacity={saving ? 0.5 : 1}>
+                <Text color="white" fontWeight="700" fontSize="$3">{saving ? 'Saving…' : 'Save'}</Text>
+              </XStack>
+            </Pressable>
+          </XStack>
+        )}
+      </YStack>
+    </View>
+  )
+}
+
+function AdminTaskEditWrapper({
+  task,
+  onClose,
+  onSave,
+  onDelete,
+  users,
+}: {
+  task: Task | null
+  onClose: () => void
+  onSave: (patch: Partial<Task>) => Promise<void>
+  onDelete: () => Promise<void>
+  users: UserProfile[]
+}) {
+  return (
+    <Modal visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
+      {task ? (
+        <AdminTaskEditModal
+          key={String(task.id)}
+          task={task}
+          onClose={onClose}
+          onSave={onSave}
+          onDelete={onDelete}
+          users={users}
+        />
+      ) : (
+        <View />
+      )}
+    </Modal>
+  )
+}
+
 function taskToDisplayDate(task: Task): string {
   if (task.projectedDate && task.projectedDate.length === 10) {
     const [yy, mm, dd] = task.projectedDate.split('-')
@@ -832,6 +1116,7 @@ export default function Assignments() {
   const [kanbanEvent, setKanbanEvent] = useState<{ title: string; tasks: Task[] } | null>(null)
   const [verifyTask, setVerifyTask] = useState<Task | null>(null)
   const [updateTaskItem, setUpdateTaskItem] = useState<Task | null>(null)
+  const [editTaskItem, setEditTaskItem] = useState<Task | null>(null)
   const [setListAckTask, setSetListAckTask] = useState<Task | null>(null)
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [groups, setGroups] = useState<GroupDoc[]>([])
@@ -909,6 +1194,47 @@ export default function Assignments() {
       !(t.dueDate && t.dueDate >= today && t.dueDate <= in7)
   )
   const done = filtered.filter((t) => t.status === 'done')
+
+  const handleTaskPress = (t: Task) => {
+    const specialType =
+      t.taskType === 'kaizen_verification' ||
+      t.taskType === 'kaizen_action' ||
+      t.taskType === 'issue_corrective'
+    if (admin) {
+      if (specialType) return
+      setEditTaskItem(t)
+      return
+    }
+    if (!t.assignees.some((a) => String(a) === String(uid))) return
+    if (t.status === 'done') return
+    if (t.taskType === 'worship_setlist_ack') {
+      setSetListAckTask(t)
+    } else if (!specialType) {
+      setUpdateTaskItem(t)
+    }
+  }
+
+  const handleAdminEditTask = async (patch: Partial<Task>) => {
+    if (!editTaskItem) return
+    try {
+      await tasksStore.updateTask(editTaskItem.id, patch)
+      toast('Task updated', 'success')
+      setEditTaskItem(null)
+    } catch {
+      toast('Failed to update task', 'error')
+    }
+  }
+
+  const handleAdminDeleteTask = async () => {
+    if (!editTaskItem) return
+    try {
+      await tasksStore.deleteTask(editTaskItem.id)
+      toast('Task deleted', 'success')
+      setEditTaskItem(null)
+    } catch {
+      toast('Failed to delete task', 'error')
+    }
+  }
 
   const handleComplete = async (task: Task) => {
     if (task.taskType === 'kaizen_verification') {
@@ -1247,21 +1573,7 @@ export default function Assignments() {
                 color="#c0392b"
                 colors={colors}
                 onComplete={handleComplete}
-                onTaskPress={(t) => {
-                  if (
-                    t.status !== 'done' &&
-                    t.assignees.some((a) => String(a) === String(uid)) &&
-                    t.taskType !== 'kaizen_verification' &&
-                    t.taskType !== 'kaizen_action' &&
-                    t.taskType !== 'issue_corrective'
-                  ) {
-                    if (t.taskType === 'worship_setlist_ack') {
-                      setSetListAckTask(t)
-                    } else {
-                      setUpdateTaskItem(t)
-                    }
-                  }
-                }}
+                onTaskPress={handleTaskPress}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -1273,21 +1585,7 @@ export default function Assignments() {
                 color="#e67e22"
                 colors={colors}
                 onComplete={handleComplete}
-                onTaskPress={(t) => {
-                  if (
-                    t.status !== 'done' &&
-                    t.assignees.some((a) => String(a) === String(uid)) &&
-                    t.taskType !== 'kaizen_verification' &&
-                    t.taskType !== 'kaizen_action' &&
-                    t.taskType !== 'issue_corrective'
-                  ) {
-                    if (t.taskType === 'worship_setlist_ack') {
-                      setSetListAckTask(t)
-                    } else {
-                      setUpdateTaskItem(t)
-                    }
-                  }
-                }}
+                onTaskPress={handleTaskPress}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -1299,21 +1597,7 @@ export default function Assignments() {
                 color="#2980b9"
                 colors={colors}
                 onComplete={handleComplete}
-                onTaskPress={(t) => {
-                  if (
-                    t.status !== 'done' &&
-                    t.assignees.some((a) => String(a) === String(uid)) &&
-                    t.taskType !== 'kaizen_verification' &&
-                    t.taskType !== 'kaizen_action' &&
-                    t.taskType !== 'issue_corrective'
-                  ) {
-                    if (t.taskType === 'worship_setlist_ack') {
-                      setSetListAckTask(t)
-                    } else {
-                      setUpdateTaskItem(t)
-                    }
-                  }
-                }}
+                onTaskPress={handleTaskPress}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -1325,21 +1609,7 @@ export default function Assignments() {
                 color="#7f8c8d"
                 colors={colors}
                 onComplete={handleComplete}
-                onTaskPress={(t) => {
-                  if (
-                    t.status !== 'done' &&
-                    t.assignees.some((a) => String(a) === String(uid)) &&
-                    t.taskType !== 'kaizen_verification' &&
-                    t.taskType !== 'kaizen_action' &&
-                    t.taskType !== 'issue_corrective'
-                  ) {
-                    if (t.taskType === 'worship_setlist_ack') {
-                      setSetListAckTask(t)
-                    } else {
-                      setUpdateTaskItem(t)
-                    }
-                  }
-                }}
+                onTaskPress={handleTaskPress}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -1351,21 +1621,7 @@ export default function Assignments() {
                 color="#7f8c8d"
                 colors={colors}
                 onComplete={handleComplete}
-                onTaskPress={(t) => {
-                  if (
-                    t.status !== 'done' &&
-                    t.assignees.some((a) => String(a) === String(uid)) &&
-                    t.taskType !== 'kaizen_verification' &&
-                    t.taskType !== 'kaizen_action' &&
-                    t.taskType !== 'issue_corrective'
-                  ) {
-                    if (t.taskType === 'worship_setlist_ack') {
-                      setSetListAckTask(t)
-                    } else {
-                      setUpdateTaskItem(t)
-                    }
-                  }
-                }}
+                onTaskPress={handleTaskPress}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -1379,21 +1635,7 @@ export default function Assignments() {
                 onToggle={filter === 'all' ? () => setShowDone((v) => !v) : undefined}
                 colors={colors}
                 onComplete={handleComplete}
-                onTaskPress={(t) => {
-                  if (
-                    t.status !== 'done' &&
-                    t.assignees.some((a) => String(a) === String(uid)) &&
-                    t.taskType !== 'kaizen_verification' &&
-                    t.taskType !== 'kaizen_action' &&
-                    t.taskType !== 'issue_corrective'
-                  ) {
-                    if (t.taskType === 'worship_setlist_ack') {
-                      setSetListAckTask(t)
-                    } else {
-                      setUpdateTaskItem(t)
-                    }
-                  }
-                }}
+                onTaskPress={handleTaskPress}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -1484,6 +1726,15 @@ export default function Assignments() {
         uid={uid}
         onClose={() => setUpdateTaskItem(null)}
         onSave={handleUpdateTask}
+      />
+
+      {/* Full admin task edit modal */}
+      <AdminTaskEditWrapper
+        task={editTaskItem}
+        onClose={() => setEditTaskItem(null)}
+        onSave={handleAdminEditTask}
+        onDelete={handleAdminDeleteTask}
+        users={allUsers}
       />
 
       {/* Set list acknowledgment modal */}
