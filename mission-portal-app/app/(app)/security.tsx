@@ -174,6 +174,8 @@ export default function SecurityScreen() {
       }
 
       toast('Report resolved', 'success')
+      setDetailReport(null)
+      setShowArchive(true)
     } catch {
       toast('Failed to resolve report', 'error')
     }
@@ -262,9 +264,12 @@ export default function SecurityScreen() {
                       <Text color={colors.textMuted} fontSize="$2">
                         {r.reporterName} · {formatTs(r.createdAt)}
                       </Text>
-                      {r.status === 'responding' && r.responderName ? (
+                      {r.status === 'responding' ? (
                         <Text color="#f39c12" fontSize="$2" fontWeight="600">
-                          🚨 {r.responderName}
+                          🚨{' '}
+                          {(r.responders?.length ?? 0) > 0
+                            ? r.responders!.map((rp) => rp.name).join(', ')
+                            : (r.responderName ?? '')}
                         </Text>
                       ) : null}
                     </XStack>

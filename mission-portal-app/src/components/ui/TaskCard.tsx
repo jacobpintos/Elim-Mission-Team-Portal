@@ -14,9 +14,17 @@ interface TaskCardProps {
 }
 
 const STATUS_COLORS: Record<Task['status'], string> = {
-  pending: '#2980b9',
+  pending: '#7f8c8d',
+  in_progress: '#2980b9',
   done: '#27ae60',
   behind: '#e67e22',
+}
+
+const STATUS_LABELS: Record<Task['status'], string> = {
+  pending: 'Not Started',
+  in_progress: 'In Progress',
+  done: 'Completed',
+  behind: 'Behind',
 }
 
 export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames }: TaskCardProps) {
@@ -54,16 +62,27 @@ export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames 
                 · {eventTitle}
               </Text>
             ) : null}
-            <XStack
-              backgroundColor={overdue ? '#c0392b' : STATUS_COLORS[task.status]}
-              borderRadius={99}
-              paddingHorizontal="$2"
-              paddingVertical={2}
-            >
-              <Text color="white" fontSize={10} fontWeight="600">
-                {overdue ? 'Overdue' : task.status.charAt(0).toUpperCase() + task.status.slice(1)}
-              </Text>
-            </XStack>
+            {overdue ? (
+              <XStack backgroundColor="#c0392b" borderRadius={99} paddingHorizontal="$2" paddingVertical={2}>
+                <Text color="white" fontSize={10} fontWeight="600">Overdue</Text>
+              </XStack>
+            ) : null}
+            {task.status !== 'done' ? (
+              <XStack
+                backgroundColor={STATUS_COLORS[task.status]}
+                borderRadius={99}
+                paddingHorizontal="$2"
+                paddingVertical={2}
+              >
+                <Text color="white" fontSize={10} fontWeight="600">
+                  {STATUS_LABELS[task.status] ?? task.status}
+                </Text>
+              </XStack>
+            ) : !overdue ? (
+              <XStack backgroundColor={STATUS_COLORS.done} borderRadius={99} paddingHorizontal="$2" paddingVertical={2}>
+                <Text color="white" fontSize={10} fontWeight="600">Completed</Text>
+              </XStack>
+            ) : null}
           </XStack>
           {assigneeNames && assigneeNames.length > 0 ? (
             <Text color={colors.textMuted} fontSize="$2">

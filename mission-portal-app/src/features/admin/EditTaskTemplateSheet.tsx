@@ -23,7 +23,9 @@ interface SectionTasks {
 function buildSectionTasks(tasks: TaskItem[]): SectionTasks {
   const result: SectionTasks = {}
   for (const s of TASK_SECTIONS) {
-    result[s.id] = tasks.filter((t) => t.section === s.id)
+    result[s.id] = tasks
+      .filter((t) => t.section === s.id)
+      .map((t) => ({ ...t, assignees: t.assignees ?? [] }))
   }
   return result
 }
@@ -102,15 +104,16 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
       return
     }
     const allTasks = flattenSectionTasks(sectionTasks)
-    const assignedTasks = allTasks.filter((t) => t.assignees.length > 0 && t.title.trim())
-    if (assignedTasks.length === 0) {
-      toast('Add at least one assigned task', 'error')
+      .filter((t) => t.title.trim())
+      .map((t) => ({ ...t, assignees: t.assignees ?? [] }))
+    if (allTasks.length === 0) {
+      toast('Add at least one task with a title', 'error')
       return
     }
     setSaving(true)
     try {
       if (template) {
-        await updateDoc(doc(db, 'taskTemplates', template.id), {
+        await updateDoc(doc(db, 'taskTemplates', String(template.id)), {
           name: name.trim(),
           tasks: allTasks,
           updatedAt: new Date(),

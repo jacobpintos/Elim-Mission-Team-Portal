@@ -17,6 +17,7 @@ import { sameId } from '@/lib/ids'
 import { SetListFormModal } from '@/features/worship/SetListFormModal'
 import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
 import { ChordSheetsTab } from '@/features/worship/ChordSheetsTab'
+import { InputListTab } from '@/features/worship/InputListTab'
 import type { SetList } from '@/types/worship'
 
 export default function WorshipScreen() {
@@ -32,7 +33,7 @@ export default function WorshipScreen() {
   const tasksStore = useTasksStore()
   const toast = useUIStore((s) => s.toast)
 
-  const [activeTab, setActiveTab] = useState<'setlists' | 'chords'>('setlists')
+  const [activeTab, setActiveTab] = useState<'setlists' | 'chords' | 'inputs'>('setlists')
   const [showForm, setShowForm] = useState(false)
   const [detailSetList, setDetailSetList] = useState<SetList | null>(null)
 
@@ -164,6 +165,24 @@ export default function WorshipScreen() {
             </Text>
           </XStack>
         </Pressable>
+        <Pressable onPress={() => setActiveTab('inputs')}>
+          <XStack
+            backgroundColor={activeTab === 'inputs' ? colors.primary : colors.surface}
+            borderRadius={99}
+            borderWidth={1}
+            borderColor={activeTab === 'inputs' ? colors.primary : colors.border}
+            paddingHorizontal="$3"
+            paddingVertical="$1"
+          >
+            <Text
+              color={activeTab === 'inputs' ? 'white' : colors.textMuted}
+              fontWeight={activeTab === 'inputs' ? '700' : '400'}
+              fontSize="$3"
+            >
+              Input List
+            </Text>
+          </XStack>
+        </Pressable>
       </XStack>
 
       {activeTab === 'setlists' ? (
@@ -287,8 +306,10 @@ export default function WorshipScreen() {
 
           <SetListDetailModal setList={detailSetList} onClose={() => setDetailSetList(null)} />
         </>
-      ) : (
+      ) : activeTab === 'chords' ? (
         <ChordSheetsTab createdBy={uid} />
+      ) : (
+        <InputListTab />
       )}
     </YStack>
   )

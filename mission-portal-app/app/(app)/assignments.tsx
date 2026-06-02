@@ -20,6 +20,7 @@ import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
 import { httpsCallable } from 'firebase/functions'
+import { TASK_SECTIONS, type TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import type { Task } from '@/types/events'
 import type { KaizenCard, KaizenVerificationResult } from '@/types/operations'
 import type { UserProfile } from '@/types/user'
@@ -421,7 +422,7 @@ function CreateTaskModal({
                               ) : null}
                             </View>
                             <Text color={colors.text} fontSize="$3">
-                              {u.displayName}
+                              {u.displayName || u.email || String(u.uid)}
                             </Text>
                           </XStack>
                         </Pressable>
@@ -561,7 +562,7 @@ const ctStyles = StyleSheet.create({
   },
 })
 
-type FilterTab = 'all' | 'pending' | 'done' | 'behind' | 'overdue'
+type FilterTab = 'all' | 'pending' | 'in_progress' | 'done' | 'behind' | 'overdue'
 type AdminView = 'mine' | 'all' | 'health'
 
 interface TaskGroupColors {
@@ -623,6 +624,290 @@ function TaskGroup({
   )
 }
 
+function isoToDisplay(iso: string | null | undefined): string {
+  if (!iso || iso.length < 10) return ''
+  const [yy, mm, dd] = iso.split('-')
+  return `${mm}/${dd}/${yy.slice(2)}`
+}
+
+function displayToIso(display: string): string | null {
+  if (display.length < 8) return null
+  const [mm, dd, yy] = display.split('/')
+  return `20${yy}-${mm}-${dd}`
+}
+
+function AdminTaskEditModal({
+  task,
+  onClose,
+  onSave,
+  onDelete,
+  users,
+}: {
+  task: Task
+  onClose: () => void
+  onSave: (patch: Partial<Task>) => Promise<void>
+  onDelete: () => Promise<void>
+  users: UserProfile[]
+}) {
+  const colors = useThemeColors()
+  const [title, setTitle] = useState(task.title)
+  const [status, setStatus] = useState<Task['status']>(task.status)
+  const [dueDate, setDueDate] = useState(() => isoToDisplay(task.dueDate))
+  const [projectedDate, setProjectedDate] = useState(() => isoToDisplay(task.projectedDate))
+  const [assignees, setAssignees] = useState<string[]>(task.assignees.map(String))
+  const [confirming, setConfirming] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const statusOptions: { value: Task['status']; label: string; color: string }[] = [
+    { value: 'pending', label: 'Not Started', color: '#7f8c8d' },
+    { value: 'in_progress', label: 'In Progress', color: '#2980b9' },
+    { value: 'behind', label: 'Behind', color: '#e67e22' },
+    { value: 'done', label: 'Completed', color: '#27ae60' },
+  ]
+
+  const formatDateInput = (v: string): string => {
+    const digits = v.replace(/\D/g, '').slice(0, 6)
+    let out = digits.slice(0, 2)
+    if (digits.length > 2) out += '/' + digits.slice(2, 4)
+    if (digits.length > 4) out += '/' + digits.slice(4, 6)
+    return out
+  }
+
+  const nonPublicUsers = users.filter((u) => !u.roles?.includes('public'))
+
+  const handleSave = async () => {
+    if (!title.trim()) return
+    setSaving(true)
+    try {
+      const patch: Partial<Task> = {
+        title: title.trim(),
+        status,
+        assignees,
+        lead: assignees[0] ?? null,
+        dueDate: displayToIso(dueDate),
+        projectedDate: status === 'behind' ? displayToIso(projectedDate) : null,
+      }
+      await onSave(patch)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await onDelete()
+    } finally {
+      setDeleting(false)
+      setConfirming(false)
+    }
+  }
+
+  return (
+    <View style={ctStyles.overlay}>
+      <YStack
+        backgroundColor={colors.surface}
+        borderRadius="$4"
+        padding="$4"
+        gap="$3"
+        width="92%"
+        maxWidth={520}
+        maxHeight="90%"
+      >
+        <XStack justifyContent="space-between" alignItems="center">
+          <Text color={colors.text} fontSize="$5" fontWeight="700">Edit Task</Text>
+          <Pressable onPress={onClose}>
+            <Text color={colors.textMuted} fontSize="$4">✕</Text>
+          </Pressable>
+        </XStack>
+
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <YStack gap="$3">
+            {/* Title */}
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">TITLE</Text>
+              <TextInput
+                style={[ctStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Task title"
+                placeholderTextColor={colors.textMuted}
+              />
+            </YStack>
+
+            {/* Status */}
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">STATUS</Text>
+              <XStack gap="$2" flexWrap="wrap">
+                {statusOptions.map((s) => {
+                  const active = status === s.value
+                  return (
+                    <Pressable key={s.value} onPress={() => setStatus(s.value)}>
+                      <XStack
+                        paddingHorizontal="$3"
+                        paddingVertical="$1"
+                        borderRadius={99}
+                        borderWidth={1}
+                        borderColor={s.color}
+                        backgroundColor={active ? s.color : 'transparent'}
+                      >
+                        <Text color={active ? 'white' : s.color} fontSize="$2" fontWeight="600">
+                          {s.label}
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  )
+                })}
+              </XStack>
+            </YStack>
+
+            {/* Due date */}
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">DUE DATE</Text>
+              <TextInput
+                style={[ctStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                value={dueDate}
+                onChangeText={(v) => setDueDate(formatDateInput(v))}
+                placeholder="mm/dd/yy"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                maxLength={8}
+              />
+            </YStack>
+
+            {/* Projected date — only when Behind */}
+            {status === 'behind' ? (
+              <YStack gap="$1">
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">PROJECTED DATE</Text>
+                <TextInput
+                  style={[ctStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                  value={projectedDate}
+                  onChangeText={(v) => setProjectedDate(formatDateInput(v))}
+                  placeholder="mm/dd/yy"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="numeric"
+                  maxLength={8}
+                />
+              </YStack>
+            ) : null}
+
+            {/* Assignees */}
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                ASSIGNEES ({assignees.length} selected)
+              </Text>
+              <ScrollView style={{ maxHeight: 200 }}>
+                {nonPublicUsers.map((u) => {
+                  const sel = assignees.includes(String(u.uid))
+                  return (
+                    <Pressable
+                      key={String(u.uid)}
+                      onPress={() =>
+                        setAssignees((prev) =>
+                          sel ? prev.filter((id) => id !== String(u.uid)) : [...prev, String(u.uid)]
+                        )
+                      }
+                    >
+                      <XStack
+                        paddingVertical="$2"
+                        paddingHorizontal="$2"
+                        gap="$3"
+                        alignItems="center"
+                        borderBottomWidth={1}
+                        borderBottomColor={colors.border}
+                        backgroundColor={sel ? colors.primary + '18' : 'transparent'}
+                      >
+                        <View
+                          style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: 4,
+                            borderWidth: 2,
+                            borderColor: sel ? colors.primary : colors.border,
+                            backgroundColor: sel ? colors.primary : 'transparent',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {sel ? <Text color="white" fontSize={11}>✓</Text> : null}
+                        </View>
+                        <Text color={colors.text} fontSize="$3">
+                          {u.displayName || u.email || String(u.uid)}
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  )
+                })}
+              </ScrollView>
+            </YStack>
+          </YStack>
+        </ScrollView>
+
+        {/* Delete */}
+        {confirming ? (
+          <XStack gap="$2">
+            <Pressable onPress={() => setConfirming(false)} style={{ flex: 1 }}>
+              <XStack borderWidth={1} borderColor={colors.border} borderRadius="$2" paddingVertical="$2" justifyContent="center">
+                <Text color={colors.text} fontWeight="600" fontSize="$3">Cancel</Text>
+              </XStack>
+            </Pressable>
+            <Pressable onPress={handleDelete} disabled={deleting} style={{ flex: 1 }}>
+              <XStack backgroundColor="#c0392b" borderRadius="$2" paddingVertical="$2" justifyContent="center" opacity={deleting ? 0.5 : 1}>
+                <Text color="white" fontWeight="600" fontSize="$3">{deleting ? 'Deleting…' : 'Confirm Delete'}</Text>
+              </XStack>
+            </Pressable>
+          </XStack>
+        ) : (
+          <XStack gap="$2">
+            <Pressable onPress={() => setConfirming(true)} style={{ flex: 1 }}>
+              <XStack borderWidth={1} borderColor="#c0392b" borderRadius="$2" paddingVertical="$2" justifyContent="center">
+                <Text color="#c0392b" fontWeight="600" fontSize="$3">Delete</Text>
+              </XStack>
+            </Pressable>
+            <Pressable onPress={handleSave} disabled={saving || !title.trim()} style={{ flex: 2 }}>
+              <XStack backgroundColor={colors.primary} borderRadius="$2" paddingVertical="$2" justifyContent="center" opacity={saving ? 0.5 : 1}>
+                <Text color="white" fontWeight="700" fontSize="$3">{saving ? 'Saving…' : 'Save'}</Text>
+              </XStack>
+            </Pressable>
+          </XStack>
+        )}
+      </YStack>
+    </View>
+  )
+}
+
+function AdminTaskEditWrapper({
+  task,
+  onClose,
+  onSave,
+  onDelete,
+  users,
+}: {
+  task: Task | null
+  onClose: () => void
+  onSave: (patch: Partial<Task>) => Promise<void>
+  onDelete: () => Promise<void>
+  users: UserProfile[]
+}) {
+  return (
+    <Modal visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
+      {task ? (
+        <AdminTaskEditModal
+          key={String(task.id)}
+          task={task}
+          onClose={onClose}
+          onSave={onSave}
+          onDelete={onDelete}
+          users={users}
+        />
+      ) : (
+        <View />
+      )}
+    </Modal>
+  )
+}
+
 function taskToDisplayDate(task: Task): string {
   if (task.projectedDate && task.projectedDate.length === 10) {
     const [yy, mm, dd] = task.projectedDate.split('-')
@@ -635,14 +920,16 @@ function TaskUpdateModalInner({
   task,
   onClose,
   onSave,
+  onEdit,
 }: {
   task: Task
   onClose: () => void
-  onSave: (status: 'pending' | 'behind', projectedDate: string) => Promise<void>
+  onSave: (status: 'pending' | 'in_progress' | 'behind', projectedDate: string) => Promise<void>
+  onEdit?: () => void
 }) {
   const colors = useThemeColors()
-  const [status, setStatus] = useState<'pending' | 'behind'>(
-    task.status === 'behind' ? 'behind' : 'pending'
+  const [status, setStatus] = useState<'pending' | 'in_progress' | 'behind'>(
+    task.status === 'behind' ? 'behind' : task.status === 'in_progress' ? 'in_progress' : 'pending'
   )
   const [projectedDate, setProjectedDate] = useState(() => taskToDisplayDate(task))
   const [saving, setSaving] = useState(false)
@@ -656,9 +943,16 @@ function TaskUpdateModalInner({
     }
   }
 
-  const statusColors = {
-    pending: '#2980b9',
+  const statusColors: Record<'pending' | 'in_progress' | 'behind', string> = {
+    pending: '#7f8c8d',
+    in_progress: '#2980b9',
     behind: '#e67e22',
+  }
+
+  const statusLabels: Record<'pending' | 'in_progress' | 'behind', string> = {
+    pending: 'Not Started',
+    in_progress: 'In Progress',
+    behind: 'Behind',
   }
 
   return (
@@ -675,11 +969,18 @@ function TaskUpdateModalInner({
           <Text color={colors.text} fontSize="$5" fontWeight="700">
             Update Task
           </Text>
-          <Pressable onPress={onClose}>
-            <Text color={colors.textMuted} fontSize="$4">
-              ✕
-            </Text>
-          </Pressable>
+          <XStack gap="$3" alignItems="center">
+            {onEdit ? (
+              <Pressable onPress={onEdit}>
+                <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                  Full Edit
+                </Text>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={onClose}>
+              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+            </Pressable>
+          </XStack>
         </XStack>
 
         <Text color={colors.textMuted} fontSize="$3" numberOfLines={2}>
@@ -691,7 +992,7 @@ function TaskUpdateModalInner({
             STATUS
           </Text>
           <XStack gap="$2">
-            {(['pending', 'behind'] as const).map((s) => {
+            {(['pending', 'in_progress', 'behind'] as const).map((s) => {
               const active = status === s
               return (
                 <Pressable key={s} onPress={() => setStatus(s)}>
@@ -704,7 +1005,7 @@ function TaskUpdateModalInner({
                     backgroundColor={active ? statusColors[s] : 'transparent'}
                   >
                     <Text color={active ? 'white' : statusColors[s]} fontSize="$2" fontWeight="600">
-                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                      {statusLabels[s]}
                     </Text>
                   </XStack>
                 </Pressable>
@@ -765,16 +1066,18 @@ function TaskUpdateModal({
   task,
   onClose,
   onSave,
+  onEdit,
 }: {
   task: Task | null
   uid: string
   onClose: () => void
-  onSave: (status: 'pending' | 'behind', projectedDate: string) => Promise<void>
+  onSave: (status: 'pending' | 'in_progress' | 'behind', projectedDate: string) => Promise<void>
+  onEdit?: () => void
 }) {
   return (
     <Modal visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
       {task ? (
-        <TaskUpdateModalInner key={String(task.id)} task={task} onClose={onClose} onSave={onSave} />
+        <TaskUpdateModalInner key={String(task.id)} task={task} onClose={onClose} onSave={onSave} onEdit={onEdit} />
       ) : (
         <View />
       )}
@@ -816,7 +1119,7 @@ export default function Assignments() {
   const { setLists, subscribe: subWorship, unsubscribe: unsubWorship } = useWorshipStore()
   const displayName = (uid: string | number): string => {
     const u = allUsers.find((x) => String(x.uid) === String(uid))
-    return u?.displayName ?? String(uid)
+    return u?.displayName || u?.email || String(uid)
   }
   const toast = useUIStore((s) => s.toast)
 
@@ -824,6 +1127,7 @@ export default function Assignments() {
   const [kanbanEvent, setKanbanEvent] = useState<{ title: string; tasks: Task[] } | null>(null)
   const [verifyTask, setVerifyTask] = useState<Task | null>(null)
   const [updateTaskItem, setUpdateTaskItem] = useState<Task | null>(null)
+  const [editTaskItem, setEditTaskItem] = useState<Task | null>(null)
   const [setListAckTask, setSetListAckTask] = useState<Task | null>(null)
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [groups, setGroups] = useState<GroupDoc[]>([])
@@ -831,17 +1135,23 @@ export default function Assignments() {
   const [filter, setFilter] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
   const [showDone, setShowDone] = useState(false)
+  const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([])
+  const [spawning, setSpawning] = useState<string | number | null>(null)
 
   useEffect(() => {
     subTasks()
     subEvents()
     subKaizen()
     subWorship()
+    const unsub = onSnapshot(collection(db, 'taskTemplates'), (snap) => {
+      setTaskTemplates(snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TaskTemplate))
+    })
     return () => {
       unsubTasks()
       unsubEvents()
       unsubKaizen()
       unsubWorship()
+      unsub()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -864,6 +1174,7 @@ export default function Assignments() {
       if (!titleMatch && !eventMatch) return false
     }
     if (filter === 'pending') return t.status === 'pending'
+    if (filter === 'in_progress') return t.status === 'in_progress'
     if (filter === 'done') return t.status === 'done'
     if (filter === 'behind') return t.status === 'behind'
     if (filter === 'overdue') return isOverdue(t)
@@ -872,6 +1183,7 @@ export default function Assignments() {
 
   const overdue = filtered.filter((t) => isOverdue(t))
   const behind = filtered.filter((t) => t.status === 'behind' && !isOverdue(t))
+  const inProgress = filtered.filter((t) => t.status === 'in_progress' && !isOverdue(t))
   const today = new Date().toISOString().split('T')[0]
   const in7 = (() => {
     const d = new Date()
@@ -893,6 +1205,43 @@ export default function Assignments() {
       !(t.dueDate && t.dueDate >= today && t.dueDate <= in7)
   )
   const done = filtered.filter((t) => t.status === 'done')
+
+  const handleTaskPress = (t: Task) => {
+    if (
+      t.taskType === 'kaizen_verification' ||
+      t.taskType === 'kaizen_action' ||
+      t.taskType === 'issue_corrective'
+    ) return
+    if (!admin && !t.assignees.some((a) => String(a) === String(uid))) return
+    if (!admin && t.status === 'done') return
+    if (t.taskType === 'worship_setlist_ack') {
+      if (t.status !== 'done') setSetListAckTask(t)
+      return
+    }
+    setUpdateTaskItem(t)
+  }
+
+  const handleAdminEditTask = async (patch: Partial<Task>) => {
+    if (!editTaskItem) return
+    try {
+      await tasksStore.updateTask(editTaskItem.id, patch)
+      toast('Task updated', 'success')
+      setEditTaskItem(null)
+    } catch {
+      toast('Failed to update task', 'error')
+    }
+  }
+
+  const handleAdminDeleteTask = async () => {
+    if (!editTaskItem) return
+    try {
+      await tasksStore.deleteTask(editTaskItem.id)
+      toast('Task deleted', 'success')
+      setEditTaskItem(null)
+    } catch {
+      toast('Failed to delete task', 'error')
+    }
+  }
 
   const handleComplete = async (task: Task) => {
     if (task.taskType === 'kaizen_verification') {
@@ -920,7 +1269,7 @@ export default function Assignments() {
     }
   }
 
-  const handleUpdateTask = async (status: 'pending' | 'behind', projectedDate: string) => {
+  const handleUpdateTask = async (status: 'pending' | 'in_progress' | 'behind', projectedDate: string) => {
     if (!updateTaskItem) return
     let storedDate: string | undefined
     if (projectedDate && projectedDate.length === 8) {
@@ -946,10 +1295,20 @@ export default function Assignments() {
     return ev?.title
   }
 
-  const FILTER_TABS: FilterTab[] = ['all', 'pending', 'done', 'behind', 'overdue']
+  const FILTER_TABS: FilterTab[] = ['all', 'pending', 'in_progress', 'done', 'behind', 'overdue']
+
+  const FILTER_LABELS: Record<FilterTab, string> = {
+    all: 'All',
+    pending: 'Not Started',
+    in_progress: 'In Progress',
+    done: 'Completed',
+    behind: 'Behind',
+    overdue: 'Overdue',
+  }
 
   // --- Event Health view data ---
   const allTasks = tasksStore.tasks
+  const { createTask } = useTasksStore()
   const eventHealthCards = (() => {
     const result: {
       templateId: string | number
@@ -958,14 +1317,25 @@ export default function Assignments() {
       taskCount: number
       hasProblem: boolean
       tasks: Task[]
+      sectionStatus: { id: string; label: string; color: string; hasProblem: boolean }[]
+      canSpawn: boolean
     }[] = []
 
     for (const ev of templates) {
+      if (!ev.taskTemplateId) continue
       const evTasks = allTasks.filter(
         (t) => sameId(t.evId ?? t.evTemplateId, ev.id) || sameId(t.evTemplateId, ev.taskTemplateId)
       )
-      if (evTasks.length === 0) continue
       const hasProblem = evTasks.some((t) => t.status === 'behind' || isOverdue(t))
+      const tpl = taskTemplates.find((tt) => sameId(tt.id, ev.taskTemplateId))
+      const sectionStatus = TASK_SECTIONS.flatMap((s) => {
+        if (!tpl || evTasks.length === 0) return []
+        const sectionTitles = (tpl.tasks ?? []).filter((t) => t.section === s.id).map((t) => t.title)
+        if (sectionTitles.length === 0) return []
+        const sTasks = evTasks.filter((t) => sectionTitles.includes(t.title))
+        if (sTasks.length === 0) return []
+        return [{ id: s.id, label: s.label, color: s.color, hasProblem: sTasks.some((t) => t.status === 'behind' || isOverdue(t)) }]
+      })
       result.push({
         templateId: ev.id,
         title: ev.title,
@@ -973,6 +1343,8 @@ export default function Assignments() {
         taskCount: evTasks.length,
         hasProblem,
         tasks: evTasks,
+        sectionStatus,
+        canSpawn: evTasks.length === 0 && !!tpl,
       })
     }
 
@@ -984,6 +1356,39 @@ export default function Assignments() {
       return a.date < b.date ? -1 : a.date > b.date ? 1 : 0
     })
   })()
+
+  const spawnTasksForEvent = async (card: (typeof eventHealthCards)[0]) => {
+    const ev = templates.find((t) => sameId(t.id, card.templateId))
+    const tpl = taskTemplates.find((tt) => sameId(tt.id, ev?.taskTemplateId))
+    if (!ev || !tpl) return
+    setSpawning(card.templateId)
+    try {
+      for (const taskItem of tpl.tasks ?? []) {
+        if (!taskItem.title.trim()) continue
+        let dueDate: string | null = null
+        if (ev.date && taskItem.daysBefore > 0) {
+          const d = new Date(ev.date)
+          d.setDate(d.getDate() - taskItem.daysBefore)
+          dueDate = d.toISOString().split('T')[0]
+        }
+        await createTask({
+          title: taskItem.title,
+          assignees: taskItem.assignees ?? [],
+          lead: (taskItem.assignees ?? [])[0] ?? null,
+          by: profile?.uid ?? '',
+          status: 'pending',
+          evTemplateId: ev.id,
+          evDate: ev.date ?? null,
+          dueDate,
+        })
+      }
+      toast('Tasks spawned', 'success')
+    } catch {
+      toast('Failed to spawn tasks', 'error')
+    } finally {
+      setSpawning(null)
+    }
+  }
 
   const ADMIN_VIEWS: { key: AdminView; label: string }[] = [
     { key: 'mine', label: 'My Tasks' },
@@ -1058,7 +1463,7 @@ export default function Assignments() {
                       fontSize="$2"
                       fontWeight={filter === f ? '600' : '400'}
                     >
-                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                      {FILTER_LABELS[f]}
                     </Text>
                   </XStack>
                 </Pressable>
@@ -1082,13 +1487,13 @@ export default function Assignments() {
                 alignItems="center"
                 flex={1}
               >
-                <Text color={colors.textMuted}>No events with tasks found.</Text>
+                <Text color={colors.textMuted}>No events with a task template found.</Text>
               </YStack>
             ) : (
               eventHealthCards.map((card) => (
                 <Pressable
                   key={String(card.templateId)}
-                  onPress={() => setKanbanEvent({ title: card.title, tasks: card.tasks })}
+                  onPress={card.canSpawn ? undefined : () => setKanbanEvent({ title: card.title, tasks: card.tasks })}
                   style={{ width: 300 }}
                 >
                   <YStack
@@ -1107,21 +1512,57 @@ export default function Assignments() {
                         {FD(card.date, { weekday: true })}
                       </Text>
                     ) : null}
-                    <Text color={colors.textMuted} fontSize="$2">
-                      {card.taskCount} task{card.taskCount !== 1 ? 's' : ''}
-                    </Text>
-                    <XStack>
-                      <XStack
-                        backgroundColor={card.hasProblem ? '#c0392b' : '#27ae60'}
-                        borderRadius={99}
-                        paddingHorizontal={10}
-                        paddingVertical={3}
-                      >
-                        <Text color="white" fontSize={11} fontWeight="600">
-                          {card.hasProblem ? '⚠ Behind' : '✓ On Track'}
+                    {card.canSpawn ? (
+                      <Pressable onPress={() => spawnTasksForEvent(card)}>
+                        <XStack
+                          backgroundColor={spawning === card.templateId ? colors.border : colors.primary}
+                          borderRadius={99}
+                          paddingHorizontal={10}
+                          paddingVertical={4}
+                          alignSelf="flex-start"
+                        >
+                          <Text color="white" fontSize={11} fontWeight="600">
+                            {spawning === card.templateId ? 'Spawning…' : '+ Spawn Tasks'}
+                          </Text>
+                        </XStack>
+                      </Pressable>
+                    ) : (
+                      <>
+                        <Text color={colors.textMuted} fontSize="$2">
+                          {card.taskCount} task{card.taskCount !== 1 ? 's' : ''}
                         </Text>
-                      </XStack>
-                    </XStack>
+                        {card.sectionStatus.length > 0 ? (
+                          <XStack flexWrap="wrap" gap="$1">
+                            {card.sectionStatus.map((s) => (
+                              <XStack
+                                key={s.id}
+                                backgroundColor={s.hasProblem ? '#c0392b' : '#27ae60'}
+                                borderRadius={99}
+                                paddingHorizontal={8}
+                                paddingVertical={2}
+                              >
+                                <Text color="white" fontSize={10} fontWeight="600">
+                                  {s.hasProblem ? `⚠ ${s.label}` : `✓ ${s.label}`}
+                                </Text>
+                              </XStack>
+                            ))}
+                          </XStack>
+                        ) : (
+                          <XStack>
+                            <XStack
+                              backgroundColor={card.hasProblem ? '#c0392b' : '#27ae60'}
+                              borderRadius={99}
+                              paddingHorizontal={10}
+                              paddingVertical={3}
+                            >
+                              <Text color="white" fontSize={11} fontWeight="600">
+                                {card.hasProblem ? '⚠ Behind' : '✓ On Track'}
+                              </Text>
+                            </XStack>
+                          </XStack>
+                        )}
+                      </>
+                    )}
                   </YStack>
                 </Pressable>
               ))
@@ -1139,21 +1580,7 @@ export default function Assignments() {
                 color="#c0392b"
                 colors={colors}
                 onComplete={handleComplete}
-                onTaskPress={(t) => {
-                  if (
-                    t.status !== 'done' &&
-                    t.assignees.some((a) => String(a) === String(uid)) &&
-                    t.taskType !== 'kaizen_verification' &&
-                    t.taskType !== 'kaizen_action' &&
-                    t.taskType !== 'issue_corrective'
-                  ) {
-                    if (t.taskType === 'worship_setlist_ack') {
-                      setSetListAckTask(t)
-                    } else {
-                      setUpdateTaskItem(t)
-                    }
-                  }
-                }}
+                onTaskPress={handleTaskPress}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -1165,21 +1592,19 @@ export default function Assignments() {
                 color="#e67e22"
                 colors={colors}
                 onComplete={handleComplete}
-                onTaskPress={(t) => {
-                  if (
-                    t.status !== 'done' &&
-                    t.assignees.some((a) => String(a) === String(uid)) &&
-                    t.taskType !== 'kaizen_verification' &&
-                    t.taskType !== 'kaizen_action' &&
-                    t.taskType !== 'issue_corrective'
-                  ) {
-                    if (t.taskType === 'worship_setlist_ack') {
-                      setSetListAckTask(t)
-                    } else {
-                      setUpdateTaskItem(t)
-                    }
-                  }
-                }}
+                onTaskPress={handleTaskPress}
+                getEventTitle={getEventTitle}
+                resolveUser={displayName}
+              />
+            ) : null}
+            {filter === 'all' || filter === 'in_progress' ? (
+              <TaskGroup
+                title={`▶ In Progress (${inProgress.length})`}
+                tasks={inProgress}
+                color="#2980b9"
+                colors={colors}
+                onComplete={handleComplete}
+                onTaskPress={handleTaskPress}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -1188,77 +1613,36 @@ export default function Assignments() {
               <TaskGroup
                 title={`📅 Due This Week (${upcoming.length})`}
                 tasks={upcoming}
-                color="#2980b9"
+                color="#7f8c8d"
                 colors={colors}
                 onComplete={handleComplete}
-                onTaskPress={(t) => {
-                  if (
-                    t.status !== 'done' &&
-                    t.assignees.some((a) => String(a) === String(uid)) &&
-                    t.taskType !== 'kaizen_verification' &&
-                    t.taskType !== 'kaizen_action' &&
-                    t.taskType !== 'issue_corrective'
-                  ) {
-                    if (t.taskType === 'worship_setlist_ack') {
-                      setSetListAckTask(t)
-                    } else {
-                      setUpdateTaskItem(t)
-                    }
-                  }
-                }}
+                onTaskPress={handleTaskPress}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
             ) : null}
             {filter === 'all' || filter === 'pending' ? (
               <TaskGroup
-                title={`Pending (${allPending.length})`}
+                title={`Not Started (${allPending.length})`}
                 tasks={allPending}
+                color="#7f8c8d"
                 colors={colors}
                 onComplete={handleComplete}
-                onTaskPress={(t) => {
-                  if (
-                    t.status !== 'done' &&
-                    t.assignees.some((a) => String(a) === String(uid)) &&
-                    t.taskType !== 'kaizen_verification' &&
-                    t.taskType !== 'kaizen_action' &&
-                    t.taskType !== 'issue_corrective'
-                  ) {
-                    if (t.taskType === 'worship_setlist_ack') {
-                      setSetListAckTask(t)
-                    } else {
-                      setUpdateTaskItem(t)
-                    }
-                  }
-                }}
+                onTaskPress={handleTaskPress}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
             ) : null}
             {filter === 'all' || filter === 'done' ? (
               <TaskGroup
-                title={`✓ Done (${done.length})`}
+                title={`✓ Completed (${done.length})`}
                 tasks={done}
                 color="#27ae60"
                 collapsed={filter === 'all' && !showDone}
                 onToggle={filter === 'all' ? () => setShowDone((v) => !v) : undefined}
                 colors={colors}
                 onComplete={handleComplete}
-                onTaskPress={(t) => {
-                  if (
-                    t.status !== 'done' &&
-                    t.assignees.some((a) => String(a) === String(uid)) &&
-                    t.taskType !== 'kaizen_verification' &&
-                    t.taskType !== 'kaizen_action' &&
-                    t.taskType !== 'issue_corrective'
-                  ) {
-                    if (t.taskType === 'worship_setlist_ack') {
-                      setSetListAckTask(t)
-                    } else {
-                      setUpdateTaskItem(t)
-                    }
-                  }
-                }}
+                onTaskPress={handleTaskPress}
                 getEventTitle={getEventTitle}
                 resolveUser={displayName}
               />
@@ -1343,12 +1727,22 @@ export default function Assignments() {
         }}
       />
 
-      {/* Task status update modal for assignees */}
+      {/* Task status update modal */}
       <TaskUpdateModal
         task={updateTaskItem}
         uid={uid}
         onClose={() => setUpdateTaskItem(null)}
         onSave={handleUpdateTask}
+        onEdit={admin ? () => { setEditTaskItem(updateTaskItem); setUpdateTaskItem(null) } : undefined}
+      />
+
+      {/* Full admin task edit modal */}
+      <AdminTaskEditWrapper
+        task={editTaskItem}
+        onClose={() => setEditTaskItem(null)}
+        onSave={handleAdminEditTask}
+        onDelete={handleAdminDeleteTask}
+        users={allUsers}
       />
 
       {/* Set list acknowledgment modal */}

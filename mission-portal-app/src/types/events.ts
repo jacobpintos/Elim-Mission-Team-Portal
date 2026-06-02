@@ -84,7 +84,7 @@ export interface Task {
   lead: string | number | null
   by: string | number
   title: string
-  status: 'pending' | 'done' | 'behind'
+  status: 'pending' | 'in_progress' | 'done' | 'behind'
   evId?: string | number | null
   evDate?: string | null
   evTemplateId?: string | number | null
@@ -161,6 +161,8 @@ export interface PostPage {
   label: string
   bgImage?: string
   fbUrl?: string
+  fbPageId?: string  // Facebook Page ID or username — Zapier path + Graph API (post-approval)
+  fbToken?: string   // Page Access Token — added after Facebook app approval
   desc?: string
   posts: Post[]
 }

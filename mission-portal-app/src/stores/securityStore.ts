@@ -9,6 +9,7 @@ import {
   serverTimestamp,
   query,
   where,
+  arrayUnion,
 } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
@@ -116,6 +117,7 @@ export const useSecurityStore = create<SecurityStore>((set, get) => ({
   setOnMyWay: async (id, responderId, responderName) => {
     await updateDoc(doc(db, 'securityReports', String(id)), {
       status: 'responding',
+      responders: arrayUnion({ uid: responderId, name: responderName }),
       responderId,
       responderName,
       updatedAt: serverTimestamp(),

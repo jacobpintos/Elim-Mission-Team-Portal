@@ -181,7 +181,15 @@ export function EventKanban({
     .filter((t) => t.status === 'pending' && !isOverdue(t))
     .sort(byDateAsc)
 
-  // In Progress / Behind column — overdue+behind first (most critical)
+  // In Progress column
+  const inProgressOverdue = tasks
+    .filter((t) => t.status === 'in_progress' && isOverdue(t))
+    .sort(byDateAsc)
+  const inProgressNormal = tasks
+    .filter((t) => t.status === 'in_progress' && !isOverdue(t))
+    .sort(byDateAsc)
+
+  // Behind column
   const behindOverdue = tasks
     .filter((t) => t.status === 'behind' && isOverdue(t))
     .sort(byDateAsc)
@@ -193,7 +201,7 @@ export function EventKanban({
   const done = tasks.filter((t) => t.status === 'done').sort(byDateDesc)
 
   const hasProblems =
-    pendingOverdue.length > 0 || behindOverdue.length > 0 || behindNormal.length > 0
+    pendingOverdue.length > 0 || inProgressOverdue.length > 0 || behindOverdue.length > 0 || behindNormal.length > 0
 
   const totalCount = tasks.length
   const colMaxHeight = height * 0.65
@@ -294,9 +302,28 @@ export function EventKanban({
                 />
               </KanbanColumn>
 
-              {/* In Progress / Behind */}
+              {/* In Progress */}
               <KanbanColumn
-                title="In Progress / Behind"
+                title="In Progress"
+                count={inProgressNormal.length + inProgressOverdue.length}
+                headerColor="#2980b9"
+                maxHeight={colMaxHeight}
+              >
+                {inProgressNormal.map((t) => (
+                  <TaskCard key={String(t.id)} task={t} resolveUser={resolve} />
+                ))}
+                <SubSection
+                  title="⚠ Overdue"
+                  tasks={inProgressOverdue}
+                  borderColor="#c0392b"
+                  bgColor="#c0392b11"
+                  resolveUser={resolve}
+                />
+              </KanbanColumn>
+
+              {/* Behind */}
+              <KanbanColumn
+                title="Behind"
                 count={behindNormal.length + behindOverdue.length}
                 headerColor="#e67e22"
                 maxHeight={colMaxHeight}

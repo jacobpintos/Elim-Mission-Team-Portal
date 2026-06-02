@@ -304,7 +304,7 @@ export default function MessagesIndex() {
                           ) : null}
                         </View>
                         <Text color={colors.text} fontSize="$3">
-                          {u.displayName}
+                          {u.displayName || u.email || String(u.uid)}
                         </Text>
                       </XStack>
                     </Pressable>

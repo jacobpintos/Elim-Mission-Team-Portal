@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { XStack, YStack, Text, Button } from 'tamagui'
 
 export const TASK_SECTIONS = [
@@ -28,9 +29,9 @@ interface TaskTemplateCardProps {
 }
 
 export function TaskTemplateCard({ template, onEdit, onDelete }: TaskTemplateCardProps) {
-  const usedSections = TASK_SECTIONS.filter((s) =>
-    template.tasks.some((t) => t.section === s.id)
-  )
+  const tasks = template.tasks ?? []
+  const usedSections = TASK_SECTIONS.filter((s) => tasks.some((t) => t.section === s.id))
+  const [confirming, setConfirming] = useState(false)
 
   return (
     <YStack
@@ -47,17 +48,37 @@ export function TaskTemplateCard({ template, onEdit, onDelete }: TaskTemplateCar
             {template.name}
           </Text>
           <Text fontSize="$2" color="$gray10">
-            {template.tasks.length} task{template.tasks.length !== 1 ? 's' : ''}
+            {tasks.length} task{tasks.length !== 1 ? 's' : ''}
           </Text>
         </YStack>
 
         <XStack gap="$2">
-          <Button size="$2" onPress={() => onEdit(template)} theme="active">
-            Edit
-          </Button>
-          <Button size="$2" onPress={() => onDelete(template)} theme="red">
-            Delete
-          </Button>
+          {confirming ? (
+            <>
+              <Button size="$2" onPress={() => setConfirming(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="$2"
+                theme="red"
+                onPress={() => {
+                  setConfirming(false)
+                  onDelete(template)
+                }}
+              >
+                Confirm
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="$2" onPress={() => onEdit(template)} theme="active">
+                Edit
+              </Button>
+              <Button size="$2" onPress={() => setConfirming(true)} theme="red">
+                Delete
+              </Button>
+            </>
+          )}
         </XStack>
       </XStack>
 
