@@ -11,6 +11,7 @@ export interface SecurityReport {
   status: SecurityReportStatus
   responderId: string | null
   responderName: string | null
+  responders?: { uid: string; name: string }[]
   resolution: string | null
   completedAt: number | null
   deleteAt: number | null

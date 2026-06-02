@@ -39,7 +39,8 @@ export function ReportDetailModal({
 
   const isResponding = report.status === 'responding'
   const isResolved = report.status === 'resolved'
-  const iAmResponder = report.responderId === currentUserId
+  const responders = report.responders ?? []
+  const iAmResponder = responders.some((r) => r.uid === currentUserId)
 
   const handleMyWay = async () => {
     setActing(true)
@@ -171,19 +172,26 @@ export function ReportDetailModal({
                 </YStack>
               ) : null}
 
-              {isResponding && report.responderName ? (
-                <XStack
-                  backgroundColor="#f39c1222"
-                  borderRadius="$3"
-                  padding="$3"
-                  gap="$2"
-                  alignItems="center"
-                >
-                  <Text fontSize={18}>🚨</Text>
-                  <Text color={colors.text} fontSize="$3" flex={1}>
-                    <Text fontWeight="700">{report.responderName}</Text> is on the way
-                  </Text>
-                </XStack>
+              {isResponding ? (
+                <YStack backgroundColor="#f39c1222" borderRadius="$3" padding="$3" gap="$2">
+                  {responders.length > 0 ? (
+                    responders.map((r) => (
+                      <XStack key={r.uid} gap="$2" alignItems="center">
+                        <Text fontSize={16}>🚨</Text>
+                        <Text color={colors.text} fontSize="$3">
+                          <Text fontWeight="700">{r.name}</Text> is on the way
+                        </Text>
+                      </XStack>
+                    ))
+                  ) : report.responderName ? (
+                    <XStack gap="$2" alignItems="center">
+                      <Text fontSize={16}>🚨</Text>
+                      <Text color={colors.text} fontSize="$3">
+                        <Text fontWeight="700">{report.responderName}</Text> is on the way
+                      </Text>
+                    </XStack>
+                  ) : null}
+                </YStack>
               ) : null}
 
               {isResolved && report.resolution ? (
@@ -202,36 +210,27 @@ export function ReportDetailModal({
 
               {canAct && !isResolved ? (
                 <YStack gap="$2" marginTop="$1">
-                  {!isResponding || iAmResponder ? (
-                    <Pressable onPress={handleMyWay} disabled={acting || isResponding}>
-                      <XStack
-                        backgroundColor="#f39c12"
-                        borderRadius="$2"
-                        paddingVertical="$3"
-                        justifyContent="center"
-                        opacity={acting || isResponding ? 0.5 : 1}
-                        gap="$2"
-                        alignItems="center"
-                      >
-                        <Text color="white" fontWeight="700" fontSize="$3">
-                          {isResponding && iAmResponder ? '✓ On My Way' : '🚨 On My Way'}
-                        </Text>
-                      </XStack>
-                    </Pressable>
-                  ) : (
+                  <Pressable onPress={handleMyWay} disabled={acting || iAmResponder}>
                     <XStack
-                      backgroundColor={colors.surface}
+                      backgroundColor={iAmResponder ? colors.surface : '#f39c12'}
                       borderRadius="$2"
                       paddingVertical="$3"
                       justifyContent="center"
-                      borderWidth={1}
-                      borderColor={colors.border}
+                      opacity={acting ? 0.5 : 1}
+                      borderWidth={iAmResponder ? 1 : 0}
+                      borderColor={iAmResponder ? colors.border : 'transparent'}
+                      gap="$2"
+                      alignItems="center"
                     >
-                      <Text color={colors.textMuted} fontSize="$3">
-                        {report.responderName} is already responding
+                      <Text
+                        color={iAmResponder ? colors.textMuted : 'white'}
+                        fontWeight="700"
+                        fontSize="$3"
+                      >
+                        {iAmResponder ? '✓ On My Way' : '🚨 On My Way'}
                       </Text>
                     </XStack>
-                  )}
+                  </Pressable>
 
                   {showResolveForm ? (
                     <YStack gap="$2">
