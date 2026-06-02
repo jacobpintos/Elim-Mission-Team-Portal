@@ -161,6 +161,8 @@ export interface PostPage {
   label: string
   bgImage?: string
   fbUrl?: string
+  fbPageId?: string  // Facebook Page ID or username — Zapier path + Graph API (post-approval)
+  fbToken?: string   // Page Access Token — added after Facebook app approval
   desc?: string
   posts: Post[]
 }
