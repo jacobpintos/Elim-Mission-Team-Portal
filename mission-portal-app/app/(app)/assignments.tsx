@@ -920,10 +920,12 @@ function TaskUpdateModalInner({
   task,
   onClose,
   onSave,
+  onEdit,
 }: {
   task: Task
   onClose: () => void
   onSave: (status: 'pending' | 'in_progress' | 'behind', projectedDate: string) => Promise<void>
+  onEdit?: () => void
 }) {
   const colors = useThemeColors()
   const [status, setStatus] = useState<'pending' | 'in_progress' | 'behind'>(
@@ -967,11 +969,18 @@ function TaskUpdateModalInner({
           <Text color={colors.text} fontSize="$5" fontWeight="700">
             Update Task
           </Text>
-          <Pressable onPress={onClose}>
-            <Text color={colors.textMuted} fontSize="$4">
-              ✕
-            </Text>
-          </Pressable>
+          <XStack gap="$3" alignItems="center">
+            {onEdit ? (
+              <Pressable onPress={onEdit}>
+                <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                  Full Edit
+                </Text>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={onClose}>
+              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+            </Pressable>
+          </XStack>
         </XStack>
 
         <Text color={colors.textMuted} fontSize="$3" numberOfLines={2}>
@@ -1057,16 +1066,18 @@ function TaskUpdateModal({
   task,
   onClose,
   onSave,
+  onEdit,
 }: {
   task: Task | null
   uid: string
   onClose: () => void
   onSave: (status: 'pending' | 'in_progress' | 'behind', projectedDate: string) => Promise<void>
+  onEdit?: () => void
 }) {
   return (
     <Modal visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
       {task ? (
-        <TaskUpdateModalInner key={String(task.id)} task={task} onClose={onClose} onSave={onSave} />
+        <TaskUpdateModalInner key={String(task.id)} task={task} onClose={onClose} onSave={onSave} onEdit={onEdit} />
       ) : (
         <View />
       )}
@@ -1196,22 +1207,18 @@ export default function Assignments() {
   const done = filtered.filter((t) => t.status === 'done')
 
   const handleTaskPress = (t: Task) => {
-    const specialType =
+    if (
       t.taskType === 'kaizen_verification' ||
       t.taskType === 'kaizen_action' ||
       t.taskType === 'issue_corrective'
-    if (admin) {
-      if (specialType) return
-      setEditTaskItem(t)
+    ) return
+    if (!admin && !t.assignees.some((a) => String(a) === String(uid))) return
+    if (!admin && t.status === 'done') return
+    if (t.taskType === 'worship_setlist_ack') {
+      if (t.status !== 'done') setSetListAckTask(t)
       return
     }
-    if (!t.assignees.some((a) => String(a) === String(uid))) return
-    if (t.status === 'done') return
-    if (t.taskType === 'worship_setlist_ack') {
-      setSetListAckTask(t)
-    } else if (!specialType) {
-      setUpdateTaskItem(t)
-    }
+    setUpdateTaskItem(t)
   }
 
   const handleAdminEditTask = async (patch: Partial<Task>) => {
@@ -1720,12 +1727,13 @@ export default function Assignments() {
         }}
       />
 
-      {/* Task status update modal for assignees */}
+      {/* Task status update modal */}
       <TaskUpdateModal
         task={updateTaskItem}
         uid={uid}
         onClose={() => setUpdateTaskItem(null)}
         onSave={handleUpdateTask}
+        onEdit={admin ? () => { setEditTaskItem(updateTaskItem); setUpdateTaskItem(null) } : undefined}
       />
 
       {/* Full admin task edit modal */}
