@@ -34,27 +34,28 @@ function RsvpForm({
   const toast = useUIStore((s) => s.toast)
 
   const existing = avail[availKey(event)]?.[uid] ?? null
-  const [lastKey, setLastKey] = useState<string | undefined>(undefined)
   const [status, setStatus] = useState<AvailResponse['status']>(existing?.status ?? 'yes')
   const [note, setNote] = useState(existing?.note ?? '')
   const [saving, setSaving] = useState(false)
 
-  if (event.instanceKey !== lastKey) {
-    setLastKey(event.instanceKey)
-    const r = avail[availKey(event)]?.[uid] ?? null
-    setStatus(r?.status ?? 'yes')
-    setNote(r?.note ?? '')
-  }
+  const needsNote = status === 'partial' || status === 'tbd'
 
-  const handleSave = async () => {
+  const handleSave = async (saveStatus: AvailResponse['status'] = status) => {
     setSaving(true)
     try {
-      await setAvail(event, uid, status, note)
+      await setAvail(event, uid, saveStatus, note)
       onSaved()
     } catch {
       toast('Failed to save RSVP', 'error')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleStatusSelect = (s: AvailResponse['status']) => {
+    setStatus(s)
+    if (s !== 'partial' && s !== 'tbd') {
+      handleSave(s)
     }
   }
 
@@ -87,7 +88,7 @@ function RsvpForm({
 
       <XStack gap="$2" flexWrap="wrap">
         {STATUSES.map((s) => (
-          <Pressable key={s} onPress={() => setStatus(s)}>
+          <Pressable key={s} onPress={() => handleStatusSelect(s)} disabled={saving}>
             <XStack
               backgroundColor={status === s ? AVAIL_COLORS[s] : 'transparent'}
               borderWidth={2}
@@ -95,6 +96,7 @@ function RsvpForm({
               borderRadius="$2"
               paddingHorizontal="$3"
               paddingVertical="$1"
+              opacity={saving ? 0.5 : 1}
             >
               <Text color={status === s ? 'white' : AVAIL_COLORS[s]} fontWeight="600" fontSize="$2">
                 {AVAIL_LABELS[s]}
@@ -104,36 +106,39 @@ function RsvpForm({
         ))}
       </XStack>
 
-      <TextInput
-        style={[
-          styles.noteInput,
-          {
-            color: colors.text,
-            borderColor: colors.border,
-            backgroundColor: colors.background,
-          },
-        ]}
-        value={note}
-        onChangeText={setNote}
-        placeholder="Note (optional)"
-        placeholderTextColor={colors.textMuted}
-      />
-
-      <XStack justifyContent="flex-end">
-        <Pressable onPress={handleSave} disabled={saving}>
-          <XStack
-            backgroundColor={AVAIL_COLORS[status]}
-            borderRadius="$2"
-            paddingHorizontal="$4"
-            paddingVertical="$2"
-            opacity={saving ? 0.6 : 1}
-          >
-            <Text color="white" fontWeight="700" fontSize="$3">
-              {saving ? 'Saving…' : queueCount > 1 ? 'Save & Next' : 'Save'}
-            </Text>
+      {needsNote ? (
+        <>
+          <TextInput
+            style={[
+              styles.noteInput,
+              {
+                color: colors.text,
+                borderColor: colors.border,
+                backgroundColor: colors.background,
+              },
+            ]}
+            value={note}
+            onChangeText={setNote}
+            placeholder="Note (optional)"
+            placeholderTextColor={colors.textMuted}
+          />
+          <XStack justifyContent="flex-end">
+            <Pressable onPress={() => handleSave()} disabled={saving}>
+              <XStack
+                backgroundColor={AVAIL_COLORS[status]}
+                borderRadius="$2"
+                paddingHorizontal="$4"
+                paddingVertical="$2"
+                opacity={saving ? 0.6 : 1}
+              >
+                <Text color="white" fontWeight="700" fontSize="$3">
+                  {saving ? 'Saving…' : queueCount > 1 ? 'Save & Next' : 'Save'}
+                </Text>
+              </XStack>
+            </Pressable>
           </XStack>
-        </Pressable>
-      </XStack>
+        </>
+      ) : null}
     </YStack>
   )
 }
@@ -235,12 +240,11 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
       {/* Queue mode: show first pending event */}
       {hasQueue && !collapsed && queue[0] ? (
         <RsvpForm
+          key={queue[0].instanceKey}
           event={queue[0]}
           uid={uid}
           queueCount={queue.length}
-          onSaved={() => {
-            /* queue auto-updates; nothing to do */
-          }}
+          onSaved={() => {}}
         />
       ) : null}
 
@@ -264,6 +268,7 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
                 </XStack>
               </Pressable>
               <RsvpForm
+                key={selectedEvent.instanceKey}
                 event={selectedEvent}
                 uid={uid}
                 queueCount={0}
