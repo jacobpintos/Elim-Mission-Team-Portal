@@ -427,7 +427,7 @@ export default function PostsIndex() {
                   confirmDelete ? (
                     <YStack gap="$2">
                       <Text color="#c0392b" fontSize="$3" textAlign="center">
-                        Remove "{editState?.label}"? This cannot be undone.
+                        {'Remove "'}{editState?.label}{'" — this cannot be undone.'}
                       </Text>
                       <XStack gap="$2">
                         <Pressable onPress={() => setConfirmDelete(false)} style={{ flex: 1 }}>
