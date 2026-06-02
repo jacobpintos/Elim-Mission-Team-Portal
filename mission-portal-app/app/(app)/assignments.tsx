@@ -824,7 +824,7 @@ export default function Assignments() {
   const { setLists, subscribe: subWorship, unsubscribe: unsubWorship } = useWorshipStore()
   const displayName = (uid: string | number): string => {
     const u = allUsers.find((x) => String(x.uid) === String(uid))
-    return u?.displayName ?? String(uid)
+    return u?.displayName || u?.email || String(uid)
   }
   const toast = useUIStore((s) => s.toast)
 
