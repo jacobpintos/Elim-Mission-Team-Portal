@@ -856,7 +856,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
                               backgroundColor={colors.surface}
                             >
                               <Text color={colors.text} fontSize="$3">
-                                {u.displayName}
+                                {u.displayName || u.email || String(u.uid)}
                               </Text>
                             </XStack>
                           </Pressable>
@@ -1006,7 +1006,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
                     alignItems="center"
                   >
                     <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                      {u.displayName}
+                      {u.displayName || u.email || String(u.uid)}
                     </Text>
                     <Text color={colors.primary} fontSize="$1">
                       ✕
@@ -1047,7 +1047,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
                     alignItems="center"
                   >
                     <Text color={colors.text} fontSize="$3">
-                      {u.displayName}
+                      {u.displayName || u.email || String(u.uid)}
                     </Text>
                   </XStack>
                 </Pressable>

@@ -479,7 +479,7 @@ export default function IssueDetail() {
                     borderBottomColor={colors.border}
                     backgroundColor={String(u.uid) === caAssignee ? colors.primary + '22' : 'transparent'}
                   >
-                    <Text color={colors.text} fontSize="$3">{u.displayName}</Text>
+                    <Text color={colors.text} fontSize="$3">{u.displayName || u.email || String(u.uid)}</Text>
                   </XStack>
                 </Pressable>
               ))}
