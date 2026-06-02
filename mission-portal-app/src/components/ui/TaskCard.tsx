@@ -62,16 +62,27 @@ export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames 
                 · {eventTitle}
               </Text>
             ) : null}
-            <XStack
-              backgroundColor={overdue ? '#c0392b' : STATUS_COLORS[task.status]}
-              borderRadius={99}
-              paddingHorizontal="$2"
-              paddingVertical={2}
-            >
-              <Text color="white" fontSize={10} fontWeight="600">
-                {overdue ? 'Overdue' : STATUS_LABELS[task.status] ?? task.status}
-              </Text>
-            </XStack>
+            {overdue ? (
+              <XStack backgroundColor="#c0392b" borderRadius={99} paddingHorizontal="$2" paddingVertical={2}>
+                <Text color="white" fontSize={10} fontWeight="600">Overdue</Text>
+              </XStack>
+            ) : null}
+            {task.status !== 'done' ? (
+              <XStack
+                backgroundColor={STATUS_COLORS[task.status]}
+                borderRadius={99}
+                paddingHorizontal="$2"
+                paddingVertical={2}
+              >
+                <Text color="white" fontSize={10} fontWeight="600">
+                  {STATUS_LABELS[task.status] ?? task.status}
+                </Text>
+              </XStack>
+            ) : !overdue ? (
+              <XStack backgroundColor={STATUS_COLORS.done} borderRadius={99} paddingHorizontal="$2" paddingVertical={2}>
+                <Text color="white" fontSize={10} fontWeight="600">Completed</Text>
+              </XStack>
+            ) : null}
           </XStack>
           {assigneeNames && assigneeNames.length > 0 ? (
             <Text color={colors.textMuted} fontSize="$2">
