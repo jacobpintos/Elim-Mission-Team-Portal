@@ -417,7 +417,7 @@ export default function PostsIndex() {
 
 const styles = StyleSheet.create({
   pill: {
-    borderRadius: 999,
+    borderRadius: 14,
     overflow: 'hidden',
     flexDirection: 'row',
     borderWidth: 1,
