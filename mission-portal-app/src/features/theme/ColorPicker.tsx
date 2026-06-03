@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react'
-import { View, TextInput as RNTextInput } from 'react-native'
+import { View, TextInput as RNTextInput, Modal, Pressable, Platform, ScrollView } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { ColorWheel } from './ColorWheel'
 
 interface ColorPickerProps {
   label: string
@@ -9,7 +10,6 @@ interface ColorPickerProps {
   onChange: (hex: string) => void
 }
 
-// Convert hex to HSL
 function hexToHsl(hex: string): [number, number, number] {
   const r = parseInt(hex.slice(1, 3), 16) / 255
   const g = parseInt(hex.slice(3, 5), 16) / 255
@@ -40,7 +40,6 @@ function hexToHsl(hex: string): [number, number, number] {
   return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)]
 }
 
-// Convert HSL to hex
 function hslToHex(h: number, s: number, l: number): string {
   const sl = s / 100
   const ll = l / 100
@@ -59,11 +58,69 @@ function isValidHex(hex: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(hex)
 }
 
+function HslInput({
+  label,
+  value,
+  max,
+  unit,
+  onCommit,
+}: {
+  label: string
+  value: number
+  max: number
+  unit: string
+  onCommit: (n: number) => void
+}) {
+  const colors = useThemeColors()
+  return (
+    <YStack gap="$1">
+      <XStack justifyContent="space-between">
+        <Text fontSize="$2" color="$gray10">
+          {label}
+        </Text>
+        <Text fontSize="$2" color="$gray10">
+          {value}
+          {unit}
+        </Text>
+      </XStack>
+      <XStack gap="$2" alignItems="center">
+        <Text fontSize="$2" color="$gray10">
+          0
+        </Text>
+        <View style={{ flex: 1 }}>
+          <RNTextInput
+            value={String(value)}
+            onChangeText={(v) => {
+              const num = Math.max(0, Math.min(max, parseInt(v) || 0))
+              onCommit(num)
+            }}
+            keyboardType="numeric"
+            style={{
+              textAlign: 'center',
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 4,
+              paddingVertical: 4,
+              fontSize: 13,
+              backgroundColor: colors.surface,
+              color: colors.text,
+            }}
+          />
+        </View>
+        <Text fontSize="$2" color="$gray10">
+          {max}
+        </Text>
+      </XStack>
+    </YStack>
+  )
+}
+
 export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
   const colors = useThemeColors()
   const safeHex = isValidHex(value) ? value : '#888888'
   const [hsl, setHsl] = useState<[number, number, number]>(() => hexToHsl(safeHex))
   const [hexInput, setHexInput] = useState(safeHex)
+  const [open, setOpen] = useState(false)
 
   const [h, s, l] = hsl
 
@@ -87,6 +144,15 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
     }
   }
 
+  const handleWheelChange = (hex: string) => {
+    if (isValidHex(hex)) {
+      const newHsl = hexToHsl(hex)
+      setHsl(newHsl)
+      setHexInput(hex)
+      onChange(hex)
+    }
+  }
+
   return (
     <YStack gap="$2" padding="$3" backgroundColor="$gray2" borderRadius="$3">
       <Text fontWeight="700" fontSize="$3">
@@ -94,17 +160,19 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
       </Text>
 
       <XStack alignItems="center" gap="$3">
-        {/* Color swatch */}
-        <View
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 8,
-            backgroundColor: safeHex,
-            borderWidth: 1,
-            borderColor: '#ccc',
-          }}
-        />
+        {/* Clickable color swatch — opens color wheel */}
+        <Pressable onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel={`Open color picker for ${label}`}>
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 8,
+              backgroundColor: safeHex,
+              borderWidth: 2,
+              borderColor: '#ccc',
+            }}
+          />
+        </Pressable>
 
         {/* Hex input */}
         <YStack flex={1} gap="$1">
@@ -131,125 +199,123 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
         </YStack>
       </XStack>
 
-      {/* Hue */}
-      <YStack gap="$1">
-        <XStack justifyContent="space-between">
-          <Text fontSize="$2" color="$gray10">
-            Hue
-          </Text>
-          <Text fontSize="$2" color="$gray10">
-            {h}°
-          </Text>
-        </XStack>
-        <XStack gap="$2" alignItems="center">
-          <Text fontSize="$2" color="$gray10">
-            0
-          </Text>
-          <View style={{ flex: 1 }}>
-            <RNTextInput
-              value={String(h)}
-              onChangeText={(v) => {
-                const num = Math.max(0, Math.min(360, parseInt(v) || 0))
-                updateFromHsl(num, s, l)
-              }}
-              keyboardType="numeric"
+      {/* Color wheel modal */}
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+      >
+        {/* Backdrop */}
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' }}
+          onPress={() => setOpen(false)}
+        >
+          {/* Panel — stop propagation */}
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View
               style={{
-                textAlign: 'center',
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 4,
-                paddingVertical: 4,
-                fontSize: 13,
                 backgroundColor: colors.surface,
-                color: colors.text,
+                borderRadius: 14,
+                padding: 20,
+                width: Platform.OS === 'web' ? 300 : 280,
+                maxHeight: '80%',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 12,
+                elevation: 10,
               }}
-            />
-          </View>
-          <Text fontSize="$2" color="$gray10">
-            360
-          </Text>
-        </XStack>
-      </YStack>
+            >
+              {/* Header */}
+              <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>
+                  {label}
+                </Text>
+                {/* Live swatch */}
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 6,
+                    backgroundColor: safeHex,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                />
+              </XStack>
 
-      {/* Saturation */}
-      <YStack gap="$1">
-        <XStack justifyContent="space-between">
-          <Text fontSize="$2" color="$gray10">
-            Saturation
-          </Text>
-          <Text fontSize="$2" color="$gray10">
-            {s}%
-          </Text>
-        </XStack>
-        <XStack gap="$2" alignItems="center">
-          <Text fontSize="$2" color="$gray10">
-            0
-          </Text>
-          <View style={{ flex: 1 }}>
-            <RNTextInput
-              value={String(s)}
-              onChangeText={(v) => {
-                const num = Math.max(0, Math.min(100, parseInt(v) || 0))
-                updateFromHsl(h, num, l)
-              }}
-              keyboardType="numeric"
-              style={{
-                textAlign: 'center',
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 4,
-                paddingVertical: 4,
-                fontSize: 13,
-                backgroundColor: colors.surface,
-                color: colors.text,
-              }}
-            />
-          </View>
-          <Text fontSize="$2" color="$gray10">
-            100
-          </Text>
-        </XStack>
-      </YStack>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Color wheel (web) / H/S/L controls (native) */}
+                <ColorWheel color={safeHex} onChange={handleWheelChange} />
 
-      {/* Lightness */}
-      <YStack gap="$1">
-        <XStack justifyContent="space-between">
-          <Text fontSize="$2" color="$gray10">
-            Lightness
-          </Text>
-          <Text fontSize="$2" color="$gray10">
-            {l}%
-          </Text>
-        </XStack>
-        <XStack gap="$2" alignItems="center">
-          <Text fontSize="$2" color="$gray10">
-            0
-          </Text>
-          <View style={{ flex: 1 }}>
-            <RNTextInput
-              value={String(l)}
-              onChangeText={(v) => {
-                const num = Math.max(0, Math.min(100, parseInt(v) || 0))
-                updateFromHsl(h, s, num)
-              }}
-              keyboardType="numeric"
-              style={{
-                textAlign: 'center',
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 4,
-                paddingVertical: 4,
-                fontSize: 13,
-                backgroundColor: colors.surface,
-                color: colors.text,
-              }}
-            />
-          </View>
-          <Text fontSize="$2" color="$gray10">
-            100
-          </Text>
-        </XStack>
-      </YStack>
+                {/* H/S/L numeric controls — always shown for fine-tuning, primary on native */}
+                <YStack gap="$2" marginTop={Platform.OS === 'web' ? 12 : 0}>
+                  <HslInput
+                    label="Hue"
+                    value={h}
+                    max={360}
+                    unit="°"
+                    onCommit={(n) => updateFromHsl(n, s, l)}
+                  />
+                  <HslInput
+                    label="Saturation"
+                    value={s}
+                    max={100}
+                    unit="%"
+                    onCommit={(n) => updateFromHsl(h, n, l)}
+                  />
+                  <HslInput
+                    label="Lightness"
+                    value={l}
+                    max={100}
+                    unit="%"
+                    onCommit={(n) => updateFromHsl(h, s, n)}
+                  />
+                </YStack>
+
+                {/* Hex input */}
+                <YStack gap="$1" marginTop={12}>
+                  <Text fontSize="$2" color="$gray10">
+                    Hex
+                  </Text>
+                  <RNTextInput
+                    value={hexInput}
+                    onChangeText={handleHexChange}
+                    autoCapitalize="none"
+                    maxLength={7}
+                    style={{
+                      fontSize: 15,
+                      fontFamily: 'monospace',
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: 6,
+                      paddingHorizontal: 8,
+                      paddingVertical: 8,
+                      backgroundColor: colors.background,
+                      color: colors.text,
+                    }}
+                  />
+                </YStack>
+              </ScrollView>
+
+              {/* Done */}
+              <Pressable
+                onPress={() => setOpen(false)}
+                style={{
+                  marginTop: 16,
+                  paddingVertical: 10,
+                  borderRadius: 8,
+                  backgroundColor: safeHex,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Done</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </YStack>
   )
 }
