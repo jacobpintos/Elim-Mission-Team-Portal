@@ -1,7 +1,7 @@
 import { Tabs, Redirect, usePathname, useRouter } from 'expo-router'
 import { ScrollView, View, Pressable, StyleSheet, Animated } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { getDocs, collection } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -92,8 +92,8 @@ export default function AppLayout() {
   const toast = useUIStore((s) => s.toast)
 
   // Drawer + content animation (must be before early returns)
-  const drawerX = useRef(new Animated.Value(-DRAWER_W)).current
-  const contentX = useRef(new Animated.Value(0)).current
+  const drawerX = useMemo(() => new Animated.Value(-DRAWER_W), [])
+  const contentX = useMemo(() => new Animated.Value(0), [])
 
   const drawerAnim = { transform: [{ translateX: drawerX }] }
   const contentAnim = { transform: [{ translateX: contentX }], flex: 1 as const, zIndex: 1 as const }
