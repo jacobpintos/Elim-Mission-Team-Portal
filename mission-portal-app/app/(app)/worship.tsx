@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack } from 'expo-router'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
@@ -120,7 +119,6 @@ export default function WorshipScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Worship' }} />
 
       {/* Tab switcher */}
       <XStack

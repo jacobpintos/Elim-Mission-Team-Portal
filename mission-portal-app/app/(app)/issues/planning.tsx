@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Stack } from 'expo-router'
 import { ScrollView, Pressable, Modal, TextInput, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -81,7 +80,6 @@ export default function Planning() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Planning Boards' }} />
 
       {/* Header */}
       <XStack

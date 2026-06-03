@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack, useRouter } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useIssuesStore } from '@/stores/issuesStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -117,7 +117,6 @@ export default function IssuesIndex() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Operations' }} />
 
       {/* Filter tabs */}
       <ScrollView

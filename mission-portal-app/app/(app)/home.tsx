@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, useWindowDimensions, Pressable, Linking, Image, View } from 'react-native'
 import { YStack, XStack, Text, H3, Input } from 'tamagui'
-import { Stack, useRouter } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useGroupsStore } from '@/stores/groupsStore'
@@ -725,7 +725,6 @@ export default function Home() {
   if (!isMember) {
     return (
       <>
-        <Stack.Screen options={{ title: 'Home' }} />
         <PubHomeContent />
       </>
     )
@@ -733,7 +732,6 @@ export default function Home() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Home' }} />
       <TeamHomeContent />
     </>
   )

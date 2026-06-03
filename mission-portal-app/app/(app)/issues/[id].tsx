@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack, useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useIssuesStore } from '@/stores/issuesStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -155,7 +155,6 @@ export default function IssueDetail() {
   if (!issue) {
     return (
       <YStack flex={1} padding="$4" alignItems="center" justifyContent="center" backgroundColor={colors.background}>
-        <Stack.Screen options={{ title: 'Issue Detail' }} />
         <Text color={colors.textMuted}>Issue not found.</Text>
       </YStack>
     )
@@ -165,7 +164,6 @@ export default function IssueDetail() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: `Issue #${issue.id}` }} />
 
       <ScrollView style={{ flex: 1 }}>
         <YStack padding="$4" gap="$4">

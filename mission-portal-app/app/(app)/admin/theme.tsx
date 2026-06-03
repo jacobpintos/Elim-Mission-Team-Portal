@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Alert, useWindowDimensions } from 'react-native'
 import { ScrollView } from 'react-native'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
-import { Stack } from 'expo-router'
 import { useThemeStore } from '@/stores/themeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -185,7 +184,6 @@ export default function AdminTheme() {
   return (
     <ScrollView>
       <YStack flex={1} padding="$4" gap="$3">
-        <Stack.Screen options={{ title: 'Theme Editor', headerShown: false }} />
 
         <Text fontSize="$6" fontWeight="700">
           Theme Editor

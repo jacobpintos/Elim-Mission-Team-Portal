@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack } from 'expo-router'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
@@ -188,7 +187,6 @@ export default function SecurityScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Security' }} />
 
       <XStack
         padding="$3"

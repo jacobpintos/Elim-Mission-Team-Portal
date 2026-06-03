@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, TextInput, View, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { usePostsStore } from '@/stores/postsStore'
@@ -169,7 +169,6 @@ export default function PageFeed() {
   if (loadingConfig) {
     return (
       <YStack flex={1} backgroundColor={colors.background} alignItems="center" justifyContent="center">
-        <Stack.Screen options={{ title: 'Posts' }} />
         <Text color={colors.textMuted}>Loading…</Text>
       </YStack>
     )
@@ -178,7 +177,6 @@ export default function PageFeed() {
   if (!page) {
     return (
       <YStack flex={1} backgroundColor={colors.background}>
-        <Stack.Screen options={{ title: 'Posts' }} />
         <Pressable onPress={() => router.back()}>
           <XStack paddingHorizontal="$3" paddingVertical="$2" alignItems="center" borderBottomWidth={1} borderBottomColor={colors.border}>
             <Text color={colors.primary} fontSize={14}>‹ Posts</Text>
@@ -476,7 +474,6 @@ export default function PageFeed() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: page.label }} />
 
       {/* Back button — Tabs navigator has no native back, so provide one explicitly */}
       <Pressable onPress={() => router.back()}>

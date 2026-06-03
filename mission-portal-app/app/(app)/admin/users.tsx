@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Alert } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Input } from 'tamagui'
-import { Stack } from 'expo-router'
 import { useUsersStore } from '@/stores/usersStore'
 import { useAuthStore } from '@/stores/authStore'
 import { UserCard } from '@/features/admin/UserCard'
@@ -234,7 +233,6 @@ export default function AdminUsers() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
-      <Stack.Screen options={{ title: 'User Management', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

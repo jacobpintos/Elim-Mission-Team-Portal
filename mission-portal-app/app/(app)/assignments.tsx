@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, Modal, View, TextInput, StyleSheet } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
-import { Stack } from 'expo-router'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
@@ -1398,7 +1397,6 @@ export default function Assignments() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Assignments' }} />
 
       {/* Admin view switcher */}
       {admin ? (

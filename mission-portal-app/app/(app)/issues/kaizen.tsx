@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useKaizenStore } from '@/stores/kaizenStore'
 import { useTasksStore } from '@/stores/tasksStore'
@@ -509,7 +508,6 @@ export default function Kaizen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Kaizen Board' }} />
 
       {/* Kanban columns */}
       <ScrollView horizontal style={{ flex: 1 }} showsHorizontalScrollIndicator={false}>

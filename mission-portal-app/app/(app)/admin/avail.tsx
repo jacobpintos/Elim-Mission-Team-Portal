@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { ScrollView, Pressable, TextInput, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack } from 'expo-router'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -112,7 +111,6 @@ export default function AdminAvailScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Availability Tracker' }} />
 
       {/* Search */}
       <YStack padding="$3" gap="$2" borderBottomWidth={1} borderBottomColor={colors.border}>

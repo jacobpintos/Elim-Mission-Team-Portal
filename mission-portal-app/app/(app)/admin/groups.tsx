@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Alert } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
-import { Stack } from 'expo-router'
 import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { GroupCard, type GroupDoc } from '@/features/admin/GroupCard'
@@ -74,7 +73,6 @@ export default function AdminGroups() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
-      <Stack.Screen options={{ title: 'Groups', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

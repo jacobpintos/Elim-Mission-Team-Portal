@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
-import { Stack } from 'expo-router'
 import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { TaskTemplateCard, type TaskTemplate } from '@/features/admin/TaskTemplateCard'
@@ -46,7 +45,6 @@ export default function AdminTemplates() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
-      <Stack.Screen options={{ title: 'Task Templates', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

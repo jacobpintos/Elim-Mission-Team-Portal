@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { Alert } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
-import { Stack } from 'expo-router'
 import { useDigestStore, type DigestStatDoc } from '@/stores/digestStore'
 import { useUIStore } from '@/stores/uiStore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
@@ -108,7 +107,6 @@ export default function AdminDigests() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
-      <Stack.Screen options={{ title: 'Email Digests', headerShown: false }} />
 
       <Text fontSize="$6" fontWeight="700">
         Email Digests

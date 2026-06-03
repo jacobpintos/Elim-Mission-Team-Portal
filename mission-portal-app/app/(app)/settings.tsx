@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { ScrollView, Pressable, TextInput, StyleSheet, View } from 'react-native'
 import { YStack, XStack, Text, Switch, Label, Separator } from 'tamagui'
-import { Stack, useRouter } from 'expo-router'
+import { useRouter } from 'expo-router'
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
@@ -277,7 +277,6 @@ export default function SettingsScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Settings' }} />
 
       {/* Hidden file input for photo upload */}
       <input

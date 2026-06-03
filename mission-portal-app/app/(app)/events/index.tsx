@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { ScrollView, Pressable, Linking } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useConfigStore } from '@/stores/configStore'
@@ -132,7 +131,6 @@ export default function EventsScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Events' }} />
 
       {/* Header */}
       <XStack
