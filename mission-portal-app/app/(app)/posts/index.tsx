@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ScrollView, Pressable, TextInput, View, Modal, useWindowDimensions, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack, useRouter } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { usePostsStore } from '@/stores/postsStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -119,36 +119,34 @@ export default function PostsIndex() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen
-        options={{
-          title: 'Posts',
-          headerRight: admin
-            ? () => (
-                <Pressable
-                  onPress={() => setBuildMode((v) => !v)}
-                  style={{ marginRight: 12 }}
-                >
-                  <XStack
-                    paddingHorizontal={10}
-                    paddingVertical={4}
-                    borderRadius={6}
-                    backgroundColor={buildMode ? colors.primary : 'transparent'}
-                    borderWidth={1}
-                    borderColor={buildMode ? colors.primary : colors.border}
-                  >
-                    <Text
-                      color={buildMode ? 'white' : colors.text}
-                      fontSize={12}
-                      fontWeight="600"
-                    >
-                      {buildMode ? '✓ Done' : '⚙ Build'}
-                    </Text>
-                  </XStack>
-                </Pressable>
-              )
-            : undefined,
-        }}
-      />
+      {/* Admin build-mode toggle — inline since the layout uses a custom header */}
+      {admin ? (
+        <XStack
+          justifyContent="flex-end"
+          paddingHorizontal={PADDING}
+          paddingTop={10}
+          paddingBottom={0}
+        >
+          <Pressable onPress={() => setBuildMode((v) => !v)}>
+            <XStack
+              paddingHorizontal={10}
+              paddingVertical={5}
+              borderRadius={6}
+              backgroundColor={buildMode ? colors.primary : 'transparent'}
+              borderWidth={1}
+              borderColor={buildMode ? colors.primary : colors.border}
+            >
+              <Text
+                color={buildMode ? 'white' : colors.text}
+                fontSize={12}
+                fontWeight="600"
+              >
+                {buildMode ? '✓ Done' : '⚙ Build'}
+              </Text>
+            </XStack>
+          </Pressable>
+        </XStack>
+      ) : null}
 
       <ScrollView style={{ flex: 1 }}>
         <YStack padding={PADDING} gap={GAP}>

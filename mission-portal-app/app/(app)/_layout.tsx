@@ -187,7 +187,8 @@ export default function AppLayout() {
 
   // Block direct URL access to unauthorized routes (href:null only hides the tab, doesn't block navigation)
   // 'admin/*' screens are owned by the 'rolehub' tab — allow them when rolehub is accessible
-  const SUB_ROUTE_OWNERS: Partial<Record<string, Tab>> = { admin: 'rolehub' }
+  // 'posts/*' screens are owned by the 'public' tab for members; non-members have 'posts' directly
+  const SUB_ROUTE_OWNERS: Partial<Record<string, Tab>> = { admin: 'rolehub', posts: 'public' }
   const pathSeg = pathname.split('/').filter(Boolean)[0] ?? ''
   const owner = SUB_ROUTE_OWNERS[pathSeg]
   const allowed = tabs.includes(pathSeg as Tab) || (!!owner && tabs.includes(owner))
@@ -444,6 +445,8 @@ export default function AppLayout() {
             <Tabs.Screen name="admin/leadership" options={{ href: null }} />
             <Tabs.Screen name="public/index" options={{ href: null }} />
             <Tabs.Screen name="public/posts" options={{ href: null }} />
+            <Tabs.Screen name="posts/index" options={{ href: null }} />
+            <Tabs.Screen name="posts/[pageId]" options={{ href: null }} />
             <Tabs.Screen name="public/connect" options={{ href: null }} />
             <Tabs.Screen name="public/giving" options={{ href: null }} />
             <Tabs.Screen name="public/story" options={{ href: null }} />
