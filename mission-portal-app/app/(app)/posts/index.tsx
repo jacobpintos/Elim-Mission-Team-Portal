@@ -419,16 +419,16 @@ const styles = StyleSheet.create({
   pill: {
     borderRadius: 999,
     overflow: 'hidden',
-    height: 82,
     flexDirection: 'row',
     borderWidth: 1,
+    minHeight: 82,
   },
   pillBuildMode: {
     opacity: 0.8,
   },
   pillLeft: {
     width: 110,
-    height: 82,
+    alignSelf: 'stretch',
     overflow: 'hidden',
     position: 'relative',
   },
@@ -442,6 +442,8 @@ const styles = StyleSheet.create({
   },
   pillRight: {
     flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
     paddingHorizontal: 16,
     paddingVertical: 14,
     justifyContent: 'center',
