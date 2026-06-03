@@ -72,10 +72,10 @@ export default function PostsIndex() {
     try {
       const patch: Partial<PostPage> = {
         label: editState.label.trim(),
-        bgImage: editState.bgImage.trim() || undefined,
-        fbPageId: editState.fbPageId.trim() || undefined,
-        fbToken: editState.fbToken.trim() || undefined,
-        desc: editState.desc.trim() || undefined,
+        bgImage: editState.bgImage.trim(),
+        fbPageId: editState.fbPageId.trim(),
+        fbToken: editState.fbToken.trim(),
+        desc: editState.desc.trim(),
       }
       if (editState.isNew) {
         await postsStore.addPage({ ...patch, id: editState.id, label: patch.label!, posts: [] })
