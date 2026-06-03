@@ -95,6 +95,15 @@ export default function AppLayout() {
   const drawerX = useMemo(() => new Animated.Value(-DRAWER_W), [])
   const contentX = useMemo(() => new Animated.Value(0), [])
 
+  // Stable reference required: Tabs processes screenOptions in useLayoutEffect.
+  // A new inline object every render fires that effect → setState → re-render → loop.
+  const tabScreenOptions = useMemo(() => ({
+    headerShown: false,
+    tabBarStyle: { display: 'none', height: 0 },
+    tabBarActiveTintColor: theme.primary,
+    sceneStyle: { backgroundColor: colors.background },
+  }), [theme.primary, colors.background])
+
   const drawerAnim = { transform: [{ translateX: drawerX }] }
   const contentAnim = { transform: [{ translateX: contentX }], flex: 1 as const, zIndex: 1 as const }
 
@@ -389,14 +398,7 @@ export default function AppLayout() {
 
         {/* Tabs with hidden bar — handles all routing */}
         <View style={{ flex: 1 }}>
-          <Tabs
-            screenOptions={{
-              headerShown: false,
-              tabBarStyle: { display: 'none', height: 0 },
-              tabBarActiveTintColor: theme.primary,
-              sceneStyle: { backgroundColor: colors.background },
-            }}
-          >
+          <Tabs screenOptions={tabScreenOptions}>
             {/* On web, Tabs.Screen children call navigation.setOptions() in useLayoutEffect.
                 Every back-navigation changes the Tabs navigation state, re-firing all those
                 effects with freshly created options objects → infinite update loop (error #185).
