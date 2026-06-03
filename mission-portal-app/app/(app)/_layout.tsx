@@ -1,5 +1,5 @@
 import { Tabs, Redirect, usePathname, useRouter } from 'expo-router'
-import { ScrollView, View, Pressable, StyleSheet, Animated } from 'react-native'
+import { ScrollView, View, Pressable, StyleSheet, Animated, Platform } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useState, useEffect, useMemo } from 'react'
 import { getDocs, collection } from 'firebase/firestore'
@@ -397,7 +397,11 @@ export default function AppLayout() {
               sceneStyle: { backgroundColor: colors.background },
             }}
           >
-            {(Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
+            {/* On web, Tabs.Screen children call navigation.setOptions() in useLayoutEffect.
+                Every back-navigation changes the Tabs navigation state, re-firing all those
+                effects with freshly created options objects → infinite update loop (error #185).
+                Routes work via file-system routing on web, so these registrations are unnecessary. */}
+            {Platform.OS !== 'web' && (Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
               <Tabs.Screen
                 key={tab}
                 name={tab}
@@ -407,35 +411,39 @@ export default function AppLayout() {
                 }}
               />
             ))}
-            {/* Sub-routes hidden from tab bar */}
-            <Tabs.Screen name="events/[id]" options={{ href: null }} />
-            <Tabs.Screen name="messages/[threadId]" options={{ href: null }} />
-            <Tabs.Screen name="issues/[id]" options={{ href: null }} />
-            <Tabs.Screen name="issues/kaizen" options={{ href: null }} />
-            <Tabs.Screen name="issues/planning" options={{ href: null }} />
-            <Tabs.Screen name="pages/[slug]" options={{ href: null }} />
-            <Tabs.Screen name="pages/our-story" options={{ href: null }} />
-            <Tabs.Screen name="pages/connect" options={{ href: null }} />
-            <Tabs.Screen name="pages/giving" options={{ href: null }} />
-            <Tabs.Screen name="admin/users" options={{ href: null }} />
-            <Tabs.Screen name="admin/avail" options={{ href: null }} />
-            <Tabs.Screen name="admin/groups" options={{ href: null }} />
-            <Tabs.Screen name="admin/teams" options={{ href: null }} />
-            <Tabs.Screen name="admin/templates" options={{ href: null }} />
-            <Tabs.Screen name="admin/theme" options={{ href: null }} />
-            <Tabs.Screen name="admin/audit" options={{ href: null }} />
-            <Tabs.Screen name="admin/digests" options={{ href: null }} />
-            <Tabs.Screen name="admin/leadership" options={{ href: null }} />
-            <Tabs.Screen name="public/posts" options={{ href: null }} />
-            <Tabs.Screen name="posts/[pageId]" options={{ href: null }} />
-            <Tabs.Screen name="public/connect" options={{ href: null }} />
-            <Tabs.Screen name="public/giving" options={{ href: null }} />
-            <Tabs.Screen name="public/story" options={{ href: null }} />
-            <Tabs.Screen name="public/music" options={{ href: null }} />
-            <Tabs.Screen name="rolehub/inventory" options={{ href: null }} />
-            <Tabs.Screen name="rolehub/worship" options={{ href: null }} />
-            <Tabs.Screen name="rolehub/admin" options={{ href: null }} />
-            <Tabs.Screen name="profile" options={{ href: null }} />
+            {Platform.OS !== 'web' && (
+              <>
+                {/* Sub-routes hidden from tab bar */}
+                <Tabs.Screen name="events/[id]" options={{ href: null }} />
+                <Tabs.Screen name="messages/[threadId]" options={{ href: null }} />
+                <Tabs.Screen name="issues/[id]" options={{ href: null }} />
+                <Tabs.Screen name="issues/kaizen" options={{ href: null }} />
+                <Tabs.Screen name="issues/planning" options={{ href: null }} />
+                <Tabs.Screen name="pages/[slug]" options={{ href: null }} />
+                <Tabs.Screen name="pages/our-story" options={{ href: null }} />
+                <Tabs.Screen name="pages/connect" options={{ href: null }} />
+                <Tabs.Screen name="pages/giving" options={{ href: null }} />
+                <Tabs.Screen name="admin/users" options={{ href: null }} />
+                <Tabs.Screen name="admin/avail" options={{ href: null }} />
+                <Tabs.Screen name="admin/groups" options={{ href: null }} />
+                <Tabs.Screen name="admin/teams" options={{ href: null }} />
+                <Tabs.Screen name="admin/templates" options={{ href: null }} />
+                <Tabs.Screen name="admin/theme" options={{ href: null }} />
+                <Tabs.Screen name="admin/audit" options={{ href: null }} />
+                <Tabs.Screen name="admin/digests" options={{ href: null }} />
+                <Tabs.Screen name="admin/leadership" options={{ href: null }} />
+                <Tabs.Screen name="public/posts" options={{ href: null }} />
+                <Tabs.Screen name="posts/[pageId]" options={{ href: null }} />
+                <Tabs.Screen name="public/connect" options={{ href: null }} />
+                <Tabs.Screen name="public/giving" options={{ href: null }} />
+                <Tabs.Screen name="public/story" options={{ href: null }} />
+                <Tabs.Screen name="public/music" options={{ href: null }} />
+                <Tabs.Screen name="rolehub/inventory" options={{ href: null }} />
+                <Tabs.Screen name="rolehub/worship" options={{ href: null }} />
+                <Tabs.Screen name="rolehub/admin" options={{ href: null }} />
+                <Tabs.Screen name="profile" options={{ href: null }} />
+              </>
+            )}
           </Tabs>
         </View>
       </Animated.View>
