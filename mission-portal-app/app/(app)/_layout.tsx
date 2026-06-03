@@ -99,7 +99,7 @@ export default function AppLayout() {
   // A new inline object every render fires that effect → setState → re-render → loop.
   const tabScreenOptions = useMemo(() => ({
     headerShown: false,
-    tabBarStyle: { display: 'none', height: 0 },
+    tabBarStyle: { display: 'none' as const, height: 0 },
     tabBarActiveTintColor: theme.primary,
     sceneStyle: { backgroundColor: colors.background },
   }), [theme.primary, colors.background])
