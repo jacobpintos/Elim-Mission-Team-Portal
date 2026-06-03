@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AuditEntry, type AuditDoc } from '@/features/admin/AuditEntry'
 import { useAdminStore } from '@/stores/adminStore'
 import { useUIStore } from '@/stores/uiStore'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const PAGE_SIZE = 25
 
@@ -85,7 +86,7 @@ export default function AdminAudit() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
-      <Stack.Screen options={{ title: 'Audit Trail', headerShown: false }} />
+      <ScreenTitle options={{ title: 'Audit Trail', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

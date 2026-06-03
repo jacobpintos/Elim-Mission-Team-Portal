@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ScrollView, useWindowDimensions, Pressable, Linking, Image } from 'react-native'
+import { ScrollView, useWindowDimensions, Pressable, Linking, Image, View } from 'react-native'
 import { YStack, XStack, Text, H3, Input } from 'tamagui'
-import { Stack, useRouter } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useGroupsStore } from '@/stores/groupsStore'
@@ -25,6 +25,7 @@ import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { EventInstance, PostPage } from '@/types/events'
 import type { MusicItem } from '@/stores/musicStore'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 function isItemNew(item: MusicItem): boolean {
   if (!item.isNew) return false
@@ -412,7 +413,7 @@ function PubHomeContent() {
           )}
         </YStack>
 
-        {/* New Posts */}
+        {/* Posts */}
         <YStack gap="$2">
           <H3 color={colors.text}>Posts</H3>
           {pages.length === 0 ? (
@@ -426,42 +427,38 @@ function PubHomeContent() {
               <Text color={colors.textMuted}>No post directories configured.</Text>
             </YStack>
           ) : (
-            <XStack gap="$2" flexWrap="wrap">
+            <YStack gap={10}>
               {pages.map((page) => {
                 const unseen = hasUnseen(page)
                 return (
-                  <Pressable key={page.id} onPress={() => router.push('/posts')}>
-                    <YStack
-                      backgroundColor={colors.surface}
-                      borderRadius="$3"
-                      padding="$3"
-                      borderWidth={1}
-                      borderColor={unseen ? colors.primary : colors.border}
-                      minWidth={100}
-                      alignItems="center"
-                      gap="$1"
-                    >
-                      {unseen ? (
-                        <XStack gap="$1" alignItems="center">
-                          <YStack
-                            width={8}
-                            height={8}
-                            borderRadius={4}
-                            backgroundColor={colors.primary}
-                          />
-                          <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                            New Posts
-                          </Text>
-                        </XStack>
-                      ) : null}
-                      <Text color={colors.text} fontWeight="600">
-                        {page.label}
-                      </Text>
-                    </YStack>
+                  <Pressable key={page.id} onPress={() => router.push(`/posts/${page.id}` as never)}>
+                    <View style={{ borderRadius: 14, overflow: 'hidden', minHeight: 82, flexDirection: 'row', borderWidth: 1, borderColor: unseen ? colors.primary : colors.border }}>
+                      {/* Left: photo panel */}
+                      <View style={{ width: 90, alignSelf: 'stretch', overflow: 'hidden', position: 'relative' }}>
+                        {page.bgImage ? (
+                          <img src={page.bgImage} alt="" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' } as object} />
+                        ) : (
+                          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.primary + '77' }} />
+                        )}
+                      </View>
+                      {/* Right: text panel */}
+                      <View style={{ flex: 1, minWidth: 0, overflow: 'hidden', paddingHorizontal: 16, paddingVertical: 14, justifyContent: 'center', backgroundColor: colors.surface }}>
+                        {unseen ? (
+                          <XStack gap={4} alignItems="center" marginBottom={2}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                            <Text color={colors.primary} fontSize={11} fontWeight="600">New</Text>
+                          </XStack>
+                        ) : null}
+                        <Text color={colors.text} fontWeight="700" fontSize={15} numberOfLines={1}>{page.label}</Text>
+                        {page.desc ? (
+                          <Text color={colors.textMuted} fontSize={12} numberOfLines={1} marginTop={2}>{page.desc}</Text>
+                        ) : null}
+                      </View>
+                    </View>
                   </Pressable>
                 )
               })}
-            </XStack>
+            </YStack>
           )}
         </YStack>
 
@@ -729,7 +726,7 @@ export default function Home() {
   if (!isMember) {
     return (
       <>
-        <Stack.Screen options={{ title: 'Home' }} />
+        <ScreenTitle options={{ title: 'Home' }} />
         <PubHomeContent />
       </>
     )
@@ -737,7 +734,7 @@ export default function Home() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Home' }} />
+      <ScreenTitle options={{ title: 'Home' }} />
       <TeamHomeContent />
     </>
   )

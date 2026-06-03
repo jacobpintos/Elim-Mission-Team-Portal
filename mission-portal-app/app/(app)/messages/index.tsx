@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack, useRouter } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useMessagesStore } from '@/stores/messagesStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -9,6 +9,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
 import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function MessagesIndex() {
   const colors = useThemeColors()
@@ -77,7 +78,7 @@ export default function MessagesIndex() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Messages' }} />
+      <ScreenTitle options={{ title: 'Messages' }} />
 
       {loading ? (
         <YStack flex={1} alignItems="center" justifyContent="center">

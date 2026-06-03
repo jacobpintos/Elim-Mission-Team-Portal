@@ -24,6 +24,7 @@ import { TASK_SECTIONS, type TaskTemplate } from '@/features/admin/TaskTemplateC
 import type { Task } from '@/types/events'
 import type { KaizenCard, KaizenVerificationResult } from '@/types/operations'
 import type { UserProfile } from '@/types/user'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 interface GroupDoc {
   id: string
@@ -1398,7 +1399,7 @@ export default function Assignments() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Assignments' }} />
+      <ScreenTitle options={{ title: 'Assignments' }} />
 
       {/* Admin view switcher */}
       {admin ? (

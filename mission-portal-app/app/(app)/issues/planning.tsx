@@ -8,6 +8,7 @@ import { usePlanningStore } from '@/stores/planningStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { sameId } from '@/lib/ids'
 import { PlanningBoardCanvas } from '@/features/planning/PlanningBoardCanvas'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function Planning() {
   const colors = useThemeColors()
@@ -81,7 +82,7 @@ export default function Planning() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Planning Boards' }} />
+      <ScreenTitle options={{ title: 'Planning Boards' }} />
 
       {/* Header */}
       <XStack

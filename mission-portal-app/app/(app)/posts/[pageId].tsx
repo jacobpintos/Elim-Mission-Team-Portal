@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, TextInput, View, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack, useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { usePostsStore } from '@/stores/postsStore'
@@ -10,6 +10,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
 import { likeFbPost, unlikeFbPost, postFbComment } from '@/lib/fbGraph'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 // Shape of posts — from Firestore (Zapier) or demo fallback
 interface FbPost {
@@ -126,6 +127,7 @@ function timeSince(isoString: string): string {
 
 export default function PageFeed() {
   const colors = useThemeColors()
+  const router = useRouter()
   const { pageId } = useLocalSearchParams<{ pageId: string }>()
   const { profile } = useAuthStore()
   const admin = isAdmin(profile)
@@ -168,7 +170,7 @@ export default function PageFeed() {
   if (loadingConfig) {
     return (
       <YStack flex={1} backgroundColor={colors.background} alignItems="center" justifyContent="center">
-        <Stack.Screen options={{ title: 'Posts' }} />
+        <ScreenTitle options={{ title: 'Posts' }} />
         <Text color={colors.textMuted}>Loading…</Text>
       </YStack>
     )
@@ -176,9 +178,16 @@ export default function PageFeed() {
 
   if (!page) {
     return (
-      <YStack flex={1} backgroundColor={colors.background} alignItems="center" justifyContent="center" padding="$4">
-        <Stack.Screen options={{ title: 'Posts' }} />
-        <Text color={colors.textMuted} textAlign="center">Page not found.</Text>
+      <YStack flex={1} backgroundColor={colors.background}>
+        <ScreenTitle options={{ title: 'Posts' }} />
+        <Pressable onPress={() => router.back()}>
+          <XStack paddingHorizontal="$3" paddingVertical="$2" alignItems="center" borderBottomWidth={1} borderBottomColor={colors.border}>
+            <Text color={colors.primary} fontSize={14}>‹ Posts</Text>
+          </XStack>
+        </Pressable>
+        <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
+          <Text color={colors.textMuted} textAlign="center">Page not found.</Text>
+        </YStack>
       </YStack>
     )
   }
@@ -468,7 +477,14 @@ export default function PageFeed() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: page.label }} />
+      <ScreenTitle options={{ title: page.label }} />
+
+      {/* Back button — Tabs navigator has no native back, so provide one explicitly */}
+      <Pressable onPress={() => router.back()}>
+        <XStack paddingHorizontal="$3" paddingVertical="$2" alignItems="center" borderBottomWidth={1} borderBottomColor={colors.border}>
+          <Text color={colors.primary} fontSize={14}>‹ Posts</Text>
+        </XStack>
+      </Pressable>
 
       {!isLive && admin ? (
         <XStack

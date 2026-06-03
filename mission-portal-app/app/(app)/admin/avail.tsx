@@ -10,6 +10,7 @@ import { allInstances, todayStr, dateStr } from '@/lib/events'
 import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
 import type { AvailResponse } from '@/types/events'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 type ResponseFilter = 'all' | AvailResponse['status'] | 'none'
 
@@ -112,7 +113,7 @@ export default function AdminAvailScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Availability Tracker' }} />
+      <ScreenTitle options={{ title: 'Availability Tracker' }} />
 
       {/* Search */}
       <YStack padding="$3" gap="$2" borderBottomWidth={1} borderBottomColor={colors.border}>

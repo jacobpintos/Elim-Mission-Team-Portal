@@ -8,7 +8,8 @@ import {
   Pressable,
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack, useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams } from 'expo-router'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { FlashList, FlashListRef } from '@shopify/flash-list'
 import { useAuthStore } from '@/stores/authStore'
 import { useMessagesStore, sendMessageAs } from '@/stores/messagesStore'
@@ -146,20 +147,27 @@ export default function ThreadScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen
-        options={{
-          title: room?.name ?? 'Messages',
-          headerRight: admin
-            ? () => (
-                <Pressable onPress={handleFlagForReview} style={{ marginRight: 8 }}>
-                  <Text color={colors.primary} fontSize="$3">
-                    Flag
-                  </Text>
-                </Pressable>
-              )
-            : undefined,
-        }}
-      />
+      <ScreenTitle options={{ title: room?.name ?? 'Messages' }} />
+      {/* Chat header: room name + admin flag button */}
+      <XStack
+        paddingHorizontal="$3"
+        paddingVertical="$2"
+        borderBottomWidth={1}
+        borderBottomColor={colors.border}
+        alignItems="center"
+        justifyContent="space-between"
+      >
+        <Text color={colors.text} fontWeight="600" fontSize="$3" numberOfLines={1} flex={1}>
+          {room?.name ?? 'Messages'}
+        </Text>
+        {admin ? (
+          <Pressable onPress={handleFlagForReview} style={{ marginLeft: 8 }}>
+            <Text color={colors.primary} fontSize="$2">
+              Flag
+            </Text>
+          </Pressable>
+        ) : null}
+      </XStack>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}

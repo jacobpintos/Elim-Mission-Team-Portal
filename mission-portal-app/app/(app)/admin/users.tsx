@@ -23,6 +23,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { UserProfile } from '@/types/user'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function AdminUsers() {
   const { users, subscribe, unsubscribe } = useUsersStore()
@@ -234,7 +235,7 @@ export default function AdminUsers() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
-      <Stack.Screen options={{ title: 'User Management', headerShown: false }} />
+      <ScreenTitle options={{ title: 'User Management', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

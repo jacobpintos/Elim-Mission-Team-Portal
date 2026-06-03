@@ -8,6 +8,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
 import { ProductionTab } from '@/features/inventory/ProductionTab'
 import { ReorderTab } from '@/features/inventory/ReorderTab'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function InventoryScreen() {
   const colors = useThemeColors()
@@ -24,7 +25,7 @@ export default function InventoryScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Inventory' }} />
+      <ScreenTitle options={{ title: 'Inventory' }} />
 
       <XStack paddingHorizontal="$3" paddingTop="$3" paddingBottom="$2" gap="$2">
         {(['production', 'reorder'] as const).map((tab) => (

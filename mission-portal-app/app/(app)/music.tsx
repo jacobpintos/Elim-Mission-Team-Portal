@@ -8,6 +8,7 @@ import type { MusicItem } from '@/stores/musicStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
 import { useUIStore } from '@/stores/uiStore'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 function nanoid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
@@ -391,7 +392,7 @@ export default function MusicScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Content' }} />
+      <ScreenTitle options={{ title: 'Content' }} />
 
       {/* Admin toolbar */}
       {admin ? (

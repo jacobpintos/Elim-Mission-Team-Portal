@@ -15,6 +15,7 @@ import { isAdmin, isPublic } from '@/lib/roles'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { FD } from '@/lib/format'
 import type { EventInstance } from '@/types/events'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const VIRTUAL_COLOR = '#8e44ad'
 
@@ -132,7 +133,7 @@ export default function EventsScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Events' }} />
+      <ScreenTitle options={{ title: 'Events' }} />
 
       {/* Header */}
       <XStack

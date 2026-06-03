@@ -11,6 +11,7 @@ import { contrastRatio } from '@/theme/contrast'
 import { ColorPicker } from '@/features/theme/ColorPicker'
 import { ThemePreview } from '@/features/theme/ThemePreview'
 import type { ThemeDoc } from '@/types/theme'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 function ContrastBadge({ ratio }: { ratio: number }) {
   const pass4_5 = ratio >= 4.5
@@ -185,7 +186,7 @@ export default function AdminTheme() {
   return (
     <ScrollView>
       <YStack flex={1} padding="$4" gap="$3">
-        <Stack.Screen options={{ title: 'Theme Editor', headerShown: false }} />
+        <ScreenTitle options={{ title: 'Theme Editor', headerShown: false }} />
 
         <Text fontSize="$6" fontWeight="700">
           Theme Editor

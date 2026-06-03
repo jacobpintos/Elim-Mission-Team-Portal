@@ -9,6 +9,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
 import { isAdmin, isPublic } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -113,7 +114,7 @@ export default function AnnounceScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Announcements' }} />
+      <ScreenTitle options={{ title: 'Announcements' }} />
 
       {admin ? (
         <XStack

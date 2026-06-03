@@ -12,6 +12,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { Avatar } from '@/components/ui/Avatar'
 import type { UserProfile } from '@/types/user'
 import { useThemeStore } from '@/stores/themeStore'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function AdminLeadership() {
   const { users, subscribe, unsubscribe } = useUsersStore()
@@ -81,7 +82,7 @@ export default function AdminLeadership() {
   if (loading) {
     return (
       <YStack flex={1} alignItems="center" justifyContent="center">
-        <Stack.Screen options={{ title: 'Leadership Team', headerShown: false }} />
+        <ScreenTitle options={{ title: 'Leadership Team', headerShown: false }} />
         <Spinner size="large" />
       </YStack>
     )
@@ -89,7 +90,7 @@ export default function AdminLeadership() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
-      <Stack.Screen options={{ title: 'Leadership Team', headerShown: false }} />
+      <ScreenTitle options={{ title: 'Leadership Team', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

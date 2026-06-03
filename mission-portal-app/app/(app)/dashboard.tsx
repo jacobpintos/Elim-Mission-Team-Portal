@@ -20,6 +20,7 @@ import { isOverdue } from '@/lib/availability'
 import { isAdmin } from '@/lib/roles'
 import { usePWAInstallPrompt } from '@/lib/pwaInstall'
 import type { EventInstance } from '@/types/events'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function Dashboard() {
   const colors = useThemeColors()
@@ -108,7 +109,7 @@ export default function Dashboard() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
-      <Stack.Screen options={{ title: 'Dashboard' }} />
+      <ScreenTitle options={{ title: 'Dashboard' }} />
       <YStack padding="$4" gap="$4">
         {/* PWA install banner — web only, shown when browser install prompt is available */}
         {canInstall && (

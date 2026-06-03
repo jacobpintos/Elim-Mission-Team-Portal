@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack, useRouter } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useIssuesStore } from '@/stores/issuesStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -9,6 +9,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
 import { isPublic } from '@/lib/roles'
 import type { IssueCategory, IssueStatus } from '@/types/operations'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const CATEGORY_COLORS: Record<IssueCategory, string> = {
   equipment: '#e67e22',
@@ -117,7 +118,7 @@ export default function IssuesIndex() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Operations' }} />
+      <ScreenTitle options={{ title: 'Operations' }} />
 
       {/* Filter tabs */}
       <ScrollView

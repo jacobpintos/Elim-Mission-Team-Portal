@@ -12,6 +12,7 @@ import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import type { KaizenCard, KaizenStatus, KaizenActionTask } from '@/types/operations'
 import type { UserProfile } from '@/types/user'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const COLUMNS: { key: KaizenStatus; label: string; color: string }[] = [
   { key: 'idea', label: 'Idea', color: '#2980b9' },
@@ -509,7 +510,7 @@ export default function Kaizen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Kaizen Board' }} />
+      <ScreenTitle options={{ title: 'Kaizen Board' }} />
 
       {/* Kanban columns */}
       <ScrollView horizontal style={{ flex: 1 }} showsHorizontalScrollIndicator={false}>

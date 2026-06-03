@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { ScrollView, Pressable, TextInput, StyleSheet, View } from 'react-native'
 import { YStack, XStack, Text, Switch, Label, Separator } from 'tamagui'
-import { Stack, useRouter } from 'expo-router'
+import { useRouter } from 'expo-router'
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
@@ -19,6 +19,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { isAdmin, isPublic } from '@/lib/roles'
 import { geocodeCity } from '@/lib/geocode'
 import type { NotificationPrefs } from '@/types/user'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 type NotifKey = keyof Pick<
   NotificationPrefs,
@@ -277,7 +278,7 @@ export default function SettingsScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Settings' }} />
+      <ScreenTitle options={{ title: 'Settings' }} />
 
       {/* Hidden file input for photo upload */}
       <input

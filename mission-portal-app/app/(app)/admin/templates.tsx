@@ -9,6 +9,7 @@ import { EditTaskTemplateSheet } from '@/features/admin/EditTaskTemplateSheet'
 import { audit } from '@/lib/audit'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function AdminTemplates() {
   const { profile } = useAuthStore()
@@ -46,7 +47,7 @@ export default function AdminTemplates() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
-      <Stack.Screen options={{ title: 'Task Templates', headerShown: false }} />
+      <ScreenTitle options={{ title: 'Task Templates', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

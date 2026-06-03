@@ -19,6 +19,7 @@ import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
 import { ChordSheetsTab } from '@/features/worship/ChordSheetsTab'
 import { InputListTab } from '@/features/worship/InputListTab'
 import type { SetList } from '@/types/worship'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function WorshipScreen() {
   const colors = useThemeColors()
@@ -120,7 +121,7 @@ export default function WorshipScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <Stack.Screen options={{ title: 'Worship' }} />
+      <ScreenTitle options={{ title: 'Worship' }} />
 
       {/* Tab switcher */}
       <XStack
