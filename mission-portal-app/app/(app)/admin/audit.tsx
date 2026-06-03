@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Alert } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Input, Spinner } from 'tamagui'
+import { Stack } from 'expo-router'
 import {
   collection,
   getDocs,
@@ -15,6 +16,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AuditEntry, type AuditDoc } from '@/features/admin/AuditEntry'
 import { useAdminStore } from '@/stores/adminStore'
 import { useUIStore } from '@/stores/uiStore'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const PAGE_SIZE = 25
 
@@ -84,6 +86,7 @@ export default function AdminAudit() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
+      <ScreenTitle options={{ title: 'Audit Trail', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

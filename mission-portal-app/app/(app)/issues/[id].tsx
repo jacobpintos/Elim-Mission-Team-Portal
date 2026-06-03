@@ -11,6 +11,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { isAdmin } from '@/lib/roles'
 import { FD } from '@/lib/format'
 import type { IssueCategory, IssueStatus } from '@/types/operations'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const CATEGORY_COLORS: Record<IssueCategory, string> = {
   equipment: '#e67e22',
@@ -155,6 +156,7 @@ export default function IssueDetail() {
   if (!issue) {
     return (
       <YStack flex={1} padding="$4" alignItems="center" justifyContent="center" backgroundColor={colors.background}>
+        <ScreenTitle options={{ title: 'Issue Detail' }} />
         <Text color={colors.textMuted}>Issue not found.</Text>
       </YStack>
     )
@@ -164,6 +166,7 @@ export default function IssueDetail() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: `Issue #${issue.id}` }} />
 
       <ScrollView style={{ flex: 1 }}>
         <YStack padding="$4" gap="$4">

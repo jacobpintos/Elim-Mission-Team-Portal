@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { ScrollView, Pressable, Linking } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useConfigStore } from '@/stores/configStore'
@@ -14,6 +15,7 @@ import { isAdmin, isPublic } from '@/lib/roles'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { FD } from '@/lib/format'
 import type { EventInstance } from '@/types/events'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const VIRTUAL_COLOR = '#8e44ad'
 
@@ -131,6 +133,7 @@ export default function EventsScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: 'Events' }} />
 
       {/* Header */}
       <XStack

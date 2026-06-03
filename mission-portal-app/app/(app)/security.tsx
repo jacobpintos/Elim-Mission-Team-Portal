@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { Stack } from 'expo-router'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
@@ -12,6 +13,7 @@ import { isAdmin, isSecurity } from '@/lib/roles'
 import { ReportFormModal } from '@/features/security/ReportFormModal'
 import { ReportDetailModal } from '@/features/security/ReportDetailModal'
 import type { SecurityReport } from '@/types/security'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 function formatTs(ts: unknown): string {
@@ -187,6 +189,7 @@ export default function SecurityScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: 'Security' }} />
 
       <XStack
         padding="$3"

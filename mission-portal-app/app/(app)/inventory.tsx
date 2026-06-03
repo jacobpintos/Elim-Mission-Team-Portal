@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Pressable } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { Stack } from 'expo-router'
 import { useInventoryStore } from '@/stores/inventoryStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
 import { ProductionTab } from '@/features/inventory/ProductionTab'
 import { ReorderTab } from '@/features/inventory/ReorderTab'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function InventoryScreen() {
   const colors = useThemeColors()
@@ -23,6 +25,7 @@ export default function InventoryScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: 'Inventory' }} />
 
       <XStack paddingHorizontal="$3" paddingTop="$3" paddingBottom="$2" gap="$2">
         {(['production', 'reorder'] as const).map((tab) => (

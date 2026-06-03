@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, useWindowDimensions } from 'react-native'
 import { YStack, XStack, Text, H3, Button } from 'tamagui'
+import { Stack } from 'expo-router'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -19,6 +20,7 @@ import { isOverdue } from '@/lib/availability'
 import { isAdmin } from '@/lib/roles'
 import { usePWAInstallPrompt } from '@/lib/pwaInstall'
 import type { EventInstance } from '@/types/events'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function Dashboard() {
   const colors = useThemeColors()
@@ -107,6 +109,7 @@ export default function Dashboard() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScreenTitle options={{ title: 'Dashboard' }} />
       <YStack padding="$4" gap="$4">
         {/* PWA install banner — web only, shown when browser install prompt is available */}
         {canInstall && (

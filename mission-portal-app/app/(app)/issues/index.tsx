@@ -9,6 +9,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
 import { isPublic } from '@/lib/roles'
 import type { IssueCategory, IssueStatus } from '@/types/operations'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const CATEGORY_COLORS: Record<IssueCategory, string> = {
   equipment: '#e67e22',
@@ -117,6 +118,7 @@ export default function IssuesIndex() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: 'Operations' }} />
 
       {/* Filter tabs */}
       <ScrollView

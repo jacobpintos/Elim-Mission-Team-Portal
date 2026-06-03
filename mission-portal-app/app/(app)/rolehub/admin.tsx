@@ -1,7 +1,9 @@
 import { useRouter } from 'expo-router'
 import { ScrollView, Pressable } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { Stack } from 'expo-router'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const SECTIONS = [
   { label: 'User Management', path: '/(app)/admin/users', icon: '👥' },
@@ -20,6 +22,7 @@ export default function RolehubAdmin() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: 'Admin' }} />
       <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
         {SECTIONS.map((s) => (
           <Pressable key={s.path} onPress={() => router.push(s.path as never)}>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Alert } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Input } from 'tamagui'
+import { Stack } from 'expo-router'
 import { useUsersStore } from '@/stores/usersStore'
 import { useAuthStore } from '@/stores/authStore'
 import { UserCard } from '@/features/admin/UserCard'
@@ -22,6 +23,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { UserProfile } from '@/types/user'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function AdminUsers() {
   const { users, subscribe, unsubscribe } = useUsersStore()
@@ -233,6 +235,7 @@ export default function AdminUsers() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
+      <ScreenTitle options={{ title: 'User Management', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

@@ -9,6 +9,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
 import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function MessagesIndex() {
   const colors = useThemeColors()
@@ -77,6 +78,7 @@ export default function MessagesIndex() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: 'Messages' }} />
 
       {loading ? (
         <YStack flex={1} alignItems="center" justifyContent="center">

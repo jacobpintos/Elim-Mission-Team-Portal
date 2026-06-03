@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { TextInput as RNTextInput } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
+import { Stack } from 'expo-router'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useConfigStore } from '@/stores/configStore'
 import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
 import { useUIStore } from '@/stores/uiStore'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function AdminTeams() {
   const { commonTeams, subscribe, unsubscribe } = useConfigStore()
@@ -74,6 +76,7 @@ export default function AdminTeams() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
+      <ScreenTitle options={{ title: 'Common Teams', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

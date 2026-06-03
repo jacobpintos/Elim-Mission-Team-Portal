@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Alert } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
+import { Stack } from 'expo-router'
 import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { GroupCard, type GroupDoc } from '@/features/admin/GroupCard'
@@ -11,6 +12,7 @@ import { audit } from '@/lib/audit'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useUsersStore } from '@/stores/usersStore'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function AdminGroups() {
   const { profile } = useAuthStore()
@@ -73,6 +75,7 @@ export default function AdminGroups() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
+      <ScreenTitle options={{ title: 'Groups', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

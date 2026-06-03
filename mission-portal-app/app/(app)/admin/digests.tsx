@@ -2,9 +2,11 @@ import { useEffect } from 'react'
 import { Alert } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
+import { Stack } from 'expo-router'
 import { useDigestStore, type DigestStatDoc } from '@/stores/digestStore'
 import { useUIStore } from '@/stores/uiStore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 function formatTimestamp(ts: unknown): string {
   if (!ts) return 'N/A'
@@ -107,6 +109,7 @@ export default function AdminDigests() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
+      <ScreenTitle options={{ title: 'Email Digests', headerShown: false }} />
 
       <Text fontSize="$6" fontWeight="700">
         Email Digests

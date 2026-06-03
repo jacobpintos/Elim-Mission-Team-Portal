@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { TextInput as RNTextInput } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
+import { Stack } from 'expo-router'
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useUsersStore } from '@/stores/usersStore'
@@ -11,6 +12,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { Avatar } from '@/components/ui/Avatar'
 import type { UserProfile } from '@/types/user'
 import { useThemeStore } from '@/stores/themeStore'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function AdminLeadership() {
   const { users, subscribe, unsubscribe } = useUsersStore()
@@ -80,6 +82,7 @@ export default function AdminLeadership() {
   if (loading) {
     return (
       <YStack flex={1} alignItems="center" justifyContent="center">
+        <ScreenTitle options={{ title: 'Leadership Team', headerShown: false }} />
         <Spinner size="large" />
       </YStack>
     )
@@ -87,6 +90,7 @@ export default function AdminLeadership() {
 
   return (
     <YStack flex={1} padding="$4" gap="$3">
+      <ScreenTitle options={{ title: 'Leadership Team', headerShown: false }} />
 
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">

@@ -19,6 +19,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { isAdmin, isPublic } from '@/lib/roles'
 import { geocodeCity } from '@/lib/geocode'
 import type { NotificationPrefs } from '@/types/user'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 type NotifKey = keyof Pick<
   NotificationPrefs,
@@ -277,6 +278,7 @@ export default function SettingsScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: 'Settings' }} />
 
       {/* Hidden file input for photo upload */}
       <input

@@ -25,6 +25,7 @@ import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { EventInstance, PostPage } from '@/types/events'
 import type { MusicItem } from '@/stores/musicStore'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 function isItemNew(item: MusicItem): boolean {
   if (!item.isNew) return false
@@ -725,6 +726,7 @@ export default function Home() {
   if (!isMember) {
     return (
       <>
+        <ScreenTitle options={{ title: 'Home' }} />
         <PubHomeContent />
       </>
     )
@@ -732,6 +734,7 @@ export default function Home() {
 
   return (
     <>
+      <ScreenTitle options={{ title: 'Home' }} />
       <TeamHomeContent />
     </>
   )

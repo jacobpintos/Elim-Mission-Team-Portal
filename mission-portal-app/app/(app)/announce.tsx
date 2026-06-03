@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -8,6 +9,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
 import { isAdmin, isPublic } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -112,6 +114,7 @@ export default function AnnounceScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: 'Announcements' }} />
 
       {admin ? (
         <XStack

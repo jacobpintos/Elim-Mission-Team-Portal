@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useLocalSearchParams } from 'expo-router'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { FlashList, FlashListRef } from '@shopify/flash-list'
 import { useAuthStore } from '@/stores/authStore'
 import { useMessagesStore, sendMessageAs } from '@/stores/messagesStore'
@@ -146,6 +147,7 @@ export default function ThreadScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: room?.name ?? 'Messages' }} />
       {/* Chat header: room name + admin flag button */}
       <XStack
         paddingHorizontal="$3"

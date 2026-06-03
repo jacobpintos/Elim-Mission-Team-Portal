@@ -10,6 +10,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
 import { likeFbPost, unlikeFbPost, postFbComment } from '@/lib/fbGraph'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 // Shape of posts — from Firestore (Zapier) or demo fallback
 interface FbPost {
@@ -169,6 +170,7 @@ export default function PageFeed() {
   if (loadingConfig) {
     return (
       <YStack flex={1} backgroundColor={colors.background} alignItems="center" justifyContent="center">
+        <ScreenTitle options={{ title: 'Posts' }} />
         <Text color={colors.textMuted}>Loading…</Text>
       </YStack>
     )
@@ -177,6 +179,7 @@ export default function PageFeed() {
   if (!page) {
     return (
       <YStack flex={1} backgroundColor={colors.background}>
+        <ScreenTitle options={{ title: 'Posts' }} />
         <Pressable onPress={() => router.back()}>
           <XStack paddingHorizontal="$3" paddingVertical="$2" alignItems="center" borderBottomWidth={1} borderBottomColor={colors.border}>
             <Text color={colors.primary} fontSize={14}>‹ Posts</Text>
@@ -474,6 +477,7 @@ export default function PageFeed() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: page.label }} />
 
       {/* Back button — Tabs navigator has no native back, so provide one explicitly */}
       <Pressable onPress={() => router.back()}>

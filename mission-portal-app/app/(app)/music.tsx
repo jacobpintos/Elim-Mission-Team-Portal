@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, TextInput, Pressable, StyleSheet, Modal, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useMusicStore, extractYouTubeId, youtubeThumbnail } from '@/stores/musicStore'
 import type { MusicItem } from '@/stores/musicStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
 import { useUIStore } from '@/stores/uiStore'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 function nanoid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
@@ -390,6 +392,7 @@ export default function MusicScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: 'Content' }} />
 
       {/* Admin toolbar */}
       {admin ? (

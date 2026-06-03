@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useKaizenStore } from '@/stores/kaizenStore'
 import { useTasksStore } from '@/stores/tasksStore'
@@ -11,6 +12,7 @@ import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import type { KaizenCard, KaizenStatus, KaizenActionTask } from '@/types/operations'
 import type { UserProfile } from '@/types/user'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const COLUMNS: { key: KaizenStatus; label: string; color: string }[] = [
   { key: 'idea', label: 'Idea', color: '#2980b9' },
@@ -508,6 +510,7 @@ export default function Kaizen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: 'Kaizen Board' }} />
 
       {/* Kanban columns */}
       <ScrollView horizontal style={{ flex: 1 }} showsHorizontalScrollIndicator={false}>
