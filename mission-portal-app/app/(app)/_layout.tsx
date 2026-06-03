@@ -1,13 +1,7 @@
 import { Tabs, Redirect, usePathname, useRouter } from 'expo-router'
-import { ScrollView, View, Pressable, StyleSheet } from 'react-native'
+import { ScrollView, View, Pressable, StyleSheet, Animated } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { useState, useEffect } from 'react'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  runOnJS,
-} from 'react-native-reanimated'
+import { useState, useEffect, useRef } from 'react'
 import { getDocs, collection } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -98,17 +92,11 @@ export default function AppLayout() {
   const toast = useUIStore((s) => s.toast)
 
   // Drawer + content animation (must be before early returns)
-  const drawerX = useSharedValue(-DRAWER_W)
-  const contentX = useSharedValue(0)
+  const drawerX = useRef(new Animated.Value(-DRAWER_W)).current
+  const contentX = useRef(new Animated.Value(0)).current
 
-  const drawerAnim = useAnimatedStyle(() => ({
-    transform: [{ translateX: drawerX.value }],
-  }))
-  const contentAnim = useAnimatedStyle(() => ({
-    transform: [{ translateX: contentX.value }],
-    flex: 1,
-    zIndex: 1,
-  }))
+  const drawerAnim = { transform: [{ translateX: drawerX }] }
+  const contentAnim = { transform: [{ translateX: contentX }], flex: 1 as const, zIndex: 1 as const }
 
   useEffect(() => {
     subUsers()
@@ -241,19 +229,18 @@ export default function AppLayout() {
 
   function openDrawer() {
     setIsOpen(true)
-    // eslint-disable-next-line react-hooks/immutability
-    drawerX.value = withTiming(0, { duration: 260 })
-    // eslint-disable-next-line react-hooks/immutability
-    contentX.value = withTiming(DRAWER_W, { duration: 260 })
+    Animated.parallel([
+      Animated.timing(drawerX, { toValue: 0, duration: 260, useNativeDriver: false }),
+      Animated.timing(contentX, { toValue: DRAWER_W, duration: 260, useNativeDriver: false }),
+    ]).start()
   }
 
   function closeDrawer() {
-    // eslint-disable-next-line react-hooks/immutability
-    drawerX.value = withTiming(-DRAWER_W, { duration: 260 })
-    // eslint-disable-next-line react-hooks/immutability
-    contentX.value = withTiming(0, { duration: 260 }, (done) => {
-      'worklet'
-      if (done) runOnJS(setIsOpen)(false)
+    Animated.parallel([
+      Animated.timing(drawerX, { toValue: -DRAWER_W, duration: 260, useNativeDriver: false }),
+      Animated.timing(contentX, { toValue: 0, duration: 260, useNativeDriver: false }),
+    ]).start(({ finished }) => {
+      if (finished) setIsOpen(false)
     })
   }
 

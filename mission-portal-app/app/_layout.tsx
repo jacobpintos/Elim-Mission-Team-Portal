@@ -50,7 +50,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     } else if (fbUser && fbUser.emailVerified && profile?.onboardingComplete && inOnboarding) {
       router.replace('/(app)/home')
     }
-  }, [fbUser, profile, loading, segments, router])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fbUser, profile, loading, segments])
 
   return <>{children}</>
 }
