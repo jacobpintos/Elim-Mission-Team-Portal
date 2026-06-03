@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ScrollView, Pressable, TextInput, View, Modal, useWindowDimensions, StyleSheet } from 'react-native'
+import { ScrollView, Pressable, TextInput, View, Modal, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useRouter } from 'expo-router'
 import { usePostsStore } from '@/stores/postsStore'
@@ -42,7 +42,6 @@ export default function PostsIndex() {
   const admin = isAdmin(profile)
   const toast = useUIStore((s) => s.toast)
   const postsStore = usePostsStore()
-  const { width } = useWindowDimensions()
 
   const [buildMode, setBuildMode] = useState(false)
   const [editState, setEditState] = useState<EditState | null>(null)
@@ -57,9 +56,7 @@ export default function PostsIndex() {
   const { pages } = postsStore.config
 
   const PADDING = 16
-  const GAP = 12
-  const cardWidth = (width - PADDING * 2 - GAP) / 2
-  const cardHeight = Math.round(cardWidth * 0.68)
+  const GAP = 10
 
   const openEdit = (page?: PostPage) => {
     setConfirmDelete(false)
@@ -158,132 +155,77 @@ export default function PostsIndex() {
               </Text>
               <Text color={colors.textMuted} textAlign="center" fontSize="$3">
                 {admin
-                  ? 'Tap ⚙ Build in the top right to add your first Facebook page.'
+                  ? 'Tap ⚙ Build above to add your first Facebook page.'
                   : 'Check back soon for updates.'}
               </Text>
             </YStack>
-          ) : (
-            <XStack flexWrap="wrap" gap={GAP}>
-              {pages.map((page) => (
-                <Pressable key={page.id} onPress={() => handleCardPress(page)}>
-                  <View
-                    style={[
-                      styles.card,
-                      { width: cardWidth, height: cardHeight },
-                      buildMode && styles.cardBuildMode,
-                    ]}
-                  >
-                    {page.bgImage ? (
-                      <img
-                        src={page.bgImage}
-                        alt={page.label}
-                        style={styles.cardBg}
-                      />
-                    ) : (
-                      <View
-                        style={[
-                          styles.cardBg,
-                          { backgroundColor: colors.primary + '55' },
-                        ]}
-                      />
-                    )}
-
-                    {/* Dark overlay */}
-                    <View style={styles.cardOverlay} />
-
-                    {/* Bottom text area */}
-                    <View style={styles.cardText}>
-                      <Text
-                        color="white"
-                        fontWeight="700"
-                        fontSize={cardWidth > 160 ? 15 : 13}
-                        numberOfLines={2}
-                      >
-                        {page.label}
-                      </Text>
-                      {page.desc ? (
-                        <Text
-                          color="rgba(255,255,255,0.75)"
-                          fontSize={11}
-                          numberOfLines={1}
-                        >
-                          {page.desc}
-                        </Text>
-                      ) : null}
-                      {!page.fbPageId && admin ? (
-                        <Text color="rgba(255,200,100,0.9)" fontSize={10} fontWeight="600">
-                          ⚠ Facebook page not linked
-                        </Text>
-                      ) : null}
-                    </View>
-
-                    {/* Facebook badge when linked */}
-                    {page.fbPageId && !buildMode ? (
-                      <View style={styles.fbBadge}>
-                        <Text color="white" fontSize={10} fontWeight="700">
-                          f
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    {/* Build mode overlay */}
-                    {buildMode ? (
-                      <View style={styles.buildOverlay}>
-                        <View style={styles.editChip}>
-                          <Text color={colors.primary} fontSize={12} fontWeight="700">
-                            ✎ Edit
-                          </Text>
-                        </View>
-                      </View>
-                    ) : null}
-                  </View>
-                </Pressable>
-              ))}
-
-              {/* Add page card — only in build mode */}
-              {buildMode ? (
-                <Pressable onPress={() => openEdit()}>
-                  <View
-                    style={[
-                      styles.card,
-                      styles.addCard,
-                      {
-                        width: cardWidth,
-                        height: cardHeight,
-                        borderColor: colors.border,
-                        backgroundColor: colors.surface,
-                      },
-                    ]}
-                  >
-                    <Text color={colors.primary} fontSize={28} fontWeight="300">
-                      +
-                    </Text>
-                    <Text color={colors.textMuted} fontSize={12} marginTop={4}>
-                      Add Page
-                    </Text>
-                  </View>
-                </Pressable>
-              ) : null}
-            </XStack>
-          )}
-
-          {/* Build mode — add button when list is empty */}
-          {buildMode && pages.length === 0 ? (
-            <Pressable onPress={() => openEdit()}>
-              <YStack
-                borderWidth={2}
-                borderColor={colors.primary}
-                borderRadius="$3"
-                borderStyle="dashed"
-                padding="$6"
-                alignItems="center"
-                gap="$2"
-              >
-                <Text color={colors.primary} fontSize={28}>+</Text>
-                <Text color={colors.primary} fontWeight="600">Add your first page</Text>
-              </YStack>
-            </Pressable>
           ) : null}
+
+          <YStack gap={GAP}>
+            {pages.map((page) => (
+              <Pressable key={page.id} onPress={() => handleCardPress(page)}>
+                <View style={[styles.pill, buildMode && styles.pillBuildMode, { borderColor: colors.border }]}>
+                  {/* Left: photo panel */}
+                  <View style={styles.pillLeft}>
+                    {page.bgImage ? (
+                      <img src={page.bgImage} alt="" style={styles.pillImg as object} />
+                    ) : (
+                      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.primary + '77' }]} />
+                    )}
+                  </View>
+
+                  {/* Right: text panel */}
+                  <View style={[styles.pillRight, { backgroundColor: colors.surface }]}>
+                    <Text color={colors.text} fontWeight="700" fontSize={15} numberOfLines={1}>
+                      {page.label}
+                    </Text>
+                    {page.desc ? (
+                      <Text color={colors.textMuted} fontSize={12} numberOfLines={1} marginTop={2}>
+                        {page.desc}
+                      </Text>
+                    ) : null}
+                    {!page.fbPageId && admin ? (
+                      <Text style={{ color: 'rgba(255,160,30,1)', fontSize: 10, fontWeight: '600', marginTop: 3 }}>
+                        ⚠ Facebook page not linked
+                      </Text>
+                    ) : null}
+                    {page.fbPageId && !buildMode ? (
+                      <XStack gap={4} alignItems="center" marginTop={3}>
+                        <View style={styles.fbBadge}>
+                          <Text color="white" fontSize={9} fontWeight="700">f</Text>
+                        </View>
+                        <Text color={colors.textMuted} fontSize={10}>Facebook linked</Text>
+                      </XStack>
+                    ) : null}
+                  </View>
+
+                  {/* Build mode edit overlay */}
+                  {buildMode ? (
+                    <View style={styles.buildOverlay}>
+                      <View style={styles.editChip}>
+                        <Text color={colors.primary} fontSize={12} fontWeight="700">✎ Edit</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              </Pressable>
+            ))}
+
+            {/* Add page pill — build mode only */}
+            {buildMode ? (
+              <Pressable onPress={() => openEdit()}>
+                <XStack
+                  style={[styles.pill, { borderColor: colors.primary, backgroundColor: colors.surface, borderStyle: 'dashed', borderWidth: 2 }]}
+                  alignItems="center"
+                  justifyContent="center"
+                  gap={8}
+                >
+                  <Text color={colors.primary} fontSize={22} fontWeight="300">+</Text>
+                  <Text color={colors.primary} fontSize={14} fontWeight="600">Add Page</Text>
+                </XStack>
+              </Pressable>
+            ) : null}
+          </YStack>
         </YStack>
       </ScrollView>
 
@@ -474,42 +416,39 @@ export default function PostsIndex() {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: 14,
+  pill: {
+    borderRadius: 999,
+    overflow: 'hidden',
+    height: 82,
+    flexDirection: 'row',
+    borderWidth: 1,
+  },
+  pillBuildMode: {
+    opacity: 0.8,
+  },
+  pillLeft: {
+    width: 110,
+    height: 82,
     overflow: 'hidden',
     position: 'relative',
   },
-  cardBuildMode: {
-    opacity: 0.85,
-  },
-  cardBg: {
+  pillImg: {
     position: 'absolute' as const,
     top: 0,
     left: 0,
     width: '100%' as const,
     height: '100%' as const,
     objectFit: 'cover' as const,
-  } as object,
-  cardOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.38)',
   },
-  cardText: {
-    position: 'absolute',
-    bottom: 10,
-    left: 12,
-    right: 12,
+  pillRight: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    justifyContent: 'center',
   },
   fbBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
     backgroundColor: '#1877F2',
-    borderRadius: 4,
+    borderRadius: 3,
     paddingHorizontal: 5,
     paddingVertical: 2,
   },
@@ -528,12 +467,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 6,
-  },
-  addCard: {
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   overlay: {
     flex: 1,
