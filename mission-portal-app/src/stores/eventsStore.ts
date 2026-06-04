@@ -72,7 +72,11 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     const { getMemberUids } = useGroupsStore.getState()
     return all.filter((ev) => {
       if (ev.users?.some((x) => sameId(x, uid))) return true
-      if (ev.groups?.length) return getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid))
+      if (ev.groups?.length && getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid))) return true
+      if (ev.teams?.some((team) =>
+        team.leaders.some((m) => sameId(m, uid)) ||
+        team.members.some((m) => sameId(m, uid))
+      )) return true
       return false
     })
   },
@@ -87,7 +91,11 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     return allInstances(templates, overrides, today, to).filter((ev) => {
       const isAssigned =
         ev.users?.some((x) => sameId(x, uid)) ||
-        (ev.groups?.length ? getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)) : false)
+        (ev.groups?.length ? getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)) : false) ||
+        (ev.teams?.some((team) =>
+          team.leaders.some((m) => sameId(m, uid)) ||
+          team.members.some((m) => sameId(m, uid))
+        ) ?? false)
       if (!isAssigned) return false
       const response = avail[availKey(ev)]?.[uid]
       return !response || response.status === 'tbd'

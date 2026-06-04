@@ -34,13 +34,13 @@ function RsvpForm({
   const toast = useUIStore((s) => s.toast)
 
   const existing = avail[availKey(event)]?.[uid] ?? null
-  const [status, setStatus] = useState<AvailResponse['status']>(existing?.status ?? 'yes')
+  const [status, setStatus] = useState<AvailResponse['status'] | null>(existing?.status ?? null)
   const [note, setNote] = useState(existing?.note ?? '')
   const [saving, setSaving] = useState(false)
 
   const needsNote = status === 'partial' || status === 'tbd'
 
-  const handleSave = async (saveStatus: AvailResponse['status'] = status) => {
+  const handleSave = async (saveStatus: AvailResponse['status'] = status ?? 'tbd') => {
     setSaving(true)
     try {
       await setAvail(event, uid, saveStatus, note)
@@ -55,7 +55,9 @@ function RsvpForm({
   const handleStatusSelect = (s: AvailResponse['status']) => {
     setStatus(s)
     if (s !== 'partial' && s !== 'tbd') {
-      handleSave(s)
+      // advance card immediately; save runs in background
+      onSaved()
+      setAvail(event, uid, s, note).catch(() => toast('Failed to save RSVP', 'error'))
     }
   }
 
@@ -125,7 +127,7 @@ function RsvpForm({
           <XStack justifyContent="flex-end">
             <Pressable onPress={() => handleSave()} disabled={saving}>
               <XStack
-                backgroundColor={AVAIL_COLORS[status]}
+                backgroundColor={AVAIL_COLORS[status!]}
                 borderRadius="$2"
                 paddingHorizontal="$4"
                 paddingVertical="$2"
@@ -152,15 +154,19 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
   // pick mode: shown when queue is empty and user wants to edit an existing response
   const [pickMode, setPickMode] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<EventInstance | null>(null)
+  // keys responded to locally — prevents re-appearing if snapshot fires before write is confirmed
+  const [skipKeys, setSkipKeys] = useState<Set<string>>(new Set())
 
   const isAssignedToEvent = (ev: EventInstance) => {
     if (ev.users?.some((x) => sameId(x, uid))) return true
-    if (ev.groups?.length) {
-      return ev.groups.some((gid) => {
-        const group = groups.find((g) => g.id === gid)
-        return group?.members.some((m) => sameId(m, uid))
-      })
-    }
+    if (ev.groups?.some((gid) => {
+      const group = groups.find((g) => g.id === gid)
+      return group?.members.some((m) => sameId(m, uid))
+    })) return true
+    if (ev.teams?.some((team) =>
+      team.leaders.some((m) => sameId(m, uid)) ||
+      team.members.some((m) => sameId(m, uid))
+    )) return true
     return false
   }
 
@@ -170,11 +176,12 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
     const to = dateStr(60)
     return allInstances(templates, overrides, today, to).filter((ev) => {
       if (!isAssignedToEvent(ev)) return false
+      if (skipKeys.has(ev.instanceKey)) return false
       const r = avail[availKey(ev)]?.[uid]
       return !r || r.status === 'tbd'
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templates, overrides, avail, uid, groups])
+  }, [templates, overrides, avail, uid, groups, skipKeys])
 
   // All upcoming assigned events (for the picker)
   const allAssigned: EventInstance[] = useMemo(() => {
@@ -244,7 +251,7 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
           event={queue[0]}
           uid={uid}
           queueCount={queue.length}
-          onSaved={() => {}}
+          onSaved={() => setSkipKeys((p) => new Set([...p, queue[0].instanceKey]))}
         />
       ) : null}
 
