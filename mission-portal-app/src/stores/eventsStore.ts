@@ -225,8 +225,8 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     }))
     await setDoc(
       doc(db, 'avail', key),
-      { [`responses.${uid}`]: response, updatedAt: serverTimestamp() },
-      { merge: true }
+      { responses: { [uid]: response }, updatedAt: serverTimestamp() },
+      { mergeFields: [`responses.${uid}`, 'updatedAt'] }
     )
   },
 }))
