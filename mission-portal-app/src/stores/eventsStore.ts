@@ -126,12 +126,25 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     })
 
     const unsubAvail = onSnapshot(collection(db, 'avail'), (snap) => {
-      const avail: Record<string, Record<string, AvailResponse>> = {}
+      const snapAvail: Record<string, Record<string, AvailResponse>> = {}
       snap.docs.forEach((d) => {
         const data = d.data() as { responses?: Record<string, AvailResponse> }
-        avail[d.id] = data.responses ?? {}
+        snapAvail[d.id] = data.responses ?? {}
       })
-      set({ avail })
+      // Merge: keep local optimistic entries that are newer than what Firestore returned.
+      // This prevents a snapshot triggered by another user's write from wiping pending writes.
+      set((s) => {
+        const merged: Record<string, Record<string, AvailResponse>> = { ...snapAvail }
+        Object.entries(s.avail).forEach(([docKey, responses]) => {
+          Object.entries(responses).forEach(([respUid, local]) => {
+            const server = snapAvail[docKey]?.[respUid]
+            if (!server || local.ts > (server.ts ?? 0)) {
+              merged[docKey] = { ...(merged[docKey] ?? {}), [respUid]: local }
+            }
+          })
+        })
+        return { avail: merged }
+      })
     })
 
     set({ _unsubTemplates: unsubTemplates, _unsubAvail: unsubAvail })
