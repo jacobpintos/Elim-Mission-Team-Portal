@@ -11,6 +11,7 @@ const SECTIONS = [
   { label: 'Common Teams', path: '/(app)/admin/teams', icon: '🤝' },
   { label: 'Task Templates', path: '/(app)/admin/templates', icon: '📋' },
   { label: 'Leadership Team', path: '/(app)/admin/leadership', icon: '⭐' },
+  { label: 'Availability', path: '/(app)/admin/avail', icon: '📅' },
   { label: 'Audit Trail', path: '/(app)/admin/audit', icon: '🔍' },
   { label: 'Theme', path: '/(app)/admin/theme', icon: '🎨' },
   { label: 'Digests', path: '/(app)/admin/digests', icon: '📰' },
