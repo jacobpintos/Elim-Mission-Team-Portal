@@ -23,7 +23,7 @@ export const useUsersStore = create<UsersStore>((set, get) => ({
     if (get()._unsub) return
     set({ loading: true })
     const unsub = onSnapshot(collection(db, 'users'), (snap) => {
-      const users = snap.docs.map((d) => d.data() as UserProfile)
+      const users = snap.docs.map((d) => ({ ...(d.data() as UserProfile), uid: d.id }))
       set({ users, loading: false })
     })
     set({ _unsub: unsub })
