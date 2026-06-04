@@ -7,7 +7,6 @@ import { useUsersStore } from '@/stores/usersStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AVAIL_COLORS, AVAIL_LABELS } from '@/lib/availability'
 import { allInstances, todayStr, dateStr } from '@/lib/events'
-import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
 import type { AvailResponse } from '@/types/events'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -32,7 +31,7 @@ export default function AdminAvailScreen() {
     subscribe: subEvents,
     unsubscribe: unsubEvents,
   } = useEventsStore()
-  const { users, subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
+  const { users, loading: usersLoading, subscribe: subUsers, unsubscribe: unsubUsers, displayName } = useUsersStore()
 
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<ResponseFilter>('all')
@@ -57,9 +56,6 @@ export default function AdminAvailScreen() {
     return allInstances(templates, overrides, today, to).filter((ev) => (ev.users?.length ?? 0) > 0)
   }, [templates, overrides])
 
-  const displayName = (uid: string | number) =>
-    users.find((u) => sameId(u.uid, uid))?.displayName ?? String(uid)
-
   // Filter events by search and response filter
   const filteredEvents = useMemo(() => {
     return eventInstances.filter((ev) => {
@@ -69,7 +65,6 @@ export default function AdminAvailScreen() {
       if (ev.users?.some((uid) => displayName(uid).toLowerCase().includes(q))) return true
       return false
     })
-    // displayName is derived entirely from users which is already in deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventInstances, q, users])
 
@@ -109,6 +104,15 @@ export default function AdminAvailScreen() {
       else counts[r.status] = (counts[r.status] ?? 0) + 1
     })
     return counts
+  }
+
+  if (usersLoading && users.length === 0) {
+    return (
+      <YStack flex={1} backgroundColor={colors.background} alignItems="center" justifyContent="center">
+        <ScreenTitle options={{ title: 'Availability Tracker' }} />
+        <Text color={colors.textMuted}>Loading…</Text>
+      </YStack>
+    )
   }
 
   return (
