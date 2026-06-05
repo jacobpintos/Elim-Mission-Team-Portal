@@ -7,7 +7,7 @@ import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AVAIL_COLORS, AVAIL_LABELS } from '@/lib/availability'
-import { allInstances, todayStr } from '@/lib/events'
+import { allInstances } from '@/lib/events'
 import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
 import type { AvailResponse } from '@/types/events'
@@ -69,10 +69,9 @@ export default function AdminAvailScreen() {
     return Array.from(set)
   }
 
-  // All upcoming events that have at least one assigned person
+  // All events (past and future) that have at least one assigned person
   const eventInstances = useMemo(() => {
-    const today = todayStr()
-    return allInstances(templates, overrides, today, '9999-12-31').filter(
+    return allInstances(templates, overrides, '2000-01-01', '9999-12-31').filter(
       (ev) => getAssignedUids(ev).length > 0
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
