@@ -8,7 +8,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { FD } from '@/lib/format'
 import { openLocationInMaps, eventMapQuery } from '@/lib/location'
 import { downloadICS } from '@/lib/icsExport'
-import { availKey } from '@/lib/availability'
+import { availKey, effectiveAvail, getSeriesAvail } from '@/lib/availability'
 import { AvailBadge } from '@/components/ui/AvailBadge'
 import { useUIStore } from '@/stores/uiStore'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -587,7 +587,12 @@ export function EventDetailModal({
   const colors = useThemeColors()
   const toast = useUIStore((s) => s.toast)
   const { avail } = useEventsStore()
-  const myAvail = event ? (avail[availKey(event)]?.[uid] ?? null) : null
+  // For recurring events, show instance response if set, else fall back to series response
+  const myAvail = event ? effectiveAvail(avail, event, uid) : null
+  const instanceAvail = event ? (avail[availKey(event)]?.[uid] ?? null) : null
+  const hasSeriesResponse = event?.isRec
+    ? getSeriesAvail(avail, event.templateId ?? event.id, uid) !== null
+    : true
   const { users } = useUsersStore()
   const myDisplayName = users.find((u) => sameId(u.uid, uid))?.displayName ?? ''
   const { boards } = usePlanningStore()
@@ -773,8 +778,21 @@ export function EventDetailModal({
                   {myAvail.note}
                 </Text>
               ) : null}
+              {event.isRec && instanceAvail ? (
+                <Text color={colors.textMuted} fontSize={11}>
+                  (this date only)
+                </Text>
+              ) : event.isRec && myAvail ? (
+                <Text color={colors.textMuted} fontSize={11}>
+                  (series)
+                </Text>
+              ) : null}
             </XStack>
-            {onAvail ? (
+            {event.isRec && !hasSeriesResponse ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                Set your series availability in the banner above first.
+              </Text>
+            ) : onAvail ? (
               <Pressable onPress={onAvail}>
                 <XStack
                   borderWidth={1}
@@ -785,7 +803,11 @@ export function EventDetailModal({
                   alignSelf="flex-start"
                 >
                   <Text color={colors.primary} fontWeight="600" fontSize="$3">
-                    {myAvail ? 'Change RSVP' : 'Set RSVP'}
+                    {instanceAvail
+                      ? 'Change This Date'
+                      : myAvail
+                      ? 'Override This Date'
+                      : 'Set RSVP'}
                   </Text>
                 </XStack>
               </Pressable>
