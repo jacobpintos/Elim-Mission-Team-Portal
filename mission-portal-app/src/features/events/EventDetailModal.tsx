@@ -17,6 +17,7 @@ import { useUsersStore } from '@/stores/usersStore'
 import { sameId } from '@/lib/ids'
 import { PlanningBoardCanvas } from '@/features/planning/PlanningBoardCanvas'
 import type { EventInstance } from '@/types/events'
+import { fetchWeather, type WeatherData } from '@/lib/weather'
 
 interface FoodSignupEntry {
   uid: string
@@ -600,6 +601,14 @@ export function EventDetailModal({
     ? boards.find((b) => sameId(b.id, event.planningBoardId!))
     : null
   const [showBoard, setShowBoard] = useState(false)
+  const [weather, setWeather] = useState<WeatherData | null>(null)
+
+  useEffect(() => {
+    if (!open || !event?._geocodeLat || !event?._geocodeLng || !event?.date || event?.isVirtual) return
+    if (!isMember && !isAdmin) return
+    setWeather(null)
+    fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then(setWeather)
+  }, [open, event?.date, event?._geocodeLat, event?._geocodeLng, isMember, isAdmin])
 
   const handleExportICS = async () => {
     if (!event) return
@@ -646,6 +655,29 @@ export function EventDetailModal({
             </Text>
           ) : null}
         </YStack>
+
+        {/* Weather forecast */}
+        {weather ? (
+          <XStack
+            backgroundColor={colors.surface}
+            borderRadius="$2"
+            padding="$2"
+            borderWidth={1}
+            borderColor={colors.border}
+            alignItems="center"
+            gap="$3"
+          >
+            <Text fontSize={24}>{weather.icon}</Text>
+            <YStack flex={1}>
+              <Text color={colors.text} fontSize="$3" fontWeight="600">
+                {weather.label}
+              </Text>
+              <Text color={colors.textMuted} fontSize="$2">
+                {weather.high}°F / {weather.low}°F · {weather.precipPct}% chance of rain
+              </Text>
+            </YStack>
+          </XStack>
+        ) : null}
 
         {/* Location */}
         {event.location || event.address || event.city ? (

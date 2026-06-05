@@ -1,9 +1,11 @@
+import { useState, useEffect } from 'react'
 import { Pressable, Linking } from 'react-native'
 import { XStack, YStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { FD } from '@/lib/format'
 import { openLocationInMaps, eventMapQuery } from '@/lib/location'
 import { AvailBadge } from './AvailBadge'
+import { fetchWeather, type WeatherData } from '@/lib/weather'
 import type { EventInstance, AvailResponse } from '@/types/events'
 
 interface EventCardProps {
@@ -14,6 +16,7 @@ interface EventCardProps {
   healthStatus?: 'on-track' | 'behind' | 'no-tasks'
   onShowTasks?: () => void
   mini?: boolean
+  isPublic?: boolean
 }
 
 export function EventCard({
@@ -24,8 +27,15 @@ export function EventCard({
   healthStatus,
   onShowTasks,
   mini,
+  isPublic,
 }: EventCardProps) {
   const colors = useThemeColors()
+  const [weather, setWeather] = useState<WeatherData | null>(null)
+
+  useEffect(() => {
+    if (isPublic || !event._geocodeLat || !event._geocodeLng || !event.date || event.isVirtual) return
+    fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then(setWeather)
+  }, [event._geocodeLat, event._geocodeLng, event.date, event.isVirtual, isPublic])
 
   const healthBadge =
     healthStatus === 'on-track'
@@ -74,7 +84,17 @@ export function EventCard({
             </Pressable>
           ) : null}
         </YStack>
-        {myAvail ? <AvailBadge status={myAvail.status} size="sm" /> : null}
+        <YStack alignItems="flex-end" gap="$1">
+          {myAvail ? <AvailBadge status={myAvail.status} size="sm" /> : null}
+          {weather ? (
+            <XStack alignItems="center" gap="$1">
+              <Text fontSize={13}>{weather.icon}</Text>
+              <Text color={colors.textMuted} fontSize={11}>
+                {weather.high}°/{weather.low}°
+              </Text>
+            </XStack>
+          ) : null}
+        </YStack>
       </XStack>
 
       {/* Health badge */}
