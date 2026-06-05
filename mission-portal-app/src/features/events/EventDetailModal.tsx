@@ -606,7 +606,6 @@ export function EventDetailModal({
   useEffect(() => {
     if (!open || !event?._geocodeLat || !event?._geocodeLng || !event?.date || event?.isVirtual) return
     if (!isMember && !isAdmin) return
-    setWeather(null)
     fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then(setWeather)
   }, [open, event?.date, event?._geocodeLat, event?._geocodeLng, isMember, isAdmin])
 
