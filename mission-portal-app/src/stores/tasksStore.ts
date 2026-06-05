@@ -46,7 +46,15 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   loading: false,
   _unsub: null,
 
-  myTasks: (uid) => get().tasks.filter((t) => t.assignees.some((a) => sameId(a, uid))),
+  myTasks: (uid) => {
+    const today = todayStr()
+    return get().tasks.filter((t) => {
+      if (!t.assignees.some((a) => sameId(a, uid))) return false
+      // Hide pre-event tasks once the event date has passed
+      if (t.evDate && !t.isPostEvent && t.evDate < today) return false
+      return true
+    })
+  },
   eventTasks: (templateId) =>
     get().tasks.filter((t) => sameId(t.evId ?? t.evTemplateId, templateId)),
   overdueTasks: (uid) =>
@@ -115,8 +123,10 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     set((s) => ({
       tasks: s.tasks.map((t) => (sameId(t.id, id) ? { ...t, status } : t)),
     }))
+    const extra = status === 'done' ? { doneAt: serverTimestamp() } : {}
     await updateDoc(doc(db, 'tasks', String(id)), {
       status,
+      ...extra,
       _updatedAt: serverTimestamp(),
     })
   },

@@ -250,11 +250,18 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
             const eventDate = form.isRec ? null : displayToIso(form.date) || null
             for (const taskItem of tpl.tasks ?? []) {
               if (!taskItem.title.trim()) continue
+              const isPostEvent = (taskItem.daysAfterEvent ?? 0) > 0
               let dueDate: string | null = null
-              if (eventDate && taskItem.daysBefore > 0) {
-                const d = new Date(eventDate)
-                d.setDate(d.getDate() - taskItem.daysBefore)
-                dueDate = d.toISOString().split('T')[0]
+              if (eventDate) {
+                if (isPostEvent) {
+                  const d = new Date(eventDate)
+                  d.setDate(d.getDate() + (taskItem.daysAfterEvent ?? 1))
+                  dueDate = d.toISOString().split('T')[0]
+                } else if (taskItem.daysBefore > 0) {
+                  const d = new Date(eventDate)
+                  d.setDate(d.getDate() - taskItem.daysBefore)
+                  dueDate = d.toISOString().split('T')[0]
+                }
               }
               await createTask({
                 title: taskItem.title,
@@ -265,6 +272,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
                 evTemplateId: newEventId,
                 evDate: eventDate,
                 dueDate,
+                ...(isPostEvent ? { isPostEvent: true } : {}),
               })
             }
           }

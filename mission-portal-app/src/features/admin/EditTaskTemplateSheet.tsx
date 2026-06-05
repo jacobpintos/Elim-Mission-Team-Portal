@@ -76,7 +76,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
       ...prev,
       [sectionId]: [
         ...(prev[sectionId] ?? []),
-        { title: '', assignees: [], daysBefore: 7, section: sectionId },
+        { title: '', assignees: [], daysBefore: 7, daysAfterEvent: undefined, section: sectionId },
       ],
     }))
     setExpandedSections((prev) => ({ ...prev, [sectionId]: true }))
@@ -232,22 +232,62 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                           size="$3"
                         />
 
-                        <XStack alignItems="center" gap="$2">
-                          <Text fontSize="$2" color="$gray10">
-                            Days before:
-                          </Text>
-                          <Input
-                            placeholder="7"
-                            value={String(task.daysBefore)}
-                            onChangeText={(v) =>
-                              updateTask(section.id, index, {
-                                daysBefore: parseInt(v) || 0,
-                              })
-                            }
-                            keyboardType="numeric"
-                            size="$3"
-                            width={80}
-                          />
+                        <XStack alignItems="center" gap="$2" flexWrap="wrap">
+                          {/* Before / After toggle */}
+                          <XStack borderWidth={1} borderColor="$borderColor" borderRadius="$2" overflow="hidden">
+                            {(['before', 'after'] as const).map((side) => {
+                              const active = side === 'after'
+                                ? (task.daysAfterEvent ?? 0) > 0
+                                : !(task.daysAfterEvent && task.daysAfterEvent > 0)
+                              return (
+                                <Pressable
+                                  key={side}
+                                  onPress={() => {
+                                    if (side === 'after') {
+                                      updateTask(section.id, index, { daysAfterEvent: task.daysAfterEvent || 1, daysBefore: 0 })
+                                    } else {
+                                      updateTask(section.id, index, { daysAfterEvent: undefined, daysBefore: task.daysBefore || 7 })
+                                    }
+                                  }}
+                                >
+                                  <XStack
+                                    paddingHorizontal="$2"
+                                    paddingVertical="$1"
+                                    backgroundColor={active ? '$blue9' : 'transparent'}
+                                  >
+                                    <Text fontSize="$2" color={active ? 'white' : '$gray10'} fontWeight={active ? '700' : '400'}>
+                                      {side === 'before' ? 'Before' : 'After'}
+                                    </Text>
+                                  </XStack>
+                                </Pressable>
+                              )
+                            })}
+                          </XStack>
+                          {(task.daysAfterEvent ?? 0) > 0 ? (
+                            <>
+                              <Input
+                                placeholder="1"
+                                value={String(task.daysAfterEvent ?? 1)}
+                                onChangeText={(v) => updateTask(section.id, index, { daysAfterEvent: parseInt(v) || 1 })}
+                                keyboardType="numeric"
+                                size="$3"
+                                width={70}
+                              />
+                              <Text fontSize="$2" color="$gray10">days after event</Text>
+                            </>
+                          ) : (
+                            <>
+                              <Input
+                                placeholder="7"
+                                value={String(task.daysBefore)}
+                                onChangeText={(v) => updateTask(section.id, index, { daysBefore: parseInt(v) || 0 })}
+                                keyboardType="numeric"
+                                size="$3"
+                                width={70}
+                              />
+                              <Text fontSize="$2" color="$gray10">days before event</Text>
+                            </>
+                          )}
                         </XStack>
 
                         <MemberPicker

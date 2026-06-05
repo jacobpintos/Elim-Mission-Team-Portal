@@ -96,6 +96,8 @@ export interface Task {
   kaizenId?: string | number
   issueId?: string | number
   setListId?: string | number
+  isPostEvent?: boolean
+  doneAt?: unknown
   _updatedAt?: unknown
 }
 

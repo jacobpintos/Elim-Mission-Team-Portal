@@ -13,6 +13,7 @@ export interface TaskItem {
   title: string
   assignees: string[]
   daysBefore: number
+  daysAfterEvent?: number
   section: string
 }
 
