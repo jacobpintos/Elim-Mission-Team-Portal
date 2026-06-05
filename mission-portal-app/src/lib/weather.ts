@@ -45,11 +45,17 @@ export async function fetchWeather(
       `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode` +
       `&temperature_unit=fahrenheit&timezone=auto&forecast_days=16`
     const res = await fetch(url)
-    if (!res.ok) { cache.set(key, null); return null }
+    if (!res.ok) {
+      cache.set(key, null)
+      return null
+    }
     const json = await res.json()
     const dates: string[] = json.daily?.time ?? []
     const idx = dates.indexOf(date)
-    if (idx < 0) { cache.set(key, null); return null }
+    if (idx < 0) {
+      cache.set(key, null)
+      return null
+    }
     const high = Math.round(json.daily.temperature_2m_max[idx])
     const low = Math.round(json.daily.temperature_2m_min[idx])
     const precipPct = json.daily.precipitation_probability_max[idx] ?? 0
