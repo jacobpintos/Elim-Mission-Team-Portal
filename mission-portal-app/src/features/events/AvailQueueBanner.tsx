@@ -6,7 +6,7 @@ import { useGroupsStore } from '@/stores/groupsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AVAIL_LABELS, AVAIL_COLORS, availKey } from '@/lib/availability'
-import { allInstances, todayStr, dateStr } from '@/lib/events'
+import { allInstances, todayStr } from '@/lib/events'
 import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
 import type { AvailResponse, EventInstance } from '@/types/events'
@@ -173,8 +173,7 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
   // Events with missing/TBD responses (the queue)
   const queue: EventInstance[] = useMemo(() => {
     const today = todayStr()
-    const to = dateStr(60)
-    return allInstances(templates, overrides, today, to).filter((ev) => {
+    return allInstances(templates, overrides, today, '9999-12-31').filter((ev) => {
       if (!isAssignedToEvent(ev)) return false
       if (skipKeys.has(ev.instanceKey)) return false
       const r = avail[availKey(ev)]?.[uid]
@@ -186,8 +185,7 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
   // All upcoming assigned events (for the picker)
   const allAssigned: EventInstance[] = useMemo(() => {
     const today = todayStr()
-    const to = dateStr(60)
-    return allInstances(templates, overrides, today, to).filter((ev) => isAssignedToEvent(ev))
+    return allInstances(templates, overrides, today, '9999-12-31').filter((ev) => isAssignedToEvent(ev))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templates, overrides, uid, groups])
 

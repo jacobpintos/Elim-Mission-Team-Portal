@@ -83,9 +83,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
 
   pendingAvailEvents: (uid) => {
     const today = new Date().toISOString().split('T')[0]
-    const in60 = new Date()
-    in60.setDate(in60.getDate() + 60)
-    const to = in60.toISOString().split('T')[0]
+    const to = '9999-12-31'
     const { templates, overrides, avail } = get()
     const { getMemberUids } = useGroupsStore.getState()
     return allInstances(templates, overrides, today, to).filter((ev) => {

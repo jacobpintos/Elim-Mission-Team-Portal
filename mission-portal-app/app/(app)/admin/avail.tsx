@@ -4,9 +4,11 @@ import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
+import { useGroupsStore } from '@/stores/groupsStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AVAIL_COLORS, AVAIL_LABELS } from '@/lib/availability'
-import { allInstances, todayStr, dateStr } from '@/lib/events'
+import { allInstances, todayStr } from '@/lib/events'
+import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
 import type { AvailResponse } from '@/types/events'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -32,6 +34,7 @@ export default function AdminAvailScreen() {
     unsubscribe: unsubEvents,
   } = useEventsStore()
   const { users, loading: usersLoading, subscribe: subUsers, unsubscribe: unsubUsers, displayName } = useUsersStore()
+  const { groups, subscribe: subGroups, unsubscribe: unsubGroups } = useGroupsStore()
 
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<ResponseFilter>('all')
@@ -40,21 +43,40 @@ export default function AdminAvailScreen() {
   useEffect(() => {
     subEvents()
     subUsers()
+    subGroups()
     return () => {
       unsubEvents()
       unsubUsers()
+      unsubGroups()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const q = search.trim().toLowerCase()
 
-  // Events in the next 60 days that have at least one assigned user
+  // Collect all uids assigned to an event (users + groups + teams)
+  const getAssignedUids = (ev: ReturnType<typeof allInstances>[0]): string[] => {
+    const set = new Set<string>()
+    ev.users?.forEach((uid) => set.add(String(uid)))
+    ev.groups?.forEach((gid) => {
+      const group = groups.find((g) => sameId(g.id, gid))
+      group?.members.forEach((m) => set.add(String(m)))
+    })
+    ev.teams?.forEach((team) => {
+      team.leaders.forEach((m) => set.add(String(m)))
+      team.members.forEach((m) => set.add(String(m)))
+    })
+    return Array.from(set)
+  }
+
+  // All upcoming events that have at least one assigned person
   const eventInstances = useMemo(() => {
     const today = todayStr()
-    const to = dateStr(60)
-    return allInstances(templates, overrides, today, to).filter((ev) => (ev.users?.length ?? 0) > 0)
-  }, [templates, overrides])
+    return allInstances(templates, overrides, today, '9999-12-31').filter(
+      (ev) => getAssignedUids(ev).length > 0
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates, overrides, groups])
 
   // Filter events by search and response filter
   const filteredEvents = useMemo(() => {
@@ -62,22 +84,21 @@ export default function AdminAvailScreen() {
       if (!q) return true
       if (ev.title.toLowerCase().includes(q)) return true
       if (ev.location?.toLowerCase().includes(q)) return true
-      if (ev.users?.some((uid) => displayName(uid).toLowerCase().includes(q))) return true
+      if (getAssignedUids(ev).some((uid) => displayName(uid).toLowerCase().includes(q))) return true
       return false
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventInstances, q, users])
+  }, [eventInstances, q, users, groups])
 
   const getResponseForUser = (instanceKey: string, uid: string | number): AvailResponse | null => {
     return avail[instanceKey]?.[String(uid)] ?? null
   }
 
   const getUsersForEvent = (ev: (typeof eventInstances)[0]) => {
-    if (!ev.users || ev.users.length === 0) return []
-    return ev.users
+    return getAssignedUids(ev)
       .map((uid) => {
         const r = getResponseForUser(ev.instanceKey, uid)
-        return { uid: String(uid), name: displayName(uid), response: r }
+        return { uid, name: displayName(uid), response: r }
       })
       .filter(({ response }) => {
         if (filter === 'all') return true
@@ -98,7 +119,7 @@ export default function AdminAvailScreen() {
   // Summary counts for an event
   const summarize = (ev: (typeof eventInstances)[0]) => {
     const counts: Record<string, number> = { yes: 0, no: 0, partial: 0, tbd: 0, none: 0 }
-    ev.users?.forEach((uid) => {
+    getAssignedUids(ev).forEach((uid) => {
       const r = getResponseForUser(ev.instanceKey, uid)
       if (!r) counts.none++
       else counts[r.status] = (counts[r.status] ?? 0) + 1
