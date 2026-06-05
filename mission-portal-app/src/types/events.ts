@@ -71,6 +71,7 @@ export interface AvailResponse {
   note: string
   uid: string
   ts: number
+  source?: 'instance' | 'series'
 }
 
 export interface AvailDoc {

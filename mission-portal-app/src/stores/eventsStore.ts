@@ -6,16 +6,20 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
+  arrayUnion,
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { geocodeCity } from '@/lib/geocode'
 import { allInstances } from '@/lib/events'
-import { availKey } from '@/lib/availability'
+import { availKey, seriesAvailKey, getSeriesAvail } from '@/lib/availability'
+import { AVAIL_LABELS } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { nextId } from '@/lib/counters'
 import { useGroupsStore } from '@/stores/groupsStore'
-import type { EventTemplate, EventInstance, AvailResponse } from '@/types/events'
+import { useUsersStore } from '@/stores/usersStore'
+import type { EventTemplate, EventInstance, AvailResponse, InAppNotif } from '@/types/events'
 
 interface EventsStore {
   templates: EventTemplate[]
@@ -29,6 +33,11 @@ interface EventsStore {
   instances: (from: string, to: string) => EventInstance[]
   myInstances: (uid: string, from: string, to: string) => EventInstance[]
   pendingAvailEvents: (uid: string) => EventInstance[]
+  checkSeriesConflicts: (
+    templateId: string | number,
+    uid: string,
+    newStatus: AvailResponse['status']
+  ) => EventInstance[]
   // actions
   subscribe: () => void
   unsubscribe: () => void
@@ -43,6 +52,13 @@ interface EventsStore {
     status: AvailResponse['status'] | null,
     note?: string
   ) => Promise<void>
+  setSeriesAvail: (
+    templateId: string | number,
+    uid: string,
+    status: AvailResponse['status'] | null,
+    note: string,
+    forceOverrideKeys?: string[]
+  ) => Promise<void>
 }
 
 async function resolveGeo(city?: string, state?: string) {
@@ -50,6 +66,53 @@ async function resolveGeo(city?: string, state?: string) {
   const coords = await geocodeCity(city, state)
   if (!coords) return {}
   return { lat: coords.lat, lng: coords.lng, _geocodeLat: coords.lat, _geocodeLng: coords.lng }
+}
+
+async function notifyAssignedAdmins(
+  ev: EventInstance,
+  changerUid: string,
+  newStatus: AvailResponse['status']
+) {
+  const { users } = useUsersStore.getState()
+  const { groups } = useGroupsStore.getState()
+
+  const assignedUids = new Set<string>()
+  ev.users?.forEach((u) => assignedUids.add(String(u)))
+  ev.groups?.forEach((gid) => {
+    const grp = groups.find((g) => sameId(g.id, gid))
+    grp?.members.forEach((m) => assignedUids.add(String(m)))
+  })
+  ev.teams?.forEach((team) => {
+    team.leaders.forEach((m) => assignedUids.add(String(m)))
+    team.members.forEach((m) => assignedUids.add(String(m)))
+  })
+
+  const changer = users.find((u) => sameId(u.uid, changerUid))
+  const changerName = changer?.displayName || changer?.email || changerUid
+
+  const adminsToNotify = users.filter(
+    (u) =>
+      u.roles?.includes('admin') &&
+      String(u.uid) !== String(changerUid) &&
+      assignedUids.has(u.uid)
+  )
+
+  if (adminsToNotify.length === 0) return
+
+  const notif: InAppNotif = {
+    id: `avail_${Date.now()}`,
+    msg: `${changerName} is ${AVAIL_LABELS[newStatus].toLowerCase()} for ${ev.title}${ev.isRec ? ` (${ev.date})` : ''}`,
+    ts: Date.now(),
+    type: 'avail',
+    read: false,
+    link: '/(app)/events',
+  }
+
+  await Promise.all(
+    adminsToNotify.map((u) =>
+      setDoc(doc(db, 'notifs', String(u.uid)), { items: arrayUnion(notif) }, { merge: true })
+    )
+  )
 }
 
 export const useEventsStore = create<EventsStore>((set, get) => ({
@@ -95,8 +158,30 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
           team.members.some((m) => sameId(m, uid))
         ) ?? false)
       if (!isAssigned) return false
+
+      // For recurring: check series response
+      if (ev.isRec) {
+        const seriesResp = getSeriesAvail(avail, ev.templateId ?? ev.id, uid)
+        return !seriesResp || seriesResp.status === 'tbd'
+      }
+      // For one-time: check instance response
       const response = avail[availKey(ev)]?.[uid]
       return !response || response.status === 'tbd'
+    })
+  },
+
+  checkSeriesConflicts: (templateId, uid, newStatus) => {
+    const today = new Date().toISOString().split('T')[0]
+    const { templates, overrides, avail } = get()
+    const tmpl = templates.find((t) => sameId(t.id, templateId))
+    if (!tmpl) return []
+
+    return allInstances([tmpl], overrides, today, '9999-12-31').filter((ev) => {
+      const existing = avail[availKey(ev)]?.[uid]
+      if (!existing) return false
+      // Treat no-source responses as manually set (pre-dates series system)
+      const isManual = !existing.source || existing.source === 'instance'
+      return isManual && existing.status !== newStatus
     })
   },
 
@@ -130,7 +215,6 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
         snapAvail[d.id] = data.responses ?? {}
       })
       // Merge: keep local optimistic entries that are newer than what Firestore returned.
-      // This prevents a snapshot triggered by another user's write from wiping pending writes.
       set((s) => {
         const merged: Record<string, Record<string, AvailResponse>> = { ...snapAvail }
         Object.entries(s.avail).forEach(([docKey, responses]) => {
@@ -186,7 +270,6 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   },
 
   setOverride: async (instanceKey, patch) => {
-    // instanceKey = `${templateId}_${date}`, extract templateId
     const parts = instanceKey.split('_')
     const templateId = parts[0]
     await updateDoc(doc(db, 'events', templateId), {
@@ -197,8 +280,9 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
 
   setAvail: async (ev, uid, status, note = '') => {
     const key = availKey(ev).replace(/\//g, '_')
+    const prevResponse = get().avail[key]?.[uid] ?? null
+
     if (!status) {
-      // Remove availability — use FieldValue.delete() equivalent: set field to null
       set((s) => {
         const avail = { ...s.avail }
         if (avail[key]) {
@@ -213,8 +297,8 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       })
       return
     }
-    const response: AvailResponse = { status, note, uid, ts: Date.now() }
-    // Optimistic
+
+    const response: AvailResponse = { status, note, uid, ts: Date.now(), source: 'instance' }
     set((s) => ({
       avail: {
         ...s.avail,
@@ -226,5 +310,91 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       { responses: { [uid]: response }, updatedAt: serverTimestamp() },
       { mergeFields: [`responses.${uid}`, 'updatedAt'] }
     )
+
+    // Notify admins only when changing from a previously-set value
+    if (prevResponse && prevResponse.status !== status) {
+      notifyAssignedAdmins(ev, uid, status).catch(() => {})
+    }
+  },
+
+  setSeriesAvail: async (templateId, uid, status, note = '', forceOverrideKeys = []) => {
+    const key = seriesAvailKey(templateId)
+    // Capture prev BEFORE optimistic update so notification check is correct
+    const prevSeriesResp = get().avail[key]?.[uid] ?? null
+
+    if (!status) {
+      set((s) => {
+        const avail = { ...s.avail }
+        if (avail[key]) {
+          const { [uid]: _removed, ...rest } = avail[key]
+          avail[key] = rest
+        }
+        return { avail }
+      })
+      await updateDoc(doc(db, 'avail', key), {
+        [`responses.${uid}`]: null,
+        updatedAt: serverTimestamp(),
+      })
+      return
+    }
+
+    const seriesResponse: AvailResponse = { status, note, uid, ts: Date.now(), source: 'series' }
+
+    // Optimistic update for series
+    set((s) => ({
+      avail: {
+        ...s.avail,
+        [key]: { ...(s.avail[key] ?? {}), [uid]: seriesResponse },
+      },
+    }))
+
+    await setDoc(
+      doc(db, 'avail', key),
+      { responses: { [uid]: seriesResponse }, updatedAt: serverTimestamp() },
+      { mergeFields: [`responses.${uid}`, 'updatedAt'] }
+    )
+
+    // Delete confirmed override instance responses so they fall back to series
+    const today = new Date().toISOString().split('T')[0]
+    const { templates, overrides, avail: currentAvail } = get()
+    const tmpl = templates.find((t) => sameId(t.id, templateId))
+
+    if (tmpl) {
+      const instances = allInstances([tmpl], overrides, today, '9999-12-31')
+
+      if (forceOverrideKeys.length > 0) {
+        const deletes: string[] = []
+        for (const instanceKey of forceOverrideKeys) {
+          if (currentAvail[instanceKey]?.[uid]) deletes.push(instanceKey)
+        }
+
+        if (deletes.length > 0) {
+          set((s) => {
+            const newAvail = { ...s.avail }
+            deletes.forEach((instKey) => {
+              if (newAvail[instKey]) {
+                const { [uid]: _, ...rest } = newAvail[instKey]
+                newAvail[instKey] = rest
+              }
+            })
+            return { avail: newAvail }
+          })
+
+          await Promise.all(
+            deletes.map((instKey) =>
+              updateDoc(doc(db, 'avail', instKey), {
+                [`responses.${uid}`]: deleteField(),
+                updatedAt: serverTimestamp(),
+              }).catch(() => {})
+            )
+          )
+        }
+      }
+
+      // Notify assigned admins when changing from a previously-set series response
+      if (prevSeriesResp && prevSeriesResp.status !== status && instances.length > 0) {
+        notifyAssignedAdmins(instances[0], uid, status).catch(() => {})
+      }
+    }
   },
 }))
