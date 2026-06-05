@@ -15,6 +15,7 @@ interface EventCardProps {
   onAvail?: () => void
   healthStatus?: 'on-track' | 'behind' | 'no-tasks'
   onShowTasks?: () => void
+  onWeatherPress?: () => void
   mini?: boolean
   isPublic?: boolean
 }
@@ -26,6 +27,7 @@ export function EventCard({
   onAvail,
   healthStatus,
   onShowTasks,
+  onWeatherPress,
   mini,
   isPublic,
 }: EventCardProps) {
@@ -87,12 +89,23 @@ export function EventCard({
         <YStack alignItems="flex-end" gap="$1">
           {myAvail ? <AvailBadge status={myAvail.status} size="sm" /> : null}
           {weather ? (
-            <XStack alignItems="center" gap="$1">
-              <Text fontSize={13}>{weather.icon}</Text>
-              <Text color={colors.textMuted} fontSize={11}>
-                {weather.high}°/{weather.low}°
-              </Text>
-            </XStack>
+            <Pressable onPress={onWeatherPress}>
+              <XStack
+                alignItems="center"
+                gap="$1"
+                backgroundColor={onWeatherPress ? colors.surface : undefined}
+                borderRadius={99}
+                paddingHorizontal={onWeatherPress ? 6 : 0}
+                paddingVertical={onWeatherPress ? 2 : 0}
+                borderWidth={onWeatherPress ? 1 : 0}
+                borderColor={colors.border}
+              >
+                <Text fontSize={13}>{weather.icon}</Text>
+                <Text color={colors.textMuted} fontSize={11}>
+                  {weather.high}°/{weather.low}°
+                </Text>
+              </XStack>
+            </Pressable>
           ) : null}
         </YStack>
       </XStack>

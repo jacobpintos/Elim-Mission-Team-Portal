@@ -17,7 +17,8 @@ import { useUsersStore } from '@/stores/usersStore'
 import { sameId } from '@/lib/ids'
 import { PlanningBoardCanvas } from '@/features/planning/PlanningBoardCanvas'
 import type { EventInstance } from '@/types/events'
-import { fetchWeather, type WeatherData } from '@/lib/weather'
+import { fetchWeather, fetchNWSAlerts, type WeatherData, type NWSAlert } from '@/lib/weather'
+import { WeatherDetailSheet } from './WeatherDetailSheet'
 
 interface FoodSignupEntry {
   uid: string
@@ -602,11 +603,14 @@ export function EventDetailModal({
     : null
   const [showBoard, setShowBoard] = useState(false)
   const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [alerts, setAlerts] = useState<NWSAlert[]>([])
+  const [showWeather, setShowWeather] = useState(false)
 
   useEffect(() => {
     if (!open || !event?._geocodeLat || !event?._geocodeLng || !event?.date || event?.isVirtual) return
     if (!isMember && !isAdmin) return
     fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then(setWeather)
+    fetchNWSAlerts(event._geocodeLat, event._geocodeLng).then(setAlerts)
   }, [open, event?.date, event?._geocodeLat, event?._geocodeLng, isMember, isAdmin])
 
   const handleExportICS = async () => {
@@ -621,6 +625,7 @@ export function EventDetailModal({
   if (!event) return null
 
   return (
+    <>
     <Modal
       open={open}
       onOpenChange={(v) => {
@@ -657,25 +662,42 @@ export function EventDetailModal({
 
         {/* Weather forecast */}
         {weather ? (
-          <XStack
-            backgroundColor={colors.surface}
-            borderRadius="$2"
-            padding="$2"
-            borderWidth={1}
-            borderColor={colors.border}
-            alignItems="center"
-            gap="$3"
-          >
-            <Text fontSize={24}>{weather.icon}</Text>
-            <YStack flex={1}>
-              <Text color={colors.text} fontSize="$3" fontWeight="600">
-                {weather.label}
-              </Text>
-              <Text color={colors.textMuted} fontSize="$2">
-                {weather.high}°F / {weather.low}°F · {weather.precipPct}% chance of rain
-              </Text>
-            </YStack>
-          </XStack>
+          <Pressable onPress={() => setShowWeather(true)}>
+            <XStack
+              backgroundColor={colors.surface}
+              borderRadius="$2"
+              padding="$2"
+              borderWidth={1}
+              borderColor={alerts.length > 0 ? '#e74c3c' : colors.border}
+              alignItems="center"
+              gap="$3"
+            >
+              <Text fontSize={24}>{weather.icon}</Text>
+              <YStack flex={1}>
+                <Text color={colors.text} fontSize="$3" fontWeight="600">
+                  {weather.label}
+                </Text>
+                <Text color={colors.textMuted} fontSize="$2">
+                  {weather.high}°F / {weather.low}°F · {weather.precipPct}% chance of rain
+                </Text>
+              </YStack>
+              {alerts.length > 0 ? (
+                <XStack
+                  backgroundColor="#e74c3c"
+                  borderRadius={99}
+                  paddingHorizontal={8}
+                  paddingVertical={3}
+                  alignItems="center"
+                  gap="$1"
+                >
+                  <Text color="white" fontSize={11} fontWeight="700">
+                    ⚠ {alerts.length}
+                  </Text>
+                </XStack>
+              ) : null}
+              <Text color={colors.textMuted} fontSize="$2">›</Text>
+            </XStack>
+          </Pressable>
         ) : null}
 
         {/* Location */}
@@ -920,5 +942,14 @@ export function EventDetailModal({
         onClose={() => setShowBoard(false)}
       />
     </Modal>
+
+    {event ? (
+      <WeatherDetailSheet
+        open={showWeather}
+        onClose={() => setShowWeather(false)}
+        event={event}
+      />
+    ) : null}
+  </>
   )
 }

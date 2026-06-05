@@ -11,6 +11,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { EventCard } from '@/components/ui/EventCard'
 import { NotificationRow } from '@/components/ui/NotificationRow'
 import { EventDetailModal } from '@/features/events/EventDetailModal'
+import { WeatherDetailSheet } from '@/features/events/WeatherDetailSheet'
 import { AvailModal } from '@/features/events/AvailModal'
 import { EventKanban } from '@/features/events/EventKanban'
 import { todayStr, dateStr } from '@/lib/events'
@@ -38,6 +39,7 @@ export default function Dashboard() {
   const [detailEvent, setDetailEvent] = useState<EventInstance | null>(null)
   const [availEvent, setAvailEvent] = useState<EventInstance | null>(null)
   const [kanbanEvent, setKanbanEvent] = useState<EventInstance | null>(null)
+  const [weatherEvent, setWeatherEvent] = useState<EventInstance | null>(null)
   const { canInstall, install } = usePWAInstallPrompt()
 
   const uid = profile?.uid ?? ''
@@ -169,6 +171,7 @@ export default function Dashboard() {
                   onAvail={() => setAvailEvent(ev)}
                   healthStatus={ev.taskTemplateId ? getEventHealthStatus(ev) : undefined}
                   onShowTasks={ev.taskTemplateId ? () => setKanbanEvent(ev) : undefined}
+                  onWeatherPress={() => setWeatherEvent(ev)}
                 />
               ))
             )}
@@ -234,6 +237,13 @@ export default function Dashboard() {
         visible={!!kanbanEvent}
         onClose={() => setKanbanEvent(null)}
       />
+      {weatherEvent ? (
+        <WeatherDetailSheet
+          open={!!weatherEvent}
+          onClose={() => setWeatherEvent(null)}
+          event={weatherEvent}
+        />
+      ) : null}
     </ScrollView>
   )
 }

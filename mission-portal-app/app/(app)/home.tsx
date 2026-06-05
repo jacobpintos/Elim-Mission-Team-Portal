@@ -15,6 +15,7 @@ import { EventCard } from '@/components/ui/EventCard'
 import { TaskCard } from '@/components/ui/TaskCard'
 import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
 import { EventDetailModal } from '@/features/events/EventDetailModal'
+import { WeatherDetailSheet } from '@/features/events/WeatherDetailSheet'
 import { AvailModal } from '@/features/events/AvailModal'
 import { isAdmin, isSecurity, isMerch, isWorship } from '@/lib/roles'
 import { AppLogo } from '@/components/ui/AppLogo'
@@ -533,6 +534,7 @@ function TeamHomeContent() {
 
   const [detailEvent, setDetailEvent] = useState<EventInstance | null>(null)
   const [availEvent, setAvailEvent] = useState<EventInstance | null>(null)
+  const [weatherEvent, setWeatherEvent] = useState<EventInstance | null>(null)
 
   useEffect(() => {
     subEvents()
@@ -603,6 +605,7 @@ function TeamHomeContent() {
                   myAvail={myAvail(ev)}
                   onDetail={() => setDetailEvent(ev)}
                   onAvail={() => setAvailEvent(ev)}
+                  onWeatherPress={() => setWeatherEvent(ev)}
                 />
               ))
             )}
@@ -709,6 +712,13 @@ function TeamHomeContent() {
         open={!!availEvent}
         onClose={() => setAvailEvent(null)}
       />
+      {weatherEvent ? (
+        <WeatherDetailSheet
+          open={!!weatherEvent}
+          onClose={() => setWeatherEvent(null)}
+          event={weatherEvent}
+        />
+      ) : null}
     </ScrollView>
   )
 }
