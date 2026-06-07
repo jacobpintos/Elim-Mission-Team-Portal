@@ -33,12 +33,16 @@ export const usePhotoAlbumsStore = create<PhotoAlbumsStore>((set, get) => ({
   subscribe: () => {
     if (get()._unsub) return
     set({ loading: true })
-    const unsub = onSnapshot(collection(db, 'photoAlbums'), (snap) => {
-      const albums = snap.docs
-        .map((d) => ({ ...(d.data() as Omit<PhotoAlbum, 'id'>), id: d.id }))
-        .sort((a, b) => b.createdAt - a.createdAt)
-      set({ albums, loading: false })
-    })
+    const unsub = onSnapshot(
+      collection(db, 'photoAlbums'),
+      (snap) => {
+        const albums = snap.docs
+          .map((d) => ({ ...(d.data() as Omit<PhotoAlbum, 'id'>), id: d.id }))
+          .sort((a, b) => b.createdAt - a.createdAt)
+        set({ albums, loading: false })
+      },
+      () => set({ loading: false })
+    )
     set({ _unsub: unsub })
   },
 
