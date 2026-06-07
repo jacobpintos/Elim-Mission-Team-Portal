@@ -440,6 +440,7 @@ export default function AppLayout() {
                 <Tabs.Screen name="public/giving" options={{ href: null }} />
                 <Tabs.Screen name="public/story" options={{ href: null }} />
                 <Tabs.Screen name="public/music" options={{ href: null }} />
+                <Tabs.Screen name="public/photos" options={{ href: null }} />
                 <Tabs.Screen name="rolehub/inventory" options={{ href: null }} />
                 <Tabs.Screen name="rolehub/worship" options={{ href: null }} />
                 <Tabs.Screen name="rolehub/admin" options={{ href: null }} />

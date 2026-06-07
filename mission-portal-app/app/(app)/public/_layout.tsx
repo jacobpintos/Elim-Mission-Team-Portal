@@ -4,11 +4,12 @@ import { XStack, Text, YStack, View } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 
 const TABS = [
-  { key: 'posts',   label: 'Posts',     path: '/(app)/public/posts' },
-  { key: 'connect', label: 'Connect',   path: '/(app)/public/connect' },
-  { key: 'giving',  label: 'Giving',    path: '/(app)/public/giving' },
-  { key: 'story',   label: 'Our Story', path: '/(app)/public/story' },
-  { key: 'music',   label: 'Content',   path: '/(app)/public/music' },
+  { key: 'posts', label: 'Posts', path: '/(app)/public/posts' },
+  { key: 'connect', label: 'Connect', path: '/(app)/public/connect' },
+  { key: 'giving', label: 'Giving', path: '/(app)/public/giving' },
+  { key: 'story', label: 'Our Story', path: '/(app)/public/story' },
+  { key: 'music', label: 'Content', path: '/(app)/public/music' },
+  { key: 'photos', label: 'Photos', path: '/(app)/public/photos' },
 ]
 
 export default function PublicLayout() {
@@ -33,10 +34,7 @@ export default function PublicLayout() {
             {TABS.map((tab) => {
               const isActive = activeKey === tab.key || pathname.endsWith('/' + tab.key)
               return (
-                <Pressable
-                  key={tab.key}
-                  onPress={() => router.push(tab.path as never)}
-                >
+                <Pressable key={tab.key} onPress={() => router.push(tab.path as never)}>
                   <View
                     paddingHorizontal={14}
                     paddingVertical={12}
