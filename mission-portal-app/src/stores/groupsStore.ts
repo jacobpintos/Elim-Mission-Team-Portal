@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { collection, onSnapshot } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { onAuthStateChanged } from 'firebase/auth'
+import { db, auth } from '@/lib/firebase'
 
 export interface GroupDoc {
   id: string
@@ -12,32 +13,51 @@ interface GroupsStore {
   groups: GroupDoc[]
   loading: boolean
   _unsub: (() => void) | null
+  _authUnsub: (() => void) | null
   _refCount: number
   subscribe: () => void
   unsubscribe: () => void
   getMemberUids: (groupIds: string[]) => string[]
 }
 
+function startFirestoreListener(set: (s: Partial<GroupsStore>) => void, get: () => GroupsStore) {
+  if (get()._unsub) return
+  set({ loading: true })
+  const unsub = onSnapshot(
+    collection(db, 'groups'),
+    (snap) => {
+      const groups: GroupDoc[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
+      set({ groups, loading: false })
+    },
+    (err) => {
+      console.error('[groupsStore] onSnapshot error:', err)
+      set({ loading: false, _unsub: null })
+    }
+  )
+  set({ _unsub: unsub })
+}
+
 export const useGroupsStore = create<GroupsStore>((set, get) => ({
   groups: [],
   loading: false,
   _unsub: null,
+  _authUnsub: null,
   _refCount: 0,
 
   subscribe: () => {
-    const { _refCount, _unsub } = get()
+    const { _refCount, _authUnsub } = get()
     set({ _refCount: _refCount + 1 })
-    if (_unsub) return
-    set({ loading: true })
-    const unsub = onSnapshot(
-      collection(db, 'groups'),
-      (snap) => {
-        const groups: GroupDoc[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
-        set({ groups, loading: false })
-      },
-      (err) => { console.error('[groupsStore] onSnapshot error:', err); set({ loading: false, _unsub: null }) }
-    )
-    set({ _unsub: unsub })
+    if (_authUnsub) return
+
+    const authUnsub = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        startFirestoreListener(set, get)
+      } else {
+        get()._unsub?.()
+        set({ _unsub: null, groups: [], loading: false })
+      }
+    })
+    set({ _authUnsub: authUnsub })
   },
 
   unsubscribe: () => {
@@ -45,7 +65,8 @@ export const useGroupsStore = create<GroupsStore>((set, get) => ({
     set({ _refCount: newCount })
     if (newCount === 0) {
       get()._unsub?.()
-      set({ _unsub: null, groups: [] })
+      get()._authUnsub?.()
+      set({ _unsub: null, _authUnsub: null, groups: [] })
     }
   },
 
