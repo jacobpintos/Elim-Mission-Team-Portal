@@ -9,12 +9,14 @@ import { useConfigStore } from '@/stores/configStore'
 import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
 import { useUIStore } from '@/stores/uiStore'
+import { useThemeColors } from '@/theme/useThemeColors'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function AdminTeams() {
   const { commonTeams, subscribe, unsubscribe } = useConfigStore()
   const { profile } = useAuthStore()
   const { toast } = useUIStore()
+  const colors = useThemeColors()
 
   const [teams, setTeams] = useState<string[]>([])
   const [newTeam, setNewTeam] = useState('')
@@ -113,9 +115,10 @@ export default function AdminTeams() {
                 padding: 8,
                 fontSize: 15,
                 borderWidth: 1,
-                borderColor: '#ccc',
+                borderColor: colors.border,
                 borderRadius: 6,
-                backgroundColor: 'white',
+                backgroundColor: colors.surface,
+                color: colors.text,
               }}
             />
             <Button
@@ -137,6 +140,7 @@ export default function AdminTeams() {
       <XStack gap="$2" alignItems="center">
         <RNTextInput
           placeholder="New team name..."
+          placeholderTextColor={colors.textMuted}
           value={newTeam}
           onChangeText={setNewTeam}
           onSubmitEditing={handleAdd}
@@ -145,9 +149,10 @@ export default function AdminTeams() {
             padding: 10,
             fontSize: 15,
             borderWidth: 1,
-            borderColor: '#ccc',
+            borderColor: colors.border,
             borderRadius: 6,
-            backgroundColor: 'white',
+            backgroundColor: colors.surface,
+            color: colors.text,
           }}
         />
         <Button size="$3" onPress={handleAdd} theme="active">

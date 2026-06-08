@@ -54,16 +54,19 @@ export function CreateUserSheet({ open, onClose }: CreateUserSheetProps) {
       })
       const { uid } = result.data as { uid: string }
 
-      // Add uid to "All" group
-      const groupsQuery = query(collection(db, 'groups'), where('name', '==', 'All'))
-      const groupsSnap = await getDocs(groupsQuery)
-      if (!groupsSnap.empty) {
-        const groupDoc = groupsSnap.docs[0]
-        const existing: string[] = groupDoc.data().members ?? []
-        if (!existing.includes(uid)) {
-          await updateDoc(doc(db, 'groups', groupDoc.id), {
-            members: [...existing, uid],
-          })
+      // Add uid to "All" group (skip public-only users)
+      const isPublicOnly = roles.length === 1 && roles[0] === 'public'
+      if (!isPublicOnly) {
+        const groupsQuery = query(collection(db, 'groups'), where('name', '==', 'All'))
+        const groupsSnap = await getDocs(groupsQuery)
+        if (!groupsSnap.empty) {
+          const groupDoc = groupsSnap.docs[0]
+          const existing: string[] = groupDoc.data().members ?? []
+          if (!existing.includes(uid)) {
+            await updateDoc(doc(db, 'groups', groupDoc.id), {
+              members: [...existing, uid],
+            })
+          }
         }
       }
 

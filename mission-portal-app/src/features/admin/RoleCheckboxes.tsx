@@ -2,13 +2,12 @@ import { XStack, Text, Checkbox, Label } from 'tamagui'
 
 export const ALL_ROLES = [
   'admin',
-  'staff',
   'security',
   'merch',
   'worship',
   'regular',
+  'intern',
   'public',
-  'unverified',
 ] as const
 
 export type AppRole = (typeof ALL_ROLES)[number]

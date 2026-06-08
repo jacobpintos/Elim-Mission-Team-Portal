@@ -4,13 +4,12 @@ import type { UserProfile } from '@/types/user'
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
-  staff: 'Staff',
   security: 'Security',
   merch: 'Merch',
   worship: 'Worship',
   regular: 'Member',
+  intern: 'Intern',
   public: 'Public',
-  unverified: 'Unverified',
 }
 
 export function userRoleDisplay(user: UserProfile): string {
@@ -20,13 +19,12 @@ export function userRoleDisplay(user: UserProfile): string {
 
 const ROLE_COLORS: Record<string, string> = {
   admin: '#e8624a',
-  staff: '#2980b9',
   security: '#e74c3c',
   merch: '#27ae60',
   worship: '#9b59b6',
   regular: '#16a085',
+  intern: '#d4a017',
   public: '#95a5a6',
-  unverified: '#7f8c8d',
 }
 
 interface UserCardProps {
@@ -38,8 +36,8 @@ interface UserCardProps {
 
 export function UserCard({ user, currentUid, onEditRole, onDelete }: UserCardProps) {
   const isSelf = user.uid === currentUid
-  const primaryRole = user.roles?.[0] ?? 'unverified'
-  const roleColor = ROLE_COLORS[primaryRole] ?? '#7f8c8d'
+  const primaryRole = user.roles?.[0] ?? 'public'
+  const roleColor = ROLE_COLORS[primaryRole] ?? '#95a5a6'
 
   return (
     <XStack

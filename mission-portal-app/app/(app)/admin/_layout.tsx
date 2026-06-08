@@ -14,6 +14,7 @@ const BASE_TABS = [
   { key: 'teams', label: 'Common Teams', path: '/(app)/admin/teams' },
   { key: 'templates', label: 'Task Templates', path: '/(app)/admin/templates' },
   { key: 'leadership', label: 'Leadership Team', path: '/(app)/admin/leadership' },
+  { key: 'analytics', label: 'Public Analytics', path: '/(app)/admin/analytics' },
   { key: 'audit', label: 'Audit Trail', path: '/(app)/admin/audit' },
   { key: 'theme', label: 'Theme', path: '/(app)/admin/theme' },
   { key: 'digests', label: 'Digests', path: '/(app)/admin/digests' },

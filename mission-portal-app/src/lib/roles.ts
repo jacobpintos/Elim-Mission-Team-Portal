@@ -5,8 +5,8 @@ export const isAdmin = (u: UserProfile | null) => hasRole(u, 'admin')
 export const isSecurity = (u: UserProfile | null) => hasRole(u, 'security') || isAdmin(u)
 export const isWorship = (u: UserProfile | null) => hasRole(u, 'worship') || isAdmin(u)
 export const isMerch = (u: UserProfile | null) => hasRole(u, 'merch') || isAdmin(u)
-export const isVerified = (u: UserProfile | null) => !!u && !hasRole(u, 'unverified')
 export const isPublic = (u: UserProfile | null) => hasRole(u, 'public')
+export const isIntern = (u: UserProfile | null) => hasRole(u, 'intern')
 
 export type Tab =
   | 'dashboard'
@@ -32,41 +32,33 @@ export type Tab =
 export function visibleTabs(u: UserProfile | null): Tab[] {
   if (!u) return []
 
-  const MEMBER_ROLES: Role[] = ['admin', 'security', 'regular', 'merch', 'worship']
+  const MEMBER_ROLES: Role[] = ['admin', 'security', 'regular', 'intern', 'merch', 'worship']
   const isMember = u.roles?.some((r) => MEMBER_ROLES.includes(r)) ?? false
 
-  // Any user without a member role (public, unverified, empty, etc.) gets public tabs
+  // Users with no member role get public-facing tabs only
   if (!isMember)
-    return [
-      'home',
-      'events',
-      'announce',
-      'connect',
-      'music',
-      'giving',
-      'story',
-      'posts',
-      'settings',
-    ]
+    return ['home', 'events', 'announce', 'connect', 'music', 'giving', 'story', 'posts', 'settings']
 
-  // Admin — all tools, role-specific grouped under rolehub
   if (isAdmin(u)) {
     return [
-      'dashboard',
-      'events',
-      'assignments',
-      'messages',
-      'announce',
-      'issues',
-      'security',
-      'worship',
-      'rolehub',
-      'public',
-      'settings',
+      'dashboard', 'events', 'assignments', 'messages', 'announce', 'issues',
+      'security', 'worship', 'rolehub', 'public', 'settings',
     ]
   }
 
-  // All other verified members share these base tabs
+  // Intern: public base + assignments + operations + specialty tabs. No dashboard or messages.
+  if (isIntern(u) && !hasRole(u, 'regular')) {
+    const tabs: Tab[] = [
+      'home', 'events', 'assignments', 'announce', 'issues',
+      'connect', 'music', 'giving', 'story', 'posts', 'settings',
+    ]
+    if (hasRole(u, 'worship')) tabs.splice(tabs.indexOf('issues') + 1, 0, 'worship')
+    if (hasRole(u, 'security')) tabs.splice(1, 0, 'security')
+    if (hasRole(u, 'merch')) tabs.push('inventory')
+    return tabs
+  }
+
+  // Regular and specialty members
   const tabs: Tab[] = ['dashboard', 'events', 'assignments', 'messages', 'announce', 'issues']
 
   if (isWorship(u)) tabs.push('worship')

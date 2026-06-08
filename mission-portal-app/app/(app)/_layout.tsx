@@ -12,7 +12,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useSecurityStore } from '@/stores/securityStore'
 import { useUIStore } from '@/stores/uiStore'
-import { visibleTabs, isSecurity, isPublic } from '@/lib/roles'
+import { visibleTabs, isSecurity, isPublic, hasRole } from '@/lib/roles'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { ReportFormModal } from '@/features/security/ReportFormModal'
@@ -90,6 +90,8 @@ export default function AppLayout() {
   const { subscribe: subUsers, unsubscribe: unsubUsers, users } = useUsersStore()
   const { createReport } = useSecurityStore()
   const toast = useUIStore((s) => s.toast)
+  const viewAsPublic = useUIStore((s) => s.viewAsPublic)
+  const setViewAsPublic = useUIStore((s) => s.setViewAsPublic)
 
   // Drawer + content animation (must be before early returns)
   const drawerX = useMemo(() => new Animated.Value(-DRAWER_W), [])
@@ -129,7 +131,14 @@ export default function AppLayout() {
   if (loading) return null
   if (!profile) return <Redirect href="/(auth)/login" />
 
-  const tabs = visibleTabs(profile)
+  // Non-public members can preview public view; always resets to false on login (store starts false)
+  const isMemberUser = !isPublic(profile) || profile.roles.length > 1
+  const effectiveProfile =
+    viewAsPublic && isMemberUser
+      ? { ...profile, roles: ['public' as const] }
+      : profile
+
+  const tabs = visibleTabs(effectiveProfile)
 
   // Unverified users who completed onboarding are awaiting role assignment — show holding screen
   if (tabs.length === 0) {
@@ -193,7 +202,7 @@ export default function AppLayout() {
     return <Redirect href={`/${tabs[0]}`} />
   }
 
-  const showReportButton = !isPublic(profile) || hasPublicEventToday
+  const showReportButton = !isPublic(effectiveProfile) || hasPublicEventToday
 
   const securityUsers = users.filter((u) => isSecurity(u))
 
@@ -348,6 +357,31 @@ export default function AppLayout() {
             </YStack>
           </ScrollView>
 
+          {/* Public view toggle for non-public members */}
+          {isMemberUser && (
+            <Pressable
+              onPress={() => {
+                closeDrawer()
+                setViewAsPublic(!viewAsPublic)
+                router.push('/home')
+              }}
+            >
+              <XStack
+                padding="$4"
+                gap="$3"
+                alignItems="center"
+                borderTopWidth={1}
+                borderTopColor={colors.border}
+                backgroundColor={viewAsPublic ? colors.primary + '22' : 'transparent'}
+              >
+                <Text fontSize={14}>{viewAsPublic ? '↩' : '🌐'}</Text>
+                <Text color={viewAsPublic ? colors.primary : colors.textMuted} fontSize="$3">
+                  {viewAsPublic ? 'Back to Member View' : 'Preview Public View'}
+                </Text>
+              </XStack>
+            </Pressable>
+          )}
+
           {/* Report a Concern */}
           {showReportButton ? (
             <Pressable
@@ -431,6 +465,7 @@ export default function AppLayout() {
                 <Tabs.Screen name="admin/teams" options={{ href: null }} />
                 <Tabs.Screen name="admin/templates" options={{ href: null }} />
                 <Tabs.Screen name="admin/theme" options={{ href: null }} />
+                <Tabs.Screen name="admin/analytics" options={{ href: null }} />
                 <Tabs.Screen name="admin/audit" options={{ href: null }} />
                 <Tabs.Screen name="admin/digests" options={{ href: null }} />
                 <Tabs.Screen name="admin/leadership" options={{ href: null }} />
