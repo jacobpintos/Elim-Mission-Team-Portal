@@ -613,9 +613,9 @@ export function EventDetailModal({
     if (!open || !event?._geocodeLat || !event?._geocodeLng || !event?.date || event?.isVirtual) return
     if (!isMember && !isAdmin) return
     const key = `${event._geocodeLat},${event._geocodeLng},${event.date}`
-    fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then((w) =>
-      setWeatherEntry({ key, data: w })
-    )
+    fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then((w) => {
+      if (w) setWeatherEntry({ key, data: w })
+    })
     fetchNWSAlerts(event._geocodeLat, event._geocodeLng).then((a) =>
       setAlertsEntry({ key, data: a })
     )
