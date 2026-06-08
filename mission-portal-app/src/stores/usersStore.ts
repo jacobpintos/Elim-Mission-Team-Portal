@@ -10,6 +10,7 @@ interface UsersStore {
   loading: boolean
   _unsub: (() => void) | null
   _authUnsub: (() => void) | null
+  _refCount: number
   subscribe: () => void
   unsubscribe: () => void
   getUser: (uid: string | number) => UserProfile | undefined
@@ -38,9 +39,12 @@ export const useUsersStore = create<UsersStore>((set, get) => ({
   loading: false,
   _unsub: null,
   _authUnsub: null,
+  _refCount: 0,
 
   subscribe: () => {
-    if (get()._authUnsub) return
+    const { _refCount, _authUnsub } = get()
+    set({ _refCount: _refCount + 1 })
+    if (_authUnsub) return
 
     const authUnsub = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -54,9 +58,13 @@ export const useUsersStore = create<UsersStore>((set, get) => ({
   },
 
   unsubscribe: () => {
-    get()._unsub?.()
-    get()._authUnsub?.()
-    set({ _unsub: null, _authUnsub: null, users: [] })
+    const newCount = Math.max(0, get()._refCount - 1)
+    set({ _refCount: newCount })
+    if (newCount === 0) {
+      get()._unsub?.()
+      get()._authUnsub?.()
+      set({ _unsub: null, _authUnsub: null, users: [] })
+    }
   },
 
   getUser: (uid) => get().users.find((u) => sameId(u.uid, uid)),
