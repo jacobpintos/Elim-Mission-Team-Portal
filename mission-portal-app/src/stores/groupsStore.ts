@@ -12,6 +12,7 @@ interface GroupsStore {
   groups: GroupDoc[]
   loading: boolean
   _unsub: (() => void) | null
+  _refCount: number
   subscribe: () => void
   unsubscribe: () => void
   getMemberUids: (groupIds: string[]) => string[]
@@ -21,9 +22,12 @@ export const useGroupsStore = create<GroupsStore>((set, get) => ({
   groups: [],
   loading: false,
   _unsub: null,
+  _refCount: 0,
 
   subscribe: () => {
-    if (get()._unsub) return
+    const { _refCount, _unsub } = get()
+    set({ _refCount: _refCount + 1 })
+    if (_unsub) return
     set({ loading: true })
     const unsub = onSnapshot(collection(db, 'groups'), (snap) => {
       const groups: GroupDoc[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
@@ -33,8 +37,12 @@ export const useGroupsStore = create<GroupsStore>((set, get) => ({
   },
 
   unsubscribe: () => {
-    get()._unsub?.()
-    set({ _unsub: null, groups: [] })
+    const newCount = Math.max(0, get()._refCount - 1)
+    set({ _refCount: newCount })
+    if (newCount === 0) {
+      get()._unsub?.()
+      set({ _unsub: null, groups: [] })
+    }
   },
 
   getMemberUids: (groupIds: string[]) => {
