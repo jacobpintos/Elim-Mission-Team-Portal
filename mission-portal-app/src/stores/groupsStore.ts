@@ -35,7 +35,7 @@ export const useGroupsStore = create<GroupsStore>((set, get) => ({
         const groups: GroupDoc[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
         set({ groups, loading: false })
       },
-      (err) => { console.error('[groupsStore] onSnapshot error:', err); set({ loading: false }) }
+      (err) => { console.error('[groupsStore] onSnapshot error:', err); set({ loading: false, _unsub: null }) }
     )
     set({ _unsub: unsub })
   },
