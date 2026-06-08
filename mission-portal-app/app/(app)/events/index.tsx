@@ -56,7 +56,7 @@ export default function EventsScreen() {
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
   const configStore = useConfigStore()
   const { subscribe: subConfig, unsubscribe: unsubConfig } = useConfigStore()
-  const { subscribe: subGroups, unsubscribe: unsubGroups } = useGroupsStore()
+  const { subscribe: subGroups, unsubscribe: unsubGroups, getMemberUids } = useGroupsStore()
 
   // Admin uses Firestore-synced cal; non-admin uses local state
   const [localY, setLocalY] = useState(() => new Date().getFullYear())
@@ -90,7 +90,11 @@ export default function EventsScreen() {
 
   const { from, to } = monthRange(calY, calM)
   const monthEvents = instances(from, to).filter(
-    (ev) => ev.isPublic || admin || ev.users?.some((x) => sameId(x, uid))
+    (ev) =>
+      ev.isPublic ||
+      admin ||
+      ev.users?.some((x) => sameId(x, uid)) ||
+      (ev.groups?.length ? getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)) : false)
   )
 
   // Group events by date string
