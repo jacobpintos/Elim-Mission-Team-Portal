@@ -605,14 +605,14 @@ export function EventDetailModal({
   const [weatherEntry, setWeatherEntry] = useState<{ key: string; data: WeatherData } | null>(null)
   const [alertsEntry, setAlertsEntry] = useState<{ key: string; data: NWSAlert[] } | null>(null)
   const [showWeather, setShowWeather] = useState(false)
-  const eventWeatherKey = `${event?._geocodeLat},${event?._geocodeLng},${event?.date}`
+  const eventWeatherKey = `${event?.templateId}_${event?.date}`
   const weather = weatherEntry?.key === eventWeatherKey ? weatherEntry.data : null
   const alerts = alertsEntry?.key === eventWeatherKey ? alertsEntry.data : []
 
   useEffect(() => {
     if (!open || !event?._geocodeLat || !event?._geocodeLng || !event?.date || event?.isVirtual) return
     if (!isMember && !isAdmin) return
-    const key = `${event._geocodeLat},${event._geocodeLng},${event.date}`
+    const key = `${event.templateId}_${event.date}`
     fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then((w) => {
       if (w) setWeatherEntry({ key, data: w })
     })
