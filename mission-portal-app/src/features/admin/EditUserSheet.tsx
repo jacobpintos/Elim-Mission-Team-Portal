@@ -20,6 +20,7 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
   const { profile } = useAuthStore()
 
   // Initialized from user prop — parent must pass key={user.uid} to reset on user change
+  const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
   const [roles, setRoles] = useState<string[]>(user?.roles ?? ['regular'])
   const [saving, setSaving] = useState(false)
@@ -37,12 +38,13 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
     setSaving(true)
     try {
       await updateDoc(doc(db, 'users', user.uid), {
+        displayName: displayName.trim(),
         email: email.trim(),
         roles,
       })
       await audit(
         'user.updated',
-        `Updated user ${user.email} → email: ${email.trim()}, roles: ${roles.join(', ')}`,
+        `Updated user ${user.email} → name: ${displayName.trim()}, email: ${email.trim()}, roles: ${roles.join(', ')}`,
         profile?.displayName ?? ''
       )
       toast('User updated!', 'success')
@@ -64,11 +66,18 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
       title="Edit User"
     >
       <YStack gap="$3" padding="$2">
-        {user && (
-          <Text fontSize="$4" fontWeight="700">
-            {user.displayName}
+        <YStack gap="$1">
+          <Text fontSize="$3" fontWeight="600">
+            Name
           </Text>
-        )}
+          <Input
+            placeholder="Display name"
+            value={displayName}
+            onChangeText={setDisplayName}
+            autoCapitalize="words"
+            size="$3"
+          />
+        </YStack>
 
         <YStack gap="$1">
           <Text fontSize="$3" fontWeight="600">
