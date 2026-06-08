@@ -30,17 +30,21 @@ export default function AdminGroups() {
   }, [])
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'groups'), (snap) => {
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
-      // Sort: "All" first, then alphabetical
-      data.sort((a, b) => {
-        if (a.name === 'All') return -1
-        if (b.name === 'All') return 1
-        return a.name.localeCompare(b.name)
-      })
-      setGroups(data)
-      setLoading(false)
-    })
+    const unsub = onSnapshot(
+      collection(db, 'groups'),
+      (snap) => {
+        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
+        // Sort: "All" first, then alphabetical
+        data.sort((a, b) => {
+          if (a.name === 'All') return -1
+          if (b.name === 'All') return 1
+          return a.name.localeCompare(b.name)
+        })
+        setGroups(data)
+        setLoading(false)
+      },
+      () => setLoading(false)
+    )
     return () => unsub()
   }, [])
 

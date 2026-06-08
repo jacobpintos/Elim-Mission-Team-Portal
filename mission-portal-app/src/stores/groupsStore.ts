@@ -29,10 +29,14 @@ export const useGroupsStore = create<GroupsStore>((set, get) => ({
     set({ _refCount: _refCount + 1 })
     if (_unsub) return
     set({ loading: true })
-    const unsub = onSnapshot(collection(db, 'groups'), (snap) => {
-      const groups: GroupDoc[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
-      set({ groups, loading: false })
-    })
+    const unsub = onSnapshot(
+      collection(db, 'groups'),
+      (snap) => {
+        const groups: GroupDoc[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
+        set({ groups, loading: false })
+      },
+      () => set({ loading: false })
+    )
     set({ _unsub: unsub })
   },
 
