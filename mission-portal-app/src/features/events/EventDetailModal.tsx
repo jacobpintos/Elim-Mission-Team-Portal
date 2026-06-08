@@ -602,15 +602,23 @@ export function EventDetailModal({
     ? boards.find((b) => sameId(b.id, event.planningBoardId!))
     : null
   const [showBoard, setShowBoard] = useState(false)
-  const [weather, setWeather] = useState<WeatherData | null>(null)
-  const [alerts, setAlerts] = useState<NWSAlert[]>([])
+  const [weatherEntry, setWeatherEntry] = useState<{ key: string; data: WeatherData } | null>(null)
+  const [alertsEntry, setAlertsEntry] = useState<{ key: string; data: NWSAlert[] } | null>(null)
   const [showWeather, setShowWeather] = useState(false)
+  const eventWeatherKey = `${event?._geocodeLat},${event?._geocodeLng},${event?.date}`
+  const weather = weatherEntry?.key === eventWeatherKey ? weatherEntry.data : null
+  const alerts = alertsEntry?.key === eventWeatherKey ? alertsEntry.data : []
 
   useEffect(() => {
     if (!open || !event?._geocodeLat || !event?._geocodeLng || !event?.date || event?.isVirtual) return
     if (!isMember && !isAdmin) return
-    fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then(setWeather)
-    fetchNWSAlerts(event._geocodeLat, event._geocodeLng).then(setAlerts)
+    const key = `${event._geocodeLat},${event._geocodeLng},${event.date}`
+    fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then((w) =>
+      setWeatherEntry({ key, data: w })
+    )
+    fetchNWSAlerts(event._geocodeLat, event._geocodeLng).then((a) =>
+      setAlertsEntry({ key, data: a })
+    )
   }, [open, event?.date, event?._geocodeLat, event?._geocodeLng, isMember, isAdmin])
 
   const handleExportICS = async () => {
@@ -629,7 +637,10 @@ export function EventDetailModal({
     <Modal
       open={open}
       onOpenChange={(v) => {
-        if (!v) onClose()
+        if (!v) {
+          setShowWeather(false)
+          onClose()
+        }
       }}
       title={event.title}
       scrollable
@@ -945,7 +956,7 @@ export function EventDetailModal({
 
     {event ? (
       <WeatherDetailSheet
-        open={showWeather}
+        open={open && showWeather}
         onClose={() => setShowWeather(false)}
         event={event}
       />
