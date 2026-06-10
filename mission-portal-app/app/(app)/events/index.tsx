@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { ScrollView, Pressable, Linking } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack } from 'expo-router'
+import { Stack, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useConfigStore } from '@/stores/configStore'
@@ -45,6 +45,7 @@ function monthRange(y: number, m: number) {
 
 export default function EventsScreen() {
   const colors = useThemeColors()
+  const router = useRouter()
   const { profile } = useAuthStore()
   const uid = String(profile?.uid ?? '')
   const admin = isAdmin(profile)
@@ -179,18 +180,31 @@ export default function EventsScreen() {
           ))}
         </XStack>
         {admin ? (
-          <Pressable onPress={() => setShowCreateModal(true)}>
-            <XStack
-              backgroundColor={colors.primary}
-              borderRadius="$2"
-              paddingHorizontal="$3"
-              paddingVertical="$1"
-            >
-              <Text color="white" fontSize="$2" fontWeight="600">
-                + Create Event
-              </Text>
-            </XStack>
-          </Pressable>
+          <XStack gap="$2" alignItems="center">
+            <Pressable onPress={() => router.push('/(app)/admin/avail' as never)}>
+              <XStack
+                borderRadius="$2"
+                paddingHorizontal="$2"
+                paddingVertical="$1"
+                borderWidth={1}
+                borderColor={colors.border}
+              >
+                <Text fontSize="$2">📅</Text>
+              </XStack>
+            </Pressable>
+            <Pressable onPress={() => setShowCreateModal(true)}>
+              <XStack
+                backgroundColor={colors.primary}
+                borderRadius="$2"
+                paddingHorizontal="$3"
+                paddingVertical="$1"
+              >
+                <Text color="white" fontSize="$2" fontWeight="600">
+                  + Create Event
+                </Text>
+              </XStack>
+            </Pressable>
+          </XStack>
         ) : null}
       </XStack>
 
