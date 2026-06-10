@@ -184,12 +184,14 @@ export default function EventsScreen() {
             <Pressable onPress={() => router.push('/(app)/admin/avail' as never)}>
               <XStack
                 borderRadius="$2"
-                paddingHorizontal="$2"
+                paddingHorizontal="$3"
                 paddingVertical="$1"
                 borderWidth={1}
                 borderColor={colors.border}
               >
-                <Text fontSize="$2">📅</Text>
+                <Text color={colors.text} fontSize="$2" fontWeight="600">
+                  Availability
+                </Text>
               </XStack>
             </Pressable>
             <Pressable onPress={() => setShowCreateModal(true)}>
