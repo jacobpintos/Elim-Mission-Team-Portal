@@ -15,7 +15,19 @@ export const createPortalUser = onCall(async (req) => {
     recoveryEmail?: string
     roles: string[]
   }
-  const userRecord = await admin.auth().createUser({ displayName: name, email, password })
+  let userRecord: admin.auth.UserRecord
+  try {
+    userRecord = await admin.auth().createUser({ displayName: name, email, password })
+  } catch (err: unknown) {
+    const code = (err as { code?: string }).code
+    if (code === 'auth/email-already-exists') {
+      throw new HttpsError('already-exists', `An account with email ${email} already exists`)
+    }
+    if (code === 'auth/invalid-email') {
+      throw new HttpsError('invalid-argument', 'Invalid email address')
+    }
+    throw new HttpsError('internal', 'Failed to create user')
+  }
   await admin.firestore().collection('users').doc(userRecord.uid).set({
     uid: userRecord.uid,
     email,
