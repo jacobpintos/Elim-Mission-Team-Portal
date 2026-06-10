@@ -22,61 +22,6 @@ export const dailyCleanup = onSchedule('0 2 * * *', async () => {
   const db = admin.firestore()
   const toDelete: FirebaseFirestore.DocumentReference[] = []
 
-  // ── Events archive: move one-time events older than 1 year ────────────────
-  // Recurring events (isRec: true) have no date field and are never archived.
-  const oneYearAgo = new Date()
-  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-  const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0]
-
-  const oldEventsSnap = await db
-    .collection('events')
-    .where('date', '<', oneYearAgoStr)
-    .get()
-
-  // Fetch all referenced planning boards up-front to avoid writes > 500 in a batch.
-  // Each event contributes up to 2 writes (archive + delete) and each board up to 2,
-  // so we limit each batch to 200 events (worst case 400 writes < 500 limit).
-  for (let i = 0; i < oldEventsSnap.docs.length; i += 200) {
-    const slice = oldEventsSnap.docs.slice(i, i + 200)
-
-    // Collect board IDs referenced by this slice
-    const boardIds = slice
-      .map((d) => d.data().planningBoardId)
-      .filter((id) => id != null)
-      .map(String)
-
-    // Fetch boards in parallel
-    const boardSnaps = await Promise.all(
-      boardIds.map((id) => db.collection('planningBoards').doc(id).get())
-    )
-    const boardById = new Map(boardSnaps.filter((s) => s.exists).map((s) => [s.id, s]))
-
-    const archiveBatch = db.batch()
-    for (const evDoc of slice) {
-      const evData = evDoc.data()
-      // Archive the event
-      archiveBatch.set(db.collection('eventsArchive').doc(evDoc.id), {
-        ...evData,
-        _archivedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
-      archiveBatch.delete(evDoc.ref)
-
-      // Archive associated planning board if present
-      const planningBoardId = evData.planningBoardId
-      if (planningBoardId != null) {
-        const boardSnap = boardById.get(String(planningBoardId))
-        if (boardSnap) {
-          archiveBatch.set(db.collection('planningBoardsArchive').doc(boardSnap.id), {
-            ...boardSnap.data(),
-            _archivedAt: admin.firestore.FieldValue.serverTimestamp(),
-          })
-          archiveBatch.delete(boardSnap.ref)
-        }
-      }
-    }
-    await archiveBatch.commit()
-  }
-
   // ── Audit log: delete entries older than 6 months ──────────────────────────
   const sixMonthsAgo = new Date()
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)

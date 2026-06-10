@@ -28,11 +28,7 @@ export const createPortalUser = onCall(async (req) => {
     }
     throw new HttpsError('internal', 'Failed to create user')
   }
-  const isPublicUser = roles.includes('public')
-  const db = admin.firestore()
-  const batch = db.batch()
-
-  batch.set(db.collection('users').doc(userRecord.uid), {
+  await admin.firestore().collection('users').doc(userRecord.uid).set({
     uid: userRecord.uid,
     email,
     displayName: name,
@@ -45,7 +41,7 @@ export const createPortalUser = onCall(async (req) => {
       eventReminder: { push: true, email: true },
       announcement: { push: true, email: false },
       issueAssigned: { push: true, email: false },
-      weeklyDigest: !isPublicUser,
+      weeklyDigest: !roles.includes('public'),
       monthlyDigest: false,
       publicAnnouncement: { push: true, email: false },
       publicEvent: { push: true, email: false },
@@ -55,17 +51,5 @@ export const createPortalUser = onCall(async (req) => {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   })
-
-  // Non-public users default to weekly digest opt-in — add to digestSubscribers
-  if (!isPublicUser) {
-    batch.set(db.collection('digestSubscribers').doc(`${userRecord.uid}_weekly`), {
-      uid: userRecord.uid,
-      email,
-      displayName: name,
-      type: 'weekly',
-    })
-  }
-
-  await batch.commit()
   return { uid: userRecord.uid }
 })

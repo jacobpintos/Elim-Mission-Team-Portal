@@ -9,8 +9,6 @@ import {
   deleteField,
   arrayUnion,
   serverTimestamp,
-  query,
-  where,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { geocodeCity } from '@/lib/geocode'
@@ -254,71 +252,23 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
 
     set({ loading: true })
 
-    // One-time events: only load those dated within the last year (archived events excluded)
-    const oneYearAgo = new Date()
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-    const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0]
-
-    // Track docs from both queries so we can merge cleanly
-    const docMapNonRec = new Map<string, EventTemplate & { overrides?: Record<string, Partial<EventTemplate>> }>()
-    const docMapRec = new Map<string, EventTemplate & { overrides?: Record<string, Partial<EventTemplate>> }>()
-
-    function buildState() {
+    const unsubTemplates = onSnapshot(collection(db, 'events'), (snap) => {
       const templates: EventTemplate[] = []
       const overrides: Record<string, Partial<EventTemplate>> = {}
-      for (const data of [...docMapNonRec.values(), ...docMapRec.values()]) {
+      snap.docs.forEach((d) => {
+        const data = d.data() as EventTemplate & {
+          overrides?: Record<string, Partial<EventTemplate>>
+        }
         const { overrides: docOverrides, ...tmpl } = data
-        templates.push(tmpl as EventTemplate)
+        templates.push({ ...tmpl, id: d.id })
         if (docOverrides) {
           Object.entries(docOverrides).forEach(([key, val]) => {
             overrides[key] = val
           })
         }
-      }
+      })
       set({ templates, overrides, loading: false })
-    }
-
-    // Query 1: one-time events with date >= one year ago
-    const qNonRec = query(
-      collection(db, 'events'),
-      where('isRec', '==', false),
-      where('date', '>=', oneYearAgoStr)
-    )
-    const unsubNonRec = onSnapshot(qNonRec, (snap) => {
-      snap.docChanges().forEach((change) => {
-        if (change.type === 'removed') {
-          docMapNonRec.delete(change.doc.id)
-        } else {
-          const data = change.doc.data() as EventTemplate & {
-            overrides?: Record<string, Partial<EventTemplate>>
-          }
-          docMapNonRec.set(change.doc.id, { ...data, id: change.doc.id })
-        }
-      })
-      buildState()
     })
-
-    // Query 2: recurring events (no date field — must always be included)
-    const qRec = query(collection(db, 'events'), where('isRec', '==', true))
-    const unsubRec = onSnapshot(qRec, (snap) => {
-      snap.docChanges().forEach((change) => {
-        if (change.type === 'removed') {
-          docMapRec.delete(change.doc.id)
-        } else {
-          const data = change.doc.data() as EventTemplate & {
-            overrides?: Record<string, Partial<EventTemplate>>
-          }
-          docMapRec.set(change.doc.id, { ...data, id: change.doc.id })
-        }
-      })
-      buildState()
-    })
-
-    // Combine both unsubscribers under _unsubTemplates
-    const unsubTemplates = () => {
-      unsubNonRec()
-      unsubRec()
-    }
 
     const unsubAvail = onSnapshot(collection(db, 'avail'), (snap) => {
       const snapAvail: Record<string, Record<string, AvailResponse>> = {}

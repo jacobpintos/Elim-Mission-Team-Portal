@@ -21,13 +21,6 @@ interface UserDoc {
   }
 }
 
-interface DigestSubscriberDoc {
-  uid: string
-  email: string
-  displayName: string
-  type: 'weekly' | 'monthly'
-}
-
 interface EventDoc {
   title?: string
   date?: string
@@ -57,14 +50,20 @@ function buildUnsubscribeUrl(uid: string, type: string): string {
 
 async function getDigestRecipients(type: 'weekly' | 'monthly'): Promise<UserDoc[]> {
   const db = admin.firestore()
-  const snap = await db
-    .collection('digestSubscribers')
-    .where('type', '==', type)
-    .get()
+  const snap = await db.collection('users').get()
   return snap.docs
-    .map((d) => d.data() as DigestSubscriberDoc)
-    .filter((u) => !!u.email)
-    .map((u) => ({ uid: u.uid, email: u.email, displayName: u.displayName, roles: [] }))
+    .map((d) => d.data() as UserDoc)
+    .filter((u) => {
+      if (!u.email) return false
+      const isPublicUser = (u.roles ?? []).includes('public')
+      const prefs = u.notificationPrefs ?? {}
+      if (type === 'weekly') {
+        // Non-public users, opt-in default ON (AC-54)
+        return !isPublicUser && prefs.weeklyDigest !== false
+      }
+      // Monthly: public users only, opt-in default OFF (AC-56)
+      return isPublicUser && prefs.monthlyDigest === true
+    })
 }
 
 async function gatherDigestContent(db: admin.firestore.Firestore): Promise<DigestContent> {

@@ -9,7 +9,7 @@ import {
   verifyBeforeUpdateEmail,
 } from 'firebase/auth'
 import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage'
-import { doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore'
+import { doc, updateDoc } from 'firebase/firestore'
 import { auth, db, storage } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
@@ -251,19 +251,6 @@ export default function SettingsScreen() {
       await updateDoc(doc(db, 'users', fbUser.uid), {
         [`notificationPrefs.${key}`]: value,
       })
-      const digestType = key === 'weeklyDigest' ? 'weekly' : 'monthly'
-      const subDocId = `${fbUser.uid}_${digestType}`
-      const subDocRef = doc(db, 'digestSubscribers', subDocId)
-      if (value) {
-        await setDoc(subDocRef, {
-          uid: fbUser.uid,
-          email: profile.email,
-          displayName: profile.displayName,
-          type: digestType,
-        })
-      } else {
-        await deleteDoc(subDocRef)
-      }
     } catch { toast('Failed', 'error') }
   }
 

@@ -86,7 +86,7 @@ function isUpcomingInDays(t: EventTemplateRaw, todayStr: string, limitStr: strin
   return false
 }
 
-export const weatherAlertCheck = onSchedule('0 */4 * * *', async () => {
+export const weatherAlertCheck = onSchedule('*/30 * * * *', async () => {
   const db = admin.firestore()
   const todayStr = todayUTCStr()
   const limitStr = addDaysStr(todayStr, 7)
@@ -115,11 +115,12 @@ export const weatherAlertCheck = onSchedule('0 */4 * * *', async () => {
   if (locMap.size === 0) return
 
   // Load all non-public users with push tokens upfront
-  const usersSnap = await db.collection('users').where('roles', 'array-contains-any', ['admin', 'security', 'regular', 'intern', 'merch', 'worship']).get()
+  const usersSnap = await db.collection('users').get()
   const memberTokenMap = new Map<string, string[]>()
 
   for (const d of usersSnap.docs) {
     const data = d.data()
+    if ((data.roles as string[] | undefined)?.includes('public')) continue
 
     const tokens: string[] = []
     const pushTokens = data.pushTokens as Record<string, string | null> | undefined
