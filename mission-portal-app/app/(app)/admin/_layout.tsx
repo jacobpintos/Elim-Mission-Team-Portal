@@ -18,6 +18,7 @@ const BASE_TABS = [
   { key: 'audit', label: 'Audit Trail', path: '/(app)/admin/audit' },
   { key: 'theme', label: 'Theme', path: '/(app)/admin/theme' },
   { key: 'digests', label: 'Digests', path: '/(app)/admin/digests' },
+  { key: 'archive', label: 'Events Archive', path: '/(app)/admin/archive' },
 ]
 
 export default function AdminLayout() {

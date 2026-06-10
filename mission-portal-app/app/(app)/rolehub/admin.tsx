@@ -14,6 +14,7 @@ const SECTIONS = [
   { label: 'Audit Trail', path: '/(app)/admin/audit', icon: '🔍' },
   { label: 'Theme', path: '/(app)/admin/theme', icon: '🎨' },
   { label: 'Digests', path: '/(app)/admin/digests', icon: '📰' },
+  { label: 'Events Archive', path: '/(app)/admin/archive', icon: '🗄' },
 ]
 
 export default function RolehubAdmin() {
