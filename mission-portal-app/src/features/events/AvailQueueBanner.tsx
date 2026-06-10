@@ -330,11 +330,13 @@ function InstanceRsvpForm({
   uid,
   queueCount,
   onSaved,
+  onFailed,
 }: {
   event: EventInstance
   uid: string
   queueCount: number
   onSaved: () => void
+  onFailed?: () => void
 }) {
   const colors = useThemeColors()
   const { avail, setAvail } = useEventsStore()
@@ -362,7 +364,12 @@ function InstanceRsvpForm({
   const handleStatusSelect = (s: AvailResponse['status']) => {
     setStatus(s)
     if (s !== 'partial' && s !== 'tbd') {
-      handleSave(s)
+      onSaved()
+      setAvail(event, uid, s, note).catch(() => {
+        onFailed?.()
+        setStatus(existing?.status ?? null)
+        toast('Failed to save RSVP — please try again', 'error')
+      })
     }
   }
 
@@ -891,6 +898,13 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
             queueCount={queueItems.length}
             onSaved={() =>
               setSkipKeys((p) => new Set([...p, currentItem.event.instanceKey]))
+            }
+            onFailed={() =>
+              setSkipKeys((p) => {
+                const next = new Set(p)
+                next.delete(currentItem.event.instanceKey)
+                return next
+              })
             }
           />
         )
