@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FlashList } from '@shopify/flash-list'
+import { ScrollView } from 'react-native'
 import { YStack, XStack, Text, Input, Spinner } from 'tamagui'
 import { collection, getDocs, orderBy, query } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -72,43 +72,42 @@ export default function AdminArchive() {
         </YStack>
       ) : (
         <>
-          <FlashList
-            data={paginated}
-            keyExtractor={(e) => String(e.id)}
-            estimatedItemSize={80}
-            renderItem={({ item }) => (
-              <YStack
-                backgroundColor={colors.surface}
-                borderRadius="$3"
-                borderWidth={1}
-                borderColor={colors.border}
-                padding="$3"
-                marginBottom="$2"
-                gap="$1"
-              >
-                <Text fontSize="$4" fontWeight="600" color={colors.text}>
-                  {item.title}
-                </Text>
-                <XStack gap="$3">
-                  {item.date ? (
-                    <Text fontSize="$2" color={colors.textMuted}>
-                      {item.date}
-                    </Text>
-                  ) : null}
-                  {item.location ? (
-                    <Text fontSize="$2" color={colors.textMuted} flex={1} numberOfLines={1}>
-                      {item.location}
-                    </Text>
-                  ) : null}
-                </XStack>
-              </YStack>
-            )}
-            ListEmptyComponent={
+          <ScrollView style={{ flex: 1 }}>
+            {paginated.length === 0 ? (
               <Text color="$gray10" textAlign="center" paddingVertical="$4">
                 No archived events found
               </Text>
-            }
-          />
+            ) : (
+              paginated.map((item) => (
+                <YStack
+                  key={String(item.id)}
+                  backgroundColor={colors.surface}
+                  borderRadius="$3"
+                  borderWidth={1}
+                  borderColor={colors.border}
+                  padding="$3"
+                  marginBottom="$2"
+                  gap="$1"
+                >
+                  <Text fontSize="$4" fontWeight="600" color={colors.text}>
+                    {item.title}
+                  </Text>
+                  <XStack gap="$3">
+                    {item.date ? (
+                      <Text fontSize="$2" color={colors.textMuted}>
+                        {item.date}
+                      </Text>
+                    ) : null}
+                    {item.location ? (
+                      <Text fontSize="$2" color={colors.textMuted} flex={1} numberOfLines={1}>
+                        {item.location}
+                      </Text>
+                    ) : null}
+                  </XStack>
+                </YStack>
+              ))
+            )}
+          </ScrollView>
 
           <XStack justifyContent="center" gap="$3" alignItems="center">
             <Text

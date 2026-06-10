@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import { collection, getDocs, query, where } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '@/lib/firebase'
 import { sameId } from '@/lib/ids'
@@ -19,21 +19,18 @@ interface UsersStore {
   displayName: (uid: string | number) => string
 }
 
-function startFirestoreListener(set: (s: Partial<UsersStore>) => void, get: () => UsersStore) {
-  if (get()._unsub) return
+async function loadUsers(set: (s: Partial<UsersStore>) => void) {
   set({ loading: true })
-  const unsub = onSnapshot(
-    query(collection(db, 'users'), where('roles', 'array-contains-any', MEMBER_ROLES)),
-    (snap) => {
-      const users = snap.docs.map((d) => ({ ...(d.data() as UserProfile), uid: d.id }))
-      set({ users, loading: false })
-    },
-    (err) => {
-      console.error('[usersStore] onSnapshot error:', err)
-      set({ loading: false, _unsub: null })
-    }
-  )
-  set({ _unsub: unsub })
+  try {
+    const snap = await getDocs(
+      query(collection(db, 'users'), where('roles', 'array-contains-any', MEMBER_ROLES))
+    )
+    const users = snap.docs.map((d) => ({ ...(d.data() as UserProfile), uid: d.id }))
+    set({ users, loading: false })
+  } catch (err) {
+    console.error('[usersStore] getDocs error:', err)
+    set({ loading: false })
+  }
 }
 
 export const useUsersStore = create<UsersStore>((set, get) => ({
@@ -50,10 +47,9 @@ export const useUsersStore = create<UsersStore>((set, get) => ({
 
     const authUnsub = onAuthStateChanged(auth, (user) => {
       if (user) {
-        startFirestoreListener(set, get)
+        loadUsers(set)
       } else {
-        get()._unsub?.()
-        set({ _unsub: null, users: [], loading: false })
+        set({ users: [], loading: false })
       }
     })
     set({ _authUnsub: authUnsub })
@@ -63,7 +59,6 @@ export const useUsersStore = create<UsersStore>((set, get) => ({
     const newCount = Math.max(0, get()._refCount - 1)
     set({ _refCount: newCount })
     if (newCount === 0) {
-      get()._unsub?.()
       get()._authUnsub?.()
       set({ _unsub: null, _authUnsub: null, users: [] })
     }
