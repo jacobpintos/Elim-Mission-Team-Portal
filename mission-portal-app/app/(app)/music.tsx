@@ -211,12 +211,15 @@ function ContentCard({
   )
 }
 
+const SECTION_PREVIEW = 8
+
 function Section({
   title,
   items,
   onPlay,
   onEdit,
   onDelete,
+  onSeeAll,
   buildMode,
 }: {
   title: string
@@ -224,21 +227,30 @@ function Section({
   onPlay: (item: MusicItem) => void
   onEdit: (item: MusicItem) => void
   onDelete: (id: string) => void
+  onSeeAll: () => void
   buildMode: boolean
 }) {
   const colors = useThemeColors()
   if (items.length === 0) return null
+  const preview = items.slice(0, SECTION_PREVIEW)
   return (
     <YStack gap="$2" marginBottom="$4">
-      <Text color={colors.text} fontSize="$5" fontWeight="700" paddingHorizontal="$4">
-        {title}
-      </Text>
+      <XStack paddingHorizontal="$4" alignItems="center" justifyContent="space-between">
+        <Text color={colors.text} fontSize="$5" fontWeight="700">
+          {title}
+        </Text>
+        <Pressable onPress={onSeeAll}>
+          <Text color={colors.primary} fontSize="$3" fontWeight="600">
+            See All ({items.length}) →
+          </Text>
+        </Pressable>
+      </XStack>
       <ScrollView
         horizontal
-        showsHorizontalScrollIndicator={false}
+        showsHorizontalScrollIndicator={true}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
       >
-        {items.map((item) => (
+        {preview.map((item) => (
           <ContentCard
             key={item.id}
             item={item}
@@ -248,6 +260,28 @@ function Section({
             buildMode={buildMode}
           />
         ))}
+        {items.length > SECTION_PREVIEW ? (
+          <Pressable onPress={onSeeAll}>
+            <YStack
+              width={120}
+              height={120}
+              backgroundColor={colors.surface}
+              borderRadius="$3"
+              borderWidth={1}
+              borderColor={colors.border}
+              alignItems="center"
+              justifyContent="center"
+              gap="$1"
+            >
+              <Text color={colors.primary} fontSize="$5" fontWeight="700">
+                +{items.length - SECTION_PREVIEW}
+              </Text>
+              <Text color={colors.textMuted} fontSize="$2">
+                more
+              </Text>
+            </YStack>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </YStack>
   )
@@ -331,6 +365,7 @@ export default function MusicScreen() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [form, setForm] = useState<EditForm>(BLANK_FORM)
   const [saving, setSaving] = useState(false)
+  const [seeAllSection, setSeeAllSection] = useState<{ title: string; items: MusicItem[] } | null>(null)
 
   useEffect(() => {
     load().catch(() => {})
@@ -452,6 +487,7 @@ export default function MusicScreen() {
             onPlay={setPlayingItem}
             onEdit={openEdit}
             onDelete={handleDelete}
+            onSeeAll={() => setSeeAllSection({ title: 'New', items: newItems })}
             buildMode={buildMode}
           />
           <Section
@@ -460,6 +496,7 @@ export default function MusicScreen() {
             onPlay={setPlayingItem}
             onEdit={openEdit}
             onDelete={handleDelete}
+            onSeeAll={() => setSeeAllSection({ title: 'Featured', items: featuredItems })}
             buildMode={buildMode}
           />
           <Section
@@ -468,6 +505,7 @@ export default function MusicScreen() {
             onPlay={setPlayingItem}
             onEdit={openEdit}
             onDelete={handleDelete}
+            onSeeAll={() => setSeeAllSection({ title: 'Music', items: musicItems })}
             buildMode={buildMode}
           />
           <Section
@@ -476,6 +514,7 @@ export default function MusicScreen() {
             onPlay={setPlayingItem}
             onEdit={openEdit}
             onDelete={handleDelete}
+            onSeeAll={() => setSeeAllSection({ title: 'Podcasts', items: podcastItems })}
             buildMode={buildMode}
           />
           <Section
@@ -484,6 +523,7 @@ export default function MusicScreen() {
             onPlay={setPlayingItem}
             onEdit={openEdit}
             onDelete={handleDelete}
+            onSeeAll={() => setSeeAllSection({ title: 'Sermons', items: sermonItems })}
             buildMode={buildMode}
           />
 
@@ -563,6 +603,78 @@ export default function MusicScreen() {
               </YStack>
             </YStack>
           ) : null}
+        </View>
+      </Modal>
+
+      {/* See All modal */}
+      <Modal
+        visible={!!seeAllSection}
+        animationType="slide"
+        onRequestClose={() => setSeeAllSection(null)}
+      >
+        <View style={[styles.editModal, { backgroundColor: colors.background }]}>
+          <XStack
+            padding="$4"
+            borderBottomWidth={1}
+            borderBottomColor={colors.border}
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <Text color={colors.text} fontSize="$5" fontWeight="700">
+              {seeAllSection?.title ?? ''}
+            </Text>
+            <Pressable onPress={() => setSeeAllSection(null)}>
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
+            </Pressable>
+          </XStack>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
+            <YStack gap="$3">
+              {(seeAllSection?.items ?? []).map((item) => (
+                <Pressable key={item.id} onPress={() => { setSeeAllSection(null); setPlayingItem(item) }}>
+                  <XStack
+                    backgroundColor={colors.surface}
+                    borderRadius="$3"
+                    borderWidth={1}
+                    borderColor={colors.border}
+                    overflow="hidden"
+                    gap="$0"
+                  >
+                    <Thumbnail url={item.youtubeUrl} size={96} />
+                    <YStack flex={1} padding="$3" gap="$1" justifyContent="center">
+                      <Text color={colors.text} fontSize="$3" fontWeight="600" numberOfLines={2}>
+                        {item.title}
+                      </Text>
+                      {item.album ? (
+                        <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                          {item.album}
+                        </Text>
+                      ) : null}
+                      {item.type === 'podcast' && item.host ? (
+                        <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                          {item.host}{item.guest ? ` ft. ${item.guest}` : ''}
+                        </Text>
+                      ) : null}
+                      {item.type === 'sermon' && item.preacher ? (
+                        <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                          {item.preacher}
+                        </Text>
+                      ) : null}
+                      {item.year ? (
+                        <Text color={colors.textMuted} fontSize={11}>
+                          {item.year}
+                        </Text>
+                      ) : null}
+                    </YStack>
+                    <YStack alignItems="center" justifyContent="center" paddingRight="$3">
+                      <Text color={colors.primary} fontSize="$5">▶</Text>
+                    </YStack>
+                  </XStack>
+                </Pressable>
+              ))}
+            </YStack>
+          </ScrollView>
         </View>
       </Modal>
 
