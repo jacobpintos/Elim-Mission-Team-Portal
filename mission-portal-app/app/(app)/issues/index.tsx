@@ -86,7 +86,7 @@ export default function IssuesIndex() {
 
   const filtered = issues
     .filter((i) => {
-      if (filter === 'all') return true
+      if (filter === 'all') return i.status !== 'resolved' && i.status !== 'closed'
       if (filter === 'resolved') return i.status === 'resolved' || i.status === 'closed'
       return i.status === filter
     })
