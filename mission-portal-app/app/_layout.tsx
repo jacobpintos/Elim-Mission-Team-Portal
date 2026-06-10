@@ -88,7 +88,8 @@ export default function RootLayout() {
   useEffect(() => {
     init()
     return () => teardown()
-  }, [init, teardown])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (Platform.OS === 'web') return
