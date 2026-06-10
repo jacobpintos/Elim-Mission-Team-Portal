@@ -15,7 +15,11 @@ export const unsubscribe = onRequest(async (req, res) => {
   const db = admin.firestore()
   const field =
     type === 'weekly' ? 'notificationPrefs.weeklyDigest' : 'notificationPrefs.monthlyDigest'
-  await db.collection('users').doc(uid).update({ [field]: false })
+  const digestType = type === 'weekly' ? 'weekly' : 'monthly'
+  await Promise.all([
+    db.collection('users').doc(uid).update({ [field]: false }),
+    db.collection('digestSubscribers').doc(`${uid}_${digestType}`).delete(),
+  ])
   res.status(200).send(
     `<!DOCTYPE html><html lang="en"><head><title>Unsubscribed</title></head><body style="font-family:sans-serif;max-width:400px;margin:60px auto;text-align:center;color:#333"><h2>You've been unsubscribed.</h2><p>You will no longer receive ${type} email digests from The Well of Iowa.</p><p style="margin-top:24px;font-size:13px;color:#888">Changed your mind? Update your notification preferences in the portal.</p></body></html>`
   )
