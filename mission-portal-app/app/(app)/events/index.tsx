@@ -181,6 +181,19 @@ export default function EventsScreen() {
         </XStack>
         {admin ? (
           <XStack gap="$2" alignItems="center">
+            <Pressable onPress={() => router.push('/(app)/events/map' as never)}>
+              <XStack
+                borderRadius="$2"
+                paddingHorizontal="$3"
+                paddingVertical="$1"
+                borderWidth={1}
+                borderColor={colors.border}
+              >
+                <Text color={colors.text} fontSize="$2" fontWeight="600">
+                  Map
+                </Text>
+              </XStack>
+            </Pressable>
             <Pressable onPress={() => router.push('/(app)/admin/avail' as never)}>
               <XStack
                 borderRadius="$2"
