@@ -1,9 +1,11 @@
 import { create } from 'zustand'
-import { collection, onSnapshot } from 'firebase/firestore'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '@/lib/firebase'
 import { sameId } from '@/lib/ids'
 import type { UserProfile } from '@/types/user'
+
+const MEMBER_ROLES = ['admin', 'security', 'regular', 'intern', 'merch', 'worship']
 
 interface UsersStore {
   users: UserProfile[]
@@ -21,7 +23,7 @@ function startFirestoreListener(set: (s: Partial<UsersStore>) => void, get: () =
   if (get()._unsub) return
   set({ loading: true })
   const unsub = onSnapshot(
-    collection(db, 'users'),
+    query(collection(db, 'users'), where('roles', 'array-contains-any', MEMBER_ROLES)),
     (snap) => {
       const users = snap.docs.map((d) => ({ ...(d.data() as UserProfile), uid: d.id }))
       set({ users, loading: false })
