@@ -10,11 +10,14 @@ import { useUsersStore } from '@/stores/usersStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { useConfigStore } from '@/stores/configStore'
 import { geocodeCity } from '@/lib/geocode'
 import { isPublic } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
+import { TeamsEditor } from './TeamsEditor'
+import { DressCodeEditor } from './DressCodeEditor'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
-import type { EventTemplate, CarpoolCarData } from '@/types/events'
+import type { EventTemplate, CarpoolCarData, EventTeam, DressCodeEntry } from '@/types/events'
 
 interface GroupDoc {
   id: string
@@ -26,12 +29,12 @@ interface EventFormModalProps {
   event?: EventTemplate | null
   open: boolean
   onClose: () => void
-  selectedDate?: string // YYYY-MM-DD, pre-populates date field when creating
+  selectedDate?: string
 }
 
 type FormData = {
   title: string
-  date: string // stored as MM/DD/YY in form state
+  date: string
   location: string
   address: string
   city: string
@@ -76,6 +79,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
   const { createTask } = useTasksStore()
   const { profile } = useAuthStore()
   const toast = useUIStore((s) => s.toast)
+  const { commonTeams, subscribe: subConfig, unsubscribe: unsubConfig } = useConfigStore()
 
   const allUsers = allStoreUsers.filter((u) => !isPublic(u) && !!u.displayName)
 
@@ -84,6 +88,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
   const [userSearch, setUserSearch] = useState('')
 
   useEffect(() => {
+    subConfig()
     const unsubTemplates = onSnapshot(collection(db, 'taskTemplates'), (snap) => {
       setTaskTemplates(snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TaskTemplate))
     })
@@ -99,9 +104,11 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
       )
     })
     return () => {
+      unsubConfig()
       unsubTemplates()
       unsubGroups()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const initDate = event?.date
@@ -132,6 +139,8 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
     users: event?.users ?? [],
     groups: event?.groups ?? [],
   })
+  const [teams, setTeams] = useState<EventTeam[]>(event?.teams ?? [])
+  const [dressCode, setDressCode] = useState<DressCodeEntry[]>(event?.dressCode ?? [])
   const [saving, setSaving] = useState(false)
 
   const [carpoolPicker, setCarpoolPicker] = useState<{ carId: string; role: 'driver' | 'rider' } | null>(null)
@@ -203,15 +212,13 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
     })
   }
 
-  const handleSave = async () => {
-    if (!form.title.trim()) {
-      toast('Title is required', 'error')
-      return
-    }
-    if (!form.isVirtual && (!form.city.trim() || !form.state.trim())) {
-      toast('City and state are required for in-person events', 'error')
-      return
-    }
+  // UIDs directly assigned (via users array or assigned groups)
+  const groupMemberUids = new Set(
+    form.groups.flatMap((gid) => allGroups.find((g) => g.id === gid)?.members ?? [])
+  )
+  const assignedUids = new Set([...form.users.map(String), ...groupMemberUids])
+
+  const doSave = async (finalUsers: (string | number)[]) => {
     setSaving(true)
     try {
       const coords = form.isVirtual ? null : await geocodeCity(form.city, form.state)
@@ -233,9 +240,10 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
         carpoolCars: form.carpool ? form.carpoolCars : [],
         isVirtual: form.isVirtual,
         virtualLink: form.virtualLink,
-        users: form.users,
+        users: finalUsers,
         groups: form.groups,
-        teams: event?.teams ?? [],
+        teams,
+        dressCode,
         ...(form.taskTemplateId ? { taskTemplateId: form.taskTemplateId } : {}),
         ...(coords ? { _geocodeLat: coords.lat, _geocodeLng: coords.lng } : {}),
       }
@@ -291,6 +299,48 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleSave = async () => {
+    if (!form.title.trim()) {
+      toast('Title is required', 'error')
+      return
+    }
+    if (!form.isVirtual && (!form.city.trim() || !form.state.trim())) {
+      toast('City and state are required for in-person events', 'error')
+      return
+    }
+
+    // Check for team members not directly assigned to the event
+    const teamMemberUids = [
+      ...new Set(teams.flatMap((t) => [...t.leaders, ...t.members].map(String))),
+    ]
+    const unassignedTeamMembers = teamMemberUids.filter((uid) => !assignedUids.has(uid))
+
+    if (unassignedTeamMembers.length > 0) {
+      const names = unassignedTeamMembers
+        .map(
+          (uid) =>
+            allUsers.find((u) => sameId(u.uid, uid))?.displayName ??
+            allUsers.find((u) => sameId(u.uid, uid))?.email ??
+            uid
+        )
+        .join(', ')
+      Alert.alert(
+        'Team Members Not Assigned',
+        `${names}\n\n${unassignedTeamMembers.length > 1 ? 'These people are' : 'This person is'} on a team but not directly assigned to this event. Add them?`,
+        [
+          { text: 'Go Back', style: 'cancel' },
+          {
+            text: 'Add & Save',
+            onPress: () => doSave([...form.users, ...unassignedTeamMembers]),
+          },
+        ]
+      )
+      return
+    }
+
+    await doSave(form.users)
   }
 
   const handleDelete = () => {
@@ -451,6 +501,161 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
             borderColor={colors.border}
           />
         </YStack>
+
+        {/* ── Assignments ── */}
+
+        {/* Assigned Groups */}
+        <YStack gap="$1">
+          <Text color={colors.text} fontSize="$3">
+            Assigned Groups
+          </Text>
+          {assignedGroups.length > 0 ? (
+            <XStack flexWrap="wrap" gap="$1">
+              {assignedGroups.map((g) => (
+                <Pressable key={g.id} onPress={() => toggleGroup(g.id)}>
+                  <XStack
+                    borderWidth={1}
+                    borderColor={colors.primary}
+                    backgroundColor={colors.primary + '22'}
+                    borderRadius={99}
+                    paddingHorizontal="$2"
+                    paddingVertical="$1"
+                    gap="$1"
+                    alignItems="center"
+                  >
+                    <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                      {g.name}
+                    </Text>
+                    <Text color={colors.primary} fontSize="$1">
+                      ✕
+                    </Text>
+                  </XStack>
+                </Pressable>
+              ))}
+            </XStack>
+          ) : null}
+          {availableGroups.length > 0 ? (
+            <YStack
+              backgroundColor={colors.surface}
+              borderWidth={1}
+              borderColor={colors.border}
+              borderRadius="$2"
+              overflow="hidden"
+            >
+              {availableGroups.map((g) => (
+                <Pressable key={g.id} onPress={() => toggleGroup(g.id)}>
+                  <XStack
+                    padding="$2"
+                    borderBottomWidth={1}
+                    borderBottomColor={colors.border}
+                    alignItems="center"
+                    gap="$2"
+                  >
+                    <Text color={colors.primary} fontSize="$2">
+                      +
+                    </Text>
+                    <YStack flex={1}>
+                      <Text color={colors.text} fontSize="$3">
+                        {g.name}
+                      </Text>
+                      <Text color={colors.textMuted} fontSize="$1">
+                        {g.members.length} member{g.members.length !== 1 ? 's' : ''}
+                      </Text>
+                    </YStack>
+                  </XStack>
+                </Pressable>
+              ))}
+            </YStack>
+          ) : null}
+          {allGroups.length === 0 ? (
+            <Text color={colors.textMuted} fontSize="$2">
+              No groups created yet.
+            </Text>
+          ) : null}
+        </YStack>
+
+        {/* Assigned Members */}
+        <YStack gap="$1">
+          <Text color={colors.text} fontSize="$3">
+            Assigned Members
+          </Text>
+          {assignedUsers.length > 0 ? (
+            <XStack flexWrap="wrap" gap="$1">
+              {assignedUsers.map((u) => (
+                <Pressable key={u.uid} onPress={() => toggleUser(u.uid)}>
+                  <XStack
+                    borderWidth={1}
+                    borderColor={colors.primary}
+                    backgroundColor={colors.primary + '22'}
+                    borderRadius={99}
+                    paddingHorizontal="$2"
+                    paddingVertical="$1"
+                    gap="$1"
+                    alignItems="center"
+                  >
+                    <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                      {u.displayName || u.email || String(u.uid)}
+                    </Text>
+                    <Text color={colors.primary} fontSize="$1">
+                      ✕
+                    </Text>
+                  </XStack>
+                </Pressable>
+              ))}
+            </XStack>
+          ) : null}
+          <Input
+            value={userSearch}
+            onChangeText={setUserSearch}
+            placeholder="Search members to add…"
+            backgroundColor={colors.surface}
+            color={colors.text}
+            borderColor={colors.border}
+          />
+          {searchResults.length > 0 ? (
+            <YStack
+              backgroundColor={colors.surface}
+              borderWidth={1}
+              borderColor={colors.border}
+              borderRadius="$2"
+              overflow="hidden"
+            >
+              {searchResults.map((u) => (
+                <Pressable
+                  key={u.uid}
+                  onPress={() => {
+                    toggleUser(u.uid)
+                    setUserSearch('')
+                  }}
+                >
+                  <XStack
+                    padding="$2"
+                    borderBottomWidth={1}
+                    borderBottomColor={colors.border}
+                    alignItems="center"
+                  >
+                    <Text color={colors.text} fontSize="$3">
+                      {u.displayName || u.email || String(u.uid)}
+                    </Text>
+                  </XStack>
+                </Pressable>
+              ))}
+            </YStack>
+          ) : null}
+        </YStack>
+
+        {/* Teams */}
+        <TeamsEditor
+          teams={teams}
+          onChange={setTeams}
+          assignedUids={assignedUids}
+          allUsers={allUsers}
+          commonTeams={commonTeams}
+          allGroups={allGroups}
+        />
+
+        {/* Dress Code */}
+        <DressCodeEditor entries={dressCode} onChange={setDressCode} teams={teams} />
 
         {/* Recurring toggle */}
         <XStack gap="$3" alignItems="center" justifyContent="space-between">
@@ -829,7 +1034,8 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
                       />
                       {allUsers
                         .filter((u) => {
-                          if (carpoolPicker?.role === 'driver' && u.uid === car.driver) return false
+                          if (carpoolPicker?.role === 'driver' && u.uid === car.driver)
+                            return false
                           if (carpoolPicker?.role === 'rider' && car.riders.includes(u.uid))
                             return false
                           if (
@@ -923,146 +1129,6 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
             </XStack>
           </YStack>
         ) : null}
-
-        {/* Assigned Groups */}
-        <YStack gap="$1">
-          <Text color={colors.text} fontSize="$3">
-            Assigned Groups
-          </Text>
-          {assignedGroups.length > 0 ? (
-            <XStack flexWrap="wrap" gap="$1">
-              {assignedGroups.map((g) => (
-                <Pressable key={g.id} onPress={() => toggleGroup(g.id)}>
-                  <XStack
-                    borderWidth={1}
-                    borderColor={colors.primary}
-                    backgroundColor={colors.primary + '22'}
-                    borderRadius={99}
-                    paddingHorizontal="$2"
-                    paddingVertical="$1"
-                    gap="$1"
-                    alignItems="center"
-                  >
-                    <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                      {g.name}
-                    </Text>
-                    <Text color={colors.primary} fontSize="$1">
-                      ✕
-                    </Text>
-                  </XStack>
-                </Pressable>
-              ))}
-            </XStack>
-          ) : null}
-          {availableGroups.length > 0 ? (
-            <YStack
-              backgroundColor={colors.surface}
-              borderWidth={1}
-              borderColor={colors.border}
-              borderRadius="$2"
-              overflow="hidden"
-            >
-              {availableGroups.map((g) => (
-                <Pressable key={g.id} onPress={() => toggleGroup(g.id)}>
-                  <XStack
-                    padding="$2"
-                    borderBottomWidth={1}
-                    borderBottomColor={colors.border}
-                    alignItems="center"
-                    gap="$2"
-                  >
-                    <Text color={colors.primary} fontSize="$2">
-                      +
-                    </Text>
-                    <YStack flex={1}>
-                      <Text color={colors.text} fontSize="$3">
-                        {g.name}
-                      </Text>
-                      <Text color={colors.textMuted} fontSize="$1">
-                        {g.members.length} member{g.members.length !== 1 ? 's' : ''}
-                      </Text>
-                    </YStack>
-                  </XStack>
-                </Pressable>
-              ))}
-            </YStack>
-          ) : null}
-          {allGroups.length === 0 ? (
-            <Text color={colors.textMuted} fontSize="$2">
-              No groups created yet.
-            </Text>
-          ) : null}
-        </YStack>
-
-        {/* Assigned Members */}
-        <YStack gap="$1">
-          <Text color={colors.text} fontSize="$3">
-            Assigned Members
-          </Text>
-          {assignedUsers.length > 0 ? (
-            <XStack flexWrap="wrap" gap="$1">
-              {assignedUsers.map((u) => (
-                <Pressable key={u.uid} onPress={() => toggleUser(u.uid)}>
-                  <XStack
-                    borderWidth={1}
-                    borderColor={colors.primary}
-                    backgroundColor={colors.primary + '22'}
-                    borderRadius={99}
-                    paddingHorizontal="$2"
-                    paddingVertical="$1"
-                    gap="$1"
-                    alignItems="center"
-                  >
-                    <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                      {u.displayName || u.email || String(u.uid)}
-                    </Text>
-                    <Text color={colors.primary} fontSize="$1">
-                      ✕
-                    </Text>
-                  </XStack>
-                </Pressable>
-              ))}
-            </XStack>
-          ) : null}
-          <Input
-            value={userSearch}
-            onChangeText={setUserSearch}
-            placeholder="Search members to add…"
-            backgroundColor={colors.surface}
-            color={colors.text}
-            borderColor={colors.border}
-          />
-          {searchResults.length > 0 ? (
-            <YStack
-              backgroundColor={colors.surface}
-              borderWidth={1}
-              borderColor={colors.border}
-              borderRadius="$2"
-              overflow="hidden"
-            >
-              {searchResults.map((u) => (
-                <Pressable
-                  key={u.uid}
-                  onPress={() => {
-                    toggleUser(u.uid)
-                    setUserSearch('')
-                  }}
-                >
-                  <XStack
-                    padding="$2"
-                    borderBottomWidth={1}
-                    borderBottomColor={colors.border}
-                    alignItems="center"
-                  >
-                    <Text color={colors.text} fontSize="$3">
-                      {u.displayName || u.email || String(u.uid)}
-                    </Text>
-                  </XStack>
-                </Pressable>
-              ))}
-            </YStack>
-          ) : null}
-        </YStack>
 
         {/* Save / Cancel / Delete */}
         <XStack gap="$2" justifyContent="space-between" alignItems="center">

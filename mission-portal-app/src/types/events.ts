@@ -12,6 +12,11 @@ export interface EventTeam {
   members: (string | number)[]
 }
 
+export interface DressCodeEntry {
+  group: string // team name | 'Unassigned' | '_remainder_'
+  text: string
+}
+
 export interface ExtraDay {
   date: string // 'YYYY-MM-DD'
   startTime?: string
@@ -47,6 +52,7 @@ export interface EventTemplate {
   carpoolCars?: CarpoolCarData[]
   vehicles?: unknown[]
   teams?: EventTeam[]
+  dressCode?: DressCodeEntry[]
   isPublic?: boolean
   taskTemplateId?: string
   extraDays?: ExtraDay[]

@@ -115,6 +115,68 @@ async function notifyAssignedAdmins(
   )
 }
 
+function getDCForUser(ev: EventTemplate, uid: string): string | null {
+  if (!ev.dressCode?.length) return null
+  const myTeam = (ev.teams ?? []).find(
+    (t) => t.leaders.some((m) => sameId(m, uid)) || t.members.some((m) => sameId(m, uid))
+  )
+  const groupName = myTeam?.name ?? 'Unassigned'
+  const specific = ev.dressCode.find((e) => e.group === groupName)
+  const remainder = ev.dressCode.find((e) => e.group === '_remainder_')
+  return (specific ?? remainder)?.text ?? null
+}
+
+async function notifyEventChanges(old: EventTemplate, updated: EventTemplate) {
+  const notifications: Array<{ uid: string; msg: string }> = []
+
+  const teamUids = new Set([
+    ...(old.teams ?? []).flatMap((t) => [...t.leaders, ...t.members].map(String)),
+    ...(updated.teams ?? []).flatMap((t) => [...t.leaders, ...t.members].map(String)),
+  ])
+  for (const uid of teamUids) {
+    const oldTeam = (old.teams ?? []).find(
+      (t) => t.leaders.some((m) => sameId(m, uid)) || t.members.some((m) => sameId(m, uid))
+    )
+    const newTeam = (updated.teams ?? []).find(
+      (t) => t.leaders.some((m) => sameId(m, uid)) || t.members.some((m) => sameId(m, uid))
+    )
+    if (oldTeam?.name !== newTeam?.name) {
+      const msg = newTeam
+        ? `You've been moved to the ${newTeam.name} team for ${updated.title}`
+        : `You've been removed from the ${oldTeam!.name} team for ${updated.title}`
+      notifications.push({ uid, msg })
+    }
+  }
+
+  const assignedUids = new Set<string>([
+    ...(updated.users ?? []).map(String),
+    ...(updated.teams ?? []).flatMap((t) => [...t.leaders, ...t.members].map(String)),
+  ])
+  for (const uid of assignedUids) {
+    if (notifications.some((n) => n.uid === uid)) continue
+    const oldDC = getDCForUser(old, uid)
+    const newDC = getDCForUser(updated, uid)
+    if (newDC !== null && oldDC !== newDC) {
+      notifications.push({ uid, msg: `Dress code update for ${updated.title}: ${newDC}` })
+    }
+  }
+
+  if (notifications.length === 0) return
+  await Promise.all(
+    notifications.map(({ uid, msg }) => {
+      const notif: InAppNotif = {
+        id: `ev_upd_${Date.now()}_${uid}`,
+        msg,
+        ts: Date.now(),
+        type: 'event_update',
+        read: false,
+        link: '/(app)/events',
+      }
+      return setDoc(doc(db, 'notifs', uid), { items: arrayUnion(notif) }, { merge: true })
+    })
+  )
+}
+
 export const useEventsStore = create<EventsStore>((set, get) => ({
   templates: [],
   overrides: {},
@@ -253,6 +315,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   },
 
   updateEvent: async (id, patch) => {
+    const old = get().templates.find((t) => sameId(t.id, id))
     set((s) => ({
       templates: s.templates.map((t) => (sameId(t.id, id) ? { ...t, ...patch } : t)),
     }))
@@ -262,6 +325,9 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       ...geoFields,
       _updatedAt: serverTimestamp(),
     })
+    if (old && (patch.teams !== undefined || patch.dressCode !== undefined)) {
+      notifyEventChanges(old, { ...old, ...patch }).catch(() => {})
+    }
   },
 
   deleteEvent: async (id) => {

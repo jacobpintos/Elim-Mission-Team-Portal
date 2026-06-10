@@ -20,6 +20,156 @@ import type { EventInstance } from '@/types/events'
 import { fetchWeather, fetchNWSAlerts, type WeatherData, type NWSAlert } from '@/lib/weather'
 import { WeatherDetailSheet } from './WeatherDetailSheet'
 
+function TeamsDisplay({
+  event,
+  uid,
+}: {
+  event: EventInstance
+  uid: string
+}) {
+  const colors = useThemeColors()
+  const { users } = useUsersStore()
+  const [showAll, setShowAll] = useState(false)
+
+  const getName = (id: string | number) =>
+    users.find((u) => sameId(u.uid, id))?.displayName ?? String(id)
+
+  const myTeam = (event.teams ?? []).find(
+    (t) =>
+      t.members.some((m) => sameId(m, uid)) || t.leaders.some((m) => sameId(m, uid))
+  )
+
+  return (
+    <YStack gap="$2">
+      <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+        TEAMS
+      </Text>
+
+      {myTeam ? (
+        <YStack
+          backgroundColor={colors.surface}
+          borderRadius="$2"
+          padding="$3"
+          borderWidth={1}
+          borderColor={colors.primary}
+          gap="$1"
+        >
+          <Text color={colors.primary} fontWeight="700" fontSize="$3">
+            Your Team: {myTeam.name}
+          </Text>
+          {myTeam.leaders.length > 0 ? (
+            <Text color={colors.textMuted} fontSize="$2">
+              Leaders: {myTeam.leaders.map(getName).join(', ')}
+            </Text>
+          ) : null}
+          <Text color={colors.textMuted} fontSize="$2">
+            {myTeam.members.map(getName).join(', ')}
+          </Text>
+        </YStack>
+      ) : (
+        <Text color={colors.textMuted} fontSize="$3">
+          You are not assigned to a team.
+        </Text>
+      )}
+
+      <Pressable onPress={() => setShowAll((s) => !s)}>
+        <Text color={colors.primary} fontSize="$2">
+          {showAll
+            ? 'Hide teams'
+            : `Show all teams (${event.teams?.length ?? 0})`}
+        </Text>
+      </Pressable>
+
+      {showAll
+        ? (event.teams ?? []).map((team, idx) => {
+            const isMine = team === myTeam
+            return (
+              <YStack
+                key={idx}
+                backgroundColor={colors.surface}
+                borderRadius="$2"
+                padding="$2"
+                borderWidth={1}
+                borderColor={isMine ? colors.primary : colors.border}
+                gap="$1"
+              >
+                <Text
+                  color={isMine ? colors.primary : colors.text}
+                  fontWeight="600"
+                  fontSize="$3"
+                >
+                  {team.name}
+                </Text>
+                {team.leaders.length > 0 ? (
+                  <Text color={colors.textMuted} fontSize="$2">
+                    Leaders: {team.leaders.map(getName).join(', ')}
+                  </Text>
+                ) : null}
+                <Text color={colors.textMuted} fontSize="$2">
+                  {team.members.map(getName).join(', ')}
+                </Text>
+              </YStack>
+            )
+          })
+        : null}
+    </YStack>
+  )
+}
+
+function DressCodeDisplay({
+  event,
+  uid,
+}: {
+  event: EventInstance
+  uid: string
+}) {
+  const colors = useThemeColors()
+
+  // New structured dress code
+  if (event.dressCode?.length) {
+    const myTeam = (event.teams ?? []).find(
+      (t) =>
+        t.members.some((m) => sameId(m, uid)) || t.leaders.some((m) => sameId(m, uid))
+    )
+    const groupName = myTeam?.name ?? 'Unassigned'
+    const specific = event.dressCode.find((e) => e.group === groupName)
+    const remainder = event.dressCode.find((e) => e.group === '_remainder_')
+    const myDC = specific ?? remainder
+    if (!myDC) return null
+
+    return (
+      <YStack gap="$1">
+        <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+          DRESS CODE
+        </Text>
+        <Text color={colors.text} fontSize="$3">
+          {myDC.text}
+        </Text>
+      </YStack>
+    )
+  }
+
+  // Legacy dcw/dcm fields
+  if (!event.dcw && !event.dcm) return null
+  return (
+    <YStack gap="$1">
+      <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+        DRESS CODE
+      </Text>
+      {event.dcw ? (
+        <Text color={colors.text} fontSize="$3">
+          Worship: {event.dcw}
+        </Text>
+      ) : null}
+      {event.dcm ? (
+        <Text color={colors.text} fontSize="$3">
+          Mission: {event.dcm}
+        </Text>
+      ) : null}
+    </YStack>
+  )
+}
+
 interface FoodSignupEntry {
   uid: string
   displayName: string
@@ -763,24 +913,8 @@ export function EventDetailModal({
           </YStack>
         ) : null}
 
-        {/* Dress Codes — members only */}
-        {isMember && (event.dcw || event.dcm) ? (
-          <YStack gap="$1">
-            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-              DRESS CODE
-            </Text>
-            {event.dcw ? (
-              <Text color={colors.text} fontSize="$3">
-                Worship: {event.dcw}
-              </Text>
-            ) : null}
-            {event.dcm ? (
-              <Text color={colors.text} fontSize="$3">
-                Mission: {event.dcm}
-              </Text>
-            ) : null}
-          </YStack>
-        ) : null}
+        {/* Dress Code — members only */}
+        {isMember ? <DressCodeDisplay event={event} uid={uid} /> : null}
 
         {/* Food — members only */}
         {isMember && event.food ? (
@@ -798,26 +932,7 @@ export function EventDetailModal({
 
         {/* Teams — members only */}
         {isMember && event.teams && event.teams.length > 0 ? (
-          <YStack gap="$2">
-            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-              TEAMS
-            </Text>
-            {event.teams.map((team) => (
-              <YStack
-                key={team.name}
-                backgroundColor={colors.surface}
-                borderRadius="$2"
-                padding="$2"
-                gap="$1"
-                borderWidth={1}
-                borderColor={colors.border}
-              >
-                <Text color={colors.text} fontWeight="600" fontSize="$3">
-                  {team.name}
-                </Text>
-              </YStack>
-            ))}
-          </YStack>
+          <TeamsDisplay event={event} uid={uid} />
         ) : null}
 
         {/* Sign up link — visible to all */}
