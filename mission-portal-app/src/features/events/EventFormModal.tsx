@@ -66,8 +66,10 @@ function isoToDisplay(iso: string): string {
 function displayToIso(display: string): string {
   if (!display) return ''
   const match = display.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
-  if (!match) return display
+  if (!match) return ''
   const [, m, d, y] = match
+  const mn = Number(m), dn = Number(d)
+  if (mn < 1 || mn > 12 || dn < 1 || dn > 31) return ''
   const fullYear = y.length <= 2 ? `20${y.padStart(2, '0')}` : y
   return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
 }
@@ -308,6 +310,10 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
     }
     if (!form.isVirtual && (!form.city.trim() || !form.state.trim())) {
       toast('City and state are required for in-person events', 'error')
+      return
+    }
+    if (!form.isRec && form.date && !displayToIso(form.date)) {
+      toast('Invalid date — use MM/DD/YY format', 'error')
       return
     }
 

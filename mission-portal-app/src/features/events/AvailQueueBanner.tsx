@@ -362,8 +362,7 @@ function InstanceRsvpForm({
   const handleStatusSelect = (s: AvailResponse['status']) => {
     setStatus(s)
     if (s !== 'partial' && s !== 'tbd') {
-      onSaved()
-      setAvail(event, uid, s, note).catch(() => toast('Failed to save RSVP', 'error'))
+      handleSave(s)
     }
   }
 
