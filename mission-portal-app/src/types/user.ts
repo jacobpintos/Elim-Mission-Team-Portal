@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'security' | 'regular' | 'merch' | 'worship' | 'public' | 'unverified'
+export type Role = 'admin' | 'security' | 'regular' | 'intern' | 'merch' | 'worship' | 'public' | 'unverified'
 
 export interface NotificationPrefs {
   newAssignment: { push: boolean; email: boolean }

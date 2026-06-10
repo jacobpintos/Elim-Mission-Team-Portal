@@ -7,6 +7,7 @@ export const isWorship = (u: UserProfile | null) => hasRole(u, 'worship') || isA
 export const isMerch = (u: UserProfile | null) => hasRole(u, 'merch') || isAdmin(u)
 export const isVerified = (u: UserProfile | null) => !!u && !hasRole(u, 'unverified')
 export const isPublic = (u: UserProfile | null) => hasRole(u, 'public')
+export const isIntern = (u: UserProfile | null) => hasRole(u, 'intern')
 
 export type Tab =
   | 'dashboard'
@@ -32,7 +33,7 @@ export type Tab =
 export function visibleTabs(u: UserProfile | null): Tab[] {
   if (!u) return []
 
-  const MEMBER_ROLES: Role[] = ['admin', 'security', 'regular', 'merch', 'worship']
+  const MEMBER_ROLES: Role[] = ['admin', 'security', 'regular', 'intern', 'merch', 'worship']
   const isMember = u.roles?.some((r) => MEMBER_ROLES.includes(r)) ?? false
 
   // Any user without a member role (public, unverified, empty, etc.) gets public tabs
@@ -64,6 +65,18 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
       'public',
       'settings',
     ]
+  }
+
+  // Intern: public base + assignments + operations + specialty tabs. No dashboard or messages.
+  if (isIntern(u) && !hasRole(u, 'regular')) {
+    const tabs: Tab[] = [
+      'home', 'events', 'assignments', 'announce', 'issues',
+      'connect', 'music', 'giving', 'story', 'posts', 'settings',
+    ]
+    if (hasRole(u, 'worship')) tabs.splice(tabs.indexOf('issues') + 1, 0, 'worship')
+    if (hasRole(u, 'security')) tabs.splice(1, 0, 'security')
+    if (hasRole(u, 'merch')) tabs.push('inventory')
+    return tabs
   }
 
   // All other verified members share these base tabs

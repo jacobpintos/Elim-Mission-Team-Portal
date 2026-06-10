@@ -108,6 +108,7 @@ export default function AppLayout() {
   const contentAnim = { transform: [{ translateX: contentX }], flex: 1 as const, zIndex: 1 as const }
 
   useEffect(() => {
+    if (isPublic(profile)) return
     subUsers()
     return () => unsubUsers()
     // eslint-disable-next-line react-hooks/exhaustive-deps
