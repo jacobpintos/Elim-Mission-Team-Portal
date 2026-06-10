@@ -53,10 +53,6 @@ export default function EventsMapScreen() {
     }
   }, [profile])
 
-  // Reset deselection when date range changes
-  useEffect(() => {
-    setDeselected(new Set())
-  }, [startDate, endDate])
 
   // Build location groups from all instances in range
   const allLocGroups = useMemo<LocationGroup[]>(() => {
@@ -275,7 +271,7 @@ export default function EventsMapScreen() {
             type="date"
             value={startDate}
             max={endDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => { setStartDate(e.target.value); setDeselected(new Set()) }}
             style={inputStyle}
           />
         </XStack>
@@ -286,7 +282,7 @@ export default function EventsMapScreen() {
             value={endDate}
             min={startDate}
             max={new Date().toISOString().split('T')[0]}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => { setEndDate(e.target.value); setDeselected(new Set()) }}
             style={inputStyle}
           />
         </XStack>
