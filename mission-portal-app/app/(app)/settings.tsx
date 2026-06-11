@@ -278,7 +278,7 @@ export default function SettingsScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <ScreenTitle options={{ title: 'Settings' }} />
+      <ScreenTitle options={{ title: 'Profile & Settings' }} />
 
       {/* Hidden file input for photo upload */}
       <input

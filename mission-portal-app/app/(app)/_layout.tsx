@@ -39,7 +39,7 @@ const TAB_LABELS: Record<Tab, string> = {
   story: 'Our Story',
   connect: 'Connect',
   rolehub: 'Role-Specific',
-  settings: 'Settings',
+  settings: 'Profile & Settings',
 }
 
 const TAB_ICONS: Record<Tab, string> = {
@@ -198,7 +198,7 @@ export default function AppLayout() {
   const pathSeg = pathname.split('/').filter(Boolean)[0] ?? ''
   const owner = SUB_ROUTE_OWNERS[pathSeg]
   const allowed = tabs.includes(pathSeg as Tab) || (!!owner && tabs.includes(owner))
-  if (pathSeg && pathSeg !== 'profile' && !allowed) {
+  if (pathSeg && !allowed) {
     return <Redirect href={`/${tabs[0]}`} />
   }
 
@@ -328,32 +328,6 @@ export default function AppLayout() {
                 )
               })}
 
-              {/* Profile */}
-              <Pressable
-                onPress={() => {
-                  closeDrawer()
-                  router.push('/profile')
-                }}
-              >
-                <XStack
-                  paddingHorizontal="$4"
-                  paddingVertical="$3"
-                  gap="$3"
-                  alignItems="center"
-                  backgroundColor={pathname === '/profile' ? colors.primary + '22' : 'transparent'}
-                  borderLeftWidth={3}
-                  borderLeftColor={pathname === '/profile' ? colors.primary : 'transparent'}
-                >
-                  <Text fontSize={16}>👤</Text>
-                  <Text
-                    color={pathname === '/profile' ? colors.primary : colors.text}
-                    fontWeight={pathname === '/profile' ? '700' : '400'}
-                    fontSize="$3"
-                  >
-                    Profile
-                  </Text>
-                </XStack>
-              </Pressable>
             </YStack>
           </ScrollView>
 
