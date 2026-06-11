@@ -85,11 +85,19 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
   }
 
   const addTask = (sectionId: string) => {
+    const bulk = bulkAssign[sectionId]
     setSectionTasks((prev) => ({
       ...prev,
       [sectionId]: [
         ...(prev[sectionId] ?? []),
-        { title: '', assignees: [], assigneeGroups: [], daysBefore: 7, daysAfterEvent: undefined, section: sectionId },
+        {
+          title: '',
+          assignees: bulk?.userIds ?? [],
+          assigneeGroups: bulk?.groupIds ?? [],
+          daysBefore: 7,
+          daysAfterEvent: undefined,
+          section: sectionId,
+        },
       ],
     }))
     setExpandedSections((prev) => ({ ...prev, [sectionId]: true }))
