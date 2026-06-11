@@ -1331,14 +1331,14 @@ export default function Assignments() {
       )
       const hasProblem = evTasks.some((t) => t.status === 'behind' || isOverdue(t))
       const tpl = taskTemplates.find((tt) => sameId(tt.id, ev.taskTemplateId))
-      const sectionStatus = TASK_SECTIONS.flatMap((s) => {
+      const tplSections = tpl?.sections ?? TASK_SECTIONS
+      const sectionStatus = tplSections.flatMap((s) => {
         if (!tpl || evTasks.length === 0) return []
         const sectionTitles = (tpl.tasks ?? []).filter((t) => t.section === s.id).map((t) => t.title)
         if (sectionTitles.length === 0) return []
         const sTasks = evTasks.filter((t) => sectionTitles.includes(t.title))
         if (sTasks.length === 0) return []
-        const label = tpl.sectionLabels?.[s.id] ?? s.label
-        return [{ id: s.id, label, color: s.color, hasProblem: sTasks.some((t) => t.status === 'behind' || isOverdue(t)) }]
+        return [{ id: s.id, label: s.label, color: s.color, hasProblem: sTasks.some((t) => t.status === 'behind' || isOverdue(t)) }]
       })
       result.push({
         templateId: ev.id,

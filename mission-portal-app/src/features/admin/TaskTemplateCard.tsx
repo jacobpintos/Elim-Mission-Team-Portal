@@ -9,6 +9,8 @@ export const TASK_SECTIONS = [
   { id: 'other', label: 'Other', color: '#9b59b6' },
 ]
 
+export type TaskSection = { id: string; label: string; color: string }
+
 export interface TaskItem {
   title: string
   assignees: string[]
@@ -22,6 +24,8 @@ export interface TaskTemplate {
   id: string
   name: string
   tasks: TaskItem[]
+  sections?: TaskSection[]
+  /** @deprecated use sections[].label instead */
   sectionLabels?: Record<string, string>
 }
 
@@ -33,7 +37,8 @@ interface TaskTemplateCardProps {
 
 export function TaskTemplateCard({ template, onEdit, onDelete }: TaskTemplateCardProps) {
   const tasks = template.tasks ?? []
-  const usedSections = TASK_SECTIONS.filter((s) => tasks.some((t) => t.section === s.id))
+  const sections = template.sections ?? TASK_SECTIONS
+  const usedSections = sections.filter((s) => tasks.some((t) => t.section === s.id))
   const [confirming, setConfirming] = useState(false)
 
   return (
@@ -96,7 +101,7 @@ export function TaskTemplateCard({ template, onEdit, onDelete }: TaskTemplateCar
               paddingVertical="$0.5"
             >
               <Text fontSize="$1" color="white" fontWeight="600">
-                {template.sectionLabels?.[s.id] ?? s.label}
+                {s.label}
               </Text>
             </XStack>
           ))}

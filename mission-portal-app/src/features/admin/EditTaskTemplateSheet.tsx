@@ -3,12 +3,25 @@ import { ScrollView, Pressable, TextInput } from 'react-native'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
 import { MemberAndGroupPicker } from './MemberAndGroupPicker'
-import { TASK_SECTIONS, type TaskItem, type TaskTemplate } from './TaskTemplateCard'
+import { TASK_SECTIONS, type TaskItem, type TaskSection, type TaskTemplate } from './TaskTemplateCard'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+
+const SECTION_COLORS = [
+  '#e8624a', '#2980b9', '#27ae60', '#f39c12',
+  '#9b59b6', '#1abc9c', '#e91e8c', '#607d8b',
+]
+
+function slugify(label: string, existing: string[]): string {
+  const base = label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || 'section'
+  if (!existing.includes(base)) return base
+  let i = 2
+  while (existing.includes(`${base}_${i}`)) i++
+  return `${base}_${i}`
+}
 
 interface EditTaskTemplateSheetProps {
   open: boolean
@@ -25,9 +38,9 @@ interface BulkAssign {
   groupIds: string[]
 }
 
-function buildSectionTasks(tasks: TaskItem[]): SectionTasks {
+function buildSectionTasks(tasks: TaskItem[], sections: TaskSection[]): SectionTasks {
   const result: SectionTasks = {}
-  for (const s of TASK_SECTIONS) {
+  for (const s of sections) {
     result[s.id] = tasks
       .filter((t) => t.section === s.id)
       .map((t) => ({ ...t, assignees: t.assignees ?? [], assigneeGroups: t.assigneeGroups ?? [] }))
@@ -35,9 +48,9 @@ function buildSectionTasks(tasks: TaskItem[]): SectionTasks {
   return result
 }
 
-function flattenSectionTasks(sectionTasks: SectionTasks): TaskItem[] {
+function flattenSectionTasks(sectionTasks: SectionTasks, sections: TaskSection[]): TaskItem[] {
   const result: TaskItem[] = []
-  for (const s of TASK_SECTIONS) {
+  for (const s of sections) {
     result.push(...(sectionTasks[s.id] ?? []))
   }
   return result
@@ -48,37 +61,78 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
   const { profile } = useAuthStore()
 
   const [name, setName] = useState('')
+  const [templateSections, setTemplateSections] = useState<TaskSection[]>([...TASK_SECTIONS])
   const [sectionTasks, setSectionTasks] = useState<SectionTasks>({})
-  const [sectionLabels, setSectionLabels] = useState<Record<string, string>>({})
   const [bulkAssign, setBulkAssign] = useState<Record<string, BulkAssign>>({})
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({})
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
+  const [addingSection, setAddingSection] = useState(false)
+  const [newSectionLabel, setNewSectionLabel] = useState('')
+  const [newSectionColor, setNewSectionColor] = useState(SECTION_COLORS[0])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (template) {
+      const secs = template.sections ?? TASK_SECTIONS
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(template.name)
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSectionTasks(buildSectionTasks(template.tasks))
+      setTemplateSections(secs)
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSectionLabels(template.sectionLabels ?? {})
+      setSectionTasks(buildSectionTasks(template.tasks, secs))
     } else {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setName('')
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTemplateSections([...TASK_SECTIONS])
       const initial: SectionTasks = {}
-      for (const s of TASK_SECTIONS) {
-        initial[s.id] = []
-      }
+      for (const s of TASK_SECTIONS) initial[s.id] = []
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSectionTasks(initial)
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSectionLabels({})
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBulkAssign({})
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setExpandedSections({})
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setConfirmRemove(null)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAddingSection(false)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNewSectionLabel('')
   }, [template, open])
+
+  const updateSectionLabel = (id: string, label: string) => {
+    setTemplateSections((prev) => prev.map((s) => (s.id === id ? { ...s, label } : s)))
+  }
+
+  const removeSection = (id: string) => {
+    setTemplateSections((prev) => prev.filter((s) => s.id !== id))
+    setSectionTasks((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    setBulkAssign((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    setConfirmRemove(null)
+  }
+
+  const addSection = () => {
+    const label = newSectionLabel.trim()
+    if (!label) return
+    const id = slugify(label, templateSections.map((s) => s.id))
+    const newSec: TaskSection = { id, label, color: newSectionColor }
+    setTemplateSections((prev) => [...prev, newSec])
+    setSectionTasks((prev) => ({ ...prev, [id]: [] }))
+    setAddingSection(false)
+    setNewSectionLabel('')
+    setNewSectionColor(SECTION_COLORS[0])
+    setExpandedSections((prev) => ({ ...prev, [id]: true }))
+  }
 
   const toggleSection = (id: string) => {
     setExpandedSections((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -130,7 +184,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
         assigneeGroups: bulk.groupIds,
       })),
     }))
-    toast(`Applied to all ${sectionId} tasks`, 'success')
+    toast(`Applied to all tasks in section`, 'success')
   }
 
   const handleSave = async () => {
@@ -138,7 +192,11 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
       toast('Template name is required', 'error')
       return
     }
-    const allTasks = flattenSectionTasks(sectionTasks)
+    if (templateSections.length === 0) {
+      toast('Add at least one category', 'error')
+      return
+    }
+    const allTasks = flattenSectionTasks(sectionTasks, templateSections)
       .filter((t) => t.title.trim())
       .map((t) => ({ ...t, assignees: t.assignees ?? [], assigneeGroups: t.assigneeGroups ?? [] }))
     if (allTasks.length === 0) {
@@ -147,41 +205,24 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
     }
     setSaving(true)
     try {
-      const cleanLabels = Object.fromEntries(
-        Object.entries(sectionLabels).filter(([, v]) => v.trim())
-      )
+      const payload = {
+        name: name.trim(),
+        tasks: allTasks,
+        sections: templateSections,
+        updatedAt: new Date(),
+      }
       if (template) {
-        await updateDoc(doc(db, 'taskTemplates', String(template.id)), {
-          name: name.trim(),
-          tasks: allTasks,
-          sectionLabels: cleanLabels,
-          updatedAt: new Date(),
-        })
-        await audit(
-          'taskTemplate.updated',
-          `Updated task template "${name.trim()}"`,
-          profile?.displayName ?? ''
-        )
+        await updateDoc(doc(db, 'taskTemplates', String(template.id)), payload)
+        await audit('taskTemplate.updated', `Updated task template "${name.trim()}"`, profile?.displayName ?? '')
         toast('Template updated!', 'success')
       } else {
-        await addDoc(collection(db, 'taskTemplates'), {
-          name: name.trim(),
-          tasks: allTasks,
-          sectionLabels: cleanLabels,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        await audit(
-          'taskTemplate.created',
-          `Created task template "${name.trim()}"`,
-          profile?.displayName ?? ''
-        )
+        await addDoc(collection(db, 'taskTemplates'), { ...payload, createdAt: new Date() })
+        await audit('taskTemplate.created', `Created task template "${name.trim()}"`, profile?.displayName ?? '')
         toast('Template created!', 'success')
       }
       onClose()
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save template'
-      toast(message, 'error')
+      toast(err instanceof Error ? err.message : 'Failed to save template', 'error')
     } finally {
       setSaving(false)
     }
@@ -192,22 +233,16 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
       <ScrollView style={{ maxHeight: 600 }}>
         <YStack gap="$3" padding="$2">
           <YStack gap="$1">
-            <Text fontSize="$3" fontWeight="600">
-              Template Name *
-            </Text>
-            <Input
-              placeholder="Template Name"
-              value={name}
-              onChangeText={setName}
-              size="$3"
-            />
+            <Text fontSize="$3" fontWeight="600">Template Name *</Text>
+            <Input placeholder="Template Name" value={name} onChangeText={setName} size="$3" />
           </YStack>
 
-          {TASK_SECTIONS.map((section) => {
+          {templateSections.map((section) => {
             const tasks = sectionTasks[section.id] ?? []
             const isExpanded = expandedSections[section.id] ?? false
             const bulk = bulkAssign[section.id] ?? { userIds: [], groupIds: [] }
             const hasBulk = bulk.userIds.length > 0 || bulk.groupIds.length > 0
+            const isConfirmingRemove = confirmRemove === section.id
 
             return (
               <YStack
@@ -217,7 +252,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                 borderRadius="$2"
                 overflow="hidden"
               >
-                {/* Section header: editable label + expand toggle */}
+                {/* Section header */}
                 <XStack
                   padding="$2"
                   alignItems="center"
@@ -233,34 +268,43 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                       flexShrink={0}
                     />
                     <TextInput
-                      value={sectionLabels[section.id] ?? section.label}
-                      onChangeText={(v) =>
-                        setSectionLabels((prev) => ({ ...prev, [section.id]: v }))
-                      }
-                      style={{
-                        fontWeight: '700',
-                        fontSize: 14,
-                        color: section.color,
-                        minWidth: 60,
-                        maxWidth: 160,
-                        padding: 0,
-                      }}
-                      placeholder={section.label}
+                      value={section.label}
+                      onChangeText={(v) => updateSectionLabel(section.id, v)}
+                      style={{ fontWeight: '700', fontSize: 14, color: section.color, minWidth: 60, maxWidth: 160, padding: 0 }}
+                      placeholder="Category name"
                     />
-                    <Text fontSize="$2" color="$gray10">
-                      ({tasks.length})
-                    </Text>
+                    <Text fontSize="$2" color="$gray10">({tasks.length})</Text>
                   </XStack>
-                  <Pressable onPress={() => toggleSection(section.id)}>
-                    <Text fontSize="$3" color="$gray10" paddingHorizontal="$2">
-                      {isExpanded ? '▲' : '▼'}
-                    </Text>
-                  </Pressable>
+
+                  <XStack alignItems="center" gap="$1">
+                    {/* Remove / confirm */}
+                    {isConfirmingRemove ? (
+                      <>
+                        <Pressable onPress={() => setConfirmRemove(null)}>
+                          <Text fontSize="$2" color="$gray10" paddingHorizontal="$2">Cancel</Text>
+                        </Pressable>
+                        <Pressable onPress={() => removeSection(section.id)}>
+                          <XStack backgroundColor="#c0392b" borderRadius="$1" paddingHorizontal="$2" paddingVertical="$0.5">
+                            <Text fontSize="$2" color="white" fontWeight="700">Remove</Text>
+                          </XStack>
+                        </Pressable>
+                      </>
+                    ) : (
+                      <Pressable onPress={() => setConfirmRemove(section.id)}>
+                        <Text fontSize="$3" color="$gray8" paddingHorizontal="$1">✕</Text>
+                      </Pressable>
+                    )}
+                    <Pressable onPress={() => toggleSection(section.id)}>
+                      <Text fontSize="$3" color="$gray10" paddingHorizontal="$2">
+                        {isExpanded ? '▲' : '▼'}
+                      </Text>
+                    </Pressable>
+                  </XStack>
                 </XStack>
 
                 {isExpanded && (
                   <YStack padding="$2" gap="$3">
-                    {/* Bulk assign for this section */}
+                    {/* Bulk assign panel */}
                     <YStack
                       gap="$2"
                       padding="$2"
@@ -283,12 +327,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                         }
                       />
                       {hasBulk && tasks.length > 0 ? (
-                        <Button
-                          size="$2"
-                          theme="active"
-                          alignSelf="flex-start"
-                          onPress={() => applyBulkAssign(section.id)}
-                        >
+                        <Button size="$2" theme="active" alignSelf="flex-start" onPress={() => applyBulkAssign(section.id)}>
                           Apply to all {tasks.length} task{tasks.length !== 1 ? 's' : ''}
                         </Button>
                       ) : null}
@@ -296,24 +335,10 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
 
                     {/* Individual tasks */}
                     {tasks.map((task, index) => (
-                      <YStack
-                        key={index}
-                        gap="$2"
-                        padding="$2"
-                        backgroundColor="$gray2"
-                        borderRadius="$2"
-                      >
+                      <YStack key={index} gap="$2" padding="$2" backgroundColor="$gray2" borderRadius="$2">
                         <XStack alignItems="center" justifyContent="space-between">
-                          <Text fontSize="$2" fontWeight="600" color="$gray10">
-                            Task {index + 1}
-                          </Text>
-                          <Button
-                            size="$1"
-                            onPress={() => removeTask(section.id, index)}
-                            theme="red"
-                          >
-                            Remove
-                          </Button>
+                          <Text fontSize="$2" fontWeight="600" color="$gray10">Task {index + 1}</Text>
+                          <Button size="$1" onPress={() => removeTask(section.id, index)} theme="red">Remove</Button>
                         </XStack>
 
                         <Input
@@ -340,11 +365,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                                     }
                                   }}
                                 >
-                                  <XStack
-                                    paddingHorizontal="$2"
-                                    paddingVertical="$1"
-                                    backgroundColor={active ? '$blue9' : 'transparent'}
-                                  >
+                                  <XStack paddingHorizontal="$2" paddingVertical="$1" backgroundColor={active ? '$blue9' : 'transparent'}>
                                     <Text fontSize="$2" color={active ? 'white' : '$gray10'} fontWeight={active ? '700' : '400'}>
                                       {side === 'before' ? 'Before' : 'After'}
                                     </Text>
@@ -390,12 +411,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                       </YStack>
                     ))}
 
-                    <Button
-                      size="$2"
-                      onPress={() => addTask(section.id)}
-                      theme="active"
-                      alignSelf="flex-start"
-                    >
+                    <Button size="$2" onPress={() => addTask(section.id)} theme="active" alignSelf="flex-start">
                       + Add Task
                     </Button>
                   </YStack>
@@ -404,10 +420,60 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
             )
           })}
 
+          {/* Add category */}
+          {addingSection ? (
+            <YStack gap="$2" padding="$2" borderWidth={1} borderColor="$borderColor" borderRadius="$2">
+              <Text fontSize="$3" fontWeight="600">New Category</Text>
+              <Input
+                placeholder="Category name"
+                value={newSectionLabel}
+                onChangeText={setNewSectionLabel}
+                size="$3"
+                autoFocus
+              />
+              <XStack gap="$2" flexWrap="wrap">
+                {SECTION_COLORS.map((c) => (
+                  <Pressable key={c} onPress={() => setNewSectionColor(c)}>
+                    <XStack
+                      width={28}
+                      height={28}
+                      borderRadius={14}
+                      backgroundColor={c}
+                      borderWidth={newSectionColor === c ? 3 : 0}
+                      borderColor="white"
+                      style={{ outline: newSectionColor === c ? `2px solid ${c}` : 'none' } as object}
+                    />
+                  </Pressable>
+                ))}
+              </XStack>
+              <XStack gap="$2">
+                <Button size="$2" theme="gray" onPress={() => { setAddingSection(false); setNewSectionLabel('') }}>
+                  Cancel
+                </Button>
+                <Button size="$2" theme="active" onPress={addSection} disabled={!newSectionLabel.trim()}>
+                  Add
+                </Button>
+              </XStack>
+            </YStack>
+          ) : (
+            <Pressable onPress={() => setAddingSection(true)}>
+              <XStack
+                padding="$2"
+                borderWidth={1}
+                borderColor="$borderColor"
+                borderRadius="$2"
+                alignItems="center"
+                justifyContent="center"
+                gap="$2"
+              >
+                <Text fontSize="$3" color="$gray10">+</Text>
+                <Text fontSize="$3" color="$gray10">Add Category</Text>
+              </XStack>
+            </Pressable>
+          )}
+
           <XStack gap="$2" justifyContent="flex-end">
-            <Button size="$3" onPress={onClose} theme="gray">
-              Cancel
-            </Button>
+            <Button size="$3" onPress={onClose} theme="gray">Cancel</Button>
             <Button size="$3" onPress={handleSave} disabled={saving} theme="active">
               {saving ? <Spinner size="small" /> : 'Save Template'}
             </Button>
