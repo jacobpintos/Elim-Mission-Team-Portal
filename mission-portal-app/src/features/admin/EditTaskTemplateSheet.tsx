@@ -205,7 +205,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
           assigneeGroups: t.assigneeGroups ?? [],
         }
         Object.keys(item).forEach((k) => item[k] === undefined && delete item[k])
-        return item as TaskItem
+        return item as unknown as TaskItem
       })
     if (allTasks.length === 0) {
       toast('Add at least one task with a title', 'error')
