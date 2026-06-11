@@ -272,7 +272,11 @@ function FlightBlock({
       ) : null}
       {flight ? (
         statusLink ? (
-          <Pressable onPress={() => Linking.openURL(statusLink)}>
+          <Pressable
+            onPress={() =>
+              Linking.openURL(/^https?:\/\//i.test(statusLink) ? statusLink : `https://${statusLink}`)
+            }
+          >
             <Text color={colors.primary} fontSize="$2" textDecorationLine="underline">
               Flight {flight}
             </Text>
