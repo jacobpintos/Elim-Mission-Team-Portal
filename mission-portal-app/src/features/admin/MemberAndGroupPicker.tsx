@@ -124,6 +124,7 @@ export function MemberAndGroupPicker({
         size="$3"
       />
 
+      {!q ? null : (
       <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
         {tab === 'people'
           ? filteredUsers.slice(0, 50).map((u) => {
@@ -203,6 +204,7 @@ export function MemberAndGroupPicker({
           <Text padding="$2" color="$gray10" fontSize="$3">No groups found</Text>
         ) : null}
       </ScrollView>
+      )}
     </YStack>
   )
 }
