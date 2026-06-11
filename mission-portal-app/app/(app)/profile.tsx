@@ -97,7 +97,7 @@ export default function ProfileScreen() {
   const toggleEmailPref = async (key: NotifKey, value: boolean) => {
     const updated = {
       ...prefs,
-      [key]: { ...prefs[key], email: value },
+      [key]: { ...(prefs?.[key] ?? {}), email: value },
     }
     try {
       await updateDoc(doc(db, 'users', fbUser.uid), {
@@ -112,7 +112,7 @@ export default function ProfileScreen() {
   const togglePushPref = async (key: NotifKey, value: boolean) => {
     const updated = {
       ...prefs,
-      [key]: { ...prefs[key], push: value },
+      [key]: { ...(prefs?.[key] ?? {}), push: value },
     }
     try {
       await updateDoc(doc(db, 'users', fbUser.uid), {
@@ -249,7 +249,7 @@ export default function ProfileScreen() {
                   {/* Push — functional */}
                   <YStack flex={1} alignItems="center">
                     <Switch
-                      checked={prefs[key].push}
+                      checked={prefs?.[key]?.push ?? false}
                       onCheckedChange={(v) => togglePushPref(key, v)}
                     >
                       <Switch.Thumb />
@@ -258,7 +258,7 @@ export default function ProfileScreen() {
                   {/* Email — functional */}
                   <YStack flex={1} alignItems="center">
                     <Switch
-                      checked={prefs[key].email}
+                      checked={prefs?.[key]?.email ?? false}
                       onCheckedChange={(v) => toggleEmailPref(key, v)}
                     >
                       <Switch.Thumb />
@@ -274,7 +274,7 @@ export default function ProfileScreen() {
             <XStack alignItems="center" justifyContent="space-between">
               <Label>Weekly digest</Label>
               <Switch
-                checked={prefs.weeklyDigest}
+                checked={prefs?.weeklyDigest ?? false}
                 onCheckedChange={(v) => toggleDigest('weeklyDigest', v)}
               >
                 <Switch.Thumb />
@@ -285,7 +285,7 @@ export default function ProfileScreen() {
               <XStack alignItems="center" justifyContent="space-between">
                 <Label>Monthly digest</Label>
                 <Switch
-                  checked={prefs.monthlyDigest}
+                  checked={prefs?.monthlyDigest ?? false}
                   onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}
                 >
                   <Switch.Thumb />
