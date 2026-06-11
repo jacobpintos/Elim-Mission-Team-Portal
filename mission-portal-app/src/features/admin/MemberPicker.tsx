@@ -15,13 +15,15 @@ export function MemberPicker({ selected, onChange, label }: MemberPickerProps) {
   const { users } = useUsersStore()
   const safeSelected = Array.isArray(selected) ? selected.map(String) : []
 
+  const nonPublic = users.filter((u) => !u.roles?.includes('public'))
+
   const filtered = search.trim()
-    ? users.filter(
+    ? nonPublic.filter(
         (u) =>
           (u.displayName ?? '').toLowerCase().includes(search.toLowerCase()) ||
           (u.email ?? '').toLowerCase().includes(search.toLowerCase())
       )
-    : users
+    : nonPublic
 
   const toggle = (uid: string) => {
     if (safeSelected.includes(uid)) onChange(safeSelected.filter((id) => id !== uid))
@@ -32,7 +34,7 @@ export function MemberPicker({ selected, onChange, label }: MemberPickerProps) {
     onChange(safeSelected.filter((id) => id !== uid))
   }
 
-  const selectedUsers = users.filter((u) => safeSelected.includes(u.uid))
+  const selectedUsers = nonPublic.filter((u) => safeSelected.includes(u.uid))
 
   return (
     <YStack gap="$2">
