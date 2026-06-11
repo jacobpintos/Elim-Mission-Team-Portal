@@ -13,7 +13,7 @@ interface MemberPickerProps {
 export function MemberPicker({ selected, onChange, label }: MemberPickerProps) {
   const [search, setSearch] = useState('')
   const { users } = useUsersStore()
-  const safeSelected = selected ?? []
+  const safeSelected = Array.isArray(selected) ? selected.map(String) : []
 
   const filtered = search.trim()
     ? users.filter(

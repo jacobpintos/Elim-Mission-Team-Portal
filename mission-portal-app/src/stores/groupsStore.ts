@@ -26,7 +26,14 @@ function startFirestoreListener(set: (s: Partial<GroupsStore>) => void, get: () 
   const unsub = onSnapshot(
     collection(db, 'groups'),
     (snap) => {
-      const groups: GroupDoc[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
+      const groups: GroupDoc[] = snap.docs.map((d) => {
+        const data = d.data()
+        return {
+          id: d.id,
+          name: data.name ?? '',
+          members: Array.isArray(data.members) ? data.members.map(String) : [],
+        }
+      })
       set({ groups, loading: false })
     },
     (err) => {
