@@ -1211,7 +1211,6 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
           <FlightEditor
             entries={flightEntries}
             onChange={setFlightEntries}
-            assignedUids={assignedUids}
             allUsers={allUsers}
           />
         ) : null}

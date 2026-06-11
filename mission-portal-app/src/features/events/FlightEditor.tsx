@@ -9,7 +9,6 @@ import type { UserProfile } from '@/types/user'
 interface FlightEditorProps {
   entries: FlightEntry[]
   onChange: (entries: FlightEntry[]) => void
-  assignedUids: Set<string>
   allUsers: UserProfile[]
 }
 
@@ -131,16 +130,14 @@ function FlightSection({
   )
 }
 
-export function FlightEditor({ entries, onChange, assignedUids, allUsers }: FlightEditorProps) {
+export function FlightEditor({ entries, onChange, allUsers }: FlightEditorProps) {
   const colors = useThemeColors()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showPicker, setShowPicker] = useState(false)
   const [search, setSearch] = useState('')
 
   const usedUids = new Set(entries.map((e) => e.uid))
-  const availableUsers = allUsers.filter(
-    (u) => assignedUids.has(String(u.uid)) && !usedUids.has(String(u.uid))
-  )
+  const availableUsers = allUsers.filter((u) => !usedUids.has(String(u.uid)))
   const searchResults = search.trim()
     ? availableUsers
         .filter(
