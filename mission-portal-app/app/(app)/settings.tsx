@@ -150,7 +150,7 @@ export default function SettingsScreen() {
         reader.readAsDataURL(file)
       })
       const compressed = await compressImage(dataUrl)
-      const sref = storageRef(storage, `avatars/${fbUser.uid}.jpg`)
+      const sref = storageRef(storage, `avatars/${fbUser.uid}`)
       await uploadString(sref, compressed, 'data_url')
       const photoURL = await getDownloadURL(sref)
       await updateDoc(doc(db, 'users', fbUser.uid), { photoURL })

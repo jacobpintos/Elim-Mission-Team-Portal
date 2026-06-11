@@ -22,7 +22,10 @@
     "rules": "mission-portal-app/firestore.rules",
     "indexes": "mission-portal-app/firestore.indexes.json"
   },
-  "storage": {
-    "rules": "mission-portal-app/storage.rules"
-  }
+  "storage": [
+    {
+      "bucket": "mission-team-portal.firebasestorage.app",
+      "rules": "mission-portal-app/storage.rules"
+    }
+  ]
 }
