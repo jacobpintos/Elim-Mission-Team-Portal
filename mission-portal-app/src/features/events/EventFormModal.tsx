@@ -16,8 +16,9 @@ import { isPublic } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { TeamsEditor } from './TeamsEditor'
 import { DressCodeEditor } from './DressCodeEditor'
+import { LodgingEditor } from './LodgingEditor'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
-import type { EventTemplate, CarpoolCarData, EventTeam, DressCodeEntry } from '@/types/events'
+import type { EventTemplate, CarpoolCarData, EventTeam, DressCodeEntry, LodgingEntry } from '@/types/events'
 
 interface GroupDoc {
   id: string
@@ -48,6 +49,7 @@ type FormData = {
   foodItems: string[]
   carpool: boolean
   carpoolCars: CarpoolCarData[]
+  lodging: boolean
   isVirtual: boolean
   virtualLink: string
   taskTemplateId: string
@@ -135,6 +137,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
     foodItems: event?.foodItems ?? [],
     carpool: event?.carpool ?? false,
     carpoolCars: event?.carpoolCars ?? [],
+    lodging: event?.lodging ?? false,
     isVirtual: event?.isVirtual ?? false,
     virtualLink: event?.virtualLink ?? '',
     taskTemplateId: event?.taskTemplateId ?? '',
@@ -143,6 +146,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
   })
   const [teams, setTeams] = useState<EventTeam[]>(event?.teams ?? [])
   const [dressCode, setDressCode] = useState<DressCodeEntry[]>(event?.dressCode ?? [])
+  const [lodgingEntries, setLodgingEntries] = useState<LodgingEntry[]>(event?.lodgingEntries ?? [])
   const [saving, setSaving] = useState(false)
 
   const [carpoolPicker, setCarpoolPicker] = useState<{ carId: string; role: 'driver' | 'rider' } | null>(null)
@@ -240,6 +244,8 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
         foodItems: form.food ? form.foodItems.filter((s) => s.trim()) : [],
         carpool: form.carpool,
         carpoolCars: form.carpool ? form.carpoolCars : [],
+        lodging: form.lodging,
+        lodgingEntries: form.lodging ? lodgingEntries : [],
         isVirtual: form.isVirtual,
         virtualLink: form.virtualLink,
         users: finalUsers,
@@ -344,6 +350,31 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
         ]
       )
       return
+    }
+
+    // Check for people not assigned to any lodging
+    if (form.lodging && assignedUids.size > 0) {
+      const placed = new Set(lodgingEntries.flatMap((e) => e.assignees))
+      const unassignedLodging = [...assignedUids].filter((uid) => !placed.has(uid))
+      if (unassignedLodging.length > 0) {
+        const names = unassignedLodging
+          .map(
+            (uid) =>
+              allUsers.find((u) => sameId(u.uid, uid))?.displayName ??
+              allUsers.find((u) => sameId(u.uid, uid))?.email ??
+              uid
+          )
+          .join(', ')
+        Alert.alert(
+          'Unassigned Lodging',
+          `${names}\n\n${unassignedLodging.length > 1 ? 'These people are' : 'This person is'} not assigned to any lodging. Save anyway?`,
+          [
+            { text: 'Go Back', style: 'cancel' },
+            { text: 'Save Anyway', onPress: () => doSave(form.users) },
+          ]
+        )
+        return
+      }
     }
 
     await doSave(form.users)
@@ -1101,6 +1132,49 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
               </XStack>
             </Pressable>
           </YStack>
+        ) : null}
+
+        {/* Lodging toggle + entries */}
+        <XStack gap="$3" alignItems="center" justifyContent="space-between">
+          <Text color={colors.text} fontSize="$3" flex={1}>
+            Hotel / Lodging
+          </Text>
+          <Pressable
+            onPress={() => {
+              const next = !form.lodging
+              field('lodging')(next)
+              if (next && lodgingEntries.length === 0) {
+                setLodgingEntries([{ id: Date.now().toString(), name: '', room: '', assignees: [] }])
+              }
+            }}
+          >
+            <XStack
+              paddingHorizontal="$3"
+              paddingVertical="$1"
+              borderRadius={99}
+              backgroundColor={form.lodging ? colors.primary : colors.surface}
+              borderWidth={1}
+              borderColor={form.lodging ? colors.primary : colors.border}
+            >
+              <Text
+                color={form.lodging ? 'white' : colors.textMuted}
+                fontSize="$2"
+                fontWeight="600"
+              >
+                {form.lodging ? 'ON' : 'OFF'}
+              </Text>
+            </XStack>
+          </Pressable>
+        </XStack>
+        {form.lodging ? (
+          <LodgingEditor
+            entries={lodgingEntries}
+            onChange={setLodgingEntries}
+            assignedUids={assignedUids}
+            allUsers={allUsers}
+            teams={teams}
+            assignedGroups={allGroups.filter((g) => form.groups.includes(g.id))}
+          />
         ) : null}
 
         {/* Task Template selector */}

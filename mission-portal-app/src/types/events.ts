@@ -1,3 +1,10 @@
+export interface LodgingEntry {
+  id: string
+  name: string
+  room?: string
+  assignees: string[]
+}
+
 export interface CarpoolCarData {
   id: string
   label: string
@@ -55,6 +62,8 @@ export interface EventTemplate {
   dressCode?: DressCodeEntry[]
   isPublic?: boolean
   taskTemplateId?: string
+  lodging?: boolean
+  lodgingEntries?: LodgingEntry[]
   extraDays?: ExtraDay[]
   overrides?: Record<string, Partial<EventTemplate>>
   planningBoardId?: string | number

@@ -116,6 +116,103 @@ function TeamsDisplay({
   )
 }
 
+function LodgingDisplay({
+  event,
+  uid,
+  isAdmin,
+}: {
+  event: EventInstance
+  uid: string
+  isAdmin: boolean
+}) {
+  const colors = useThemeColors()
+  const { users } = useUsersStore()
+  const [showAll, setShowAll] = useState(false)
+
+  const getName = (id: string | number) =>
+    users.find((u) => sameId(u.uid, id))?.displayName ?? String(id)
+
+  const myEntry = (event.lodgingEntries ?? []).find((e) =>
+    e.assignees.some((a) => sameId(a, uid))
+  )
+
+  return (
+    <YStack gap="$2">
+      <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+        LODGING
+      </Text>
+
+      {myEntry ? (
+        <YStack
+          backgroundColor={colors.surface}
+          borderRadius="$2"
+          padding="$3"
+          borderWidth={1}
+          borderColor={colors.primary}
+          gap="$1"
+        >
+          <Text color={colors.primary} fontWeight="700" fontSize="$3">
+            {myEntry.name}
+          </Text>
+          {myEntry.room ? (
+            <Text color={colors.textMuted} fontSize="$2">
+              Room / Location: {myEntry.room}
+            </Text>
+          ) : null}
+          <Text color={colors.textMuted} fontSize="$2">
+            With:{' '}
+            {myEntry.assignees.filter((a) => !sameId(a, uid)).map(getName).join(', ') ||
+              'Just you'}
+          </Text>
+        </YStack>
+      ) : (
+        <Text color={colors.textMuted} fontSize="$3">
+          You have no lodging assignment.
+        </Text>
+      )}
+
+      {isAdmin ? (
+        <Pressable onPress={() => setShowAll((s) => !s)}>
+          <Text color={colors.primary} fontSize="$2">
+            {showAll
+              ? 'Hide all lodging'
+              : `Show all lodging (${event.lodgingEntries?.length ?? 0})`}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {isAdmin && showAll
+        ? (event.lodgingEntries ?? []).map((entry) => {
+            const isMine = entry === myEntry
+            return (
+              <YStack
+                key={entry.id}
+                backgroundColor={colors.surface}
+                borderRadius="$2"
+                padding="$2"
+                borderWidth={1}
+                borderColor={isMine ? colors.primary : colors.border}
+                gap="$1"
+              >
+                <Text
+                  color={isMine ? colors.primary : colors.text}
+                  fontWeight="600"
+                  fontSize="$3"
+                >
+                  {entry.name}
+                  {entry.room ? ` — ${entry.room}` : ''}
+                </Text>
+                <Text color={colors.textMuted} fontSize="$2">
+                  {entry.assignees.map(getName).join(', ') || 'No one assigned'}
+                </Text>
+              </YStack>
+            )
+          })
+        : null}
+    </YStack>
+  )
+}
+
 function DressCodeDisplay({
   event,
   uid,
@@ -933,6 +1030,11 @@ export function EventDetailModal({
         {/* Teams — members only */}
         {isMember && event.teams && event.teams.length > 0 ? (
           <TeamsDisplay event={event} uid={uid} />
+        ) : null}
+
+        {/* Lodging — members only */}
+        {isMember && event.lodging && event.lodgingEntries && event.lodgingEntries.length > 0 ? (
+          <LodgingDisplay event={event} uid={uid} isAdmin={isAdmin} />
         ) : null}
 
         {/* Sign up link — visible to all */}
