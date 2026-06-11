@@ -55,7 +55,8 @@ export default function ProfileScreen() {
       const response = await fetch(asset.uri)
       const blob = await response.blob()
       const storageRef = ref(storage, `avatars/${fbUser.uid}`)
-      await uploadBytes(storageRef, blob)
+      const contentType = asset.mimeType ?? 'image/jpeg'
+      await uploadBytes(storageRef, blob, { contentType })
       const downloadURL = await getDownloadURL(storageRef)
       await updateDoc(doc(db, 'users', fbUser.uid), { photoURL: downloadURL })
       toast('Photo updated', 'success')
