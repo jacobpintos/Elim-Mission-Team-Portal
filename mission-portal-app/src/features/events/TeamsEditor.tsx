@@ -3,22 +3,15 @@ import { Pressable } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { sameId } from '@/lib/ids'
-import type { EventTeam } from '@/types/events'
+import type { EventTeam, CommonTeam } from '@/types/events'
 import type { UserProfile } from '@/types/user'
-
-interface GroupDoc {
-  id: string
-  name: string
-  members: string[]
-}
 
 interface TeamsEditorProps {
   teams: EventTeam[]
   onChange: (teams: EventTeam[]) => void
   assignedUids: Set<string>
   allUsers: UserProfile[]
-  commonTeams: string[]
-  allGroups: GroupDoc[]
+  commonTeams: CommonTeam[]
 }
 
 export function TeamsEditor({
@@ -27,7 +20,6 @@ export function TeamsEditor({
   assignedUids,
   allUsers,
   commonTeams,
-  allGroups,
 }: TeamsEditorProps) {
   const colors = useThemeColors()
   const [pickerIdx, setPickerIdx] = useState<number | null>(null)
@@ -47,9 +39,8 @@ export function TeamsEditor({
     updateTeam(teamIdx, { members: [...teams[teamIdx].members, uid] })
   }
 
-  const addFromCommon = (name: string) => {
-    const grp = allGroups.find((g) => g.name === name)
-    onChange([...teams, { name, leaders: [], members: grp?.members ?? [] }])
+  const addFromCommon = (ct: CommonTeam) => {
+    onChange([...teams, { name: ct.name, leaders: [], members: ct.members }])
     setShowCommon(false)
   }
 
@@ -239,19 +230,26 @@ export function TeamsEditor({
           backgroundColor={colors.surface}
           overflow="hidden"
         >
-          {commonTeams.filter((ct) => !teams.some((t) => t.name === ct)).length > 0 ? (
+          {commonTeams.filter((ct) => !teams.some((t) => t.name === ct.name)).length > 0 ? (
             commonTeams
-              .filter((ct) => !teams.some((t) => t.name === ct))
+              .filter((ct) => !teams.some((t) => t.name === ct.name))
               .map((ct) => (
-                <Pressable key={ct} onPress={() => addFromCommon(ct)}>
+                <Pressable key={ct.name} onPress={() => addFromCommon(ct)}>
                   <XStack
                     padding="$3"
                     borderBottomWidth={1}
                     borderBottomColor={colors.border}
                   >
-                    <Text color={colors.text} fontSize="$3">
-                      {ct}
-                    </Text>
+                    <YStack>
+                      <Text color={colors.text} fontSize="$3">
+                        {ct.name}
+                      </Text>
+                      {ct.members.length > 0 && (
+                        <Text color={colors.textMuted} fontSize="$2">
+                          {ct.members.length} member{ct.members.length !== 1 ? 's' : ''}
+                        </Text>
+                      )}
+                    </YStack>
                   </XStack>
                 </Pressable>
               ))

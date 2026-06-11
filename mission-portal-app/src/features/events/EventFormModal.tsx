@@ -657,7 +657,6 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
           assignedUids={assignedUids}
           allUsers={allUsers}
           commonTeams={commonTeams}
-          allGroups={allGroups}
         />
 
         {/* Dress Code */}

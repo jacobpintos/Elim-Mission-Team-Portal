@@ -1,12 +1,12 @@
 import { create } from 'zustand'
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { ConfigMain, PostsConfig } from '@/types/events'
+import type { ConfigMain, PostsConfig, CommonTeam } from '@/types/events'
 
 interface ConfigStore {
   calY: number
   calM: number
-  commonTeams: string[]
+  commonTeams: CommonTeam[]
   postsConfig: PostsConfig
   lastSeenPosts: Record<string, number>
   loading: boolean
@@ -22,7 +22,7 @@ const now = new Date()
 export const useConfigStore = create<ConfigStore>((set, get) => ({
   calY: now.getFullYear(),
   calM: now.getMonth() + 1,
-  commonTeams: [],
+  commonTeams: [] as CommonTeam[],
   postsConfig: { pages: [] },
   lastSeenPosts: {},
   loading: false,
@@ -40,7 +40,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       set({
         calY: data.calY ?? now.getFullYear(),
         calM: data.calM ?? now.getMonth() + 1,
-        commonTeams: data.COMMON_TEAMS ?? [],
+        commonTeams: (data.COMMON_TEAMS ?? []).map((t) =>
+          typeof t === 'string' ? { name: t, members: [] } : t
+        ),
         postsConfig: data.postsConfig ?? { pages: [] },
         lastSeenPosts: data.lastSeenPosts ?? {},
         loading: false,

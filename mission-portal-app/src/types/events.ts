@@ -194,10 +194,15 @@ export interface NotifDoc {
   updatedAt?: unknown
 }
 
+export interface CommonTeam {
+  name: string
+  members: string[]
+}
+
 export interface ConfigMain {
   calY: number
   calM: number
-  COMMON_TEAMS: string[]
+  COMMON_TEAMS: (string | CommonTeam)[]
   connectConfig: { socialLinks: unknown[]; leadershipTeam: unknown[] }
   publicPages: Record<string, unknown>
   postsConfig: PostsConfig
