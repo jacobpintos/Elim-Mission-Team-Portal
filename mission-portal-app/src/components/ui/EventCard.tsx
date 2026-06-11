@@ -6,6 +6,8 @@ import { FD } from '@/lib/format'
 import { openLocationInMaps, eventMapQuery } from '@/lib/location'
 import { AvailBadge } from './AvailBadge'
 import { fetchWeather, type WeatherData } from '@/lib/weather'
+import { useAuthStore } from '@/stores/authStore'
+import { sameId } from '@/lib/ids'
 import type { EventInstance, AvailResponse } from '@/types/events'
 
 interface EventCardProps {
@@ -32,7 +34,19 @@ export function EventCard({
   isPublic,
 }: EventCardProps) {
   const colors = useThemeColors()
+  const { profile } = useAuthStore()
+  const uid = profile?.uid ? String(profile.uid) : null
   const [weather, setWeather] = useState<WeatherData | null>(null)
+
+  const myLodging =
+    uid && event.lodging
+      ? (event.lodgingEntries ?? []).find((e) => e.assignees.some((a) => sameId(a, uid)))
+      : null
+
+  const myFlight =
+    uid && event.flights
+      ? (event.flightEntries ?? []).find((e) => sameId(e.uid, uid))
+      : null
 
   useEffect(() => {
     if (isPublic || !event._geocodeLat || !event._geocodeLng || !event.date || event.isVirtual) return
@@ -84,6 +98,29 @@ export function EventCard({
                 Join Here
               </Text>
             </Pressable>
+          ) : null}
+          {myLodging ? (
+            <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+              🏨 {myLodging.name}{myLodging.room ? ` · ${myLodging.room}` : ''}
+            </Text>
+          ) : null}
+          {myFlight ? (
+            <YStack gap="$0.5">
+              {(myFlight.outAirline || myFlight.outFlight || myFlight.outDate) ? (
+                <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                  ✈ {[myFlight.outDate, myFlight.outAirline, myFlight.outFlight]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Text>
+              ) : null}
+              {(myFlight.retAirline || myFlight.retFlight || myFlight.retDate) ? (
+                <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                  ↩ {[myFlight.retDate, myFlight.retAirline, myFlight.retFlight]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Text>
+              ) : null}
+            </YStack>
           ) : null}
         </YStack>
         <YStack alignItems="flex-end" gap="$1">
