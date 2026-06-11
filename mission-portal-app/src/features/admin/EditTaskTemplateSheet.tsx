@@ -198,7 +198,15 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
     }
     const allTasks = flattenSectionTasks(sectionTasks, templateSections)
       .filter((t) => t.title.trim())
-      .map((t) => ({ ...t, assignees: t.assignees ?? [], assigneeGroups: t.assigneeGroups ?? [] }))
+      .map((t) => {
+        const item: Record<string, unknown> = {
+          ...t,
+          assignees: t.assignees ?? [],
+          assigneeGroups: t.assigneeGroups ?? [],
+        }
+        Object.keys(item).forEach((k) => item[k] === undefined && delete item[k])
+        return item as TaskItem
+      })
     if (allTasks.length === 0) {
       toast('Add at least one task with a title', 'error')
       return
