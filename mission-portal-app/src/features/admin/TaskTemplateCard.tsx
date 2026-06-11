@@ -12,6 +12,7 @@ export const TASK_SECTIONS = [
 export interface TaskItem {
   title: string
   assignees: string[]
+  assigneeGroups?: string[]
   daysBefore: number
   daysAfterEvent?: number
   section: string

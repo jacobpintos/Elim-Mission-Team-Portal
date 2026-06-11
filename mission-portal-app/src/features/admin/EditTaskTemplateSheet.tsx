@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ScrollView, Pressable, TextInput } from 'react-native'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
-import { MemberPicker } from './MemberPicker'
+import { MemberAndGroupPicker } from './MemberAndGroupPicker'
 import { TASK_SECTIONS, type TaskItem, type TaskTemplate } from './TaskTemplateCard'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -20,12 +20,17 @@ interface SectionTasks {
   [sectionId: string]: TaskItem[]
 }
 
+interface BulkAssign {
+  userIds: string[]
+  groupIds: string[]
+}
+
 function buildSectionTasks(tasks: TaskItem[]): SectionTasks {
   const result: SectionTasks = {}
   for (const s of TASK_SECTIONS) {
     result[s.id] = tasks
       .filter((t) => t.section === s.id)
-      .map((t) => ({ ...t, assignees: t.assignees ?? [] }))
+      .map((t) => ({ ...t, assignees: t.assignees ?? [], assigneeGroups: t.assigneeGroups ?? [] }))
   }
   return result
 }
@@ -45,6 +50,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
   const [name, setName] = useState('')
   const [sectionTasks, setSectionTasks] = useState<SectionTasks>({})
   const [sectionLabels, setSectionLabels] = useState<Record<string, string>>({})
+  const [bulkAssign, setBulkAssign] = useState<Record<string, BulkAssign>>({})
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
 
@@ -69,6 +75,8 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
       setSectionLabels({})
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBulkAssign({})
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setExpandedSections({})
   }, [template, open])
 
@@ -81,7 +89,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
       ...prev,
       [sectionId]: [
         ...(prev[sectionId] ?? []),
-        { title: '', assignees: [], daysBefore: 7, daysAfterEvent: undefined, section: sectionId },
+        { title: '', assignees: [], assigneeGroups: [], daysBefore: 7, daysAfterEvent: undefined, section: sectionId },
       ],
     }))
     setExpandedSections((prev) => ({ ...prev, [sectionId]: true }))
@@ -103,6 +111,20 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
     })
   }
 
+  const applyBulkAssign = (sectionId: string) => {
+    const bulk = bulkAssign[sectionId]
+    if (!bulk || (bulk.userIds.length === 0 && bulk.groupIds.length === 0)) return
+    setSectionTasks((prev) => ({
+      ...prev,
+      [sectionId]: (prev[sectionId] ?? []).map((t) => ({
+        ...t,
+        assignees: bulk.userIds,
+        assigneeGroups: bulk.groupIds,
+      })),
+    }))
+    toast(`Applied to all ${sectionId} tasks`, 'success')
+  }
+
   const handleSave = async () => {
     if (!name.trim()) {
       toast('Template name is required', 'error')
@@ -110,7 +132,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
     }
     const allTasks = flattenSectionTasks(sectionTasks)
       .filter((t) => t.title.trim())
-      .map((t) => ({ ...t, assignees: t.assignees ?? [] }))
+      .map((t) => ({ ...t, assignees: t.assignees ?? [], assigneeGroups: t.assigneeGroups ?? [] }))
     if (allTasks.length === 0) {
       toast('Add at least one task with a title', 'error')
       return
@@ -176,6 +198,8 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
           {TASK_SECTIONS.map((section) => {
             const tasks = sectionTasks[section.id] ?? []
             const isExpanded = expandedSections[section.id] ?? false
+            const bulk = bulkAssign[section.id] ?? { userIds: [], groupIds: [] }
+            const hasBulk = bulk.userIds.length > 0 || bulk.groupIds.length > 0
 
             return (
               <YStack
@@ -185,6 +209,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                 borderRadius="$2"
                 overflow="hidden"
               >
+                {/* Section header: editable label + expand toggle */}
                 <XStack
                   padding="$2"
                   alignItems="center"
@@ -227,6 +252,41 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
 
                 {isExpanded && (
                   <YStack padding="$2" gap="$3">
+                    {/* Bulk assign for this section */}
+                    <YStack
+                      gap="$2"
+                      padding="$2"
+                      borderWidth={1}
+                      borderColor={section.color + '55'}
+                      borderRadius="$2"
+                      backgroundColor={section.color + '11'}
+                    >
+                      <Text fontSize="$2" fontWeight="700" color={section.color}>
+                        Assign all tasks in this section
+                      </Text>
+                      <MemberAndGroupPicker
+                        selectedUsers={bulk.userIds}
+                        onUsersChange={(uids) =>
+                          setBulkAssign((prev) => ({ ...prev, [section.id]: { ...bulk, userIds: uids } }))
+                        }
+                        selectedGroups={bulk.groupIds}
+                        onGroupsChange={(gids) =>
+                          setBulkAssign((prev) => ({ ...prev, [section.id]: { ...bulk, groupIds: gids } }))
+                        }
+                      />
+                      {hasBulk && tasks.length > 0 ? (
+                        <Button
+                          size="$2"
+                          theme="active"
+                          alignSelf="flex-start"
+                          onPress={() => applyBulkAssign(section.id)}
+                        >
+                          Apply to all {tasks.length} task{tasks.length !== 1 ? 's' : ''}
+                        </Button>
+                      ) : null}
+                    </YStack>
+
+                    {/* Individual tasks */}
                     {tasks.map((task, index) => (
                       <YStack
                         key={index}
@@ -256,7 +316,6 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                         />
 
                         <XStack alignItems="center" gap="$2" flexWrap="wrap">
-                          {/* Before / After toggle */}
                           <XStack borderWidth={1} borderColor="$borderColor" borderRadius="$2" overflow="hidden">
                             {(['before', 'after'] as const).map((side) => {
                               const active = side === 'after'
@@ -313,9 +372,11 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                           )}
                         </XStack>
 
-                        <MemberPicker
-                          selected={task.assignees}
-                          onChange={(v) => updateTask(section.id, index, { assignees: v })}
+                        <MemberAndGroupPicker
+                          selectedUsers={task.assignees}
+                          onUsersChange={(v) => updateTask(section.id, index, { assignees: v })}
+                          selectedGroups={task.assigneeGroups ?? []}
+                          onGroupsChange={(v) => updateTask(section.id, index, { assigneeGroups: v })}
                           label="Assignees"
                         />
                       </YStack>

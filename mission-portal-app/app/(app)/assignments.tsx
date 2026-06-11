@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
+import { useGroupsStore } from '@/stores/groupsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useKaizenStore } from '@/stores/kaizenStore'
 import { useWorshipStore } from '@/stores/worshipStore'
@@ -1111,6 +1112,7 @@ export default function Assignments() {
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
   const { templates, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
   const { users: allUsers } = useUsersStore()
+  const { getMemberUids } = useGroupsStore()
   const {
     cards: kaizenCards,
     subscribe: subKaizen,
@@ -1368,15 +1370,23 @@ export default function Assignments() {
       for (const taskItem of tpl.tasks ?? []) {
         if (!taskItem.title.trim()) continue
         let dueDate: string | null = null
-        if (ev.date && taskItem.daysBefore > 0) {
+        if (taskItem.daysAfterEvent && taskItem.daysAfterEvent > 0 && ev.date) {
+          const d = new Date(ev.date)
+          d.setDate(d.getDate() + taskItem.daysAfterEvent)
+          dueDate = d.toISOString().split('T')[0]
+        } else if (ev.date && taskItem.daysBefore > 0) {
           const d = new Date(ev.date)
           d.setDate(d.getDate() - taskItem.daysBefore)
           dueDate = d.toISOString().split('T')[0]
         }
+        const groupUids = getMemberUids(taskItem.assigneeGroups ?? [])
+        const allAssignees = [
+          ...new Set([...(taskItem.assignees ?? []), ...groupUids]),
+        ]
         await createTask({
           title: taskItem.title,
-          assignees: taskItem.assignees ?? [],
-          lead: (taskItem.assignees ?? [])[0] ?? null,
+          assignees: allAssignees,
+          lead: allAssignees[0] ?? null,
           by: profile?.uid ?? '',
           status: 'pending',
           evTemplateId: ev.id,
