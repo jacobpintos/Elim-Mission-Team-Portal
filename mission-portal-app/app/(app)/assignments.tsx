@@ -1335,7 +1335,8 @@ export default function Assignments() {
         if (sectionTitles.length === 0) return []
         const sTasks = evTasks.filter((t) => sectionTitles.includes(t.title))
         if (sTasks.length === 0) return []
-        return [{ id: s.id, label: s.label, color: s.color, hasProblem: sTasks.some((t) => t.status === 'behind' || isOverdue(t)) }]
+        const label = tpl.sectionLabels?.[s.id] ?? s.label
+        return [{ id: s.id, label, color: s.color, hasProblem: sTasks.some((t) => t.status === 'behind' || isOverdue(t)) }]
       })
       result.push({
         templateId: ev.id,

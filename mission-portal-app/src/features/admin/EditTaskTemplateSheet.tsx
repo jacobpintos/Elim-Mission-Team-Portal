@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ScrollView, Pressable } from 'react-native'
+import { ScrollView, Pressable, TextInput } from 'react-native'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
 import { MemberPicker } from './MemberPicker'
@@ -44,6 +44,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
 
   const [name, setName] = useState('')
   const [sectionTasks, setSectionTasks] = useState<SectionTasks>({})
+  const [sectionLabels, setSectionLabels] = useState<Record<string, string>>({})
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
 
@@ -53,6 +54,8 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
       setName(template.name)
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSectionTasks(buildSectionTasks(template.tasks))
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSectionLabels(template.sectionLabels ?? {})
     } else {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setName('')
@@ -62,6 +65,8 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
       }
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSectionTasks(initial)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSectionLabels({})
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setExpandedSections({})
@@ -112,10 +117,14 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
     }
     setSaving(true)
     try {
+      const cleanLabels = Object.fromEntries(
+        Object.entries(sectionLabels).filter(([, v]) => v.trim())
+      )
       if (template) {
         await updateDoc(doc(db, 'taskTemplates', String(template.id)), {
           name: name.trim(),
           tasks: allTasks,
+          sectionLabels: cleanLabels,
           updatedAt: new Date(),
         })
         await audit(
@@ -128,6 +137,7 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
         await addDoc(collection(db, 'taskTemplates'), {
           name: name.trim(),
           tasks: allTasks,
+          sectionLabels: cleanLabels,
           createdAt: new Date(),
           updatedAt: new Date(),
         })
@@ -175,32 +185,45 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                 borderRadius="$2"
                 overflow="hidden"
               >
-                <Pressable onPress={() => toggleSection(section.id)}>
-                  <XStack
-                    padding="$2"
-                    alignItems="center"
-                    justifyContent="space-between"
-                    backgroundColor={section.color + '22'}
-                  >
-                    <XStack alignItems="center" gap="$2">
-                      <XStack
-                        width={12}
-                        height={12}
-                        borderRadius={6}
-                        backgroundColor={section.color}
-                      />
-                      <Text fontWeight="700" fontSize="$3" color={section.color}>
-                        {section.label}
-                      </Text>
-                      <Text fontSize="$2" color="$gray10">
-                        ({tasks.length})
-                      </Text>
-                    </XStack>
-                    <Text fontSize="$3" color="$gray10">
-                      {isExpanded ? '▲' : '▼'}
+                <XStack
+                  padding="$2"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  backgroundColor={section.color + '22'}
+                >
+                  <XStack alignItems="center" gap="$2" flex={1}>
+                    <XStack
+                      width={12}
+                      height={12}
+                      borderRadius={6}
+                      backgroundColor={section.color}
+                      flexShrink={0}
+                    />
+                    <TextInput
+                      value={sectionLabels[section.id] ?? section.label}
+                      onChangeText={(v) =>
+                        setSectionLabels((prev) => ({ ...prev, [section.id]: v }))
+                      }
+                      style={{
+                        fontWeight: '700',
+                        fontSize: 14,
+                        color: section.color,
+                        minWidth: 60,
+                        maxWidth: 160,
+                        padding: 0,
+                      }}
+                      placeholder={section.label}
+                    />
+                    <Text fontSize="$2" color="$gray10">
+                      ({tasks.length})
                     </Text>
                   </XStack>
-                </Pressable>
+                  <Pressable onPress={() => toggleSection(section.id)}>
+                    <Text fontSize="$3" color="$gray10" paddingHorizontal="$2">
+                      {isExpanded ? '▲' : '▼'}
+                    </Text>
+                  </Pressable>
+                </XStack>
 
                 {isExpanded && (
                   <YStack padding="$2" gap="$3">

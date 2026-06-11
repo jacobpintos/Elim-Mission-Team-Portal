@@ -21,6 +21,7 @@ export interface TaskTemplate {
   id: string
   name: string
   tasks: TaskItem[]
+  sectionLabels?: Record<string, string>
 }
 
 interface TaskTemplateCardProps {
@@ -94,7 +95,7 @@ export function TaskTemplateCard({ template, onEdit, onDelete }: TaskTemplateCar
               paddingVertical="$0.5"
             >
               <Text fontSize="$1" color="white" fontWeight="600">
-                {s.label}
+                {template.sectionLabels?.[s.id] ?? s.label}
               </Text>
             </XStack>
           ))}

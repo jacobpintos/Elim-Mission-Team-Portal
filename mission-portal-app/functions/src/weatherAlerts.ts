@@ -86,7 +86,7 @@ function isUpcomingInDays(t: EventTemplateRaw, todayStr: string, limitStr: strin
   return false
 }
 
-export const weatherAlertCheck = onSchedule('*/30 * * * *', async () => {
+export const weatherAlertCheck = onSchedule('0 */4 * * *', async () => {
   const db = admin.firestore()
   const todayStr = todayUTCStr()
   const limitStr = addDaysStr(todayStr, 7)
