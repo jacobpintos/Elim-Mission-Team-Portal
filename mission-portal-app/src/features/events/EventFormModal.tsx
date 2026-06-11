@@ -17,8 +17,9 @@ import { sameId } from '@/lib/ids'
 import { TeamsEditor } from './TeamsEditor'
 import { DressCodeEditor } from './DressCodeEditor'
 import { LodgingEditor } from './LodgingEditor'
+import { FlightEditor } from './FlightEditor'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
-import type { EventTemplate, CarpoolCarData, EventTeam, DressCodeEntry, LodgingEntry } from '@/types/events'
+import type { EventTemplate, CarpoolCarData, EventTeam, DressCodeEntry, LodgingEntry, FlightEntry } from '@/types/events'
 
 interface GroupDoc {
   id: string
@@ -50,6 +51,7 @@ type FormData = {
   carpool: boolean
   carpoolCars: CarpoolCarData[]
   lodging: boolean
+  flights: boolean
   isVirtual: boolean
   virtualLink: string
   taskTemplateId: string
@@ -138,6 +140,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
     carpool: event?.carpool ?? false,
     carpoolCars: event?.carpoolCars ?? [],
     lodging: event?.lodging ?? false,
+    flights: event?.flights ?? false,
     isVirtual: event?.isVirtual ?? false,
     virtualLink: event?.virtualLink ?? '',
     taskTemplateId: event?.taskTemplateId ?? '',
@@ -147,6 +150,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
   const [teams, setTeams] = useState<EventTeam[]>(event?.teams ?? [])
   const [dressCode, setDressCode] = useState<DressCodeEntry[]>(event?.dressCode ?? [])
   const [lodgingEntries, setLodgingEntries] = useState<LodgingEntry[]>(event?.lodgingEntries ?? [])
+  const [flightEntries, setFlightEntries] = useState<FlightEntry[]>(event?.flightEntries ?? [])
   const [saving, setSaving] = useState(false)
 
   const [carpoolPicker, setCarpoolPicker] = useState<{ carId: string; role: 'driver' | 'rider' } | null>(null)
@@ -246,6 +250,8 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
         carpoolCars: form.carpool ? form.carpoolCars : [],
         lodging: form.lodging,
         lodgingEntries: form.lodging ? lodgingEntries : [],
+        flights: form.flights,
+        flightEntries: form.flights ? flightEntries : [],
         isVirtual: form.isVirtual,
         virtualLink: form.virtualLink,
         users: finalUsers,
@@ -1174,6 +1180,39 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
             allUsers={allUsers}
             teams={teams}
             assignedGroups={allGroups.filter((g) => form.groups.includes(g.id))}
+          />
+        ) : null}
+
+        {/* Flights toggle + entries */}
+        <XStack gap="$3" alignItems="center" justifyContent="space-between">
+          <Text color={colors.text} fontSize="$3" flex={1}>
+            Flights
+          </Text>
+          <Pressable onPress={() => field('flights')(!form.flights)}>
+            <XStack
+              paddingHorizontal="$3"
+              paddingVertical="$1"
+              borderRadius={99}
+              backgroundColor={form.flights ? colors.primary : colors.surface}
+              borderWidth={1}
+              borderColor={form.flights ? colors.primary : colors.border}
+            >
+              <Text
+                color={form.flights ? 'white' : colors.textMuted}
+                fontSize="$2"
+                fontWeight="600"
+              >
+                {form.flights ? 'ON' : 'OFF'}
+              </Text>
+            </XStack>
+          </Pressable>
+        </XStack>
+        {form.flights ? (
+          <FlightEditor
+            entries={flightEntries}
+            onChange={setFlightEntries}
+            assignedUids={assignedUids}
+            allUsers={allUsers}
           />
         ) : null}
 

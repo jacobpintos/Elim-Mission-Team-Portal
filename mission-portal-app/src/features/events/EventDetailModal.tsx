@@ -213,6 +213,185 @@ function LodgingDisplay({
   )
 }
 
+function FlightDisplay({
+  event,
+  uid,
+  isAdmin,
+}: {
+  event: EventInstance
+  uid: string
+  isAdmin: boolean
+}) {
+  const colors = useThemeColors()
+  const { users } = useUsersStore()
+  const [showAll, setShowAll] = useState(false)
+
+  const getName = (id: string | number) =>
+    users.find((u) => sameId(u.uid, id))?.displayName ?? String(id)
+
+  const myEntry = (event.flightEntries ?? []).find((e) => sameId(e.uid, uid))
+
+  const FlightBlock = ({
+    title,
+    date,
+    time,
+    airport,
+    airline,
+    flight,
+    statusLink,
+    ticket,
+    confirmation,
+    arrival,
+    contact,
+  }: {
+    title: string
+    date?: string
+    time?: string
+    airport?: string
+    airline?: string
+    flight?: string
+    statusLink?: string
+    ticket?: string
+    confirmation?: string
+    arrival?: string
+    contact?: string
+  }) => {
+    const hasAny = date || time || airport || airline || flight || ticket || confirmation || arrival || contact
+    if (!hasAny) return null
+    return (
+      <YStack gap="$1">
+        <Text color={colors.primary} fontSize="$2" fontWeight="700">
+          {title}
+        </Text>
+        {(date || time) ? (
+          <Text color={colors.text} fontSize="$3">
+            {[date, time].filter(Boolean).join(' at ')}
+          </Text>
+        ) : null}
+        {airport ? (
+          <Pressable onPress={() => Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(airport)}`)}>
+            <Text color={colors.primary} fontSize="$3" textDecorationLine="underline">
+              {airport}
+            </Text>
+          </Pressable>
+        ) : null}
+        {airline ? (
+          <Text color={colors.textMuted} fontSize="$2">
+            {airline}
+          </Text>
+        ) : null}
+        {flight ? (
+          statusLink ? (
+            <Pressable onPress={() => Linking.openURL(statusLink)}>
+              <Text color={colors.primary} fontSize="$2" textDecorationLine="underline">
+                Flight {flight}
+              </Text>
+            </Pressable>
+          ) : (
+            <Text color={colors.textMuted} fontSize="$2">
+              Flight {flight}
+            </Text>
+          )
+        ) : null}
+        {ticket ? (
+          <Text color={colors.textMuted} fontSize="$2">
+            Ticket: {ticket}
+          </Text>
+        ) : null}
+        {confirmation ? (
+          <Text color={colors.textMuted} fontSize="$2">
+            Confirmation: {confirmation}
+          </Text>
+        ) : null}
+        {arrival ? (
+          <Text color={colors.textMuted} fontSize="$2">
+            Est. arrival: {arrival}
+          </Text>
+        ) : null}
+        {contact ? (
+          <Text color={colors.textMuted} fontSize="$2">
+            Contact: {contact}
+          </Text>
+        ) : null}
+      </YStack>
+    )
+  }
+
+  const EntryCard = ({ entry, isMine }: { entry: typeof myEntry & object; isMine: boolean }) => (
+    <YStack
+      backgroundColor={colors.surface}
+      borderRadius="$2"
+      padding="$3"
+      borderWidth={1}
+      borderColor={isMine ? colors.primary : colors.border}
+      gap="$2"
+    >
+      {isAdmin && (
+        <Text color={isMine ? colors.primary : colors.text} fontWeight="700" fontSize="$3">
+          {getName(entry!.uid)}
+        </Text>
+      )}
+      <FlightBlock
+        title="OUTBOUND FLIGHT"
+        date={entry!.outDate}
+        time={entry!.outTime}
+        airport={entry!.outAirport}
+        airline={entry!.outAirline}
+        flight={entry!.outFlight}
+        statusLink={entry!.outStatusLink}
+        ticket={entry!.outTicket}
+        confirmation={entry!.outConfirmation}
+        arrival={entry!.outArrival}
+        contact={entry!.outContact}
+      />
+      <FlightBlock
+        title="RETURN FLIGHT"
+        date={entry!.retDate}
+        time={entry!.retTime}
+        airport={entry!.retAirport}
+        airline={entry!.retAirline}
+        flight={entry!.retFlight}
+        statusLink={entry!.retStatusLink}
+        ticket={entry!.retTicket}
+        confirmation={entry!.retConfirmation}
+        arrival={entry!.retArrival}
+      />
+    </YStack>
+  )
+
+  return (
+    <YStack gap="$2">
+      <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+        FLIGHTS
+      </Text>
+
+      {myEntry ? (
+        <EntryCard entry={myEntry} isMine />
+      ) : (
+        <Text color={colors.textMuted} fontSize="$3">
+          You have no flight assignment.
+        </Text>
+      )}
+
+      {isAdmin ? (
+        <Pressable onPress={() => setShowAll((s) => !s)}>
+          <Text color={colors.primary} fontSize="$2">
+            {showAll
+              ? 'Hide all flights'
+              : `Show all flights (${event.flightEntries?.length ?? 0})`}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {isAdmin && showAll
+        ? (event.flightEntries ?? []).map((entry) => (
+            <EntryCard key={entry.id} entry={entry} isMine={entry === myEntry} />
+          ))
+        : null}
+    </YStack>
+  )
+}
+
 function DressCodeDisplay({
   event,
   uid,
@@ -1035,6 +1214,11 @@ export function EventDetailModal({
         {/* Lodging — members only */}
         {isMember && event.lodging && event.lodgingEntries && event.lodgingEntries.length > 0 ? (
           <LodgingDisplay event={event} uid={uid} isAdmin={isAdmin} />
+        ) : null}
+
+        {/* Flights — members only */}
+        {isMember && event.flights && event.flightEntries && event.flightEntries.length > 0 ? (
+          <FlightDisplay event={event} uid={uid} isAdmin={isAdmin} />
         ) : null}
 
         {/* Sign up link — visible to all */}

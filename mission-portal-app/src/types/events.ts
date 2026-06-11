@@ -5,6 +5,34 @@ export interface LodgingEntry {
   assignees: string[]
 }
 
+export interface FlightEntry {
+  id: string
+  uid: string        // required — who this entry belongs to
+
+  // Outbound
+  outDate?: string
+  outTime?: string
+  outAirport?: string
+  outAirline?: string
+  outFlight?: string
+  outStatusLink?: string
+  outTicket?: string
+  outConfirmation?: string
+  outArrival?: string
+  outContact?: string
+
+  // Return
+  retDate?: string
+  retTime?: string
+  retAirport?: string
+  retAirline?: string
+  retFlight?: string
+  retStatusLink?: string
+  retTicket?: string
+  retConfirmation?: string
+  retArrival?: string
+}
+
 export interface CarpoolCarData {
   id: string
   label: string
@@ -64,6 +92,8 @@ export interface EventTemplate {
   taskTemplateId?: string
   lodging?: boolean
   lodgingEntries?: LodgingEntry[]
+  flights?: boolean
+  flightEntries?: FlightEntry[]
   extraDays?: ExtraDay[]
   overrides?: Record<string, Partial<EventTemplate>>
   planningBoardId?: string | number
