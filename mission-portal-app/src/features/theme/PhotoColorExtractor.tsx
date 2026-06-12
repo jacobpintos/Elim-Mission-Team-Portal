@@ -7,6 +7,7 @@ const STORAGE_KEY = 'theme.photoColors'
 interface PhotoColorExtractorProps {
   onSetPrimary: (hex: string) => void
   onSetSecondary: (hex: string) => void
+  onSetLogo?: (dataUrl: string) => Promise<void>
 }
 
 function loadStoredColors(): string[] {
@@ -86,12 +87,14 @@ async function extractColors(dataUrl: string): Promise<string[]> {
   return picked.map(([r, g, b]) => rgbToHex(r, g, b))
 }
 
-export function PhotoColorExtractor({ onSetPrimary, onSetSecondary }: PhotoColorExtractorProps) {
+export function PhotoColorExtractor({ onSetPrimary, onSetSecondary, onSetLogo }: PhotoColorExtractorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [colors, setColors] = useState<string[]>(loadStoredColors)
   const [selected, setSelected] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [capturedDataUrl, setCapturedDataUrl] = useState<string | null>(null)
+  const [settingLogo, setSettingLogo] = useState(false)
 
   if (Platform.OS !== 'web') return null
 
@@ -101,6 +104,7 @@ export function PhotoColorExtractor({ onSetPrimary, onSetSecondary }: PhotoColor
     setAnalyzing(true)
     setError(null)
     setSelected(null)
+    setCapturedDataUrl(null)
     try {
       const reader = new FileReader()
       const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -109,9 +113,10 @@ export function PhotoColorExtractor({ onSetPrimary, onSetSecondary }: PhotoColor
         reader.readAsDataURL(file)
       })
       const extracted = await extractColors(dataUrl)
-      // The photo itself is discarded here — only the hex values are kept.
       setColors(extracted)
       storeColors(extracted)
+      // Keep the dataUrl only when logo replacement is available
+      if (onSetLogo) setCapturedDataUrl(dataUrl)
     } catch {
       setError('Could not analyze that photo. Try a different image.')
     } finally {
@@ -123,7 +128,22 @@ export function PhotoColorExtractor({ onSetPrimary, onSetSecondary }: PhotoColor
   const handleClear = () => {
     setColors([])
     setSelected(null)
+    setCapturedDataUrl(null)
     storeColors([])
+  }
+
+  const handleSetLogo = async () => {
+    if (!capturedDataUrl || !onSetLogo) return
+    setSettingLogo(true)
+    setError(null)
+    try {
+      await onSetLogo(capturedDataUrl)
+      setCapturedDataUrl(null)
+    } catch {
+      setError('Failed to update logo. Try again.')
+    } finally {
+      setSettingLogo(false)
+    }
   }
 
   return (
@@ -132,8 +152,10 @@ export function PhotoColorExtractor({ onSetPrimary, onSetSecondary }: PhotoColor
         Colors from Photo
       </Text>
       <Text fontSize="$2" color="$gray10">
-        Upload a photo to pull its main colors. The photo is analyzed on your device and deleted
-        after the colors are extracted.
+        Upload a photo to pull its main colors.
+        {onSetLogo
+          ? ' You can also use the photo as the app logo.'
+          : ' The photo is analyzed on your device and deleted after the colors are extracted.'}
       </Text>
 
       <input
@@ -236,6 +258,53 @@ export function PhotoColorExtractor({ onSetPrimary, onSetSecondary }: PhotoColor
             </XStack>
           </Pressable>
         </XStack>
+      ) : null}
+
+      {onSetLogo && capturedDataUrl ? (
+        <YStack
+          gap="$2"
+          paddingTop="$3"
+          marginTop="$1"
+          borderTopWidth={1}
+          borderTopColor="$gray6"
+        >
+          <XStack gap="$3" alignItems="center">
+            <img
+              src={capturedDataUrl}
+              alt="Uploaded photo"
+              style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
+            />
+            <Text fontSize="$2" flex={1}>
+              Replace the app logo with this photo? The existing logo will be backed up for 30 days.
+            </Text>
+          </XStack>
+          <XStack gap="$2">
+            <Pressable onPress={handleSetLogo} disabled={settingLogo}>
+              <XStack
+                borderWidth={1}
+                borderColor="$gray8"
+                borderRadius="$2"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                alignItems="center"
+                gap="$2"
+                opacity={settingLogo ? 0.6 : 1}
+              >
+                {settingLogo ? <ActivityIndicator size="small" /> : null}
+                <Text fontSize="$2" fontWeight="600">
+                  {settingLogo ? 'Uploading…' : 'Replace Logo'}
+                </Text>
+              </XStack>
+            </Pressable>
+            <Pressable onPress={() => setCapturedDataUrl(null)} disabled={settingLogo}>
+              <XStack paddingHorizontal="$3" paddingVertical="$2">
+                <Text fontSize="$2" color="$gray10">
+                  No thanks
+                </Text>
+              </XStack>
+            </Pressable>
+          </XStack>
+        </YStack>
       ) : null}
     </YStack>
   )

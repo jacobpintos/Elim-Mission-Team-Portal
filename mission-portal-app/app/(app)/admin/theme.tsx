@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useWindowDimensions } from 'react-native'
+import { Platform, useWindowDimensions } from 'react-native'
 import { ScrollView } from 'react-native'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { useThemeStore } from '@/stores/themeStore'
@@ -43,7 +43,7 @@ function ContrastBadge({ ratio }: { ratio: number }) {
 }
 
 export default function AdminTheme() {
-  const { theme, publishTheme } = useThemeStore()
+  const { theme, publishTheme, setLogo, revertLogo } = useThemeStore()
   const { profile } = useAuthStore()
   const { toast } = useUIStore()
   const { width } = useWindowDimensions()
@@ -54,6 +54,8 @@ export default function AdminTheme() {
   const [publishing, setPublishing] = useState(false)
   const [confirmPublish, setConfirmPublish] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [confirmRevert, setConfirmRevert] = useState(false)
+  const [reverting, setReverting] = useState(false)
 
   const doPublish = async () => {
     setConfirmPublish(false)
@@ -74,8 +76,33 @@ export default function AdminTheme() {
     setPreview({ ...defaults })
   }
 
+  const handleSetLogo = async (dataUrl: string) => {
+    await setLogo(dataUrl, profile?.uid ?? '')
+    toast('Logo updated!', 'success')
+  }
+
+  const doRevertLogo = async () => {
+    setConfirmRevert(false)
+    setReverting(true)
+    try {
+      await revertLogo(profile?.uid ?? '')
+      toast('Logo reverted!', 'success')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to revert logo'
+      toast(message, 'error')
+    } finally {
+      setReverting(false)
+    }
+  }
+
   const textOnBgRatio = contrastRatio(preview.dark.text, preview.dark.background)
   const textOnSurfaceRatio = contrastRatio(preview.dark.text, preview.dark.surface)
+
+  const hasBackup =
+    !!theme.logoBackup && theme.logoBackup.expiresAt > Date.now()
+  const backupDaysLeft = hasBackup
+    ? Math.ceil((theme.logoBackup!.expiresAt - Date.now()) / (1000 * 60 * 60 * 24))
+    : 0
 
   const content = (
     <>
@@ -99,6 +126,7 @@ export default function AdminTheme() {
         <PhotoColorExtractor
           onSetPrimary={(v) => setPreview((p) => ({ ...p, primary: v }))}
           onSetSecondary={(v) => setPreview((p) => ({ ...p, accent: v }))}
+          onSetLogo={handleSetLogo}
         />
 
         <ColorPicker
@@ -149,6 +177,62 @@ export default function AdminTheme() {
         <Text fontWeight="700" fontSize="$4">
           Preview
         </Text>
+
+        {/* Current logo */}
+        {theme.logoUrl ? (
+          <YStack
+            gap="$2"
+            padding="$3"
+            backgroundColor="$gray2"
+            borderRadius="$3"
+            width="100%"
+          >
+            <Text fontWeight="700" fontSize="$3">
+              Current Logo
+            </Text>
+            {Platform.OS === 'web' ? (
+              <img
+                src={theme.logoUrl}
+                alt="Current app logo"
+                style={{ maxWidth: 200, height: 'auto', objectFit: 'contain' }}
+              />
+            ) : null}
+            {hasBackup ? (
+              <YStack gap="$2">
+                <Text fontSize="$2" color="$gray10">
+                  Previous logo backed up · {backupDaysLeft} day{backupDaysLeft !== 1 ? 's' : ''} remaining to revert
+                </Text>
+                {confirmRevert ? (
+                  <YStack gap="$2" padding="$2" backgroundColor="$gray3" borderRadius="$2">
+                    <Text fontSize="$2" fontWeight="600">Restore the previous logo?</Text>
+                    <XStack gap="$2">
+                      <Button
+                        size="$3"
+                        onPress={doRevertLogo}
+                        disabled={reverting}
+                        theme="gray"
+                      >
+                        {reverting ? <Spinner size="small" /> : 'Restore'}
+                      </Button>
+                      <Button
+                        size="$3"
+                        onPress={() => setConfirmRevert(false)}
+                        theme="gray"
+                      >
+                        Cancel
+                      </Button>
+                    </XStack>
+                  </YStack>
+                ) : (
+                  <Button size="$3" onPress={() => setConfirmRevert(true)} theme="gray">
+                    Revert to Previous Logo
+                  </Button>
+                )}
+              </YStack>
+            ) : null}
+          </YStack>
+        ) : null}
+
         <ThemePreview theme={preview} />
 
         {confirmReset ? (

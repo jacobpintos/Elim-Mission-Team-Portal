@@ -62,6 +62,14 @@ export default function RootLayout() {
   const router = useRouter()
   const theme = useThemeStore((s) => s.theme)
   const mode = useThemeStore((s) => s.mode)
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return
+    const { logoUrl } = theme
+    if (!logoUrl) return
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+    if (link) link.href = logoUrl
+  }, [theme.logoUrl])
   const notifListener = useRef<Notifications.EventSubscription | null>(null)
   const responseListener = useRef<Notifications.EventSubscription | null>(null)
 

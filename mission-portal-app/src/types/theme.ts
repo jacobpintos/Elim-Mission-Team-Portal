@@ -20,4 +20,11 @@ export interface ThemeDoc {
   onPrimaryOverride: string | null
   updatedAt: number
   updatedBy: string
+  logoUrl?: string
+  logoPath?: string
+  logoBackup?: {
+    url: string
+    path: string
+    expiresAt: number
+  } | null
 }
