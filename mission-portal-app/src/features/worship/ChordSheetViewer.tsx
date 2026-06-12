@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native'
+import { Modal, View, ScrollView, Pressable, StyleSheet, Platform } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { printAsync } from 'expo-print'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { NNS_KEYS, nashvilleToChord, getWordSlots } from '@/lib/nashvilleNumbers'
 import { SECTION_LABELS } from '@/types/chordSheet'
@@ -25,6 +26,99 @@ const saveKeyPrefs = (prefs: KeyPrefs) => {
       window.localStorage?.setItem('chordsheet_key_prefs', JSON.stringify(prefs))
     }
   } catch {}
+}
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function buildChordSheetHtml(
+  sheet: ChordSheet,
+  selectedKey: string,
+  isMinor: boolean,
+  keyIdx: number,
+  primaryColor: string,
+): string {
+  const disp = (raw: string) => {
+    if (!raw || keyIdx < 0) return raw
+    return raw.split('/').map((t) => nashvilleToChord(t.trim(), keyIdx, isMinor)).join('/')
+  }
+
+  const secLabel = (id: string) => {
+    const sec = sheet.sections.find((s) => s.id === id)
+    if (!sec) return ''
+    const ofType = sheet.sections.filter((s) => s.type === sec.type)
+    const base = SECTION_LABELS[sec.type]
+    return ofType.length <= 1 ? base : `${base} ${ofType.findIndex((s) => s.id === id) + 1}`
+  }
+
+  const prevLabel = (id: string) => {
+    const idx = sheet.sections.findIndex((s) => s.id === id)
+    if (idx <= 0) return ''
+    const sec = sheet.sections[idx]
+    const prev = sheet.sections.slice(0, idx).reverse().find((s) => s.type === sec.type)
+    return prev ? secLabel(prev.id) : ''
+  }
+
+  let body = ''
+  for (const section of sheet.sections) {
+    const label = secLabel(section.id)
+
+    if (section.sameAsPrevious) {
+      const pl = prevLabel(section.id)
+      body += `<div class="section"><div class="slabel">${escHtml(label)}</div><div class="same-as">${pl ? `(same as ${escHtml(pl)})` : '(same as previous)'}</div></div>\n`
+      continue
+    }
+
+    const hasLyrics = section.lyrics.trim().length > 0
+
+    if (!hasLyrics) {
+      const toks = (section.chordTokens[0] ?? []).filter(Boolean).map(disp).join('  ')
+      body += `<div class="section"><div class="slabel">${escHtml(label)}</div>${toks ? `<div class="instrumental">${escHtml(toks)}</div>` : ''}</div>\n`
+      continue
+    }
+
+    let linesHtml = ''
+    for (let li = 0; li < section.lyrics.split('\n').length; li++) {
+      const lyricLine = section.lyrics.split('\n')[li]
+      const slots = getWordSlots(lyricLine)
+      if (!slots.length) { linesHtml += '<br>'; continue }
+      const rowTokens = section.chordTokens[li] ?? []
+      let cStr = '', lStr = ''
+      for (let wi = 0; wi < slots.length; wi++) {
+        const slot = slots[wi]
+        const word = slot.text + (slot.trailing === '-' ? '-' : slot.trailing === ' ' ? ' ' : '')
+        const chord = rowTokens[wi] ? disp(rowTokens[wi]) : ''
+        const w = Math.max(word.length, chord ? chord.length + 1 : 0)
+        cStr += chord.padEnd(w, ' ')
+        lStr += word.padEnd(w, ' ')
+      }
+      linesHtml += `<div class="cl">${escHtml(cStr.trimEnd())}</div><div class="ll">${escHtml(lStr.trimEnd())}</div>`
+    }
+    body += `<div class="section"><div class="slabel">${escHtml(label)}</div>${linesHtml}</div>\n`
+  }
+
+  const metaParts: string[] = []
+  if (sheet.artist) metaParts.push(sheet.artist)
+  if (sheet.bpm != null) metaParts.push(`♩ = ${sheet.bpm} BPM`)
+  if (selectedKey) metaParts.push(`Key: ${selectedKey}${isMinor ? ' minor' : ''}`)
+
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${escHtml(sheet.title)}</title>
+<style>
+  body{font-family:'Courier New',Courier,monospace;padding:28px 32px;color:#222;font-size:13px}
+  h1{font-family:sans-serif;margin:0 0 4px;font-size:22px;font-weight:700}
+  .meta{color:#888;font-size:12px;font-family:sans-serif;margin-bottom:28px}
+  .section{margin-bottom:20px;page-break-inside:avoid}
+  .slabel{font-family:sans-serif;font-weight:700;font-size:13px;color:${primaryColor};margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+  .same-as{font-style:italic;color:#888;font-size:12px}
+  .cl{color:${primaryColor};font-weight:700;white-space:pre;line-height:1.5;min-height:1em}
+  .ll{white-space:pre;line-height:1.5;margin-bottom:4px}
+  .instrumental{color:${primaryColor};font-weight:700}
+</style></head><body>
+<h1>${escHtml(sheet.title)}</h1>
+${metaParts.length ? `<div class="meta">${escHtml(metaParts.join(' · '))}</div>` : ''}
+${body}
+</body></html>`
 }
 
 function getSectionLabel(sections: ChordSheet['sections'], id: string): string {
@@ -83,6 +177,11 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
   const displayToken = (raw: string) => {
     if (!raw || keyIdx < 0) return raw
     return raw.split('/').map((t) => nashvilleToChord(t.trim(), keyIdx, isMinor)).join('/')
+  }
+
+  const handleExportPdf = async () => {
+    const html = buildChordSheetHtml(sheet, selectedKey, isMinor, keyIdx, colors.primary)
+    await printAsync({ html })
   }
 
   return (
@@ -215,6 +314,24 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                   fontWeight="600"
                 >
                   Chords Only
+                </Text>
+              </XStack>
+            </Pressable>
+
+            {/* Export PDF — available on all platforms via expo-print */}
+            <Pressable onPress={handleExportPdf}>
+              <XStack
+                backgroundColor={colors.primary + '18'}
+                borderRadius={99}
+                borderWidth={1}
+                borderColor={colors.primary}
+                paddingHorizontal="$3"
+                paddingVertical="$1"
+                alignItems="center"
+                gap="$1"
+              >
+                <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                  Export PDF
                 </Text>
               </XStack>
             </Pressable>
