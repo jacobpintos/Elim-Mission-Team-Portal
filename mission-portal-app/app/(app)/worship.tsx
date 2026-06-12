@@ -38,7 +38,11 @@ export default function WorshipScreen() {
   const [showForm, setShowForm] = useState(false)
   const [detailSetList, setDetailSetList] = useState<SetList | null>(null)
 
+  // Wait for Firebase Auth to confirm the user's identity before subscribing.
+  // Starting Firestore listeners before auth is ready can cause silent
+  // permission-denied failures that leave stores in an empty state.
   useEffect(() => {
+    if (!uid) return
     subscribe()
     subChords()
     subEvents()
@@ -52,7 +56,7 @@ export default function WorshipScreen() {
       tasksStore.unsubscribe()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [uid])
 
   const worshipUsers = users.filter((u) => isWorship(u) && !u.roles?.includes('admin'))
 

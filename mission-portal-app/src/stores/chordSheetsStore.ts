@@ -17,10 +17,11 @@ import type { ChordSheet, ChordSheetSection } from '@/types/chordSheet'
 // (each row JSON-encoded) and deserialized on read.
 
 function serializeSection(s: ChordSheetSection): object {
-  return {
+  const result: Record<string, unknown> = {
     ...s,
     chordTokens: s.chordTokens.map((row) => JSON.stringify(row)),
   }
+  return Object.fromEntries(Object.entries(result).filter(([, v]) => v !== undefined))
 }
 
 function deserializeSection(raw: Record<string, unknown>): ChordSheetSection {
@@ -62,19 +63,27 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
   subscribe: () => {
     if (get()._unsub) return
     set({ loading: true })
-    const unsub = onSnapshot(collection(db, 'chordSheets'), (snap) => {
-      const chordSheets = snap.docs.map((d) => {
-        const raw = d.data() as Record<string, unknown>
-        return {
-          ...raw,
-          id: d.id,
-          sections: Array.isArray(raw.sections)
-            ? (raw.sections as Record<string, unknown>[]).map(deserializeSection)
-            : [],
-        } as ChordSheet
-      })
-      set({ chordSheets, loading: false })
-    })
+    const unsub = onSnapshot(
+      collection(db, 'chordSheets'),
+      (snap) => {
+        const chordSheets = snap.docs.map((d) => {
+          const raw = d.data() as Record<string, unknown>
+          return {
+            ...raw,
+            id: d.id,
+            sections: Array.isArray(raw.sections)
+              ? (raw.sections as Record<string, unknown>[]).map(deserializeSection)
+              : [],
+          } as ChordSheet
+        })
+        set({ chordSheets, loading: false })
+      },
+      (err) => {
+        console.error('[ChordSheetsStore] onSnapshot error:', err.code, err.message)
+        // Clear _unsub so subscribe() can be retried (e.g. after auth is ready)
+        set({ loading: false, _unsub: null })
+      },
+    )
     set({ _unsub: unsub })
   },
 
