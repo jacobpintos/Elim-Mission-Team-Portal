@@ -13,6 +13,9 @@ import { ThemePreview } from '@/features/theme/ThemePreview'
 import type { ThemeDoc } from '@/types/theme'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
+// Captured once per page load — sufficient precision for a 30-day window display
+const PAGE_LOAD_TS = Date.now()
+
 function ContrastBadge({ ratio }: { ratio: number }) {
   const pass4_5 = ratio >= 4.5
   const pass7 = ratio >= 7
@@ -98,10 +101,9 @@ export default function AdminTheme() {
   const textOnBgRatio = contrastRatio(preview.dark.text, preview.dark.background)
   const textOnSurfaceRatio = contrastRatio(preview.dark.text, preview.dark.surface)
 
-  const hasBackup =
-    !!theme.logoBackup && theme.logoBackup.expiresAt > Date.now()
+  const hasBackup = !!theme.logoBackup && theme.logoBackup.expiresAt > PAGE_LOAD_TS
   const backupDaysLeft = hasBackup
-    ? Math.ceil((theme.logoBackup!.expiresAt - Date.now()) / (1000 * 60 * 60 * 24))
+    ? Math.ceil((theme.logoBackup!.expiresAt - PAGE_LOAD_TS) / (1000 * 60 * 60 * 24))
     : 0
 
   const content = (
