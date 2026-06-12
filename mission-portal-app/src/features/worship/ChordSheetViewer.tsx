@@ -184,6 +184,22 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
     await printAsync({ html })
   }
 
+  // Sections to omit in Chords Only: manually marked same-as-previous, or
+  // any section whose chord progression exactly matches an earlier section's.
+  const chordsOnlySkipIds = new Set<string>()
+  if (chordsOnly) {
+    const seenProgressions = new Set<string>()
+    for (const section of sheet.sections) {
+      if (section.sameAsPrevious) { chordsOnlySkipIds.add(section.id); continue }
+      const sig = (section.chordTokens ?? []).flat().filter(Boolean).join('\x00')
+      if (sig && seenProgressions.has(sig)) {
+        chordsOnlySkipIds.add(section.id)
+      } else if (sig) {
+        seenProgressions.add(sig)
+      }
+    }
+  }
+
   return (
     <Modal visible={!!sheet} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -344,9 +360,9 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                 const label = getSectionLabel(sheet.sections, section.id)
                 const hasLyrics = section.lyrics.trim().length > 0
 
-                // Chords Only: skip sections marked as same-as-previous
+                // Chords Only: skip duplicate/same-as-previous sections
                 if (chordsOnly) {
-                  if (section.sameAsPrevious) return null
+                  if (chordsOnlySkipIds.has(section.id)) return null
                   const allTokens = (section.chordTokens ?? [])
                     .flat()
                     .filter(Boolean)
