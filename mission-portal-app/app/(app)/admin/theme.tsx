@@ -9,6 +9,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { defaults } from '@/theme/defaults'
 import { contrastRatio } from '@/theme/contrast'
 import { ColorPicker } from '@/features/theme/ColorPicker'
+import { PhotoColorExtractor } from '@/features/theme/PhotoColorExtractor'
 import { ThemePreview } from '@/features/theme/ThemePreview'
 import type { ThemeDoc } from '@/types/theme'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -108,6 +109,11 @@ export default function AdminTheme() {
           label="Accent Color"
           value={preview.accent}
           onChange={(v) => setPreview((p) => ({ ...p, accent: v }))}
+        />
+
+        <PhotoColorExtractor
+          onSetPrimary={(v) => setPreview((p) => ({ ...p, primary: v }))}
+          onSetSecondary={(v) => setPreview((p) => ({ ...p, accent: v }))}
         />
 
         <ColorPicker
