@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { Alert, useWindowDimensions } from 'react-native'
+import { useWindowDimensions } from 'react-native'
 import { ScrollView } from 'react-native'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
-import { Stack } from 'expo-router'
 import { useThemeStore } from '@/stores/themeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -53,40 +52,26 @@ export default function AdminTheme() {
 
   const [preview, setPreview] = useState<ThemeDoc>({ ...theme })
   const [publishing, setPublishing] = useState(false)
+  const [confirmPublish, setConfirmPublish] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
 
-  const handlePublish = async () => {
-    Alert.alert(
-      'Publish Theme',
-      'Apply this theme to all users?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Publish',
-          onPress: async () => {
-            setPublishing(true)
-            try {
-              await publishTheme(preview, profile?.uid ?? '')
-              toast('Theme published!', 'success')
-            } catch (err: unknown) {
-              const message = err instanceof Error ? err.message : 'Failed to publish'
-              toast(message, 'error')
-            } finally {
-              setPublishing(false)
-            }
-          },
-        },
-      ]
-    )
+  const doPublish = async () => {
+    setConfirmPublish(false)
+    setPublishing(true)
+    try {
+      await publishTheme(preview, profile?.uid ?? '')
+      toast('Theme published!', 'success')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to publish'
+      toast(message, 'error')
+    } finally {
+      setPublishing(false)
+    }
   }
 
-  const handleReset = () => {
-    Alert.alert('Reset to Defaults', 'Reset preview to default theme?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reset',
-        onPress: () => setPreview({ ...defaults }),
-      },
-    ])
+  const doReset = () => {
+    setConfirmReset(false)
+    setPreview({ ...defaults })
   }
 
   const textOnBgRatio = contrastRatio(preview.dark.text, preview.dark.background)
@@ -166,13 +151,44 @@ export default function AdminTheme() {
         </Text>
         <ThemePreview theme={preview} />
 
-        <XStack gap="$2" flexWrap="wrap">
-          <Button size="$3" onPress={handleReset} theme="gray">
+        {confirmReset ? (
+          <YStack gap="$2" padding="$3" backgroundColor="$gray2" borderRadius="$3">
+            <Text fontSize="$3" fontWeight="600">Reset preview to default theme?</Text>
+            <XStack gap="$2">
+              <Button size="$3" onPress={doReset} theme="red">
+                Reset
+              </Button>
+              <Button size="$3" onPress={() => setConfirmReset(false)} theme="gray">
+                Cancel
+              </Button>
+            </XStack>
+          </YStack>
+        ) : (
+          <Button size="$3" onPress={() => setConfirmReset(true)} theme="gray">
             Reset to Defaults
           </Button>
+        )}
+
+        {confirmPublish ? (
+          <YStack gap="$2" padding="$3" backgroundColor="$gray2" borderRadius="$3">
+            <Text fontSize="$3" fontWeight="600">Apply this theme to all users?</Text>
+            <XStack gap="$2">
+              <Button
+                size="$3"
+                onPress={doPublish}
+                backgroundColor={preview.primary}
+              >
+                <Text color="white" fontWeight="700">Publish</Text>
+              </Button>
+              <Button size="$3" onPress={() => setConfirmPublish(false)} theme="gray">
+                Cancel
+              </Button>
+            </XStack>
+          </YStack>
+        ) : (
           <Button
             size="$3"
-            onPress={handlePublish}
+            onPress={() => setConfirmPublish(true)}
             disabled={publishing}
             backgroundColor={preview.primary}
           >
@@ -184,7 +200,7 @@ export default function AdminTheme() {
               </Text>
             )}
           </Button>
-        </XStack>
+        )}
       </YStack>
     </>
   )
