@@ -36,6 +36,15 @@ function getSectionLabel(sections: ChordSheet['sections'], id: string): string {
   return `${base} ${ofType.findIndex((s) => s.id === id) + 1}`
 }
 
+function getPrevMatchingLabel(sections: ChordSheet['sections'], id: string): string {
+  const idx = sections.findIndex((s) => s.id === id)
+  if (idx <= 0) return ''
+  const section = sections[idx]
+  const prev = sections.slice(0, idx).reverse().find((s) => s.type === section.type)
+  if (!prev) return ''
+  return getSectionLabel(sections, prev.id)
+}
+
 // Estimate column width in logical px from word length (Courier New 13px ≈ 9px/char)
 function colWidth(word: string, chordLen = 0): number {
   return Math.max(word.length * 9 + 8, chordLen * 9 + 8, 36)
@@ -218,7 +227,9 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                 const label = getSectionLabel(sheet.sections, section.id)
                 const hasLyrics = section.lyrics.trim().length > 0
 
+                // Chords Only: skip sections marked as same-as-previous
                 if (chordsOnly) {
+                  if (section.sameAsPrevious) return null
                   const allTokens = (section.chordTokens ?? [])
                     .flat()
                     .filter(Boolean)
@@ -234,6 +245,21 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                           {allTokens}
                         </Text>
                       ) : null}
+                    </YStack>
+                  )
+                }
+
+                // Full mode: same-as-previous → label only
+                if (section.sameAsPrevious) {
+                  const prevLabel = getPrevMatchingLabel(sheet.sections, section.id)
+                  return (
+                    <YStack key={section.id} gap="$0.5">
+                      <Text color={colors.primary} fontWeight="700" fontSize="$3">
+                        {label}
+                      </Text>
+                      <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
+                        {prevLabel ? `(same as ${prevLabel})` : '(same as previous)'}
+                      </Text>
                     </YStack>
                   )
                 }

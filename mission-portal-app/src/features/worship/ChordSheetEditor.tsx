@@ -140,7 +140,19 @@ export function ChordSheetEditor({
   }
 
   const updateSectionType = (id: string, type: SectionType) => {
-    setSections((prev) => prev.map((s) => (s.id === id ? { ...s, type } : s)))
+    setSections((prev) => {
+      const idx = prev.findIndex((s) => s.id === id)
+      const hasPrevOfType = prev.slice(0, idx).some((s) => s.type === type)
+      return prev.map((s) =>
+        s.id === id
+          ? { ...s, type, sameAsPrevious: hasPrevOfType ? s.sameAsPrevious : false }
+          : s,
+      )
+    })
+  }
+
+  const toggleSameAsPrevious = (id: string) => {
+    setSections((prev) => prev.map((s) => (s.id === id ? { ...s, sameAsPrevious: !s.sameAsPrevious } : s)))
   }
 
   const updateSectionLyrics = (id: string, lyrics: string) => {
@@ -301,6 +313,12 @@ export function ChordSheetEditor({
               {sections.map((section) => {
                 const hasLyrics = section.lyrics.trim().length > 0
                 const lyricsLines = hasLyrics ? section.lyrics.split('\n') : []
+                const sectionIdx = sections.findIndex((s) => s.id === section.id)
+                const prevOfType = sections
+                  .slice(0, sectionIdx)
+                  .reverse()
+                  .find((s) => s.type === section.type) ?? null
+                const prevLabel = prevOfType ? getSectionLabel(sections, prevOfType.id) : null
                 return (
                   <YStack
                     key={section.id}
@@ -351,6 +369,40 @@ export function ChordSheetEditor({
                       ))}
                     </XStack>
 
+                    {/* Same-as-previous toggle */}
+                    {prevLabel ? (
+                      <Pressable onPress={() => toggleSameAsPrevious(section.id)}>
+                        <XStack
+                          backgroundColor={
+                            section.sameAsPrevious ? colors.primary + '22' : colors.surface
+                          }
+                          borderRadius="$2"
+                          borderWidth={1}
+                          borderColor={
+                            section.sameAsPrevious ? colors.primary : colors.border
+                          }
+                          paddingHorizontal="$2"
+                          paddingVertical="$1"
+                          alignSelf="flex-start"
+                          alignItems="center"
+                          gap="$1"
+                        >
+                          <Text
+                            color={
+                              section.sameAsPrevious ? colors.primary : colors.textMuted
+                            }
+                            fontSize="$1"
+                            fontWeight={section.sameAsPrevious ? '700' : '400'}
+                          >
+                            {section.sameAsPrevious ? `✓ Same as ${prevLabel}` : `Same as ${prevLabel}`}
+                          </Text>
+                        </XStack>
+                      </Pressable>
+                    ) : null}
+
+                    {/* Lyrics + chords — hidden when marked same-as-previous */}
+                    {!section.sameAsPrevious ? (
+                      <>
                     {/* Lyrics */}
                     <TextInput
                       style={[
@@ -567,6 +619,8 @@ export function ChordSheetEditor({
                         })}
                       </YStack>
                     )}
+                      </>
+                    ) : null}
                   </YStack>
                 )
               })}
