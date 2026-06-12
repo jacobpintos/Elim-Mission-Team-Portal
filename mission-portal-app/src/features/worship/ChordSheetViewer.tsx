@@ -32,6 +32,17 @@ function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+// Convert a raw NNS token to a display string.
+// "4/1"  → slash chord    (4 chord, 1 in the bass)  e.g. "F/C"
+// "4>1"  → passing chord  (moves from 4 to 1)        e.g. "F → C"
+function formatToken(raw: string, keyIdx: number, isMinor: boolean): string {
+  if (!raw) return raw
+  const conv = (t: string) => keyIdx < 0 ? t.trim() : nashvilleToChord(t.trim(), keyIdx, isMinor)
+  if (raw.includes('>')) return raw.split('>').map(conv).join(' → ')
+  if (keyIdx < 0) return raw
+  return raw.split('/').map(conv).join('/')
+}
+
 function buildChordSheetHtml(
   sheet: ChordSheet,
   selectedKey: string,
@@ -39,10 +50,7 @@ function buildChordSheetHtml(
   keyIdx: number,
   primaryColor: string,
 ): string {
-  const disp = (raw: string) => {
-    if (!raw || keyIdx < 0) return raw
-    return raw.split('/').map((t) => nashvilleToChord(t.trim(), keyIdx, isMinor)).join('/')
-  }
+  const disp = (raw: string) => formatToken(raw, keyIdx, isMinor)
 
   const secLabel = (id: string) => {
     const sec = sheet.sections.find((s) => s.id === id)
@@ -174,10 +182,7 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
     saveKeyPrefs({ key: selectedKey, isMinor: newIsMinor })
   }
 
-  const displayToken = (raw: string) => {
-    if (!raw || keyIdx < 0) return raw
-    return raw.split('/').map((t) => nashvilleToChord(t.trim(), keyIdx, isMinor)).join('/')
-  }
+  const displayToken = (raw: string) => formatToken(raw, keyIdx, isMinor)
 
   const handleExportPdf = async () => {
     const html = buildChordSheetHtml(sheet, selectedKey, isMinor, keyIdx, colors.primary)

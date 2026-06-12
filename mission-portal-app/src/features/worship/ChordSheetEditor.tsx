@@ -467,6 +467,8 @@ export function ChordSheetEditor({
                             ['2sus4', 'Sus 4'],
                             ['7dim', 'Diminished'],
                             ['5aug', 'Augmented'],
+                            ['4/1', 'Slash chord — 4 over 1 bass (e.g. F/C)'],
+                            ['4>1', 'Passing chord — moves from 4 to 1 on same syllable (displays as F → C)'],
                           ].map(([token, desc]) => (
                             <XStack key={token} gap="$2" alignItems="center">
                               <Text
