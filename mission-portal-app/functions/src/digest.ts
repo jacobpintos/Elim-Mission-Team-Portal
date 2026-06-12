@@ -1,14 +1,15 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
+import { defineSecret } from 'firebase-functions/params'
 import * as admin from 'firebase-admin'
-import { Resend } from 'resend'
 import * as crypto from 'crypto'
+import { RESEND_API_KEY, resend } from './email/client'
 
 if (!admin.apps.length) admin.initializeApp()
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY ?? ''
-const UNSUBSCRIBE_HMAC_SECRET = process.env.UNSUBSCRIBE_HMAC_SECRET ?? ''
-const FUNCTIONS_BASE_URL = process.env.FUNCTIONS_BASE_URL ?? 'https://us-central1-yourproject.cloudfunctions.net'
+const UNSUBSCRIBE_HMAC_SECRET = defineSecret('UNSUBSCRIBE_HMAC_SECRET')
+
+const SECRETS = [RESEND_API_KEY, UNSUBSCRIBE_HMAC_SECRET]
 
 interface UserDoc {
   uid: string
@@ -39,13 +40,15 @@ interface DigestContent {
   announcements: AnnouncementDoc[]
 }
 
-function buildUnsubscribeToken(uid: string, type: string): string {
-  return crypto.createHmac('sha256', UNSUBSCRIBE_HMAC_SECRET).update(`${uid}:${type}`).digest('hex')
+function buildUnsubscribeToken(uid: string, type: string, secret: string): string {
+  return crypto.createHmac('sha256', secret).update(`${uid}:${type}`).digest('hex')
 }
 
 function buildUnsubscribeUrl(uid: string, type: string): string {
-  const token = buildUnsubscribeToken(uid, type)
-  return `${FUNCTIONS_BASE_URL}/unsubscribe?uid=${uid}&type=${type}&token=${token}`
+  const projectId = process.env.GCLOUD_PROJECT ?? 'unknown'
+  const base = `https://us-central1-${projectId}.cloudfunctions.net`
+  const token = buildUnsubscribeToken(uid, type, UNSUBSCRIBE_HMAC_SECRET.value())
+  return `${base}/unsubscribe?uid=${uid}&type=${type}&token=${token}`
 }
 
 async function getDigestRecipients(type: 'weekly' | 'monthly'): Promise<UserDoc[]> {
@@ -58,10 +61,8 @@ async function getDigestRecipients(type: 'weekly' | 'monthly'): Promise<UserDoc[
       const isPublicUser = (u.roles ?? []).includes('public')
       const prefs = u.notificationPrefs ?? {}
       if (type === 'weekly') {
-        // Non-public users, opt-in default ON (AC-54)
         return !isPublicUser && prefs.weeklyDigest !== false
       }
-      // Monthly: public users only, opt-in default OFF (AC-56)
       return isPublicUser && prefs.monthlyDigest === true
     })
 }
@@ -74,7 +75,6 @@ async function gatherDigestContent(db: admin.firestore.Firestore): Promise<Diges
   const nowStr = now.toISOString().slice(0, 10)
   const twoWeeksStr = twoWeeksLater.toISOString().slice(0, 10)
 
-  // Fetch upcoming events (next 2 weeks)
   let events: EventDoc[] = []
   try {
     const eventsSnap = await db
@@ -89,7 +89,6 @@ async function gatherDigestContent(db: admin.firestore.Firestore): Promise<Diges
     events = []
   }
 
-  // Fetch recent announcements (last 7 days)
   let announcements: AnnouncementDoc[] = []
   try {
     const announcementsSnap = await db
@@ -237,7 +236,7 @@ async function sendDigestBatch(
   content: DigestContent,
   db: admin.firestore.Firestore
 ): Promise<void> {
-  const resend = new Resend(RESEND_API_KEY)
+  const client = resend()
   const batchId = `${type}-${Date.now()}`
   const CHUNK_SIZE = 100
 
@@ -254,7 +253,7 @@ async function sendDigestBatch(
           : buildMonthlyEmailHtml(user.displayName, content.events, content.announcements, unsubUrl)
 
       return {
-        from: 'The Well of Iowa <noreply@thewellofiowa.org>',
+        from: 'The Well of Iowa <onboarding@resend.dev>',
         to: user.email,
         subject:
           type === 'weekly'
@@ -266,14 +265,13 @@ async function sendDigestBatch(
     })
 
     try {
-      await resend.batch.send(emails)
+      await client.batch.send(emails)
       totalDelivered += chunk.length
     } catch {
       totalBounced += chunk.length
     }
   }
 
-  // Write digest stats
   await db.collection('digestStats').add({
     type,
     sentAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -286,25 +284,31 @@ async function sendDigestBatch(
 }
 
 // Scheduled: Weekly — Monday 8am Central = 13:00 UTC
-export const weeklyDigest = onSchedule('0 13 * * 1', async () => {
-  const db = admin.firestore()
-  const recipients = await getDigestRecipients('weekly')
-  if (recipients.length === 0) return
-  const content = await gatherDigestContent(db)
-  await sendDigestBatch(recipients, 'weekly', content, db)
-})
+export const weeklyDigest = onSchedule(
+  { schedule: '0 13 * * 1', secrets: SECRETS },
+  async () => {
+    const db = admin.firestore()
+    const recipients = await getDigestRecipients('weekly')
+    if (recipients.length === 0) return
+    const content = await gatherDigestContent(db)
+    await sendDigestBatch(recipients, 'weekly', content, db)
+  }
+)
 
 // Scheduled: Monthly — 1st of month 8am Central = 13:00 UTC
-export const monthlyDigest = onSchedule('0 13 1 * *', async () => {
-  const db = admin.firestore()
-  const recipients = await getDigestRecipients('monthly')
-  if (recipients.length === 0) return
-  const content = await gatherDigestContent(db)
-  await sendDigestBatch(recipients, 'monthly', content, db)
-})
+export const monthlyDigest = onSchedule(
+  { schedule: '0 13 1 * *', secrets: SECRETS },
+  async () => {
+    const db = admin.firestore()
+    const recipients = await getDigestRecipients('monthly')
+    if (recipients.length === 0) return
+    const content = await gatherDigestContent(db)
+    await sendDigestBatch(recipients, 'monthly', content, db)
+  }
+)
 
 // Manual callable — admin only
-export const sendDigestManual = onCall(async (req) => {
+export const sendDigestManual = onCall({ secrets: SECRETS }, async (req) => {
   if (!req.auth?.token.admin) throw new HttpsError('permission-denied', 'Admins only')
   const { type } = req.data as { type: 'weekly' | 'monthly' }
   if (!['weekly', 'monthly'].includes(type)) {

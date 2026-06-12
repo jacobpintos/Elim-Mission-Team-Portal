@@ -1,12 +1,15 @@
 import { onRequest } from 'firebase-functions/v2/https'
+import { defineSecret } from 'firebase-functions/params'
 import * as admin from 'firebase-admin'
 import * as crypto from 'crypto'
 
 if (!admin.apps.length) admin.initializeApp()
 
-export const unsubscribe = onRequest(async (req, res) => {
+const UNSUBSCRIBE_HMAC_SECRET = defineSecret('UNSUBSCRIBE_HMAC_SECRET')
+
+export const unsubscribe = onRequest({ secrets: [UNSUBSCRIBE_HMAC_SECRET] }, async (req, res) => {
   const { uid, type, token } = req.query as { uid: string; type: string; token: string }
-  const secret = process.env.UNSUBSCRIBE_HMAC_SECRET ?? ''
+  const secret = UNSUBSCRIBE_HMAC_SECRET.value()
   const expected = crypto.createHmac('sha256', secret).update(`${uid}:${type}`).digest('hex')
   if (!secret || token !== expected) {
     res.status(400).send('Invalid unsubscribe link.')
