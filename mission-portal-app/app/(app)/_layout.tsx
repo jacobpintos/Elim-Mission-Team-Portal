@@ -10,9 +10,11 @@ import type { EventTemplate } from '@/types/events'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { useUsersStore } from '@/stores/usersStore'
+import { useWorshipStore } from '@/stores/worshipStore'
+import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useSecurityStore } from '@/stores/securityStore'
 import { useUIStore } from '@/stores/uiStore'
-import { visibleTabs, isSecurity, isPublic, hasRole } from '@/lib/roles'
+import { visibleTabs, isSecurity, isPublic, hasRole, isWorship } from '@/lib/roles'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { ReportFormModal } from '@/features/security/ReportFormModal'
@@ -88,6 +90,8 @@ export default function AppLayout() {
   const [isOpen, setIsOpen] = useState(false)
   const [hasPublicEventToday, setHasPublicEventToday] = useState(false)
   const { subscribe: subUsers, unsubscribe: unsubUsers, users } = useUsersStore()
+  const { subscribe: subWorship, unsubscribe: unsubWorship } = useWorshipStore()
+  const { subscribe: subChords, unsubscribe: unsubChords } = useChordSheetsStore()
   const { createReport } = useSecurityStore()
   const toast = useUIStore((s) => s.toast)
   const viewAsPublic = useUIStore((s) => s.viewAsPublic)
@@ -114,6 +118,17 @@ export default function AppLayout() {
     return () => unsubUsers()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!profile || !isWorship(profile)) return
+    subWorship()
+    subChords()
+    return () => {
+      unsubWorship()
+      unsubChords()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.uid])
 
   useEffect(() => {
     if (!profile || !isPublic(profile)) return
