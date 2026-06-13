@@ -25,6 +25,7 @@ interface TasksStore {
   tasks: Task[]
   loading: boolean
   _unsub: (() => void) | null
+  _refCount: number
   // selectors
   myTasks: (uid: string) => Task[]
   eventTasks: (templateId: string | number) => Task[]
@@ -45,6 +46,7 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   tasks: [],
   loading: false,
   _unsub: null,
+  _refCount: 0,
 
   myTasks: (uid) => {
     const today = todayStr()
@@ -76,7 +78,9 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   },
 
   subscribe: () => {
-    if (get()._unsub) return
+    const count = get()._refCount + 1
+    set({ _refCount: count })
+    if (count > 1) return
     set({ loading: true })
     const unsub = onSnapshot(collection(db, 'tasks'), (snap) => {
       const tasks = snap.docs.map((d) => ({ ...(d.data() as Task), id: d.id }))
@@ -86,8 +90,12 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   },
 
   unsubscribe: () => {
-    get()._unsub?.()
-    set({ _unsub: null, tasks: [] })
+    const count = Math.max(0, get()._refCount - 1)
+    set({ _refCount: count })
+    if (count === 0) {
+      get()._unsub?.()
+      set({ _unsub: null, tasks: [] })
+    }
   },
 
   createTask: async (data) => {

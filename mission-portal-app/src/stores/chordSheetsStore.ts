@@ -43,6 +43,7 @@ interface ChordSheetsStore {
   chordSheets: ChordSheet[]
   loading: boolean
   _unsub: (() => void) | null
+  _refCount: number
   subscribe: () => void
   unsubscribe: () => void
   createChordSheet: (
@@ -59,9 +60,12 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
   chordSheets: [],
   loading: false,
   _unsub: null,
+  _refCount: 0,
 
   subscribe: () => {
-    if (get()._unsub) return
+    const count = get()._refCount + 1
+    set({ _refCount: count })
+    if (count > 1) return
     set({ loading: true })
     const unsub = onSnapshot(
       collection(db, 'chordSheets'),
@@ -88,8 +92,12 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
   },
 
   unsubscribe: () => {
-    get()._unsub?.()
-    set({ _unsub: null, chordSheets: [] })
+    const count = Math.max(0, get()._refCount - 1)
+    set({ _refCount: count })
+    if (count === 0) {
+      get()._unsub?.()
+      set({ _unsub: null, chordSheets: [] })
+    }
   },
 
   createChordSheet: async (data) => {

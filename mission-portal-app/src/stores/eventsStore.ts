@@ -29,6 +29,7 @@ interface EventsStore {
   loading: boolean
   _unsubTemplates: (() => void) | null
   _unsubAvail: (() => void) | null
+  _refCount: number
   // selectors
   instances: (from: string, to: string) => EventInstance[]
   myInstances: (uid: string, from: string, to: string) => EventInstance[]
@@ -185,6 +186,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   loading: false,
   _unsubTemplates: null,
   _unsubAvail: null,
+  _refCount: 0,
 
   instances: (from, to) => {
     const { templates, overrides } = get()
@@ -248,7 +250,9 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   },
 
   subscribe: () => {
-    if (get()._unsubTemplates) return
+    const count = get()._refCount + 1
+    set({ _refCount: count })
+    if (count > 1) return
 
     set({ loading: true })
 
@@ -295,9 +299,13 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   },
 
   unsubscribe: () => {
-    get()._unsubTemplates?.()
-    get()._unsubAvail?.()
-    set({ _unsubTemplates: null, _unsubAvail: null, templates: [], avail: {}, overrides: {} })
+    const count = Math.max(0, get()._refCount - 1)
+    set({ _refCount: count })
+    if (count === 0) {
+      get()._unsubTemplates?.()
+      get()._unsubAvail?.()
+      set({ _unsubTemplates: null, _unsubAvail: null, templates: [], avail: {}, overrides: {} })
+    }
   },
 
   selectEvent: (key) => set({ selectedInstanceKey: key }),

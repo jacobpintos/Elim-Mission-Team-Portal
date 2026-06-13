@@ -16,6 +16,7 @@ interface WorshipStore {
   setLists: SetList[]
   loading: boolean
   _unsub: (() => void) | null
+  _refCount: number
   subscribe: () => void
   unsubscribe: () => void
   createSetList: (data: Omit<SetList, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string | number>
@@ -27,9 +28,12 @@ export const useWorshipStore = create<WorshipStore>((set, get) => ({
   setLists: [],
   loading: false,
   _unsub: null,
+  _refCount: 0,
 
   subscribe: () => {
-    if (get()._unsub) return
+    const count = get()._refCount + 1
+    set({ _refCount: count })
+    if (count > 1) return
     set({ loading: true })
     const unsub = onSnapshot(collection(db, 'setLists'), (snap) => {
       const setLists = snap.docs.map((d) => ({ ...(d.data() as SetList), id: d.id }))
@@ -39,8 +43,12 @@ export const useWorshipStore = create<WorshipStore>((set, get) => ({
   },
 
   unsubscribe: () => {
-    get()._unsub?.()
-    set({ _unsub: null, setLists: [] })
+    const count = Math.max(0, get()._refCount - 1)
+    set({ _refCount: count })
+    if (count === 0) {
+      get()._unsub?.()
+      set({ _unsub: null, setLists: [] })
+    }
   },
 
   createSetList: async (data) => {
