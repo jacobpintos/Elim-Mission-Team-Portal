@@ -5,7 +5,7 @@ import { printAsync } from 'expo-print'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { NNS_KEYS, nashvilleToChord, getWordSlots } from '@/lib/nashvilleNumbers'
 import { SECTION_LABELS } from '@/types/chordSheet'
-import type { ChordSheet } from '@/types/chordSheet'
+import type { ChordSheet, ChordSheetSection } from '@/types/chordSheet'
 
 interface KeyPrefs { key: string; isMinor: boolean }
 
@@ -32,15 +32,48 @@ function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+// Token used to mark the end of one chord progression cycle within a section.
+const PROGRESSION_END = '||'
+
 // Convert a raw NNS token to a display string.
 // "4/1"  → slash chord    (4 chord, 1 in the bass)  e.g. "F/C"
 // "4>1"  → passing chord  (moves from 4 to 1)        e.g. "F → C"
 function formatToken(raw: string, keyIdx: number, isMinor: boolean): string {
-  if (!raw) return raw
+  if (!raw || raw === PROGRESSION_END) return raw
   const conv = (t: string) => keyIdx < 0 ? t.trim() : nashvilleToChord(t.trim(), keyIdx, isMinor)
   if (raw.includes('>')) return raw.split('>').map(conv).join(' → ')
   if (keyIdx < 0) return raw
   return raw.split('/').map(conv).join('/')
+}
+
+// Split a flat chord token array on PROGRESSION_END markers.
+function splitByProgressionEnd(tokens: string[]): string[][] {
+  const groups: string[][] = []
+  let current: string[] = []
+  for (const t of tokens) {
+    if (t === PROGRESSION_END) {
+      if (current.length > 0) { groups.push(current); current = [] }
+    } else if (t) {
+      current.push(t)
+    }
+  }
+  if (current.length > 0) groups.push(current)
+  return groups
+}
+
+// Collapse consecutive identical progression groups into { chords, count } entries.
+function compressGroups(groups: string[][]): { chords: string[]; count: number }[] {
+  const result: { chords: string[]; count: number }[] = []
+  for (const group of groups) {
+    const sig = group.join('\x00')
+    const last = result[result.length - 1]
+    if (last && last.chords.join('\x00') === sig) {
+      last.count++
+    } else {
+      result.push({ chords: [...group], count: 1 })
+    }
+  }
+  return result
 }
 
 function buildChordSheetHtml(
@@ -81,7 +114,8 @@ function buildChordSheetHtml(
     const hasLyrics = section.lyrics.trim().length > 0
 
     if (!hasLyrics) {
-      const toks = (section.chordTokens[0] ?? []).filter(Boolean).map(disp).join('  ')
+      const toks = (section.chordTokens[0] ?? []).filter(Boolean)
+        .map((t) => (t === PROGRESSION_END ? ' | ' : disp(t))).join('  ')
       body += `<div class="section"><div class="slabel">${escHtml(label)}</div>${toks ? `<div class="instrumental">${escHtml(toks)}</div>` : ''}</div>\n`
       continue
     }
@@ -152,6 +186,12 @@ function colWidth(word: string, chordLen = 0): number {
   return Math.max(word.length * 9 + 8, chordLen * 9 + 8, 36)
 }
 
+interface SectionGroup {
+  section: ChordSheetSection
+  count: number
+  sig: string
+}
+
 interface ChordSheetViewerProps {
   sheet: ChordSheet | null
   onClose: () => void
@@ -189,18 +229,23 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
     await printAsync({ html })
   }
 
-  // Sections to omit in Chords Only: manually marked same-as-previous, or
-  // any section whose chord progression exactly matches an earlier section's.
-  const chordsOnlySkipIds = new Set<string>()
+  // In Chords Only mode, group consecutive sections with the same type + chord progression.
+  // sameAsPrevious sections increment the current group's repeat count.
+  const sectionGroups: SectionGroup[] = []
   if (chordsOnly) {
-    const seenProgressions = new Set<string>()
     for (const section of sheet.sections) {
-      if (section.sameAsPrevious) { chordsOnlySkipIds.add(section.id); continue }
-      const sig = (section.chordTokens ?? []).flat().filter(Boolean).join('\x00')
-      if (sig && seenProgressions.has(sig)) {
-        chordsOnlySkipIds.add(section.id)
-      } else if (sig) {
-        seenProgressions.add(sig)
+      if (section.sameAsPrevious) {
+        if (sectionGroups.length > 0) sectionGroups[sectionGroups.length - 1].count++
+        continue
+      }
+      const sig = (section.chordTokens ?? []).flat()
+        .filter((t) => Boolean(t) && t !== PROGRESSION_END)
+        .join('\x00')
+      const last = sectionGroups[sectionGroups.length - 1]
+      if (last && last.section.type === section.type && sig && sig === last.sig) {
+        last.count++
+      } else {
+        sectionGroups.push({ section, count: 1, sig })
       }
     }
   }
@@ -361,141 +406,161 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
           {/* Content */}
           <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
             <YStack gap="$3" paddingBottom="$4">
-              {sheet.sections.map((section) => {
-                const label = getSectionLabel(sheet.sections, section.id)
-                const hasLyrics = section.lyrics.trim().length > 0
-
-                // Chords Only: skip duplicate/same-as-previous sections
-                if (chordsOnly) {
-                  if (chordsOnlySkipIds.has(section.id)) return null
-                  const allTokens = (section.chordTokens ?? [])
-                    .flat()
-                    .filter(Boolean)
-                    .map(displayToken)
-                    .join('  ')
-                  return (
-                    <YStack key={section.id} gap="$0.5">
-                      <Text color={colors.primary} fontWeight="700" fontSize="$3">
-                        {label}
-                      </Text>
-                      {allTokens ? (
-                        <Text style={styles.mono} color={colors.text}>
-                          {allTokens}
-                        </Text>
-                      ) : null}
-                    </YStack>
-                  )
-                }
-
-                // Full mode: same-as-previous → label only
-                if (section.sameAsPrevious) {
-                  const prevLabel = getPrevMatchingLabel(sheet.sections, section.id)
-                  return (
-                    <YStack key={section.id} gap="$0.5">
-                      <Text color={colors.primary} fontWeight="700" fontSize="$3">
-                        {label}
-                      </Text>
-                      <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
-                        {prevLabel ? `(same as ${prevLabel})` : '(same as previous)'}
-                      </Text>
-                    </YStack>
-                  )
-                }
-
-                // Full mode — instrumental
-                if (!hasLyrics) {
-                  const tokens = (section.chordTokens?.[0] ?? []).filter(Boolean)
-                  return (
-                    <YStack key={section.id} gap="$1">
-                      <Text color={colors.primary} fontWeight="700" fontSize="$3">
-                        {label}
-                      </Text>
-                      {tokens.length > 0 ? (
-                        <XStack flexWrap="wrap" gap="$2">
-                          {tokens.map((t, i) => (
-                            <Text
-                              key={i}
-                              style={[styles.mono, styles.chordText]}
-                              color={colors.primary}
-                            >
-                              {displayToken(t)}
+              {chordsOnly
+                ? sectionGroups.map(({ section, count }) => {
+                    const label = count > 1
+                      ? SECTION_LABELS[section.type]
+                      : getSectionLabel(sheet.sections, section.id)
+                    const allTokens = (section.chordTokens ?? []).flat()
+                    const progGroups = splitByProgressionEnd(allTokens)
+                    const compressed = compressGroups(progGroups)
+                    return (
+                      <YStack key={section.id} gap="$0.5">
+                        <XStack gap="$2" alignItems="center">
+                          <Text color={colors.primary} fontWeight="700" fontSize="$3">
+                            {label}
+                          </Text>
+                          {count > 1 ? (
+                            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                              ×{count}
                             </Text>
-                          ))}
+                          ) : null}
                         </XStack>
-                      ) : null}
-                    </YStack>
-                  )
-                }
-
-                // Full mode — lyrics section with per-word chord alignment
-                const lyricsLines = section.lyrics.split('\n')
-                return (
-                  <YStack key={section.id} gap="$1">
-                    <Text
-                      color={colors.primary}
-                      fontWeight="700"
-                      fontSize="$3"
-                      marginBottom="$0.5"
-                    >
-                      {label}
-                    </Text>
-                    {lyricsLines.map((lyricLine, lineIdx) => {
-                      const slots = getWordSlots(lyricLine)
-                      if (!slots.length) return <View key={lineIdx} style={{ height: 8 }} />
-                      const lineTokens = section.chordTokens?.[lineIdx] ?? []
-                      return (
-                        <ScrollView
-                          key={lineIdx}
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                        >
-                          <XStack alignItems="flex-end" gap={0}>
-                            {slots.map((slot, wi) => {
-                              const raw = lineTokens[wi] ?? ''
-                              const chord = displayToken(raw)
-                              const cw = colWidth(slot.text, chord.length)
-                              return (
-                                <XStack key={wi} alignItems="flex-end">
-                                  <YStack width={cw} alignItems="center" gap={0}>
-                                    <Text
-                                      style={[styles.mono, styles.chordText]}
-                                      color={chord ? colors.primary : 'transparent'}
-                                      numberOfLines={1}
-                                    >
-                                      {chord || ' '}
-                                    </Text>
-                                    <Text
-                                      style={[styles.mono, styles.lyricText]}
-                                      color={colors.text}
-                                      numberOfLines={1}
-                                    >
-                                      {slot.text}
-                                    </Text>
-                                  </YStack>
-                                  {slot.trailing === '-' ? (
-                                    <Text
-                                      style={[
-                                        styles.mono,
-                                        styles.lyricText,
-                                        { alignSelf: 'flex-end' },
-                                      ]}
-                                      color={colors.text}
-                                    >
-                                      -
-                                    </Text>
-                                  ) : slot.trailing === ' ' ? (
-                                    <View style={{ width: 8 }} />
-                                  ) : null}
-                                </XStack>
-                              )
-                            })}
+                        {compressed.map(({ chords, count: pc }, gi) => (
+                          <XStack key={gi} gap="$2" alignItems="center">
+                            <Text style={styles.mono} color={colors.text}>
+                              {chords.map(displayToken).join('  ')}
+                            </Text>
+                            {pc > 1 ? (
+                              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                                ×{pc}
+                              </Text>
+                            ) : null}
                           </XStack>
-                        </ScrollView>
+                        ))}
+                      </YStack>
+                    )
+                  })
+                : sheet.sections.map((section) => {
+                    const label = getSectionLabel(sheet.sections, section.id)
+                    const hasLyrics = section.lyrics.trim().length > 0
+
+                    // Full mode: same-as-previous → label only
+                    if (section.sameAsPrevious) {
+                      const prevLabel = getPrevMatchingLabel(sheet.sections, section.id)
+                      return (
+                        <YStack key={section.id} gap="$0.5">
+                          <Text color={colors.primary} fontWeight="700" fontSize="$3">
+                            {label}
+                          </Text>
+                          <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
+                            {prevLabel ? `(same as ${prevLabel})` : '(same as previous)'}
+                          </Text>
+                        </YStack>
                       )
-                    })}
-                  </YStack>
-                )
-              })}
+                    }
+
+                    // Full mode — instrumental
+                    if (!hasLyrics) {
+                      const tokens = (section.chordTokens?.[0] ?? []).filter(Boolean)
+                      return (
+                        <YStack key={section.id} gap="$1">
+                          <Text color={colors.primary} fontWeight="700" fontSize="$3">
+                            {label}
+                          </Text>
+                          {tokens.length > 0 ? (
+                            <XStack flexWrap="wrap" gap="$2" alignItems="center">
+                              {tokens.map((t, i) =>
+                                t === PROGRESSION_END ? (
+                                  <Text key={i} style={styles.mono} color={colors.border}>
+                                    {'|'}
+                                  </Text>
+                                ) : (
+                                  <Text
+                                    key={i}
+                                    style={[styles.mono, styles.chordText]}
+                                    color={colors.primary}
+                                  >
+                                    {displayToken(t)}
+                                  </Text>
+                                )
+                              )}
+                            </XStack>
+                          ) : null}
+                        </YStack>
+                      )
+                    }
+
+                    // Full mode — lyrics section with per-word chord alignment
+                    const lyricsLines = section.lyrics.split('\n')
+                    return (
+                      <YStack key={section.id} gap="$1">
+                        <Text
+                          color={colors.primary}
+                          fontWeight="700"
+                          fontSize="$3"
+                          marginBottom="$0.5"
+                        >
+                          {label}
+                        </Text>
+                        {lyricsLines.map((lyricLine, lineIdx) => {
+                          const slots = getWordSlots(lyricLine)
+                          if (!slots.length) return <View key={lineIdx} style={{ height: 8 }} />
+                          const lineTokens = section.chordTokens?.[lineIdx] ?? []
+                          return (
+                            <ScrollView
+                              key={lineIdx}
+                              horizontal
+                              showsHorizontalScrollIndicator={false}
+                            >
+                              <XStack alignItems="flex-end" gap={0}>
+                                {slots.map((slot, wi) => {
+                                  const raw = lineTokens[wi] ?? ''
+                                  const chord = displayToken(raw)
+                                  const cw = colWidth(slot.text, chord.length)
+                                  return (
+                                    <XStack key={wi} alignItems="flex-end">
+                                      <YStack width={cw} alignItems="center" gap={0}>
+                                        <Text
+                                          style={[styles.mono, styles.chordText]}
+                                          color={chord ? colors.primary : 'transparent'}
+                                          numberOfLines={1}
+                                        >
+                                          {chord || ' '}
+                                        </Text>
+                                        <Text
+                                          style={[styles.mono, styles.lyricText]}
+                                          color={colors.text}
+                                          numberOfLines={1}
+                                        >
+                                          {slot.text}
+                                        </Text>
+                                      </YStack>
+                                      {slot.trailing === '-' ? (
+                                        <Text
+                                          style={[
+                                            styles.mono,
+                                            styles.lyricText,
+                                            { alignSelf: 'flex-end' },
+                                          ]}
+                                          color={colors.text}
+                                        >
+                                          -
+                                        </Text>
+                                      ) : slot.trailing === ' ' ? (
+                                        <View style={{ width: 8 }} />
+                                      ) : null}
+                                    </XStack>
+                                  )
+                                })}
+                              </XStack>
+                            </ScrollView>
+                          )
+                        })}
+                      </YStack>
+                    )
+                  })
+              }
             </YStack>
           </ScrollView>
         </YStack>

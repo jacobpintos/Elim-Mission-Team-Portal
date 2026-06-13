@@ -18,6 +18,8 @@ import {
   type ChordSheet,
 } from '@/types/chordSheet'
 
+const PROGRESSION_END = '||'
+
 function makeSection(type: SectionType): ChordSheetSection {
   return {
     id: String(Date.now() + Math.random()),
@@ -118,7 +120,7 @@ export function ChordSheetEditor({
         bpm: bpm ? parseInt(bpm, 10) || undefined : undefined,
         sections: sections.map((s) => ({
           ...s,
-          // Strip trailing empty tokens from instrumentals
+          // Strip trailing empty tokens from instrumentals (keep || markers)
           chordTokens: !s.lyrics.trim()
             ? [(s.chordTokens[0] ?? []).filter(Boolean)]
             : s.chordTokens,
@@ -190,6 +192,16 @@ export function ChordSheetEditor({
         s.id !== sectionId
           ? s
           : { ...s, chordTokens: [[...(s.chordTokens[0] ?? []), '']] },
+      ),
+    )
+  }
+
+  const addProgressionBreak = (sectionId: string) => {
+    setSections((prev) =>
+      prev.map((s) =>
+        s.id !== sectionId
+          ? s
+          : { ...s, chordTokens: [[...(s.chordTokens[0] ?? []), PROGRESSION_END]] },
       ),
     )
   }
@@ -488,41 +500,83 @@ export function ChordSheetEditor({
                           The Major/Minor toggle in the viewer affects scale degrees, not chord
                           quality. Add m yourself for minor chords (e.g. 5m).
                         </Text>
+                        <YStack
+                          borderTopWidth={1}
+                          borderColor={colors.border}
+                          paddingTop="$2"
+                          gap="$1"
+                        >
+                          <Text color={colors.text} fontSize="$2" fontWeight="700">
+                            Progression markers (instrumental only)
+                          </Text>
+                          <XStack gap="$2" alignItems="center">
+                            <Text
+                              style={{ fontFamily: 'Courier New', fontSize: 12 }}
+                              color={colors.primary}
+                              fontWeight="700"
+                            >
+                              ||
+                            </Text>
+                            <Text color={colors.textMuted} fontSize="$1" flex={1}>
+                              End of progression — marks where one chord cycle ends. In Chords Only view, repeated cycles collapse to ×2, ×3, etc.
+                            </Text>
+                          </XStack>
+                        </YStack>
                       </YStack>
                     ) : null}
 
                     {!hasLyrics ? (
-                      /* Instrumental: individual add/remove chord boxes */
+                      /* Instrumental: individual add/remove chord boxes + progression break */
                       <XStack flexWrap="wrap" gap="$1" alignItems="center">
-                        {(section.chordTokens[0] ?? []).map((token, wi) => (
-                          <YStack key={wi} alignItems="center" gap={2}>
-                            <Pressable onPress={() => removeInstrumentalSlot(section.id, wi)}>
-                              <Text
-                                color={colors.textMuted}
-                                fontSize="$1"
-                                style={{ textAlign: 'center' }}
-                              >
-                                ×
-                              </Text>
-                            </Pressable>
-                            <TextInput
-                              style={[
-                                styles.chordBox,
-                                {
-                                  color: colors.primary,
-                                  borderColor: colors.primary,
-                                  backgroundColor: colors.surface,
-                                },
-                              ]}
-                              value={token}
-                              onChangeText={(v) =>
-                                updateChordToken(section.id, 0, wi, v)
-                              }
-                              placeholder="—"
-                              placeholderTextColor={colors.textMuted}
-                            />
-                          </YStack>
-                        ))}
+                        {(section.chordTokens[0] ?? []).map((token, wi) =>
+                          token === PROGRESSION_END ? (
+                            <YStack key={wi} alignItems="center" gap={2}>
+                              <Pressable onPress={() => removeInstrumentalSlot(section.id, wi)}>
+                                <Text
+                                  color={colors.textMuted}
+                                  fontSize="$1"
+                                  style={{ textAlign: 'center' }}
+                                >
+                                  ×
+                                </Text>
+                              </Pressable>
+                              <View
+                                style={[
+                                  styles.progressionBreak,
+                                  { borderColor: colors.border },
+                                ]}
+                              />
+                            </YStack>
+                          ) : (
+                            <YStack key={wi} alignItems="center" gap={2}>
+                              <Pressable onPress={() => removeInstrumentalSlot(section.id, wi)}>
+                                <Text
+                                  color={colors.textMuted}
+                                  fontSize="$1"
+                                  style={{ textAlign: 'center' }}
+                                >
+                                  ×
+                                </Text>
+                              </Pressable>
+                              <TextInput
+                                style={[
+                                  styles.chordBox,
+                                  {
+                                    color: colors.primary,
+                                    borderColor: colors.primary,
+                                    backgroundColor: colors.surface,
+                                  },
+                                ]}
+                                value={token}
+                                onChangeText={(v) =>
+                                  updateChordToken(section.id, 0, wi, v)
+                                }
+                                placeholder="—"
+                                placeholderTextColor={colors.textMuted}
+                              />
+                            </YStack>
+                          )
+                        )}
                         <Pressable onPress={() => addInstrumentalSlot(section.id)}>
                           <XStack
                             backgroundColor={colors.primary + '18'}
@@ -534,6 +588,20 @@ export function ChordSheetEditor({
                           >
                             <Text color={colors.primary} fontSize="$1" fontWeight="600">
                               + Add
+                            </Text>
+                          </XStack>
+                        </Pressable>
+                        <Pressable onPress={() => addProgressionBreak(section.id)}>
+                          <XStack
+                            backgroundColor={colors.surface}
+                            borderRadius="$2"
+                            borderWidth={1}
+                            borderColor={colors.border}
+                            paddingHorizontal="$2"
+                            paddingVertical="$1"
+                          >
+                            <Text color={colors.textMuted} fontSize="$1" fontWeight="600">
+                              ‖ Break
                             </Text>
                           </XStack>
                         </Pressable>
@@ -700,5 +768,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier New',
     fontSize: 13,
     paddingHorizontal: 2,
+  },
+  progressionBreak: {
+    height: 28,
+    width: 2,
+    borderRightWidth: 2,
+    borderStyle: 'dashed',
+    marginHorizontal: 6,
   },
 })
