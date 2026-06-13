@@ -3,8 +3,10 @@ import { YStack, Text } from 'tamagui'
 import { useThemeStore } from '@/stores/themeStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 
-const DEFAULT_LOGO_URL =
-  'https://images.squarespace-cdn.com/content/v1/6751456bc7917b1e18a60ac9/e27f680f-3426-4c63-8ea9-e87647a99e8c/TheWell-Elim-Logo-Black.png?format=300w'
+// Bundled asset — never breaks due to external CDN changes.
+// Metro returns a number (asset ID) on native and a URL string on web.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const DEFAULT_LOGO = require('../../../assets/logo-black.png')
 
 const WIDTHS = { sm: 140, md: 220, lg: 300 }
 
@@ -18,13 +20,12 @@ export function AppLogo({ size = 'md', showSlogan = true }: AppLogoProps) {
   const colors = useThemeColors()
   const isDark = mode === 'dark'
   const width = WIDTHS[size]
-  const logoUrl = theme.logoUrl ?? DEFAULT_LOGO_URL
 
   return (
     <YStack alignItems="center" gap="$2">
       {Platform.OS === 'web' ? (
         <img
-          src={logoUrl}
+          src={theme.logoUrl ?? DEFAULT_LOGO}
           alt="The Well of Iowa – Elim"
           style={{
             width,
@@ -36,7 +37,7 @@ export function AppLogo({ size = 'md', showSlogan = true }: AppLogoProps) {
         />
       ) : (
         <Image
-          source={{ uri: logoUrl }}
+          source={theme.logoUrl ? { uri: theme.logoUrl } : DEFAULT_LOGO}
           style={{ width, height: Math.round(width * 0.38), resizeMode: 'contain' }}
           tintColor={isDark ? '#ffffff' : undefined}
         />
