@@ -120,12 +120,15 @@ function buildChordSheetHtml(
       continue
     }
 
+    const lyricChordRows = (section.chordTokens ?? []).filter(
+      (row) => !(row.length === 1 && row[0] === PROGRESSION_END)
+    )
     let linesHtml = ''
     for (let li = 0; li < section.lyrics.split('\n').length; li++) {
       const lyricLine = section.lyrics.split('\n')[li]
       const slots = getWordSlots(lyricLine)
       if (!slots.length) { linesHtml += '<br>'; continue }
-      const rowTokens = section.chordTokens[li] ?? []
+      const rowTokens = lyricChordRows[li] ?? []
       let cStr = '', lStr = ''
       for (let wi = 0; wi < slots.length; wi++) {
         const slot = slots[wi]
@@ -493,6 +496,10 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
 
                     // Full mode — lyrics section with per-word chord alignment
                     const lyricsLines = section.lyrics.split('\n')
+                    // Filter break rows so lineIdx maps correctly to lyricsLines
+                    const lyricChordRows = (section.chordTokens ?? []).filter(
+                      (row) => !(row.length === 1 && row[0] === PROGRESSION_END)
+                    )
                     return (
                       <YStack key={section.id} gap="$1">
                         <Text
@@ -506,7 +513,7 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                         {lyricsLines.map((lyricLine, lineIdx) => {
                           const slots = getWordSlots(lyricLine)
                           if (!slots.length) return <View key={lineIdx} style={{ height: 8 }} />
-                          const lineTokens = section.chordTokens?.[lineIdx] ?? []
+                          const lineTokens = lyricChordRows[lineIdx] ?? []
                           return (
                             <ScrollView
                               key={lineIdx}

@@ -20,6 +20,10 @@ import {
 
 const PROGRESSION_END = '||'
 
+function isBreakRow(row: string[]): boolean {
+  return row.length === 1 && row[0] === PROGRESSION_END
+}
+
 function makeSection(type: SectionType): ChordSheetSection {
   return {
     id: String(Date.now() + Math.random()),
@@ -38,18 +42,39 @@ function getSectionLabel(sections: ChordSheetSection[], id: string): string {
   return `${base} ${ofType.findIndex((s) => s.id === id) + 1}`
 }
 
+// Sync chordTokens to match the current lyrics lines, preserving break rows.
 function syncSectionTokens(lyrics: string, existing: string[][]): string[][] {
   if (!lyrics.trim()) {
     return [existing[0] ?? []]
   }
   const lines = lyrics.split('\n')
-  return lines.map((line, i) => {
-    const count = getWordSlots(line).length
-    const prev = existing[i] ?? []
-    if (count === prev.length) return prev
-    if (count > prev.length) return [...prev, ...Array(count - prev.length).fill('')]
-    return prev.slice(0, count)
-  })
+  const result: string[][] = []
+  let lyricIdx = 0
+
+  for (const row of existing) {
+    if (isBreakRow(row)) {
+      result.push([PROGRESSION_END])
+      continue
+    }
+    if (lyricIdx < lines.length) {
+      const count = getWordSlots(lines[lyricIdx]).length
+      const prev = row
+      if (count === prev.length) result.push(prev)
+      else if (count > prev.length) result.push([...prev, ...Array(count - prev.length).fill('')])
+      else result.push(prev.slice(0, count))
+      lyricIdx++
+    }
+    // rows past the end of lyrics are dropped (lyrics were deleted)
+  }
+
+  // Add rows for any new lyrics lines beyond existing rows
+  while (lyricIdx < lines.length) {
+    const count = getWordSlots(lines[lyricIdx]).length
+    result.push(Array(count).fill(''))
+    lyricIdx++
+  }
+
+  return result
 }
 
 // Estimate column width from word character count (Courier New 13px ≈ 8px/char)
@@ -168,7 +193,7 @@ export function ChordSheetEditor({
 
   const updateChordToken = (
     sectionId: string,
-    lineIdx: number,
+    rowIdx: number,
     wordIdx: number,
     value: string,
   ) => {
@@ -176,7 +201,7 @@ export function ChordSheetEditor({
       prev.map((s) => {
         if (s.id !== sectionId) return s
         const newTokens = s.chordTokens.map((row, ri) => {
-          if (ri !== lineIdx) return row
+          if (ri !== rowIdx) return row
           const newRow = [...row]
           newRow[wordIdx] = value
           return newRow
@@ -212,6 +237,28 @@ export function ChordSheetEditor({
         if (s.id !== sectionId) return s
         const newRow = (s.chordTokens[0] ?? []).filter((_, i) => i !== idx)
         return { ...s, chordTokens: [newRow] }
+      }),
+    )
+  }
+
+  // Insert a break row after the given rowIdx in a lyrics section's chordTokens.
+  const addBreakAfterRow = (sectionId: string, rowIdx: number) => {
+    setSections((prev) =>
+      prev.map((s) => {
+        if (s.id !== sectionId) return s
+        const newTokens = [...s.chordTokens]
+        newTokens.splice(rowIdx + 1, 0, [PROGRESSION_END])
+        return { ...s, chordTokens: newTokens }
+      }),
+    )
+  }
+
+  // Remove a break row at the given rowIdx in a lyrics section's chordTokens.
+  const removeBreakRow = (sectionId: string, rowIdx: number) => {
+    setSections((prev) =>
+      prev.map((s) => {
+        if (s.id !== sectionId) return s
+        return { ...s, chordTokens: s.chordTokens.filter((_, i) => i !== rowIdx) }
       }),
     )
   }
@@ -507,20 +554,13 @@ export function ChordSheetEditor({
                           gap="$1"
                         >
                           <Text color={colors.text} fontSize="$2" fontWeight="700">
-                            Progression markers (instrumental only)
+                            Progression breaks
                           </Text>
-                          <XStack gap="$2" alignItems="center">
-                            <Text
-                              style={{ fontFamily: 'Courier New', fontSize: 12 }}
-                              color={colors.primary}
-                              fontWeight="700"
-                            >
-                              ||
-                            </Text>
-                            <Text color={colors.textMuted} fontSize="$1" flex={1}>
-                              End of progression — marks where one chord cycle ends. In Chords Only view, repeated cycles collapse to ×2, ×3, etc.
-                            </Text>
-                          </XStack>
+                          <Text color={colors.textMuted} fontSize="$1">
+                            Tap ‖ beside any chord row (or the ‖ Break button for
+                            instrumentals) to mark where one chord cycle ends. In Chords Only
+                            view, identical consecutive cycles collapse to ×2, ×3, etc.
+                          </Text>
                         </YStack>
                       </YStack>
                     ) : null}
@@ -607,86 +647,140 @@ export function ChordSheetEditor({
                         </Pressable>
                       </XStack>
                     ) : (
-                      /* Lyrics sections: per-word chord boxes per line */
+                      /* Lyrics sections: per-row chord boxes, with break row support */
                       <YStack gap="$2">
-                        {lyricsLines.map((lyricLine, lineIdx) => {
-                          const slots = getWordSlots(lyricLine)
-                          if (!slots.length) {
-                            return <View key={lineIdx} style={{ height: 6 }} />
+                        {(() => {
+                          // Build mapping: chordTokens rowIdx → lyrics lineIdx (null for break rows)
+                          const rowToLyricIdx: (number | null)[] = []
+                          let li = 0
+                          for (const row of section.chordTokens) {
+                            rowToLyricIdx.push(isBreakRow(row) ? null : li++)
                           }
-                          return (
-                            <ScrollView
-                              key={lineIdx}
-                              horizontal
-                              showsHorizontalScrollIndicator={false}
-                            >
-                              <XStack alignItems="flex-end" gap={0}>
-                                {slots.map((slot, wi) => {
-                                  const token =
-                                    section.chordTokens[lineIdx]?.[wi] ?? ''
-                                  const cw = colWidth(slot.text)
-                                  return (
-                                    <XStack key={wi} alignItems="flex-end">
-                                      <YStack
-                                        width={cw}
-                                        alignItems="center"
-                                        gap={2}
-                                      >
-                                        <TextInput
-                                          style={[
-                                            styles.chordBox,
-                                            {
-                                              width: cw - 4,
-                                              color: colors.primary,
-                                              borderColor: colors.primary,
-                                              backgroundColor: colors.surface,
-                                            },
-                                          ]}
-                                          value={token}
-                                          onChangeText={(v) =>
-                                            updateChordToken(
-                                              section.id,
-                                              lineIdx,
-                                              wi,
-                                              v,
-                                            )
-                                          }
-                                          placeholder=""
-                                          placeholderTextColor={colors.textMuted}
-                                        />
-                                        <Text
-                                          style={[
-                                            styles.wordLabel,
-                                            { color: colors.text },
-                                          ]}
-                                          numberOfLines={1}
-                                        >
-                                          {slot.text}
-                                        </Text>
-                                      </YStack>
-                                      {slot.trailing === '-' ? (
-                                        <Text
-                                          style={[
-                                            styles.wordLabel,
-                                            {
-                                              color: colors.text,
-                                              alignSelf: 'flex-end',
-                                              paddingHorizontal: 1,
-                                            },
-                                          ]}
-                                        >
-                                          -
-                                        </Text>
-                                      ) : slot.trailing === ' ' ? (
-                                        <View style={{ width: 8 }} />
-                                      ) : null}
-                                    </XStack>
-                                  )
-                                })}
+
+                          return section.chordTokens.map((row, rowIdx) => {
+                            // Break row — render as a thin divider with remove option
+                            if (isBreakRow(row)) {
+                              return (
+                                <XStack
+                                  key={rowIdx}
+                                  alignItems="center"
+                                  gap="$2"
+                                  paddingVertical="$0.5"
+                                >
+                                  <View
+                                    style={[
+                                      styles.breakDivider,
+                                      { borderColor: colors.border },
+                                    ]}
+                                  />
+                                  <Pressable
+                                    onPress={() => removeBreakRow(section.id, rowIdx)}
+                                  >
+                                    <Text color={colors.textMuted} fontSize="$1">
+                                      × break
+                                    </Text>
+                                  </Pressable>
+                                  <View
+                                    style={[
+                                      styles.breakDivider,
+                                      { borderColor: colors.border },
+                                    ]}
+                                  />
+                                </XStack>
+                              )
+                            }
+
+                            const lyricIdx = rowToLyricIdx[rowIdx]!
+                            const lyricLine = lyricsLines[lyricIdx] ?? ''
+                            const slots = getWordSlots(lyricLine)
+
+                            if (!slots.length) {
+                              return <View key={rowIdx} style={{ height: 6 }} />
+                            }
+
+                            const nextRow = section.chordTokens[rowIdx + 1]
+                            const nextIsBreak = nextRow ? isBreakRow(nextRow) : false
+
+                            return (
+                              <XStack key={rowIdx} alignItems="flex-start" gap="$1">
+                                <ScrollView
+                                  horizontal
+                                  showsHorizontalScrollIndicator={false}
+                                  style={{ flex: 1 }}
+                                >
+                                  <XStack alignItems="flex-end" gap={0}>
+                                    {slots.map((slot, wi) => {
+                                      const token = row[wi] ?? ''
+                                      const cw = colWidth(slot.text)
+                                      return (
+                                        <XStack key={wi} alignItems="flex-end">
+                                          <YStack width={cw} alignItems="center" gap={2}>
+                                            <TextInput
+                                              style={[
+                                                styles.chordBox,
+                                                {
+                                                  width: cw - 4,
+                                                  color: colors.primary,
+                                                  borderColor: colors.primary,
+                                                  backgroundColor: colors.surface,
+                                                },
+                                              ]}
+                                              value={token}
+                                              onChangeText={(v) =>
+                                                updateChordToken(section.id, rowIdx, wi, v)
+                                              }
+                                              placeholder=""
+                                              placeholderTextColor={colors.textMuted}
+                                            />
+                                            <Text
+                                              style={[
+                                                styles.wordLabel,
+                                                { color: colors.text },
+                                              ]}
+                                              numberOfLines={1}
+                                            >
+                                              {slot.text}
+                                            </Text>
+                                          </YStack>
+                                          {slot.trailing === '-' ? (
+                                            <Text
+                                              style={[
+                                                styles.wordLabel,
+                                                {
+                                                  color: colors.text,
+                                                  alignSelf: 'flex-end',
+                                                  paddingHorizontal: 1,
+                                                },
+                                              ]}
+                                            >
+                                              -
+                                            </Text>
+                                          ) : slot.trailing === ' ' ? (
+                                            <View style={{ width: 8 }} />
+                                          ) : null}
+                                        </XStack>
+                                      )
+                                    })}
+                                  </XStack>
+                                </ScrollView>
+                                {/* ‖ button — insert a break after this row */}
+                                {!nextIsBreak ? (
+                                  <Pressable
+                                    onPress={() => addBreakAfterRow(section.id, rowIdx)}
+                                    style={styles.breakAfterBtn}
+                                  >
+                                    <Text
+                                      color={colors.border}
+                                      style={styles.breakAfterBtnText}
+                                    >
+                                      ‖
+                                    </Text>
+                                  </Pressable>
+                                ) : null}
                               </XStack>
-                            </ScrollView>
-                          )
-                        })}
+                            )
+                          })
+                        })()}
                       </YStack>
                     )}
                       </>
@@ -775,5 +869,20 @@ const styles = StyleSheet.create({
     borderRightWidth: 2,
     borderStyle: 'dashed',
     marginHorizontal: 6,
+  },
+  breakDivider: {
+    flex: 1,
+    height: 0,
+    borderTopWidth: 1,
+    borderStyle: 'dashed',
+  },
+  breakAfterBtn: {
+    paddingTop: 2,
+    paddingHorizontal: 6,
+    alignSelf: 'flex-start',
+  },
+  breakAfterBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 })
