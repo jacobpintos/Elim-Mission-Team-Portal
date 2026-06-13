@@ -12,6 +12,7 @@ on:
       - 'mission-portal-app/package.json'
       - 'firebase.json'
       - '.firebaserc'
+      - 'mission-portal-app/storage.rules'
       - '.github/workflows/deploy-web.yml'
 
 jobs:
