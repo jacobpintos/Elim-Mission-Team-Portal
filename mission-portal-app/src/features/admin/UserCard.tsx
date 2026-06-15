@@ -18,7 +18,7 @@ export function userRoleDisplay(user: UserProfile): string {
 }
 
 const ROLE_COLORS: Record<string, string> = {
-  admin: '#e8624a',
+  admin: '#f56c5a',
   security: '#e74c3c',
   merch: '#27ae60',
   worship: '#9b59b6',

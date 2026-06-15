@@ -52,7 +52,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     bundler: 'metro',
     output: 'single',
     favicon: './assets/favicon.png',
-    themeColor: '#e8624a',
+    themeColor: '#f56c5a',
     backgroundColor: '#14141e',
     name: 'Mission Portal',
     shortName: 'Portal',
@@ -64,12 +64,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     'expo-font',
-    'expo-splash-screen',
+    [
+      'expo-splash-screen',
+      {
+        image: './assets/splash-icon.png',
+        imageWidth: 220,
+        resizeMode: 'contain',
+        backgroundColor: '#ffffff',
+      },
+    ],
     [
       'expo-notifications',
       {
         icon: './assets/notification-icon.png',
-        color: '#e8624a',
+        color: '#f56c5a',
         sounds: [],
         iosDisplayInForeground: true,
       },

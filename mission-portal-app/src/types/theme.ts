@@ -1,5 +1,5 @@
 export interface ThemeDoc {
-  primary: string // e.g. "#e8624a"
+  primary: string // e.g. "#f56c5a"
   primaryDark: string // computed or admin-set
   accent: string // computed or admin-set
   dark: {
