@@ -1,7 +1,7 @@
 import { onCall } from 'firebase-functions/v2/https'
 import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
-import { resend, RESEND_API_KEY } from './email/client'
+import { resend, RESEND_API_KEY, MAIL_FROM } from './email/client'
 import { sendExpoPush } from './push/expoPush'
 
 function nanoid(): string {
@@ -69,7 +69,7 @@ export const sendNotification = onCall(
     // PHASE 1: email-only branch
     if (prefs?.email && profile.email) {
       await resend().emails.send({
-        from: 'Mission Portal <noreply@yourdomain.com>',
+        from: MAIL_FROM.value(),
         to: profile.email as string,
         subject: subjectFor(type, data),
         html: bodyFor(type, data),

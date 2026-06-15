@@ -1,5 +1,5 @@
 import { onCall } from 'firebase-functions/v2/https'
-import { resend, RESEND_API_KEY } from './client'
+import { resend, RESEND_API_KEY, MAIL_FROM, MAIL_ADMIN_TO } from './client'
 
 interface ContactFormPayload {
   name: string
@@ -21,8 +21,8 @@ export const sendContactForm = onCall(
     }
 
     await resend().emails.send({
-      from: 'Mission Portal <noreply@yourdomain.com>',
-      to: 'admin@yourdomain.com', // TODO: read from Firestore appSettings
+      from: MAIL_FROM.value(),
+      to: MAIL_ADMIN_TO.value(),
       reply_to: email,
       subject: `Contact form: ${name}`,
       html: `

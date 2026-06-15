@@ -3,7 +3,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { defineSecret } from 'firebase-functions/params'
 import * as admin from 'firebase-admin'
 import * as crypto from 'crypto'
-import { RESEND_API_KEY, resend } from './email/client'
+import { RESEND_API_KEY, resend, MAIL_FROM } from './email/client'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -253,7 +253,7 @@ async function sendDigestBatch(
           : buildMonthlyEmailHtml(user.displayName, content.events, content.announcements, unsubUrl)
 
       return {
-        from: 'The Well of Iowa <onboarding@resend.dev>',
+        from: MAIL_FROM.value(),
         to: user.email,
         subject:
           type === 'weekly'
