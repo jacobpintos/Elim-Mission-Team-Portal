@@ -129,7 +129,7 @@ function buildChordSheetHtml(
     const hasLyrics = section.lyrics.trim().length > 0
 
     if (!hasLyrics) {
-      const toks = (section.chordTokens[0] ?? []).filter(Boolean)
+      const toks = (section.chordTokens ?? []).flat().filter(Boolean)
         .map((t) => (t === PROGRESSION_END ? ' | ' : disp(t))).join('  ')
       body += `<div class="section"><div class="slabel">${escHtml(label)}</div>${toks ? `<div class="instrumental">${escHtml(toks)}</div>` : ''}</div>\n`
       continue
@@ -481,7 +481,7 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
 
                     // Full mode — instrumental
                     if (!hasLyrics) {
-                      const tokens = (section.chordTokens?.[0] ?? []).filter(Boolean)
+                      const tokens = (section.chordTokens ?? []).flat().filter(Boolean)
                       return (
                         <YStack key={section.id} gap="$1">
                           <Text color={colors.primary} fontWeight="700" fontSize="$3">

@@ -61,6 +61,9 @@ export function nashvilleToChord(token: string, keyIdx: number, isMinor = false)
   const useFlatNames = FLAT_ROOT_INDICES.has(keyIdx)
   const noteName = useFlatNames ? CHROMATIC_FLATS[noteIdx] : CHROMATIC_SHARPS[noteIdx]
 
+  if (!quality) return noteName
+  // Wrap multi-word qualifiers in parens for readability: Ab(sus4), Ab(maj7), Ab(add9), Ab(dim), Ab(aug)
+  if (/^(sus|maj|add|dim|aug)/.test(quality)) return `${noteName}(${quality})`
   return `${noteName}${quality}`
 }
 
