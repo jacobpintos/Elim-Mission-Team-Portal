@@ -448,16 +448,21 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                           </Text>
                         </XStack>
                         {compressed.map(({ chords, count: pc }, gi) => (
-                          <XStack key={gi} gap="$2" alignItems="center">
-                            <Text style={styles.mono} color={colors.text}>
-                              {chords.map(displayToken).join('  ')}
-                            </Text>
-                            {pc > 1 ? (
-                              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                                ×{pc}
-                              </Text>
+                          <YStack key={gi}>
+                            {gi > 0 && compressed.length > 1 ? (
+                              <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 4 }} />
                             ) : null}
-                          </XStack>
+                            <XStack gap="$2" alignItems="center">
+                              <Text style={styles.mono} color={colors.text}>
+                                {chords.map(displayToken).join('  ')}
+                              </Text>
+                              {pc > 1 ? (
+                                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                                  ×{pc}
+                                </Text>
+                              ) : null}
+                            </XStack>
+                          </YStack>
                         ))}
                       </YStack>
                     )
