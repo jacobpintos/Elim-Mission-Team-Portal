@@ -45,6 +45,7 @@ function stripBoundary(token: string): string {
 // Convert a raw NNS token to a display string.
 // "4/1"  → slash chord    (4 chord, 1 in the bass)  e.g. "F/C"
 // "4>1"  → passing chord  (moves from 4 to 1)        e.g. "F → C"
+// "4 1"  → space-separated chords packed in one box  e.g. "F  C"
 function formatToken(raw: string, keyIdx: number, isMinor: boolean): string {
   if (!raw || raw === PROGRESSION_END) return raw
   const tok = stripBoundary(raw)
@@ -52,6 +53,10 @@ function formatToken(raw: string, keyIdx: number, isMinor: boolean): string {
   const conv = (t: string) => keyIdx < 0 ? t.trim() : nashvilleToChord(t.trim(), keyIdx, isMinor)
   if (tok.includes('>')) return tok.split('>').map(conv).join(' → ')
   if (keyIdx < 0) return tok
+  // Space-separated: user packed multiple chords into one box — convert each independently
+  if (tok.includes(' ')) {
+    return tok.trim().split(/\s+/).map((p) => p.split('/').map(conv).join('/')).join('  ')
+  }
   return tok.split('/').map(conv).join('/')
 }
 
