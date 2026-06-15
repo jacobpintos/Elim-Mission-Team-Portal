@@ -35,27 +35,42 @@ function escHtml(s: string): string {
 // Token used to mark the end of one chord progression cycle within a section.
 const PROGRESSION_END = '||'
 
+// A trailing "." on a chord token marks the end of a progression (used to
+// collapse repeats). It is a hidden marker — never rendered — so strip it
+// before displaying the chord.
+function stripBoundary(token: string): string {
+  return token.endsWith('.') ? token.slice(0, -1) : token
+}
+
 // Convert a raw NNS token to a display string.
 // "4/1"  → slash chord    (4 chord, 1 in the bass)  e.g. "F/C"
 // "4>1"  → passing chord  (moves from 4 to 1)        e.g. "F → C"
 function formatToken(raw: string, keyIdx: number, isMinor: boolean): string {
   if (!raw || raw === PROGRESSION_END) return raw
+  const tok = stripBoundary(raw)
+  if (!tok) return ''
   const conv = (t: string) => keyIdx < 0 ? t.trim() : nashvilleToChord(t.trim(), keyIdx, isMinor)
-  if (raw.includes('>')) return raw.split('>').map(conv).join(' → ')
-  if (keyIdx < 0) return raw
-  return raw.split('/').map(conv).join('/')
+  if (tok.includes('>')) return tok.split('>').map(conv).join(' → ')
+  if (keyIdx < 0) return tok
+  return tok.split('/').map(conv).join('/')
 }
 
-// Split a flat chord token array on PROGRESSION_END markers.
+// Split a flat chord token array into progression groups. A group ends at a
+// PROGRESSION_END ("||") marker or right after a token carrying a trailing "."
+// boundary. Stored chords have the "." stripped.
 function splitByProgressionEnd(tokens: string[]): string[][] {
   const groups: string[][] = []
   let current: string[] = []
   for (const t of tokens) {
     if (t === PROGRESSION_END) {
       if (current.length > 0) { groups.push(current); current = [] }
-    } else if (t) {
-      current.push(t)
+      continue
     }
+    if (!t) continue
+    const isBoundary = t.endsWith('.')
+    const chord = stripBoundary(t)
+    if (chord) current.push(chord)
+    if (isBoundary && current.length > 0) { groups.push(current); current = [] }
   }
   if (current.length > 0) groups.push(current)
   return groups
@@ -243,6 +258,7 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
       }
       const sig = (section.chordTokens ?? []).flat()
         .filter((t) => Boolean(t) && t !== PROGRESSION_END)
+        .map(stripBoundary)
         .join('\x00')
       const last = sectionGroups[sectionGroups.length - 1]
       if (last && last.section.type === section.type && sig && sig === last.sig) {

@@ -557,9 +557,11 @@ export function ChordSheetEditor({
                             Progression breaks
                           </Text>
                           <Text color={colors.textMuted} fontSize="$1">
-                            Tap ‖ beside any chord row (or the ‖ Break button for
-                            instrumentals) to mark where one chord cycle ends. In Chords Only
-                            view, identical consecutive cycles collapse to ×2, ×3, etc.
+                            In a lyrics section, type a period after a chord (e.g. 1.) to mark
+                            where a progression ends. The dot is hidden in the chord sheet and
+                            Chords Only view — it only controls where repeats collapse. In
+                            Chords Only view, identical consecutive cycles collapse to ×2, ×3,
+                            etc. (The ‖ buttons mark the same kind of break.)
                           </Text>
                         </YStack>
                       </YStack>
