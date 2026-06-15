@@ -3,7 +3,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { defineSecret } from 'firebase-functions/params'
 import * as admin from 'firebase-admin'
 import * as crypto from 'crypto'
-import { RESEND_API_KEY, resend } from './email/client'
+import { RESEND_API_KEY, resend, MAIL_FROM } from './email/client'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -143,7 +143,7 @@ function buildWeeklyEmailHtml(
 <html lang="en">
 <head><meta charset="UTF-8"><title>Weekly Digest</title></head>
 <body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333">
-  <div style="background:#e8624a;padding:24px;border-radius:8px 8px 0 0;text-align:center">
+  <div style="background:#f56c5a;padding:24px;border-radius:8px 8px 0 0;text-align:center">
     <h1 style="color:white;margin:0;font-size:24px">Weekly Digest</h1>
     <p style="color:rgba(255,255,255,0.85);margin:8px 0 0">The Well of Iowa</p>
   </div>
@@ -151,12 +151,12 @@ function buildWeeklyEmailHtml(
     <p>Hi ${name},</p>
     <p>Here's your weekly update from The Well of Iowa.</p>
 
-    <h2 style="color:#e8624a;font-size:18px">Upcoming Events</h2>
+    <h2 style="color:#f56c5a;font-size:18px">Upcoming Events</h2>
     <table style="width:100%;border-collapse:collapse">
       ${eventsHtml}
     </table>
 
-    <h2 style="color:#e8624a;font-size:18px;margin-top:24px">Recent Announcements</h2>
+    <h2 style="color:#f56c5a;font-size:18px;margin-top:24px">Recent Announcements</h2>
     ${announcementsHtml}
 
     <hr style="border:none;border-top:1px solid #ddd;margin:24px 0">
@@ -204,7 +204,7 @@ function buildMonthlyEmailHtml(
 <html lang="en">
 <head><meta charset="UTF-8"><title>Monthly Digest</title></head>
 <body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333">
-  <div style="background:#e8624a;padding:24px;border-radius:8px 8px 0 0;text-align:center">
+  <div style="background:#f56c5a;padding:24px;border-radius:8px 8px 0 0;text-align:center">
     <h1 style="color:white;margin:0;font-size:24px">Monthly Newsletter</h1>
     <p style="color:rgba(255,255,255,0.85);margin:8px 0 0">The Well of Iowa</p>
   </div>
@@ -212,12 +212,12 @@ function buildMonthlyEmailHtml(
     <p>Hi ${name},</p>
     <p>Here's your monthly update from The Well of Iowa.</p>
 
-    <h2 style="color:#e8624a;font-size:18px">Upcoming Events</h2>
+    <h2 style="color:#f56c5a;font-size:18px">Upcoming Events</h2>
     <ul>
       ${eventsHtml}
     </ul>
 
-    <h2 style="color:#e8624a;font-size:18px;margin-top:24px">Announcements</h2>
+    <h2 style="color:#f56c5a;font-size:18px;margin-top:24px">Announcements</h2>
     ${announcementsHtml}
 
     <hr style="border:none;border-top:1px solid #ddd;margin:24px 0">
@@ -253,7 +253,7 @@ async function sendDigestBatch(
           : buildMonthlyEmailHtml(user.displayName, content.events, content.announcements, unsubUrl)
 
       return {
-        from: 'The Well of Iowa <onboarding@resend.dev>',
+        from: MAIL_FROM.value(),
         to: user.email,
         subject:
           type === 'weekly'

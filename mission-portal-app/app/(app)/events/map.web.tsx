@@ -200,7 +200,7 @@ export default function EventsMapScreen() {
     for (const { lat, lng, names, trips, onewayMi } of activeGroups) {
       const el = document.createElement('div')
       el.style.cssText = [
-        'width:26px', 'height:26px', 'background:#e8624a',
+        'width:26px', 'height:26px', 'background:#f56c5a',
         'border:3px solid white', 'border-radius:50% 50% 50% 0',
         'transform:rotate(-45deg)',
         'box-shadow:0 2px 8px rgba(0,0,0,0.35)',
@@ -457,7 +457,7 @@ export default function EventsMapScreen() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{
-                width: 12, height: 12, background: '#e8624a',
+                width: 12, height: 12, background: '#f56c5a',
                 borderRadius: '50% 50% 50% 0', transform: 'rotate(-45deg)',
                 border: '2px solid white', boxShadow: '0 1px 4px rgba(0,0,0,0.3)', flexShrink: 0,
               }} />

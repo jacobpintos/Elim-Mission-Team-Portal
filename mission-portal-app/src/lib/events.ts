@@ -1,7 +1,7 @@
 import type { EventTemplate, EventInstance } from '@/types/events'
 
 export const TASK_SECTIONS = [
-  { id: 'production', label: 'Production', color: '#e8624a' },
+  { id: 'production', label: 'Production', color: '#f56c5a' },
   { id: 'teamcare', label: 'Team Care', color: '#2980b9' },
   { id: 'merch', label: 'Merch', color: '#8e44ad' },
   { id: 'network', label: 'Network', color: '#27ae60' },

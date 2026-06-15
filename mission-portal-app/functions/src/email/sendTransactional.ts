@@ -1,4 +1,4 @@
-import { resend } from './client'
+import { resend, MAIL_FROM } from './client'
 
 interface TransactionalEmailParams {
   to: string
@@ -12,7 +12,7 @@ interface TransactionalEmailParams {
  */
 export async function sendTransactionalEmail(params: TransactionalEmailParams): Promise<void> {
   await resend().emails.send({
-    from: 'Mission Portal <noreply@yourdomain.com>',
+    from: MAIL_FROM.value(),
     ...params,
   })
 }

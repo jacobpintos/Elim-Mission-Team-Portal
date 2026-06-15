@@ -11,7 +11,7 @@ import { SocialEditor } from './BlockEditor/SocialEditor'
 import type { PageBlock } from '@/types/pages'
 
 const BLOCK_COLORS: Record<string, string> = {
-  hero: '#e8624a',
+  hero: '#f56c5a',
   text: '#2980b9',
   image: '#27ae60',
   twocol: '#8e44ad',

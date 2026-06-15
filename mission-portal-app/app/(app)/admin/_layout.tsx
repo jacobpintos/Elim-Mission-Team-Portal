@@ -82,7 +82,7 @@ export default function AdminLayout() {
                     paddingHorizontal={14}
                     paddingVertical={12}
                     borderBottomWidth={isActive ? 2 : 0}
-                    borderBottomColor={isActive ? '#e8624a' : 'transparent'}
+                    borderBottomColor={isActive ? '#f56c5a' : 'transparent'}
                   >
                     <Text
                       fontSize="$3"

@@ -1,7 +1,7 @@
 import type { ThemeDoc } from '@/types/theme'
 
 export const defaults: ThemeDoc = {
-  primary: '#e8624a',
+  primary: '#f56c5a',
   primaryDark: '#c04a34',
   accent: '#f0a070',
   dark: {

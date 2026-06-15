@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { XStack, YStack, Text, Button } from 'tamagui'
 
 export const TASK_SECTIONS = [
-  { id: 'production', label: 'Production', color: '#e8624a' },
+  { id: 'production', label: 'Production', color: '#f56c5a' },
   { id: 'setup', label: 'Setup', color: '#2980b9' },
   { id: 'teardown', label: 'Teardown', color: '#27ae60' },
   { id: 'food', label: 'Food', color: '#f39c12' },

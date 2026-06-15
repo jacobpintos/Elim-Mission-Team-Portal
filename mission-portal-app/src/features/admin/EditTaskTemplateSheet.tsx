@@ -11,7 +11,7 @@ import { collection, addDoc, doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
 const SECTION_COLORS = [
-  '#e8624a', '#2980b9', '#27ae60', '#f39c12',
+  '#f56c5a', '#2980b9', '#27ae60', '#f39c12',
   '#9b59b6', '#1abc9c', '#e91e8c', '#607d8b',
 ]
 
