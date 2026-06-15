@@ -432,9 +432,11 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
             <YStack gap="$3" paddingBottom="$4">
               {chordsOnly
                 ? sectionGroups.map(({ section, count }) => {
-                    const label = count > 1
-                      ? SECTION_LABELS[section.type]
-                      : getSectionLabel(sheet.sections, section.id)
+                    const fullLabel = getSectionLabel(sheet.sections, section.id)
+                    const rangeMatch = count > 1 ? fullLabel.match(/^(.+?)\s+(\d+)$/) : null
+                    const label = rangeMatch
+                      ? `${rangeMatch[1]} ${parseInt(rangeMatch[2], 10)}-${parseInt(rangeMatch[2], 10) + count - 1}`
+                      : fullLabel
                     const allTokens = (section.chordTokens ?? []).flat()
                     const progGroups = splitByProgressionEnd(allTokens)
                     const compressed = compressGroups(progGroups)
@@ -444,11 +446,6 @@ export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
                           <Text color={colors.primary} fontWeight="700" fontSize="$3">
                             {label}
                           </Text>
-                          {count > 1 ? (
-                            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                              ×{count}
-                            </Text>
-                          ) : null}
                         </XStack>
                         {compressed.map(({ chords, count: pc }, gi) => (
                           <XStack key={gi} gap="$2" alignItems="center">
