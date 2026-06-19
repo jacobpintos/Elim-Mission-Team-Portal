@@ -35,13 +35,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     if (!fbUser && !inAuth && !atRoot) {
       router.replace('/')
-    } else if (fbUser && !fbUser.emailVerified && !inAuth) {
+    } else if (fbUser && !fbUser.emailVerified && !inAuth && profile?.roles.includes('public')) {
       router.replace('/(auth)/verify-email')
-    } else if (fbUser && fbUser.emailVerified && inAuth) {
+    } else if (fbUser && (fbUser.emailVerified || !profile?.roles.includes('public')) && inAuth) {
       router.replace('/')
     } else if (
       fbUser &&
-      fbUser.emailVerified &&
+      (fbUser.emailVerified || !profile?.roles.includes('public')) &&
       profile &&
       !profile.onboardingComplete &&
       !inOnboarding
