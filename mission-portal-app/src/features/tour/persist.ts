@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 // Bump this suffix if the tour changes substantially and should re-show once.
-const VERSION = 'v1'
+const VERSION = 'v2'
 const key = (uid: string) => `tour_seen_${VERSION}_${uid}`
 
 /**
