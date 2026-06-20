@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert } from 'react-native'
+import { Alert, Platform } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Input, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
@@ -49,37 +49,40 @@ export default function AdminAudit() {
   const safePage = Math.min(auditPage, totalPages - 1)
   const paginated = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
 
+  const doClear = async () => {
+    setClearing(true)
+    try {
+      const q = query(collection(db, 'auditLog'), limit(500))
+      let snap = await getDocs(q)
+      while (!snap.empty) {
+        const batch = writeBatch(db)
+        snap.docs.forEach((d) => batch.delete(d.ref))
+        await batch.commit()
+        snap = await getDocs(q)
+      }
+      await refetch()
+      toast('Audit log cleared', 'success')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to clear log'
+      toast(message, 'error')
+    } finally {
+      setClearing(false)
+    }
+  }
+
   const handleClearLog = () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('This will permanently delete all audit log entries. Are you sure?')) {
+        doClear()
+      }
+      return
+    }
     Alert.alert(
       'Clear Audit Log',
       'This will permanently delete all audit log entries. Are you sure?',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear All',
-          style: 'destructive',
-          onPress: async () => {
-            setClearing(true)
-            try {
-              // Batch delete up to 500 at a time
-              const q = query(collection(db, 'auditLog'), limit(500))
-              let snap = await getDocs(q)
-              while (!snap.empty) {
-                const batch = writeBatch(db)
-                snap.docs.forEach((d) => batch.delete(d.ref))
-                await batch.commit()
-                snap = await getDocs(q)
-              }
-              await refetch()
-              toast('Audit log cleared', 'success')
-            } catch (err: unknown) {
-              const message = err instanceof Error ? err.message : 'Failed to clear log'
-              toast(message, 'error')
-            } finally {
-              setClearing(false)
-            }
-          },
-        },
+        { text: 'Clear All', style: 'destructive', onPress: doClear },
       ]
     )
   }

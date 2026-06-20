@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Alert } from 'react-native'
+import { Alert, Platform } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
@@ -81,28 +81,34 @@ export default function AdminDigests() {
   const lastWeekly = stats.find((s) => s.type === 'weekly')
   const lastMonthly = stats.find((s) => s.type === 'monthly')
 
+  const doSend = async (type: 'weekly' | 'monthly') => {
+    const label = type === 'weekly' ? 'Weekly' : 'Monthly'
+    try {
+      const functions = getFunctions()
+      const sendDigestManual = httpsCallable(functions, 'sendDigestManual')
+      await sendDigestManual({ type })
+      toast(`${label} digest queued!`, 'success')
+      await fetchStats()
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send digest'
+      toast(message, 'error')
+    }
+  }
+
   const sendDigest = (type: 'weekly' | 'monthly') => {
     const label = type === 'weekly' ? 'Weekly' : 'Monthly'
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Send the ${label.toLowerCase()} digest to all subscribers now?`)) {
+        doSend(type)
+      }
+      return
+    }
     Alert.alert(
       `Send ${label} Digest`,
       `Send the ${label.toLowerCase()} digest to all subscribers now?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send',
-          onPress: async () => {
-            try {
-              const functions = getFunctions()
-              const sendDigestManual = httpsCallable(functions, 'sendDigestManual')
-              await sendDigestManual({ type })
-              toast(`${label} digest queued!`, 'success')
-              await fetchStats()
-            } catch (err: unknown) {
-              const message = err instanceof Error ? err.message : 'Failed to send digest'
-              toast(message, 'error')
-            }
-          },
-        },
+        { text: 'Send', onPress: () => doSend(type) },
       ]
     )
   }
