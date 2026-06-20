@@ -18,6 +18,7 @@ import { visibleTabs, isSecurity, isPublic, hasRole, isWorship } from '@/lib/rol
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { ReportFormModal } from '@/features/security/ReportFormModal'
+import { TourHost } from '@/features/tour/TourHost'
 import type { Tab } from '@/lib/roles'
 
 const DRAWER_W = 260
@@ -485,6 +486,8 @@ export default function AppLayout() {
         onClose={() => setReportOpen(false)}
         onSubmit={handleReportSubmit}
       />
+
+      <TourHost />
     </View>
   )
 }
