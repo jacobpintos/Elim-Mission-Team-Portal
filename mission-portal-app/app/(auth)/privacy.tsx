@@ -65,7 +65,7 @@ export default function PrivacyPolicyScreen() {
             Effective date: June 22, 2026
           </Text>
           <Body>
-            This Privacy Policy explains how Elim Mission Team (“we,” “us,” or “our”) collects,
+            This Privacy Policy explains how The Well of Iowa (“we,” “us,” or “our”) collects,
             uses, and protects information when you use the Mission Portal app (“App”). By using the
             App you agree to the practices described here.
           </Body>

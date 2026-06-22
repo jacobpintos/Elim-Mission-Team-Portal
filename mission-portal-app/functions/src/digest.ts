@@ -162,6 +162,7 @@ function buildWeeklyEmailHtml(
     <hr style="border:none;border-top:1px solid #ddd;margin:24px 0">
     <p style="font-size:12px;color:#aaa;text-align:center">
       You're receiving this weekly digest from The Well of Iowa.<br>
+      P.O. Box 552, North Liberty, IA 52317<br>
       <a href="${unsubUrl}" style="color:#aaa">Unsubscribe</a>
     </p>
   </div>
@@ -223,6 +224,7 @@ function buildMonthlyEmailHtml(
     <hr style="border:none;border-top:1px solid #ddd;margin:24px 0">
     <p style="font-size:12px;color:#aaa;text-align:center">
       You're receiving this monthly newsletter from The Well of Iowa.<br>
+      P.O. Box 552, North Liberty, IA 52317<br>
       <a href="${unsubUrl}" style="color:#aaa">Unsubscribe</a>
     </p>
   </div>
