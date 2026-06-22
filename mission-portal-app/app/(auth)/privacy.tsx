@@ -65,8 +65,8 @@ export default function PrivacyPolicyScreen() {
             Effective date: June 22, 2026
           </Text>
           <Body>
-            This Privacy Policy explains how Elim Mission Team ("we," "us," or "our") collects,
-            uses, and protects information when you use the Mission Portal app ("App"). By using the
+            This Privacy Policy explains how Elim Mission Team (“we,” “us,” or “our”) collects,
+            uses, and protects information when you use the Mission Portal app (“App”). By using the
             App you agree to the practices described here.
           </Body>
         </YStack>
@@ -138,7 +138,7 @@ export default function PrivacyPolicyScreen() {
               reports.
             </Bullet>
             <Bullet>
-              <Text fontWeight="700">Service providers</Text> — we use Google Firebase (authentication, database, cloud functions, and hosting), Sentry (crash reporting), and Expo (push-notification infrastructure). Each provider processes only the data necessary to deliver their service and is bound by their own privacy policies and Google's/Sentry's data-processing terms.
+              <Text fontWeight="700">Service providers</Text> — we use Google Firebase (authentication, database, cloud functions, and hosting), Sentry (crash reporting), and Expo (push-notification infrastructure). Each provider processes only the data necessary to deliver their service and is bound by their own privacy policies and Google’s/Sentry’s data-processing terms.
             </Bullet>
             <Bullet>
               <Text fontWeight="700">Legal requirements</Text> — if required by law, court order,
@@ -173,7 +173,7 @@ export default function PrivacyPolicyScreen() {
             The App may send push notifications and email digests for events, assignments,
             announcements, and other team activity. You control which notifications you receive
             in Profile &amp; Settings → Notifications. You can unsubscribe from email digests
-            at any time by toggling them off in settings or clicking "Unsubscribe" in any digest
+            at any time by toggling them off in settings or clicking “Unsubscribe” in any digest
             email.
           </Body>
         </Section>
