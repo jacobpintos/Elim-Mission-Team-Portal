@@ -164,6 +164,17 @@ export default function RegisterScreen() {
             <Text color="$primary">Sign in</Text>
           </Link>
         </XStack>
+
+        <XStack justifyContent="center">
+          <Paragraph color="$colorMuted" fontSize="$2">
+            By creating an account you agree to our{' '}
+          </Paragraph>
+          <Link href="/(auth)/privacy">
+            <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
+              Privacy Policy
+            </Text>
+          </Link>
+        </XStack>
       </YStack>
     </SafeAreaView>
   )

@@ -136,6 +136,14 @@ export default function LoginScreen() {
             </Text>
           </Link>
         </XStack>
+
+        <XStack justifyContent="center">
+          <Link href="/(auth)/privacy">
+            <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
+              Privacy Policy
+            </Text>
+          </Link>
+        </XStack>
       </YStack>
     </SafeAreaView>
   )
