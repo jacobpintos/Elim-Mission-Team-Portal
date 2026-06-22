@@ -125,10 +125,6 @@ export default function LoginScreen() {
           {loading ? 'Signing in…' : 'Sign in'}
         </Button>
 
-        <Button variant="outlined" size="$5" onPress={() => router.push('/(auth)/register')}>
-          Create Account
-        </Button>
-
         <XStack justifyContent="center">
           <Link href="/(auth)/reset-password">
             <Text color="$colorMuted" fontSize="$3">
