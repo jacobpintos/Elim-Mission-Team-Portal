@@ -3,7 +3,7 @@ import { useRouter, Link } from 'expo-router'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { YStack, XStack, H1, Paragraph, Button, Input, Text } from 'tamagui'
+import { YStack, XStack, H1, Paragraph, Button, Input, Text, View } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -14,6 +14,9 @@ const schema = z
     email: z.string().email('Invalid email address'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
+    ageConfirm: z.boolean().refine((v) => v === true, {
+      message: 'You must confirm you are 13 or older to register',
+    }),
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: 'Passwords do not match',
@@ -34,7 +37,13 @@ export default function RegisterScreen() {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { displayName: '', email: '', password: '', confirmPassword: '' },
+    defaultValues: {
+      displayName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      ageConfirm: false,
+    },
   })
 
   const onSubmit = async (data: FormData) => {
@@ -142,6 +151,48 @@ export default function RegisterScreen() {
                 {errors.confirmPassword && (
                   <Text color="$red9" fontSize="$2">
                     {errors.confirmPassword.message}
+                  </Text>
+                )}
+              </YStack>
+            )}
+          />
+
+          <Controller
+            control={control}
+            name="ageConfirm"
+            render={({ field }) => (
+              <YStack gap="$1">
+                <XStack
+                  gap="$2.5"
+                  alignItems="center"
+                  onPress={() => field.onChange(!field.value)}
+                  cursor="pointer"
+                >
+                  <View
+                    width={22}
+                    height={22}
+                    borderRadius={6}
+                    borderWidth={2}
+                    borderColor={
+                      field.value ? '$primary' : errors.ageConfirm ? '$red9' : '$borderColor'
+                    }
+                    backgroundColor={field.value ? '$primary' : 'transparent'}
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    {field.value ? (
+                      <Text color="white" fontSize={13} fontWeight="900">
+                        ✓
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text color="$colorMuted" fontSize="$3" flex={1}>
+                    I confirm I am 13 years of age or older
+                  </Text>
+                </XStack>
+                {errors.ageConfirm && (
+                  <Text color="$red9" fontSize="$2">
+                    {errors.ageConfirm.message}
                   </Text>
                 )}
               </YStack>
