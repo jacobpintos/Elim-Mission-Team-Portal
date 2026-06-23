@@ -206,7 +206,7 @@ export default function WorshipScreen() {
               </Text>
             </YStack>
           ) : (
-            <ScrollView style={{ flex: 1 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 80 }}>
               <YStack padding="$3" gap="$3">
                 {sorted.map((sl) => {
                   const evTemplate = sl.eventTemplateId
