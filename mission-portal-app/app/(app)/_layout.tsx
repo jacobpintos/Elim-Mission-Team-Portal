@@ -19,6 +19,8 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { ReportFormModal } from '@/features/security/ReportFormModal'
 import { TourHost } from '@/features/tour/TourHost'
+import { useTourStore } from '@/features/tour/tourStore'
+import { buildTabTour } from '@/features/tour/flows'
 import type { Tab } from '@/lib/roles'
 
 const DRAWER_W = 260
@@ -110,6 +112,11 @@ export default function AppLayout() {
     tabBarActiveTintColor: theme.primary,
     sceneStyle: { backgroundColor: colors.background },
   }), [theme.primary, colors.background])
+
+  const tourActive = useTourStore((s) => s.active)
+  const tourStart = useTourStore((s) => s.start)
+  const currentSeg = useMemo(() => pathname.split('/').filter(Boolean)[0] ?? '', [pathname])
+  const tabTour = useMemo(() => buildTabTour(currentSeg, profile ?? null), [currentSeg, profile])
 
   const drawerAnim = { transform: [{ translateX: drawerX }] }
   const contentAnim = { transform: [{ translateX: contentX }], flex: 1 as const, zIndex: 1 as const }
@@ -371,6 +378,29 @@ export default function AppLayout() {
               </XStack>
             </Pressable>
           )}
+
+          {/* Need help? */}
+          {!tourActive && tabTour ? (
+            <Pressable
+              onPress={() => {
+                closeDrawer()
+                tourStart({ title: tabTour.title, steps: tabTour.steps })
+              }}
+            >
+              <XStack
+                padding="$4"
+                gap="$3"
+                alignItems="center"
+                borderTopWidth={1}
+                borderTopColor={colors.border}
+              >
+                <Text fontSize={14}>?</Text>
+                <Text color={colors.textMuted} fontSize="$3">
+                  Need help?
+                </Text>
+              </XStack>
+            </Pressable>
+          ) : null}
 
           {/* Report a Concern */}
           {showReportButton ? (
