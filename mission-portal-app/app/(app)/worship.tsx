@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, StyleSheet } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
 import { httpsCallable } from 'firebase/functions'
@@ -22,6 +23,7 @@ import type { SetList } from '@/types/worship'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function WorshipScreen() {
+  const insets = useSafeAreaInsets()
   const colors = useThemeColors()
   const { profile } = useAuthStore()
   const uid = profile?.uid ?? ''
@@ -206,7 +208,7 @@ export default function WorshipScreen() {
               </Text>
             </YStack>
           ) : (
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 80 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}>
               <YStack padding="$3" gap="$3">
                 {sorted.map((sl) => {
                   const evTemplate = sl.eventTemplateId
@@ -295,7 +297,7 @@ export default function WorshipScreen() {
 
           <Pressable
             onPress={() => setShowForm(true)}
-            style={[styles.fab, { backgroundColor: colors.primary }]}
+            style={[styles.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 16 }]}
           >
             <Text color="white" fontWeight="700" fontSize="$3">
               ⊕ New Set List
