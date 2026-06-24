@@ -1,13 +1,14 @@
 {
   "expo": {
-    "name": "mission-portal-app",
+    "name": "Elim App",
     "slug": "mission-portal-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.elim.app"
     },
     "android": {
       "adaptiveIcon": {
