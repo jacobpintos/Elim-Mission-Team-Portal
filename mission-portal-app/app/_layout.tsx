@@ -65,23 +65,6 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (Platform.OS !== 'web') return
-    // Lock the viewport so browser-level scroll can't push the app header off-screen.
-    // Individual ScrollViews still scroll normally because they have their own overflow.
-    const { documentElement: html, body } = document
-    html.style.height = '100%'
-    html.style.overflow = 'hidden'
-    body.style.height = '100%'
-    body.style.overflow = 'hidden'
-    const root = document.getElementById('root')
-    if (root) {
-      root.style.height = '100%'
-      root.style.display = 'flex'
-      root.style.flexDirection = 'column'
-    }
-  }, [])
-
-  useEffect(() => {
-    if (Platform.OS !== 'web') return
     const { logoUrl } = theme
     if (!logoUrl) return
     const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')

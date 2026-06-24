@@ -199,13 +199,16 @@ export default function WorshipScreen() {
               <Text color={colors.textMuted}>Loading…</Text>
             </YStack>
           ) : sorted.length === 0 ? (
-            <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
+            <YStack flex={1} alignItems="center" justifyContent="center" padding="$4" gap="$4">
               <Text color={colors.textMuted} textAlign="center">
                 No set lists yet.
               </Text>
-              <Text color={colors.textMuted} fontSize="$2" textAlign="center" marginTop="$2">
-                Tap ⊕ New Set List to create one.
-              </Text>
+              <Pressable
+                onPress={() => setShowForm(true)}
+                style={[styles.fab, { backgroundColor: colors.primary, position: 'relative', bottom: 0, right: 0 }]}
+              >
+                <Text color="white" fontWeight="700" fontSize="$3">⊕ New Set List</Text>
+              </Pressable>
             </YStack>
           ) : (
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}>
