@@ -23,6 +23,7 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
   const chordSheets = useChordSheetsStore((s) => s.chordSheets)
   const [acknowledging, setAcknowledging] = useState(false)
   const [viewSheet, setViewSheet] = useState<ChordSheet | null>(null)
+  const [viewSheetKey, setViewSheetKey] = useState<string>('')
 
   if (!setList) return null
 
@@ -42,7 +43,11 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
 
   return (
     <>
-      <ChordSheetViewer sheet={viewSheet} onClose={() => setViewSheet(null)} />
+      <ChordSheetViewer
+        sheet={viewSheet}
+        onClose={() => { setViewSheet(null); setViewSheetKey('') }}
+        initialKey={viewSheetKey}
+      />
       <Modal visible={!!setList} animationType="slide" transparent onRequestClose={onClose}>
         <View style={styles.overlay}>
           <YStack
@@ -136,7 +141,7 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                               (c) => String(c.id) === String(song.chordSheetId)
                             )
                             return cs ? (
-                              <Pressable onPress={() => setViewSheet(cs)}>
+                              <Pressable onPress={() => { setViewSheet(cs); setViewSheetKey(song.key ?? '') }}>
                                 <Text color={colors.primary} fontSize="$2">
                                   🎸 {cs.title}
                                   {cs.artist ? ` — ${cs.artist}` : ''}

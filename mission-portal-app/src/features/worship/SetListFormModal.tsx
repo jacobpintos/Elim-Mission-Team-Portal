@@ -126,6 +126,96 @@ function ChordSheetPicker({ chordSheets, selectedId, onSelect, colors }: ChordSh
   )
 }
 
+interface SongNameComboBoxProps {
+  value: string
+  chordSheets: ChordSheet[]
+  onChangeName: (name: string) => void
+  onSelectSheet: (id: string | number | null) => void
+  colors: ReturnType<typeof useThemeColors>
+  inputStyle: object | object[]
+}
+
+function SongNameComboBox({
+  value,
+  chordSheets,
+  onChangeName,
+  onSelectSheet,
+  colors,
+  inputStyle,
+}: SongNameComboBoxProps) {
+  const [focused, setFocused] = useState(false)
+
+  const suggestions =
+    value.trim().length > 0
+      ? chordSheets
+          .filter((cs) => cs.title.toLowerCase().includes(value.toLowerCase()))
+          .slice(0, 6)
+      : []
+
+  const showDropdown = focused && suggestions.length > 0
+
+  const handleChangeText = (v: string) => {
+    onChangeName(v)
+    if (!v.trim()) {
+      onSelectSheet(null)
+      return
+    }
+    const lower = v.toLowerCase()
+    const exact = chordSheets.filter((cs) => cs.title.toLowerCase() === lower)
+    if (exact.length === 1) onSelectSheet(exact[0].id)
+    else if (exact.length === 0) onSelectSheet(null)
+    // Multiple exact matches: leave existing selection
+  }
+
+  return (
+    <YStack>
+      <TextInput
+        style={inputStyle as object}
+        value={value}
+        onChangeText={handleChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setTimeout(() => setFocused(false), 200)}
+        placeholder="Song name"
+        placeholderTextColor={colors.textMuted}
+      />
+      {showDropdown ? (
+        <YStack
+          backgroundColor={colors.surface}
+          borderRadius="$2"
+          borderWidth={1}
+          borderColor={colors.border}
+          maxHeight={180}
+          overflow="hidden"
+        >
+          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+            {suggestions.map((cs) => (
+              <Pressable
+                key={String(cs.id)}
+                onPress={() => {
+                  onChangeName(cs.title)
+                  onSelectSheet(cs.id)
+                  setFocused(false)
+                }}
+              >
+                <XStack
+                  paddingHorizontal="$3"
+                  paddingVertical="$2"
+                  backgroundColor="transparent"
+                >
+                  <Text color={colors.text} fontSize={13} numberOfLines={1}>
+                    {cs.title}
+                    {cs.artist ? ` — ${cs.artist}` : ''}
+                  </Text>
+                </XStack>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </YStack>
+      ) : null}
+    </YStack>
+  )
+}
+
 export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetListFormModalProps) {
   const colors = useThemeColors()
   const chordSheets = useChordSheetsStore((s) => s.chordSheets)
@@ -148,22 +238,6 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
 
   const updateSong = (id: string, field: keyof SetListSong, value: string | number | null) => {
     setSongs((prev) => prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)))
-  }
-
-  const autoLinkChordSheet = (songId: string, songName: string) => {
-    if (!songName.trim()) {
-      updateSong(songId, 'chordSheetId', null)
-      return
-    }
-    const lower = songName.toLowerCase()
-    const matches = chordSheets.filter((cs) => cs.title.toLowerCase() === lower)
-    if (matches.length === 1) {
-      updateSong(songId, 'chordSheetId', matches[0].id)
-    } else if (matches.length === 0) {
-      // No exact match — clear any auto-linked sheet
-      updateSong(songId, 'chordSheetId', null)
-    }
-    // Multiple matches: leave existing selection for user to resolve manually
   }
 
   const addSong = () => {
@@ -309,8 +383,13 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
                         ) : null}
                       </XStack>
 
-                      <TextInput
-                        style={[
+                      <SongNameComboBox
+                        value={song.name}
+                        chordSheets={chordSheets}
+                        onChangeName={(v) => updateSong(song.id, 'name', v)}
+                        onSelectSheet={(id) => updateSong(song.id, 'chordSheetId', id)}
+                        colors={colors}
+                        inputStyle={[
                           styles.input,
                           {
                             color: colors.text,
@@ -318,13 +397,6 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
                             backgroundColor: colors.surface,
                           },
                         ]}
-                        value={song.name}
-                        onChangeText={(v) => {
-                          updateSong(song.id, 'name', v)
-                          autoLinkChordSheet(song.id, v)
-                        }}
-                        placeholder="Song name"
-                        placeholderTextColor={colors.textMuted}
                       />
 
                       <TextInput

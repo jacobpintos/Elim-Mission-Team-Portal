@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Modal, View, ScrollView, Pressable, StyleSheet, Platform } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { printAsync } from 'expo-print'
@@ -218,12 +218,26 @@ interface SectionGroup {
 interface ChordSheetViewerProps {
   sheet: ChordSheet | null
   onClose: () => void
+  initialKey?: string
 }
 
-export function ChordSheetViewer({ sheet, onClose }: ChordSheetViewerProps) {
+export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewerProps) {
   const colors = useThemeColors()
   const [selectedKey, setSelectedKey] = useState(() => getKeyPrefs().key)
   const [isMinor, setIsMinor] = useState(() => getKeyPrefs().isMinor)
+
+  // When a sheet opens with a specified key, switch to it automatically.
+  useEffect(() => {
+    if (!sheet) return
+    if (initialKey && (NNS_KEYS as readonly string[]).includes(initialKey)) {
+      setSelectedKey(initialKey)
+      setIsMinor(false)
+    } else {
+      const prefs = getKeyPrefs()
+      setSelectedKey(prefs.key)
+      setIsMinor(prefs.isMinor)
+    }
+  }, [sheet?.id, initialKey])
   const [chordsOnly, setChordsOnly] = useState(false)
   const [showKeyDropdown, setShowKeyDropdown] = useState(false)
 
