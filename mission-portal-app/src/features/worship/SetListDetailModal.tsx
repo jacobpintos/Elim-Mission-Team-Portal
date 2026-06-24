@@ -44,6 +44,7 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
   return (
     <>
       <ChordSheetViewer
+        key={viewSheet ? `${String(viewSheet.id)}-${viewSheetKey}` : 'closed'}
         sheet={viewSheet}
         onClose={() => { setViewSheet(null); setViewSheetKey('') }}
         initialKey={viewSheetKey}
