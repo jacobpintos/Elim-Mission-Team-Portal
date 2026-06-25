@@ -52,20 +52,28 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       }
       set({ fbUser, loading: true })
       let loginAtWritten = false
-      const unsubProfile = onSnapshot(doc(db, 'users', fbUser.uid), (snap) => {
-        const userProfile = (snap.data() as UserProfile) ?? null
-        if (!loginAtWritten && userProfile) {
-          loginAtWritten = true
-          set({ prevLoginAt: userProfile.lastLoginAt ?? null })
-          updateDoc(doc(db, 'users', fbUser.uid), { lastLoginAt: Date.now() }).catch(() => {})
-          registerForPushNotifications()
-            .then((result) => {
-              if (result) return persistPushToken(fbUser.uid, result.token, result.platform)
-            })
-            .catch(() => {})
+      const unsubProfile = onSnapshot(
+        doc(db, 'users', fbUser.uid),
+        (snap) => {
+          const userProfile = (snap.data() as UserProfile) ?? null
+          if (!loginAtWritten && userProfile) {
+            loginAtWritten = true
+            set({ prevLoginAt: userProfile.lastLoginAt ?? null })
+            updateDoc(doc(db, 'users', fbUser.uid), { lastLoginAt: Date.now() }).catch(() => {})
+            registerForPushNotifications()
+              .then((result) => {
+                if (result) return persistPushToken(fbUser.uid, result.token, result.platform)
+              })
+              .catch(() => {})
+          }
+          set({ profile: userProfile, loading: false })
+        },
+        () => {
+          // Firestore read failed (e.g. permission denied) — unblock routing so the app
+          // doesn't hang on a loading screen; profile stays null and routing handles it.
+          set({ profile: null, loading: false })
         }
-        set({ profile: userProfile, loading: false })
-      })
+      )
       set({ _unsubProfile: unsubProfile })
     })
     set({ _unsubAuth: unsubAuth })
