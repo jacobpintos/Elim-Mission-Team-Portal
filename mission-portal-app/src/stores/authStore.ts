@@ -96,7 +96,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       email: cred.user.email,
       displayName,
       roles: ['public'],
-      onboardingComplete: false,
+      onboardingComplete: true,
       notificationPrefs: defaultNotificationPrefs(),
       pushTokens: {},
       createdAt: serverTimestamp(),

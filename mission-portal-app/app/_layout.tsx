@@ -31,7 +31,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (loading) return
     const seg = segments as string[]
     const inAuth = seg[0] === '(auth)'
-    const inOnboarding = seg[0] === '(onboarding)'
     const atRoot = !seg[0]
 
     if (!fbUser && !inAuth && !atRoot) {
@@ -40,26 +39,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       router.replace('/(auth)/verify-email')
     } else if (fbUser && (fbUser.emailVerified || (profile && !profile?.roles?.includes('public'))) && inAuth) {
       // Navigate directly to avoid competing with index.tsx's <Redirect>
-      const isNonPublic = profile?.roles?.some((r) => r !== 'public') ?? false
-      if (profile && !profile.onboardingComplete && !isNonPublic) {
-        router.replace('/(onboarding)')
-      } else if (profile?.onboardingComplete || isNonPublic) {
-        const firstTab = visibleTabs(profile!)[0] ?? 'home'
+      if (profile) {
+        const firstTab = visibleTabs(profile)[0] ?? 'home'
         router.replace(`/(app)/${firstTab}` as never)
       }
-      // profile=null + emailVerified=true: no-op, user stays at auth route
-    } else if (
-      fbUser &&
-      (fbUser.emailVerified || !profile?.roles?.includes('public')) &&
-      profile &&
-      !profile.onboardingComplete &&
-      !inOnboarding &&
-      !profile.roles?.some((r) => r !== 'public')
-    ) {
-      router.replace('/(onboarding)')
-    } else if (fbUser && fbUser.emailVerified && profile?.onboardingComplete && inOnboarding) {
-      const firstTab = visibleTabs(profile)[0] ?? 'home'
-      router.replace(`/(app)/${firstTab}` as never)
+      // profile=null: no-op, stay at auth route until Firestore snapshot fires
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fbUser, profile, loading, segments])
