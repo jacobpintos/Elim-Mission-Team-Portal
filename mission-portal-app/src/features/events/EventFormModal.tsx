@@ -32,6 +32,7 @@ interface EventFormModalProps {
   open: boolean
   onClose: () => void
   selectedDate?: string
+  instanceKey?: string
 }
 
 type FormData = {
@@ -78,9 +79,9 @@ function displayToIso(display: string): string {
   return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
 }
 
-export function EventFormModal({ event, open, onClose, selectedDate }: EventFormModalProps) {
+export function EventFormModal({ event, open, onClose, selectedDate, instanceKey }: EventFormModalProps) {
   const colors = useThemeColors()
-  const { createEvent, updateEvent, deleteEvent } = useEventsStore()
+  const { createEvent, updateEvent, deleteEvent, setOverride } = useEventsStore()
   const { users: allStoreUsers } = useUsersStore()
   const { createTask } = useTasksStore()
   const { profile } = useAuthStore()
@@ -152,6 +153,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
   const [lodgingEntries, setLodgingEntries] = useState<LodgingEntry[]>(event?.lodgingEntries ?? [])
   const [flightEntries, setFlightEntries] = useState<FlightEntry[]>(event?.flightEntries ?? [])
   const [saving, setSaving] = useState(false)
+  const [editScope, setEditScope] = useState<'instance' | 'all'>(instanceKey ? 'instance' : 'all')
 
   const [carpoolPicker, setCarpoolPicker] = useState<{ carId: string; role: 'driver' | 'rider' } | null>(null)
   const [carpoolSearch, setCarpoolSearch] = useState('')
@@ -261,7 +263,34 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
         ...(form.taskTemplateId ? { taskTemplateId: form.taskTemplateId } : {}),
         ...(coords ? { _geocodeLat: coords.lat, _geocodeLng: coords.lng } : {}),
       }
-      if (event) {
+      if (instanceKey && editScope === 'instance') {
+        await setOverride(instanceKey, {
+          title: form.title,
+          location: form.location,
+          address: form.address,
+          city: form.city,
+          state: form.state,
+          startTime: form.startTime,
+          isPublic: form.isPublic,
+          isVirtual: form.isVirtual,
+          virtualLink: form.isVirtual ? form.virtualLink : '',
+          food: form.food,
+          foodItems: form.food ? form.foodItems.filter((s) => s.trim()) : [],
+          carpool: form.carpool,
+          carpoolCars: form.carpool ? form.carpoolCars : [],
+          lodging: form.lodging,
+          lodgingEntries: form.lodging ? lodgingEntries : [],
+          flights: form.flights,
+          flightEntries: form.flights ? flightEntries : [],
+          users: finalUsers,
+          groups: form.groups,
+          teams,
+          dressCode,
+          ...(coords ? { _geocodeLat: coords.lat, _geocodeLng: coords.lng } : {}),
+        })
+        toast('This date updated', 'success')
+        onClose()
+      } else if (event) {
         await updateEvent(event.id, payload)
         toast('Event updated', 'success')
       } else {
@@ -389,22 +418,30 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
 
   const handleDelete = () => {
     if (!event) return
-    const msg = `Delete "${event.title}"? This cannot be undone.`
+    const isInstanceOnly = !!(instanceKey && editScope === 'instance')
+    const msg = isInstanceOnly
+      ? `Remove the ${instanceKey!.split('_').pop()} occurrence of "${event.title}"?`
+      : `Delete "${event.title}" and all its occurrences? This cannot be undone.`
     const doDelete = async () => {
       try {
-        await deleteEvent(event.id)
+        if (isInstanceOnly) {
+          await setOverride(instanceKey!, { deleted: true })
+          toast('Occurrence removed', 'success')
+        } else {
+          await deleteEvent(event.id)
+        }
         onClose()
       } catch {
-        toast('Failed to delete event', 'error')
+        toast(isInstanceOnly ? 'Failed to remove occurrence' : 'Failed to delete event', 'error')
       }
     }
     if (Platform.OS === 'web') {
       if (window.confirm(msg)) doDelete()
       return
     }
-    Alert.alert('Delete Event', msg, [
+    Alert.alert(isInstanceOnly ? 'Remove Occurrence' : 'Delete Event', msg, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: doDelete },
+      { text: isInstanceOnly ? 'Remove' : 'Delete', style: 'destructive', onPress: doDelete },
     ])
   }
 
@@ -435,10 +472,74 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
       onOpenChange={(v) => {
         if (!v) onClose()
       }}
-      title={event ? 'Edit Event' : 'Create Event'}
+      title={
+        instanceKey
+          ? editScope === 'instance'
+            ? 'Edit This Date'
+            : 'Edit All Occurrences'
+          : event
+            ? 'Edit Event'
+            : 'Create Event'
+      }
       scrollable
     >
       <YStack gap="$3" paddingBottom="$4">
+        {/* Scope toggle for recurring event instances */}
+        {instanceKey && (
+          <YStack
+            backgroundColor={colors.surface}
+            borderWidth={1}
+            borderColor={colors.border}
+            borderRadius="$3"
+            padding="$3"
+            gap="$2"
+          >
+            <Text color={colors.text} fontSize="$3" fontWeight="600">
+              What would you like to edit?
+            </Text>
+            <XStack gap="$2">
+              <Pressable style={{ flex: 1 }} onPress={() => setEditScope('instance')}>
+                <YStack
+                  flex={1}
+                  borderWidth={1}
+                  borderColor={editScope === 'instance' ? colors.primary : colors.border}
+                  backgroundColor={editScope === 'instance' ? colors.primary : 'transparent'}
+                  borderRadius="$2"
+                  padding="$2"
+                  alignItems="center"
+                  gap="$1"
+                >
+                  <Text color={editScope === 'instance' ? 'white' : colors.text} fontSize="$3" fontWeight="600">
+                    This date only
+                  </Text>
+                  <Text color={editScope === 'instance' ? 'rgba(255,255,255,0.8)' : colors.textMuted} fontSize="$1" textAlign="center">
+                    {instanceKey.split('_').pop()}
+                  </Text>
+                </YStack>
+              </Pressable>
+              <Pressable style={{ flex: 1 }} onPress={() => setEditScope('all')}>
+                <YStack
+                  flex={1}
+                  borderWidth={1}
+                  borderColor={editScope === 'all' ? colors.primary : colors.border}
+                  backgroundColor={editScope === 'all' ? colors.primary : 'transparent'}
+                  borderRadius="$2"
+                  padding="$2"
+                  alignItems="center"
+                  gap="$1"
+                >
+                  <Text color={editScope === 'all' ? 'white' : colors.text} fontSize="$3" fontWeight="600">
+                    All occurrences
+                  </Text>
+                  <Text color={editScope === 'all' ? 'rgba(255,255,255,0.8)' : colors.textMuted} fontSize="$1" textAlign="center">
+                    Edits the series
+                  </Text>
+                </YStack>
+              </Pressable>
+            </XStack>
+          </YStack>
+        )}
+
         {/* Title */}
         <YStack gap="$1">
           <Text color={colors.text} fontSize="$3">
@@ -454,20 +555,22 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
           />
         </YStack>
 
-        {/* Date */}
-        <YStack gap="$1">
-          <Text color={colors.text} fontSize="$3">
-            Date (MM/DD/YY)
-          </Text>
-          <Input
-            value={form.date}
-            onChangeText={field('date')}
-            placeholder="04/06/26"
-            backgroundColor={colors.surface}
-            color={colors.text}
-            borderColor={colors.border}
-          />
-        </YStack>
+        {/* Date — hidden for instance edits (date is fixed) */}
+        {!(instanceKey && editScope === 'instance') && (
+          <YStack gap="$1">
+            <Text color={colors.text} fontSize="$3">
+              Date (MM/DD/YY)
+            </Text>
+            <Input
+              value={form.date}
+              onChangeText={field('date')}
+              placeholder="04/06/26"
+              backgroundColor={colors.surface}
+              color={colors.text}
+              borderColor={colors.border}
+            />
+          </YStack>
+        )}
 
         {/* Venue Name */}
         <YStack gap="$1">
@@ -698,83 +801,82 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
         {/* Dress Code */}
         <DressCodeEditor entries={dressCode} onChange={setDressCode} teams={teams} />
 
-        {/* Recurring toggle */}
-        <XStack gap="$3" alignItems="center" justifyContent="space-between">
-          <Text color={colors.text} fontSize="$3" flex={1}>
-            Recurring
-          </Text>
-          <Pressable onPress={() => field('isRec')(!form.isRec)}>
-            <XStack
-              paddingHorizontal="$3"
-              paddingVertical="$1"
-              borderRadius={99}
-              backgroundColor={form.isRec ? colors.primary : colors.surface}
-              borderWidth={1}
-              borderColor={form.isRec ? colors.primary : colors.border}
-            >
-              <Text
-                color={form.isRec ? 'white' : colors.textMuted}
-                fontSize="$2"
-                fontWeight="600"
-              >
-                {form.isRec ? 'ON' : 'OFF'}
-              </Text>
-            </XStack>
-          </Pressable>
-        </XStack>
-
-        {form.isRec ? (
+        {/* Recurring toggle + settings — hidden when editing a single instance */}
+        {!(instanceKey && editScope === 'instance') && (
           <>
-            <YStack gap="$1">
-              <Text color={colors.text} fontSize="$3">
-                Frequency
+            <XStack gap="$3" alignItems="center" justifyContent="space-between">
+              <Text color={colors.text} fontSize="$3" flex={1}>
+                Recurring
               </Text>
-              <XStack gap="$2">
-                {(['weekly', 'biweekly', 'monthly'] as const).map((r) => (
-                  <Pressable key={r} onPress={() => field('recur')(r)}>
-                    <XStack
-                      borderWidth={1}
-                      borderColor={form.recur === r ? colors.primary : colors.border}
-                      backgroundColor={form.recur === r ? colors.primary : 'transparent'}
-                      borderRadius="$2"
-                      paddingHorizontal="$2"
-                      paddingVertical="$1"
-                    >
-                      <Text color={form.recur === r ? 'white' : colors.text} fontSize="$2">
-                        {r.charAt(0).toUpperCase() + r.slice(1)}
-                      </Text>
-                    </XStack>
-                  </Pressable>
-                ))}
-              </XStack>
-            </YStack>
-            <YStack gap="$1">
-              <Text color={colors.text} fontSize="$3">
-                Day of Week
-              </Text>
-              <XStack gap="$1" flexWrap="wrap">
-                {DAY_LABELS.map((d, i) => (
-                  <Pressable key={d} onPress={() => field('recDay')(i)}>
-                    <XStack
-                      width={36}
-                      height={36}
-                      borderRadius={18}
-                      borderWidth={1}
-                      borderColor={form.recDay === i ? colors.primary : colors.border}
-                      backgroundColor={form.recDay === i ? colors.primary : 'transparent'}
-                      alignItems="center"
-                      justifyContent="center"
-                    >
-                      <Text color={form.recDay === i ? 'white' : colors.text} fontSize={11}>
-                        {d}
-                      </Text>
-                    </XStack>
-                  </Pressable>
-                ))}
-              </XStack>
-            </YStack>
+              <Pressable onPress={() => field('isRec')(!form.isRec)}>
+                <XStack
+                  paddingHorizontal="$3"
+                  paddingVertical="$1"
+                  borderRadius={99}
+                  backgroundColor={form.isRec ? colors.primary : colors.surface}
+                  borderWidth={1}
+                  borderColor={form.isRec ? colors.primary : colors.border}
+                >
+                  <Text color={form.isRec ? 'white' : colors.textMuted} fontSize="$2" fontWeight="600">
+                    {form.isRec ? 'ON' : 'OFF'}
+                  </Text>
+                </XStack>
+              </Pressable>
+            </XStack>
+            {form.isRec ? (
+              <>
+                <YStack gap="$1">
+                  <Text color={colors.text} fontSize="$3">
+                    Frequency
+                  </Text>
+                  <XStack gap="$2">
+                    {(['weekly', 'biweekly', 'monthly'] as const).map((r) => (
+                      <Pressable key={r} onPress={() => field('recur')(r)}>
+                        <XStack
+                          borderWidth={1}
+                          borderColor={form.recur === r ? colors.primary : colors.border}
+                          backgroundColor={form.recur === r ? colors.primary : 'transparent'}
+                          borderRadius="$2"
+                          paddingHorizontal="$2"
+                          paddingVertical="$1"
+                        >
+                          <Text color={form.recur === r ? 'white' : colors.text} fontSize="$2">
+                            {r.charAt(0).toUpperCase() + r.slice(1)}
+                          </Text>
+                        </XStack>
+                      </Pressable>
+                    ))}
+                  </XStack>
+                </YStack>
+                <YStack gap="$1">
+                  <Text color={colors.text} fontSize="$3">
+                    Day of Week
+                  </Text>
+                  <XStack gap="$1" flexWrap="wrap">
+                    {DAY_LABELS.map((d, i) => (
+                      <Pressable key={d} onPress={() => field('recDay')(i)}>
+                        <XStack
+                          width={36}
+                          height={36}
+                          borderRadius={18}
+                          borderWidth={1}
+                          borderColor={form.recDay === i ? colors.primary : colors.border}
+                          backgroundColor={form.recDay === i ? colors.primary : 'transparent'}
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          <Text color={form.recDay === i ? 'white' : colors.text} fontSize={11}>
+                            {d}
+                          </Text>
+                        </XStack>
+                      </Pressable>
+                    ))}
+                  </XStack>
+                </YStack>
+              </>
+            ) : null}
           </>
-        ) : null}
+        )}
 
         {/* Public Event toggle */}
         <XStack gap="$3" alignItems="center" justifyContent="space-between">
@@ -1214,8 +1316,8 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
           />
         ) : null}
 
-        {/* Task Template selector */}
-        {taskTemplates.length > 0 ? (
+        {/* Task Template selector — only for series edits */}
+        {!(instanceKey && editScope === 'instance') && taskTemplates.length > 0 ? (
           <YStack gap="$1">
             <Text color={colors.text} fontSize="$3">
               Task Template
@@ -1258,7 +1360,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
                 opacity={saving ? 0.6 : 1}
               >
                 <Text color="white" fontWeight="600">
-                  Delete
+                  {instanceKey && editScope === 'instance' ? 'Remove Date' : 'Delete'}
                 </Text>
               </XStack>
             </Pressable>
@@ -1286,7 +1388,7 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
                 opacity={saving ? 0.6 : 1}
               >
                 <Text color="white" fontWeight="600">
-                  {saving ? 'Saving…' : event ? 'Update' : 'Create'}
+                  {saving ? 'Saving…' : instanceKey && editScope === 'instance' ? 'Save This Date' : event ? 'Update' : 'Create'}
                 </Text>
               </XStack>
             </Pressable>

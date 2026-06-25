@@ -29,6 +29,17 @@ interface EventTeamRaw {
   members?: (string | number)[]
 }
 
+interface EventOverrideRaw {
+  deleted?: boolean
+  isVirtual?: boolean
+  _geocodeLat?: number
+  _geocodeLng?: number
+  title?: string
+  users?: (string | number)[]
+  groups?: string[]
+  teams?: EventTeamRaw[]
+}
+
 interface EventTemplateRaw {
   isRec?: boolean
   date?: string
@@ -42,6 +53,7 @@ interface EventTemplateRaw {
   users?: (string | number)[]
   groups?: string[]
   teams?: EventTeamRaw[]
+  overrides?: Record<string, EventOverrideRaw>
 }
 
 function todayUTCStr(): string {
@@ -102,14 +114,36 @@ export const weatherAlertCheck = onSchedule('0 */4 * * *', async () => {
 
   for (const d of eventsSnap.docs) {
     const t = d.data() as EventTemplateRaw
-    if (!t._geocodeLat || !t._geocodeLng) continue
-    if (!isUpcomingInDays(t, todayStr, limitStr)) continue
+    const templateDoc = { id: d.id, ...t }
 
-    const locKey = `${t._geocodeLat.toFixed(3)},${t._geocodeLng.toFixed(3)}`
-    if (!locMap.has(locKey)) {
-      locMap.set(locKey, { lat: t._geocodeLat, lng: t._geocodeLng, eventDocs: [] })
+    // Template-level location
+    if (t._geocodeLat && t._geocodeLng && isUpcomingInDays(t, todayStr, limitStr)) {
+      const locKey = `${t._geocodeLat.toFixed(3)},${t._geocodeLng.toFixed(3)}`
+      if (!locMap.has(locKey)) {
+        locMap.set(locKey, { lat: t._geocodeLat, lng: t._geocodeLng, eventDocs: [] })
+      }
+      locMap.get(locKey)!.eventDocs.push(templateDoc)
     }
-    locMap.get(locKey)!.eventDocs.push({ id: d.id, ...t })
+
+    // Per-instance location overrides (recurring only)
+    if (t.isRec && t.overrides) {
+      for (const [instanceKey, ov] of Object.entries(t.overrides)) {
+        if (ov.deleted) continue
+        if (!ov._geocodeLat || !ov._geocodeLng) continue
+        // Confirm this instance date falls within the alert window
+        const parts = instanceKey.split('_')
+        const instanceDate = parts[parts.length - 1]
+        if (!instanceDate || instanceDate < todayStr || instanceDate > limitStr) continue
+        // Skip if location is same as template (already handled above)
+        if (ov._geocodeLat === t._geocodeLat && ov._geocodeLng === t._geocodeLng) continue
+        const locKey = `${ov._geocodeLat.toFixed(3)},${ov._geocodeLng.toFixed(3)}`
+        if (!locMap.has(locKey)) {
+          locMap.set(locKey, { lat: ov._geocodeLat, lng: ov._geocodeLng, eventDocs: [] })
+        }
+        // Merge template + override so notification targets the right users
+        locMap.get(locKey)!.eventDocs.push({ ...templateDoc, ...ov, id: instanceKey })
+      }
+    }
   }
 
   if (locMap.size === 0) return

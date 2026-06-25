@@ -69,12 +69,8 @@ export default function EventsScreen() {
   const [detailEvent, setDetailEvent] = useState<EventInstance | null>(null)
   const [availEvent, setAvailEvent] = useState<EventInstance | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [editEventId, setEditEventId] = useState<string | null>(null)
+  const [editInstance, setEditInstance] = useState<EventInstance | null>(null)
   const [view, setView] = useState<'calendar' | 'list'>('calendar')
-
-  const editTemplate = editEventId
-    ? (templates.find((t) => sameId(t.id, editEventId)) ?? null)
-    : null
 
   useEffect(() => {
     subEvents()
@@ -444,7 +440,7 @@ export default function EventsScreen() {
         onEdit={
           admin
             ? () => {
-                setEditEventId(detailEvent?.templateId ? String(detailEvent.templateId) : null)
+                setEditInstance(detailEvent)
                 setDetailEvent(null)
               }
             : undefined
@@ -458,14 +454,15 @@ export default function EventsScreen() {
       />
       {admin ? (
         <EventFormModal
-          key={editEventId ?? 'create'}
-          event={editTemplate}
-          open={showCreateModal || !!editEventId}
+          key={editInstance?.instanceKey ?? 'create'}
+          event={editInstance}
+          instanceKey={editInstance?.isRec ? editInstance.instanceKey : undefined}
+          open={showCreateModal || !!editInstance}
           onClose={() => {
             setShowCreateModal(false)
-            setEditEventId(null)
+            setEditInstance(null)
           }}
-          selectedDate={!editEventId && selectedDay ? selectedDay : undefined}
+          selectedDate={!editInstance && selectedDay ? selectedDay : undefined}
         />
       ) : null}
     </YStack>
