@@ -7,11 +7,6 @@ export default function Index() {
 
   if (loading) return null
 
-  // Non-public roles (admin, worship, etc.) are created by admins and bypass email verification
-  const isPublic = profile?.roles?.includes('public') ?? false
-  const needsEmailVerify = fbUser && !fbUser.emailVerified && isPublic
-  if (needsEmailVerify) return <Redirect href="/(auth)/verify-email" />
-
   const isNonPublic = profile?.roles?.some((r) => r !== 'public') ?? false
   const isAuthenticated = fbUser && (fbUser.emailVerified || isNonPublic)
 

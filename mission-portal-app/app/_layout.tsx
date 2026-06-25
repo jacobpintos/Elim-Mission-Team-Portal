@@ -35,9 +35,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     if (!fbUser && !inAuth && !atRoot) {
       router.replace('/')
-    } else if (fbUser && !fbUser.emailVerified && !inAuth && profile?.roles?.includes('public')) {
-      router.replace('/(auth)/verify-email')
-    } else if (fbUser && (fbUser.emailVerified || (profile && !profile?.roles?.includes('public'))) && inAuth) {
+    } else if (fbUser && profile && inAuth) {
       // Navigate directly to avoid competing with index.tsx's <Redirect>
       if (profile) {
         const firstTab = visibleTabs(profile)[0] ?? 'home'
