@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Platform, Text } from 'react-native'
 import { Slot, useRouter, useSegments, ThemeProvider, DarkTheme, DefaultTheme } from 'expo-router'
+import { visibleTabs } from '@/lib/roles'
 import '@tamagui/core/reset.css'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -35,20 +36,21 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     if (!fbUser && !inAuth && !atRoot) {
       router.replace('/')
-    } else if (fbUser && !fbUser.emailVerified && !inAuth && profile?.roles.includes('public')) {
+    } else if (fbUser && !fbUser.emailVerified && !inAuth && profile?.roles?.includes('public')) {
       router.replace('/(auth)/verify-email')
-    } else if (fbUser && (fbUser.emailVerified || !profile?.roles.includes('public')) && inAuth) {
+    } else if (fbUser && (fbUser.emailVerified || !profile?.roles?.includes('public')) && inAuth) {
       router.replace('/')
     } else if (
       fbUser &&
-      (fbUser.emailVerified || !profile?.roles.includes('public')) &&
+      (fbUser.emailVerified || !profile?.roles?.includes('public')) &&
       profile &&
       !profile.onboardingComplete &&
       !inOnboarding
     ) {
       router.replace('/(onboarding)')
     } else if (fbUser && fbUser.emailVerified && profile?.onboardingComplete && inOnboarding) {
-      router.replace('/(app)/home')
+      const firstTab = visibleTabs(profile)[0] ?? 'home'
+      router.replace(`/(app)/${firstTab}` as never)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fbUser, profile, loading, segments])

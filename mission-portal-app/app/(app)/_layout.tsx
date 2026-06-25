@@ -155,7 +155,7 @@ export default function AppLayout() {
   if (!profile) return <Redirect href="/(auth)/login" />
 
   // Non-public members can preview public view; always resets to false on login (store starts false)
-  const isMemberUser = !isPublic(profile) || profile.roles.length > 1
+  const isMemberUser = !isPublic(profile) || (profile.roles?.length ?? 0) > 1
   const effectiveProfile =
     viewAsPublic && isMemberUser
       ? { ...profile, roles: ['public' as const] }
