@@ -51,11 +51,13 @@ export default function AdminUsers() {
     (u) => !(u.roles?.length === 1 && u.roles[0] === 'public')
   )
 
-  const filtered = search.trim()
+  const q = search.trim().toLowerCase()
+  const filtered = q
     ? users.filter(
         (u) =>
-          (u.displayName ?? '').toLowerCase().includes(search.toLowerCase()) ||
-          (u.email ?? '').toLowerCase().includes(search.toLowerCase())
+          (u.displayName ?? '').toLowerCase().includes(q) ||
+          (u.email ?? '').toLowerCase().includes(q) ||
+          u.uid.toLowerCase().includes(q)
       )
     : memberUsers
 

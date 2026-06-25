@@ -66,6 +66,10 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
       title="Edit User"
     >
       <YStack gap="$3" padding="$2">
+        <Text fontSize="$2" color="$gray9" selectable>
+          UID: {user?.uid}
+        </Text>
+
         <YStack gap="$1">
           <Text fontSize="$3" fontWeight="600">
             Name
