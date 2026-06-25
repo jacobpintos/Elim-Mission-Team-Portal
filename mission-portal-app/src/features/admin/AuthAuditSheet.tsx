@@ -27,6 +27,14 @@ type AuditResult = {
   orphanAuth: OrphanAuthAccount[]
 }
 
+type CreateAuthResult = {
+  uid: string
+  email: string
+  displayName: string
+  status: 'created' | 'already_exists' | 'error'
+  error?: string
+}
+
 interface AuthAuditSheetProps {
   open: boolean
   onClose: () => void
@@ -36,37 +44,71 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
   const { toast } = useUIStore()
   const { profile } = useAuthStore()
   const [loading, setLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
   const [result, setResult] = useState<AuditResult | null>(null)
+  const [createResults, setCreateResults] = useState<CreateAuthResult[] | null>(null)
 
   const runAudit = async () => {
     setLoading(true)
     setResult(null)
+    setCreateResults(null)
     try {
       const auditAuthUsers = httpsCallable(functions, 'auditAuthUsers')
       const res = await auditAuthUsers({})
       setResult(res.data as AuditResult)
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Audit failed'
-      toast(message, 'error')
+      toast(err instanceof Error ? err.message : 'Audit failed', 'error')
     } finally {
       setLoading(false)
     }
   }
 
+  const createAllAuthAccounts = async () => {
+    if (!result?.orphanFirestore.length) return
+    const ok = typeof window !== 'undefined' && window.confirm(
+      `Create Auth accounts for all ${result.orphanFirestore.length} orphan users? Default password will be 12345678.`
+    )
+    if (!ok) return
+    setCreating(true)
+    try {
+      const createAuthForOrphans = httpsCallable(functions, 'createAuthForOrphans', { timeout: 120000 })
+      const uids = result.orphanFirestore.map((u) => u.uid)
+      const res = await createAuthForOrphans({ uids })
+      const results = (res.data as { results: CreateAuthResult[] }).results
+      setCreateResults(results)
+      const created = results.filter((r) => r.status === 'created').length
+      const errors = results.filter((r) => r.status === 'error').length
+      await audit(
+        'user.bulkAuthCreated',
+        `Created ${created} Auth accounts for orphan Firestore users (${errors} errors)`,
+        profile?.displayName ?? ''
+      )
+      toast(`Created ${created} accounts${errors ? ` — ${errors} failed (see results)` : ''}`, errors ? 'info' : 'success')
+      // Re-run audit to refresh counts
+      const auditAuthUsers = httpsCallable(functions, 'auditAuthUsers')
+      const auditRes = await auditAuthUsers({})
+      setResult(auditRes.data as AuditResult)
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to create accounts', 'error')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   const deleteOrphanDoc = async (user: OrphanFirestoreDoc) => {
     const ok = typeof window !== 'undefined' && window.confirm(
-      `Delete orphan Firestore doc for "${user.displayName ?? user.email ?? user.uid}"? This has no Auth account.`
+      `Delete orphan Firestore doc for "${user.displayName ?? user.email ?? user.uid}"?`
     )
     if (!ok) return
     await deleteDoc(doc(db, 'users', user.uid))
-    await audit('user.deleted', `Deleted orphan Firestore doc ${user.uid} (${user.email ?? 'no email'})`, profile?.displayName ?? '')
+    await audit('user.deleted', `Deleted orphan Firestore doc ${user.uid}`, profile?.displayName ?? '')
     toast('Orphan document deleted', 'success')
     setResult((r) => r ? { ...r, orphanFirestore: r.orphanFirestore.filter((u) => u.uid !== user.uid) } : r)
   }
 
   const createProfileForOrphan = async (user: OrphanAuthAccount) => {
     const ok = typeof window !== 'undefined' && window.confirm(
-      `Create a Firestore profile for Auth account "${user.displayName || user.email}"?`
+      `Create a Firestore profile for "${user.displayName || user.email}"?`
     )
     if (!ok) return
     await setDoc(doc(db, 'users', user.uid), {
@@ -88,10 +130,15 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
-    await audit('user.created', `Created missing Firestore profile for Auth account ${user.uid} (${user.email})`, profile?.displayName ?? '')
+    await audit('user.created', `Created missing Firestore profile for Auth account ${user.uid}`, profile?.displayName ?? '')
     toast('Profile created', 'success')
     setResult((r) => r ? { ...r, orphanAuth: r.orphanAuth.filter((u) => u.uid !== user.uid) } : r)
   }
+
+  const statusColor = (s: CreateAuthResult['status']) =>
+    s === 'created' ? '$green10' : s === 'already_exists' ? '$yellow10' : '$red10'
+  const statusLabel = (s: CreateAuthResult['status']) =>
+    s === 'created' ? 'Created' : s === 'already_exists' ? 'Already exists' : 'Error'
 
   return (
     <Modal open={open} onOpenChange={(v) => { if (!v) onClose() }} title="Auth Sync Audit">
@@ -100,20 +147,30 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
           Compares Firebase Auth accounts against Firestore user documents to find mismatches.
         </Text>
 
-        <Button onPress={runAudit} disabled={loading} theme="active" size="$3">
+        <Button onPress={runAudit} disabled={loading || creating} theme="active" size="$3">
           {loading ? <Spinner size="small" /> : result ? 'Re-run Audit' : 'Run Audit'}
         </Button>
 
         {result && (
-          <ScrollView style={{ maxHeight: 480 }}>
+          <ScrollView style={{ maxHeight: 520 }}>
             <YStack gap="$4">
+
+              {/* Orphan Firestore docs */}
               <YStack gap="$2">
-                <Text fontWeight="700" fontSize="$4">
-                  Orphan Firestore Docs ({result.orphanFirestore.length})
-                </Text>
-                <Text fontSize="$2" color="$gray10">
-                  These exist in Firestore but have no Firebase Auth account.
-                </Text>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <YStack>
+                    <Text fontWeight="700" fontSize="$4">
+                      Firestore Only ({result.orphanFirestore.length})
+                    </Text>
+                    <Text fontSize="$2" color="$gray10">In user management but no Auth account</Text>
+                  </YStack>
+                  {result.orphanFirestore.length > 0 && (
+                    <Button size="$3" theme="active" onPress={createAllAuthAccounts} disabled={creating}>
+                      {creating ? <Spinner size="small" /> : `Create All Auth Accounts`}
+                    </Button>
+                  )}
+                </XStack>
+
                 {result.orphanFirestore.length === 0 ? (
                   <Text color="$green10" fontSize="$3">None — all clear</Text>
                 ) : (
@@ -123,7 +180,6 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
                       <YStack flex={1}>
                         <Text fontWeight="600" fontSize="$3">{u.displayName ?? '(no name)'}</Text>
                         <Text fontSize="$2" color="$gray10">{u.email ?? '(no email)'}</Text>
-                        <Text fontSize="$1" color="$gray8" selectable>{u.uid}</Text>
                         <Text fontSize="$2" color="$gray9">{(u.roles ?? []).join(', ')}</Text>
                       </YStack>
                       <Button size="$2" theme="red" onPress={() => deleteOrphanDoc(u)}>Delete</Button>
@@ -132,13 +188,32 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
                 )}
               </YStack>
 
+              {/* Create results */}
+              {createResults && (
+                <YStack gap="$2">
+                  <Text fontWeight="700" fontSize="$4">Creation Results</Text>
+                  {createResults.map((r) => (
+                    <XStack key={r.uid} borderWidth={1} borderColor="$borderColor" borderRadius="$3"
+                      padding="$3" gap="$2" alignItems="center">
+                      <YStack flex={1}>
+                        <Text fontWeight="600" fontSize="$3">{r.displayName || r.email}</Text>
+                        <Text fontSize="$2" color="$gray10">{r.email}</Text>
+                        {r.error && <Text fontSize="$2" color="$red10">{r.error}</Text>}
+                      </YStack>
+                      <Text fontSize="$2" fontWeight="600" color={statusColor(r.status)}>
+                        {statusLabel(r.status)}
+                      </Text>
+                    </XStack>
+                  ))}
+                </YStack>
+              )}
+
+              {/* Auth accounts without Firestore docs */}
               <YStack gap="$2">
                 <Text fontWeight="700" fontSize="$4">
-                  Auth Accounts Without Profile ({result.orphanAuth.length})
+                  Auth Only ({result.orphanAuth.length})
                 </Text>
-                <Text fontSize="$2" color="$gray10">
-                  These exist in Firebase Auth but have no Firestore document.
-                </Text>
+                <Text fontSize="$2" color="$gray10">In Auth but no Firestore profile</Text>
                 {result.orphanAuth.length === 0 ? (
                   <Text color="$green10" fontSize="$3">None — all clear</Text>
                 ) : (
@@ -157,6 +232,7 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
                   ))
                 )}
               </YStack>
+
             </YStack>
           </ScrollView>
         )}
