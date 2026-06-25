@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Pressable, Alert } from 'react-native'
+import { Pressable, Alert, Platform } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { Modal } from '@/components/ui/Modal'
@@ -344,17 +344,16 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
             uid
         )
         .join(', ')
-      Alert.alert(
-        'Team Members Not Assigned',
-        `${names}\n\n${unassignedTeamMembers.length > 1 ? 'These people are' : 'This person is'} on a team but not directly assigned to this event. Add them?`,
-        [
-          { text: 'Go Back', style: 'cancel' },
-          {
-            text: 'Add & Save',
-            onPress: () => doSave([...form.users, ...unassignedTeamMembers]),
-          },
-        ]
-      )
+      const label = unassignedTeamMembers.length > 1 ? 'These people are' : 'This person is'
+      const msg = `${names}\n\n${label} on a team but not directly assigned to this event. Add them?`
+      if (Platform.OS === 'web') {
+        if (window.confirm(msg)) doSave([...form.users, ...unassignedTeamMembers])
+        return
+      }
+      Alert.alert('Team Members Not Assigned', msg, [
+        { text: 'Go Back', style: 'cancel' },
+        { text: 'Add & Save', onPress: () => doSave([...form.users, ...unassignedTeamMembers]) },
+      ])
       return
     }
 
@@ -371,14 +370,16 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
               uid
           )
           .join(', ')
-        Alert.alert(
-          'Unassigned Lodging',
-          `${names}\n\n${unassignedLodging.length > 1 ? 'These people are' : 'This person is'} not assigned to any lodging. Save anyway?`,
-          [
-            { text: 'Go Back', style: 'cancel' },
-            { text: 'Save Anyway', onPress: () => doSave(form.users) },
-          ]
-        )
+        const lodgingLabel = unassignedLodging.length > 1 ? 'These people are' : 'This person is'
+        const lodgingMsg = `${names}\n\n${lodgingLabel} not assigned to any lodging. Save anyway?`
+        if (Platform.OS === 'web') {
+          if (window.confirm(lodgingMsg)) doSave(form.users)
+          return
+        }
+        Alert.alert('Unassigned Lodging', lodgingMsg, [
+          { text: 'Go Back', style: 'cancel' },
+          { text: 'Save Anyway', onPress: () => doSave(form.users) },
+        ])
         return
       }
     }
@@ -388,25 +389,23 @@ export function EventFormModal({ event, open, onClose, selectedDate }: EventForm
 
   const handleDelete = () => {
     if (!event) return
-    Alert.alert(
-      'Delete Event',
-      `Delete "${event.title}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteEvent(event.id)
-              onClose()
-            } catch {
-              toast('Failed to delete event', 'error')
-            }
-          },
-        },
-      ]
-    )
+    const msg = `Delete "${event.title}"? This cannot be undone.`
+    const doDelete = async () => {
+      try {
+        await deleteEvent(event.id)
+        onClose()
+      } catch {
+        toast('Failed to delete event', 'error')
+      }
+    }
+    if (Platform.OS === 'web') {
+      if (window.confirm(msg)) doDelete()
+      return
+    }
+    Alert.alert('Delete Event', msg, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: doDelete },
+    ])
   }
 
   const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']

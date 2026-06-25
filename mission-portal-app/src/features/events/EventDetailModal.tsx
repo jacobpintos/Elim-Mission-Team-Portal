@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Pressable, Linking, Alert } from 'react-native'
+import { Pressable, Linking, Alert, Platform } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { onSnapshot, doc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -532,23 +532,22 @@ function FoodPanel({
       }
       return
     }
+    const doSignup = async () => {
+      try {
+        await setDoc(doc(db, 'foodSignups', foodKey), {
+          signups: { ...signups, [String(itemIndex)]: { uid, displayName: myDisplayName } },
+        })
+      } catch {
+        toast('Failed to sign up', 'error')
+      }
+    }
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Sign up to bring "${itemName}"?`)) doSignup()
+      return
+    }
     Alert.alert(`Sign up to bring "${itemName}"?`, '', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Up',
-        onPress: async () => {
-          try {
-            await setDoc(doc(db, 'foodSignups', foodKey), {
-              signups: {
-                ...signups,
-                [String(itemIndex)]: { uid, displayName: myDisplayName },
-              },
-            })
-          } catch {
-            toast('Failed to sign up', 'error')
-          }
-        },
-      },
+      { text: 'Sign Up', onPress: doSignup },
     ])
   }
 
@@ -792,14 +791,15 @@ function CarpoolPanel({
       return
     }
     const names = unassigned.map(getName).join(', ')
-    Alert.alert(
-      'Unassigned Members',
-      `${unassigned.length} member(s) not yet in a car: ${names}\n\nFinalize anyway?`,
-      [
-        { text: 'Go Back', style: 'cancel' },
-        { text: 'Finalize', onPress: () => toast('Carpool finalized', 'success') },
-      ]
-    )
+    const msg = `${unassigned.length} member(s) not yet in a car: ${names}\n\nFinalize anyway?`
+    if (Platform.OS === 'web') {
+      if (window.confirm(msg)) toast('Carpool finalized', 'success')
+      return
+    }
+    Alert.alert('Unassigned Members', msg, [
+      { text: 'Go Back', style: 'cancel' },
+      { text: 'Finalize', onPress: () => toast('Carpool finalized', 'success') },
+    ])
   }
 
   // Find the current user's car

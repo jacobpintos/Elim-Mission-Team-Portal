@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert } from 'react-native'
+import { Alert, Platform } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { doc, deleteDoc } from 'firebase/firestore'
@@ -41,31 +41,25 @@ export default function AdminGroups() {
 
   const handleDelete = (group: GroupDoc) => {
     if (group.name === 'All') return
-    Alert.alert(
-      'Delete Group',
-      `Delete group "${group.name}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'groups', group.id))
-              await audit(
-                'group.deleted',
-                `Deleted group "${group.name}"`,
-                profile?.displayName ?? ''
-              )
-              toast('Group deleted', 'success')
-            } catch (err: unknown) {
-              const message = err instanceof Error ? err.message : 'Failed to delete group'
-              toast(message, 'error')
-            }
-          },
-        },
-      ]
-    )
+    const msg = `Delete group "${group.name}"? This cannot be undone.`
+    const doDelete = async () => {
+      try {
+        await deleteDoc(doc(db, 'groups', group.id))
+        await audit('group.deleted', `Deleted group "${group.name}"`, profile?.displayName ?? '')
+        toast('Group deleted', 'success')
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to delete group'
+        toast(message, 'error')
+      }
+    }
+    if (Platform.OS === 'web') {
+      if (window.confirm(msg)) doDelete()
+      return
+    }
+    Alert.alert('Delete Group', msg, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: doDelete },
+    ])
   }
 
   return (
