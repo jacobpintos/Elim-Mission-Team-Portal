@@ -29,8 +29,11 @@ export function AppLogo({ size = 'md', showSlogan = true }: AppLogoProps) {
               width,
               height: 'auto',
               objectFit: 'contain',
-              mixBlendMode: isDark ? 'multiply' : 'normal',
               display: 'block',
+              ...(isDark ? {
+                filter: 'invert(1) hue-rotate(180deg)',
+                mixBlendMode: 'screen' as const,
+              } : {}),
             }}
           />
         ) : (
@@ -47,7 +50,10 @@ export function AppLogo({ size = 'md', showSlogan = true }: AppLogoProps) {
             width,
             height: width,
             resizeMode: 'contain',
-            ...(Platform.OS === 'web' && isDark ? { mixBlendMode: 'multiply' } : {}),
+            ...(Platform.OS === 'web' && isDark ? {
+              filter: 'invert(1) hue-rotate(180deg)',
+              mixBlendMode: 'screen' as const,
+            } : {}),
           }}
         />
       )}
