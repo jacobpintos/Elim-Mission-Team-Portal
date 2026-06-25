@@ -29,7 +29,7 @@ export function AppLogo({ size = 'md', showSlogan = true }: AppLogoProps) {
               width,
               height: 'auto',
               objectFit: 'contain',
-              filter: isDark ? 'brightness(0) invert(1)' : 'none',
+              mixBlendMode: isDark ? 'multiply' : 'normal',
               display: 'block',
             }}
           />
@@ -43,7 +43,12 @@ export function AppLogo({ size = 'md', showSlogan = true }: AppLogoProps) {
       ) : (
         <Image
           source={localIcon}
-          style={{ width, height: width, resizeMode: 'contain' }}
+          style={{
+            width,
+            height: width,
+            resizeMode: 'contain',
+            ...(Platform.OS === 'web' && isDark ? { mixBlendMode: 'multiply' } : {}),
+          }}
         />
       )}
       {showSlogan ? (
