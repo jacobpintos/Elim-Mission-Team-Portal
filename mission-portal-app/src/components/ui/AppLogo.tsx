@@ -3,7 +3,8 @@ import { YStack, Text } from 'tamagui'
 import { useThemeStore } from '@/stores/themeStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 
-const WIDTHS = { sm: 140, md: 220, lg: 300 }
+const WIDTHS = { sm: 100, md: 180, lg: 220 }
+const localIcon = require('../../../assets/icon.png')
 
 interface AppLogoProps {
   size?: 'sm' | 'md' | 'lg'
@@ -39,7 +40,12 @@ export function AppLogo({ size = 'md', showSlogan = true }: AppLogoProps) {
             tintColor={isDark ? '#ffffff' : undefined}
           />
         )
-      ) : null}
+      ) : (
+        <Image
+          source={localIcon}
+          style={{ width, height: width, resizeMode: 'contain' }}
+        />
+      )}
       {showSlogan ? (
         <Text
           color={colors.textMuted}
