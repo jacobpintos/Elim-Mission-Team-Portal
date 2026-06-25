@@ -40,10 +40,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       router.replace('/(auth)/verify-email')
     } else if (fbUser && (fbUser.emailVerified || (profile && !profile?.roles?.includes('public'))) && inAuth) {
       // Navigate directly to avoid competing with index.tsx's <Redirect>
-      if (profile && !profile.onboardingComplete) {
+      const isNonPublic = profile?.roles?.some((r) => r !== 'public') ?? false
+      if (profile && !profile.onboardingComplete && !isNonPublic) {
         router.replace('/(onboarding)')
-      } else if (profile?.onboardingComplete) {
-        const firstTab = visibleTabs(profile)[0] ?? 'home'
+      } else if (profile?.onboardingComplete || isNonPublic) {
+        const firstTab = visibleTabs(profile!)[0] ?? 'home'
         router.replace(`/(app)/${firstTab}` as never)
       }
       // profile=null + emailVerified=true: no-op, user stays at auth route
@@ -52,7 +53,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       (fbUser.emailVerified || !profile?.roles?.includes('public')) &&
       profile &&
       !profile.onboardingComplete &&
-      !inOnboarding
+      !inOnboarding &&
+      !profile.roles?.some((r) => r !== 'public')
     ) {
       router.replace('/(onboarding)')
     } else if (fbUser && fbUser.emailVerified && profile?.onboardingComplete && inOnboarding) {

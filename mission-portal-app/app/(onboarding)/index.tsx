@@ -26,13 +26,13 @@ export default function OnboardingScreen() {
     if (!fbUser) return
     setCompleting(true)
     try {
+      // Only assign 'public' if they have no team role; preserve existing non-public roles.
+      const hasTeamRole = profile?.roles?.some((r) => r !== 'public') ?? false
       await setDoc(
         doc(db, 'users', fbUser.uid),
         {
           onboardingComplete: true,
-          // Promote from unverified → public so the user can access the app.
-          // Admins can later assign a team role which supersedes this.
-          roles: ['public'],
+          ...(!hasTeamRole && { roles: ['public'] }),
           notificationPrefs: {
             ...(profile?.notificationPrefs ?? {}),
             weeklyDigest: notifPrefs.weeklyDigest,

@@ -16,16 +16,18 @@ export default function Index() {
   const needsEmailVerify = fbUser && !fbUser.emailVerified && isPublic
   if (needsEmailVerify) return <Redirect href="/(auth)/verify-email" />
 
-  const isAuthenticated = fbUser && (fbUser.emailVerified || (profile && !isPublic))
+  const isNonPublic = profile?.roles?.some((r) => r !== 'public') ?? false
+  const isAuthenticated = fbUser && (fbUser.emailVerified || isNonPublic)
 
-  if (isAuthenticated && profile && !profile.onboardingComplete)
-    return <Redirect href="/(onboarding)" />
-
-  if (isAuthenticated && profile?.onboardingComplete) {
-    // Route to the user's actual first tab so (app)/_layout never needs to redirect
+  // Non-public users (admin, worship, etc.) skip onboarding — they're set up by admins.
+  // Public users only enter the app after completing onboarding.
+  if (isAuthenticated && profile && (profile.onboardingComplete || isNonPublic)) {
     const firstTab = visibleTabs(profile)[0] ?? 'home'
     return <Redirect href={`/(app)/${firstTab}` as never} />
   }
+
+  if (isAuthenticated && profile && !profile.onboardingComplete)
+    return <Redirect href="/(onboarding)" />
 
   return <Redirect href="/(auth)/login" />
 }
