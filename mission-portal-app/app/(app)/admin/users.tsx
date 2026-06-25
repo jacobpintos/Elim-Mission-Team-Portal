@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Alert } from 'react-native'
+import { Platform } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Input } from 'tamagui'
 import { useUsersStore } from '@/stores/usersStore'
@@ -22,6 +22,13 @@ import { db } from '@/lib/firebase'
 import type { UserProfile } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
+function webConfirm(message: string): boolean {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.confirm(message)
+  }
+  return false
+}
+
 export default function AdminUsers() {
   const { users, subscribe, unsubscribe } = useUsersStore()
   const { profile } = useAuthStore()
@@ -31,7 +38,6 @@ export default function AdminUsers() {
   const [showCreate, setShowCreate] = useState(false)
   const [editTarget, setEditTarget] = useState<UserProfile | null>(null)
   const [pendingDel, setPendingDel] = useState<PendingDeletion[]>([])
-  const adminCount = Math.max(users.filter((u) => u.roles?.includes('admin')).length, 1)
 
   useEffect(() => {
     subscribe()
@@ -65,7 +71,6 @@ export default function AdminUsers() {
     const batch = writeBatch(db)
     batch.delete(doc(db, 'users', user.uid))
 
-    // Remove from all groups
     const groupsSnap = await getDocs(collection(db, 'groups'))
     groupsSnap.docs.forEach((g) => {
       const members: string[] = g.data().members ?? []
@@ -76,7 +81,6 @@ export default function AdminUsers() {
       }
     })
 
-    // Remove from pendingDel in config/main
     await batch.commit()
     await updateDoc(doc(db, 'config', 'main'), {
       pendingDel: pendingDel.filter((d) => d.uid !== user.uid),
@@ -85,58 +89,51 @@ export default function AdminUsers() {
     toast(`Deleted ${user.displayName}`, 'success')
   }
 
-  const handleDeleteUser = (user: UserProfile) => {
+  const handleDeleteUser = async (user: UserProfile) => {
     const isTargetAdmin = user.roles?.includes('admin')
 
     if (isTargetAdmin) {
-      // Admin deletion requires approval workflow
       const alreadyPending = pendingDel.find((d) => d.uid === user.uid)
       if (alreadyPending) {
-        toast('Deletion request already pending', 'info')
+        toast('Deletion request already pending — see Pending Deletions above', 'info')
         return
       }
-      Alert.alert(
-        'Request Admin Deletion',
-        `Deleting an admin requires approval from all ${adminCount} admin(s). Submit deletion request?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Submit Request',
-            style: 'destructive',
-            onPress: async () => {
-              const newDel: PendingDeletion = {
-                uid: user.uid,
-                name: user.displayName,
-                requestedBy: profile?.displayName ?? '',
-                approvals: [profile?.uid ?? ''],
-                totalAdmins: adminCount,
-              }
-              await updateDoc(doc(db, 'config', 'main'), {
-                pendingDel: [...pendingDel, newDel],
-              })
-              await audit(
-                'user.deletionRequested',
-                `Requested deletion of admin ${user.email}`,
-                profile?.displayName ?? ''
-              )
-              toast('Deletion request submitted', 'info')
-            },
-          },
-        ]
+      // Only count OTHER admins (not the one being deleted) as required approvers
+      const otherAdminCount = Math.max(
+        users.filter((u) => u.roles?.includes('admin') && u.uid !== user.uid).length,
+        1
       )
+      const ok = webConfirm(
+        `Deleting an admin requires approval from ${otherAdminCount} admin(s). Submit deletion request?`
+      )
+      if (!ok) return
+      const newDel: PendingDeletion = {
+        uid: user.uid,
+        name: user.displayName,
+        requestedBy: profile?.displayName ?? '',
+        approvals: [profile?.uid ?? ''],
+        totalAdmins: otherAdminCount,
+      }
+      await updateDoc(doc(db, 'config', 'main'), {
+        pendingDel: [...pendingDel, newDel],
+      })
+      await audit(
+        'user.deletionRequested',
+        `Requested deletion of admin ${user.email}`,
+        profile?.displayName ?? ''
+      )
+      // If the submitting admin is already the sole required approver, execute immediately
+      if (newDel.approvals.length >= otherAdminCount) {
+        await execDelete(user)
+      } else {
+        toast('Deletion request submitted', 'info')
+      }
     } else {
-      Alert.alert(
-        'Delete User',
-        `Are you sure you want to delete "${user.displayName}"? This cannot be undone.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => execDelete(user),
-          },
-        ]
+      const ok = webConfirm(
+        `Are you sure you want to delete "${user.displayName ?? user.email}"? This cannot be undone.`
       )
+      if (!ok) return
+      await execDelete(user)
     }
   }
 
@@ -150,7 +147,6 @@ export default function AdminUsers() {
     )
 
     if (updatedApprovals.length >= deletion.totalAdmins) {
-      // Execute deletion
       const target = users.find((u) => u.uid === deletion.uid)
       if (target) {
         await execDelete(target)
@@ -167,23 +163,17 @@ export default function AdminUsers() {
   }
 
   const handleCancelDeletion = async (deletion: PendingDeletion) => {
-    Alert.alert('Cancel Deletion Request', `Cancel deletion request for "${deletion.name}"?`, [
-      { text: 'No', style: 'cancel' },
-      {
-        text: 'Yes, Cancel',
-        onPress: async () => {
-          await updateDoc(doc(db, 'config', 'main'), {
-            pendingDel: pendingDel.filter((d) => d.uid !== deletion.uid),
-          })
-          await audit(
-            'user.deletionCancelled',
-            `Cancelled deletion of ${deletion.name}`,
-            profile?.displayName ?? ''
-          )
-          toast('Deletion request cancelled', 'info')
-        },
-      },
-    ])
+    const ok = webConfirm(`Cancel deletion request for "${deletion.name}"?`)
+    if (!ok) return
+    await updateDoc(doc(db, 'config', 'main'), {
+      pendingDel: pendingDel.filter((d) => d.uid !== deletion.uid),
+    })
+    await audit(
+      'user.deletionCancelled',
+      `Cancelled deletion of ${deletion.name}`,
+      profile?.displayName ?? ''
+    )
+    toast('Deletion request cancelled', 'info')
   }
 
   return (
@@ -200,7 +190,7 @@ export default function AdminUsers() {
       </XStack>
 
       <Input
-        placeholder="Search by name or email..."
+        placeholder="Search by name, email, or UID..."
         value={search}
         onChangeText={setSearch}
         size="$3"
