@@ -6,7 +6,8 @@ import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
 import { doc, updateDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { db, functions } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
 import type { UserProfile } from '@/types/user'
 
 interface EditUserSheetProps {
@@ -37,6 +38,11 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
     }
     setSaving(true)
     try {
+      const emailChanged = email.trim().toLowerCase() !== (user.email ?? '').toLowerCase()
+      if (emailChanged) {
+        const updateUserEmail = httpsCallable(functions, 'updateUserEmail')
+        await updateUserEmail({ uid: user.uid, newEmail: email.trim() })
+      }
       await updateDoc(doc(db, 'users', user.uid), {
         displayName: displayName.trim(),
         email: email.trim(),
