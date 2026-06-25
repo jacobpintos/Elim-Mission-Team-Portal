@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { UserCard } from '@/features/admin/UserCard'
 import { CreateUserSheet } from '@/features/admin/CreateUserSheet'
 import { EditUserSheet } from '@/features/admin/EditUserSheet'
+import { AuthAuditSheet } from '@/features/admin/AuthAuditSheet'
 import { PendingDeletionCard, type PendingDeletion } from '@/features/admin/PendingDeletionCard'
 import { audit } from '@/lib/audit'
 import { useUIStore } from '@/stores/uiStore'
@@ -36,6 +37,7 @@ export default function AdminUsers() {
 
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
+  const [showAudit, setShowAudit] = useState(false)
   const [editTarget, setEditTarget] = useState<UserProfile | null>(null)
   const [pendingDel, setPendingDel] = useState<PendingDeletion[]>([])
 
@@ -184,9 +186,14 @@ export default function AdminUsers() {
         <Text fontSize="$6" fontWeight="700">
           Users ({memberUsers.length})
         </Text>
-        <Button size="$3" onPress={() => setShowCreate(true)} theme="active">
-          + Add User
-        </Button>
+        <XStack gap="$2">
+          <Button size="$3" onPress={() => setShowAudit(true)} theme="gray">
+            Auth Audit
+          </Button>
+          <Button size="$3" onPress={() => setShowCreate(true)} theme="active">
+            + Add User
+          </Button>
+        </XStack>
       </XStack>
 
       <Input
@@ -232,6 +239,7 @@ export default function AdminUsers() {
         }
       />
 
+      <AuthAuditSheet open={showAudit} onClose={() => setShowAudit(false)} />
       <CreateUserSheet open={showCreate} onClose={() => setShowCreate(false)} />
       <EditUserSheet
         key={editTarget?.uid ?? 'none'}
