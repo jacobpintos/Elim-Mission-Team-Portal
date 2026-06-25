@@ -52,7 +52,7 @@ export default function AdminUsers() {
   )
 
   const filtered = search.trim()
-    ? memberUsers.filter(
+    ? users.filter(
         (u) =>
           (u.displayName ?? '').toLowerCase().includes(search.toLowerCase()) ||
           (u.email ?? '').toLowerCase().includes(search.toLowerCase())

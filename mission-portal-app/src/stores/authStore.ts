@@ -56,7 +56,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         doc(db, 'users', fbUser.uid),
         (snap) => {
           const userProfile = (snap.data() as UserProfile) ?? null
-          console.log('[authStore] snapshot uid:', fbUser.uid, 'roles:', userProfile?.roles, 'exists:', snap.exists())
           if (!loginAtWritten && userProfile) {
             loginAtWritten = true
             set({ prevLoginAt: userProfile.lastLoginAt ?? null })
