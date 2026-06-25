@@ -45,6 +45,7 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
   const { profile } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [result, setResult] = useState<AuditResult | null>(null)
   const [createResults, setCreateResults] = useState<CreateAuthResult[] | null>(null)
 
@@ -104,6 +105,30 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
     await audit('user.deleted', `Deleted orphan Firestore doc ${user.uid}`, profile?.displayName ?? '')
     toast('Orphan document deleted', 'success')
     setResult((r) => r ? { ...r, orphanFirestore: r.orphanFirestore.filter((u) => u.uid !== user.uid) } : r)
+  }
+
+  const deleteAuthAccounts = async (users: OrphanAuthAccount[]) => {
+    const isBulk = users.length > 1
+    const ok = typeof window !== 'undefined' && window.confirm(
+      isBulk
+        ? `Permanently delete all ${users.length} Auth-only accounts? This cannot be undone.`
+        : `Permanently delete Auth account for "${users[0].displayName || users[0].email}"? This cannot be undone.`
+    )
+    if (!ok) return
+    setDeleting(true)
+    try {
+      const deleteAuthAccount = httpsCallable(functions, 'deleteAuthAccount')
+      const res = await deleteAuthAccount({ uids: users.map((u) => u.uid) })
+      const { deleted, errors } = res.data as { deleted: number; errors: { uid: string; message: string }[] }
+      await audit('user.authDeleted', `Deleted ${deleted} Auth-only accounts`, profile?.displayName ?? '')
+      toast(`Deleted ${deleted} account${deleted !== 1 ? 's' : ''}${errors.length ? ` — ${errors.length} failed` : ''}`, errors.length ? 'info' : 'success')
+      const deletedUids = new Set(users.map((u) => u.uid).filter((uid) => !errors.find((e) => e.uid === uid)))
+      setResult((r) => r ? { ...r, orphanAuth: r.orphanAuth.filter((u) => !deletedUids.has(u.uid)) } : r)
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to delete accounts', 'error')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const createProfileForOrphan = async (user: OrphanAuthAccount) => {
@@ -210,10 +235,19 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
 
               {/* Auth accounts without Firestore docs */}
               <YStack gap="$2">
-                <Text fontWeight="700" fontSize="$4">
-                  Auth Only ({result.orphanAuth.length})
-                </Text>
-                <Text fontSize="$2" color="$gray10">In Auth but no Firestore profile</Text>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <YStack>
+                    <Text fontWeight="700" fontSize="$4">
+                      Auth Only ({result.orphanAuth.length})
+                    </Text>
+                    <Text fontSize="$2" color="$gray10">In Auth but no Firestore profile</Text>
+                  </YStack>
+                  {result.orphanAuth.length > 0 && (
+                    <Button size="$3" theme="red" onPress={() => deleteAuthAccounts(result.orphanAuth)} disabled={deleting}>
+                      {deleting ? <Spinner size="small" /> : 'Delete All'}
+                    </Button>
+                  )}
+                </XStack>
                 {result.orphanAuth.length === 0 ? (
                   <Text color="$green10" fontSize="$3">None — all clear</Text>
                 ) : (
@@ -225,9 +259,14 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
                         <Text fontSize="$2" color="$gray10">{u.email || '(no email)'}</Text>
                         <Text fontSize="$1" color="$gray8" selectable>{u.uid}</Text>
                       </YStack>
-                      <Button size="$2" theme="active" onPress={() => createProfileForOrphan(u)}>
-                        Create Profile
-                      </Button>
+                      <XStack gap="$2">
+                        <Button size="$2" theme="active" onPress={() => createProfileForOrphan(u)}>
+                          Create Profile
+                        </Button>
+                        <Button size="$2" theme="red" onPress={() => deleteAuthAccounts([u])} disabled={deleting}>
+                          Delete
+                        </Button>
+                      </XStack>
                     </XStack>
                   ))
                 )}
