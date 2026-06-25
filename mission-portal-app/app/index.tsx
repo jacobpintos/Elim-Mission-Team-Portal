@@ -6,12 +6,17 @@ export default function Index() {
 
   if (loading) return null
 
-  if (fbUser && !fbUser.emailVerified) return <Redirect href="/(auth)/verify-email" />
+  // Non-public roles (admin, worship, etc.) are created by admins and bypass email verification
+  const isPublic = !profile || profile.roles.includes('public')
+  const needsEmailVerify = fbUser && !fbUser.emailVerified && isPublic
+  if (needsEmailVerify) return <Redirect href="/(auth)/verify-email" />
 
-  if (fbUser && fbUser.emailVerified && profile && !profile.onboardingComplete)
+  const isAuthenticated = fbUser && (fbUser.emailVerified || (profile && !isPublic))
+
+  if (isAuthenticated && profile && !profile.onboardingComplete)
     return <Redirect href="/(onboarding)" />
 
-  if (fbUser && fbUser.emailVerified && profile?.onboardingComplete)
+  if (isAuthenticated && profile?.onboardingComplete)
     return <Redirect href="/(app)/home" />
 
   return <Redirect href="/(auth)/login" />
