@@ -7,8 +7,12 @@ export default function Index() {
 
   if (loading) return null
 
+  // Authenticated but no Firestore document — route to onboarding to create profile.
+  // This handles accounts created before the portal schema existed (no users doc).
+  if (fbUser && !profile) return <Redirect href="/(onboarding)" />
+
   // Non-public roles (admin, worship, etc.) are created by admins and bypass email verification
-  const isPublic = !profile || (profile.roles?.includes('public') ?? false)
+  const isPublic = profile?.roles?.includes('public') ?? false
   const needsEmailVerify = fbUser && !fbUser.emailVerified && isPublic
   if (needsEmailVerify) return <Redirect href="/(auth)/verify-email" />
 
