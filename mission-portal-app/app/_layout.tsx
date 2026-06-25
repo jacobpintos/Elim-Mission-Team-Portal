@@ -38,8 +38,15 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       router.replace('/')
     } else if (fbUser && !fbUser.emailVerified && !inAuth && profile?.roles?.includes('public')) {
       router.replace('/(auth)/verify-email')
-    } else if (fbUser && (fbUser.emailVerified || !profile?.roles?.includes('public')) && inAuth) {
-      router.replace('/')
+    } else if (fbUser && (fbUser.emailVerified || (profile && !profile?.roles?.includes('public'))) && inAuth) {
+      // Navigate directly to avoid competing with index.tsx's <Redirect>
+      if (profile && !profile.onboardingComplete) {
+        router.replace('/(onboarding)')
+      } else if (profile?.onboardingComplete) {
+        const firstTab = visibleTabs(profile)[0] ?? 'home'
+        router.replace(`/(app)/${firstTab}` as never)
+      }
+      // profile=null + emailVerified=true: no-op, user stays at auth route
     } else if (
       fbUser &&
       (fbUser.emailVerified || !profile?.roles?.includes('public')) &&
