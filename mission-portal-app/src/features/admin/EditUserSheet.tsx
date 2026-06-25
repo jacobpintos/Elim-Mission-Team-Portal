@@ -25,6 +25,27 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
   const [email, setEmail] = useState(user?.email ?? '')
   const [roles, setRoles] = useState<string[]>(user?.roles ?? ['regular'])
   const [saving, setSaving] = useState(false)
+  const [resetting, setResetting] = useState(false)
+
+  const handleResetPassword = async () => {
+    if (!user) return
+    const ok = typeof window !== 'undefined' && window.confirm(
+      `Reset password for "${user.displayName ?? user.email}" to 12345678?`
+    )
+    if (!ok) return
+    setResetting(true)
+    try {
+      const resetUserPassword = httpsCallable(functions, 'resetUserPassword')
+      await resetUserPassword({ uid: user.uid })
+      await audit('user.passwordReset', `Reset password for ${user.email}`, profile?.displayName ?? '')
+      toast('Password reset to 12345678', 'success')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to reset password'
+      toast(message, 'error')
+    } finally {
+      setResetting(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!user) return
@@ -110,13 +131,18 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
           <RoleCheckboxes selected={roles} onChange={setRoles} />
         </YStack>
 
-        <XStack gap="$2" justifyContent="flex-end">
-          <Button size="$3" onPress={onClose} theme="gray">
-            Cancel
+        <XStack gap="$2" justifyContent="space-between" alignItems="center">
+          <Button size="$3" onPress={handleResetPassword} disabled={resetting} theme="yellow">
+            {resetting ? <Spinner size="small" /> : 'Reset Password'}
           </Button>
-          <Button size="$3" onPress={handleSave} disabled={saving} theme="active">
-            {saving ? <Spinner size="small" /> : 'Save'}
-          </Button>
+          <XStack gap="$2">
+            <Button size="$3" onPress={onClose} theme="gray">
+              Cancel
+            </Button>
+            <Button size="$3" onPress={handleSave} disabled={saving} theme="active">
+              {saving ? <Spinner size="small" /> : 'Save'}
+            </Button>
+          </XStack>
         </XStack>
       </YStack>
     </Modal>

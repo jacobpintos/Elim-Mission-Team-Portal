@@ -11,3 +11,4 @@ export { onAnnouncementPublished, onPublicEventCreated, onContentUpdated } from 
 export { dailyCleanup } from './cleanup'
 export { weatherAlertCheck } from './weatherAlerts'
 export { updateUserEmail } from './updateUserEmail'
+export { resetUserPassword } from './resetUserPassword'
