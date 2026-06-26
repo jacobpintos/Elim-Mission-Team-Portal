@@ -626,7 +626,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
           <Input
             value={form.address}
             onChangeText={field('address')}
-            placeholder="123 Main St"
+            placeholder=""
             backgroundColor={colors.surface}
             color={colors.text}
             borderColor={colors.border}
@@ -642,7 +642,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
             <Input
               value={form.city}
               onChangeText={field('city')}
-              placeholder="City"
+              placeholder=""
               backgroundColor={colors.surface}
               color={colors.text}
               borderColor={colors.border}
@@ -655,7 +655,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
             <Input
               value={form.state}
               onChangeText={field('state')}
-              placeholder="ST"
+              placeholder=""
               backgroundColor={colors.surface}
               color={colors.text}
               borderColor={colors.border}
