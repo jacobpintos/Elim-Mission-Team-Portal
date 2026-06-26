@@ -140,7 +140,7 @@ export default function EventDetailScreen() {
       <YStack flex={1} padding="$4" alignItems="center" justifyContent="center">
         <ScreenTitle options={{ title: 'Event' }} />
         <Text color={colors.textMuted}>Event not found.</Text>
-        <Pressable onPress={() => router.back()}>
+        <Pressable onPress={() => router.push('/(app)/events' as never)}>
           <Text color={colors.primary} marginTop="$3">← Go back</Text>
         </Pressable>
       </YStack>
@@ -150,16 +150,22 @@ export default function EventDetailScreen() {
   return (
     <>
       <ScreenTitle options={{ title: event.title }} />
+      {/* Back button — outside ScrollView so it stays fixed and avoids Tabs navigator router.back() issues */}
+      <Pressable onPress={() => router.push('/(app)/events' as never)}>
+        <XStack
+          paddingHorizontal="$4"
+          paddingVertical="$2"
+          alignItems="center"
+          borderBottomWidth={1}
+          borderBottomColor={colors.border}
+          gap="$1"
+        >
+          <Text color={colors.primary} fontSize="$4">‹</Text>
+          <Text color={colors.primary} fontSize="$3" fontWeight="600">Events</Text>
+        </XStack>
+      </Pressable>
       <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
         <YStack padding="$4" gap="$4" paddingBottom="$8">
-
-          {/* Back button */}
-          <Pressable onPress={() => router.back()}>
-            <XStack alignItems="center" gap="$1">
-              <Text color={colors.primary} fontSize="$4">←</Text>
-              <Text color={colors.primary} fontSize="$3" fontWeight="600">Back</Text>
-            </XStack>
-          </Pressable>
 
           {/* Unpublished banner */}
           {isUnpublished ? (
