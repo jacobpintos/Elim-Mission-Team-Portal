@@ -234,7 +234,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
   const doSave = async (finalUsers: (string | number)[], saveAsDraft = false) => {
     setSaving(true)
     try {
-      const coords = form.isVirtual ? null : await geocodeCity(form.city, form.state)
+      const coords = form.isVirtual || saveAsDraft ? null : await geocodeCity(form.city, form.state)
       const payload = {
         title: form.title,
         date: form.isRec ? '' : displayToIso(form.date),
@@ -332,7 +332,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
         }
         toast(saveAsDraft ? 'Draft saved' : 'Event created', 'success')
       }
-      if (!form.isVirtual && !coords) {
+      if (!form.isVirtual && !coords && !saveAsDraft) {
         toast(
           `Location "${form.city}, ${form.state}" could not be geocoded — event won't appear in Events Near Me.`,
           'error'
