@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, Linking } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack, useRouter } from 'expo-router'
@@ -102,14 +102,11 @@ export default function EventsScreen() {
   )
 
   // Group events by date string
-  const byDate = useMemo(() => {
-    const map: Record<string, EventInstance[]> = {}
-    monthEvents.forEach((ev) => {
-      if (!map[ev.date]) map[ev.date] = []
-      map[ev.date].push(ev)
-    })
-    return map
-  }, [monthEvents])
+  const byDate: Record<string, EventInstance[]> = {}
+  monthEvents.forEach((ev) => {
+    if (!byDate[ev.date]) byDate[ev.date] = []
+    byDate[ev.date].push(ev)
+  })
 
   // Calendar grid helpers
   const firstDayOfMonth = new Date(calY, calM - 1, 1).getDay()
