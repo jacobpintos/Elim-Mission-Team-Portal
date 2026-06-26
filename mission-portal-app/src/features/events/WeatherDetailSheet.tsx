@@ -183,18 +183,20 @@ export function WeatherDetailSheet({ open, onClose, event }: WeatherDetailSheetP
                     <Text color={colors.textMuted} fontSize="$2" width={52}>
                       {formatHour(pt.time)}
                     </Text>
-                    <Text fontSize={20}>{pt.icon}</Text>
-                    <Text color={colors.text} fontSize="$4" fontWeight="600" flex={1}>
-                      {pt.temp}°
-                    </Text>
-                    {pt.precipPct > 0 ? (
-                      <XStack alignItems="center" gap={4}>
-                        <Text fontSize={12}>💧</Text>
-                        <Text color={colors.textMuted} fontSize={12}>
-                          {pt.precipPct}%
-                        </Text>
-                      </XStack>
-                    ) : null}
+                    <XStack alignItems="center" gap="$2" flex={1}>
+                      <Text fontSize={20}>{pt.icon}</Text>
+                      <Text color={colors.text} fontSize="$4" fontWeight="600">
+                        {pt.temp}°
+                      </Text>
+                      {pt.precipPct > 0 ? (
+                        <XStack alignItems="center" gap={3}>
+                          <Text fontSize={12}>💧</Text>
+                          <Text color={colors.textMuted} fontSize={12}>
+                            {pt.precipPct}%
+                          </Text>
+                        </XStack>
+                      ) : null}
+                    </XStack>
                   </XStack>
                 ))}
               </YStack>
