@@ -516,6 +516,7 @@ function PubHomeContent() {
 // Main Home for team members (non-admin, non-public)
 function TeamHomeContent() {
   const colors = useThemeColors()
+  const router = useRouter()
   const { width } = useWindowDimensions()
   const isWide = width >= 768
 
