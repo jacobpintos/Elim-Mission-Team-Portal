@@ -161,25 +161,26 @@ function CategoryRow({
                   {response?.note ? ' *' : ''}
                 </Text>
               </XStack>
-              {noteUid === uid && response?.note ? (
-                <YStack
-                  backgroundColor={colors.surface}
-                  borderRadius="$2"
-                  padding="$2"
-                  borderWidth={1}
-                  borderColor={colors.border}
-                  marginTop={2}
-                  style={{ position: 'absolute', top: 28, zIndex: 10, minWidth: 160 }}
-                >
-                  <Text color={colors.text} fontSize={12}>
-                    {response.note}
-                  </Text>
-                </YStack>
-              ) : null}
             </Pressable>
           ))}
         </XStack>
       </ScrollView>
+      {noteUid ? (
+        <YStack
+          backgroundColor={colors.surface}
+          borderRadius="$2"
+          padding="$2"
+          borderWidth={1}
+          borderColor={colors.border}
+        >
+          <Text color={colors.textMuted} fontSize={11} fontWeight="600" marginBottom={2}>
+            {users.find((u) => u.uid === noteUid)?.name}
+          </Text>
+          <Text color={colors.text} fontSize={12}>
+            {users.find((u) => u.uid === noteUid)?.response?.note}
+          </Text>
+        </YStack>
+      ) : null}
     </YStack>
   )
 }
