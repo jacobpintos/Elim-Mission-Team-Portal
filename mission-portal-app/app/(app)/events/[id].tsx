@@ -153,6 +153,14 @@ export default function EventDetailScreen() {
       <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
         <YStack padding="$4" gap="$4" paddingBottom="$8">
 
+          {/* Back button */}
+          <Pressable onPress={() => router.back()}>
+            <XStack alignItems="center" gap="$1">
+              <Text color={colors.primary} fontSize="$4">←</Text>
+              <Text color={colors.primary} fontSize="$3" fontWeight="600">Back</Text>
+            </XStack>
+          </Pressable>
+
           {/* Unpublished banner */}
           {isUnpublished ? (
             <XStack
