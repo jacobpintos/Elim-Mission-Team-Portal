@@ -508,6 +508,7 @@ export default function EventDetailScreen() {
           instanceKey={event.isRec ? event.instanceKey : undefined}
           open={editModalOpen}
           onClose={() => setEditModalOpen(false)}
+          onDelete={() => router.push('/(app)/events' as never)}
         />
       ) : null}
 

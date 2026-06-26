@@ -12,7 +12,7 @@ import { AvailQueueBanner } from '@/features/events/AvailQueueBanner'
 import { isAdmin, isPublic } from '@/lib/roles'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { FD } from '@/lib/format'
-import type { EventInstance } from '@/types/events'
+import type { EventInstance, EventTemplate } from '@/types/events'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const VIRTUAL_COLOR = '#8e44ad'
@@ -67,6 +67,7 @@ export default function EventsScreen() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editInstance, setEditInstance] = useState<EventInstance | null>(null)
+  const [editDraft, setEditDraft] = useState<EventTemplate | null>(null)
   const [view, setView] = useState<'calendar' | 'list'>('calendar')
 
   const openDetail = (ev: EventInstance) => {
@@ -88,9 +89,9 @@ export default function EventsScreen() {
 
   const { from, to } = monthRange(calY, calM)
   const allMonthInstances = instances(from, to)
-  // Unpublished events: only visible to admins, not on calendar
+  // Unpublished drafts: pulled from all templates (not month-scoped) so dateless drafts appear
   const unpublishedEvents = admin
-    ? allMonthInstances.filter((ev) => ev.unpublished === true)
+    ? templates.filter((t) => t.unpublished === true && !t.deleted)
     : []
   const monthEvents = allMonthInstances.filter(
     (ev) =>
@@ -441,7 +442,7 @@ export default function EventsScreen() {
               <YStack flex={1} height={1} backgroundColor={colors.border} />
             </XStack>
             {unpublishedEvents.map((ev) => (
-              <Pressable key={ev.instanceKey} onPress={() => openDetail(ev)}>
+              <Pressable key={String(ev.id)} onPress={() => setEditDraft(ev)}>
                 <XStack
                   backgroundColor={colors.surface}
                   borderRadius="$2"
@@ -465,24 +466,17 @@ export default function EventsScreen() {
                       {ev.date ? FD(ev.date, { weekday: true }) : 'No date set'}
                     </Text>
                   </YStack>
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation?.()
-                      setEditInstance(ev)
-                    }}
+                  <XStack
+                    borderWidth={1}
+                    borderColor="#e67e22"
+                    borderRadius="$2"
+                    paddingHorizontal="$2"
+                    paddingVertical="$1"
                   >
-                    <XStack
-                      borderWidth={1}
-                      borderColor="#e67e22"
-                      borderRadius="$2"
-                      paddingHorizontal="$2"
-                      paddingVertical="$1"
-                    >
-                      <Text color="#e67e22" fontSize="$2" fontWeight="600">
-                        Edit
-                      </Text>
-                    </XStack>
-                  </Pressable>
+                    <Text color="#e67e22" fontSize="$2" fontWeight="600">
+                      Edit
+                    </Text>
+                  </XStack>
                 </XStack>
               </Pressable>
             ))}
@@ -492,15 +486,16 @@ export default function EventsScreen() {
 
       {admin ? (
         <EventFormModal
-          key={editInstance?.instanceKey ?? 'create'}
-          event={editInstance}
+          key={editInstance?.instanceKey ?? String(editDraft?.id ?? 'create')}
+          event={editInstance ?? editDraft}
           instanceKey={editInstance?.isRec ? editInstance.instanceKey : undefined}
-          open={showCreateModal || !!editInstance}
+          open={showCreateModal || !!editInstance || !!editDraft}
           onClose={() => {
             setShowCreateModal(false)
             setEditInstance(null)
+            setEditDraft(null)
           }}
-          selectedDate={!editInstance && selectedDay ? selectedDay : undefined}
+          selectedDate={!editInstance && !editDraft && selectedDay ? selectedDay : undefined}
         />
       ) : null}
     </YStack>

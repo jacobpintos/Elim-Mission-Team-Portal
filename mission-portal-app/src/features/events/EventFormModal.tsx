@@ -31,6 +31,7 @@ interface EventFormModalProps {
   event?: EventTemplate | null
   open: boolean
   onClose: () => void
+  onDelete?: () => void
   selectedDate?: string
   instanceKey?: string
 }
@@ -79,7 +80,7 @@ function displayToIso(display: string): string {
   return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
 }
 
-export function EventFormModal({ event, open, onClose, selectedDate, instanceKey }: EventFormModalProps) {
+export function EventFormModal({ event, open, onClose, onDelete, selectedDate, instanceKey }: EventFormModalProps) {
   const colors = useThemeColors()
   const { createEvent, updateEvent, deleteEvent, setOverride } = useEventsStore()
   const { users: allStoreUsers } = useUsersStore()
@@ -460,7 +461,7 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
         } else {
           await deleteEvent(event.id)
         }
-        onClose()
+        onDelete ? onDelete() : onClose()
       } catch {
         toast(isInstanceOnly ? 'Failed to remove occurrence' : 'Failed to delete event', 'error')
       }
