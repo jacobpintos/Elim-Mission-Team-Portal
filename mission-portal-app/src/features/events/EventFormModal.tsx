@@ -230,7 +230,7 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
   )
   const assignedUids = new Set([...form.users.map(String), ...groupMemberUids])
 
-  const doSave = async (finalUsers: (string | number)[]) => {
+  const doSave = async (finalUsers: (string | number)[], saveAsDraft = false) => {
     setSaving(true)
     try {
       const coords = form.isVirtual ? null : await geocodeCity(form.city, form.state)
@@ -260,6 +260,7 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
         groups: form.groups,
         teams,
         dressCode,
+        unpublished: saveAsDraft,
         ...(form.taskTemplateId ? { taskTemplateId: form.taskTemplateId } : {}),
         ...(coords ? { _geocodeLat: coords.lat, _geocodeLng: coords.lng } : {}),
       }
@@ -292,7 +293,7 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
         onClose()
       } else if (event) {
         await updateEvent(event.id, payload)
-        toast('Event updated', 'success')
+        toast(saveAsDraft ? 'Draft saved' : 'Event updated', 'success')
       } else {
         const newEventId = await createEvent(payload)
         if (form.taskTemplateId && newEventId) {
@@ -328,7 +329,7 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
             }
           }
         }
-        toast('Event created', 'success')
+        toast(saveAsDraft ? 'Draft saved' : 'Event created', 'success')
       }
       if (!form.isVirtual && !coords) {
         toast(
@@ -344,19 +345,48 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
     }
   }
 
-  const handleSave = async () => {
+  const isExistingDraft = event?.unpublished === true
+
+  const handleSave = async (mode: 'draft' | 'publish') => {
     if (!form.title.trim()) {
       toast('Title is required', 'error')
       return
     }
-    if (!form.isVirtual && (!form.city.trim() || !form.state.trim())) {
-      toast('City and state are required for in-person events', 'error')
-      return
+
+    if (mode === 'publish') {
+      if (!form.isVirtual && (!form.city.trim() || !form.state.trim())) {
+        toast('City and state are required for in-person events', 'error')
+        return
+      }
+      if (!form.isRec && !displayToIso(form.date)) {
+        toast('Date is required — use MM/DD/YY format', 'error')
+        return
+      }
+      if (!form.isVirtual && !form.location.trim()) {
+        toast('Venue name is required', 'error')
+        return
+      }
+      if (!form.startTime.trim()) {
+        toast('Start time is required', 'error')
+        return
+      }
+      if (form.isVirtual && !form.virtualLink.trim()) {
+        toast('Meeting link is required for virtual events', 'error')
+        return
+      }
+      if (form.food && !form.foodItems.some((i) => i.trim())) {
+        toast('Add at least one food item or turn off Food', 'error')
+        return
+      }
+    } else {
+      // Draft: only check date format if a date was entered
+      if (!form.isRec && form.date && !displayToIso(form.date)) {
+        toast('Invalid date — use MM/DD/YY format', 'error')
+        return
+      }
     }
-    if (!form.isRec && form.date && !displayToIso(form.date)) {
-      toast('Invalid date — use MM/DD/YY format', 'error')
-      return
-    }
+
+    const saveAsDraft = mode === 'draft'
 
     // Check for team members not directly assigned to the event
     const teamMemberUids = [
@@ -376,18 +406,18 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
       const label = unassignedTeamMembers.length > 1 ? 'These people are' : 'This person is'
       const msg = `${names}\n\n${label} on a team but not directly assigned to this event. Add them?`
       if (Platform.OS === 'web') {
-        if (window.confirm(msg)) doSave([...form.users, ...unassignedTeamMembers])
+        if (window.confirm(msg)) doSave([...form.users, ...unassignedTeamMembers], saveAsDraft)
         return
       }
       Alert.alert('Team Members Not Assigned', msg, [
         { text: 'Go Back', style: 'cancel' },
-        { text: 'Add & Save', onPress: () => doSave([...form.users, ...unassignedTeamMembers]) },
+        { text: 'Add & Save', onPress: () => doSave([...form.users, ...unassignedTeamMembers], saveAsDraft) },
       ])
       return
     }
 
-    // Check for people not assigned to any lodging
-    if (form.lodging && assignedUids.size > 0) {
+    // Check for people not assigned to any lodging (only in publish mode)
+    if (mode === 'publish' && form.lodging && assignedUids.size > 0) {
       const placed = new Set(lodgingEntries.flatMap((e) => e.assignees))
       const unassignedLodging = [...assignedUids].filter((uid) => !placed.has(uid))
       if (unassignedLodging.length > 0) {
@@ -402,18 +432,18 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
         const lodgingLabel = unassignedLodging.length > 1 ? 'These people are' : 'This person is'
         const lodgingMsg = `${names}\n\n${lodgingLabel} not assigned to any lodging. Save anyway?`
         if (Platform.OS === 'web') {
-          if (window.confirm(lodgingMsg)) doSave(form.users)
+          if (window.confirm(lodgingMsg)) doSave(form.users, saveAsDraft)
           return
         }
         Alert.alert('Unassigned Lodging', lodgingMsg, [
           { text: 'Go Back', style: 'cancel' },
-          { text: 'Save Anyway', onPress: () => doSave(form.users) },
+          { text: 'Save Anyway', onPress: () => doSave(form.users, saveAsDraft) },
         ])
         return
       }
     }
 
-    await doSave(form.users)
+    await doSave(form.users, saveAsDraft)
   }
 
   const handleDelete = () => {
@@ -580,7 +610,7 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
           <Input
             value={form.location}
             onChangeText={field('location')}
-            placeholder="First Baptist Church"
+            placeholder="Venue name"
             backgroundColor={colors.surface}
             color={colors.text}
             borderColor={colors.border}
@@ -611,7 +641,7 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
             <Input
               value={form.city}
               onChangeText={field('city')}
-              placeholder="Dallas"
+              placeholder="City"
               backgroundColor={colors.surface}
               color={colors.text}
               borderColor={colors.border}
@@ -624,7 +654,7 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
             <Input
               value={form.state}
               onChangeText={field('state')}
-              placeholder="TX"
+              placeholder="ST"
               backgroundColor={colors.surface}
               color={colors.text}
               borderColor={colors.border}
@@ -1349,7 +1379,7 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
         ) : null}
 
         {/* Save / Cancel / Delete */}
-        <XStack gap="$2" justifyContent="space-between" alignItems="center">
+        <XStack gap="$2" justifyContent="space-between" alignItems="center" flexWrap="wrap">
           {event ? (
             <Pressable onPress={handleDelete} disabled={saving}>
               <XStack
@@ -1367,7 +1397,7 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
           ) : (
             <YStack />
           )}
-          <XStack gap="$2">
+          <XStack gap="$2" flexWrap="wrap">
             <Pressable onPress={onClose}>
               <XStack
                 borderWidth={1}
@@ -1379,19 +1409,53 @@ export function EventFormModal({ event, open, onClose, selectedDate, instanceKey
                 <Text color={colors.textMuted}>Cancel</Text>
               </XStack>
             </Pressable>
-            <Pressable onPress={handleSave} disabled={saving}>
-              <XStack
-                backgroundColor={colors.primary}
-                borderRadius="$2"
-                paddingHorizontal="$4"
-                paddingVertical="$2"
-                opacity={saving ? 0.6 : 1}
-              >
-                <Text color="white" fontWeight="600">
-                  {saving ? 'Saving…' : instanceKey && editScope === 'instance' ? 'Save This Date' : event ? 'Update' : 'Create'}
-                </Text>
-              </XStack>
-            </Pressable>
+            {/* For recurring instance edits and published events: single save button */}
+            {(instanceKey && editScope === 'instance') || (event && !isExistingDraft) ? (
+              <Pressable onPress={() => handleSave('publish')} disabled={saving}>
+                <XStack
+                  backgroundColor={colors.primary}
+                  borderRadius="$2"
+                  paddingHorizontal="$4"
+                  paddingVertical="$2"
+                  opacity={saving ? 0.6 : 1}
+                >
+                  <Text color="white" fontWeight="600">
+                    {saving ? 'Saving…' : instanceKey && editScope === 'instance' ? 'Save This Date' : 'Update'}
+                  </Text>
+                </XStack>
+              </Pressable>
+            ) : (
+              /* New event or editing a draft: show Save as Draft + Publish */
+              <>
+                <Pressable onPress={() => handleSave('draft')} disabled={saving}>
+                  <XStack
+                    borderWidth={1}
+                    borderColor={colors.border}
+                    borderRadius="$2"
+                    paddingHorizontal="$3"
+                    paddingVertical="$2"
+                    opacity={saving ? 0.6 : 1}
+                  >
+                    <Text color={colors.textMuted} fontWeight="600">
+                      {saving ? 'Saving…' : 'Save as Draft'}
+                    </Text>
+                  </XStack>
+                </Pressable>
+                <Pressable onPress={() => handleSave('publish')} disabled={saving}>
+                  <XStack
+                    backgroundColor={colors.primary}
+                    borderRadius="$2"
+                    paddingHorizontal="$4"
+                    paddingVertical="$2"
+                    opacity={saving ? 0.6 : 1}
+                  >
+                    <Text color="white" fontWeight="600">
+                      {saving ? 'Saving…' : isExistingDraft ? 'Publish' : 'Create'}
+                    </Text>
+                  </XStack>
+                </Pressable>
+              </>
+            )}
           </XStack>
         </XStack>
       </YStack>

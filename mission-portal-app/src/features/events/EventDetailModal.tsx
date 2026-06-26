@@ -20,7 +20,7 @@ import type { EventInstance } from '@/types/events'
 import { fetchWeather, fetchNWSAlerts, type WeatherData, type NWSAlert } from '@/lib/weather'
 import { WeatherDetailSheet } from './WeatherDetailSheet'
 
-function TeamsDisplay({
+export function TeamsDisplay({
   event,
   uid,
 }: {
@@ -116,7 +116,7 @@ function TeamsDisplay({
   )
 }
 
-function LodgingDisplay({
+export function LodgingDisplay({
   event,
   uid,
   isAdmin,
@@ -371,7 +371,7 @@ function FlightEntryCard({
   )
 }
 
-function FlightDisplay({
+export function FlightDisplay({
   event,
   uid,
   isAdmin,
@@ -435,7 +435,7 @@ function FlightDisplay({
   )
 }
 
-function DressCodeDisplay({
+export function DressCodeDisplay({
   event,
   uid,
 }: {
@@ -494,7 +494,7 @@ interface FoodSignupEntry {
   displayName: string
 }
 
-function FoodPanel({
+export function FoodPanel({
   event,
   uid,
   myDisplayName,
@@ -614,7 +614,7 @@ function FoodPanel({
   )
 }
 
-function CarpoolReadOnly({
+export function CarpoolReadOnly({
   event,
   uid,
   isAdmin,
@@ -697,7 +697,7 @@ interface EventDetailModalProps {
   onEdit?: () => void
 }
 
-function CarpoolPanel({
+export function CarpoolPanel({
   event,
   uid,
   isAdmin,

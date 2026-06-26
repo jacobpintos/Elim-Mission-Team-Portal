@@ -7,8 +7,6 @@ import { useEventsStore } from '@/stores/eventsStore'
 import { useConfigStore } from '@/stores/configStore'
 import { sameId } from '@/lib/ids'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { EventDetailModal } from '@/features/events/EventDetailModal'
-import { AvailModal } from '@/features/events/AvailModal'
 import { EventFormModal } from '@/features/events/EventFormModal'
 import { AvailQueueBanner } from '@/features/events/AvailQueueBanner'
 import { isAdmin, isPublic } from '@/lib/roles'
@@ -65,12 +63,16 @@ export default function EventsScreen() {
   const calY = admin ? configStore.calY : localY
   const calM = admin ? configStore.calM : localM
 
+  const { setSelectedEvent } = useEventsStore()
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
-  const [detailEvent, setDetailEvent] = useState<EventInstance | null>(null)
-  const [availEvent, setAvailEvent] = useState<EventInstance | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editInstance, setEditInstance] = useState<EventInstance | null>(null)
   const [view, setView] = useState<'calendar' | 'list'>('calendar')
+
+  const openDetail = (ev: EventInstance) => {
+    setSelectedEvent(ev)
+    router.push(`/(app)/events/${ev.instanceKey}` as never)
+  }
 
   useEffect(() => {
     subEvents()
@@ -85,12 +87,18 @@ export default function EventsScreen() {
   }, [])
 
   const { from, to } = monthRange(calY, calM)
-  const monthEvents = instances(from, to).filter(
+  const allMonthInstances = instances(from, to)
+  // Unpublished events: only visible to admins, not on calendar
+  const unpublishedEvents = admin
+    ? allMonthInstances.filter((ev) => ev.unpublished === true)
+    : []
+  const monthEvents = allMonthInstances.filter(
     (ev) =>
-      ev.isPublic ||
-      admin ||
-      ev.users?.some((x) => sameId(x, uid)) ||
-      (ev.groups?.length ? getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)) : false)
+      ev.unpublished !== true &&
+      (ev.isPublic ||
+        admin ||
+        ev.users?.some((x) => sameId(x, uid)) ||
+        (ev.groups?.length ? getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)) : false))
   )
 
   // Group events by date string
@@ -282,7 +290,7 @@ export default function EventsScreen() {
                             {evs.slice(0, 3).map((ev) => (
                               <Pressable
                                 key={ev.instanceKey}
-                                onPress={() => setDetailEvent(ev)}
+                                onPress={() => openDetail(ev)}
                                 hitSlop={6}
                               >
                                 <YStack
@@ -309,7 +317,7 @@ export default function EventsScreen() {
                   {FD(selectedDay, { weekday: true })}
                 </Text>
                 {selectedEvents.map((ev) => (
-                  <Pressable key={ev.instanceKey} onPress={() => setDetailEvent(ev)}>
+                  <Pressable key={ev.instanceKey} onPress={() => openDetail(ev)}>
                     <XStack
                       backgroundColor={colors.surface}
                       borderRadius="$2"
@@ -366,7 +374,7 @@ export default function EventsScreen() {
               monthEvents.map((ev) => {
                 const evColor = ev.isVirtual ? VIRTUAL_COLOR : colors.primary
                 return (
-                  <Pressable key={ev.instanceKey} onPress={() => setDetailEvent(ev)}>
+                  <Pressable key={ev.instanceKey} onPress={() => openDetail(ev)}>
                     <XStack
                       backgroundColor={colors.surface}
                       borderRadius="$3"
@@ -425,38 +433,66 @@ export default function EventsScreen() {
             )}
           </YStack>
         )}
+        {/* Unpublished queue — admins only */}
+        {admin && unpublishedEvents.length > 0 ? (
+          <YStack padding="$3" gap="$2">
+            <XStack alignItems="center" gap="$2">
+              <YStack flex={1} height={1} backgroundColor={colors.border} />
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                UNPUBLISHED DRAFTS
+              </Text>
+              <YStack flex={1} height={1} backgroundColor={colors.border} />
+            </XStack>
+            {unpublishedEvents.map((ev) => (
+              <Pressable key={ev.instanceKey} onPress={() => openDetail(ev)}>
+                <XStack
+                  backgroundColor={colors.surface}
+                  borderRadius="$2"
+                  padding="$2"
+                  borderWidth={1}
+                  borderColor="#e67e2244"
+                  gap="$2"
+                  alignItems="center"
+                >
+                  <YStack
+                    width={4}
+                    alignSelf="stretch"
+                    backgroundColor="#e67e22"
+                    borderRadius={2}
+                  />
+                  <YStack flex={1}>
+                    <Text color={colors.text} fontWeight="600" fontSize="$3">
+                      {ev.title}
+                    </Text>
+                    <Text color={colors.textMuted} fontSize="$2">
+                      {ev.date ? FD(ev.date, { weekday: true }) : 'No date set'}
+                    </Text>
+                  </YStack>
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation?.()
+                      setEditInstance(ev)
+                    }}
+                  >
+                    <XStack
+                      borderWidth={1}
+                      borderColor="#e67e22"
+                      borderRadius="$2"
+                      paddingHorizontal="$2"
+                      paddingVertical="$1"
+                    >
+                      <Text color="#e67e22" fontSize="$2" fontWeight="600">
+                        Edit
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                </XStack>
+              </Pressable>
+            ))}
+          </YStack>
+        ) : null}
       </ScrollView>
 
-      <EventDetailModal
-        event={detailEvent}
-        uid={uid}
-        isMember={isMember}
-        isAdmin={admin}
-        open={!!detailEvent}
-        onClose={() => setDetailEvent(null)}
-        onAvail={
-          isMember
-            ? () => {
-                setAvailEvent(detailEvent)
-                setDetailEvent(null)
-              }
-            : undefined
-        }
-        onEdit={
-          admin
-            ? () => {
-                setEditInstance(detailEvent)
-                setDetailEvent(null)
-              }
-            : undefined
-        }
-      />
-      <AvailModal
-        event={availEvent}
-        uid={uid}
-        open={!!availEvent}
-        onClose={() => setAvailEvent(null)}
-      />
       {admin ? (
         <EventFormModal
           key={editInstance?.instanceKey ?? 'create'}

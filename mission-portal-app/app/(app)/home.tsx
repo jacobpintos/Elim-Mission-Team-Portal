@@ -14,7 +14,6 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { EventCard } from '@/components/ui/EventCard'
 import { TaskCard } from '@/components/ui/TaskCard'
 import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
-import { EventDetailModal } from '@/features/events/EventDetailModal'
 import { WeatherDetailSheet } from '@/features/events/WeatherDetailSheet'
 import { AvailModal } from '@/features/events/AvailModal'
 import { isAdmin, isSecurity, isMerch, isWorship } from '@/lib/roles'
@@ -523,7 +522,7 @@ function TeamHomeContent() {
   const { profile } = useAuthStore()
   const uid = profile?.uid ?? ''
 
-  const { avail } = useEventsStore()
+  const { avail, setSelectedEvent } = useEventsStore()
   const eventsStore = useEventsStore()
   const tasksStore = useTasksStore()
   const announceStore = useAnnounceStore()
@@ -532,8 +531,12 @@ function TeamHomeContent() {
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
   const { subscribe: subAnnounce, unsubscribe: unsubAnnounce } = useAnnounceStore()
 
-  const [detailEvent, setDetailEvent] = useState<EventInstance | null>(null)
   const [availEvent, setAvailEvent] = useState<EventInstance | null>(null)
+
+  const openDetail = (ev: EventInstance) => {
+    setSelectedEvent(ev)
+    router.push(`/(app)/events/${ev.instanceKey}` as never)
+  }
   const [weatherEvent, setWeatherEvent] = useState<EventInstance | null>(null)
 
   useEffect(() => {
@@ -603,7 +606,7 @@ function TeamHomeContent() {
                   key={ev.instanceKey}
                   event={ev}
                   myAvail={myAvail(ev)}
-                  onDetail={() => setDetailEvent(ev)}
+                  onDetail={() => openDetail(ev)}
                   onAvail={() => setAvailEvent(ev)}
                   onWeatherPress={() => setWeatherEvent(ev)}
                 />
@@ -694,18 +697,6 @@ function TeamHomeContent() {
         </XStack>
       </YStack>
 
-      <EventDetailModal
-        event={detailEvent}
-        uid={uid}
-        isMember
-        isAdmin={false}
-        open={!!detailEvent}
-        onClose={() => setDetailEvent(null)}
-        onAvail={() => {
-          setAvailEvent(detailEvent)
-          setDetailEvent(null)
-        }}
-      />
       <AvailModal
         event={availEvent}
         uid={uid}

@@ -26,12 +26,14 @@ interface EventsStore {
   overrides: Record<string, Partial<EventTemplate>>
   avail: Record<string, Record<string, AvailResponse>>
   selectedInstanceKey: string | null
+  selectedEvent: EventInstance | null
   loading: boolean
   _unsubTemplates: (() => void) | null
   _unsubAvail: (() => void) | null
   _refCount: number
   // selectors
   instances: (from: string, to: string) => EventInstance[]
+  getInstanceByKey: (instanceKey: string) => EventInstance | null
   myInstances: (uid: string, from: string, to: string) => EventInstance[]
   pendingAvailEvents: (uid: string) => EventInstance[]
   checkSeriesConflicts: (
@@ -43,6 +45,7 @@ interface EventsStore {
   subscribe: () => void
   unsubscribe: () => void
   selectEvent: (key: string | null) => void
+  setSelectedEvent: (ev: EventInstance | null) => void
   createEvent: (data: Omit<EventTemplate, 'id'>) => Promise<string | number>
   updateEvent: (id: string | number, patch: Partial<EventTemplate>) => Promise<void>
   deleteEvent: (id: string | number) => Promise<void>
@@ -183,6 +186,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   overrides: {},
   avail: {},
   selectedInstanceKey: null,
+  selectedEvent: null,
   loading: false,
   _unsubTemplates: null,
   _unsubAvail: null,
@@ -191,6 +195,18 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   instances: (from, to) => {
     const { templates, overrides } = get()
     return allInstances(templates, overrides, from, to)
+  },
+
+  getInstanceByKey: (instanceKey) => {
+    const { templates, overrides } = get()
+    const underscoreIdx = instanceKey.indexOf('_')
+    if (underscoreIdx === -1) return null
+    const templateId = instanceKey.substring(0, underscoreIdx)
+    const date = instanceKey.substring(underscoreIdx + 1)
+    const tmpl = templates.find((t) => String(t.id) === templateId)
+    if (!tmpl) return null
+    const hits = allInstances([tmpl], overrides, date, date)
+    return hits.find((i) => i.instanceKey === instanceKey) ?? null
   },
 
   myInstances: (uid, from, to) => {
@@ -309,6 +325,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   },
 
   selectEvent: (key) => set({ selectedInstanceKey: key }),
+  setSelectedEvent: (ev) => set({ selectedEvent: ev }),
 
   createEvent: async (data) => {
     const id = await nextId('nEv')

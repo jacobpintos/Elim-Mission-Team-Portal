@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, useWindowDimensions } from 'react-native'
 import { YStack, XStack, Text, H3, Button } from 'tamagui'
-import { Stack } from 'expo-router'
+import { Stack, useRouter } from 'expo-router'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -10,7 +10,6 @@ import { useNotifsStore } from '@/stores/notifsStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { EventCard } from '@/components/ui/EventCard'
 import { NotificationRow } from '@/components/ui/NotificationRow'
-import { EventDetailModal } from '@/features/events/EventDetailModal'
 import { WeatherDetailSheet } from '@/features/events/WeatherDetailSheet'
 import { AvailModal } from '@/features/events/AvailModal'
 import { EventKanban } from '@/features/events/EventKanban'
@@ -25,18 +24,18 @@ import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function Dashboard() {
   const colors = useThemeColors()
+  const router = useRouter()
   const { width } = useWindowDimensions()
   const isWide = width >= 768
 
   const { profile } = useAuthStore()
-  const { instances, avail } = useEventsStore()
+  const { instances, avail, setSelectedEvent } = useEventsStore()
   const { tasks } = useTasksStore()
   const { items: notifs, markRead } = useNotifsStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
   const { subscribe: subNotifs, unsubscribe: unsubNotifs } = useNotifsStore()
 
-  const [detailEvent, setDetailEvent] = useState<EventInstance | null>(null)
   const [availEvent, setAvailEvent] = useState<EventInstance | null>(null)
   const [kanbanEvent, setKanbanEvent] = useState<EventInstance | null>(null)
   const [weatherEvent, setWeatherEvent] = useState<EventInstance | null>(null)
@@ -61,9 +60,14 @@ export default function Dashboard() {
   const in60 = dateStr(60)
 
   // Upcoming events (60 days) — visibility-filtered, dedupe by templateId
+  const openDetail = (ev: EventInstance) => {
+    setSelectedEvent(ev)
+    router.push(`/(app)/events/${ev.instanceKey}` as never)
+  }
+
   const upcoming60 = (() => {
     const all = instances(today, in60).filter(
-      (ev) => ev.isPublic || admin || ev.users?.some((x) => sameId(x, uid))
+      (ev) => ev.unpublished !== true && (ev.isPublic || admin || ev.users?.some((x) => sameId(x, uid)))
     )
     const seen = new Set<string>()
     return all.filter((ev) => {
@@ -167,7 +171,7 @@ export default function Dashboard() {
                   key={ev.instanceKey}
                   event={ev}
                   myAvail={myAvail(ev)}
-                  onDetail={() => setDetailEvent(ev)}
+                  onDetail={() => openDetail(ev)}
                   onAvail={() => setAvailEvent(ev)}
                   healthStatus={ev.taskTemplateId ? getEventHealthStatus(ev) : undefined}
                   onShowTasks={ev.taskTemplateId ? () => setKanbanEvent(ev) : undefined}
@@ -213,18 +217,6 @@ export default function Dashboard() {
         </XStack>
       </YStack>
 
-      <EventDetailModal
-        event={detailEvent}
-        uid={uid}
-        isMember
-        isAdmin={admin}
-        open={!!detailEvent}
-        onClose={() => setDetailEvent(null)}
-        onAvail={() => {
-          setAvailEvent(detailEvent)
-          setDetailEvent(null)
-        }}
-      />
       <AvailModal
         event={availEvent}
         uid={uid}

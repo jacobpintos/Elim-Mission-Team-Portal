@@ -96,6 +96,7 @@ export interface EventTemplate {
   flightEntries?: FlightEntry[]
   extraDays?: ExtraDay[]
   deleted?: boolean
+  unpublished?: boolean
   overrides?: Record<string, Partial<EventTemplate>>
   planningBoardId?: string | number
   _geocodeLat?: number
