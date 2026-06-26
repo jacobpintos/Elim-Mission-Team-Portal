@@ -579,7 +579,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
           <Input
             value={form.title}
             onChangeText={field('title')}
-            placeholder="Event title"
+            placeholder=""
             backgroundColor={colors.surface}
             color={colors.text}
             borderColor={colors.border}
@@ -595,7 +595,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
             <Input
               value={form.date}
               onChangeText={field('date')}
-              placeholder="04/06/26"
+              placeholder=""
               backgroundColor={colors.surface}
               color={colors.text}
               borderColor={colors.border}
@@ -611,7 +611,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
           <Input
             value={form.location}
             onChangeText={field('location')}
-            placeholder="Venue name"
+            placeholder=""
             backgroundColor={colors.surface}
             color={colors.text}
             borderColor={colors.border}
@@ -671,7 +671,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
           <Input
             value={form.startTime}
             onChangeText={field('startTime')}
-            placeholder="10:00 AM"
+            placeholder=""
             backgroundColor={colors.surface}
             color={colors.text}
             borderColor={colors.border}
@@ -783,7 +783,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
           <Input
             value={userSearch}
             onChangeText={setUserSearch}
-            placeholder="Search members to add…"
+            placeholder=""
             backgroundColor={colors.surface}
             color={colors.text}
             borderColor={colors.border}
@@ -966,7 +966,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
             <Input
               value={form.virtualLink}
               onChangeText={field('virtualLink')}
-              placeholder="https://zoom.us/j/..."
+              placeholder=""
               backgroundColor={colors.surface}
               color={colors.text}
               borderColor={colors.border}
@@ -1005,7 +1005,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
                   flex={1}
                   value={item}
                   onChangeText={(v) => updateFoodItem(i, v)}
-                  placeholder={`Item ${i + 1}`}
+                  placeholder=""
                   backgroundColor={colors.surface}
                   color={colors.text}
                   borderColor={colors.border}
@@ -1081,7 +1081,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
                       flex={1}
                       value={car.label}
                       onChangeText={(v) => updateCarField(car.id, 'label', v)}
-                      placeholder="Car name (e.g. Jacob's Van)"
+                      placeholder=""
                       backgroundColor={colors.surface}
                       color={colors.text}
                       borderColor={colors.border}
@@ -1200,7 +1200,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
                       <Input
                         value={carpoolSearch}
                         onChangeText={setCarpoolSearch}
-                        placeholder="Search…"
+                        placeholder=""
                         backgroundColor={colors.surface}
                         color={colors.text}
                         borderColor={colors.border}
