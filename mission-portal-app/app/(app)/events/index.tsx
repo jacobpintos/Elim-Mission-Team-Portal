@@ -280,13 +280,18 @@ export default function EventsScreen() {
                         {evs.length > 0 ? (
                           <XStack flexWrap="wrap" gap={2} justifyContent="center">
                             {evs.slice(0, 3).map((ev) => (
-                              <YStack
+                              <Pressable
                                 key={ev.instanceKey}
-                                width={6}
-                                height={6}
-                                borderRadius={3}
-                                backgroundColor={ev.isVirtual ? VIRTUAL_COLOR : colors.primary}
-                              />
+                                onPress={() => setDetailEvent(ev)}
+                                hitSlop={6}
+                              >
+                                <YStack
+                                  width={6}
+                                  height={6}
+                                  borderRadius={3}
+                                  backgroundColor={ev.isVirtual ? VIRTUAL_COLOR : colors.primary}
+                                />
+                              </Pressable>
                             ))}
                           </XStack>
                         ) : null}

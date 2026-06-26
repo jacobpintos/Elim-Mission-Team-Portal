@@ -63,6 +63,7 @@ export function EventCard({
           : null
 
   return (
+    <Pressable onPress={onDetail} disabled={!onDetail}>
     <YStack
       backgroundColor={colors.surface}
       borderRadius="$3"
@@ -165,21 +166,6 @@ export function EventCard({
 
       {!mini ? (
         <XStack gap="$2" marginTop="$1" flexWrap="wrap">
-          {onDetail ? (
-            <Pressable onPress={onDetail}>
-              <XStack
-                backgroundColor={colors.primary}
-                borderRadius="$2"
-                paddingHorizontal="$3"
-                paddingVertical="$1"
-                alignItems="center"
-              >
-                <Text color="white" fontSize="$2" fontWeight="600">
-                  Details
-                </Text>
-              </XStack>
-            </Pressable>
-          ) : null}
           {onAvail ? (
             <Pressable onPress={onAvail}>
               <XStack
@@ -215,5 +201,6 @@ export function EventCard({
         </XStack>
       ) : null}
     </YStack>
+    </Pressable>
   )
 }

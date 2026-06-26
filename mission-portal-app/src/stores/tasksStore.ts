@@ -52,8 +52,8 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     const today = todayStr()
     return get().tasks.filter((t) => {
       if (!t.assignees.some((a) => sameId(a, uid))) return false
-      // Hide pre-event tasks once the event date has passed
-      if (t.evDate && !t.isPostEvent && t.evDate < today) return false
+      // Hide pre-event tasks for past events only if they're already done
+      if (t.evDate && !t.isPostEvent && t.evDate < today && !!t.doneAt) return false
       return true
     })
   },
