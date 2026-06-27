@@ -531,7 +531,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                       (row) => !(row.length === 1 && row[0] === PROGRESSION_END)
                     )
                     return (
-                      <YStack key={section.id} gap="$1">
+                      <YStack key={section.id} gap="$2">
                         <Text
                           color={colors.primary}
                           fontWeight="700"
@@ -545,12 +545,8 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                           if (!slots.length) return <View key={lineIdx} style={{ height: 8 }} />
                           const lineTokens = lyricChordRows[lineIdx] ?? []
                           return (
-                            <ScrollView
-                              key={lineIdx}
-                              horizontal
-                              showsHorizontalScrollIndicator={false}
-                            >
-                              <XStack alignItems="flex-end" gap={0}>
+                            <YStack key={lineIdx} gap={0} paddingBottom="$1">
+                              <XStack alignItems="flex-end" gap={0} flexWrap="wrap">
                                 {slots.map((slot, wi) => {
                                   const raw = lineTokens[wi] ?? ''
                                   const chord = displayToken(raw)
@@ -591,7 +587,8 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                                   )
                                 })}
                               </XStack>
-                            </ScrollView>
+                              <View style={{ height: 1, backgroundColor: colors.border, opacity: 0.35, marginTop: 3 }} />
+                            </YStack>
                           )
                         })}
                       </YStack>
