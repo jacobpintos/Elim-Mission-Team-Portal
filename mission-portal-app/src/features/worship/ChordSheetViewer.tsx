@@ -204,6 +204,16 @@ function getPrevMatchingLabel(sections: ChordSheet['sections'], id: string): str
   return getSectionLabel(sections, prev.id)
 }
 
+function getPrevMatchingSection(
+  sections: ChordSheet['sections'],
+  id: string
+): ChordSheetSection | null {
+  const idx = sections.findIndex((s) => s.id === id)
+  if (idx <= 0) return null
+  const section = sections[idx]
+  return sections.slice(0, idx).reverse().find((s) => s.type === section.type) ?? null
+}
+
 // Estimate column width in logical px from word length (Courier New 13px ≈ 9px/char)
 function colWidth(word: string, chordLen = 0): number {
   return Math.max(word.length * 9 + 8, chordLen * 9 + 8, 36)
@@ -478,9 +488,11 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                     const label = getSectionLabel(sheet.sections, section.id)
                     const hasLyrics = section.lyrics.trim().length > 0
 
-                    // Full mode: same-as-previous → label only
+                    // Full mode: same-as-previous → label + "(same as X)" + chords
                     if (section.sameAsPrevious) {
                       const prevLabel = getPrevMatchingLabel(sheet.sections, section.id)
+                      const prevSection = getPrevMatchingSection(sheet.sections, section.id)
+                      const prevTokens = (prevSection?.chordTokens ?? []).flat().filter(Boolean)
                       return (
                         <YStack key={section.id} gap="$0.5">
                           <Text color={colors.primary} fontWeight="700" fontSize="$3">
@@ -489,6 +501,25 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                           <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
                             {prevLabel ? `(same as ${prevLabel})` : '(same as previous)'}
                           </Text>
+                          {prevTokens.length > 0 ? (
+                            <XStack flexWrap="wrap" gap="$2" alignItems="center">
+                              {prevTokens.map((t, i) =>
+                                t === PROGRESSION_END ? (
+                                  <Text key={i} style={styles.mono} color={colors.border}>
+                                    {'|'}
+                                  </Text>
+                                ) : (
+                                  <Text
+                                    key={i}
+                                    style={[styles.mono, styles.chordText]}
+                                    color={colors.primary}
+                                  >
+                                    {displayToken(t)}
+                                  </Text>
+                                )
+                              )}
+                            </XStack>
+                          ) : null}
                         </YStack>
                       )
                     }
