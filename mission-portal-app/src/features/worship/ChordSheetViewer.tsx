@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Modal, View, ScrollView, Pressable, StyleSheet, Platform } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { printAsync } from 'expo-print'
+import { jsPDF } from 'jspdf'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { NNS_KEYS, nashvilleToChord, getWordSlots } from '@/lib/nashvilleNumbers'
 import { SECTION_LABELS } from '@/types/chordSheet'
@@ -186,6 +187,154 @@ ${body}
 </body></html>`
 }
 
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace('#', '')
+  const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean
+  const n = parseInt(full, 16)
+  if (Number.isNaN(n)) return [30, 30, 30]
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+// Builds a real PDF file (not a print job) for web export, where expo-print has
+// no way to generate an actual file — its web shim just calls window.print().
+// Mirrors buildChordSheetHtml's layout section-by-section, but draws text
+// directly via jsPDF instead of emitting HTML, with manual page-break tracking
+// standing in for the HTML version's `page-break-inside:avoid`.
+function buildChordSheetPdfBlob(
+  sheet: ChordSheet,
+  selectedKey: string,
+  isMinor: boolean,
+  keyIdx: number,
+  primaryColor: string
+): Blob {
+  const disp = (raw: string) => formatToken(raw, keyIdx, isMinor)
+  const [pr, pg, pb] = hexToRgb(primaryColor)
+  const DARK: [number, number, number] = [30, 30, 30]
+  const GRAY: [number, number, number] = [140, 140, 140]
+
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const margin = 40
+  const bottom = pageHeight - margin
+  const lineHeight = 16.5
+  let y = margin
+
+  const ensureSpace = (needed: number) => {
+    if (y + needed > bottom) {
+      doc.addPage()
+      y = margin
+    }
+  }
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(20)
+  doc.setTextColor(...DARK)
+  doc.text(sheet.title, margin, y)
+  y += 26
+
+  const metaParts: string[] = []
+  if (sheet.artist) metaParts.push(sheet.artist)
+  if (sheet.bpm != null) metaParts.push(`♪ = ${sheet.bpm} BPM`)
+  if (selectedKey) metaParts.push(`Key: ${selectedKey}${isMinor ? ' minor' : ''}`)
+  if (metaParts.length) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(11)
+    doc.setTextColor(...GRAY)
+    doc.text(metaParts.join('   ·   '), margin, y)
+    y += 26
+  } else {
+    y += 8
+  }
+
+  for (const section of sheet.sections) {
+    const label = getSectionLabel(sheet.sections, section.id)
+
+    if (section.sameAsPrevious) {
+      ensureSpace(lineHeight * 2)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(pr, pg, pb)
+      doc.text(label, margin, y)
+      y += 15
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(10.5)
+      doc.setTextColor(...GRAY)
+      const pl = getPrevMatchingLabel(sheet.sections, section.id)
+      doc.text(pl ? `(same as ${pl})` : '(same as previous)', margin, y)
+      y += 24
+      continue
+    }
+
+    const hasLyrics = section.lyrics.trim().length > 0
+
+    if (!hasLyrics) {
+      const toks = (section.chordTokens ?? [])
+        .flat()
+        .filter(Boolean)
+        .map((t) => (t === PROGRESSION_END ? '|' : disp(t)))
+      const text = toks.join('  ')
+      ensureSpace(lineHeight * 2)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(pr, pg, pb)
+      doc.text(label, margin, y)
+      y += 15
+      if (text) {
+        doc.setFont('courier', 'bold')
+        doc.setFontSize(11)
+        doc.text(text, margin, y)
+        y += lineHeight
+      }
+      y += 12
+      continue
+    }
+
+    const lyricsLines = section.lyrics.split('\n')
+    const lyricChordRows = (section.chordTokens ?? []).filter(
+      (row) => !(row.length === 1 && row[0] === PROGRESSION_END)
+    )
+
+    ensureSpace(lineHeight * 2 + 18)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.setTextColor(pr, pg, pb)
+    doc.text(label, margin, y)
+    y += 18
+
+    for (let li = 0; li < lyricsLines.length; li++) {
+      const slots = getWordSlots(lyricsLines[li])
+      if (!slots.length) {
+        y += 8
+        continue
+      }
+      const rowTokens = lyricChordRows[li] ?? []
+      let cStr = ''
+      let lStr = ''
+      for (let wi = 0; wi < slots.length; wi++) {
+        const slot = slots[wi]
+        const word = slot.text + (slot.trailing === '-' ? '-' : slot.trailing === ' ' ? ' ' : '')
+        const chord = rowTokens[wi] ? disp(rowTokens[wi]) : ''
+        const w = Math.max(word.length, chord ? chord.length + 1 : 0)
+        cStr += chord.padEnd(w, ' ')
+        lStr += word.padEnd(w, ' ')
+      }
+      ensureSpace(lineHeight * 2)
+      doc.setFont('courier', 'bold')
+      doc.setFontSize(11)
+      doc.setTextColor(pr, pg, pb)
+      doc.text(cStr.trimEnd() || ' ', margin, y)
+      y += 12
+      doc.setFont('courier', 'normal')
+      doc.setTextColor(...DARK)
+      doc.text(lStr.trimEnd(), margin, y)
+      y += 16
+    }
+    y += 14
+  }
+
+  return doc.output('blob')
+}
+
 function getSectionLabel(sections: ChordSheet['sections'], id: string): string {
   const section = sections.find((s) => s.id === id)
   if (!section) return ''
@@ -265,28 +414,42 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
   const displayToken = (raw: string) => formatToken(raw, keyIdx, isMinor)
 
   const handleExportPdf = async () => {
-    const html = buildChordSheetHtml(sheet, selectedKey, isMinor, keyIdx, colors.primary)
-
-    // expo-print's web implementation ignores the `html` option and just calls
-    // window.print() on the current page, so on web we render the document into
-    // a hidden iframe and print that instead — this is the only way to get the
-    // full multi-section sheet (with proper pagination) instead of a screenshot
-    // of whatever is currently on screen.
+    // expo-print has no way to produce an actual file on web — its web shim just
+    // calls window.print() on the current page regardless of the `html` option,
+    // which opens the OS print/printer chooser rather than creating a PDF. So on
+    // web we build a real PDF client-side and hand it to the user directly: via
+    // the share sheet where available (so it can be saved to Files, AirDropped,
+    // etc.), or as a plain download otherwise.
     if (Platform.OS === 'web') {
-      const iframe = document.createElement('iframe')
-      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
-      document.body.appendChild(iframe)
-      const doc = iframe.contentWindow?.document
-      if (!doc) { document.body.removeChild(iframe); return }
-      doc.open()
-      doc.write(html)
-      doc.close()
-      iframe.contentWindow?.focus()
-      iframe.contentWindow?.print()
-      setTimeout(() => document.body.removeChild(iframe), 1000)
+      const blob = buildChordSheetPdfBlob(sheet, selectedKey, isMinor, keyIdx, colors.primary)
+      const filename = `${sheet.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'chord-sheet'}.pdf`
+      const file = new File([blob], filename, { type: 'application/pdf' })
+
+      const nav = navigator as Navigator & {
+        canShare?: (data: { files: File[] }) => boolean
+        share?: (data: { files: File[]; title?: string }) => Promise<void>
+      }
+      if (nav.canShare?.({ files: [file] }) && nav.share) {
+        try {
+          await nav.share({ files: [file], title: sheet.title })
+          return
+        } catch {
+          // user cancelled or share failed — fall through to direct download
+        }
+      }
+
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
       return
     }
 
+    const html = buildChordSheetHtml(sheet, selectedKey, isMinor, keyIdx, colors.primary)
     await printAsync({ html })
   }
 

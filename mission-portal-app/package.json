@@ -31,6 +31,7 @@
     "expo-status-bar": "~56.0.4",
     "expo-system-ui": "~56.0.5",
     "firebase": "^12.13.0",
+    "jspdf": "^4.2.1",
     "mapbox-gl": "^3.24.0",
     "react": "19.2.3",
     "react-colorful": "^5.7.0",
