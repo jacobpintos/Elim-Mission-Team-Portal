@@ -266,6 +266,27 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
 
   const handleExportPdf = async () => {
     const html = buildChordSheetHtml(sheet, selectedKey, isMinor, keyIdx, colors.primary)
+
+    // expo-print's web implementation ignores the `html` option and just calls
+    // window.print() on the current page, so on web we render the document into
+    // a hidden iframe and print that instead — this is the only way to get the
+    // full multi-section sheet (with proper pagination) instead of a screenshot
+    // of whatever is currently on screen.
+    if (Platform.OS === 'web') {
+      const iframe = document.createElement('iframe')
+      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+      document.body.appendChild(iframe)
+      const doc = iframe.contentWindow?.document
+      if (!doc) { document.body.removeChild(iframe); return }
+      doc.open()
+      doc.write(html)
+      doc.close()
+      iframe.contentWindow?.focus()
+      iframe.contentWindow?.print()
+      setTimeout(() => document.body.removeChild(iframe), 1000)
+      return
+    }
+
     await printAsync({ html })
   }
 
