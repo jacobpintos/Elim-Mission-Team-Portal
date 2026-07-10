@@ -30,8 +30,15 @@ const FLAT_ROOT_INDICES = new Set([1, 3, 5, 8, 10])
  *
  * Token format:  [b|#]<degree>[quality]
  *   degree  : 1–7
- *   quality : m, maj7, m7, 7, sus4, dim, aug, add9, etc.
+ *   quality : m, maj7, m7, 7, sus4, dim, aug, add9, M, etc.
  *   examples: "1", "b7", "#4", "5m", "4maj7"
+ *
+ * In a major key, a bare 2, 3, or 6 (no quality at all) is diatonically
+ * minor — matching standard NNS convention — so it renders with an "m"
+ * automatically (e.g. "6" → "Am" in the key of C). Write "M" as the quality
+ * to force major instead (e.g. "6M" → "A"). This only applies to bare
+ * degrees: any other quality ("7", "m7", "sus4", …) is left exactly as
+ * written, so "67" is still the dominant 7 (A7), not "Am7".
  *
  * @param token    NNS token string
  * @param keyIdx   Index into NNS_KEYS (0 = C, 1 = Db, …)
@@ -61,10 +68,18 @@ export function nashvilleToChord(token: string, keyIdx: number, isMinor = false)
   const useFlatNames = FLAT_ROOT_INDICES.has(keyIdx)
   const noteName = useFlatNames ? CHROMATIC_FLATS[noteIdx] : CHROMATIC_SHARPS[noteIdx]
 
-  if (!quality) return noteName
+  // "M" on its own is an explicit-major marker — it overrides the diatonic
+  // minor default below and never appears in the rendered name.
+  const explicitMajor = quality === 'M'
+  const effectiveQuality = explicitMajor ? '' : quality
+
+  const diatonicMinor = !isMinor && !explicitMajor && !effectiveQuality && (degree === 2 || degree === 3 || degree === 6)
+  if (diatonicMinor) return `${noteName}m`
+
+  if (!effectiveQuality) return noteName
   // Wrap multi-word qualifiers in parens for readability: Ab(sus4), Ab(maj7), Ab(add9), Ab(dim), Ab(aug)
-  if (/^(sus|maj|add|dim|aug)/.test(quality)) return `${noteName}(${quality})`
-  return `${noteName}${quality}`
+  if (/^(sus|maj|add|dim|aug)/.test(effectiveQuality)) return `${noteName}(${effectiveQuality})`
+  return `${noteName}${effectiveQuality}`
 }
 
 /**
