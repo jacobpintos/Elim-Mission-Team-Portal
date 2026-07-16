@@ -17,6 +17,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.elim.missionportal',
+    config: {
+      usesNonExemptEncryption: false,
+    },
     infoPlist: {
       NSUserNotificationUsageDescription:
         'Mission Portal uses notifications to alert you about events, assignments, and messages.',
