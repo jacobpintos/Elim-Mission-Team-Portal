@@ -8,12 +8,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
-  updates: {
-    url: `https://u.expo.dev/${process.env.EAS_PROJECT_ID ?? ''}`,
-  },
-  runtimeVersion: {
-    policy: 'appVersion',
-  },
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.elim.missionportal',
