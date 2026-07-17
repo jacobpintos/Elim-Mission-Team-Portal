@@ -13,10 +13,17 @@ import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { ToastContainer } from '@/components/ui/Toast'
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  debug: __DEV__,
-})
+// No DSN is configured yet, so avoid touching the native Sentry SDK at all —
+// initializing with an empty/undefined dsn still triggers native setup, which
+// isn't something we want running unconfigured in production.
+const sentryEnabled = Boolean(process.env.EXPO_PUBLIC_SENTRY_DSN)
+
+if (sentryEnabled) {
+  Sentry.init({
+    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    debug: __DEV__,
+  })
+}
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -111,23 +118,27 @@ export default function RootLayout() {
     }
   }, [router])
 
-  return (
-    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaProvider>
-          <QueryClientProvider client={queryClient}>
-            <DynamicThemeProvider>
-              <ThemeProvider value={navTheme}>
-                <AuthGate>
-                  <Slot />
-                </AuthGate>
-                <ToastContainer />
-              </ThemeProvider>
-            </DynamicThemeProvider>
-          </QueryClientProvider>
-        </SafeAreaProvider>
-      </GestureHandlerRootView>
-    </Sentry.ErrorBoundary>
+  const content = (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <DynamicThemeProvider>
+            <ThemeProvider value={navTheme}>
+              <AuthGate>
+                <Slot />
+              </AuthGate>
+              <ToastContainer />
+            </ThemeProvider>
+          </DynamicThemeProvider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  )
+
+  return sentryEnabled ? (
+    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>{content}</Sentry.ErrorBoundary>
+  ) : (
+    content
   )
 }
 
