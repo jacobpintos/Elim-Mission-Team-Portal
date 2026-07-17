@@ -85,14 +85,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         iosDisplayInForeground: true,
       },
     ],
-    [
-      '@sentry/react-native/expo',
-      {
-        url: 'https://sentry.io/',
-        organization: 'the-well-of-iowa',
-        project: 'react-native',
-      },
-    ],
   ],
   scheme: 'mission',
   extra: {
