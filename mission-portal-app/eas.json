@@ -15,7 +15,7 @@
     "production": {
       "channel": "production",
       "autoIncrement": true,
-      "env": { "EXPO_PUBLIC_ENV": "production", "EAS_PROJECT_ID": "79c8ec55-2787-4ed3-8813-2ed6758f9065" }
+      "env": { "EXPO_PUBLIC_ENV": "production", "EAS_PROJECT_ID": "79c8ec55-2787-4ed3-8813-2ed6758f9065", "SENTRY_DISABLE_AUTO_UPLOAD": "true" }
     }
   },
   "submit": {
