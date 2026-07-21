@@ -4,15 +4,43 @@
     "preview": {
       "distribution": "internal",
       "ios": { "simulator": true },
-      "env": { "EXPO_PUBLIC_ENV": "preview", "EAS_PROJECT_ID": "79c8ec55-2787-4ed3-8813-2ed6758f9065" }
+      "env": {
+        "EXPO_PUBLIC_ENV": "preview",
+        "EAS_PROJECT_ID": "79c8ec55-2787-4ed3-8813-2ed6758f9065",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCFwC4mb68HBKVS88RVub7tWzoPmL59Wxs",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "mission-team-portal.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "mission-team-portal",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "mission-team-portal.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "222865106764",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:222865106764:web:100da541b795712f1091e9"
+      }
     },
     "staging": {
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_ENV": "staging", "EAS_PROJECT_ID": "79c8ec55-2787-4ed3-8813-2ed6758f9065" }
+      "env": {
+        "EXPO_PUBLIC_ENV": "staging",
+        "EAS_PROJECT_ID": "79c8ec55-2787-4ed3-8813-2ed6758f9065",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCFwC4mb68HBKVS88RVub7tWzoPmL59Wxs",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "mission-team-portal.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "mission-team-portal",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "mission-team-portal.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "222865106764",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:222865106764:web:100da541b795712f1091e9"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "env": { "EXPO_PUBLIC_ENV": "production", "EAS_PROJECT_ID": "79c8ec55-2787-4ed3-8813-2ed6758f9065", "SENTRY_DISABLE_AUTO_UPLOAD": "true" }
+      "env": {
+        "EXPO_PUBLIC_ENV": "production",
+        "EAS_PROJECT_ID": "79c8ec55-2787-4ed3-8813-2ed6758f9065",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCFwC4mb68HBKVS88RVub7tWzoPmL59Wxs",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "mission-team-portal.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "mission-team-portal",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "mission-team-portal.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "222865106764",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:222865106764:web:100da541b795712f1091e9"
+      }
     }
   },
   "submit": {
