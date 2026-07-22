@@ -62,6 +62,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   // TEMPORARY DIAGNOSTIC MARKER — see index.js.
+  // eslint-disable-next-line react-hooks/immutability
   ;(globalThis as any).__rootLayoutCalled = true
   const init = useAuthStore((s) => s.init)
   const teardown = useAuthStore((s) => s.teardown)
