@@ -48,3 +48,6 @@ export function useToast() {
   const toast = useUIStore((s) => s.toast)
   return toast
 }
+
+// TEMPORARY DIAGNOSTIC MARKER — see index.js.
+;(globalThis as any).__diag_toastLoaded = true

@@ -108,3 +108,6 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
     return t.onPrimaryOverride ?? autoTextColor(t.primary)
   },
 }))
+
+// TEMPORARY DIAGNOSTIC MARKER — see index.js.
+;(globalThis as any).__diag_themeStoreLoaded = true

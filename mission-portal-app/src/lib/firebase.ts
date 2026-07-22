@@ -45,3 +45,6 @@ export const auth = getFirebaseAuth()
 export const db = getFirestore(app)
 export const storage = getStorage(app)
 export const functions = getFunctions(app)
+
+// TEMPORARY DIAGNOSTIC MARKER — see index.js.
+;(globalThis as any).__diag_firebaseLoaded = true

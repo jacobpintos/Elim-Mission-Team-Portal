@@ -86,3 +86,6 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
     </TamaguiProvider>
   )
 }
+
+// TEMPORARY DIAGNOSTIC MARKER — see index.js.
+;(globalThis as any).__diag_dynamicThemeProviderLoaded = true

@@ -73,3 +73,6 @@ export async function unsubscribeFromPushTopic(_topic: string): Promise<void> {
 export function platformKey(): 'ios' | 'android' | 'web' {
   return Platform.OS === 'web' ? 'web' : (Platform.OS as 'ios' | 'android')
 }
+
+// TEMPORARY DIAGNOSTIC MARKER — see index.js.
+;(globalThis as any).__diag_notificationsLoaded = true

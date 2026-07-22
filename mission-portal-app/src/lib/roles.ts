@@ -68,3 +68,6 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
   tabs.push('public', 'settings')
   return tabs
 }
+
+// TEMPORARY DIAGNOSTIC MARKER — see index.js.
+;(globalThis as any).__diag_rolesLoaded = true

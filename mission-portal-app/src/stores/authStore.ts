@@ -144,3 +144,6 @@ function defaultNotificationPrefs() {
     monthlyDigest: false,
   }
 }
+
+// TEMPORARY DIAGNOSTIC MARKER — see index.js.
+;(globalThis as any).__diag_authStoreLoaded = true

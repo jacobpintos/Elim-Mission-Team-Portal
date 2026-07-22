@@ -52,15 +52,26 @@ function startWatchdogAndLoadApp() {
   // far execution actually got.
   setTimeout(() => {
     if (!global.__rootLayoutCalled) {
-      const moduleLoaded = Boolean(global.__layoutModuleLoaded)
+      // Checkpoints in _layout.tsx's own import chain, in the order they're
+      // expected to resolve (each import fully evaluates before the next one
+      // starts) — whichever is the LAST "true" here is the last file that
+      // finished loading; the hang is in whatever comes right after it.
+      const checkpoints = [
+        ['roles.ts', global.__diag_rolesLoaded],
+        ['tamagui.config.ts', global.__diag_tamaguiConfigLoaded],
+        ['firebase.ts', global.__diag_firebaseLoaded],
+        ['themeStore.ts', global.__diag_themeStoreLoaded],
+        ['DynamicThemeProvider.tsx', global.__diag_dynamicThemeProviderLoaded],
+        ['notifications.ts', global.__diag_notificationsLoaded],
+        ['authStore.ts', global.__diag_authStoreLoaded],
+        ['Toast.tsx', global.__diag_toastLoaded],
+        ['_layout.tsx (whole module)', global.__layoutModuleLoaded],
+      ]
+      const lines = checkpoints.map(([name, done]) => `${done ? '✓' : '✗'} ${name}`).join('\n')
       try {
         Alert.alert(
           'Startup watchdog (diagnostic build)',
-          `App did not reach RootLayout within 8s.\n\n` +
-            `_layout.tsx module finished loading: ${moduleLoaded}\n\n` +
-            (moduleLoaded
-              ? 'Module imports all resolved, but React never called RootLayout — hang is likely in expo-router itself or something between module load and first render.'
-              : 'Hung while evaluating _layout.tsx\'s own imports (e.g. firebase.ts, tamagui config, a store file) — before RootLayout could even be defined/called.')
+          `App did not reach RootLayout within 8s.\n\n${lines}`
         )
       } catch {
         // ignore
