@@ -13,6 +13,10 @@ import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { ToastContainer } from '@/components/ui/Toast'
 
+// TEMPORARY DIAGNOSTIC MARKER — see index.js. Confirms this module's top-level
+// code finished evaluating (i.e. all its imports resolved without hanging).
+;(globalThis as any).__layoutModuleLoaded = true
+
 // No DSN is configured yet, so avoid touching the native Sentry SDK at all —
 // initializing with an empty/undefined dsn still triggers native setup, which
 // isn't something we want running unconfigured in production.
@@ -57,6 +61,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
+  // TEMPORARY DIAGNOSTIC MARKER — see index.js.
+  ;(globalThis as any).__rootLayoutCalled = true
   const init = useAuthStore((s) => s.init)
   const teardown = useAuthStore((s) => s.teardown)
   const router = useRouter()

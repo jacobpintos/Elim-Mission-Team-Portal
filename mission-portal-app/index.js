@@ -40,8 +40,32 @@ AsyncStorage.getItem(STORAGE_KEY)
       }, 500)
       return
     }
-    require('expo-router/entry')
+    startWatchdogAndLoadApp()
   })
   .catch(() => {
-    require('expo-router/entry')
+    startWatchdogAndLoadApp()
   })
+
+function startWatchdogAndLoadApp() {
+  // If the app hangs before ever reaching a first render (no thrown error, so
+  // our ErrorUtils handler never fires), this fires instead and tells us how
+  // far execution actually got.
+  setTimeout(() => {
+    if (!global.__rootLayoutCalled) {
+      const moduleLoaded = Boolean(global.__layoutModuleLoaded)
+      try {
+        Alert.alert(
+          'Startup watchdog (diagnostic build)',
+          `App did not reach RootLayout within 8s.\n\n` +
+            `_layout.tsx module finished loading: ${moduleLoaded}\n\n` +
+            (moduleLoaded
+              ? 'Module imports all resolved, but React never called RootLayout — hang is likely in expo-router itself or something between module load and first render.'
+              : 'Hung while evaluating _layout.tsx\'s own imports (e.g. firebase.ts, tamagui config, a store file) — before RootLayout could even be defined/called.')
+        )
+      } catch {
+        // ignore
+      }
+    }
+  }, 8000)
+  require('expo-router/entry')
+}
