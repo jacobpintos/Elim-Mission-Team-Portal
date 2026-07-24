@@ -13,6 +13,14 @@
 // to AsyncStorage immediately (cheap, no UI involved), and display it on the
 // NEXT app launch, before ever requiring the crashing module chain.
 //
+// Second bug found: the previous version called startWatchdogAndLoadApp()
+// (which calls require('expo-router/entry')) from BOTH a .then() and a
+// sibling .catch() on the same promise chain — so if require() ever threw
+// synchronously, that exception was caught by the .catch() and the whole
+// broken require was retried a second time, corrupting AppRegistry
+// registration into "main has not been registered". Rewritten below as a
+// single linear async function with require() called from exactly one place.
+//
 // Revert this file and package.json's "main" field back to "expo-router/entry"
 // once the real error has been identified and fixed.
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -27,35 +35,31 @@ if (global.ErrorUtils) {
   })
 }
 
-AsyncStorage.getItem(STORAGE_KEY)
-  .then((stored) => {
-    if (stored) {
-      AsyncStorage.removeItem(STORAGE_KEY).catch(() => {})
-      setTimeout(() => {
-        try {
-          Alert.alert('Previous startup error', stored.slice(0, 3000))
-        } catch {
-          // ignore
-        }
-      }, 500)
-      return
-    }
-    startWatchdogAndLoadApp()
-  })
-  .catch(() => {
-    startWatchdogAndLoadApp()
-  })
+async function main() {
+  let stored = null
+  try {
+    stored = await AsyncStorage.getItem(STORAGE_KEY)
+  } catch {
+    // ignore — proceed as if there was nothing stored
+  }
 
-function startWatchdogAndLoadApp() {
+  if (stored) {
+    AsyncStorage.removeItem(STORAGE_KEY).catch(() => {})
+    setTimeout(() => {
+      try {
+        Alert.alert('Previous startup error', stored.slice(0, 3000))
+      } catch {
+        // ignore
+      }
+    }, 500)
+    return
+  }
+
   // If the app hangs before ever reaching a first render (no thrown error, so
   // our ErrorUtils handler never fires), this fires instead and tells us how
   // far execution actually got.
   setTimeout(() => {
     if (!global.__rootLayoutCalled) {
-      // Checkpoints in _layout.tsx's own import chain, in the order they're
-      // expected to resolve (each import fully evaluates before the next one
-      // starts) — whichever is the LAST "true" here is the last file that
-      // finished loading; the hang is in whatever comes right after it.
       const checkpoints = [
         ['roles.ts', global.__diag_rolesLoaded],
         ['tamagui.config.ts', global.__diag_tamaguiConfigLoaded],
@@ -78,5 +82,8 @@ function startWatchdogAndLoadApp() {
       }
     }
   }, 8000)
+
   require('expo-router/entry')
 }
+
+main()
