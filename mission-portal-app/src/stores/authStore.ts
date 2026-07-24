@@ -16,6 +16,7 @@ import {
   clearPushToken,
   platformKey,
 } from '@/lib/notifications'
+import { logDiagnosticError } from '@/lib/diagnostics'
 import type { UserProfile } from '@/types/user'
 
 interface AuthStore {
@@ -66,7 +67,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
               .then((result) => {
                 if (result) return persistPushToken(fbUser.uid, result.token, result.platform)
               })
-              .catch(() => {})
+              .catch((err) => logDiagnosticError('Push notification registration failed', err))
           }
           set({ profile: userProfile, loading: false })
         },

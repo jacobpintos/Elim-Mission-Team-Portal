@@ -3,6 +3,7 @@ import * as Device from 'expo-device'
 import { Platform } from 'react-native'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from './firebase'
+import { markProgress, clearProgress } from './diagnostics'
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -25,23 +26,45 @@ export async function registerForPushNotifications(): Promise<{
     return null
   }
 
+  // TEMPORARY DIAGNOSTIC CHECKPOINTS — see index.js / src/lib/diagnostics.ts.
+  // This whole flow has been crashing natively (RCTFatal via TurboModule
+  // invocation) right around permission request, with no catchable JS error
+  // reaching the caller's .catch(). Breadcrumbing each step to AsyncStorage
+  // so we know exactly which native call was in flight even if the crash
+  // itself bypasses JS entirely.
+  await markProgress('registerForPushNotifications: start')
+
+  await markProgress('before Notifications.getPermissionsAsync()')
   const { status: existingStatus } = await Notifications.getPermissionsAsync()
+  await markProgress(`after getPermissionsAsync(): ${existingStatus}`)
+
   let finalStatus = existingStatus
   if (existingStatus !== 'granted') {
+    await markProgress('before Notifications.requestPermissionsAsync()')
     const { status } = await Notifications.requestPermissionsAsync()
+    await markProgress(`after requestPermissionsAsync(): ${status}`)
     finalStatus = status
   }
-  if (finalStatus !== 'granted') return null
+  if (finalStatus !== 'granted') {
+    await clearProgress()
+    return null
+  }
 
   if (Platform.OS === 'android') {
+    await markProgress('before setNotificationChannelAsync()')
     await Notifications.setNotificationChannelAsync('default', {
       name: 'Default',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
     })
+    await markProgress('after setNotificationChannelAsync()')
   }
 
+  await markProgress('before getExpoPushTokenAsync()')
   const tokenData = await Notifications.getExpoPushTokenAsync()
+  await markProgress('after getExpoPushTokenAsync(): success')
+  await clearProgress()
+
   return {
     token: tokenData.data,
     platform: Platform.OS as 'ios' | 'android',

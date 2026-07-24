@@ -18,7 +18,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Alert } from 'react-native'
 
+// Kept as plain string literals (not imported from src/lib/diagnostics.ts)
+// to keep this sensitive entry file's dependency graph minimal — must match
+// FATAL_ERROR_KEY / PROGRESS_KEY there exactly.
 const STORAGE_KEY = '__diagnostic_last_fatal_error__'
+const PROGRESS_KEY = '__diagnostic_progress_trail__'
 
 if (global.ErrorUtils) {
   global.ErrorUtils.setGlobalHandler((error, isFatal) => {
@@ -57,15 +61,23 @@ setTimeout(() => {
 // MUST be synchronous and unconditional — see header comment.
 require('expo-router/entry')
 
-// Show any stored error from a previous launch on top of the (hopefully
-// working) app. Delayed so the root view exists before presenting an alert.
-AsyncStorage.getItem(STORAGE_KEY)
-  .then((stored) => {
-    if (!stored) return
+// Show any stored error AND/OR progress trail from a previous launch on top
+// of the (hopefully working) app. Delayed so the root view exists before
+// presenting an alert. The progress trail is checked even when there's no
+// fatal error, since a true native crash (Objective-C exception on a
+// TurboModule queue) bypasses JS's ErrorUtils entirely and leaves no error —
+// only the last breadcrumb written before the process died.
+Promise.all([AsyncStorage.getItem(STORAGE_KEY), AsyncStorage.getItem(PROGRESS_KEY)])
+  .then(([storedError, progressTrail]) => {
+    if (!storedError && !progressTrail) return
     AsyncStorage.removeItem(STORAGE_KEY).catch(() => {})
+    AsyncStorage.removeItem(PROGRESS_KEY).catch(() => {})
+    const parts = []
+    if (storedError) parts.push(`ERROR:\n${storedError}`)
+    if (progressTrail) parts.push(`LAST PROGRESS TRAIL (may be from a native crash with no catchable error):\n${progressTrail}`)
     setTimeout(() => {
       try {
-        Alert.alert('Previous startup error', stored.slice(0, 3000))
+        Alert.alert('Previous startup error', parts.join('\n\n---\n\n').slice(0, 3000))
       } catch {
         // ignore
       }
