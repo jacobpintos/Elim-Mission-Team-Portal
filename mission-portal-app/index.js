@@ -1,28 +1,20 @@
 // TEMPORARY DIAGNOSTIC ENTRY POINT.
 //
-// The production build crashes on launch with EXC_CRASH/SIGABRT via RCTFatal,
-// meaning an uncaught JS exception is thrown very early (during module import,
-// before the router even mounts). Apple's crash reporter doesn't preserve the
-// JS error message/stack, and Expo Go can't load this project (SDK version
-// mismatch) to get a red-screen trace instead.
+// Captures fatal startup JS errors (which Apple's crash logs don't preserve)
+// to AsyncStorage and displays them via alert, plus a watchdog that reports
+// how far module evaluation got if the app never reaches first render.
 //
-// First attempt (showing Alert.alert() immediately from inside the error
-// handler) caused a *second*, different crash: presenting a UIAlertController
-// this early, re-entrantly from inside exception handling, crashed in UIKit's
-// safe-area code before the alert could render. So instead: persist the error
-// to AsyncStorage immediately (cheap, no UI involved), and display it on the
-// NEXT app launch, before ever requiring the crashing module chain.
-//
-// Second bug found: the previous version called startWatchdogAndLoadApp()
-// (which calls require('expo-router/entry')) from BOTH a .then() and a
-// sibling .catch() on the same promise chain — so if require() ever threw
-// synchronously, that exception was caught by the .catch() and the whole
-// broken require was retried a second time, corrupting AppRegistry
-// registration into "main has not been registered". Rewritten below as a
-// single linear async function with require() called from exactly one place.
+// CRITICAL constraint learned the hard way: React Native requires the entry
+// module to register the root component ("main") SYNCHRONOUSLY during the
+// bundle's initial evaluation. An earlier version of this file deferred
+// require('expo-router/entry') until after an async AsyncStorage read — which
+// caused 'Invariant Violation: "main" has not been registered' plus an
+// eternal splash screen, alternating by launch depending on whether a stored
+// error short-circuited the require. So: require runs unconditionally at top
+// level, and the stored-error alert is shown ON TOP of the app asynchronously.
 //
 // Revert this file and package.json's "main" field back to "expo-router/entry"
-// once the real error has been identified and fixed.
+// once the underlying issue is confirmed fixed.
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Alert } from 'react-native'
 
@@ -35,15 +27,41 @@ if (global.ErrorUtils) {
   })
 }
 
-async function main() {
-  let stored = null
-  try {
-    stored = await AsyncStorage.getItem(STORAGE_KEY)
-  } catch {
-    // ignore — proceed as if there was nothing stored
+// Watchdog: if the app hangs before first render (no thrown error, so the
+// ErrorUtils handler never fires), report which modules finished evaluating.
+setTimeout(() => {
+  if (!global.__rootLayoutCalled) {
+    const checkpoints = [
+      ['roles.ts', global.__diag_rolesLoaded],
+      ['tamagui.config.ts', global.__diag_tamaguiConfigLoaded],
+      ['firebase.ts', global.__diag_firebaseLoaded],
+      ['themeStore.ts', global.__diag_themeStoreLoaded],
+      ['DynamicThemeProvider.tsx', global.__diag_dynamicThemeProviderLoaded],
+      ['notifications.ts', global.__diag_notificationsLoaded],
+      ['authStore.ts', global.__diag_authStoreLoaded],
+      ['Toast.tsx', global.__diag_toastLoaded],
+      ['_layout.tsx (whole module)', global.__layoutModuleLoaded],
+    ]
+    const lines = checkpoints.map(([name, done]) => `${done ? '✓' : '✗'} ${name}`).join('\n')
+    try {
+      Alert.alert(
+        'Startup watchdog (diagnostic build)',
+        `App did not reach RootLayout within 8s.\n\n${lines}`
+      )
+    } catch {
+      // ignore
+    }
   }
+}, 8000)
 
-  if (stored) {
+// MUST be synchronous and unconditional — see header comment.
+require('expo-router/entry')
+
+// Show any stored error from a previous launch on top of the (hopefully
+// working) app. Delayed so the root view exists before presenting an alert.
+AsyncStorage.getItem(STORAGE_KEY)
+  .then((stored) => {
+    if (!stored) return
     AsyncStorage.removeItem(STORAGE_KEY).catch(() => {})
     setTimeout(() => {
       try {
@@ -51,39 +69,6 @@ async function main() {
       } catch {
         // ignore
       }
-    }, 500)
-    return
-  }
-
-  // If the app hangs before ever reaching a first render (no thrown error, so
-  // our ErrorUtils handler never fires), this fires instead and tells us how
-  // far execution actually got.
-  setTimeout(() => {
-    if (!global.__rootLayoutCalled) {
-      const checkpoints = [
-        ['roles.ts', global.__diag_rolesLoaded],
-        ['tamagui.config.ts', global.__diag_tamaguiConfigLoaded],
-        ['firebase.ts', global.__diag_firebaseLoaded],
-        ['themeStore.ts', global.__diag_themeStoreLoaded],
-        ['DynamicThemeProvider.tsx', global.__diag_dynamicThemeProviderLoaded],
-        ['notifications.ts', global.__diag_notificationsLoaded],
-        ['authStore.ts', global.__diag_authStoreLoaded],
-        ['Toast.tsx', global.__diag_toastLoaded],
-        ['_layout.tsx (whole module)', global.__layoutModuleLoaded],
-      ]
-      const lines = checkpoints.map(([name, done]) => `${done ? '✓' : '✗'} ${name}`).join('\n')
-      try {
-        Alert.alert(
-          'Startup watchdog (diagnostic build)',
-          `App did not reach RootLayout within 8s.\n\n${lines}`
-        )
-      } catch {
-        // ignore
-      }
-    }
-  }, 8000)
-
-  require('expo-router/entry')
-}
-
-main()
+    }, 2000)
+  })
+  .catch(() => {})
