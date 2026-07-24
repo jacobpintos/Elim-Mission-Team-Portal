@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
+import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from './firebase'
@@ -60,8 +61,14 @@ export async function registerForPushNotifications(): Promise<{
     await markProgress('after setNotificationChannelAsync()')
   }
 
-  await markProgress('before getExpoPushTokenAsync()')
-  const tokenData = await Notifications.getExpoPushTokenAsync()
+  // getExpoPushTokenAsync throws if it can't resolve a projectId. It normally
+  // infers it from Constants, but pass it explicitly (matching the SDK 56 docs
+  // example) so the token call never depends on manifest inference.
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ??
+    (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId
+  await markProgress(`before getExpoPushTokenAsync() (projectId: ${projectId ?? 'MISSING'})`)
+  const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
   await markProgress('after getExpoPushTokenAsync(): success')
   await clearProgress()
 
@@ -74,7 +81,7 @@ export async function registerForPushNotifications(): Promise<{
 export async function persistPushToken(
   _uid: string,
   token: string,
-  platform: 'ios' | 'android' | 'web',
+  platform: 'ios' | 'android' | 'web'
 ): Promise<void> {
   // Delegates to Cloud Function which writes to Firestore and subscribes to topics
   const registerPushToken = httpsCallable(functions, 'registerPushToken')
@@ -83,7 +90,7 @@ export async function persistPushToken(
 
 export async function clearPushToken(
   _uid: string,
-  platform: 'ios' | 'android' | 'web',
+  platform: 'ios' | 'android' | 'web'
 ): Promise<void> {
   const registerPushToken = httpsCallable(functions, 'registerPushToken')
   await registerPushToken({ token: null, platform })

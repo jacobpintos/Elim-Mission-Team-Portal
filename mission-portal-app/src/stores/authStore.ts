@@ -57,17 +57,26 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         doc(db, 'users', fbUser.uid),
         (snap) => {
           const userProfile = snap.exists()
-              ? ({ ...(snap.data() as UserProfile), uid: fbUser.uid } as UserProfile)
-              : null
+            ? ({ ...(snap.data() as UserProfile), uid: fbUser.uid } as UserProfile)
+            : null
           if (!loginAtWritten && userProfile) {
             loginAtWritten = true
             set({ prevLoginAt: userProfile.lastLoginAt ?? null })
             updateDoc(doc(db, 'users', fbUser.uid), { lastLoginAt: Date.now() }).catch(() => {})
-            registerForPushNotifications()
-              .then((result) => {
-                if (result) return persistPushToken(fbUser.uid, result.token, result.platform)
-              })
-              .catch((err) => logDiagnosticError('Push notification registration failed', err))
+            // Defer push registration off the critical cold-start path. On a
+            // restored session this callback fires within the first couple of
+            // seconds of launch, before React has committed its first render;
+            // kicking off native notification registration there was crashing
+            // the app before any UI appeared. Waiting lets the app render and
+            // settle first (and avoids prompting for permissions the instant
+            // the app opens).
+            setTimeout(() => {
+              registerForPushNotifications()
+                .then((result) => {
+                  if (result) return persistPushToken(fbUser.uid, result.token, result.platform)
+                })
+                .catch((err) => logDiagnosticError('Push notification registration failed', err))
+            }, 4000)
           }
           set({ profile: userProfile, loading: false })
         },
