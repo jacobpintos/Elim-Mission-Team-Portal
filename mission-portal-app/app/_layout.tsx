@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Platform, Text } from 'react-native'
+import { Platform, Text, ScrollView } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Slot, useRouter, useSegments, ThemeProvider, DarkTheme, DefaultTheme } from 'expo-router'
 import { visibleTabs } from '@/lib/roles'
 import '@tamagui/core/reset.css'
@@ -108,16 +109,32 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (Platform.OS === 'web') return
-    notifListener.current = Notifications.addNotificationReceivedListener((notification) => {
-      console.log('Notification received:', notification)
-    })
+    // Wrapped defensively: these are native expo-notifications calls that run
+    // at startup (independent of the deferred token registration). A throw
+    // here must not take down the app.
+    try {
+      notifListener.current = Notifications.addNotificationReceivedListener((notification) => {
+        console.log('Notification received:', notification)
+      })
 
-    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { type?: string; link?: string }
-      if (data.link) {
-        router.push(data.link as Parameters<typeof router.push>[0])
-      }
-    })
+      responseListener.current = Notifications.addNotificationResponseReceivedListener(
+        (response) => {
+          const data = response.notification.request.content.data as {
+            type?: string
+            link?: string
+          }
+          if (data.link) {
+            router.push(data.link as Parameters<typeof router.push>[0])
+          }
+        }
+      )
+    } catch (err) {
+      const e = err as { message?: string; stack?: string } | undefined
+      AsyncStorage.setItem(
+        '__diagnostic_last_fatal_error__',
+        `Notification listener setup failed: ${e?.message ?? String(err)}\n\n${e?.stack ?? '(no stack)'}`
+      ).catch(() => {})
+    }
 
     return () => {
       notifListener.current?.remove()
@@ -161,5 +178,50 @@ function ErrorFallback() {
         Please reload the page to try again.
       </Text>
     </GestureHandlerRootView>
+  )
+}
+
+// TEMPORARY DIAGNOSTIC ERROR BOUNDARY — see index.js.
+//
+// Expo Router renders this as `<Try catch={ErrorBoundary}><RootLayout/></Try>`,
+// so it wraps RootLayout itself and catches React RENDER/commit errors anywhere
+// in the app. This is the one class of error that bypasses
+// ErrorUtils.setGlobalHandler entirely: in the New Architecture, React routes
+// uncaught render errors through its own onUncaughtError → ExceptionsManager →
+// reportFatal → abort() path. Catching them here both stops the crash loop and
+// surfaces the real message on screen (plus persists it for the next launch).
+//
+// Remove this export once the underlying issue is confirmed fixed.
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  useEffect(() => {
+    const message = `RENDER ERROR: ${error?.message ?? String(error)}\n\n${error?.stack ?? '(no stack)'}`
+    AsyncStorage.setItem('__diagnostic_last_fatal_error__', message).catch(() => {})
+  }, [error])
+
+  // Deliberately depends on NO app providers (theme, safe-area, gesture
+  // handler) so it can render even when one of those is what threw.
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: '#ffffff' }}
+      contentContainerStyle={{ padding: 24, paddingTop: 72 }}
+    >
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#dc2626', marginBottom: 12 }}>
+        App error (diagnostic build)
+      </Text>
+      <Text selectable style={{ fontSize: 14, color: '#111111' }}>
+        {error?.message ?? String(error)}
+      </Text>
+      <Text selectable style={{ fontSize: 11, color: '#555555', marginTop: 16 }}>
+        {error?.stack ?? '(no stack)'}
+      </Text>
+      <Text
+        onPress={() => {
+          retry().catch(() => {})
+        }}
+        style={{ marginTop: 24, fontSize: 16, color: '#2563eb' }}
+      >
+        Tap to retry
+      </Text>
+    </ScrollView>
   )
 }
