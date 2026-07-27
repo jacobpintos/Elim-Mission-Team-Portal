@@ -11,6 +11,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
 import { likeFbPost, unlikeFbPost, postFbComment } from '@/lib/fbGraph'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { Img } from '@/components/ui/Img'
 
 // Shape of posts — from Firestore (Zapier) or demo fallback
 interface FbPost {
@@ -284,7 +285,7 @@ export default function PageFeed() {
         <XStack padding="$3" gap="$2" alignItems="center">
           <View style={styles.pageAvatar}>
             {page.bgImage ? (
-              <img src={page.bgImage} alt={page.label} style={styles.pageAvatarImg} />
+              <Img src={page.bgImage} alt={page.label} style={styles.pageAvatarImg} />
             ) : (
               <View style={[styles.pageAvatarImg, { backgroundColor: colors.primary + '55' }]} />
             )}
@@ -322,7 +323,7 @@ export default function PageFeed() {
 
         {/* Post image */}
         {post.fullPicture ? (
-          <img
+          <Img
             src={post.fullPicture}
             alt="Post"
             style={styles.postImage}
@@ -406,7 +407,7 @@ export default function PageFeed() {
               <XStack key={c.id} gap="$2" alignItems="flex-start">
                 <View style={styles.commentAvatar}>
                   {c.fromPicture ? (
-                    <img src={c.fromPicture} alt={c.fromName} style={styles.commentAvatarImg} />
+                    <Img src={c.fromPicture} alt={c.fromName} style={styles.commentAvatarImg} />
                   ) : (
                     <Text color="white" fontSize={11} fontWeight="700">
                       {c.fromName.charAt(0).toUpperCase()}

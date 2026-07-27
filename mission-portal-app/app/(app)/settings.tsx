@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { ScrollView, Pressable, TextInput, StyleSheet, View } from 'react-native'
+import { ScrollView, Pressable, TextInput, StyleSheet, View, Platform } from 'react-native'
 import { YStack, XStack, Text, Switch, Label, Separator } from 'tamagui'
 import { useRouter } from 'expo-router'
 import {
@@ -134,8 +134,44 @@ export default function SettingsScreen() {
   }
 
   // ── Photo upload ────────────────────────────────────────────────────────────
-  const handlePickPhoto = () => {
-    fileInputRef.current?.click()
+  const handlePickPhoto = async () => {
+    if (Platform.OS === 'web') {
+      fileInputRef.current?.click()
+      return
+    }
+    // Native: use expo-image-picker instead of a hidden <input type="file">
+    // (which has no React Native host component). expo-image-picker's quality
+    // option handles compression, so we skip the web-only canvas compressImage.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const ImagePicker = require('expo-image-picker')
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!perm.granted) {
+        toast('Photo library permission denied', 'error')
+        return
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
+      })
+      if (result.canceled) return
+      const asset = result.assets?.[0]
+      if (!asset?.base64) return
+      setPhotoUploading(true)
+      const dataUrl = `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`
+      const sref = storageRef(storage, `avatars/${fbUser.uid}`)
+      await uploadString(sref, dataUrl, 'data_url')
+      const photoURL = await getDownloadURL(sref)
+      await updateDoc(doc(db, 'users', fbUser.uid), { photoURL })
+      toast('Photo updated', 'success')
+    } catch {
+      toast('Failed to upload photo', 'error')
+    } finally {
+      setPhotoUploading(false)
+    }
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -280,14 +316,16 @@ export default function SettingsScreen() {
     <YStack flex={1} backgroundColor={colors.background}>
       <ScreenTitle options={{ title: 'Profile & Settings' }} />
 
-      {/* Hidden file input for photo upload */}
-      <input
-        ref={fileInputRef as React.RefObject<HTMLInputElement>}
-        type="file"
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
+      {/* Hidden file input for photo upload (web only; native uses expo-image-picker) */}
+      {Platform.OS === 'web' ? (
+        <input
+          ref={fileInputRef as React.RefObject<HTMLInputElement>}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+      ) : null}
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 24 }}>
 

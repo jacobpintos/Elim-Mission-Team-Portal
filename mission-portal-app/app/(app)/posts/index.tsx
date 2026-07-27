@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
+import { Img } from '@/components/ui/Img'
 import type { PostPage } from '@/types/events'
 
 function nanoid() {
@@ -168,7 +169,7 @@ export default function PostsIndex() {
                   {/* Left: photo panel */}
                   <View style={styles.pillLeft}>
                     {page.bgImage ? (
-                      <img src={page.bgImage} alt="" style={styles.pillImg as object} />
+                      <Img src={page.bgImage} alt="" style={styles.pillImg} />
                     ) : (
                       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.primary + '77' }]} />
                     )}
