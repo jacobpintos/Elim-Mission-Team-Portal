@@ -435,10 +435,13 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
       top: y,
       width: Math.max(w, 4),
       height: Math.max(h, 4),
-      borderWidth: 2,
+      borderWidth: 3,
+      borderStyle: 'dashed' as const,
       borderColor: shapePreviewColor.value,
       borderRadius: shapePreviewRadius.value,
-      backgroundColor: 'transparent' as const,
+      // Translucent fill so the shape being drawn is clearly visible while
+      // gesturing (a thin transparent border read as "no indicator").
+      backgroundColor: shapePreviewColor.value + '33',
     }
   })
 
