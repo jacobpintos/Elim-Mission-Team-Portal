@@ -139,6 +139,8 @@ export interface Task {
   dueDate?: string | null
   projectedDate?: string | null
   overdueNotified?: boolean
+  notifiedDueWeekAt?: string | null // date str this task's 1-week-out reminder was sent, for dedup
+  notifiedDueTodayAt?: string | null // date str this task's due-today reminder was sent, for dedup
   taskType?: 'kaizen_verification' | 'kaizen_action' | 'issue_corrective' | 'worship_setlist_ack'
   kaizenId?: string | number
   issueId?: string | number
@@ -154,6 +156,7 @@ export interface Room {
   members: (string | number)[]
   call: boolean
   reviewers: (string | number)[]
+  mutedBy?: (string | number)[]
   updatedAt?: unknown
 }
 

@@ -19,8 +19,9 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { MessageBubble } from '@/components/ui/MessageBubble'
 import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
-import { updateDoc, doc, arrayUnion } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import type { Message, MessageAttachment } from '@/types/events'
 
 export default function ThreadScreen() {
@@ -118,9 +119,34 @@ export default function ThreadScreen() {
       await updateDoc(doc(db, 'rooms', String(room.id)), {
         reviewers: arrayUnion(uid),
       })
+      // Alert the other admins that this chat needs review.
+      const sendNotif = httpsCallable(functions, 'sendNotification')
+      users
+        .filter((u) => u.roles?.includes('admin') && !sameId(u.uid, uid))
+        .forEach((u) => {
+          sendNotif({
+            uid: String(u.uid),
+            type: 'chatFlagged',
+            data: { roomName: room.name ?? '', roomId: String(room.id) },
+          }).catch(() => {})
+        })
       toast('Room flagged for review', 'info')
     } catch {
       toast('Failed to flag room', 'error')
+    }
+  }
+
+  const isMuted = (room?.mutedBy ?? []).some((m) => sameId(m, uid))
+
+  const handleToggleMute = async () => {
+    if (!room) return
+    try {
+      await updateDoc(doc(db, 'rooms', String(room.id)), {
+        mutedBy: isMuted ? arrayRemove(uid) : arrayUnion(uid),
+      })
+      toast(isMuted ? 'Notifications on' : 'Chat muted', 'info')
+    } catch {
+      toast('Failed to update mute setting', 'error')
     }
   }
 
@@ -171,8 +197,13 @@ export default function ThreadScreen() {
         <Text color={colors.text} fontWeight="600" fontSize="$3" numberOfLines={1} flex={1}>
           {room?.name ?? 'Messages'}
         </Text>
+        <Pressable onPress={handleToggleMute} hitSlop={8} style={{ marginLeft: 8 }}>
+          <Text color={isMuted ? colors.textMuted : colors.primary} fontSize="$2">
+            {isMuted ? '🔕 Muted' : '🔔 Mute'}
+          </Text>
+        </Pressable>
         {admin ? (
-          <Pressable onPress={handleFlagForReview} style={{ marginLeft: 8 }}>
+          <Pressable onPress={handleFlagForReview} hitSlop={8} style={{ marginLeft: 8 }}>
             <Text color={colors.primary} fontSize="$2">
               Flag
             </Text>

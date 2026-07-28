@@ -152,6 +152,17 @@ function defaultNotificationPrefs() {
     issueAssigned: { push: true, email: false },
     weeklyDigest: true,
     monthlyDigest: false,
+    eventJoin: { push: true, email: false },
+    eventRemoved: { push: true, email: false },
+    worshipSetAssigned: { push: true, email: false },
+    taskDueSoon: { push: true, email: false },
+    rsvpNonAvailable: { push: true, email: false },
+    kaizenSubmission: { push: true, email: false },
+    issueSubmission: { push: true, email: false },
+    eventHealthBehind: { push: true, email: false },
+    chatFlagged: { push: true, email: false },
+    securityReport: { push: true, email: false },
+    weatherAlertAdmin: { push: true, email: false },
   }
 }
 

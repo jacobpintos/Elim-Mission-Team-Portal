@@ -229,7 +229,13 @@ export default function AppLayout() {
 
   const showReportButton = !isPublic(effectiveProfile) || hasPublicEventToday
 
-  const securityUsers = users.filter((u) => isSecurity(u))
+  // Security reports go to security users AND admins (deduped — a user with
+  // both roles should only be notified once).
+  const securityReportAudience = Array.from(
+    new Map(
+      users.filter((u) => isSecurity(u) || u.roles?.includes('admin')).map((u) => [String(u.uid), u])
+    ).values()
+  )
 
   const handleReportSubmit = async (data: {
     description: string
@@ -249,13 +255,12 @@ export default function AppLayout() {
         data.photoFile
       )
       const sendNotif = httpsCallable(functions, 'sendNotification')
-      securityUsers.forEach((u) => {
+      securityReportAudience.forEach((u) => {
         sendNotif({
           uid: String(u.uid),
-          type: 'announcement',
+          type: 'securityReport',
           data: {
-            title: '🚨 Security Report',
-            body: `New incident at ${data.location}: ${data.description.slice(0, 80)}${data.description.length > 80 ? '…' : ''}`,
+            message: `🚨 New incident at ${data.location}: ${data.description.slice(0, 80)}${data.description.length > 80 ? '…' : ''}`,
           },
         }).catch(() => {})
       })

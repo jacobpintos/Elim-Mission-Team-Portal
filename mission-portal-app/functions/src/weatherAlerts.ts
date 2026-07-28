@@ -1,7 +1,8 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
-import { sendExpoPush } from './push/expoPush'
+import { RESEND_API_KEY } from './email/client'
+import { notifyUser } from './push/notifyCore'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -98,7 +99,9 @@ function isUpcomingInDays(t: EventTemplateRaw, todayStr: string, limitStr: strin
   return false
 }
 
-export const weatherAlertCheck = onSchedule('0 */4 * * *', async () => {
+export const weatherAlertCheck = onSchedule(
+  { schedule: '0 */4 * * *', secrets: [RESEND_API_KEY] },
+  async () => {
   const db = admin.firestore()
   const todayStr = todayUTCStr()
   const limitStr = addDaysStr(todayStr, 7)
@@ -148,33 +151,15 @@ export const weatherAlertCheck = onSchedule('0 */4 * * *', async () => {
 
   if (locMap.size === 0) return
 
-  // Load all non-public users with push tokens upfront
-  const usersSnap = await db.collection('users').get()
-  const memberTokenMap = new Map<string, string[]>()
-
-  for (const d of usersSnap.docs) {
-    const data = d.data()
-    if ((data.roles as string[] | undefined)?.includes('public')) continue
-
-    const tokens: string[] = []
-    const pushTokens = data.pushTokens as Record<string, string | null> | undefined
-    if (pushTokens) {
-      for (const token of Object.values(pushTokens)) {
-        if (typeof token === 'string' && token.startsWith('ExponentPushToken')) {
-          tokens.push(token)
-        }
-      }
-    }
-    if (tokens.length > 0) memberTokenMap.set(d.id, tokens)
-  }
-
-  // Load groups for member resolution
-  const groupsSnap = await db.collection('groups').get()
-  const groupMembersMap = new Map<string, string[]>()
-  for (const d of groupsSnap.docs) {
-    const members = (d.data().members as (string | number)[] | undefined) ?? []
-    groupMembersMap.set(d.id, members.map(String))
-  }
+  // Weather alerts are an ADMIN-facing notification: rather than alerting
+  // everyone assigned to the event, notify admins so they can decide how to
+  // respond. Delivery goes through notifyUser so it respects each admin's
+  // prefs and participates in the batching window.
+  const adminsSnap = await db
+    .collection('users')
+    .where('roles', 'array-contains', 'admin')
+    .get()
+  const adminUids = adminsSnap.docs.map((d) => d.id)
 
   // For each location, fetch NWS alerts and notify
   for (const [, { lat, lng, eventDocs }] of locMap) {
@@ -206,46 +191,18 @@ export const weatherAlertCheck = onSchedule('0 */4 * * *', async () => {
         const sentSnap = await sentRef.get()
         if (sentSnap.exists) continue
 
-        // Collect assigned user IDs
-        const userIds = new Set<string>()
-        const hasAssignees =
-          (evDoc.users?.length ?? 0) > 0 ||
-          (evDoc.groups?.length ?? 0) > 0 ||
-          (evDoc.teams?.length ?? 0) > 0
-
-        if (!hasAssignees) {
-          // General event: notify all non-public members
-          for (const uid of memberTokenMap.keys()) userIds.add(uid)
-        } else {
-          for (const uid of evDoc.users ?? []) userIds.add(String(uid))
-          for (const gid of evDoc.groups ?? []) {
-            for (const uid of groupMembersMap.get(String(gid)) ?? []) userIds.add(uid)
-          }
-          for (const team of evDoc.teams ?? []) {
-            for (const uid of [...(team.leaders ?? []), ...(team.members ?? [])]) {
-              userIds.add(String(uid))
-            }
-          }
-        }
-
-        // Gather tokens
-        const tokens: string[] = []
-        for (const uid of userIds) {
-          for (const token of memberTokenMap.get(uid) ?? []) {
-            tokens.push(token)
-          }
-        }
-
-        if (tokens.length > 0) {
-          const title = `⚠️ Weather Alert — ${evDoc.title ?? 'Upcoming Event'}`
-          const body = `${alert.event}: ${alert.headline}`.slice(0, 178)
-          await sendExpoPush(tokens, title, body, {
-            type: 'weatherAlert',
+        for (const uid of adminUids) {
+          await notifyUser(uid, 'weatherAlertAdmin', {
+            eventTitle: evDoc.title ?? 'Upcoming Event',
+            alertEvent: alert.event,
+            headline: alert.headline,
             eventId: evDoc.id,
             alertId: alert.id,
           })
+        }
+        if (adminUids.length > 0) {
           logger.info(
-            `Weather alert "${alert.event}" sent to ${tokens.length} token(s) for event "${evDoc.title ?? evDoc.id}"`
+            `Weather alert "${alert.event}" sent to ${adminUids.length} admin(s) for event "${evDoc.title ?? evDoc.id}"`
           )
         }
 
@@ -268,9 +225,10 @@ export const weatherAlertCheck = onSchedule('0 */4 * * *', async () => {
     .where('sentAt', '<', sevenDaysAgo)
     .limit(500)
     .get()
-  if (!oldSnap.empty) {
-    const batch = db.batch()
-    oldSnap.docs.forEach((d) => batch.delete(d.ref))
-    await batch.commit()
+    if (!oldSnap.empty) {
+      const batch = db.batch()
+      oldSnap.docs.forEach((d) => batch.delete(d.ref))
+      await batch.commit()
+    }
   }
-})
+)

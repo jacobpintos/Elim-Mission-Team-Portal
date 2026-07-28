@@ -84,6 +84,25 @@ export default function WorshipScreen() {
           ? worshipUsers.filter((wu) => evUsers.some((eu) => sameId(eu, wu.uid)))
           : []
 
+        // Notify anyone on a team whose NAME contains "worship" for this event
+        // (per spec this is team-name-based, not role-based, so e.g. a
+        // "Worship Band" team member gets it even without the worship role).
+        const worshipTeamUids = new Set<string>()
+        for (const team of evTemplate?.teams ?? []) {
+          if (!team.name?.toLowerCase().includes('worship')) continue
+          ;[...team.leaders, ...team.members].forEach((m) => worshipTeamUids.add(String(m)))
+        }
+        worshipTeamUids.forEach((wuid) => {
+          sendNotif({
+            uid: wuid,
+            type: 'worshipSetAssigned',
+            data: {
+              setListTitle: data.title,
+              eventTitle: evTemplate?.title ?? 'an event',
+            },
+          }).catch(() => {})
+        })
+
         for (const wu of assignedWorshipUsers) {
           await tasksStore.createTask({
             title: `Acknowledge set list: ${data.title}`,
