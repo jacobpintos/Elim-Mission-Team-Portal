@@ -5,6 +5,8 @@ import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useUsersStore } from '@/stores/usersStore'
+import { useGroupsStore } from '@/stores/groupsStore'
+import { RecipientPicker } from '@/components/ui/RecipientPicker'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
 import { isAdmin, isPublic } from '@/lib/roles'
@@ -37,13 +39,20 @@ export default function AnnounceScreen() {
     publicAnnouncements,
   } = useAnnounceStore()
   const { users, subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
+  const { groups, subscribe: subGroups, unsubscribe: unsubGroups } = useGroupsStore()
 
   useEffect(() => {
     subscribe()
-    if (admin) subUsers()
+    if (admin) {
+      subUsers()
+      subGroups()
+    }
     return () => {
       unsubscribe()
-      if (admin) unsubUsers()
+      if (admin) {
+        unsubUsers()
+        unsubGroups()
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin])
@@ -61,12 +70,6 @@ export default function AnnounceScreen() {
   const [aPublic, setAPublic] = useState(false)
   const [aAudience, setAAudience] = useState<string[]>([])
   const [creating, setCreating] = useState(false)
-
-  const toggleAudience = (memberId: string) => {
-    setAAudience((prev) =>
-      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
-    )
-  }
 
   const handleCreate = async () => {
     if (!aTitle.trim() || !aBody.trim()) {
@@ -309,49 +312,21 @@ export default function AnnounceScreen() {
                     <Text color={colors.textMuted} fontSize={11} marginBottom="$1">
                       Leave empty to send to all non-public members
                     </Text>
-                    <ScrollView style={{ maxHeight: 200 }}>
-                      {nonPublicUsers.map((u) => {
-                        const selected = aAudience.includes(String(u.uid))
-                        return (
-                          <Pressable
-                            key={String(u.uid)}
-                            onPress={() => toggleAudience(String(u.uid))}
-                          >
-                            <XStack
-                              paddingVertical="$2"
-                              paddingHorizontal="$2"
-                              gap="$3"
-                              alignItems="center"
-                              borderBottomWidth={1}
-                              borderBottomColor={colors.border}
-                              backgroundColor={selected ? colors.primary + '18' : 'transparent'}
-                            >
-                              <View
-                                style={{
-                                  width: 18,
-                                  height: 18,
-                                  borderRadius: 4,
-                                  borderWidth: 2,
-                                  borderColor: selected ? colors.primary : colors.border,
-                                  backgroundColor: selected ? colors.primary : 'transparent',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                {selected ? (
-                                  <Text color="white" fontSize={11}>
-                                    ✓
-                                  </Text>
-                                ) : null}
-                              </View>
-                              <Text color={colors.text} fontSize="$3">
-                                {u.displayName || u.email || String(u.uid)}
-                              </Text>
-                            </XStack>
-                          </Pressable>
-                        )
-                      })}
-                    </ScrollView>
+                    <RecipientPicker
+                      users={nonPublicUsers.map((u) => ({
+                        uid: u.uid,
+                        displayName: u.displayName,
+                        email: u.email,
+                      }))}
+                      groups={groups.map((g) => ({
+                        id: g.id,
+                        name: g.name,
+                        members: g.members,
+                      }))}
+                      value={aAudience}
+                      onChange={setAAudience}
+                      placeholder="Search people or groups…"
+                    />
                   </YStack>
                 ) : null}
 

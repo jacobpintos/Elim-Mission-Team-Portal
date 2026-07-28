@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, TextInput, Pressable, StyleSheet, Modal, View, Platform, Linking } from 'react-native'
+import { ScrollView, TextInput, Pressable, StyleSheet, Modal, View, Platform } from 'react-native'
+import { WebView } from 'react-native-webview'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -33,40 +34,21 @@ function YouTubeEmbed({ url }: { url: string }) {
   const id = extractYouTubeId(url)
   if (!id) return null
 
-  // React Native has no <iframe> host component. On native, present the
-  // thumbnail with a play affordance that opens the video in the YouTube app
-  // or browser instead of embedding it inline.
+  // React Native has no <iframe> host component. On native, embed the YouTube
+  // player inline via a WebView so the video plays inside the app.
   if (Platform.OS !== 'web') {
+    const nativeEmbedUrl = `https://www.youtube.com/embed/${id}?playsinline=1&rel=0&modestbranding=1&autoplay=1`
     return (
-      <Pressable
-        onPress={() => Linking.openURL(url).catch(() => {})}
-        style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
-      >
-        <Img
-          src={youtubeThumbnail(url)}
-          alt="Video thumbnail"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-          }}
-        />
-        <View
-          style={{
-            backgroundColor: 'rgba(0,0,0,0.55)',
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            borderRadius: 24,
-          }}
-        >
-          <Text color="white" fontWeight="700">
-            ▶  Watch on YouTube
-          </Text>
-        </View>
-      </Pressable>
+      <WebView
+        source={{ uri: nativeEmbedUrl }}
+        style={{ flex: 1, backgroundColor: '#000' }}
+        originWhitelist={['*']}
+        javaScriptEnabled
+        domStorageEnabled
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        allowsFullscreenVideo
+      />
     )
   }
 
