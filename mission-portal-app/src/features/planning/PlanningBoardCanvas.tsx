@@ -8,6 +8,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   Linking,
+  Platform,
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -51,6 +52,41 @@ const TOOL_BUTTONS: { type: ToolType; label: string; icon: string }[] = [
 
 const NOTE_COLORS = ['#FFF176', '#B3E5FC', '#C8E6C9', '#F8BBD0', '#E1BEE7']
 
+// Text box formatting maps.
+const TEXT_FONT_SIZES: Record<'sm' | 'md' | 'lg' | 'xl', number> = {
+  sm: 12,
+  md: 16,
+  lg: 22,
+  xl: 30,
+}
+// Resolve a typeface key to a concrete platform font family (system fonts, so
+// no extra font files need bundling). iOS ships Georgia / Courier New / Bradley
+// Hand; web falls back to CSS generic families.
+function textFontFamily(f?: string): string | undefined {
+  switch (f) {
+    case 'serif':
+      return Platform.OS === 'ios' ? 'Georgia' : Platform.OS === 'web' ? 'serif' : 'serif'
+    case 'mono':
+      return Platform.OS === 'ios' ? 'Courier New' : Platform.OS === 'web' ? 'monospace' : 'monospace'
+    case 'hand':
+      return Platform.OS === 'ios' ? 'Bradley Hand' : Platform.OS === 'web' ? 'cursive' : undefined
+    default:
+      return undefined
+  }
+}
+const FONT_SIZE_OPTIONS: { key: 'sm' | 'md' | 'lg' | 'xl'; label: string }[] = [
+  { key: 'sm', label: 'S' },
+  { key: 'md', label: 'M' },
+  { key: 'lg', label: 'L' },
+  { key: 'xl', label: 'XL' },
+]
+const FONT_FAMILY_OPTIONS: { key: 'default' | 'serif' | 'mono' | 'hand'; label: string }[] = [
+  { key: 'default', label: 'Default' },
+  { key: 'serif', label: 'Serif' },
+  { key: 'mono', label: 'Mono' },
+  { key: 'hand', label: 'Hand' },
+]
+
 const PALETTE = [
   '#1a1a1a', '#6b7280', '#ef4444', '#f97316',
   '#eab308', '#22c55e', '#06b6d4', '#3b82f6',
@@ -79,6 +115,11 @@ interface CreateModalState {
   vx: number
   vy: number
   editItemId?: string
+  // When a text box is drawn (rather than tapped), vx/vy are the top-left of
+  // the drawn box and w/h are its size — used verbatim instead of centering a
+  // default-sized item.
+  w?: number
+  h?: number
 }
 
 const defaultCreateModal: CreateModalState = { visible: false, type: 'note', vx: 0, vy: 0 }
@@ -299,7 +340,16 @@ function ItemCard({
           </YStack>
         )}
         {item.type === 'textbox' && (
-          <Text color={item.color ?? colors.text} fontSize={14} numberOfLines={6}>
+          <Text
+            numberOfLines={12}
+            style={{
+              color: item.color ?? colors.text,
+              fontSize: TEXT_FONT_SIZES[item.fontSize ?? 'md'],
+              fontFamily: textFontFamily(item.fontFamily),
+              fontWeight: item.bold ? '700' : '400',
+              textAlign: item.align ?? 'left',
+            }}
+          >
             {item.content}
           </Text>
         )}
@@ -415,6 +465,13 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
   const [createUrl, setCreateUrl] = useState('')
   const [createColor, setCreateColor] = useState(NOTE_COLORS[0])
   const [createShapeType, setCreateShapeType] = useState<'rect' | 'circle'>('rect')
+  // Text box formatting
+  const [createFontSize, setCreateFontSize] = useState<'sm' | 'md' | 'lg' | 'xl'>('md')
+  const [createFontFamily, setCreateFontFamily] = useState<'default' | 'serif' | 'mono' | 'hand'>(
+    'default'
+  )
+  const [createBold, setCreateBold] = useState(false)
+  const [createAlign, setCreateAlign] = useState<'left' | 'center'>('left')
 
   // Animated canvas transform
   const canvasTransformStyle = useAnimatedStyle(() => ({
@@ -486,14 +543,36 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
     setCreateUrl('')
     setCreateColor(NOTE_COLORS[0])
     setCreateShapeType('rect')
+    setCreateFontSize('md')
+    setCreateFontFamily('default')
+    setCreateBold(false)
+    setCreateAlign('left')
     setCreateModal({ visible: true, type, vx, vy })
+  }
+
+  // A text box is drawn (drag to size/place) rather than tapped. On release we
+  // open the editor pre-sized to the drawn box so the user can type + format.
+  function finalizeTextbox(sx: number, sy: number, ex: number, ey: number) {
+    if (!boardId) return
+    const x = Math.min(sx, ex)
+    const y = Math.min(sy, ey)
+    const width = Math.max(Math.abs(ex - sx), 80)
+    const height = Math.max(Math.abs(ey - sy), 40)
+    setCreateContent('')
+    setCreateUrl('')
+    setCreateColor(colors.text)
+    setCreateFontSize('md')
+    setCreateFontFamily('default')
+    setCreateBold(false)
+    setCreateAlign('left')
+    setCreateModal({ visible: true, type: 'textbox', vx: x, vy: y, w: width, h: height })
   }
 
   function handleBgTap(absX: number, absY: number) {
     const currentTool = toolRef.current
     const vx = (absX - tx.value) / sc.value
     const vy = (absY - ty.value) / sc.value
-    if (['note', 'goal', 'checklist', 'link', 'textbox'].includes(currentTool)) {
+    if (['note', 'goal', 'checklist', 'link'].includes(currentTool)) {
       openCreateModal(currentTool as PlanningItemType, vx, vy)
     } else {
       setSelectedId(null)
@@ -517,13 +596,24 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
     setCreateUrl(item.url ?? '')
     setCreateColor(item.color ?? (item.type === 'note' ? NOTE_COLORS[0] : PALETTE[0]))
     setCreateShapeType((item.shapeType as 'rect' | 'circle') ?? 'rect')
+    setCreateFontSize(item.fontSize ?? 'md')
+    setCreateFontFamily(item.fontFamily ?? 'default')
+    setCreateBold(item.bold ?? false)
+    setCreateAlign(item.align ?? 'left')
     setCreateModal({ visible: true, type: item.type, vx: item.x, vy: item.y, editItemId: item.id })
   }
 
   function handleCreateSubmit() {
     if (!boardId) return
-    const { type, vx, vy, editItemId } = createModal
+    const { type, vx, vy, editItemId, w, h } = createModal
     const sizes = DEFAULT_SIZES[type] ?? { width: 200, height: 100 }
+    const textboxFormat = {
+      color: createColor,
+      fontSize: createFontSize,
+      fontFamily: createFontFamily,
+      bold: createBold,
+      align: createAlign,
+    }
 
     if (editItemId) {
       updateItem(boardId, editItemId, {
@@ -531,7 +621,18 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
         ...(type === 'link' ? { url: createUrl } : {}),
         ...(type === 'note' ? { color: createColor } : {}),
         ...(type === 'shape' ? { shapeType: createShapeType, color: createColor } : {}),
-        ...(type === 'textbox' ? { color: createColor } : {}),
+        ...(type === 'textbox' ? textboxFormat : {}),
+      })
+    } else if (type === 'textbox' && w != null && h != null) {
+      // Drawn text box — use the drawn geometry verbatim.
+      addItem(boardId, {
+        type,
+        x: vx,
+        y: vy,
+        width: w,
+        height: h,
+        content: createContent,
+        ...textboxFormat,
       })
     } else {
       addItem(boardId, {
@@ -543,7 +644,7 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
         content: createContent,
         ...(type === 'link' ? { url: createUrl } : {}),
         ...(type === 'note' ? { color: createColor } : {}),
-        ...(type === 'textbox' ? { color: activeColorRef.current } : {}),
+        ...(type === 'textbox' ? textboxFormat : {}),
       })
     }
     setCreateModal(defaultCreateModal)
@@ -623,6 +724,34 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
         shapeDragCurX.value, shapeDragCurY.value,
       )
     })
+
+  // Text box: drag to size/place, reusing the shape drag preview (rectangular).
+  const textboxDragPan = Gesture.Pan()
+    .enabled(tool === 'textbox')
+    .onStart((e) => {
+      const vx = (e.absoluteX - tx.value) / sc.value
+      const vy = (e.absoluteY - ty.value) / sc.value
+      shapeDragStartX.value = vx
+      shapeDragStartY.value = vy
+      shapeDragCurX.value = vx
+      shapeDragCurY.value = vy
+      shapePreviewColor.value = activeColorRef.current
+      shapePreviewRadius.value = 4
+      isDraggingShape.value = true
+    })
+    .onUpdate((e) => {
+      const vx = (e.absoluteX - tx.value) / sc.value
+      const vy = (e.absoluteY - ty.value) / sc.value
+      shapeDragCurX.value = vx
+      shapeDragCurY.value = vy
+    })
+    .onEnd(() => {
+      isDraggingShape.value = false
+      runOnJS(finalizeTextbox)(
+        shapeDragStartX.value, shapeDragStartY.value,
+        shapeDragCurX.value, shapeDragCurY.value,
+      )
+    })
   /* eslint-enable react-hooks/refs, react-hooks/immutability */
 
   const panToolGesture = Gesture.Pan()
@@ -640,7 +769,7 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
 
   const bgGesture = readOnly
     ? (Gesture.Exclusive(bgTap) as ReturnType<typeof Gesture.Exclusive>)
-    : Gesture.Race(shapeDragPan, drawPan, panToolGesture, bgTap)
+    : Gesture.Race(shapeDragPan, textboxDragPan, drawPan, panToolGesture, bgTap)
 
   const items = board?.items ?? []
   const nonSvgItems = items.filter((i) => i.type !== 'draw' && i.type !== 'connector')
@@ -847,8 +976,8 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
               value={createContent}
               onChangeText={setCreateContent}
               style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background }]}
-              multiline={createModal.type === 'note'}
-              numberOfLines={createModal.type === 'note' ? 4 : 1}
+              multiline={createModal.type === 'note' || createModal.type === 'textbox'}
+              numberOfLines={createModal.type === 'note' || createModal.type === 'textbox' ? 4 : 1}
             />
 
             {createModal.type === 'link' && (
@@ -911,19 +1040,92 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
               </>
             )}
 
-            {createModal.type === 'textbox' && createModal.editItemId && (
-              <XStack gap={8} marginTop={10} flexWrap="wrap" alignItems="center">
-                <Text color={colors.textMuted} fontSize={12}>Text color:</Text>
-                {PALETTE.map((c) => (
-                  <Pressable key={c} onPress={() => setCreateColor(c)}>
-                    <View style={{
-                      width: 24, height: 24, borderRadius: 12, backgroundColor: c,
-                      borderWidth: createColor === c ? 3 : 1,
-                      borderColor: createColor === c ? colors.primary : colors.border,
-                    }} />
+            {createModal.type === 'textbox' && (
+              <>
+                {/* Font size */}
+                <XStack gap={8} marginTop={10} alignItems="center">
+                  <Text color={colors.textMuted} fontSize={12}>Size:</Text>
+                  {FONT_SIZE_OPTIONS.map((opt) => (
+                    <Pressable key={opt.key} onPress={() => setCreateFontSize(opt.key)}>
+                      <XStack
+                        paddingHorizontal={12} paddingVertical={4} borderRadius={6} borderWidth={1}
+                        borderColor={createFontSize === opt.key ? colors.primary : colors.border}
+                        backgroundColor={createFontSize === opt.key ? colors.primary : 'transparent'}
+                      >
+                        <Text color={createFontSize === opt.key ? colors.onPrimary : colors.text} fontSize={13}>
+                          {opt.label}
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  ))}
+                </XStack>
+
+                {/* Typeface */}
+                <XStack gap={8} marginTop={8} flexWrap="wrap" alignItems="center">
+                  <Text color={colors.textMuted} fontSize={12}>Font:</Text>
+                  {FONT_FAMILY_OPTIONS.map((opt) => (
+                    <Pressable key={opt.key} onPress={() => setCreateFontFamily(opt.key)}>
+                      <XStack
+                        paddingHorizontal={12} paddingVertical={4} borderRadius={6} borderWidth={1}
+                        borderColor={createFontFamily === opt.key ? colors.primary : colors.border}
+                        backgroundColor={createFontFamily === opt.key ? colors.primary : 'transparent'}
+                      >
+                        <Text
+                          fontSize={13}
+                          style={{
+                            color: createFontFamily === opt.key ? colors.onPrimary : colors.text,
+                            fontFamily: textFontFamily(opt.key),
+                          }}
+                        >
+                          {opt.label}
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  ))}
+                </XStack>
+
+                {/* Bold + alignment */}
+                <XStack gap={8} marginTop={8} alignItems="center">
+                  <Pressable onPress={() => setCreateBold((b) => !b)}>
+                    <XStack
+                      paddingHorizontal={12} paddingVertical={4} borderRadius={6} borderWidth={1}
+                      borderColor={createBold ? colors.primary : colors.border}
+                      backgroundColor={createBold ? colors.primary : 'transparent'}
+                    >
+                      <Text color={createBold ? colors.onPrimary : colors.text} fontSize={13} fontWeight="700">
+                        B
+                      </Text>
+                    </XStack>
                   </Pressable>
-                ))}
-              </XStack>
+                  {(['left', 'center'] as const).map((al) => (
+                    <Pressable key={al} onPress={() => setCreateAlign(al)}>
+                      <XStack
+                        paddingHorizontal={12} paddingVertical={4} borderRadius={6} borderWidth={1}
+                        borderColor={createAlign === al ? colors.primary : colors.border}
+                        backgroundColor={createAlign === al ? colors.primary : 'transparent'}
+                      >
+                        <Text color={createAlign === al ? colors.onPrimary : colors.text} fontSize={13}>
+                          {al === 'left' ? '⬅ Left' : '☰ Center'}
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  ))}
+                </XStack>
+
+                {/* Text color */}
+                <XStack gap={8} marginTop={8} flexWrap="wrap" alignItems="center">
+                  <Text color={colors.textMuted} fontSize={12}>Color:</Text>
+                  {PALETTE.map((c) => (
+                    <Pressable key={c} onPress={() => setCreateColor(c)}>
+                      <View style={{
+                        width: 24, height: 24, borderRadius: 12, backgroundColor: c,
+                        borderWidth: createColor === c ? 3 : 1,
+                        borderColor: createColor === c ? colors.primary : colors.border,
+                      }} />
+                    </Pressable>
+                  ))}
+                </XStack>
+              </>
             )}
 
             <XStack gap={10} marginTop={14} justifyContent="flex-end">

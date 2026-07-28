@@ -101,6 +101,11 @@ export interface PlanningItem {
   toId?: string // connector target item id
   points?: DrawPoint[] // draw path
   shapeType?: 'rect' | 'circle' // shape variant
+  // Text box formatting
+  fontSize?: 'sm' | 'md' | 'lg' | 'xl'
+  fontFamily?: 'default' | 'serif' | 'mono' | 'hand'
+  bold?: boolean
+  align?: 'left' | 'center'
 }
 
 export interface PlanningBoard {
