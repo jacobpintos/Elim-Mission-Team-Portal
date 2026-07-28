@@ -1102,6 +1102,23 @@ const tuStyles = StyleSheet.create({
   },
 })
 
+// The "New assignment" notification preference has existed in Settings (and
+// the sendNotification Cloud Function fully supports it) but nothing ever
+// called it when a task was created — so assigning someone a task, including
+// assigning yourself, never notified anyone. Fire it for every assignee
+// whenever a task is created (both the manual "Assign Task" flow and
+// event-template task spawning).
+function notifyAssignees(assignees: (string | number)[], taskTitle: string, taskId: string | number) {
+  const sendNotif = httpsCallable(functions, 'sendNotification')
+  assignees.forEach((assigneeUid) => {
+    sendNotif({
+      uid: String(assigneeUid),
+      type: 'newAssignment',
+      data: { taskId: String(taskId), taskTitle },
+    }).catch(() => {})
+  })
+}
+
 export default function Assignments() {
   const colors = useThemeColors()
   const { profile } = useAuthStore()
@@ -1383,7 +1400,7 @@ export default function Assignments() {
         const allAssignees = [
           ...new Set([...(taskItem.assignees ?? []), ...groupUids]),
         ]
-        await createTask({
+        const taskId = await createTask({
           title: taskItem.title,
           assignees: allAssignees,
           lead: allAssignees[0] ?? null,
@@ -1393,6 +1410,7 @@ export default function Assignments() {
           evDate: ev.date ?? null,
           dueDate,
         })
+        notifyAssignees(allAssignees, taskItem.title, taskId)
       }
       toast('Tasks spawned', 'success')
     } catch {
@@ -1699,7 +1717,7 @@ export default function Assignments() {
               const [mm, dd, yy] = dueDate.split('/')
               storedDate = `20${yy}-${mm}-${dd}`
             }
-            await tasksStore.createTask({
+            const taskId = await tasksStore.createTask({
               title,
               assignees,
               lead,
@@ -1707,6 +1725,7 @@ export default function Assignments() {
               status: 'pending',
               dueDate: storedDate,
             })
+            notifyAssignees(assignees, title, taskId)
             toast('Task assigned!', 'success')
             setShowCreateTask(false)
           }}

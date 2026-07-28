@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, Pressable, Linking } from 'react-native'
+import { ScrollView, Pressable, Linking, Platform } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -194,19 +194,24 @@ export default function EventsScreen() {
         </XStack>
         {admin ? (
           <XStack gap="$2" alignItems="center">
-            <Pressable onPress={() => router.push('/(app)/events/map' as never)}>
-              <XStack
-                borderRadius="$2"
-                paddingHorizontal="$3"
-                paddingVertical="$1"
-                borderWidth={1}
-                borderColor={colors.border}
-              >
-                <Text color={colors.text} fontSize="$2" fontWeight="600">
-                  Map
-                </Text>
-              </XStack>
-            </Pressable>
+            {/* The interactive map (Mapbox) is web-only — there's no native
+                equivalent, so hide the entry point on native rather than
+                linking to a screen that just says "use the web app." */}
+            {Platform.OS === 'web' ? (
+              <Pressable onPress={() => router.push('/(app)/events/map' as never)}>
+                <XStack
+                  borderRadius="$2"
+                  paddingHorizontal="$3"
+                  paddingVertical="$1"
+                  borderWidth={1}
+                  borderColor={colors.border}
+                >
+                  <Text color={colors.text} fontSize="$2" fontWeight="600">
+                    Map
+                  </Text>
+                </XStack>
+              </Pressable>
+            ) : null}
             <Pressable onPress={() => router.push('/(app)/admin/avail' as never)}>
               <XStack
                 borderRadius="$2"
