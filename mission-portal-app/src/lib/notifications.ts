@@ -78,6 +78,33 @@ export async function registerForPushNotifications(): Promise<{
   }
 }
 
+// Transient Firebase Functions error codes worth retrying — a cold-started or
+// briefly-unreachable callable returns these, and the background token save
+// runs seconds after launch when a hiccup is most likely.
+const RETRYABLE_FN_CODES = [
+  'functions/unavailable',
+  'functions/internal',
+  'functions/deadline-exceeded',
+  'functions/aborted',
+]
+
+async function callWithRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      const code = (err as { code?: string } | undefined)?.code
+      const retryable = code ? RETRYABLE_FN_CODES.includes(code) : false
+      if (!retryable || i === attempts - 1) break
+      // Backoff: 1s, 2s — lets a cold-starting function come online.
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)))
+    }
+  }
+  throw lastErr
+}
+
 export async function persistPushToken(
   _uid: string,
   token: string,
@@ -85,7 +112,7 @@ export async function persistPushToken(
 ): Promise<void> {
   // Delegates to Cloud Function which writes to Firestore and subscribes to topics
   const registerPushToken = httpsCallable(functions, 'registerPushToken')
-  await registerPushToken({ token, platform })
+  await callWithRetry(() => registerPushToken({ token, platform }))
 }
 
 export async function clearPushToken(
