@@ -10,6 +10,7 @@ import {
   Linking,
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Svg, { Polyline, Line } from 'react-native-svg'
@@ -363,6 +364,7 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
   'use no memo'
 
   const colors = useThemeColors()
+  const insets = useSafeAreaInsets()
   const { width: screenW, height: screenH } = useWindowDimensions()
   const { boards, addItem, updateItem, deleteItem } = usePlanningStore()
   const board = boards.find((b) => sameId(b.id, boardId ?? ''))
@@ -646,7 +648,7 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           {/* Toolbar */}
           {!readOnly && (
-            <View style={{ backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <View style={{ backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, paddingTop: insets.top }}>
               {/* Tool buttons row */}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 4, paddingTop: 4, paddingBottom: 2, gap: 2 }}>
                 {TOOL_BUTTONS.map((btn) => (
@@ -807,7 +809,7 @@ export function PlanningBoardCanvas({ boardId, readOnly = false, visible, onClos
           <Pressable
             onPress={onClose}
             style={{
-              position: 'absolute', top: readOnly ? 12 : 60, right: 12,
+              position: 'absolute', top: (readOnly ? 12 : 60) + insets.top, right: 12,
               backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
               borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, zIndex: 100,
             }}

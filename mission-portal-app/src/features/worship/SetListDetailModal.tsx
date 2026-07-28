@@ -89,7 +89,7 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
               {setList.songs.length} SONG{setList.songs.length !== 1 ? 'S' : ''}
             </Text>
 
-            <ScrollView style={{ flex: 1 }}>
+            <ScrollView style={{ flexShrink: 1 }}>
               <YStack gap="$3">
                 {setList.songs.length === 0 ? (
                   <Text color={colors.textMuted} fontSize="$3">

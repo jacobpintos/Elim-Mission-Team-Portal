@@ -305,7 +305,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
           </XStack>
 
           {/* Content */}
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
             <YStack gap="$3" paddingBottom="$4">
               {chordsOnly
                 ? sectionGroups.map(({ section, count }) => {

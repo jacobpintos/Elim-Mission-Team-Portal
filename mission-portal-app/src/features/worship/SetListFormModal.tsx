@@ -289,7 +289,7 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
               </Pressable>
             </XStack>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
               <YStack gap="$3">
                 {/* Title */}
                 <YStack gap="$1">

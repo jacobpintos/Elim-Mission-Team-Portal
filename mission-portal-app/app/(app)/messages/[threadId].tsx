@@ -8,7 +8,7 @@ import {
   Pressable,
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { FlashList, FlashListRef } from '@shopify/flash-list'
 import { useAuthStore } from '@/stores/authStore'
@@ -25,6 +25,7 @@ import type { Message, MessageAttachment } from '@/types/events'
 
 export default function ThreadScreen() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>()
+  const router = useRouter()
   const colors = useThemeColors()
   const { profile } = useAuthStore()
   const uid = profile?.uid ?? ''
@@ -156,7 +157,17 @@ export default function ThreadScreen() {
         borderBottomColor={colors.border}
         alignItems="center"
         justifyContent="space-between"
+        gap="$2"
       >
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/messages'))}
+          hitSlop={10}
+          style={{ paddingVertical: 4, paddingRight: 4 }}
+        >
+          <Text color={colors.primary} fontSize="$5" fontWeight="700">
+            ‹
+          </Text>
+        </Pressable>
         <Text color={colors.text} fontWeight="600" fontSize="$3" numberOfLines={1} flex={1}>
           {room?.name ?? 'Messages'}
         </Text>

@@ -304,7 +304,7 @@ export function ChordSheetEditor({
             </XStack>
           </XStack>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+          <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
             <YStack gap="$3" paddingBottom="$4">
               {/* Basic info */}
               <YStack gap="$1">
