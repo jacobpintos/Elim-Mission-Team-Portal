@@ -246,6 +246,10 @@ export interface CommonTeam {
 export interface ConfigMain {
   calY: number
   calM: number
+  // CCLI license number for the organization. Displayed on chord sheets and
+  // their PDF/print exports — CCLI requires the license number to appear on
+  // reproduced worship materials.
+  ccliLicense?: string
   COMMON_TEAMS: (string | CommonTeam)[]
   connectConfig: { socialLinks: unknown[]; leadershipTeam: unknown[] }
   publicPages: Record<string, unknown>

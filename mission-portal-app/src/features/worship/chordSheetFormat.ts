@@ -112,6 +112,7 @@ export function buildChordSheetHtml(
   isMinor: boolean,
   keyIdx: number,
   primaryColor: string,
+  ccliLicense?: string,
 ): string {
   const disp = (raw: string) => formatToken(raw, keyIdx, isMinor)
 
@@ -176,9 +177,11 @@ export function buildChordSheetHtml(
   .cl{color:${primaryColor};font-weight:700;white-space:pre;line-height:1.5;min-height:1em}
   .ll{white-space:pre;line-height:1.5;margin-bottom:4px}
   .instrumental{color:${primaryColor};font-weight:700}
+  .ccli{margin-top:28px;padding-top:10px;border-top:1px solid #ddd;color:#888;font-size:10px;font-family:sans-serif}
 </style></head><body>
 <h1>${escHtml(sheet.title)}</h1>
 ${metaParts.length ? `<div class="meta">${escHtml(metaParts.join(' · '))}</div>` : ''}
 ${body}
+${ccliLicense ? `<div class="ccli">Reproduced under CCLI License No. ${escHtml(ccliLicense)}</div>` : ''}
 </body></html>`
 }

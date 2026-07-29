@@ -8,7 +8,8 @@ export function buildChordSheetPdfBlob(
   _selectedKey: string,
   _isMinor: boolean,
   _keyIdx: number,
-  _primaryColor: string
+  _primaryColor: string,
+  _ccliLicense?: string
 ): Blob {
   throw new Error('PDF blob export is only available on web')
 }

@@ -3,6 +3,7 @@ import { Modal, View, ScrollView, Pressable, StyleSheet, Platform } from 'react-
 import { YStack, XStack, Text } from 'tamagui'
 import { printAsync } from 'expo-print'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { useConfigStore } from '@/stores/configStore'
 import { NNS_KEYS, getWordSlots } from '@/lib/nashvilleNumbers'
 import type { ChordSheet, ChordSheetSection } from '@/types/chordSheet'
 import {
@@ -58,6 +59,7 @@ interface ChordSheetViewerProps {
 
 export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewerProps) {
   const colors = useThemeColors()
+  const ccliLicense = useConfigStore((s) => s.ccliLicense)
   const [selectedKey, setSelectedKey] = useState(() => {
     if (initialKey && (NNS_KEYS as readonly string[]).includes(initialKey)) return initialKey
     return getKeyPrefs().key
@@ -97,7 +99,14 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
     // the share sheet where available (so it can be saved to Files, AirDropped,
     // etc.), or as a plain download otherwise.
     if (Platform.OS === 'web') {
-      const blob = buildChordSheetPdfBlob(sheet, selectedKey, isMinor, keyIdx, colors.primary)
+      const blob = buildChordSheetPdfBlob(
+        sheet,
+        selectedKey,
+        isMinor,
+        keyIdx,
+        colors.primary,
+        ccliLicense
+      )
       const filename = `${sheet.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'chord-sheet'}.pdf`
       const file = new File([blob], filename, { type: 'application/pdf' })
 
@@ -125,7 +134,14 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
       return
     }
 
-    const html = buildChordSheetHtml(sheet, selectedKey, isMinor, keyIdx, colors.primary)
+    const html = buildChordSheetHtml(
+      sheet,
+      selectedKey,
+      isMinor,
+      keyIdx,
+      colors.primary,
+      ccliLicense
+    )
     await printAsync({ html })
   }
 
@@ -487,6 +503,20 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                   })
               }
             </YStack>
+
+            {/* CCLI attribution — required on reproduced worship material. */}
+            {ccliLicense ? (
+              <Text
+                color={colors.textMuted}
+                fontSize={11}
+                marginTop="$4"
+                paddingTop="$2"
+                borderTopWidth={1}
+                borderTopColor={colors.border}
+              >
+                Reproduced under CCLI License No. {ccliLicense}
+              </Text>
+            ) : null}
           </ScrollView>
         </YStack>
       </View>

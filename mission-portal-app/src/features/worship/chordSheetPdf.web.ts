@@ -19,7 +19,8 @@ export function buildChordSheetPdfBlob(
   selectedKey: string,
   isMinor: boolean,
   keyIdx: number,
-  primaryColor: string
+  primaryColor: string,
+  ccliLicense?: string
 ): Blob {
   const disp = (raw: string) => formatToken(raw, keyIdx, isMinor)
   const [pr, pg, pb] = hexToRgb(primaryColor)
@@ -144,6 +145,16 @@ export function buildChordSheetPdfBlob(
       y += 16
     }
     y += 14
+  }
+
+  // CCLI requires the license number to appear on reproduced worship material,
+  // so stamp it at the foot of the last page when one is configured.
+  if (ccliLicense) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(...GRAY)
+    const pageHeight = doc.internal.pageSize.getHeight()
+    doc.text(`Reproduced under CCLI License No. ${ccliLicense}`, margin, pageHeight - 24)
   }
 
   return doc.output('blob')
