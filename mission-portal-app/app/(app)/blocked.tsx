@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable } from 'react-native'
-import { YStack, XStack, Text } from 'tamagui'
+import { useRouter } from 'expo-router'
+import { YStack, XStack, Text, Button } from 'tamagui'
 import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -13,6 +14,7 @@ import { sameId } from '@/lib/ids'
 
 export default function BlockedUsersScreen() {
   const colors = useThemeColors()
+  const router = useRouter()
   const { profile } = useAuthStore()
   const { users, subscribe, unsubscribe } = useUsersStore()
   const toast = useUIStore((s) => s.toast)
@@ -46,10 +48,29 @@ export default function BlockedUsersScreen() {
   return (
     <YStack flex={1} backgroundColor={colors.background}>
       <ScreenTitle options={{ title: 'Blocked users' }} />
+
+      {/* ScreenTitle is a no-op on web, so this screen needs its own way back. */}
+      <XStack
+        paddingHorizontal="$4"
+        paddingVertical="$3"
+        alignItems="center"
+        gap="$3"
+        borderBottomWidth={1}
+        borderBottomColor={colors.border}
+      >
+        <Button size="$3" variant="outlined" onPress={() => router.back()}>
+          ← Back
+        </Button>
+        <Text color={colors.text} fontSize={18} fontWeight="700" flex={1}>
+          Blocked users
+        </Text>
+      </XStack>
+
       <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
         <Text color={colors.textMuted} fontSize="$3" lineHeight={20}>
-          You do not see messages from anyone on this list. Block someone from the ⋯ menu on any of
-          their messages.
+          You do not see messages from anyone on this list, in any conversation — including group
+          chats created later. To block someone, tap “🚩 Report” under any message they sent and
+          choose Block.
         </Text>
 
         {blocked.length === 0 ? (

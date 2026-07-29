@@ -3,23 +3,16 @@ import { Slot, useRouter, usePathname } from 'expo-router'
 import { XStack, Text, YStack, View } from 'tamagui'
 import { useAuthStore } from '@/stores/authStore'
 import { isAdmin } from '@/lib/roles'
+import { ADMIN_SECTIONS } from '@/lib/adminSections'
 import { useEffect, useState } from 'react'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
-const BASE_TABS = [
-  { key: 'users', label: 'User Management', path: '/(app)/admin/users' },
-  { key: 'moderation', label: 'Moderation', path: '/(app)/admin/moderation' },
-  { key: 'avail', label: 'Availability', path: '/(app)/admin/avail' },
-  { key: 'groups', label: 'Groups', path: '/(app)/admin/groups' },
-  { key: 'teams', label: 'Common Teams', path: '/(app)/admin/teams' },
-  { key: 'templates', label: 'Task Templates', path: '/(app)/admin/templates' },
-  { key: 'leadership', label: 'Leadership Team', path: '/(app)/admin/leadership' },
-  { key: 'analytics', label: 'Public Analytics', path: '/(app)/admin/analytics' },
-  { key: 'audit', label: 'Audit Trail', path: '/(app)/admin/audit' },
-  { key: 'theme', label: 'Theme', path: '/(app)/admin/theme' },
-  { key: 'digests', label: 'Digests', path: '/(app)/admin/digests' },
-]
+const BASE_TABS = ADMIN_SECTIONS.map((s) => ({
+  key: s.key,
+  label: s.tabLabel ?? s.label,
+  path: s.path,
+}))
 
 export default function AdminLayout() {
   const { profile } = useAuthStore()

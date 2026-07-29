@@ -137,10 +137,6 @@ export default function SettingsScreen() {
   const [radius, setRadius] = useState(String(profile?.locationPref?.radius ?? 50))
   const [savingLoc, setSavingLoc] = useState(false)
 
-  // Account deletion
-  const [showDelete, setShowDelete] = useState(false)
-  const [deletePw, setDeletePw] = useState('')
-  const [deleting, setDeleting] = useState(false)
 
   if (!profile || !fbUser) return null
 
@@ -318,36 +314,6 @@ export default function SettingsScreen() {
     router.replace('/(auth)/login')
   }
 
-  // ── Delete account ────────────────────────────────────────────────────────
-  // Required by App Store Review Guideline 5.1.1(v) — account creation must be
-  // matched by in-app account deletion.
-  const handleDeleteAccount = async () => {
-    if (!deletePw) {
-      toast('Enter your password to confirm', 'error')
-      return
-    }
-    const ok = await confirmAsync(
-      'This permanently deletes your account, your profile, your messages and your notification settings. It cannot be undone.',
-      { title: 'Delete account?', confirmLabel: 'Delete', destructive: true }
-    )
-    if (!ok) return
-
-    setDeleting(true)
-    try {
-      // Firebase requires a recent credential before it will delete an account.
-      const credential = EmailAuthProvider.credential(fbUser.email!, deletePw)
-      await reauthenticateWithCredential(fbUser, credential)
-      const deleteOwnAccount = httpsCallable(functions, 'deleteOwnAccount')
-      await deleteOwnAccount()
-      toast('Your account has been deleted', 'success')
-      await signOutNow()
-      router.replace('/(auth)/login')
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to delete account'
-      toast(message, 'error')
-      setDeleting(false)
-    }
-  }
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
@@ -657,62 +623,23 @@ export default function SettingsScreen() {
           </Pressable>
         </Section>
 
+        {/* Account — deletion lives on its own screen so the irreversible action
+            is not adjacent to Sign out, where it invites a misclick. */}
+        <Section title="Account">
+          <Pressable onPress={() => router.push('/(app)/delete-account')}>
+            <XStack alignItems="center" justifyContent="space-between" paddingVertical="$2">
+              <Text color="#c0392b" fontSize="$4">Delete account</Text>
+              <Text color={colors.textMuted} fontSize="$4">›</Text>
+            </XStack>
+          </Pressable>
+        </Section>
+
         {/* Sign out */}
         <Pressable onPress={handleSignOut}>
           <View style={[styles.signOutBtn, { borderColor: '#c0392b' }]}>
             <Text color="#c0392b" fontWeight="700" fontSize="$4">Sign out</Text>
           </View>
         </Pressable>
-
-        {/* Delete account */}
-        <Section title="Danger zone">
-          {!showDelete ? (
-            <Pressable onPress={() => setShowDelete(true)}>
-              <View style={[styles.signOutBtn, { borderColor: '#c0392b', backgroundColor: 'transparent' }]}>
-                <Text color="#c0392b" fontWeight="700" fontSize="$4">Delete account</Text>
-              </View>
-            </Pressable>
-          ) : (
-            <YStack gap="$3">
-              <Text color={colors.textMuted} fontSize="$3" lineHeight={20}>
-                Deleting your account permanently removes your profile, your chat messages, your
-                notification settings and your profile photo. This cannot be undone. Enter your
-                password to confirm.
-              </Text>
-              <Field label="Password">
-                <TextInput
-                  value={deletePw}
-                  onChangeText={setDeletePw}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  placeholderTextColor={colors.textMuted}
-                  style={[styles.input, { borderColor: colors.border, color: colors.text }]}
-                />
-              </Field>
-              <XStack gap="$3">
-                <Pressable
-                  style={{ flex: 1 }}
-                  onPress={() => {
-                    setShowDelete(false)
-                    setDeletePw('')
-                  }}
-                  disabled={deleting}
-                >
-                  <View style={[styles.btn, { borderWidth: 1, borderColor: colors.border }]}>
-                    <Text color={colors.text} fontWeight="700">Cancel</Text>
-                  </View>
-                </Pressable>
-                <Pressable style={{ flex: 1 }} onPress={handleDeleteAccount} disabled={deleting}>
-                  <View style={[styles.btn, { backgroundColor: '#c0392b', opacity: deleting ? 0.6 : 1 }]}>
-                    <Text color="white" fontWeight="700">
-                      {deleting ? 'Deleting…' : 'Delete my account'}
-                    </Text>
-                  </View>
-                </Pressable>
-              </XStack>
-            </YStack>
-          )}
-        </Section>
 
         <View style={{ height: 40 }} />
       </ScrollView>

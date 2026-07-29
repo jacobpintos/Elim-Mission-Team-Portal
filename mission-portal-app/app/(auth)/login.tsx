@@ -3,6 +3,7 @@ import { useRouter, Link } from 'expo-router'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { Pressable } from 'react-native'
 import { YStack, XStack, Paragraph, Button, Input, Text } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
@@ -21,6 +22,7 @@ export default function LoginScreen() {
   const signIn = useAuthStore((s) => s.signIn)
   const { toast } = useUIStore()
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const {
     control,
@@ -80,6 +82,8 @@ export default function LoginScreen() {
                   value={field.value}
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
+                  returnKeyType="next"
+                  onSubmitEditing={() => void handleSubmit(onSubmit)()}
                   borderColor={errors.email ? '$red9' : '$borderColor'}
                 />
                 {errors.email && (
@@ -96,15 +100,31 @@ export default function LoginScreen() {
             name="password"
             render={({ field }) => (
               <YStack gap="$1">
-                <Input
-                  placeholder="Password"
-                  secureTextEntry
-                  autoComplete="password"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  onBlur={field.onBlur}
-                  borderColor={errors.password ? '$red9' : '$borderColor'}
-                />
+                <XStack alignItems="center" gap="$2">
+                  <Input
+                    flex={1}
+                    placeholder="Password"
+                    secureTextEntry={!showPassword}
+                    autoComplete="password"
+                    value={field.value}
+                    onChangeText={field.onChange}
+                    onBlur={field.onBlur}
+                    // Enter in either field submits, matching how every other
+                    // web login form behaves. On device this is the Go key.
+                    returnKeyType="go"
+                    onSubmitEditing={() => void handleSubmit(onSubmit)()}
+                    borderColor={errors.password ? '$red9' : '$borderColor'}
+                  />
+                  <Pressable
+                    onPress={() => setShowPassword((v) => !v)}
+                    hitSlop={8}
+                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    <Text color="$colorMuted" fontSize="$3" paddingHorizontal="$2">
+                      {showPassword ? '🙈 Hide' : '👁 Show'}
+                    </Text>
+                  </Pressable>
+                </XStack>
                 {errors.password && (
                   <Text color="$red9" fontSize="$2">
                     {errors.password.message}
@@ -133,10 +153,18 @@ export default function LoginScreen() {
           </Link>
         </XStack>
 
-        <XStack justifyContent="center">
+        <XStack justifyContent="center" gap="$2">
           <Link href="/(auth)/privacy">
             <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
               Privacy Policy
+            </Text>
+          </Link>
+          <Text color="$colorMuted" fontSize="$2">
+            ·
+          </Text>
+          <Link href="/(auth)/terms">
+            <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
+              Terms of Use
             </Text>
           </Link>
         </XStack>

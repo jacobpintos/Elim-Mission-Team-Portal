@@ -153,6 +153,8 @@ export default function RegisterScreen() {
                   value={field.value}
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
+                  returnKeyType="go"
+                  onSubmitEditing={() => void handleSubmit(onSubmit)()}
                   borderColor={errors.confirmPassword ? '$red9' : '$borderColor'}
                 />
                 {errors.confirmPassword && (

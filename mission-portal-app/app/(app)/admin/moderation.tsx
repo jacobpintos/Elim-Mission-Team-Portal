@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable } from 'react-native'
+import { useRouter } from 'expo-router'
 import { YStack, XStack, Text, Spinner } from 'tamagui'
 import {
   collection,
@@ -13,6 +14,7 @@ import {
 import { db } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
+import { useMessagesStore } from '@/stores/messagesStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { confirmAsync } from '@/lib/confirm'
@@ -28,8 +30,14 @@ function resolution(status: 'actioned' | 'dismissed', adminUid: string) {
 
 export default function AdminModeration() {
   const colors = useThemeColors()
+  const router = useRouter()
   const { profile } = useAuthStore()
   const { users, subscribe, unsubscribe } = useUsersStore()
+  const {
+    rooms,
+    subscribe: subRooms,
+    unsubscribe: unsubRooms,
+  } = useMessagesStore()
   const toast = useUIStore((s) => s.toast)
   const [reports, setReports] = useState<ContentReport[]>([])
   const [loading, setLoading] = useState(true)
@@ -38,6 +46,7 @@ export default function AdminModeration() {
 
   useEffect(() => {
     subscribe()
+    subRooms()
     const q = query(collection(db, 'contentReports'), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setReports(snap.docs.map((d) => ({ ...(d.data() as ContentReport), id: d.id })))
@@ -46,9 +55,37 @@ export default function AdminModeration() {
     return () => {
       unsub()
       unsubscribe()
+      unsubRooms()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Rooms an admin flagged for review from the chat header. This is a separate
+  // mechanism from per-message reports — it marks a whole conversation — and
+  // this is the only place the flag can be cleared.
+  const flaggedRooms = rooms.filter((r) => (r.reviewers?.length ?? 0) > 0)
+
+  const clearRoomFlag = async (roomId: string | number, roomName: string) => {
+    const ok = await confirmAsync(
+      `Clear the review flag on "${roomName}"? The conversation stays; only the flag is removed.`,
+      { title: 'Clear flag', confirmLabel: 'Clear flag' }
+    )
+    if (!ok) return
+    setBusy(String(roomId))
+    try {
+      await updateDoc(doc(db, 'rooms', String(roomId)), { reviewers: [] })
+      await audit(
+        'moderation.roomFlagCleared',
+        `Cleared review flag on room "${roomName}"`,
+        profile?.displayName ?? ''
+      )
+      toast('Flag cleared', 'success')
+    } catch {
+      toast('Failed to clear flag', 'error')
+    } finally {
+      setBusy(null)
+    }
+  }
 
   const nameFor = (uid: string) => {
     const u = users.find((x) => sameId(x.uid, uid))
@@ -116,6 +153,78 @@ export default function AdminModeration() {
         report within {MODERATION_SLA_HOURS} hours — remove the message, or dismiss the report if
         the content is fine. To remove an abusive user entirely, delete their account in User
         Management.
+      </Text>
+
+      {/* Conversations an admin flagged from the chat header */}
+      {flaggedRooms.length > 0 ? (
+        <YStack gap="$2">
+          <Text color={colors.text} fontSize="$3" fontWeight="700">
+            🚩 Flagged conversations ({flaggedRooms.length})
+          </Text>
+          {flaggedRooms.map((room) => (
+            <YStack
+              key={String(room.id)}
+              gap="$2"
+              padding="$3"
+              borderRadius="$3"
+              backgroundColor={colors.surface}
+              borderWidth={1}
+              borderColor="#e67e22"
+            >
+              <Text color={colors.text} fontSize="$4" fontWeight="600">
+                {room.name ?? 'Conversation'}
+              </Text>
+              <Text color={colors.textMuted} fontSize="$2">
+                Flagged by{' '}
+                {(room.reviewers ?? [])
+                  .map((r) => nameFor(String(r)))
+                  .join(', ')}
+                {room.members ? ` · ${room.members.length} members` : ''}
+              </Text>
+              <XStack gap="$2" marginTop="$1">
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => router.push(`/(app)/messages/${room.id}` as never)}
+                >
+                  <XStack
+                    height={38}
+                    borderRadius={8}
+                    backgroundColor={colors.primary}
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    <Text color="white" fontSize="$3" fontWeight="700">
+                      Open conversation
+                    </Text>
+                  </XStack>
+                </Pressable>
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => clearRoomFlag(room.id, room.name ?? 'Conversation')}
+                  disabled={busy === String(room.id)}
+                >
+                  <XStack
+                    height={38}
+                    borderRadius={8}
+                    borderWidth={1}
+                    borderColor={colors.border}
+                    alignItems="center"
+                    justifyContent="center"
+                    opacity={busy === String(room.id) ? 0.5 : 1}
+                  >
+                    <Text color={colors.text} fontSize="$3" fontWeight="700">
+                      Clear flag
+                    </Text>
+                  </XStack>
+                </Pressable>
+              </XStack>
+            </YStack>
+          ))}
+        </YStack>
+      ) : null}
+
+      <Text color={colors.text} fontSize="$3" fontWeight="700" marginTop="$2">
+        Reported messages
       </Text>
 
       <XStack gap="$2">

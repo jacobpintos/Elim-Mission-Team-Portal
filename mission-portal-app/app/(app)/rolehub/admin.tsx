@@ -4,20 +4,7 @@ import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
-
-const SECTIONS = [
-  { label: 'User Management', path: '/(app)/admin/users', icon: '👥' },
-  { label: 'Availability', path: '/(app)/admin/avail', icon: '📆' },
-  { label: 'Groups', path: '/(app)/admin/groups', icon: '🗂' },
-  { label: 'Common Teams', path: '/(app)/admin/teams', icon: '🤝' },
-  { label: 'Task Templates', path: '/(app)/admin/templates', icon: '📋' },
-  { label: 'Leadership Team', path: '/(app)/admin/leadership', icon: '⭐' },
-  { label: 'Analytics', path: '/(app)/admin/analytics', icon: '📊' },
-  { label: 'Audit Trail', path: '/(app)/admin/audit', icon: '🔍' },
-  { label: 'Theme', path: '/(app)/admin/theme', icon: '🎨' },
-  { label: 'Digests', path: '/(app)/admin/digests', icon: '📰' },
-  { label: 'Licensing', path: '/(app)/admin/licensing', icon: '📄' },
-]
+import { ADMIN_SECTIONS } from '@/lib/adminSections'
 
 export default function RolehubAdmin() {
   const colors = useThemeColors()
@@ -27,7 +14,7 @@ export default function RolehubAdmin() {
     <YStack flex={1} backgroundColor={colors.background}>
       <ScreenTitle options={{ title: 'Admin' }} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 8 }}>
-        {SECTIONS.map((s) => (
+        {ADMIN_SECTIONS.map((s) => (
           <Pressable key={s.path} onPress={() => router.push(s.path as never)}>
             <XStack
               backgroundColor={colors.surface}

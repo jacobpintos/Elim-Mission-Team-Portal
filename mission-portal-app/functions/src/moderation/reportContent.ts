@@ -45,11 +45,17 @@ export const reportContent = onCall(async (req) => {
 
   const db = admin.firestore()
 
-  // The reporter has to be in the room they are reporting from.
+  // The reporter has to be able to see the room they are reporting from: either
+  // a member, or an admin (who can read every room and so can moderate one they
+  // are not part of).
   const room = await db.doc(`rooms/${input.roomId}`).get()
+  if (!room.exists) throw new HttpsError('not-found', 'No such room')
   const members: string[] = room.data()?.members ?? []
-  if (!room.exists || !members.includes(reporterUid)) {
-    throw new HttpsError('permission-denied', 'Not a member of that room')
+  if (!members.includes(reporterUid)) {
+    const roles: string[] = (await db.doc(`users/${reporterUid}`).get()).data()?.roles ?? []
+    if (!roles.includes('admin')) {
+      throw new HttpsError('permission-denied', 'Not a member of that room')
+    }
   }
 
   await db.collection('contentReports').add({

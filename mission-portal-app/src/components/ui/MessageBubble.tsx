@@ -71,13 +71,26 @@ export function MessageBubble({
           <Text color={colors.textMuted} fontSize={10}>
             {shortTime(message.ts)}
           </Text>
-          {/* Visible entry point to report/block — a long-press-only affordance
-              is too easy for a user (or an App Review tester) to miss. */}
+          {/* Visible entry point to report/block. Spelled out rather than shown
+              as a bare "⋯" — users (and App Review testers) have to be able to
+              find this without guessing, and a long-press-only affordance is
+              invisible. Only rendered on other people's messages. */}
           {onLongPress ? (
-            <Pressable onPress={onLongPress} hitSlop={8} accessibilityLabel="Report or block">
-              <Text color={colors.textMuted} fontSize={12}>
-                ⋯
-              </Text>
+            <Pressable onPress={onLongPress} hitSlop={10} accessibilityLabel="Report or block">
+              <XStack
+                alignItems="center"
+                gap="$1"
+                paddingHorizontal="$2"
+                paddingVertical={2}
+                borderRadius="$2"
+                borderWidth={1}
+                borderColor={colors.border}
+              >
+                <Text fontSize={9}>🚩</Text>
+                <Text color={colors.textMuted} fontSize={10} fontWeight="600">
+                  Report
+                </Text>
+              </XStack>
             </Pressable>
           ) : null}
         </XStack>

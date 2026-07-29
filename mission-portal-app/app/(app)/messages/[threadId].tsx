@@ -18,6 +18,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { MessageBubble } from '@/components/ui/MessageBubble'
 import { MessageActionsSheet } from '@/features/moderation/MessageActionsSheet'
+import { RoomMembersSheet } from '@/features/moderation/RoomMembersSheet'
 import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { filterHiddenMessages } from '@/lib/moderation'
@@ -52,15 +53,19 @@ export default function ThreadScreen() {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [actionsFor, setActionsFor] = useState<Message | null>(null)
+  const [showMembers, setShowMembers] = useState(false)
   const flashListRef = useRef<FlashListRef<Message>>(null)
 
   // Messages from users this person blocked, and messages they reported, are
-  // hidden from them (App Store Review Guideline 1.2).
+  // hidden from them (App Store Review Guideline 1.2). This applies in every
+  // room, including ones created after the block.
   const visibleMessages = filterHiddenMessages(
     messages,
     profile?.blockedUsers,
     profile?.reportedMessages
   )
+  // Say so rather than leaving unexplained gaps in the conversation.
+  const hiddenCount = messages.length - visibleMessages.length
 
   const room = rooms.find((r) => sameId(r.id, threadId))
 
@@ -124,8 +129,16 @@ export default function ThreadScreen() {
     }
   }
 
+  const isFlagged = (room?.reviewers?.length ?? 0) > 0
+
   const handleFlagForReview = async () => {
     if (!room || !admin) return
+    // Already flagged: send the admin to the queue rather than silently
+    // re-flagging, which is the only place the flag can be acted on or cleared.
+    if (isFlagged) {
+      router.push('/(app)/admin/moderation' as never)
+      return
+    }
     try {
       await updateDoc(doc(db, 'rooms', String(room.id)), {
         reviewers: arrayUnion(uid),
@@ -141,7 +154,7 @@ export default function ThreadScreen() {
             data: { roomName: room.name ?? '', roomId: String(room.id) },
           }).catch(() => {})
         })
-      toast('Room flagged for review', 'info')
+      toast('Room flagged — review it in Admin → Moderation', 'info')
     } catch {
       toast('Failed to flag room', 'error')
     }
@@ -209,6 +222,11 @@ export default function ThreadScreen() {
         <Text color={colors.text} fontWeight="600" fontSize="$3" numberOfLines={1} flex={1}>
           {room?.name ?? 'Messages'}
         </Text>
+        <Pressable onPress={() => setShowMembers(true)} hitSlop={8} style={{ marginLeft: 8 }}>
+          <Text color={colors.primary} fontSize="$2">
+            👥 People
+          </Text>
+        </Pressable>
         <Pressable onPress={handleToggleMute} hitSlop={8} style={{ marginLeft: 8 }}>
           <Text color={isMuted ? colors.textMuted : colors.primary} fontSize="$2">
             {isMuted ? '🔕 Muted' : '🔔 Mute'}
@@ -216,8 +234,8 @@ export default function ThreadScreen() {
         </Pressable>
         {admin ? (
           <Pressable onPress={handleFlagForReview} hitSlop={8} style={{ marginLeft: 8 }}>
-            <Text color={colors.primary} fontSize="$2">
-              Flag
+            <Text color={isFlagged ? '#e67e22' : colors.primary} fontSize="$2">
+              {isFlagged ? '🚩 Flagged' : 'Flag'}
             </Text>
           </Pressable>
         ) : null}
@@ -239,6 +257,30 @@ export default function ThreadScreen() {
             >
               <Text color={colors.primary} fontSize="$2">
                 {msgLoading ? 'Loading…' : 'Load earlier messages'}
+              </Text>
+            </XStack>
+          </Pressable>
+        ) : null}
+
+        {/* Hidden-message notice — blocked authors and messages you reported */}
+        {hiddenCount > 0 ? (
+          <Pressable onPress={() => router.push('/(app)/blocked' as never)}>
+            <XStack
+              paddingHorizontal="$3"
+              paddingVertical="$2"
+              gap="$2"
+              alignItems="center"
+              backgroundColor={colors.surface}
+              borderBottomWidth={1}
+              borderBottomColor={colors.border}
+            >
+              <Text fontSize="$2">🚫</Text>
+              <Text color={colors.textMuted} fontSize="$2" flex={1}>
+                {hiddenCount} {hiddenCount === 1 ? 'message is' : 'messages are'} hidden because you
+                blocked or reported the sender.
+              </Text>
+              <Text color={colors.primary} fontSize="$2">
+                Manage
               </Text>
             </XStack>
           </Pressable>
@@ -321,6 +363,15 @@ export default function ThreadScreen() {
           </Pressable>
         </XStack>
       </KeyboardAvoidingView>
+
+      <RoomMembersSheet
+        open={showMembers}
+        onOpenChange={setShowMembers}
+        memberUids={room?.members ?? []}
+        users={users}
+        viewerUid={uid}
+        blockedUsers={profile?.blockedUsers ?? []}
+      />
 
       <MessageActionsSheet
         open={actionsFor !== null}

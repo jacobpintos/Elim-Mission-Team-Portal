@@ -219,8 +219,14 @@ export default function AppLayout() {
   // Block direct URL access to unauthorized routes (href:null only hides the tab, doesn't block navigation)
   // 'admin/*' screens are owned by the 'rolehub' tab — allow them when rolehub is accessible
   // 'posts/*' screens are owned by the 'public' tab for members; non-members have 'posts' directly
-  // 'blocked' (manage blocked users) is reached from Settings, which every role has
-  const SUB_ROUTE_OWNERS: Partial<Record<string, Tab>> = { admin: 'rolehub', inventory: 'rolehub', posts: 'public', blocked: 'settings' }
+  // 'blocked' and 'delete-account' are reached from Settings, which every role has
+  const SUB_ROUTE_OWNERS: Partial<Record<string, Tab>> = {
+    admin: 'rolehub',
+    inventory: 'rolehub',
+    posts: 'public',
+    blocked: 'settings',
+    'delete-account': 'settings',
+  }
   const pathSeg = pathname.split('/').filter(Boolean)[0] ?? ''
   const owner = SUB_ROUTE_OWNERS[pathSeg]
   const allowed = tabs.includes(pathSeg as Tab) || (!!owner && tabs.includes(owner))

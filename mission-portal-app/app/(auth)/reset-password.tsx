@@ -75,6 +75,8 @@ export default function ResetPasswordScreen() {
                     value={field.value}
                     onChangeText={field.onChange}
                     onBlur={field.onBlur}
+                    returnKeyType="go"
+                    onSubmitEditing={() => void handleSubmit(onSubmit)()}
                     borderColor={errors.email ? '$red9' : '$borderColor'}
                   />
                   {errors.email && (
