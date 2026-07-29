@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, Pressable, Linking } from 'react-native'
+import { ScrollView, Pressable, Linking, Platform } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -150,23 +150,30 @@ export default function EventsScreen() {
         borderBottomWidth={1}
         borderBottomColor={colors.border}
       >
-        <Pressable onPress={prevMonth}>
-          <Text color={colors.primary} fontSize="$4" paddingHorizontal="$2">
+        <Pressable onPress={prevMonth} hitSlop={12} style={{ paddingVertical: 6, paddingHorizontal: 16 }}>
+          <Text color={colors.primary} fontSize={30} lineHeight={32} fontWeight="700">
             ‹
           </Text>
         </Pressable>
         <Text color={colors.text} fontWeight="700" fontSize="$4">
           {MONTH_NAMES[calM - 1]} {calY}
         </Text>
-        <Pressable onPress={nextMonth}>
-          <Text color={colors.primary} fontSize="$4" paddingHorizontal="$2">
+        <Pressable onPress={nextMonth} hitSlop={12} style={{ paddingVertical: 6, paddingHorizontal: 16 }}>
+          <Text color={colors.primary} fontSize={30} lineHeight={32} fontWeight="700">
             ›
           </Text>
         </Pressable>
       </XStack>
 
-      {/* View toggle + create button */}
-      <XStack padding="$2" gap="$2" justifyContent="space-between" alignItems="center">
+      {/* View toggle + create button — wraps so nothing is cut off on narrow screens */}
+      <XStack
+        padding="$2"
+        gap="$2"
+        rowGap="$2"
+        flexWrap="wrap"
+        justifyContent="space-between"
+        alignItems="center"
+      >
         <XStack gap="$1">
           {(['calendar', 'list'] as const).map((v) => (
             <Pressable key={v} onPress={() => setView(v)}>
@@ -187,19 +194,24 @@ export default function EventsScreen() {
         </XStack>
         {admin ? (
           <XStack gap="$2" alignItems="center">
-            <Pressable onPress={() => router.push('/(app)/events/map' as never)}>
-              <XStack
-                borderRadius="$2"
-                paddingHorizontal="$3"
-                paddingVertical="$1"
-                borderWidth={1}
-                borderColor={colors.border}
-              >
-                <Text color={colors.text} fontSize="$2" fontWeight="600">
-                  Map
-                </Text>
-              </XStack>
-            </Pressable>
+            {/* The interactive map (Mapbox) is web-only — there's no native
+                equivalent, so hide the entry point on native rather than
+                linking to a screen that just says "use the web app." */}
+            {Platform.OS === 'web' ? (
+              <Pressable onPress={() => router.push('/(app)/events/map' as never)}>
+                <XStack
+                  borderRadius="$2"
+                  paddingHorizontal="$3"
+                  paddingVertical="$1"
+                  borderWidth={1}
+                  borderColor={colors.border}
+                >
+                  <Text color={colors.text} fontSize="$2" fontWeight="600">
+                    Map
+                  </Text>
+                </XStack>
+              </Pressable>
+            ) : null}
             <Pressable onPress={() => router.push('/(app)/admin/avail' as never)}>
               <XStack
                 borderRadius="$2"
@@ -213,14 +225,14 @@ export default function EventsScreen() {
                 </Text>
               </XStack>
             </Pressable>
-            <Pressable onPress={() => setShowCreateModal(true)}>
+            <Pressable onPress={() => setShowCreateModal(true)} hitSlop={6}>
               <XStack
                 backgroundColor={colors.primary}
                 borderRadius="$2"
-                paddingHorizontal="$3"
-                paddingVertical="$1"
+                paddingHorizontal="$4"
+                paddingVertical="$2.5"
               >
-                <Text color="white" fontSize="$2" fontWeight="600">
+                <Text color="white" fontSize="$3" fontWeight="700">
                   + Create Event
                 </Text>
               </XStack>

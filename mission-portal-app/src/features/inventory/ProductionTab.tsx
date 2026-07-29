@@ -15,7 +15,8 @@ interface ProductionTabProps {
 
 export function ProductionTab({ isAdmin }: ProductionTabProps) {
   const colors = useThemeColors()
-  const { categories, items, createItem, updateItem, deleteItem, createCategory, deleteCategory } = useInventoryStore()
+  const { categories, items, createItem, updateItem, deleteItem, createCategory, deleteCategory } =
+    useInventoryStore()
   const toast = useUIStore((s) => s.toast)
 
   const [subTab, setSubTab] = useState<'items' | 'analytics'>('items')
@@ -28,13 +29,19 @@ export function ProductionTab({ isAdmin }: ProductionTabProps) {
 
   const categoryMap = new Map(categories.map((c) => [String(c.id), c.name]))
 
-  const filtered = items.filter((item) => {
-    const q = search.toLowerCase()
-    const matchesSearch = !q || item.name.toLowerCase().includes(q) ||
-      (item.categoryId ? (categoryMap.get(String(item.categoryId)) ?? '').toLowerCase().includes(q) : false)
-    const matchesCat = filterCatId === null || String(item.categoryId) === String(filterCatId)
-    return matchesSearch && matchesCat
-  }).sort((a, b) => a.name.localeCompare(b.name))
+  const filtered = items
+    .filter((item) => {
+      const q = search.toLowerCase()
+      const matchesSearch =
+        !q ||
+        item.name.toLowerCase().includes(q) ||
+        (item.categoryId
+          ? (categoryMap.get(String(item.categoryId)) ?? '').toLowerCase().includes(q)
+          : false)
+      const matchesCat = filterCatId === null || String(item.categoryId) === String(filterCatId)
+      return matchesSearch && matchesCat
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const handleSave = async (data: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
@@ -96,7 +103,15 @@ export function ProductionTab({ isAdmin }: ProductionTabProps) {
           {/* Search + admin controls */}
           <XStack paddingHorizontal="$3" paddingVertical="$2" gap="$2" alignItems="center">
             <TextInput
-              style={[styles.search, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface, flex: 1 }]}
+              style={[
+                styles.search,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  flex: 1,
+                },
+              ]}
               value={search}
               onChangeText={setSearch}
               placeholder="Search items or category…"
@@ -108,13 +123,23 @@ export function ProductionTab({ isAdmin }: ProductionTabProps) {
                   onPress={() => setShowCatManager(true)}
                   style={[styles.btn, { borderColor: colors.border }]}
                 >
-                  <Text color={colors.textMuted} fontSize="$1" fontWeight="600">Categories</Text>
+                  <Text color={colors.textMuted} fontSize="$1" fontWeight="600">
+                    Categories
+                  </Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => { setEditItem(null); setShowItemForm(true) }}
-                  style={[styles.btn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                  onPress={() => {
+                    setEditItem(null)
+                    setShowItemForm(true)
+                  }}
+                  style={[
+                    styles.btn,
+                    { backgroundColor: colors.primary, borderColor: colors.primary },
+                  ]}
                 >
-                  <Text color="white" fontSize="$1" fontWeight="700">+ Add</Text>
+                  <Text color="white" fontSize="$1" fontWeight="700">
+                    + Add
+                  </Text>
                 </Pressable>
               </>
             ) : null}
@@ -133,20 +158,41 @@ export function ProductionTab({ isAdmin }: ProductionTabProps) {
                     paddingHorizontal="$2"
                     paddingVertical={2}
                   >
-                    <Text color={filterCatId === null ? colors.primary : colors.textMuted} fontSize="$1">All</Text>
+                    <Text
+                      color={filterCatId === null ? colors.primary : colors.textMuted}
+                      fontSize="$1"
+                    >
+                      All
+                    </Text>
                   </XStack>
                 </Pressable>
                 {categories.map((cat) => (
-                  <Pressable key={String(cat.id)} onPress={() => setFilterCatId(String(cat.id) === String(filterCatId) ? null : cat.id)}>
+                  <Pressable
+                    key={String(cat.id)}
+                    onPress={() =>
+                      setFilterCatId(String(cat.id) === String(filterCatId) ? null : cat.id)
+                    }
+                  >
                     <XStack
                       borderRadius={99}
                       borderWidth={1}
-                      borderColor={String(filterCatId) === String(cat.id) ? colors.primary : colors.border}
-                      backgroundColor={String(filterCatId) === String(cat.id) ? colors.primary + '18' : 'transparent'}
+                      borderColor={
+                        String(filterCatId) === String(cat.id) ? colors.primary : colors.border
+                      }
+                      backgroundColor={
+                        String(filterCatId) === String(cat.id)
+                          ? colors.primary + '18'
+                          : 'transparent'
+                      }
                       paddingHorizontal="$2"
                       paddingVertical={2}
                     >
-                      <Text color={String(filterCatId) === String(cat.id) ? colors.primary : colors.textMuted} fontSize="$1">
+                      <Text
+                        color={
+                          String(filterCatId) === String(cat.id) ? colors.primary : colors.textMuted
+                        }
+                        fontSize="$1"
+                      >
                         {cat.name}
                       </Text>
                     </XStack>
@@ -156,83 +202,207 @@ export function ProductionTab({ isAdmin }: ProductionTabProps) {
             </ScrollView>
           ) : null}
 
-          {/* Table header */}
-          <View style={[styles.headerRow, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-            <Text style={styles.colItem} color={colors.textMuted} fontWeight="700" fontSize={12}>ITEM</Text>
-            <Text style={styles.colCat} color={colors.textMuted} fontWeight="700" fontSize={12}>CATEGORY</Text>
-            <Text style={styles.colQty} color={colors.textMuted} fontWeight="700" fontSize={12}>QTY</Text>
-            <Text style={styles.colPrice} color={colors.textMuted} fontWeight="700" fontSize={12}>PRICE</Text>
-            <Text style={styles.colValue} color={colors.textMuted} fontWeight="700" fontSize={12}>VALUE</Text>
-            {isAdmin ? <View style={styles.colActions} /> : null}
-          </View>
+          {/* Table: item/category need real minimum widths to stay legible, so
+              the whole table (header + rows) scrolls horizontally together —
+              header and rows share styles.tableWidth to stay in sync. */}
+          <ScrollView horizontal showsHorizontalScrollIndicator style={{ flex: 1 }}>
+            <YStack style={styles.tableWidth}>
+              <View
+                style={[
+                  styles.headerRow,
+                  { borderBottomColor: colors.border, backgroundColor: colors.surface },
+                ]}
+              >
+                <Text
+                  style={styles.colItem}
+                  color={colors.textMuted}
+                  fontWeight="700"
+                  fontSize={12}
+                >
+                  ITEM
+                </Text>
+                <Text style={styles.colCat} color={colors.textMuted} fontWeight="700" fontSize={12}>
+                  CATEGORY
+                </Text>
+                <Text style={styles.colQty} color={colors.textMuted} fontWeight="700" fontSize={12}>
+                  QTY
+                </Text>
+                <Text
+                  style={styles.colPrice}
+                  color={colors.textMuted}
+                  fontWeight="700"
+                  fontSize={12}
+                >
+                  PRICE
+                </Text>
+                <Text
+                  style={styles.colValue}
+                  color={colors.textMuted}
+                  fontWeight="700"
+                  fontSize={12}
+                >
+                  VALUE
+                </Text>
+                {isAdmin ? <View style={styles.colActions} /> : null}
+              </View>
 
-          {filtered.length === 0 ? (
-            <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
-              <Text color={colors.textMuted} textAlign="center">
-                {search || filterCatId ? 'No items match your search.' : 'No items yet. Tap + Add to create one.'}
-              </Text>
-            </YStack>
-          ) : (
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-              <YStack paddingBottom="$8">
-                {filtered.map((item, idx) => {
-                  const catName = item.categoryId ? (categoryMap.get(String(item.categoryId)) ?? '—') : '—'
-                  const value = (item.price ?? 0) * (item.qty ?? 0)
-                  const isConfirming = String(confirmDeleteId) === String(item.id)
-                  return (
-                    <View
-                      key={String(item.id)}
-                      style={[
-                        styles.dataRow,
-                        { backgroundColor: idx % 2 === 0 ? colors.surface : colors.background, borderBottomColor: colors.border },
-                      ]}
-                    >
-                      <Text style={styles.colItem} color={colors.text} fontSize={13} numberOfLines={1}>{item.name}</Text>
-                      <Text style={styles.colCat} color={colors.textMuted} fontSize={13} numberOfLines={1}>{catName}</Text>
-                      <Text style={styles.colQty} color={colors.text} fontSize={13}>{item.qty}</Text>
-                      <Text style={styles.colPrice} color={colors.text} fontSize={13}>${(item.price ?? 0).toFixed(2)}</Text>
-                      <Text style={styles.colValue} color={colors.primary} fontSize={13} fontWeight="600">${value.toFixed(2)}</Text>
-                      {isAdmin ? (
-                        <View style={styles.colActions}>
-                          {isConfirming ? (
-                            <XStack gap={4}>
-                              <Pressable onPress={() => setConfirmDeleteId(null)}>
-                                <View style={[styles.actionBtn, { borderColor: colors.border }]}>
-                                  <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}>Cancel</Text>
-                                </View>
-                              </Pressable>
-                              <Pressable onPress={() => handleDeleteItem(item.id)}>
-                                <View style={[styles.actionBtn, { backgroundColor: '#c0392b', borderColor: '#c0392b' }]}>
-                                  <Text style={{ color: 'white', fontSize: 11, fontWeight: '600' }}>Confirm</Text>
-                                </View>
-                              </Pressable>
-                            </XStack>
-                          ) : (
-                            <XStack gap={4}>
-                              <Pressable onPress={() => { setEditItem(item); setShowItemForm(true) }}>
-                                <View style={[styles.actionBtn, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '44' }]}>
-                                  <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '600' }}>Edit</Text>
-                                </View>
-                              </Pressable>
-                              <Pressable onPress={() => setConfirmDeleteId(item.id)}>
-                                <View style={[styles.actionBtn, { backgroundColor: '#c0392b18', borderColor: '#c0392b44' }]}>
-                                  <Text style={{ color: '#c0392b', fontSize: 11, fontWeight: '600' }}>Delete</Text>
-                                </View>
-                              </Pressable>
-                            </XStack>
-                          )}
+              {filtered.length === 0 ? (
+                <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
+                  <Text color={colors.textMuted} textAlign="center">
+                    {search || filterCatId
+                      ? 'No items match your search.'
+                      : 'No items yet. Tap + Add to create one.'}
+                  </Text>
+                </YStack>
+              ) : (
+                <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                  <YStack paddingBottom="$8">
+                    {filtered.map((item, idx) => {
+                      const catName = item.categoryId
+                        ? (categoryMap.get(String(item.categoryId)) ?? '—')
+                        : '—'
+                      const value = (item.price ?? 0) * (item.qty ?? 0)
+                      const isConfirming = String(confirmDeleteId) === String(item.id)
+                      return (
+                        <View
+                          key={String(item.id)}
+                          style={[
+                            styles.dataRow,
+                            {
+                              backgroundColor: idx % 2 === 0 ? colors.surface : colors.background,
+                              borderBottomColor: colors.border,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={styles.colItem}
+                            color={colors.text}
+                            fontSize={13}
+                            numberOfLines={1}
+                          >
+                            {item.name}
+                          </Text>
+                          <Text
+                            style={styles.colCat}
+                            color={colors.textMuted}
+                            fontSize={13}
+                            numberOfLines={1}
+                          >
+                            {catName}
+                          </Text>
+                          <Text style={styles.colQty} color={colors.text} fontSize={13}>
+                            {item.qty}
+                          </Text>
+                          <Text style={styles.colPrice} color={colors.text} fontSize={13}>
+                            ${(item.price ?? 0).toFixed(2)}
+                          </Text>
+                          <Text
+                            style={styles.colValue}
+                            color={colors.primary}
+                            fontSize={13}
+                            fontWeight="600"
+                          >
+                            ${value.toFixed(2)}
+                          </Text>
+                          {isAdmin ? (
+                            <View style={styles.colActions}>
+                              {isConfirming ? (
+                                <XStack gap={4}>
+                                  <Pressable onPress={() => setConfirmDeleteId(null)}>
+                                    <View
+                                      style={[styles.actionBtn, { borderColor: colors.border }]}
+                                    >
+                                      <Text
+                                        style={{
+                                          color: colors.textMuted,
+                                          fontSize: 11,
+                                          fontWeight: '600',
+                                        }}
+                                      >
+                                        Cancel
+                                      </Text>
+                                    </View>
+                                  </Pressable>
+                                  <Pressable onPress={() => handleDeleteItem(item.id)}>
+                                    <View
+                                      style={[
+                                        styles.actionBtn,
+                                        { backgroundColor: '#c0392b', borderColor: '#c0392b' },
+                                      ]}
+                                    >
+                                      <Text
+                                        style={{ color: 'white', fontSize: 11, fontWeight: '600' }}
+                                      >
+                                        Confirm
+                                      </Text>
+                                    </View>
+                                  </Pressable>
+                                </XStack>
+                              ) : (
+                                <XStack gap={4}>
+                                  <Pressable
+                                    onPress={() => {
+                                      setEditItem(item)
+                                      setShowItemForm(true)
+                                    }}
+                                  >
+                                    <View
+                                      style={[
+                                        styles.actionBtn,
+                                        {
+                                          backgroundColor: colors.primary + '18',
+                                          borderColor: colors.primary + '44',
+                                        },
+                                      ]}
+                                    >
+                                      <Text
+                                        style={{
+                                          color: colors.primary,
+                                          fontSize: 11,
+                                          fontWeight: '600',
+                                        }}
+                                      >
+                                        Edit
+                                      </Text>
+                                    </View>
+                                  </Pressable>
+                                  <Pressable onPress={() => setConfirmDeleteId(item.id)}>
+                                    <View
+                                      style={[
+                                        styles.actionBtn,
+                                        { backgroundColor: '#c0392b18', borderColor: '#c0392b44' },
+                                      ]}
+                                    >
+                                      <Text
+                                        style={{
+                                          color: '#c0392b',
+                                          fontSize: 11,
+                                          fontWeight: '600',
+                                        }}
+                                      >
+                                        Delete
+                                      </Text>
+                                    </View>
+                                  </Pressable>
+                                </XStack>
+                              )}
+                            </View>
+                          ) : null}
                         </View>
-                      ) : null}
-                    </View>
-                  )
-                })}
-              </YStack>
-            </ScrollView>
-          )}
+                      )
+                    })}
+                  </YStack>
+                </ScrollView>
+              )}
+            </YStack>
+          </ScrollView>
 
           <ItemFormModal
             visible={showItemForm}
-            onClose={() => { setShowItemForm(false); setEditItem(null) }}
+            onClose={() => {
+              setShowItemForm(false)
+              setEditItem(null)
+            }}
             onSave={handleSave}
             editItem={editItem}
             categories={categories}
@@ -279,8 +449,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderBottomWidth: 1,
   },
-  colItem: { flex: 2, paddingRight: 4 },
-  colCat: { flex: 1.5, paddingRight: 4 },
+  // Fixed (not flex) widths: on a phone-width screen, flex-based columns
+  // squeezed Item/Category down to one or two visible letters. Real minimum
+  // widths plus the enclosing horizontal ScrollView (see render) keep them
+  // legible, letting the table scroll sideways instead of collapsing.
+  tableWidth: { minWidth: 600 },
+  colItem: { width: 150, paddingRight: 8 },
+  colCat: { width: 110, paddingRight: 8 },
   colQty: { width: 50, textAlign: 'right', paddingRight: 8 },
   colPrice: { width: 70, textAlign: 'right', paddingRight: 8 },
   colValue: { width: 70, textAlign: 'right', paddingRight: 8 },

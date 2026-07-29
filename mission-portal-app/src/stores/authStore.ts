@@ -61,17 +61,26 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         doc(db, 'users', fbUser.uid),
         (snap) => {
           const userProfile = snap.exists()
-              ? ({ ...(snap.data() as UserProfile), uid: fbUser.uid } as UserProfile)
-              : null
+            ? ({ ...(snap.data() as UserProfile), uid: fbUser.uid } as UserProfile)
+            : null
           if (!loginAtWritten && userProfile) {
             loginAtWritten = true
             set({ prevLoginAt: userProfile.lastLoginAt ?? null })
             updateDoc(doc(db, 'users', fbUser.uid), { lastLoginAt: Date.now() }).catch(() => {})
-            registerForPushNotifications()
-              .then((result) => {
-                if (result) return persistPushToken(fbUser.uid, result.token, result.platform)
-              })
-              .catch(() => {})
+            // Defer push registration off the critical cold-start path. On a
+            // restored session this callback fires within the first couple of
+            // seconds of launch, before React has committed its first render.
+            // Waiting lets the app render and settle first, and avoids
+            // prompting for notification permission the instant the app opens.
+            setTimeout(() => {
+              registerForPushNotifications()
+                .then((result) => {
+                  if (result) return persistPushToken(fbUser.uid, result.token, result.platform)
+                })
+                .catch((err) => {
+                  console.warn('Push notification registration failed', err)
+                })
+            }, 4000)
           }
           set({ profile: userProfile, loading: false })
         },
@@ -152,5 +161,16 @@ function defaultNotificationPrefs() {
     issueAssigned: { push: true, email: false },
     weeklyDigest: true,
     monthlyDigest: false,
+    eventJoin: { push: true, email: false },
+    eventRemoved: { push: true, email: false },
+    worshipSetAssigned: { push: true, email: false },
+    taskDueSoon: { push: true, email: false },
+    rsvpNonAvailable: { push: true, email: false },
+    kaizenSubmission: { push: true, email: false },
+    issueSubmission: { push: true, email: false },
+    eventHealthBehind: { push: true, email: false },
+    chatFlagged: { push: true, email: false },
+    securityReport: { push: true, email: false },
+    weatherAlertAdmin: { push: true, email: false },
   }
 }

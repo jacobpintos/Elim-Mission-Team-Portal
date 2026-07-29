@@ -30,7 +30,22 @@ export function Modal({ title, children, open, onOpenChange, scrollable, ...prop
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} snapPoints={[85]} dismissOnSnapToBottom modal>
+    // disableDrag: Sheet's drag-to-dismiss gesture and the inner ScrollView
+    // compete for touches at the scroll boundary — tapping something near
+    // the bottom of a long form (once scrolled all the way down, so there's
+    // no more scroll left to "absorb" the gesture) could be interpreted as a
+    // sheet drag, snapping/relaying the sheet and resetting the ScrollView's
+    // scroll position back to the top. Every caller of this Modal already
+    // renders its own Cancel/Close control, so disabling the swipe-to-dismiss
+    // gesture doesn't remove any way to close it.
+    <Sheet
+      open={open}
+      onOpenChange={onOpenChange}
+      snapPoints={[85]}
+      dismissOnSnapToBottom
+      disableDrag
+      modal
+    >
       <Sheet.Overlay backgroundColor="rgba(0,0,0,0.5)" />
       <Sheet.Frame padding="$4" gap="$2">
         <Sheet.Handle />

@@ -25,8 +25,35 @@ import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 type NotifKey = keyof Pick<
   NotificationPrefs,
-  'newAssignment' | 'newMessage' | 'eventReminder' | 'announcement' | 'issueAssigned'
+  | 'newAssignment'
+  | 'newMessage'
+  | 'eventReminder'
+  | 'announcement'
+  | 'issueAssigned'
+  | 'eventJoin'
+  | 'eventRemoved'
+  | 'worshipSetAssigned'
+  | 'taskDueSoon'
+  | 'rsvpNonAvailable'
+  | 'kaizenSubmission'
+  | 'issueSubmission'
+  | 'eventHealthBehind'
+  | 'chatFlagged'
+  | 'securityReport'
+  | 'weatherAlertAdmin'
 >
+
+// Admin-only notification keys — hidden from the toggle list for non-admins,
+// same treatment issueAssigned already got.
+const ADMIN_ONLY_NOTIF_KEYS: NotifKey[] = [
+  'rsvpNonAvailable',
+  'kaizenSubmission',
+  'issueSubmission',
+  'eventHealthBehind',
+  'chatFlagged',
+  'securityReport',
+  'weatherAlertAdmin',
+]
 
 const NOTIF_LABELS: Record<NotifKey, string> = {
   newAssignment: 'New assignment',
@@ -34,6 +61,17 @@ const NOTIF_LABELS: Record<NotifKey, string> = {
   eventReminder: 'Event reminder',
   announcement: 'Announcement',
   issueAssigned: 'Issue assigned',
+  eventJoin: 'Added to an event',
+  eventRemoved: 'Removed from an event/team',
+  worshipSetAssigned: 'Worship set assigned',
+  taskDueSoon: 'Task due soon',
+  rsvpNonAvailable: 'RSVP: not available',
+  kaizenSubmission: 'New Kaizen submission',
+  issueSubmission: 'New issue submission',
+  eventHealthBehind: 'Event falling behind',
+  chatFlagged: 'Chat flagged',
+  securityReport: 'Security report',
+  weatherAlertAdmin: 'Weather alert',
 }
 
 type PublicNotifKey = keyof Pick<
@@ -115,6 +153,17 @@ export default function SettingsScreen() {
     issueAssigned: { push: true, email: false },
     weeklyDigest: true,
     monthlyDigest: false,
+    eventJoin: { push: true, email: false },
+    eventRemoved: { push: true, email: false },
+    worshipSetAssigned: { push: true, email: false },
+    taskDueSoon: { push: true, email: false },
+    rsvpNonAvailable: { push: true, email: false },
+    kaizenSubmission: { push: true, email: false },
+    issueSubmission: { push: true, email: false },
+    eventHealthBehind: { push: true, email: false },
+    chatFlagged: { push: true, email: false },
+    securityReport: { push: true, email: false },
+    weatherAlertAdmin: { push: true, email: false },
     publicAnnouncement: { push: true, email: false },
     publicEvent: { push: true, email: false },
     contentFeatured: { push: true, email: false },
@@ -128,10 +177,12 @@ export default function SettingsScreen() {
       fileInputRef.current?.click()
       return
     }
-    setPhotoUploading(true)
     try {
-      const url = await pickAndUploadAvatar(fbUser.uid)
-      if (url) toast('Photo updated', 'success')
+      const result = await pickAndUploadAvatar(fbUser.uid, {
+        onPermissionDenied: () => toast('Photo library permission denied', 'error'),
+        onUploadStart: () => setPhotoUploading(true),
+      })
+      if (result) toast('Photo updated', 'success')
     } catch {
       toast('Failed to upload photo', 'error')
     } finally {
@@ -551,7 +602,7 @@ export default function SettingsScreen() {
             </XStack>
             {(Object.keys(NOTIF_LABELS) as NotifKey[]).filter((k) => {
               if (isAdmin(profile)) return true
-              return k !== 'issueAssigned'
+              return k !== 'issueAssigned' && !ADMIN_ONLY_NOTIF_KEYS.includes(k)
             }).map((key) => (
               <XStack key={key} alignItems="center">
                 <Label flex={1} fontSize="$3">{NOTIF_LABELS[key]}</Label>

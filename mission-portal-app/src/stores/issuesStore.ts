@@ -7,7 +7,8 @@ import {
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
 import { useTasksStore } from '@/stores/tasksStore'
 import type { IssueReport, IssueCategory, IssueCorrectiveAction, IssueStatus } from '@/types/operations'
@@ -120,5 +121,15 @@ export const useIssuesStore = create<IssuesStore>((set, get) => ({
       status: 'actions_assigned' as IssueStatus,
       updatedAt: serverTimestamp(),
     })
+
+    // Tell the assignee they now own a corrective action.
+    httpsCallable(
+      functions,
+      'sendNotification'
+    )({
+      uid: String(action.assignee),
+      type: 'issueAssigned',
+      data: { title: action.description, issueId: String(id), taskId: String(taskId) },
+    }).catch(() => {})
   },
 }))

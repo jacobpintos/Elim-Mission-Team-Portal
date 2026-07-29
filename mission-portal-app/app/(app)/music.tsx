@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, TextInput, Pressable, StyleSheet, Modal, View } from 'react-native'
+import { ScrollView, TextInput, Pressable, StyleSheet, Modal, View, Platform } from 'react-native'
+import { WebView } from 'react-native-webview'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -9,6 +10,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
 import { useUIStore } from '@/stores/uiStore'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { Img } from '@/components/ui/Img'
 
 function nanoid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
@@ -31,8 +33,39 @@ function isItemNew(item: MusicItem): boolean {
 function YouTubeEmbed({ url }: { url: string }) {
   const id = extractYouTubeId(url)
   if (!id) return null
-  const embedUrl = `https://www.youtube.com/embed/${id}?autoplay=1`
 
+  // React Native has no <iframe> host component. On native, embed the YouTube
+  // player inline via a WebView so the video plays inside the app.
+  //
+  // Loading the embed URL directly with `source={{ uri }}` fails with
+  // "Error 153 — Video player configuration error": the WebView has no origin,
+  // so YouTube's player rejects the embed. Serving a tiny local HTML wrapper
+  // with `baseUrl` set to youtube.com gives the player the origin/referrer it
+  // validates against, which is what makes playback work.
+  if (Platform.OS !== 'web') {
+    const html = `<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}iframe{border:0;display:block;width:100%;height:100%}</style>
+</head><body>
+<iframe src="https://www.youtube.com/embed/${id}?playsinline=1&rel=0&modestbranding=1&autoplay=1&fs=1"
+  allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+  allowfullscreen></iframe>
+</body></html>`
+    return (
+      <WebView
+        source={{ html, baseUrl: 'https://www.youtube.com' }}
+        style={{ flex: 1, backgroundColor: '#000' }}
+        originWhitelist={['*']}
+        javaScriptEnabled
+        domStorageEnabled
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        allowsFullscreenVideo
+      />
+    )
+  }
+
+  const embedUrl = `https://www.youtube.com/embed/${id}?autoplay=1`
   return (
     <iframe
       src={embedUrl}
@@ -63,7 +96,7 @@ function Thumbnail({ url, size = 120 }: { url: string; size?: number }) {
     )
   }
   return (
-    <img
+    <Img
       src={thumb}
       alt="thumbnail"
       style={{

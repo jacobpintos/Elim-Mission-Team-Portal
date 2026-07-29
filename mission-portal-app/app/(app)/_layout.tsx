@@ -1,5 +1,6 @@
 import { Tabs, Redirect, usePathname, useRouter } from 'expo-router'
 import { ScrollView, View, Pressable, StyleSheet, Animated, Platform } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { useState, useEffect, useMemo } from 'react'
 import { getDocs, collection } from 'firebase/firestore'
@@ -87,6 +88,7 @@ export default function AppLayout() {
   const { profile, loading, signOutNow } = useAuthStore()
   const { theme } = useThemeStore()
   const colors = useThemeColors()
+  const insets = useSafeAreaInsets()
   const pathname = usePathname()
   const router = useRouter()
   const [reportOpen, setReportOpen] = useState(false)
@@ -228,7 +230,13 @@ export default function AppLayout() {
 
   const showReportButton = !isPublic(effectiveProfile) || hasPublicEventToday
 
-  const securityUsers = users.filter((u) => isSecurity(u))
+  // Security reports go to security users AND admins (deduped — a user with
+  // both roles should only be notified once).
+  const securityReportAudience = Array.from(
+    new Map(
+      users.filter((u) => isSecurity(u) || u.roles?.includes('admin')).map((u) => [String(u.uid), u])
+    ).values()
+  )
 
   const handleReportSubmit = async (data: {
     description: string
@@ -248,13 +256,12 @@ export default function AppLayout() {
         data.photoFile
       )
       const sendNotif = httpsCallable(functions, 'sendNotification')
-      securityUsers.forEach((u) => {
+      securityReportAudience.forEach((u) => {
         sendNotif({
           uid: String(u.uid),
-          type: 'announcement',
+          type: 'securityReport',
           data: {
-            title: '🚨 Security Report',
-            body: `New incident at ${data.location}: ${data.description.slice(0, 80)}${data.description.length > 80 ? '…' : ''}`,
+            message: `🚨 New incident at ${data.location}: ${data.description.slice(0, 80)}${data.description.length > 80 ? '…' : ''}`,
           },
         }).catch(() => {})
       })
@@ -306,10 +313,10 @@ export default function AppLayout() {
         ]}
       >
         <YStack flex={1}>
-          {/* Logo header */}
+          {/* Logo header — clear the status bar / notch inside the drawer too */}
           <YStack
             padding="$4"
-            paddingTop="$6"
+            paddingTop={insets.top + 16}
             borderBottomWidth={1}
             borderBottomColor={colors.border}
             alignItems="center"
@@ -430,20 +437,23 @@ export default function AppLayout() {
 
       {/* Content area — shifts right when drawer opens */}
       <Animated.View style={contentAnim}>
-        {/* Custom header bar */}
+        {/* Custom header bar — paddingTop includes the top safe-area inset so
+            the menu button clears the status bar / Dynamic Island (otherwise it
+            overlaps the clock and its taps are swallowed by the system). */}
         <View
           style={{
             backgroundColor: colors.background,
             borderBottomWidth: 1,
             borderBottomColor: colors.border,
             paddingHorizontal: 16,
-            paddingVertical: 12,
+            paddingTop: insets.top + 8,
+            paddingBottom: 12,
             flexDirection: 'row',
             alignItems: 'center',
             gap: 14,
           }}
         >
-          <Pressable onPress={openDrawer} style={{ padding: 4 }}>
+          <Pressable onPress={openDrawer} hitSlop={8} style={{ padding: 6 }}>
             <MenuIcon color={colors.text} />
           </Pressable>
           <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700', flex: 1 }}>
@@ -489,6 +499,7 @@ export default function AppLayout() {
                 <Tabs.Screen name="admin/analytics" options={{ href: null }} />
                 <Tabs.Screen name="admin/audit" options={{ href: null }} />
                 <Tabs.Screen name="admin/digests" options={{ href: null }} />
+                <Tabs.Screen name="admin/licensing" options={{ href: null }} />
                 <Tabs.Screen name="admin/leadership" options={{ href: null }} />
                 <Tabs.Screen name="public/posts" options={{ href: null }} />
                 <Tabs.Screen name="posts/[pageId]" options={{ href: null }} />

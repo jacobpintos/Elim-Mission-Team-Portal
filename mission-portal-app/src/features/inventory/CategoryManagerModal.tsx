@@ -77,7 +77,7 @@ export function CategoryManagerModal({
             </Pressable>
           </XStack>
 
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
             <YStack gap="$1">
               {categories.length === 0 ? (
                 <Text color={colors.textMuted} fontSize="$2" textAlign="center" paddingVertical="$4">

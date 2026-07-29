@@ -1,18 +1,22 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useMessagesStore } from '@/stores/messagesStore'
 import { useUsersStore } from '@/stores/usersStore'
+import { useGroupsStore } from '@/stores/groupsStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
 import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { RecipientPicker } from '@/components/ui/RecipientPicker'
 
 export default function MessagesIndex() {
   const colors = useThemeColors()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { profile } = useAuthStore()
   const uid = profile?.uid ?? ''
@@ -21,6 +25,7 @@ export default function MessagesIndex() {
 
   const { rooms, loading, subscribe, unsubscribe, createRoom } = useMessagesStore()
   const { users, subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
+  const { groups, subscribe: subGroups, unsubscribe: unsubGroups } = useGroupsStore()
 
   const [showCreate, setShowCreate] = useState(false)
   const [roomName, setRoomName] = useState('')
@@ -30,9 +35,11 @@ export default function MessagesIndex() {
   useEffect(() => {
     subscribe()
     subUsers()
+    subGroups()
     return () => {
       unsubscribe()
       unsubUsers()
+      unsubGroups()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -44,12 +51,6 @@ export default function MessagesIndex() {
   const flaggedRooms = admin ? rooms.filter((r) => r.reviewers && r.reviewers.length > 0) : []
   const flaggedIds = new Set(flaggedRooms.map((r) => String(r.id)))
   const unflaggedRooms = displayRooms.filter((r) => !flaggedIds.has(String(r.id)))
-
-  const toggleMember = (memberId: string) => {
-    setSelectedMembers((prev) =>
-      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
-    )
-  }
 
   const handleCreate = async () => {
     if (!roomName.trim()) {
@@ -212,7 +213,7 @@ export default function MessagesIndex() {
       {admin ? (
         <Pressable
           onPress={() => setShowCreate(true)}
-          style={[styles.fab, { backgroundColor: colors.primary }]}
+          style={[styles.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 16 }]}
         >
           <Text color="white" fontWeight="700" fontSize="$3">
             ⊕ New Room
@@ -268,50 +269,28 @@ export default function MessagesIndex() {
               />
             </YStack>
 
-            <YStack gap="$1" flex={1}>
+            {/* No flex:1 here — inside the modal's auto-height (maxHeight-only)
+                container a flex:1 child collapses to zero on native, hiding the
+                member list. The inner ScrollView's maxHeight bounds it instead. */}
+            <YStack gap="$1" flexShrink={1}>
               <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                 MEMBERS ({selectedMembers.length} selected)
               </Text>
-              <ScrollView style={{ maxHeight: 280 }}>
-                {nonPublicUsers.map((u) => {
-                  const selected = selectedMembers.includes(String(u.uid))
-                  return (
-                    <Pressable key={String(u.uid)} onPress={() => toggleMember(String(u.uid))}>
-                      <XStack
-                        paddingVertical="$2"
-                        paddingHorizontal="$2"
-                        gap="$3"
-                        alignItems="center"
-                        borderBottomWidth={1}
-                        borderBottomColor={colors.border}
-                        backgroundColor={selected ? colors.primary + '18' : 'transparent'}
-                      >
-                        <View
-                          style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: 4,
-                            borderWidth: 2,
-                            borderColor: selected ? colors.primary : colors.border,
-                            backgroundColor: selected ? colors.primary : 'transparent',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          {selected ? (
-                            <Text color="white" fontSize={12}>
-                              ✓
-                            </Text>
-                          ) : null}
-                        </View>
-                        <Text color={colors.text} fontSize="$3">
-                          {u.displayName || u.email || String(u.uid)}
-                        </Text>
-                      </XStack>
-                    </Pressable>
-                  )
-                })}
-              </ScrollView>
+              <RecipientPicker
+                users={nonPublicUsers.map((u) => ({
+                  uid: u.uid,
+                  displayName: u.displayName,
+                  email: u.email,
+                }))}
+                groups={groups.map((g) => ({
+                  id: g.id,
+                  name: g.name,
+                  members: g.members,
+                }))}
+                value={selectedMembers}
+                onChange={setSelectedMembers}
+                placeholder="Search people or groups…"
+              />
             </YStack>
 
             <Pressable

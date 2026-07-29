@@ -8,15 +8,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
-  updates: {
-    url: `https://u.expo.dev/${process.env.EAS_PROJECT_ID ?? ''}`,
-  },
-  runtimeVersion: {
-    policy: 'appVersion',
-  },
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.elim.missionportal',
+    config: {
+      usesNonExemptEncryption: false,
+    },
     infoPlist: {
       // Declares the app uses no non-exempt encryption, so App Store Connect
       // stops asking the export-compliance question on every submission.
@@ -144,14 +141,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         color: '#f56c5a',
         sounds: [],
         iosDisplayInForeground: true,
-      },
-    ],
-    [
-      '@sentry/react-native/expo',
-      {
-        url: 'https://sentry.io/',
-        organization: 'the-well-of-iowa',
-        project: 'react-native',
       },
     ],
   ],

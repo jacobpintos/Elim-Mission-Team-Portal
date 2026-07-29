@@ -13,10 +13,17 @@ import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { ToastContainer } from '@/components/ui/Toast'
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  debug: __DEV__,
-})
+// No DSN is configured yet, so avoid touching the native Sentry SDK at all —
+// initializing with an empty/undefined dsn still triggers native setup, which
+// isn't something we want running unconfigured in production.
+const sentryEnabled = Boolean(process.env.EXPO_PUBLIC_SENTRY_DSN)
+
+if (sentryEnabled) {
+  Sentry.init({
+    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    debug: __DEV__,
+  })
+}
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -98,16 +105,28 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (Platform.OS === 'web') return
-    notifListener.current = Notifications.addNotificationReceivedListener((notification) => {
-      console.log('Notification received:', notification)
-    })
+    // Wrapped defensively: these are native expo-notifications calls that run
+    // at startup (independent of the deferred token registration). A throw
+    // here must not take down the app.
+    try {
+      notifListener.current = Notifications.addNotificationReceivedListener((notification) => {
+        console.log('Notification received:', notification)
+      })
 
-    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { type?: string; link?: string }
-      if (data.link) {
-        router.push(data.link as Parameters<typeof router.push>[0])
-      }
-    })
+      responseListener.current = Notifications.addNotificationResponseReceivedListener(
+        (response) => {
+          const data = response.notification.request.content.data as {
+            type?: string
+            link?: string
+          }
+          if (data.link) {
+            router.push(data.link as Parameters<typeof router.push>[0])
+          }
+        }
+      )
+    } catch (err) {
+      console.warn('Notification listener setup failed', err)
+    }
 
     return () => {
       notifListener.current?.remove()
@@ -115,23 +134,27 @@ export default function RootLayout() {
     }
   }, [router])
 
-  return (
-    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaProvider>
-          <QueryClientProvider client={queryClient}>
-            <DynamicThemeProvider>
-              <ThemeProvider value={navTheme}>
-                <AuthGate>
-                  <Slot />
-                </AuthGate>
-                <ToastContainer />
-              </ThemeProvider>
-            </DynamicThemeProvider>
-          </QueryClientProvider>
-        </SafeAreaProvider>
-      </GestureHandlerRootView>
-    </Sentry.ErrorBoundary>
+  const content = (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <DynamicThemeProvider>
+            <ThemeProvider value={navTheme}>
+              <AuthGate>
+                <Slot />
+              </AuthGate>
+              <ToastContainer />
+            </ThemeProvider>
+          </DynamicThemeProvider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  )
+
+  return sentryEnabled ? (
+    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>{content}</Sentry.ErrorBoundary>
+  ) : (
+    content
   )
 }
 
@@ -145,6 +168,54 @@ function ErrorFallback() {
       </Text>
       <Text style={{ color: '#666', textAlign: 'center' }}>
         Please reload the page to try again.
+      </Text>
+    </GestureHandlerRootView>
+  )
+}
+
+/**
+ * App-wide error boundary.
+ *
+ * Expo Router renders this as `<Try catch={ErrorBoundary}><RootLayout/></Try>`,
+ * so it wraps RootLayout itself and catches React render/commit errors anywhere
+ * in the tree. Without it, React routes an uncaught render error through
+ * ExceptionsManager → reportFatal, which hard-aborts the process in a release
+ * build — the user just sees the app vanish. Catching it here turns that into a
+ * recoverable screen with a retry.
+ *
+ * Deliberately depends on NO app providers (theme, safe-area, gesture handler)
+ * so it can still render when one of those is what failed.
+ */
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  useEffect(() => {
+    // Surfaces in device logs / Sentry (once a DSN is configured) without
+    // showing an end user a stack trace.
+    console.error('Unhandled render error', error)
+  }, [error])
+
+  return (
+    <GestureHandlerRootView
+      style={{
+        flex: 1,
+        backgroundColor: '#ffffff',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111111', marginBottom: 8 }}>
+        Something went wrong
+      </Text>
+      <Text style={{ color: '#666666', textAlign: 'center', marginBottom: 24 }}>
+        Sorry — the app ran into an unexpected problem. Please try again.
+      </Text>
+      <Text
+        onPress={() => {
+          retry().catch(() => {})
+        }}
+        style={{ fontSize: 16, fontWeight: '600', color: '#2563eb' }}
+      >
+        Try again
       </Text>
     </GestureHandlerRootView>
   )

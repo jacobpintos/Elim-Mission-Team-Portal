@@ -139,6 +139,8 @@ export interface Task {
   dueDate?: string | null
   projectedDate?: string | null
   overdueNotified?: boolean
+  notifiedDueWeekAt?: string | null // date str this task's 1-week-out reminder was sent, for dedup
+  notifiedDueTodayAt?: string | null // date str this task's due-today reminder was sent, for dedup
   taskType?: 'kaizen_verification' | 'kaizen_action' | 'issue_corrective' | 'worship_setlist_ack'
   kaizenId?: string | number
   issueId?: string | number
@@ -154,6 +156,7 @@ export interface Room {
   members: (string | number)[]
   call: boolean
   reviewers: (string | number)[]
+  mutedBy?: (string | number)[]
   updatedAt?: unknown
 }
 
@@ -243,6 +246,10 @@ export interface CommonTeam {
 export interface ConfigMain {
   calY: number
   calM: number
+  // CCLI license number for the organization. Displayed on chord sheets and
+  // their PDF/print exports — CCLI requires the license number to appear on
+  // reproduced worship materials.
+  ccliLicense?: string
   COMMON_TEAMS: (string | CommonTeam)[]
   connectConfig: { socialLinks: unknown[]; leadershipTeam: unknown[] }
   publicPages: Record<string, unknown>

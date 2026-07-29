@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -350,6 +351,7 @@ function KaizenCardItem({
 
 export default function Kaizen() {
   const colors = useThemeColors()
+  const insets = useSafeAreaInsets()
   const { profile } = useAuthStore()
   const uid = String(profile?.uid ?? '')
   const admin = isAdmin(profile)
@@ -592,7 +594,7 @@ export default function Kaizen() {
       {/* Submit Idea FAB */}
       <Pressable
         onPress={() => setIdeaOpen(true)}
-        style={[styles.fab, { backgroundColor: colors.primary }]}
+        style={[styles.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 16 }]}
       >
         <Text color="white" fontWeight="700" fontSize="$3">
           ⊕ Submit Idea

@@ -8,7 +8,7 @@ import {
   Pressable,
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { FlashList, FlashListRef } from '@shopify/flash-list'
 import { useAuthStore } from '@/stores/authStore'
@@ -21,12 +21,14 @@ import { MessageActionsSheet } from '@/features/moderation/MessageActionsSheet'
 import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { filterHiddenMessages } from '@/lib/moderation'
-import { updateDoc, doc, arrayUnion } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import type { Message, MessageAttachment } from '@/types/events'
 
 export default function ThreadScreen() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>()
+  const router = useRouter()
   const colors = useThemeColors()
   const { profile } = useAuthStore()
   const uid = profile?.uid ?? ''
@@ -128,9 +130,34 @@ export default function ThreadScreen() {
       await updateDoc(doc(db, 'rooms', String(room.id)), {
         reviewers: arrayUnion(uid),
       })
+      // Alert the other admins that this chat needs review.
+      const sendNotif = httpsCallable(functions, 'sendNotification')
+      users
+        .filter((u) => u.roles?.includes('admin') && !sameId(u.uid, uid))
+        .forEach((u) => {
+          sendNotif({
+            uid: String(u.uid),
+            type: 'chatFlagged',
+            data: { roomName: room.name ?? '', roomId: String(room.id) },
+          }).catch(() => {})
+        })
       toast('Room flagged for review', 'info')
     } catch {
       toast('Failed to flag room', 'error')
+    }
+  }
+
+  const isMuted = (room?.mutedBy ?? []).some((m) => sameId(m, uid))
+
+  const handleToggleMute = async () => {
+    if (!room) return
+    try {
+      await updateDoc(doc(db, 'rooms', String(room.id)), {
+        mutedBy: isMuted ? arrayRemove(uid) : arrayUnion(uid),
+      })
+      toast(isMuted ? 'Notifications on' : 'Chat muted', 'info')
+    } catch {
+      toast('Failed to update mute setting', 'error')
     }
   }
 
@@ -168,12 +195,27 @@ export default function ThreadScreen() {
         borderBottomColor={colors.border}
         alignItems="center"
         justifyContent="space-between"
+        gap="$2"
       >
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/messages'))}
+          hitSlop={10}
+          style={{ paddingVertical: 4, paddingRight: 4 }}
+        >
+          <Text color={colors.primary} fontSize="$5" fontWeight="700">
+            ‹
+          </Text>
+        </Pressable>
         <Text color={colors.text} fontWeight="600" fontSize="$3" numberOfLines={1} flex={1}>
           {room?.name ?? 'Messages'}
         </Text>
+        <Pressable onPress={handleToggleMute} hitSlop={8} style={{ marginLeft: 8 }}>
+          <Text color={isMuted ? colors.textMuted : colors.primary} fontSize="$2">
+            {isMuted ? '🔕 Muted' : '🔔 Mute'}
+          </Text>
+        </Pressable>
         {admin ? (
-          <Pressable onPress={handleFlagForReview} style={{ marginLeft: 8 }}>
+          <Pressable onPress={handleFlagForReview} hitSlop={8} style={{ marginLeft: 8 }}>
             <Text color={colors.primary} fontSize="$2">
               Flag
             </Text>

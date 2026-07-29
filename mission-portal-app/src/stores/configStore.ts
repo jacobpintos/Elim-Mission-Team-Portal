@@ -9,11 +9,13 @@ interface ConfigStore {
   commonTeams: CommonTeam[]
   postsConfig: PostsConfig
   lastSeenPosts: Record<string, number>
+  ccliLicense: string
   loading: boolean
   _unsub: (() => void) | null
   subscribe: () => void
   unsubscribe: () => void
   setCalMonth: (y: number, m: number) => void
+  setCcliLicense: (license: string) => Promise<void>
   markPageSeen: (uid: string, pageId: string) => Promise<void>
 }
 
@@ -25,6 +27,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   commonTeams: [] as CommonTeam[],
   postsConfig: { pages: [] },
   lastSeenPosts: {},
+  ccliLicense: '',
   loading: false,
   _unsub: null,
 
@@ -45,6 +48,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         ),
         postsConfig: data.postsConfig ?? { pages: [] },
         lastSeenPosts: data.lastSeenPosts ?? {},
+        ccliLicense: data.ccliLicense ?? '',
         loading: false,
       })
     })
@@ -63,6 +67,14 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       calM: m,
       updatedAt: serverTimestamp(),
     }).catch(() => {})
+  },
+
+  setCcliLicense: async (license) => {
+    set({ ccliLicense: license })
+    await updateDoc(doc(db, 'config', 'main'), {
+      ccliLicense: license,
+      updatedAt: serverTimestamp(),
+    })
   },
 
   markPageSeen: async (uid, pageId) => {

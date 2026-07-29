@@ -18,6 +18,7 @@ import { WeatherDetailSheet } from '@/features/events/WeatherDetailSheet'
 import { AvailModal } from '@/features/events/AvailModal'
 import { isAdmin, isSecurity, isMerch, isWorship } from '@/lib/roles'
 import { AppLogo } from '@/components/ui/AppLogo'
+import { Img } from '@/components/ui/Img'
 import { todayStr, dateStr } from '@/lib/events'
 import { FD, timeOfDay } from '@/lib/format'
 import { haversineMiles, geocodeCity, estimatedDriveTime } from '@/lib/geocode'
@@ -436,7 +437,7 @@ function PubHomeContent() {
                       {/* Left: photo panel */}
                       <View style={{ width: 90, alignSelf: 'stretch', overflow: 'hidden', position: 'relative' }}>
                         {page.bgImage ? (
-                          <img src={page.bgImage} alt="" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' } as object} />
+                          <Img src={page.bgImage} alt="" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
                           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.primary + '77' }} />
                         )}

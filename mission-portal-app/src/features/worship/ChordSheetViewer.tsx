@@ -1,12 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal, View, ScrollView, Pressable, StyleSheet, Platform } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { YStack, XStack, Text } from 'tamagui'
 import { printAsync } from 'expo-print'
-import { jsPDF } from 'jspdf'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { NNS_KEYS, nashvilleToChord, getWordSlots } from '@/lib/nashvilleNumbers'
-import { SECTION_LABELS } from '@/types/chordSheet'
+import { useConfigStore } from '@/stores/configStore'
+import { NNS_KEYS, getWordSlots } from '@/lib/nashvilleNumbers'
 import type { ChordSheet, ChordSheetSection } from '@/types/chordSheet'
+import {
+  PROGRESSION_END,
+  formatToken,
+  stripBoundary,
+  splitByProgressionEnd,
+  compressGroups,
+  buildChordSheetHtml,
+  getSectionLabel,
+  getPrevMatchingLabel,
+  getPrevMatchingSection,
+} from './chordSheetFormat'
+import { buildChordSheetPdfBlob } from './chordSheetPdf'
 
 interface KeyPrefs { key: string; isMinor: boolean }
 
@@ -29,343 +41,26 @@ const saveKeyPrefs = (prefs: KeyPrefs) => {
   } catch {}
 }
 
-function escHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
+// Chord/lyric text is monospaced and hand-aligned by measuring characters, so
+// the font size and the per-character width must scale together — changing one
+// without the other breaks chord positioning.
+const BASE_FONT = 13
+const BASE_CHAR_W = 9 // Courier New at BASE_FONT ≈ 9px/char
+const FONT_SCALES = [0.85, 1, 1.15, 1.3, 1.5] as const
+const DEFAULT_SCALE_IDX = 1
+const FONT_SCALE_KEY = 'chordsheet_font_scale_idx'
 
-// Token used to mark the end of one chord progression cycle within a section.
-const PROGRESSION_END = '||'
+// The stored size is read asynchronously, which would make the first sheet
+// opened each session flash at the default size before snapping to the saved
+// one. Caching it in module scope means that read happens at most once — every
+// later sheet opens at the right size immediately.
+let cachedScaleIdx: number | null = null
 
-// A trailing "." on a chord token marks the end of a progression (used to
-// collapse repeats). It is a hidden marker — never rendered — so strip it
-// before displaying the chord.
-function stripBoundary(token: string): string {
-  return token.endsWith('.') ? token.slice(0, -1) : token
-}
-
-// Convert a raw NNS token to a display string.
-// "4/1"  → slash chord    (4 chord, 1 in the bass)  e.g. "F/C"
-// "4>1"  → passing chord  (moves from 4 to 1)        e.g. "F → C"
-// "4 1"  → space-separated chords packed in one box  e.g. "F  C"
-function formatToken(raw: string, keyIdx: number, isMinor: boolean): string {
-  if (!raw || raw === PROGRESSION_END) return raw
-  const tok = stripBoundary(raw)
-  if (!tok) return ''
-  const conv = (t: string) => keyIdx < 0 ? t.trim() : nashvilleToChord(t.trim(), keyIdx, isMinor)
-  if (tok.includes('>')) return tok.split('>').map(conv).join(' → ')
-  if (keyIdx < 0) return tok
-  // Space-separated: user packed multiple chords into one box — convert each independently
-  if (tok.includes(' ')) {
-    return tok.trim().split(/\s+/).map((p) => p.split('/').map(conv).join('/')).join('  ')
-  }
-  return tok.split('/').map(conv).join('/')
-}
-
-// Split a flat chord token array into progression groups. A group ends at a
-// PROGRESSION_END ("||") marker or right after a token carrying a trailing "."
-// boundary. Stored chords have the "." stripped.
-function splitByProgressionEnd(tokens: string[]): string[][] {
-  const groups: string[][] = []
-  let current: string[] = []
-  for (const t of tokens) {
-    if (t === PROGRESSION_END) {
-      if (current.length > 0) { groups.push(current); current = [] }
-      continue
-    }
-    if (!t) continue
-    const isBoundary = t.endsWith('.')
-    const chord = stripBoundary(t)
-    if (chord) current.push(chord)
-    if (isBoundary && current.length > 0) { groups.push(current); current = [] }
-  }
-  if (current.length > 0) groups.push(current)
-  return groups
-}
-
-// Collapse consecutive identical progression groups into { chords, count } entries.
-function compressGroups(groups: string[][]): { chords: string[]; count: number }[] {
-  const result: { chords: string[]; count: number }[] = []
-  for (const group of groups) {
-    const sig = group.join('\x00')
-    const last = result[result.length - 1]
-    if (last && last.chords.join('\x00') === sig) {
-      last.count++
-    } else {
-      result.push({ chords: [...group], count: 1 })
-    }
-  }
-  return result
-}
-
-function buildChordSheetHtml(
-  sheet: ChordSheet,
-  selectedKey: string,
-  isMinor: boolean,
-  keyIdx: number,
-  primaryColor: string,
-): string {
-  const disp = (raw: string) => formatToken(raw, keyIdx, isMinor)
-
-  const secLabel = (id: string) => {
-    const sec = sheet.sections.find((s) => s.id === id)
-    if (!sec) return ''
-    const ofType = sheet.sections.filter((s) => s.type === sec.type)
-    const base = SECTION_LABELS[sec.type]
-    return ofType.length <= 1 ? base : `${base} ${ofType.findIndex((s) => s.id === id) + 1}`
-  }
-
-  const prevLabel = (id: string) => {
-    const idx = sheet.sections.findIndex((s) => s.id === id)
-    if (idx <= 0) return ''
-    const sec = sheet.sections[idx]
-    const prev = sheet.sections.slice(0, idx).reverse().find((s) => s.type === sec.type)
-    return prev ? secLabel(prev.id) : ''
-  }
-
-  let body = ''
-  for (const section of sheet.sections) {
-    const label = secLabel(section.id)
-
-    if (section.sameAsPrevious) {
-      const pl = prevLabel(section.id)
-      body += `<div class="section"><div class="slabel">${escHtml(label)}</div><div class="same-as">${pl ? `(same as ${escHtml(pl)})` : '(same as previous)'}</div></div>\n`
-      continue
-    }
-
-    const hasLyrics = section.lyrics.trim().length > 0
-
-    if (!hasLyrics) {
-      const toks = (section.chordTokens ?? []).flat().filter(Boolean)
-        .map((t) => (t === PROGRESSION_END ? ' | ' : disp(t))).join('  ')
-      body += `<div class="section"><div class="slabel">${escHtml(label)}</div>${toks ? `<div class="instrumental">${escHtml(toks)}</div>` : ''}</div>\n`
-      continue
-    }
-
-    const lyricChordRows = (section.chordTokens ?? []).filter(
-      (row) => !(row.length === 1 && row[0] === PROGRESSION_END)
-    )
-    let linesHtml = ''
-    for (let li = 0; li < section.lyrics.split('\n').length; li++) {
-      const lyricLine = section.lyrics.split('\n')[li]
-      const slots = getWordSlots(lyricLine)
-      if (!slots.length) { linesHtml += '<br>'; continue }
-      const rowTokens = lyricChordRows[li] ?? []
-      let cStr = '', lStr = ''
-      for (let wi = 0; wi < slots.length; wi++) {
-        const slot = slots[wi]
-        const word = slot.text + (slot.trailing === '-' ? '-' : slot.trailing === ' ' ? ' ' : '')
-        const chord = rowTokens[wi] ? disp(rowTokens[wi]) : ''
-        const w = Math.max(word.length, chord ? chord.length + 1 : 0)
-        cStr += chord.padEnd(w, ' ')
-        lStr += word.padEnd(w, ' ')
-      }
-      linesHtml += `<div class="cl">${escHtml(cStr.trimEnd())}</div><div class="ll">${escHtml(lStr.trimEnd())}</div>`
-    }
-    body += `<div class="section"><div class="slabel">${escHtml(label)}</div>${linesHtml}</div>\n`
-  }
-
-  const metaParts: string[] = []
-  if (sheet.artist) metaParts.push(sheet.artist)
-  if (sheet.bpm != null) metaParts.push(`♩ = ${sheet.bpm} BPM`)
-  if (selectedKey) metaParts.push(`Key: ${selectedKey}${isMinor ? ' minor' : ''}`)
-
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${escHtml(sheet.title)}</title>
-<style>
-  body{font-family:'Courier New',Courier,monospace;padding:28px 32px;color:#222;font-size:13px}
-  h1{font-family:sans-serif;margin:0 0 4px;font-size:22px;font-weight:700}
-  .meta{color:#888;font-size:12px;font-family:sans-serif;margin-bottom:28px}
-  .section{margin-bottom:20px;page-break-inside:avoid}
-  .slabel{font-family:sans-serif;font-weight:700;font-size:13px;color:${primaryColor};margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
-  .same-as{font-style:italic;color:#888;font-size:12px}
-  .cl{color:${primaryColor};font-weight:700;white-space:pre;line-height:1.5;min-height:1em}
-  .ll{white-space:pre;line-height:1.5;margin-bottom:4px}
-  .instrumental{color:${primaryColor};font-weight:700}
-</style></head><body>
-<h1>${escHtml(sheet.title)}</h1>
-${metaParts.length ? `<div class="meta">${escHtml(metaParts.join(' · '))}</div>` : ''}
-${body}
-</body></html>`
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-  const clean = hex.replace('#', '')
-  const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean
-  const n = parseInt(full, 16)
-  if (Number.isNaN(n)) return [30, 30, 30]
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-}
-
-// Builds a real PDF file (not a print job) for web export, where expo-print has
-// no way to generate an actual file — its web shim just calls window.print().
-// Mirrors buildChordSheetHtml's layout section-by-section, but draws text
-// directly via jsPDF instead of emitting HTML, with manual page-break tracking
-// standing in for the HTML version's `page-break-inside:avoid`.
-function buildChordSheetPdfBlob(
-  sheet: ChordSheet,
-  selectedKey: string,
-  isMinor: boolean,
-  keyIdx: number,
-  primaryColor: string
-): Blob {
-  const disp = (raw: string) => formatToken(raw, keyIdx, isMinor)
-  const [pr, pg, pb] = hexToRgb(primaryColor)
-  const DARK: [number, number, number] = [30, 30, 30]
-  const GRAY: [number, number, number] = [140, 140, 140]
-
-  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 40
-  const bottom = pageHeight - margin
-  const lineHeight = 16.5
-  let y = margin
-
-  const ensureSpace = (needed: number) => {
-    if (y + needed > bottom) {
-      doc.addPage()
-      y = margin
-    }
-  }
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(20)
-  doc.setTextColor(...DARK)
-  doc.text(sheet.title, margin, y)
-  y += 26
-
-  const metaParts: string[] = []
-  if (sheet.artist) metaParts.push(sheet.artist)
-  if (sheet.bpm != null) metaParts.push(`♪ = ${sheet.bpm} BPM`)
-  if (selectedKey) metaParts.push(`Key: ${selectedKey}${isMinor ? ' minor' : ''}`)
-  if (metaParts.length) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(11)
-    doc.setTextColor(...GRAY)
-    doc.text(metaParts.join('   ·   '), margin, y)
-    y += 26
-  } else {
-    y += 8
-  }
-
-  for (const section of sheet.sections) {
-    const label = getSectionLabel(sheet.sections, section.id)
-
-    if (section.sameAsPrevious) {
-      ensureSpace(lineHeight * 2)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(12)
-      doc.setTextColor(pr, pg, pb)
-      doc.text(label, margin, y)
-      y += 15
-      doc.setFont('helvetica', 'italic')
-      doc.setFontSize(10.5)
-      doc.setTextColor(...GRAY)
-      const pl = getPrevMatchingLabel(sheet.sections, section.id)
-      doc.text(pl ? `(same as ${pl})` : '(same as previous)', margin, y)
-      y += 24
-      continue
-    }
-
-    const hasLyrics = section.lyrics.trim().length > 0
-
-    if (!hasLyrics) {
-      const toks = (section.chordTokens ?? [])
-        .flat()
-        .filter(Boolean)
-        .map((t) => (t === PROGRESSION_END ? '|' : disp(t)))
-      const text = toks.join('  ')
-      ensureSpace(lineHeight * 2)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(12)
-      doc.setTextColor(pr, pg, pb)
-      doc.text(label, margin, y)
-      y += 15
-      if (text) {
-        doc.setFont('courier', 'bold')
-        doc.setFontSize(11)
-        doc.text(text, margin, y)
-        y += lineHeight
-      }
-      y += 12
-      continue
-    }
-
-    const lyricsLines = section.lyrics.split('\n')
-    const lyricChordRows = (section.chordTokens ?? []).filter(
-      (row) => !(row.length === 1 && row[0] === PROGRESSION_END)
-    )
-
-    ensureSpace(lineHeight * 2 + 18)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(12)
-    doc.setTextColor(pr, pg, pb)
-    doc.text(label, margin, y)
-    y += 18
-
-    for (let li = 0; li < lyricsLines.length; li++) {
-      const slots = getWordSlots(lyricsLines[li])
-      if (!slots.length) {
-        y += 8
-        continue
-      }
-      const rowTokens = lyricChordRows[li] ?? []
-      let cStr = ''
-      let lStr = ''
-      for (let wi = 0; wi < slots.length; wi++) {
-        const slot = slots[wi]
-        const word = slot.text + (slot.trailing === '-' ? '-' : slot.trailing === ' ' ? ' ' : '')
-        const chord = rowTokens[wi] ? disp(rowTokens[wi]) : ''
-        const w = Math.max(word.length, chord ? chord.length + 1 : 0)
-        cStr += chord.padEnd(w, ' ')
-        lStr += word.padEnd(w, ' ')
-      }
-      ensureSpace(lineHeight * 2)
-      doc.setFont('courier', 'bold')
-      doc.setFontSize(11)
-      doc.setTextColor(pr, pg, pb)
-      doc.text(cStr.trimEnd() || ' ', margin, y)
-      y += 12
-      doc.setFont('courier', 'normal')
-      doc.setTextColor(...DARK)
-      doc.text(lStr.trimEnd(), margin, y)
-      y += 16
-    }
-    y += 14
-  }
-
-  return doc.output('blob')
-}
-
-function getSectionLabel(sections: ChordSheet['sections'], id: string): string {
-  const section = sections.find((s) => s.id === id)
-  if (!section) return ''
-  const ofType = sections.filter((s) => s.type === section.type)
-  const base = SECTION_LABELS[section.type]
-  if (ofType.length <= 1) return base
-  return `${base} ${ofType.findIndex((s) => s.id === id) + 1}`
-}
-
-function getPrevMatchingLabel(sections: ChordSheet['sections'], id: string): string {
-  const idx = sections.findIndex((s) => s.id === id)
-  if (idx <= 0) return ''
-  const section = sections[idx]
-  const prev = sections.slice(0, idx).reverse().find((s) => s.type === section.type)
-  if (!prev) return ''
-  return getSectionLabel(sections, prev.id)
-}
-
-function getPrevMatchingSection(
-  sections: ChordSheet['sections'],
-  id: string
-): ChordSheetSection | null {
-  const idx = sections.findIndex((s) => s.id === id)
-  if (idx <= 0) return null
-  const section = sections[idx]
-  return sections.slice(0, idx).reverse().find((s) => s.type === section.type) ?? null
-}
-
-// Estimate column width in logical px from word length (Courier New 13px ≈ 9px/char)
-function colWidth(word: string, chordLen = 0): number {
-  return Math.max(word.length * 9 + 8, chordLen * 9 + 8, 36)
+// Estimate column width in logical px from word length, at the current scale.
+function colWidth(word: string, chordLen = 0, scale = 1): number {
+  const charW = BASE_CHAR_W * scale
+  const pad = 8 * scale
+  return Math.max(word.length * charW + pad, chordLen * charW + pad, 36 * scale)
 }
 
 interface SectionGroup {
@@ -382,6 +77,41 @@ interface ChordSheetViewerProps {
 
 export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewerProps) {
   const colors = useThemeColors()
+  const ccliLicense = useConfigStore((s) => s.ccliLicense)
+
+  // Text size is a per-reader preference (stage lighting, eyesight, phone vs
+  // tablet), so it's adjustable and persisted rather than a fixed size.
+  // AsyncStorage (not localStorage like the key prefs above) so it works on
+  // native too.
+  const [scaleIdx, setScaleIdx] = useState(cachedScaleIdx ?? DEFAULT_SCALE_IDX)
+  useEffect(() => {
+    if (cachedScaleIdx !== null) return // already loaded earlier this session
+    let cancelled = false
+    AsyncStorage.getItem(FONT_SCALE_KEY)
+      .then((raw) => {
+        if (raw == null) return
+        const idx = Number(raw)
+        if (!Number.isInteger(idx) || idx < 0 || idx >= FONT_SCALES.length) return
+        cachedScaleIdx = idx
+        if (!cancelled) setScaleIdx(idx)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const fontScale = FONT_SCALES[scaleIdx]
+  const monoSize = Math.round(BASE_FONT * fontScale)
+
+  const changeScale = (delta: number) => {
+    const next = Math.min(FONT_SCALES.length - 1, Math.max(0, scaleIdx + delta))
+    if (next === scaleIdx) return
+    cachedScaleIdx = next
+    setScaleIdx(next)
+    AsyncStorage.setItem(FONT_SCALE_KEY, String(next)).catch(() => {})
+  }
+
   const [selectedKey, setSelectedKey] = useState(() => {
     if (initialKey && (NNS_KEYS as readonly string[]).includes(initialKey)) return initialKey
     return getKeyPrefs().key
@@ -421,7 +151,14 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
     // the share sheet where available (so it can be saved to Files, AirDropped,
     // etc.), or as a plain download otherwise.
     if (Platform.OS === 'web') {
-      const blob = buildChordSheetPdfBlob(sheet, selectedKey, isMinor, keyIdx, colors.primary)
+      const blob = buildChordSheetPdfBlob(
+        sheet,
+        selectedKey,
+        isMinor,
+        keyIdx,
+        colors.primary,
+        ccliLicense
+      )
       const filename = `${sheet.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'chord-sheet'}.pdf`
       const file = new File([blob], filename, { type: 'application/pdf' })
 
@@ -449,7 +186,14 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
       return
     }
 
-    const html = buildChordSheetHtml(sheet, selectedKey, isMinor, keyIdx, colors.primary)
+    const html = buildChordSheetHtml(
+      sheet,
+      selectedKey,
+      isMinor,
+      keyIdx,
+      colors.primary,
+      ccliLicense
+    )
     await printAsync({ html })
   }
 
@@ -609,6 +353,46 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
               </XStack>
             </Pressable>
 
+            {/* Text size — persists across sessions so a reader sets it once.
+                Labelled "Size" rather than A−/A+ because A–G read as key names
+                in a chord sheet. */}
+            <XStack
+              borderRadius={99}
+              borderWidth={1}
+              borderColor={colors.primary}
+              backgroundColor={colors.primary + '18'}
+              alignItems="center"
+              overflow="hidden"
+            >
+              <Pressable
+                onPress={() => changeScale(-1)}
+                disabled={scaleIdx === 0}
+                hitSlop={6}
+                style={{ paddingHorizontal: 12, paddingVertical: 4, opacity: scaleIdx === 0 ? 0.4 : 1 }}
+              >
+                <Text color={colors.primary} fontSize={16} fontWeight="700">
+                  −
+                </Text>
+              </Pressable>
+              <Text color={colors.primary} fontSize="$2" fontWeight="600" paddingHorizontal="$1">
+                Size
+              </Text>
+              <Pressable
+                onPress={() => changeScale(1)}
+                disabled={scaleIdx === FONT_SCALES.length - 1}
+                hitSlop={6}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 4,
+                  opacity: scaleIdx === FONT_SCALES.length - 1 ? 0.4 : 1,
+                }}
+              >
+                <Text color={colors.primary} fontSize={16} fontWeight="700">
+                  +
+                </Text>
+              </Pressable>
+            </XStack>
+
             {/* Export PDF — available on all platforms via expo-print */}
             <Pressable onPress={handleExportPdf}>
               <XStack
@@ -629,7 +413,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
           </XStack>
 
           {/* Content */}
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
             <YStack gap="$3" paddingBottom="$4">
               {chordsOnly
                 ? sectionGroups.map(({ section, count }) => {
@@ -654,7 +438,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                               <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 4 }} />
                             ) : null}
                             <XStack gap="$2" alignItems="center">
-                              <Text style={styles.mono} color={colors.text}>
+                              <Text style={[styles.mono, { fontSize: monoSize }]} color={colors.text}>
                                 {chords.map(displayToken).join('  ')}
                               </Text>
                               {pc > 1 ? (
@@ -670,63 +454,45 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                   })
                 : sheet.sections.map((section) => {
                     const label = getSectionLabel(sheet.sections, section.id)
-                    const hasLyrics = section.lyrics.trim().length > 0
 
-                    // Full mode: same-as-previous → label + "(same as X)" + chords
-                    if (section.sameAsPrevious) {
-                      const prevLabel = getPrevMatchingLabel(sheet.sections, section.id)
-                      const prevSection = getPrevMatchingSection(sheet.sections, section.id)
-                      const prevTokens = (prevSection?.chordTokens ?? []).flat().filter(Boolean)
-                      return (
-                        <YStack key={section.id} gap="$0.5">
-                          <Text color={colors.primary} fontWeight="700" fontSize="$3">
-                            {label}
-                          </Text>
-                          <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
-                            {prevLabel ? `(same as ${prevLabel})` : '(same as previous)'}
-                          </Text>
-                          {prevTokens.length > 0 ? (
-                            <XStack flexWrap="wrap" gap="$2" alignItems="center">
-                              {prevTokens.map((t, i) =>
-                                t === PROGRESSION_END ? (
-                                  <Text key={i} style={styles.mono} color={colors.border}>
-                                    {'|'}
-                                  </Text>
-                                ) : (
-                                  <Text
-                                    key={i}
-                                    style={[styles.mono, styles.chordText]}
-                                    color={colors.primary}
-                                  >
-                                    {displayToken(t)}
-                                  </Text>
-                                )
-                              )}
-                            </XStack>
-                          ) : null}
-                        </YStack>
-                      )
-                    }
+                    // A "same as previous" section renders the FULL content it
+                    // repeats (lyrics + aligned chords), not just a label and a
+                    // chord list — a repeated chorus should be singable in place
+                    // without scrolling back to find the words. The italic
+                    // "(same as X)" note is kept so the relationship stays clear.
+                    const repeatSource = section.sameAsPrevious
+                      ? getPrevMatchingSection(sheet.sections, section.id)
+                      : null
+                    const content = repeatSource ?? section
+                    const repeatNote = section.sameAsPrevious
+                      ? getPrevMatchingLabel(sheet.sections, section.id)
+                      : null
+                    const hasLyrics = content.lyrics.trim().length > 0
 
                     // Full mode — instrumental
                     if (!hasLyrics) {
-                      const tokens = (section.chordTokens ?? []).flat().filter(Boolean)
+                      const tokens = (content.chordTokens ?? []).flat().filter(Boolean)
                       return (
                         <YStack key={section.id} gap="$1">
                           <Text color={colors.primary} fontWeight="700" fontSize="$3">
                             {label}
                           </Text>
+                          {repeatNote ? (
+                            <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
+                              (same as {repeatNote})
+                            </Text>
+                          ) : null}
                           {tokens.length > 0 ? (
                             <XStack flexWrap="wrap" gap="$2" alignItems="center">
                               {tokens.map((t, i) =>
                                 t === PROGRESSION_END ? (
-                                  <Text key={i} style={styles.mono} color={colors.border}>
+                                  <Text key={i} style={[styles.mono, { fontSize: monoSize }]} color={colors.border}>
                                     {'|'}
                                   </Text>
                                 ) : (
                                   <Text
                                     key={i}
-                                    style={[styles.mono, styles.chordText]}
+                                    style={[styles.mono, styles.chordText, { fontSize: monoSize }]}
                                     color={colors.primary}
                                   >
                                     {displayToken(t)}
@@ -740,9 +506,9 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                     }
 
                     // Full mode — lyrics section with per-word chord alignment
-                    const lyricsLines = section.lyrics.split('\n')
+                    const lyricsLines = content.lyrics.split('\n')
                     // Filter break rows so lineIdx maps correctly to lyricsLines
-                    const lyricChordRows = (section.chordTokens ?? []).filter(
+                    const lyricChordRows = (content.chordTokens ?? []).filter(
                       (row) => !(row.length === 1 && row[0] === PROGRESSION_END)
                     )
                     return (
@@ -751,10 +517,20 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                           color={colors.primary}
                           fontWeight="700"
                           fontSize="$3"
-                          marginBottom="$0.5"
+                          marginBottom={repeatNote ? 0 : '$0.5'}
                         >
                           {label}
                         </Text>
+                        {repeatNote ? (
+                          <Text
+                            color={colors.textMuted}
+                            fontSize="$2"
+                            fontStyle="italic"
+                            marginBottom="$0.5"
+                          >
+                            (same as {repeatNote})
+                          </Text>
+                        ) : null}
                         {lyricsLines.map((lyricLine, lineIdx) => {
                           const slots = getWordSlots(lyricLine)
                           if (!slots.length) return <View key={lineIdx} style={{ height: 8 }} />
@@ -765,19 +541,19 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                                 {slots.map((slot, wi) => {
                                   const raw = lineTokens[wi] ?? ''
                                   const chord = displayToken(raw)
-                                  const cw = colWidth(slot.text, chord.length)
+                                  const cw = colWidth(slot.text, chord.length, fontScale)
                                   return (
                                     <XStack key={wi} alignItems="flex-end">
                                       <YStack width={cw} alignItems="center" gap={0}>
                                         <Text
-                                          style={[styles.mono, styles.chordText]}
+                                          style={[styles.mono, styles.chordText, { fontSize: monoSize }]}
                                           color={chord ? colors.primary : 'transparent'}
                                           numberOfLines={1}
                                         >
                                           {chord || ' '}
                                         </Text>
                                         <Text
-                                          style={[styles.mono, styles.lyricText]}
+                                          style={[styles.mono, styles.lyricText, { fontSize: monoSize }]}
                                           color={colors.text}
                                           numberOfLines={1}
                                         >
@@ -789,7 +565,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                                           style={[
                                             styles.mono,
                                             styles.lyricText,
-                                            { alignSelf: 'flex-end' },
+                                            { alignSelf: 'flex-end', fontSize: monoSize },
                                           ]}
                                           color={colors.text}
                                         >
@@ -811,6 +587,20 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                   })
               }
             </YStack>
+
+            {/* CCLI attribution — required on reproduced worship material. */}
+            {ccliLicense ? (
+              <Text
+                color={colors.textMuted}
+                fontSize={11}
+                marginTop="$4"
+                paddingTop="$2"
+                borderTopWidth={1}
+                borderTopColor={colors.border}
+              >
+                Reproduced under CCLI License No. {ccliLicense}
+              </Text>
+            ) : null}
           </ScrollView>
         </YStack>
       </View>

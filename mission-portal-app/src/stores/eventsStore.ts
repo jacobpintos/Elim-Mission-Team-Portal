@@ -10,7 +10,8 @@ import {
   arrayUnion,
   serverTimestamp,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import { geocodeCity } from '@/lib/geocode'
 import { allInstances } from '@/lib/events'
 import { availKey, seriesAvailKey, getSeriesAvail } from '@/lib/availability'
@@ -72,24 +73,21 @@ async function resolveGeo(city?: string, state?: string) {
   return { lat: coords.lat, lng: coords.lng, _geocodeLat: coords.lat, _geocodeLng: coords.lng }
 }
 
+// Fires whenever someone responds to an RSVP with anything other than
+// "Available" — including their FIRST response, not just a change from a
+// prior one. Routed through sendNotification (batched, rsvpNonAvailable) so
+// it respects prefs and the shared batching window, unlike the old
+// direct-to-notifs write this replaces.
 async function notifyAssignedAdmins(
   ev: EventInstance,
   changerUid: string,
   newStatus: AvailResponse['status']
 ) {
-  const { users } = useUsersStore.getState()
-  const { groups } = useGroupsStore.getState()
+  if (newStatus === 'yes') return
 
-  const assignedUids = new Set<string>()
-  ev.users?.forEach((u) => assignedUids.add(String(u)))
-  ev.groups?.forEach((gid) => {
-    const grp = groups.find((g) => sameId(g.id, gid))
-    grp?.members.forEach((m) => assignedUids.add(String(m)))
-  })
-  ev.teams?.forEach((team) => {
-    team.leaders.forEach((m) => assignedUids.add(String(m)))
-    team.members.forEach((m) => assignedUids.add(String(m)))
-  })
+  const { users } = useUsersStore.getState()
+
+  const assignedUids = resolveAssignedUids(ev)
 
   const changer = users.find((u) => sameId(u.uid, changerUid))
   const changerName = changer?.displayName || changer?.email || changerUid
@@ -98,23 +96,23 @@ async function notifyAssignedAdmins(
     (u) =>
       u.roles?.includes('admin') &&
       String(u.uid) !== String(changerUid) &&
-      assignedUids.has(u.uid)
+      assignedUids.has(String(u.uid))
   )
 
   if (adminsToNotify.length === 0) return
 
-  const notif: InAppNotif = {
-    id: `avail_${Date.now()}`,
-    msg: `${changerName} is ${AVAIL_LABELS[newStatus].toLowerCase()} for ${ev.title}${ev.isRec ? ` (${ev.date})` : ''}`,
-    ts: Date.now(),
-    type: 'avail',
-    read: false,
-    link: '/(app)/events',
-  }
-
+  const sendNotif = httpsCallable(functions, 'sendNotification')
   await Promise.all(
     adminsToNotify.map((u) =>
-      setDoc(doc(db, 'notifs', String(u.uid)), { items: arrayUnion(notif) }, { merge: true })
+      sendNotif({
+        uid: String(u.uid),
+        type: 'rsvpNonAvailable',
+        data: {
+          userName: changerName,
+          eventTitle: ev.title,
+          statusLabel: AVAIL_LABELS[newStatus].toLowerCase(),
+        },
+      }).catch(() => {})
     )
   )
 }
@@ -179,6 +177,44 @@ async function notifyEventChanges(old: EventTemplate, updated: EventTemplate) {
       return setDoc(doc(db, 'notifs', uid), { items: arrayUnion(notif) }, { merge: true })
     })
   )
+}
+
+/** Union of every uid assigned to an event via direct users, groups, or teams. */
+function resolveAssignedUids(t: EventTemplate): Set<string> {
+  const { getMemberUids } = useGroupsStore.getState()
+  const set = new Set<string>()
+  ;(t.users ?? []).forEach((u) => set.add(String(u)))
+  if (t.groups?.length) getMemberUids(t.groups).forEach((u) => set.add(String(u)))
+  ;(t.teams ?? []).forEach((team) => {
+    team.leaders.forEach((u) => set.add(String(u)))
+    team.members.forEach((u) => set.add(String(u)))
+  })
+  return set
+}
+
+/**
+ * Notifies uids newly added to (eventJoin, batched) or fully dropped from
+ * (eventRemoved, immediate) an event's assignment (users/groups/teams),
+ * comparing the before/after resolved uid sets. Routed through the
+ * sendNotification callable (not a raw Firestore write) so these respect
+ * notificationPrefs and participate in the batching engine.
+ */
+async function notifyEventJoinRemoval(old: EventTemplate, updated: EventTemplate) {
+  const oldAssigned = resolveAssignedUids(old)
+  const newAssigned = resolveAssignedUids(updated)
+  const sendNotif = httpsCallable(functions, 'sendNotification')
+
+  const joins = [...newAssigned].filter((uid) => !oldAssigned.has(uid))
+  const removals = [...oldAssigned].filter((uid) => !newAssigned.has(uid))
+
+  await Promise.all([
+    ...joins.map((uid) =>
+      sendNotif({ uid, type: 'eventJoin', data: { eventTitle: updated.title } }).catch(() => {})
+    ),
+    ...removals.map((uid) =>
+      sendNotif({ uid, type: 'eventRemoved', data: { eventTitle: updated.title } }).catch(() => {})
+    ),
+  ])
 }
 
 export const useEventsStore = create<EventsStore>((set, get) => ({
@@ -353,6 +389,9 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     if (old && (patch.teams !== undefined || patch.dressCode !== undefined)) {
       notifyEventChanges(old, { ...old, ...patch }).catch(() => {})
     }
+    if (old && (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined)) {
+      notifyEventJoinRemoval(old, { ...old, ...patch }).catch(() => {})
+    }
   },
 
   deleteEvent: async (id) => {
@@ -363,10 +402,17 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   setOverride: async (instanceKey, patch) => {
     const parts = instanceKey.split('_')
     const templateId = parts[0]
+    // Snapshot the effective instance BEFORE writing, so join/removal can be
+    // detected for changes scoped to a single occurrence (these previously
+    // went undetected entirely — setOverride never checked for them).
+    const before = get().getInstanceByKey(instanceKey)
     await updateDoc(doc(db, 'events', templateId), {
       [`overrides.${instanceKey}`]: patch,
       _updatedAt: serverTimestamp(),
     })
+    if (before && (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined)) {
+      notifyEventJoinRemoval(before, { ...before, ...patch }).catch(() => {})
+    }
   },
 
   setAvail: async (ev, uid, status, note = '') => {
@@ -402,8 +448,9 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       { mergeFields: [`responses.${uid}`, 'updatedAt'] }
     )
 
-    // Notify admins only when changing from a previously-set value
-    if (prevResponse && prevResponse.status !== status) {
+    // Notify admins on any new or changed response (notifyAssignedAdmins
+    // itself filters to non-"Available" statuses).
+    if (!prevResponse || prevResponse.status !== status) {
       notifyAssignedAdmins(ev, uid, status).catch(() => {})
     }
   },
@@ -482,8 +529,9 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
         }
       }
 
-      // Notify assigned admins when changing from a previously-set series response
-      if (prevSeriesResp && prevSeriesResp.status !== status && instances.length > 0) {
+      // Notify assigned admins on any new or changed series response
+      // (notifyAssignedAdmins itself filters to non-"Available" statuses).
+      if ((!prevSeriesResp || prevSeriesResp.status !== status) && instances.length > 0) {
         notifyAssignedAdmins(instances[0], uid, status).catch(() => {})
       }
     }

@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app'
 import { getAuth, initializeAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { getFirestore, initializeFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { getFunctions } from 'firebase/functions'
 import { Platform } from 'react-native'
@@ -42,6 +42,17 @@ function getFirebaseAuth() {
 }
 
 export const auth = getFirebaseAuth()
-export const db = getFirestore(app)
+// ignoreUndefinedProperties lets writes omit undefined fields instead of
+// throwing "Unsupported field value: undefined" — a web-first codebase writes
+// undefined-valued fields in several places (e.g. an unset projectedDate on a
+// task status update), which otherwise fails the whole write.
+export const db = (() => {
+  try {
+    return initializeFirestore(app, { ignoreUndefinedProperties: true })
+  } catch {
+    // Already initialized (e.g. Fast Refresh) — reuse the existing instance.
+    return getFirestore(app)
+  }
+})()
 export const storage = getStorage(app)
 export const functions = getFunctions(app)

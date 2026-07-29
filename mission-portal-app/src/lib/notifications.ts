@@ -27,6 +27,7 @@ export async function registerForPushNotifications(): Promise<{
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync()
+
   let finalStatus = existingStatus
   if (existingStatus !== 'granted') {
     const { status } = await Notifications.requestPermissionsAsync()
@@ -42,37 +43,60 @@ export async function registerForPushNotifications(): Promise<{
     })
   }
 
-  // getExpoPushTokenAsync needs the EAS project ID. It normally comes from
-  // `extra.eas.projectId`, which app.config.ts populates from EAS_PROJECT_ID —
-  // an env var EAS Build does *not* set for you. Fall back to the value EAS
-  // injects at build time so a missing env var can't silently kill push.
+  // getExpoPushTokenAsync throws if it can't resolve a projectId. It normally
+  // infers it from Constants, but pass it explicitly (matching the SDK 56 docs
+  // example) so the token call never depends on manifest inference.
   const projectId =
-    Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId
-  if (!projectId) {
-    console.warn('Push notifications: no EAS project ID configured — skipping token registration')
-    return null
-  }
+    Constants.expoConfig?.extra?.eas?.projectId ??
+    (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId
+  const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
 
-  const tokenData = await Notifications.getExpoPushTokenAsync({ projectId })
   return {
     token: tokenData.data,
     platform: Platform.OS as 'ios' | 'android',
   }
 }
 
+// Transient Firebase Functions error codes worth retrying — a cold-started or
+// briefly-unreachable callable returns these, and the background token save
+// runs seconds after launch when a hiccup is most likely.
+const RETRYABLE_FN_CODES = [
+  'functions/unavailable',
+  'functions/internal',
+  'functions/deadline-exceeded',
+  'functions/aborted',
+]
+
+async function callWithRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      const code = (err as { code?: string } | undefined)?.code
+      const retryable = code ? RETRYABLE_FN_CODES.includes(code) : false
+      if (!retryable || i === attempts - 1) break
+      // Backoff: 1s, 2s — lets a cold-starting function come online.
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)))
+    }
+  }
+  throw lastErr
+}
+
 export async function persistPushToken(
   _uid: string,
   token: string,
-  platform: 'ios' | 'android' | 'web',
+  platform: 'ios' | 'android' | 'web'
 ): Promise<void> {
   // Delegates to Cloud Function which writes to Firestore and subscribes to topics
   const registerPushToken = httpsCallable(functions, 'registerPushToken')
-  await registerPushToken({ token, platform })
+  await callWithRetry(() => registerPushToken({ token, platform }))
 }
 
 export async function clearPushToken(
   _uid: string,
-  platform: 'ios' | 'android' | 'web',
+  platform: 'ios' | 'android' | 'web'
 ): Promise<void> {
   const registerPushToken = httpsCallable(functions, 'registerPushToken')
   await registerPushToken({ token: null, platform })
