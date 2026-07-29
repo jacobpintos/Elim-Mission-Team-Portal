@@ -42,6 +42,47 @@ export const dailyCleanup = onSchedule('0 2 * * *', async () => {
       .get()
   }
 
+  // ── Security reports: honour the 30-day retention the UI promises ──────────
+  // resolveReport() stamps `deleteAt = completedAt + 30 days` and the archive
+  // shows "Auto-deletes <date>", but nothing ever acted on it, so resolved
+  // reports accumulated indefinitely. These can name individuals and describe
+  // incidents involving them, so the stated retention has to be real.
+  //
+  // Both bounds are on `deleteAt` deliberately: Firestore sorts null before
+  // numbers, so a bare `deleteAt <= now` would also match unresolved reports,
+  // which carry `deleteAt: null`. The `> 0` bound excludes them.
+  const nowMs = Date.now()
+  for (;;) {
+    const dueSnap = await db
+      .collection('securityReports')
+      .where('deleteAt', '>', 0)
+      .where('deleteAt', '<=', nowMs)
+      .limit(400)
+      .get()
+    if (dueSnap.empty) break
+
+    // Drop any attached photo first — deleting only the document would orphan
+    // the image in Storage, where it would outlive the report it belongs to.
+    await Promise.all(
+      dueSnap.docs.map(async (d) => {
+        const photoURL: string | null = d.data().photoURL ?? null
+        if (!photoURL) return
+        try {
+          // Path set by securityStore.createReport()
+          await admin.storage().bucket().file(`securityReports/${d.id}/photo`).delete()
+        } catch {
+          // Already gone — the document still goes, which is the part that
+          // carries the incident detail.
+        }
+      })
+    )
+
+    const batch = db.batch()
+    dueSnap.docs.forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+    if (dueSnap.size < 400) break
+  }
+
   // ── Tasks ───────────────────────────────────────────────────────────────────
   const thirtyDaysAgoStr = daysAgoStr(30)
   const sixtyDaysAgo = new Date()
