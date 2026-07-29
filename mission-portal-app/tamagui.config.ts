@@ -12,7 +12,4 @@ declare module 'tamagui' {
   interface TamaguiCustomConfig extends AppConfig {}
 }
 
-// TEMPORARY DIAGNOSTIC MARKER — see index.js.
-;(globalThis as any).__diag_tamaguiConfigLoaded = true
-
 export default config

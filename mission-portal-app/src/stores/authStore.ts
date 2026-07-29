@@ -16,7 +16,6 @@ import {
   clearPushToken,
   platformKey,
 } from '@/lib/notifications'
-import { logDiagnosticError } from '@/lib/diagnostics'
 import type { UserProfile } from '@/types/user'
 
 interface AuthStore {
@@ -65,17 +64,17 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
             updateDoc(doc(db, 'users', fbUser.uid), { lastLoginAt: Date.now() }).catch(() => {})
             // Defer push registration off the critical cold-start path. On a
             // restored session this callback fires within the first couple of
-            // seconds of launch, before React has committed its first render;
-            // kicking off native notification registration there was crashing
-            // the app before any UI appeared. Waiting lets the app render and
-            // settle first (and avoids prompting for permissions the instant
-            // the app opens).
+            // seconds of launch, before React has committed its first render.
+            // Waiting lets the app render and settle first, and avoids
+            // prompting for notification permission the instant the app opens.
             setTimeout(() => {
               registerForPushNotifications()
                 .then((result) => {
                   if (result) return persistPushToken(fbUser.uid, result.token, result.platform)
                 })
-                .catch((err) => logDiagnosticError('Push notification registration failed', err))
+                .catch((err) => {
+                  console.warn('Push notification registration failed', err)
+                })
             }, 4000)
           }
           set({ profile: userProfile, loading: false })
@@ -165,6 +164,3 @@ function defaultNotificationPrefs() {
     weatherAlertAdmin: { push: true, email: false },
   }
 }
-
-// TEMPORARY DIAGNOSTIC MARKER — see index.js.
-;(globalThis as any).__diag_authStoreLoaded = true

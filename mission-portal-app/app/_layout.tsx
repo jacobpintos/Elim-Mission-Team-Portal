@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Platform, Text, ScrollView } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Platform, Text } from 'react-native'
 import { Slot, useRouter, useSegments, ThemeProvider, DarkTheme, DefaultTheme } from 'expo-router'
 import { visibleTabs } from '@/lib/roles'
 import '@tamagui/core/reset.css'
@@ -13,10 +12,6 @@ import { DynamicThemeProvider } from '@/theme/DynamicThemeProvider'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { ToastContainer } from '@/components/ui/Toast'
-
-// TEMPORARY DIAGNOSTIC MARKER — see index.js. Confirms this module's top-level
-// code finished evaluating (i.e. all its imports resolved without hanging).
-;(globalThis as any).__layoutModuleLoaded = true
 
 // No DSN is configured yet, so avoid touching the native Sentry SDK at all —
 // initializing with an empty/undefined dsn still triggers native setup, which
@@ -62,9 +57,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
-  // TEMPORARY DIAGNOSTIC MARKER — see index.js.
-  // eslint-disable-next-line react-hooks/immutability
-  ;(globalThis as any).__rootLayoutCalled = true
   const init = useAuthStore((s) => s.init)
   const teardown = useAuthStore((s) => s.teardown)
   const router = useRouter()
@@ -129,11 +121,7 @@ export default function RootLayout() {
         }
       )
     } catch (err) {
-      const e = err as { message?: string; stack?: string } | undefined
-      AsyncStorage.setItem(
-        '__diagnostic_last_fatal_error__',
-        `Notification listener setup failed: ${e?.message ?? String(err)}\n\n${e?.stack ?? '(no stack)'}`
-      ).catch(() => {})
+      console.warn('Notification listener setup failed', err)
     }
 
     return () => {
@@ -181,47 +169,50 @@ function ErrorFallback() {
   )
 }
 
-// TEMPORARY DIAGNOSTIC ERROR BOUNDARY — see index.js.
-//
-// Expo Router renders this as `<Try catch={ErrorBoundary}><RootLayout/></Try>`,
-// so it wraps RootLayout itself and catches React RENDER/commit errors anywhere
-// in the app. This is the one class of error that bypasses
-// ErrorUtils.setGlobalHandler entirely: in the New Architecture, React routes
-// uncaught render errors through its own onUncaughtError → ExceptionsManager →
-// reportFatal → abort() path. Catching them here both stops the crash loop and
-// surfaces the real message on screen (plus persists it for the next launch).
-//
-// Remove this export once the underlying issue is confirmed fixed.
+/**
+ * App-wide error boundary.
+ *
+ * Expo Router renders this as `<Try catch={ErrorBoundary}><RootLayout/></Try>`,
+ * so it wraps RootLayout itself and catches React render/commit errors anywhere
+ * in the tree. Without it, React routes an uncaught render error through
+ * ExceptionsManager → reportFatal, which hard-aborts the process in a release
+ * build — the user just sees the app vanish. Catching it here turns that into a
+ * recoverable screen with a retry.
+ *
+ * Deliberately depends on NO app providers (theme, safe-area, gesture handler)
+ * so it can still render when one of those is what failed.
+ */
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
   useEffect(() => {
-    const message = `RENDER ERROR: ${error?.message ?? String(error)}\n\n${error?.stack ?? '(no stack)'}`
-    AsyncStorage.setItem('__diagnostic_last_fatal_error__', message).catch(() => {})
+    // Surfaces in device logs / Sentry (once a DSN is configured) without
+    // showing an end user a stack trace.
+    console.error('Unhandled render error', error)
   }, [error])
 
-  // Deliberately depends on NO app providers (theme, safe-area, gesture
-  // handler) so it can render even when one of those is what threw.
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: '#ffffff' }}
-      contentContainerStyle={{ padding: 24, paddingTop: 72 }}
+    <GestureHandlerRootView
+      style={{
+        flex: 1,
+        backgroundColor: '#ffffff',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+      }}
     >
-      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#dc2626', marginBottom: 12 }}>
-        App error (diagnostic build)
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111111', marginBottom: 8 }}>
+        Something went wrong
       </Text>
-      <Text selectable style={{ fontSize: 14, color: '#111111' }}>
-        {error?.message ?? String(error)}
-      </Text>
-      <Text selectable style={{ fontSize: 11, color: '#555555', marginTop: 16 }}>
-        {error?.stack ?? '(no stack)'}
+      <Text style={{ color: '#666666', textAlign: 'center', marginBottom: 24 }}>
+        Sorry — the app ran into an unexpected problem. Please try again.
       </Text>
       <Text
         onPress={() => {
           retry().catch(() => {})
         }}
-        style={{ marginTop: 24, fontSize: 16, color: '#2563eb' }}
+        style={{ fontSize: 16, fontWeight: '600', color: '#2563eb' }}
       >
-        Tap to retry
+        Try again
       </Text>
-    </ScrollView>
+    </GestureHandlerRootView>
   )
 }

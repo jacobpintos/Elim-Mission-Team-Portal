@@ -4,7 +4,6 @@ import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from './firebase'
-import { markProgress, clearProgress } from './diagnostics'
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -27,38 +26,21 @@ export async function registerForPushNotifications(): Promise<{
     return null
   }
 
-  // TEMPORARY DIAGNOSTIC CHECKPOINTS — see index.js / src/lib/diagnostics.ts.
-  // This whole flow has been crashing natively (RCTFatal via TurboModule
-  // invocation) right around permission request, with no catchable JS error
-  // reaching the caller's .catch(). Breadcrumbing each step to AsyncStorage
-  // so we know exactly which native call was in flight even if the crash
-  // itself bypasses JS entirely.
-  await markProgress('registerForPushNotifications: start')
-
-  await markProgress('before Notifications.getPermissionsAsync()')
   const { status: existingStatus } = await Notifications.getPermissionsAsync()
-  await markProgress(`after getPermissionsAsync(): ${existingStatus}`)
 
   let finalStatus = existingStatus
   if (existingStatus !== 'granted') {
-    await markProgress('before Notifications.requestPermissionsAsync()')
     const { status } = await Notifications.requestPermissionsAsync()
-    await markProgress(`after requestPermissionsAsync(): ${status}`)
     finalStatus = status
   }
-  if (finalStatus !== 'granted') {
-    await clearProgress()
-    return null
-  }
+  if (finalStatus !== 'granted') return null
 
   if (Platform.OS === 'android') {
-    await markProgress('before setNotificationChannelAsync()')
     await Notifications.setNotificationChannelAsync('default', {
       name: 'Default',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
     })
-    await markProgress('after setNotificationChannelAsync()')
   }
 
   // getExpoPushTokenAsync throws if it can't resolve a projectId. It normally
@@ -67,10 +49,7 @@ export async function registerForPushNotifications(): Promise<{
   const projectId =
     Constants.expoConfig?.extra?.eas?.projectId ??
     (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId
-  await markProgress(`before getExpoPushTokenAsync() (projectId: ${projectId ?? 'MISSING'})`)
   const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
-  await markProgress('after getExpoPushTokenAsync(): success')
-  await clearProgress()
 
   return {
     token: tokenData.data,
@@ -130,6 +109,3 @@ export async function unsubscribeFromPushTopic(_topic: string): Promise<void> {
 export function platformKey(): 'ios' | 'android' | 'web' {
   return Platform.OS === 'web' ? 'web' : (Platform.OS as 'ios' | 'android')
 }
-
-// TEMPORARY DIAGNOSTIC MARKER — see index.js.
-;(globalThis as any).__diag_notificationsLoaded = true
