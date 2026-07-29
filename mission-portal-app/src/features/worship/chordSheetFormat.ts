@@ -123,27 +123,33 @@ export function buildChordSheetHtml(
   for (const section of sheet.sections) {
     const label = secLabel(section.id)
 
-    if (section.sameAsPrevious) {
-      const pl = prevLabel(section.id)
-      body += `<div class="section"><div class="slabel">${escHtml(label)}</div><div class="same-as">${pl ? `(same as ${escHtml(pl)})` : '(same as previous)'}</div></div>\n`
-      continue
-    }
+    // A repeated section prints its full content (matching the on-screen
+    // viewer) so a printed sheet is singable straight through, with the
+    // "(same as X)" note kept for context.
+    const repeatSource = section.sameAsPrevious
+      ? getPrevMatchingSection(sheet.sections, section.id)
+      : null
+    const content = repeatSource ?? section
+    const repeatNote = section.sameAsPrevious ? prevLabel(section.id) : null
+    const noteHtml = section.sameAsPrevious
+      ? `<div class="same-as">${repeatNote ? `(same as ${escHtml(repeatNote)})` : '(same as previous)'}</div>`
+      : ''
 
-    const hasLyrics = section.lyrics.trim().length > 0
+    const hasLyrics = content.lyrics.trim().length > 0
 
     if (!hasLyrics) {
-      const toks = (section.chordTokens ?? []).flat().filter(Boolean)
+      const toks = (content.chordTokens ?? []).flat().filter(Boolean)
         .map((t) => (t === PROGRESSION_END ? ' | ' : disp(t))).join('  ')
-      body += `<div class="section"><div class="slabel">${escHtml(label)}</div>${toks ? `<div class="instrumental">${escHtml(toks)}</div>` : ''}</div>\n`
+      body += `<div class="section"><div class="slabel">${escHtml(label)}</div>${noteHtml}${toks ? `<div class="instrumental">${escHtml(toks)}</div>` : ''}</div>\n`
       continue
     }
 
-    const lyricChordRows = (section.chordTokens ?? []).filter(
+    const lyricChordRows = (content.chordTokens ?? []).filter(
       (row) => !(row.length === 1 && row[0] === PROGRESSION_END)
     )
     let linesHtml = ''
-    for (let li = 0; li < section.lyrics.split('\n').length; li++) {
-      const lyricLine = section.lyrics.split('\n')[li]
+    for (let li = 0; li < content.lyrics.split('\n').length; li++) {
+      const lyricLine = content.lyrics.split('\n')[li]
       const slots = getWordSlots(lyricLine)
       if (!slots.length) { linesHtml += '<br>'; continue }
       const rowTokens = lyricChordRows[li] ?? []
@@ -158,7 +164,7 @@ export function buildChordSheetHtml(
       }
       linesHtml += `<div class="cl">${escHtml(cStr.trimEnd())}</div><div class="ll">${escHtml(lStr.trimEnd())}</div>`
     }
-    body += `<div class="section"><div class="slabel">${escHtml(label)}</div>${linesHtml}</div>\n`
+    body += `<div class="section"><div class="slabel">${escHtml(label)}</div>${noteHtml}${linesHtml}</div>\n`
   }
 
   const metaParts: string[] = []
