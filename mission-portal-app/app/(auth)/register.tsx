@@ -7,6 +7,7 @@ import { YStack, XStack, H1, Paragraph, Button, Input, Text, View } from 'tamagu
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { passwordInputProps } from '@/lib/passwordInput'
 import { TERMS_VERSION } from './terms'
 
 const schema = z
@@ -126,7 +127,7 @@ export default function RegisterScreen() {
               <YStack gap="$1">
                 <Input
                   placeholder="Password (min 8 chars)"
-                  secureTextEntry
+                  {...passwordInputProps(true)}
                   autoComplete="new-password"
                   value={field.value}
                   onChangeText={field.onChange}
@@ -149,7 +150,7 @@ export default function RegisterScreen() {
               <YStack gap="$1">
                 <Input
                   placeholder="Confirm password"
-                  secureTextEntry
+                  {...passwordInputProps(true)}
                   value={field.value}
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}

@@ -13,10 +13,17 @@ const VALID_REASONS = [
   'Other',
 ]
 
+interface ReportedAttachment {
+  type: 'image' | 'file'
+  url: string
+  name?: string | null
+}
+
 interface ReportInput {
   roomId: string
   messageId: string
   messageText: string
+  attachment?: ReportedAttachment | null
   messageTs: number
   authorUid: string
   reason: string
@@ -62,6 +69,16 @@ export const reportContent = onCall(async (req) => {
     roomId: input.roomId,
     messageId: input.messageId,
     messageText: String(input.messageText ?? '').slice(0, 2000),
+    // Copied onto the report so a moderator can see the image that was actually
+    // reported. Without it an image report reads as an empty message and there
+    // is nothing to judge.
+    attachment: input.attachment
+      ? {
+          type: input.attachment.type === 'file' ? 'file' : 'image',
+          url: String(input.attachment.url ?? ''),
+          name: input.attachment.name ? String(input.attachment.name) : null,
+        }
+      : null,
     messageTs: input.messageTs ?? null,
     authorUid: input.authorUid ?? null,
     reporterUid,

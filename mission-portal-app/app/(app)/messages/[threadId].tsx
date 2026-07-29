@@ -21,7 +21,7 @@ import { MessageActionsSheet } from '@/features/moderation/MessageActionsSheet'
 import { RoomMembersSheet } from '@/features/moderation/RoomMembersSheet'
 import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
-import { filterHiddenMessages } from '@/lib/moderation'
+import { partitionHiddenMessages } from '@/lib/moderation'
 import { useBackTo } from '@/lib/useBackTo'
 import { updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
@@ -61,13 +61,12 @@ export default function ThreadScreen() {
   // Messages from users this person blocked, and messages they reported, are
   // hidden from them (App Store Review Guideline 1.2). This applies in every
   // room, including ones created after the block.
-  const visibleMessages = filterHiddenMessages(
-    messages,
-    profile?.blockedUsers,
-    profile?.reportedMessages
-  )
-  // Say so rather than leaving unexplained gaps in the conversation.
-  const hiddenCount = messages.length - visibleMessages.length
+  const {
+    visible: visibleMessages,
+    blockedCount,
+    reportedCount,
+  } = partitionHiddenMessages(messages, profile?.blockedUsers, profile?.reportedMessages)
+  const hiddenCount = blockedCount + reportedCount
 
   const room = rooms.find((r) => sameId(r.id, threadId))
 
@@ -287,8 +286,17 @@ export default function ThreadScreen() {
             >
               <Text fontSize="$2">🚫</Text>
               <Text color={colors.textMuted} fontSize="$2" flex={1}>
-                {hiddenCount} {hiddenCount === 1 ? 'message is' : 'messages are'} hidden because you
-                blocked or reported the sender.
+                {[
+                  blockedCount > 0
+                    ? `${blockedCount} ${blockedCount === 1 ? 'message' : 'messages'} from someone you blocked`
+                    : null,
+                  reportedCount > 0
+                    ? `${reportedCount} ${reportedCount === 1 ? 'message you reported' : 'messages you reported'}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' and ')}{' '}
+                {hiddenCount === 1 ? 'is' : 'are'} hidden.
               </Text>
               <Text color={colors.primary} fontSize="$2">
                 Manage

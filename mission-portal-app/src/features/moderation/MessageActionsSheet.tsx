@@ -54,6 +54,7 @@ export function MessageActionsSheet({
         roomId,
         messageId: `${message.ts}_${message.uid}`,
         messageText: message.text ?? '',
+        attachment: message.attachment ?? null,
         messageTs: message.ts,
         authorUid: String(message.uid),
         reason,
@@ -61,6 +62,23 @@ export function MessageActionsSheet({
       })
       toast(`Report sent. We review reports within ${MODERATION_SLA_HOURS} hours.`, 'success')
       close()
+
+      // Reporting hides only the message reported, not everything from its
+      // author — an easy thing to misread when the reported message was the
+      // only one they had sent. Offer the block explicitly rather than leaving
+      // someone to assume it happened.
+      const alsoBlock = await confirmAsync(
+        `Your report has been sent. Do you also want to block ${authorName ?? 'this person'}? That hides all of their messages from you, not just this one.`,
+        { title: 'Block them as well?', confirmLabel: 'Block', cancelLabel: 'Not now' }
+      )
+      if (alsoBlock) {
+        try {
+          await blockUser(viewerUid, String(message.uid))
+          toast(`${authorName ?? 'User'} blocked`, 'success')
+        } catch {
+          toast('Failed to block user', 'error')
+        }
+      }
     } catch {
       toast('Failed to send report', 'error')
     } finally {

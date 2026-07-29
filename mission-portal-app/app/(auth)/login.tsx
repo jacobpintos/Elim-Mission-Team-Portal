@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { AppLogo } from '@/components/ui/AppLogo'
+import { passwordInputProps } from '@/lib/passwordInput'
 
 const schema = z.object({
   email: z.string().email('Invalid email address'),
@@ -104,7 +105,7 @@ export default function LoginScreen() {
                   <Input
                     flex={1}
                     placeholder="Password"
-                    secureTextEntry={!showPassword}
+                    {...passwordInputProps(!showPassword)}
                     autoComplete="password"
                     value={field.value}
                     onChangeText={field.onChange}
