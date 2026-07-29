@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router'
 import { YStack, XStack, Text, Button } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { ORG_NAME, SUPPORT_EMAIL, ORG_MAILING_ADDRESS } from '@/lib/orgInfo'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const c = useThemeColors()
@@ -217,9 +218,28 @@ export default function PrivacyPolicyScreen() {
 
         <Section title="11. Contact Us">
           <Body>
-            Questions or concerns about this Privacy Policy? Contact the Mission Portal admin
-            team through the App or at the organization contact on file.
+            Questions or concerns about this Privacy Policy, or a request to access or delete your
+            data, can be sent to:
           </Body>
+          <YStack gap="$1.5" marginTop="$1">
+            <Bullet>{ORG_NAME}</Bullet>
+            {SUPPORT_EMAIL ? <Bullet>{SUPPORT_EMAIL}</Bullet> : null}
+            {ORG_MAILING_ADDRESS ? <Bullet>{ORG_MAILING_ADDRESS}</Bullet> : null}
+          </YStack>
+          <Body>
+            You can also delete your account and its data yourself at any time from Profile &amp;
+            Settings → Delete account.
+          </Body>
+        </Section>
+
+        <Section title="12. Terms of Use">
+          <Body>
+            Your use of the App is also governed by our Terms of Use, which set out the rules for
+            content posted in the App and how to report content you find objectionable.
+          </Body>
+          <Button size="$3" variant="outlined" alignSelf="flex-start" marginTop="$2" onPress={() => router.push('/(auth)/terms')}>
+            Read the Terms of Use
+          </Button>
         </Section>
       </ScrollView>
     </SafeAreaView>

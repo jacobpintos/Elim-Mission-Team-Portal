@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, Pressable, TextInput, View, StyleSheet } from 'react-native'
+import { ScrollView, Pressable, TextInput, View, StyleSheet, Linking, Platform } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
@@ -215,12 +215,21 @@ export default function PageFeed() {
     }
   }
 
+  // `window.open` does not exist in React Native — route through Linking, which
+  // opens a popup on web and the Facebook app / Safari on device.
+  const openExternal = (url: string, popup = false) => {
+    if (Platform.OS === 'web' && popup) {
+      window.open(url, '_blank', 'width=600,height=400')
+      return
+    }
+    Linking.openURL(url).catch(() => toast('Could not open Facebook', 'error'))
+  }
+
   const handleShare = (post: FbPost) => {
     const url = post.permalinkUrl ?? `https://www.facebook.com/${page.fbPageId ?? ''}`
-    window.open(
+    openExternal(
       `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
-      '_blank',
-      'width=600,height=400'
+      true
     )
   }
 
@@ -229,7 +238,7 @@ export default function PageFeed() {
     if (!text) return
 
     if (!page.fbToken) {
-      window.open(post.permalinkUrl ?? `https://www.facebook.com/${page.fbPageId ?? ''}`, '_blank')
+      openExternal(post.permalinkUrl ?? `https://www.facebook.com/${page.fbPageId ?? ''}`)
       toast('Opening Facebook to post your comment', 'info')
       return
     }

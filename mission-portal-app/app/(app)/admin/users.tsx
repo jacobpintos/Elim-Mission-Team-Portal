@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { Platform } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Input } from 'tamagui'
 import { useUsersStore } from '@/stores/usersStore'
@@ -22,13 +21,7 @@ import {
 import { db } from '@/lib/firebase'
 import type { UserProfile } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
-
-function webConfirm(message: string): boolean {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return window.confirm(message)
-  }
-  return false
-}
+import { confirmAsync } from '@/lib/confirm'
 
 export default function AdminUsers() {
   const { users, subscribe, unsubscribe } = useUsersStore()
@@ -105,7 +98,7 @@ export default function AdminUsers() {
         users.filter((u) => u.roles?.includes('admin') && u.uid !== user.uid).length,
         1
       )
-      const ok = webConfirm(
+      const ok = await confirmAsync(
         `Deleting an admin requires approval from ${otherAdminCount} admin(s). Submit deletion request?`
       )
       if (!ok) return
@@ -131,8 +124,9 @@ export default function AdminUsers() {
         toast('Deletion request submitted', 'info')
       }
     } else {
-      const ok = webConfirm(
-        `Are you sure you want to delete "${user.displayName ?? user.email}"? This cannot be undone.`
+      const ok = await confirmAsync(
+        `Are you sure you want to delete "${user.displayName ?? user.email}"? This cannot be undone.`,
+        { destructive: true, confirmLabel: 'Delete' }
       )
       if (!ok) return
       await execDelete(user)
@@ -165,7 +159,7 @@ export default function AdminUsers() {
   }
 
   const handleCancelDeletion = async (deletion: PendingDeletion) => {
-    const ok = webConfirm(`Cancel deletion request for "${deletion.name}"?`)
+    const ok = await confirmAsync(`Cancel deletion request for "${deletion.name}"?`)
     if (!ok) return
     await updateDoc(doc(db, 'config', 'main'), {
       pendingDel: pendingDel.filter((d) => d.uid !== deletion.uid),

@@ -42,6 +42,13 @@ export interface UserProfile {
     lng?: number
   }
   lastLoginAt?: number
+  /** UIDs this user has blocked — their messages are hidden from this user. */
+  blockedUsers?: string[]
+  /** Message IDs this user reported — hidden from them immediately. */
+  reportedMessages?: string[]
+  /** Version of the Terms of Use accepted at sign-up. */
+  acceptedTermsVersion?: string
+  acceptedTermsAt?: number
   createdAt: unknown // Firestore Timestamp
   updatedAt: unknown
 }

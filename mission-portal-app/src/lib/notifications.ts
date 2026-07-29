@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
+import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from './firebase'
@@ -41,7 +42,18 @@ export async function registerForPushNotifications(): Promise<{
     })
   }
 
-  const tokenData = await Notifications.getExpoPushTokenAsync()
+  // getExpoPushTokenAsync needs the EAS project ID. It normally comes from
+  // `extra.eas.projectId`, which app.config.ts populates from EAS_PROJECT_ID —
+  // an env var EAS Build does *not* set for you. Fall back to the value EAS
+  // injects at build time so a missing env var can't silently kill push.
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId
+  if (!projectId) {
+    console.warn('Push notifications: no EAS project ID configured — skipping token registration')
+    return null
+  }
+
+  const tokenData = await Notifications.getExpoPushTokenAsync({ projectId })
   return {
     token: tokenData.data,
     platform: Platform.OS as 'ios' | 'android',

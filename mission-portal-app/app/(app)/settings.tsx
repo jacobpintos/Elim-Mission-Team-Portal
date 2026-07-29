@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { ScrollView, Pressable, TextInput, StyleSheet, View } from 'react-native'
+import { ScrollView, Pressable, TextInput, StyleSheet, View, Platform } from 'react-native'
 import { YStack, XStack, Text, Switch, Label, Separator } from 'tamagui'
 import { useRouter } from 'expo-router'
 import {
@@ -8,9 +8,9 @@ import {
   updatePassword,
   verifyBeforeUpdateEmail,
 } from 'firebase/auth'
-import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage'
 import { doc, updateDoc } from 'firebase/firestore'
-import { auth, db, storage } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -18,6 +18,8 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { Avatar } from '@/components/ui/Avatar'
 import { isAdmin, isPublic } from '@/lib/roles'
 import { geocodeCity } from '@/lib/geocode'
+import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
+import { confirmAsync } from '@/lib/confirm'
 import type { NotificationPrefs } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
@@ -43,26 +45,6 @@ const PUBLIC_NOTIF_LABELS: Record<PublicNotifKey, string> = {
   publicAnnouncement: 'Public announcements',
   publicEvent: 'Nearby & virtual events',
   contentFeatured: 'New & featured content',
-}
-
-async function compressImage(dataUrl: string, maxDim = 512, quality = 0.78): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image()
-    img.onload = () => {
-      const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1)
-      const w = Math.round(img.width * ratio)
-      const h = Math.round(img.height * ratio)
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext('2d')
-      if (!ctx) { reject(new Error('canvas unavailable')); return }
-      ctx.drawImage(img, 0, 0, w, h)
-      resolve(canvas.toDataURL('image/jpeg', quality))
-    }
-    img.onerror = reject
-    img.src = dataUrl
-  })
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -117,6 +99,11 @@ export default function SettingsScreen() {
   const [radius, setRadius] = useState(String(profile?.locationPref?.radius ?? 50))
   const [savingLoc, setSavingLoc] = useState(false)
 
+  // Account deletion
+  const [showDelete, setShowDelete] = useState(false)
+  const [deletePw, setDeletePw] = useState('')
+  const [deleting, setDeleting] = useState(false)
+
   if (!profile || !fbUser) return null
 
   const pub = isPublic(profile)
@@ -134,8 +121,22 @@ export default function SettingsScreen() {
   }
 
   // ── Photo upload ────────────────────────────────────────────────────────────
-  const handlePickPhoto = () => {
-    fileInputRef.current?.click()
+  // Web picks through a hidden <input type="file">; native goes straight to the
+  // OS photo library via expo-image-picker.
+  const handlePickPhoto = async () => {
+    if (Platform.OS === 'web') {
+      fileInputRef.current?.click()
+      return
+    }
+    setPhotoUploading(true)
+    try {
+      const url = await pickAndUploadAvatar(fbUser.uid)
+      if (url) toast('Photo updated', 'success')
+    } catch {
+      toast('Failed to upload photo', 'error')
+    } finally {
+      setPhotoUploading(false)
+    }
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -143,17 +144,7 @@ export default function SettingsScreen() {
     if (!file) return
     setPhotoUploading(true)
     try {
-      const reader = new FileReader()
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string)
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-      const compressed = await compressImage(dataUrl)
-      const sref = storageRef(storage, `avatars/${fbUser.uid}`)
-      await uploadString(sref, compressed, 'data_url')
-      const photoURL = await getDownloadURL(sref)
-      await updateDoc(doc(db, 'users', fbUser.uid), { photoURL })
+      await uploadAvatarFromFile(fbUser.uid, file)
       toast('Photo updated', 'success')
     } catch {
       toast('Failed to upload photo', 'error')
@@ -276,18 +267,52 @@ export default function SettingsScreen() {
     router.replace('/(auth)/login')
   }
 
+  // ── Delete account ────────────────────────────────────────────────────────
+  // Required by App Store Review Guideline 5.1.1(v) — account creation must be
+  // matched by in-app account deletion.
+  const handleDeleteAccount = async () => {
+    if (!deletePw) {
+      toast('Enter your password to confirm', 'error')
+      return
+    }
+    const ok = await confirmAsync(
+      'This permanently deletes your account, your profile, your messages and your notification settings. It cannot be undone.',
+      { title: 'Delete account?', confirmLabel: 'Delete', destructive: true }
+    )
+    if (!ok) return
+
+    setDeleting(true)
+    try {
+      // Firebase requires a recent credential before it will delete an account.
+      const credential = EmailAuthProvider.credential(fbUser.email!, deletePw)
+      await reauthenticateWithCredential(fbUser, credential)
+      const deleteOwnAccount = httpsCallable(functions, 'deleteOwnAccount')
+      await deleteOwnAccount()
+      toast('Your account has been deleted', 'success')
+      await signOutNow()
+      router.replace('/(auth)/login')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete account'
+      toast(message, 'error')
+      setDeleting(false)
+    }
+  }
+
   return (
     <YStack flex={1} backgroundColor={colors.background}>
       <ScreenTitle options={{ title: 'Profile & Settings' }} />
 
-      {/* Hidden file input for photo upload */}
-      <input
-        ref={fileInputRef as React.RefObject<HTMLInputElement>}
-        type="file"
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
+      {/* Hidden file input for photo upload — web only; `input` is not a valid
+          React Native host component and throws an invariant on iOS/Android. */}
+      {Platform.OS === 'web' ? (
+        <input
+          ref={fileInputRef as React.RefObject<HTMLInputElement>}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+      ) : null}
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 24 }}>
 
@@ -559,12 +584,84 @@ export default function SettingsScreen() {
           </Section>
         )}
 
+        {/* Legal */}
+        <Section title="Legal">
+          <Pressable onPress={() => router.push('/(auth)/privacy')}>
+            <XStack alignItems="center" justifyContent="space-between" paddingVertical="$2">
+              <Text color={colors.text} fontSize="$4">Privacy Policy</Text>
+              <Text color={colors.textMuted} fontSize="$4">›</Text>
+            </XStack>
+          </Pressable>
+          <Pressable onPress={() => router.push('/(auth)/terms')}>
+            <XStack alignItems="center" justifyContent="space-between" paddingVertical="$2">
+              <Text color={colors.text} fontSize="$4">Terms of Use</Text>
+              <Text color={colors.textMuted} fontSize="$4">›</Text>
+            </XStack>
+          </Pressable>
+          <Pressable onPress={() => router.push('/(app)/blocked')}>
+            <XStack alignItems="center" justifyContent="space-between" paddingVertical="$2">
+              <Text color={colors.text} fontSize="$4">Blocked users</Text>
+              <Text color={colors.textMuted} fontSize="$4">›</Text>
+            </XStack>
+          </Pressable>
+        </Section>
+
         {/* Sign out */}
         <Pressable onPress={handleSignOut}>
           <View style={[styles.signOutBtn, { borderColor: '#c0392b' }]}>
             <Text color="#c0392b" fontWeight="700" fontSize="$4">Sign out</Text>
           </View>
         </Pressable>
+
+        {/* Delete account */}
+        <Section title="Danger zone">
+          {!showDelete ? (
+            <Pressable onPress={() => setShowDelete(true)}>
+              <View style={[styles.signOutBtn, { borderColor: '#c0392b', backgroundColor: 'transparent' }]}>
+                <Text color="#c0392b" fontWeight="700" fontSize="$4">Delete account</Text>
+              </View>
+            </Pressable>
+          ) : (
+            <YStack gap="$3">
+              <Text color={colors.textMuted} fontSize="$3" lineHeight={20}>
+                Deleting your account permanently removes your profile, your chat messages, your
+                notification settings and your profile photo. This cannot be undone. Enter your
+                password to confirm.
+              </Text>
+              <Field label="Password">
+                <TextInput
+                  value={deletePw}
+                  onChangeText={setDeletePw}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.input, { borderColor: colors.border, color: colors.text }]}
+                />
+              </Field>
+              <XStack gap="$3">
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    setShowDelete(false)
+                    setDeletePw('')
+                  }}
+                  disabled={deleting}
+                >
+                  <View style={[styles.btn, { borderWidth: 1, borderColor: colors.border }]}>
+                    <Text color={colors.text} fontWeight="700">Cancel</Text>
+                  </View>
+                </Pressable>
+                <Pressable style={{ flex: 1 }} onPress={handleDeleteAccount} disabled={deleting}>
+                  <View style={[styles.btn, { backgroundColor: '#c0392b', opacity: deleting ? 0.6 : 1 }]}>
+                    <Text color="white" fontWeight="700">
+                      {deleting ? 'Deleting…' : 'Delete my account'}
+                    </Text>
+                  </View>
+                </Pressable>
+              </XStack>
+            </YStack>
+          )}
+        </Section>
 
         <View style={{ height: 40 }} />
       </ScrollView>

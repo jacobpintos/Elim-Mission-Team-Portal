@@ -17,8 +17,10 @@ import { useUsersStore } from '@/stores/usersStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { MessageBubble } from '@/components/ui/MessageBubble'
+import { MessageActionsSheet } from '@/features/moderation/MessageActionsSheet'
 import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
+import { filterHiddenMessages } from '@/lib/moderation'
 import { updateDoc, doc, arrayUnion } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { Message, MessageAttachment } from '@/types/events'
@@ -47,7 +49,16 @@ export default function ThreadScreen() {
 
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
+  const [actionsFor, setActionsFor] = useState<Message | null>(null)
   const flashListRef = useRef<FlashListRef<Message>>(null)
+
+  // Messages from users this person blocked, and messages they reported, are
+  // hidden from them (App Store Review Guideline 1.2).
+  const visibleMessages = filterHiddenMessages(
+    messages,
+    profile?.blockedUsers,
+    profile?.reportedMessages
+  )
 
   const room = rooms.find((r) => sameId(r.id, threadId))
 
@@ -138,6 +149,7 @@ export default function ThreadScreen() {
           isMine={isMine}
           displayName={displayName}
           photoURL={photoURL}
+          onLongPress={isMine ? undefined : () => setActionsFor(item)}
         />
       )
     },
@@ -192,14 +204,14 @@ export default function ThreadScreen() {
 
         {/* Message list */}
         <View style={{ flex: 1 }}>
-          {messages.length === 0 && !msgLoading ? (
+          {visibleMessages.length === 0 && !msgLoading ? (
             <YStack flex={1} alignItems="center" justifyContent="center">
               <Text color={colors.textMuted}>No messages yet. Say hello!</Text>
             </YStack>
           ) : (
             <FlashList<Message>
               ref={flashListRef as React.Ref<FlashListRef<Message>>}
-              data={messages}
+              data={visibleMessages}
               renderItem={renderMessage}
               keyExtractor={(item, _index) => `${item.ts}_${item.uid}`}
               getItemType={() => 'message'}
@@ -267,6 +279,15 @@ export default function ThreadScreen() {
           </Pressable>
         </XStack>
       </KeyboardAvoidingView>
+
+      <MessageActionsSheet
+        open={actionsFor !== null}
+        onOpenChange={(v) => !v && setActionsFor(null)}
+        message={actionsFor}
+        roomId={String(threadId)}
+        viewerUid={uid}
+        authorName={actionsFor ? getUserInfo(actionsFor.uid).displayName : undefined}
+      />
     </YStack>
   )
 }

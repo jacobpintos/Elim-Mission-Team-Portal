@@ -8,6 +8,7 @@ import { audit } from '@/lib/audit'
 import { functions, db } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
 import { doc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { confirmAsync } from '@/lib/confirm'
 
 type OrphanFirestoreDoc = {
   uid: string
@@ -66,8 +67,9 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
 
   const createAllAuthAccounts = async () => {
     if (!result?.orphanFirestore.length) return
-    const ok = typeof window !== 'undefined' && window.confirm(
-      `Create Auth accounts for all ${result.orphanFirestore.length} orphan users? Default password will be 12345678.`
+    const ok = await confirmAsync(
+      `Create Auth accounts for all ${result.orphanFirestore.length} orphan users? Default password will be 12345678.`,
+      { destructive: true }
     )
     if (!ok) return
     setCreating(true)
@@ -97,8 +99,9 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
   }
 
   const deleteOrphanDoc = async (user: OrphanFirestoreDoc) => {
-    const ok = typeof window !== 'undefined' && window.confirm(
-      `Delete orphan Firestore doc for "${user.displayName ?? user.email ?? user.uid}"?`
+    const ok = await confirmAsync(
+      `Delete orphan Firestore doc for "${user.displayName ?? user.email ?? user.uid}"?`,
+      { destructive: true }
     )
     if (!ok) return
     await deleteDoc(doc(db, 'users', user.uid))
@@ -109,10 +112,11 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
 
   const deleteAuthAccounts = async (users: OrphanAuthAccount[]) => {
     const isBulk = users.length > 1
-    const ok = typeof window !== 'undefined' && window.confirm(
+    const ok = await confirmAsync(
       isBulk
         ? `Permanently delete all ${users.length} Auth-only accounts? This cannot be undone.`
-        : `Permanently delete Auth account for "${users[0].displayName || users[0].email}"? This cannot be undone.`
+        : `Permanently delete Auth account for "${users[0].displayName || users[0].email}"? This cannot be undone.`,
+      { destructive: true }
     )
     if (!ok) return
     setDeleting(true)
@@ -132,8 +136,9 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
   }
 
   const createProfileForOrphan = async (user: OrphanAuthAccount) => {
-    const ok = typeof window !== 'undefined' && window.confirm(
-      `Create a Firestore profile for "${user.displayName || user.email}"?`
+    const ok = await confirmAsync(
+      `Create a Firestore profile for "${user.displayName || user.email}"?`,
+      { destructive: true }
     )
     if (!ok) return
     await setDoc(doc(db, 'users', user.uid), {

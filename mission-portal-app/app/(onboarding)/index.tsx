@@ -1,10 +1,19 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { Platform } from 'react-native'
 import { YStack, XStack, H1, H2, Paragraph, Button, Switch, Text, Label } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { doc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { Avatar } from '@/components/ui/Avatar'
+import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
+import {
+  registerForPushNotifications,
+  persistPushToken,
+  clearPushToken,
+  platformKey,
+} from '@/lib/notifications'
 import type { NotificationPrefs } from '@/types/user'
 
 const STEP_COUNT = 3
@@ -21,6 +30,72 @@ export default function OnboardingScreen() {
     weeklyDigest: true,
     monthlyDigest: false,
   })
+
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [photoURL, setPhotoURL] = useState<string | undefined>(profile?.photoURL)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleTogglePush = async (next: boolean) => {
+    if (!fbUser) return
+    setPushBusy(true)
+    try {
+      if (next) {
+        const result = await registerForPushNotifications()
+        if (!result) {
+          toast('Enable notifications for Mission Portal in your device settings', 'info')
+          setPushEnabled(false)
+          return
+        }
+        await persistPushToken(fbUser.uid, result.token, result.platform)
+        setPushEnabled(true)
+      } else {
+        await clearPushToken(fbUser.uid, platformKey())
+        setPushEnabled(false)
+      }
+    } catch {
+      toast('Could not update notification settings', 'error')
+      setPushEnabled(!next)
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  const handlePickPhoto = async () => {
+    if (!fbUser) return
+    if (Platform.OS === 'web') {
+      fileInputRef.current?.click()
+      return
+    }
+    setPhotoUploading(true)
+    try {
+      const url = await pickAndUploadAvatar(fbUser.uid)
+      if (url) {
+        setPhotoURL(url)
+        toast('Photo updated', 'success')
+      }
+    } catch {
+      toast('Failed to upload photo', 'error')
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !fbUser) return
+    setPhotoUploading(true)
+    try {
+      setPhotoURL(await uploadAvatarFromFile(fbUser.uid, file))
+      toast('Photo updated', 'success')
+    } catch {
+      toast('Failed to upload photo', 'error')
+    } finally {
+      setPhotoUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   const complete = async () => {
     if (!fbUser) return
@@ -137,24 +212,16 @@ export default function OnboardingScreen() {
               padding="$4"
               borderColor="$borderColor"
               borderWidth={1}
-              opacity={0.6}
             >
-              <XStack gap="$2" alignItems="center" marginBottom="$2">
+              <XStack gap="$2" alignItems="center" justifyContent="space-between" marginBottom="$2">
                 <Text fontWeight="600">Push notifications</Text>
-                <YStack
-                  backgroundColor="$borderColor"
-                  borderRadius="$2"
-                  paddingHorizontal="$2"
-                  paddingVertical="$1"
-                >
-                  <Text fontSize="$1" color="$colorMuted">
-                    Coming soon
-                  </Text>
-                </YStack>
+                <Switch checked={pushEnabled} onCheckedChange={handleTogglePush} disabled={pushBusy}>
+                  <Switch.Thumb />
+                </Switch>
               </XStack>
               <Paragraph color="$colorMuted" fontSize="$2">
-                Real-time push alerts for assignments, messages, and events will be available in a
-                future update.
+                Real-time alerts for assignments, messages, and events. You can change this any
+                time in Profile &amp; Settings.
               </Paragraph>
             </YStack>
           </YStack>
@@ -168,22 +235,37 @@ export default function OnboardingScreen() {
               later from your profile settings.
             </Paragraph>
 
-            <YStack
-              width={120}
-              height={120}
-              borderRadius={60}
-              backgroundColor="$borderColor"
-              alignSelf="center"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Text color="$colorMuted" fontSize="$7">
-                👤
-              </Text>
+            <YStack alignSelf="center">
+              {photoURL ? (
+                <Avatar uri={photoURL} displayName={profile?.displayName} size={120} />
+              ) : (
+                <YStack
+                  width={120}
+                  height={120}
+                  borderRadius={60}
+                  backgroundColor="$borderColor"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Text color="$colorMuted" fontSize="$7">
+                    👤
+                  </Text>
+                </YStack>
+              )}
             </YStack>
 
-            <Button variant="outlined" opacity={0.6} disabled>
-              Upload photo (coming soon)
+            {Platform.OS === 'web' ? (
+              <input
+                ref={fileInputRef as React.RefObject<HTMLInputElement>}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleFileChange}
+              />
+            ) : null}
+
+            <Button variant="outlined" onPress={handlePickPhoto} disabled={photoUploading}>
+              {photoUploading ? 'Uploading…' : photoURL ? 'Change photo' : 'Upload photo'}
             </Button>
           </YStack>
         )}

@@ -29,7 +29,12 @@ interface AuthStore {
   init: () => void
   teardown: () => void
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, displayName: string) => Promise<void>
+  signUp: (
+    email: string,
+    password: string,
+    displayName: string,
+    termsVersion: string
+  ) => Promise<void>
   signOutNow: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   resendVerification: () => Promise<void>
@@ -91,7 +96,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     await signInWithEmailAndPassword(auth, email.trim(), password)
   },
 
-  signUp: async (email, password, displayName) => {
+  signUp: async (email, password, displayName, termsVersion) => {
     const cred = await createUserWithEmailAndPassword(auth, email.trim(), password)
     await setDoc(doc(db, 'users', cred.user.uid), {
       uid: cred.user.uid,
@@ -99,6 +104,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       displayName,
       roles: ['public'],
       onboardingComplete: true,
+      // Recorded so we can prove acceptance of the UGC terms (Guideline 1.2).
+      acceptedTermsVersion: termsVersion,
+      acceptedTermsAt: Date.now(),
+      blockedUsers: [],
+      reportedMessages: [],
       notificationPrefs: defaultNotificationPrefs(),
       pushTokens: {},
       createdAt: serverTimestamp(),

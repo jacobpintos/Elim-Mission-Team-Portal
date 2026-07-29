@@ -8,6 +8,7 @@ import { audit } from '@/lib/audit'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
+import { confirmAsync } from '@/lib/confirm'
 import type { UserProfile } from '@/types/user'
 
 interface EditUserSheetProps {
@@ -29,8 +30,9 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
 
   const handleResetPassword = async () => {
     if (!user) return
-    const ok = typeof window !== 'undefined' && window.confirm(
-      `Reset password for "${user.displayName ?? user.email}" to 12345678?`
+    const ok = await confirmAsync(
+      `Reset password for "${user.displayName ?? user.email}" to 12345678?`,
+      { destructive: true }
     )
     if (!ok) return
     setResetting(true)

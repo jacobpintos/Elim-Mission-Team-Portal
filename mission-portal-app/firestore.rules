@@ -1,5 +1,5 @@
 rules_version = '2';
-// Last updated: 2026-06-07 — added photoAlbums collection
+// Last updated: 2026-07-29 — added contentReports (UGC moderation queue)
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -194,6 +194,18 @@ service cloud.firestore {
     match /photoAlbums/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    // User reports about objectionable messages (App Store Guideline 1.2).
+    // Reports are created server-side by the `reportContent` callable so a
+    // reporter cannot forge or edit one; only admins can read and resolve them.
+    match /contentReports/{id} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'resolvedBy', 'resolvedAt']);
+      allow delete: if isAdmin();
     }
 
     match /securityReports/{id} {

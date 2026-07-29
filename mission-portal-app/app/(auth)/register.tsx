@@ -7,6 +7,7 @@ import { YStack, XStack, H1, Paragraph, Button, Input, Text, View } from 'tamagu
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { TERMS_VERSION } from './terms'
 
 const schema = z
   .object({
@@ -16,6 +17,11 @@ const schema = z
     confirmPassword: z.string(),
     ageConfirm: z.boolean().refine((v) => v === true, {
       message: 'You must confirm you are 13 or older to register',
+    }),
+    // App Store Review Guideline 1.2 requires users of a UGC app to agree to
+    // terms that forbid objectionable content and abusive behaviour.
+    termsAccept: z.boolean().refine((v) => v === true, {
+      message: 'You must accept the Terms of Use to register',
     }),
   })
   .refine((d) => d.password === d.confirmPassword, {
@@ -43,13 +49,14 @@ export default function RegisterScreen() {
       password: '',
       confirmPassword: '',
       ageConfirm: false,
+      termsAccept: false,
     },
   })
 
   const onSubmit = async (data: FormData) => {
     setLoading(true)
     try {
-      await signUp(data.email, data.password, data.displayName)
+      await signUp(data.email, data.password, data.displayName, TERMS_VERSION)
       router.replace('/(auth)/verify-email')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed'
@@ -198,6 +205,62 @@ export default function RegisterScreen() {
               </YStack>
             )}
           />
+
+          <Controller
+            control={control}
+            name="termsAccept"
+            render={({ field }) => (
+              <YStack gap="$1">
+                <XStack gap="$2.5" alignItems="center">
+                  <View
+                    onPress={() => field.onChange(!field.value)}
+                    cursor="pointer"
+                    width={22}
+                    height={22}
+                    borderRadius={6}
+                    borderWidth={2}
+                    borderColor={
+                      field.value ? '$primary' : errors.termsAccept ? '$red9' : '$borderColor'
+                    }
+                    backgroundColor={field.value ? '$primary' : 'transparent'}
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    {field.value ? (
+                      <Text color="white" fontSize={13} fontWeight="900">
+                        ✓
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text color="$colorMuted" fontSize="$3" flex={1}>
+                    I agree to the{' '}
+                    <Text
+                      color="$primary"
+                      textDecorationLine="underline"
+                      onPress={() => router.push('/(auth)/terms')}
+                    >
+                      Terms of Use
+                    </Text>{' '}
+                    and{' '}
+                    <Text
+                      color="$primary"
+                      textDecorationLine="underline"
+                      onPress={() => router.push('/(auth)/privacy')}
+                    >
+                      Privacy Policy
+                    </Text>
+                    . I understand that objectionable content and abusive behaviour are not
+                    tolerated and can get my account removed.
+                  </Text>
+                </XStack>
+                {errors.termsAccept && (
+                  <Text color="$red9" fontSize="$2">
+                    {errors.termsAccept.message}
+                  </Text>
+                )}
+              </YStack>
+            )}
+          />
         </YStack>
 
         <Button
@@ -216,9 +279,14 @@ export default function RegisterScreen() {
           </Link>
         </XStack>
 
-        <XStack justifyContent="center">
+        <XStack justifyContent="center" gap="$2">
+          <Link href="/(auth)/terms">
+            <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
+              Terms of Use
+            </Text>
+          </Link>
           <Paragraph color="$colorMuted" fontSize="$2">
-            By creating an account you agree to our{' '}
+            ·
           </Paragraph>
           <Link href="/(auth)/privacy">
             <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">

@@ -278,8 +278,10 @@ export function PageBuilderScreen({ pageKey, pageTitle }: PageBuilderScreenProps
             <Text fontSize="$5" fontWeight="700" marginBottom="$2">
               {pageTitle}
             </Text>
-            <Text color="$gray10" fontSize="$3">
-              {canBuild ? 'No content yet. Click "Edit Page" to add blocks.' : 'Coming soon.'}
+            <Text color="$gray10" fontSize="$3" textAlign="center">
+              {canBuild
+                ? 'No content yet. Click "Edit Page" to add blocks.'
+                : `There is nothing on the ${pageTitle} page right now. Check back after your next team update.`}
             </Text>
           </YStack>
         )}

@@ -1,3 +1,4 @@
+import { Pressable } from 'react-native'
 import { XStack, YStack, Text, Image } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { shortTime } from '@/lib/format'
@@ -9,9 +10,17 @@ interface MessageBubbleProps {
   isMine: boolean
   displayName?: string
   photoURL?: string
+  /** Opens the report/block menu. Omitted for the viewer's own messages. */
+  onLongPress?: () => void
 }
 
-export function MessageBubble({ message, isMine, displayName, photoURL }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  isMine,
+  displayName,
+  photoURL,
+  onLongPress,
+}: MessageBubbleProps) {
   const colors = useThemeColors()
   const bubbleColor = isMine ? colors.primary : colors.surface
   const textColor = isMine ? 'white' : colors.text
@@ -38,6 +47,7 @@ export function MessageBubble({ message, isMine, displayName, photoURL }: Messag
           borderBottomRightRadius={isMine ? '$1' : '$3'}
           padding="$2"
           gap="$1"
+          onLongPress={onLongPress}
         >
           {message.text ? (
             <Text color={textColor} fontSize="$3">
@@ -57,9 +67,20 @@ export function MessageBubble({ message, isMine, displayName, photoURL }: Messag
             </Text>
           ) : null}
         </YStack>
-        <Text color={colors.textMuted} fontSize={10} alignSelf={isMine ? 'flex-end' : 'flex-start'}>
-          {shortTime(message.ts)}
-        </Text>
+        <XStack gap="$2" alignItems="center" alignSelf={isMine ? 'flex-end' : 'flex-start'}>
+          <Text color={colors.textMuted} fontSize={10}>
+            {shortTime(message.ts)}
+          </Text>
+          {/* Visible entry point to report/block — a long-press-only affordance
+              is too easy for a user (or an App Review tester) to miss. */}
+          {onLongPress ? (
+            <Pressable onPress={onLongPress} hitSlop={8} accessibilityLabel="Report or block">
+              <Text color={colors.textMuted} fontSize={12}>
+                ⋯
+              </Text>
+            </Pressable>
+          ) : null}
+        </XStack>
       </YStack>
     </XStack>
   )

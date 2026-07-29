@@ -32,10 +32,14 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     const seg = segments as string[]
     const inAuth = seg[0] === '(auth)'
     const atRoot = !seg[0]
+    // The Privacy Policy and Terms of Use live under (auth) but have to stay
+    // readable while signed in — Settings links to them, and App Review expects
+    // both to be reachable from inside the app.
+    const isLegal = inAuth && (seg[1] === 'privacy' || seg[1] === 'terms')
 
     if (!fbUser && !inAuth && !atRoot) {
       router.replace('/')
-    } else if (fbUser && profile && inAuth) {
+    } else if (fbUser && profile && inAuth && !isLegal) {
       // Navigate directly to avoid competing with index.tsx's <Redirect>
       if (profile) {
         const firstTab = visibleTabs(profile)[0] ?? 'home'

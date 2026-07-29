@@ -9,6 +9,7 @@ import { db } from '@/lib/firebase'
 
 const BASE_TABS = [
   { key: 'users', label: 'User Management', path: '/(app)/admin/users' },
+  { key: 'moderation', label: 'Moderation', path: '/(app)/admin/moderation' },
   { key: 'avail', label: 'Availability', path: '/(app)/admin/avail' },
   { key: 'groups', label: 'Groups', path: '/(app)/admin/groups' },
   { key: 'teams', label: 'Common Teams', path: '/(app)/admin/teams' },
