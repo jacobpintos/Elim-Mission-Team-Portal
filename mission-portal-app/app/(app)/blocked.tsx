@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { useBackTo } from '@/lib/useBackTo'
 import { Avatar } from '@/components/ui/Avatar'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { unblockUser } from '@/lib/moderation'
@@ -15,6 +16,7 @@ import { sameId } from '@/lib/ids'
 export default function BlockedUsersScreen() {
   const colors = useThemeColors()
   const router = useRouter()
+  const goBack = useBackTo('/(app)/settings')
   const { profile } = useAuthStore()
   const { users, subscribe, unsubscribe } = useUsersStore()
   const toast = useUIStore((s) => s.toast)
@@ -58,7 +60,7 @@ export default function BlockedUsersScreen() {
         borderBottomWidth={1}
         borderBottomColor={colors.border}
       >
-        <Button size="$3" variant="outlined" onPress={() => router.back()}>
+        <Button size="$4" variant="outlined" onPress={goBack} minHeight={44} paddingHorizontal="$4" cursor="pointer">
           ← Back
         </Button>
         <Text color={colors.text} fontSize={18} fontWeight="700" flex={1}>

@@ -3,6 +3,8 @@ import { useRouter } from 'expo-router'
 import { YStack, XStack, Text, Button } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { useAuthStore } from '@/stores/authStore'
+import { useBackTo } from '@/lib/useBackTo'
 import { ORG_NAME, SUPPORT_EMAIL, ORG_MAILING_ADDRESS, MODERATION_SLA_HOURS } from '@/lib/orgInfo'
 
 export const TERMS_VERSION = '2026-07-29'
@@ -43,13 +45,15 @@ function Bullet({ children }: { children: React.ReactNode }) {
 }
 
 export default function TermsScreen() {
-  const router = useRouter()
   const c = useThemeColors()
+  const signedIn = useAuthStore((s) => !!s.fbUser)
+  // Opened from Settings when signed in, from the login screen when not.
+  const goBack = useBackTo(signedIn ? '/(app)/settings' : '/(auth)/login')
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
       <XStack paddingHorizontal="$4" paddingVertical="$3" alignItems="center" gap="$3">
-        <Button size="$3" variant="outlined" onPress={() => router.back()}>
+        <Button size="$4" variant="outlined" onPress={goBack} minHeight={44} paddingHorizontal="$4" cursor="pointer">
           ← Back
         </Button>
         <Text color={c.text} fontSize={18} fontWeight="700" flex={1}>

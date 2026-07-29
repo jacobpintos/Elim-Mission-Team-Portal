@@ -22,6 +22,7 @@ import { RoomMembersSheet } from '@/features/moderation/RoomMembersSheet'
 import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { filterHiddenMessages } from '@/lib/moderation'
+import { useBackTo } from '@/lib/useBackTo'
 import { updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -30,6 +31,7 @@ import type { Message, MessageAttachment } from '@/types/events'
 export default function ThreadScreen() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>()
   const router = useRouter()
+  const goBack = useBackTo('/(app)/messages')
   const colors = useThemeColors()
   const { profile } = useAuthStore()
   const uid = profile?.uid ?? ''
@@ -210,14 +212,23 @@ export default function ThreadScreen() {
         justifyContent="space-between"
         gap="$2"
       >
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/messages'))}
-          hitSlop={10}
-          style={{ paddingVertical: 4, paddingRight: 4 }}
-        >
-          <Text color={colors.primary} fontSize="$5" fontWeight="700">
-            ‹
-          </Text>
+        <Pressable onPress={goBack} hitSlop={12} accessibilityLabel="Back to conversations">
+          <XStack
+            alignItems="center"
+            gap="$1"
+            minHeight={44}
+            paddingRight="$3"
+            paddingLeft="$1"
+            cursor="pointer"
+            hoverStyle={{ opacity: 0.7 }}
+          >
+            <Text color={colors.primary} fontSize="$6" fontWeight="700">
+              ‹
+            </Text>
+            <Text color={colors.primary} fontSize="$3" fontWeight="600">
+              Back
+            </Text>
+          </XStack>
         </Pressable>
         <Text color={colors.text} fontWeight="600" fontSize="$3" numberOfLines={1} flex={1}>
           {room?.name ?? 'Messages'}

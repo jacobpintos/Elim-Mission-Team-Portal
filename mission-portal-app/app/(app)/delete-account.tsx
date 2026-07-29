@@ -8,6 +8,7 @@ import { functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { useBackTo } from '@/lib/useBackTo'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { confirmAsync } from '@/lib/confirm'
 
@@ -21,6 +22,7 @@ import { confirmAsync } from '@/lib/confirm'
 export default function DeleteAccountScreen() {
   const colors = useThemeColors()
   const router = useRouter()
+  const goBack = useBackTo('/(app)/settings')
   const { fbUser, profile, signOutNow } = useAuthStore()
   const { toast } = useUIStore()
 
@@ -70,7 +72,7 @@ export default function DeleteAccountScreen() {
         borderBottomWidth={1}
         borderBottomColor={colors.border}
       >
-        <Button size="$3" variant="outlined" onPress={() => router.back()} disabled={deleting}>
+        <Button size="$4" variant="outlined" onPress={goBack} disabled={deleting} minHeight={44} paddingHorizontal="$4" cursor="pointer">
           ← Back
         </Button>
         <Text color={colors.text} fontSize={18} fontWeight="700" flex={1}>
@@ -148,7 +150,7 @@ export default function DeleteAccountScreen() {
               </Text>
             </View>
           </Pressable>
-          <Pressable onPress={() => router.back()} disabled={deleting}>
+          <Pressable onPress={goBack} disabled={deleting}>
             <View style={[styles.btn, { borderWidth: 1, borderColor: colors.border }]}>
               <Text color={colors.text} fontWeight="700" fontSize="$4">
                 Cancel
