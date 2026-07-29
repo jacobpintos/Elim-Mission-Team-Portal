@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, Modal, View, TextInput, StyleSheet } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text, Input } from 'tamagui'
 import { Stack } from 'expo-router'
 import { collection, onSnapshot } from 'firebase/firestore'
@@ -1121,6 +1122,7 @@ function notifyAssignees(assignees: (string | number)[], taskTitle: string, task
 
 export default function Assignments() {
   const colors = useThemeColors()
+  const insets = useSafeAreaInsets()
   const { profile } = useAuthStore()
   const uid = profile?.uid ?? ''
   const admin = isAdmin(profile)
@@ -1697,7 +1699,7 @@ export default function Assignments() {
       {admin ? (
         <Pressable
           onPress={() => setShowCreateTask(true)}
-          style={[fabStyle, { backgroundColor: colors.primary }]}
+          style={[fabStyle, { backgroundColor: colors.primary, bottom: insets.bottom + 16 }]}
         >
           <Text color="white" fontWeight="700" fontSize="$3">
             ⊕ Assign Task

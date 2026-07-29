@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -13,6 +14,7 @@ import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function MessagesIndex() {
   const colors = useThemeColors()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { profile } = useAuthStore()
   const uid = profile?.uid ?? ''
@@ -212,7 +214,7 @@ export default function MessagesIndex() {
       {admin ? (
         <Pressable
           onPress={() => setShowCreate(true)}
-          style={[styles.fab, { backgroundColor: colors.primary }]}
+          style={[styles.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 16 }]}
         >
           <Text color="white" fontWeight="700" fontSize="$3">
             ⊕ New Room
@@ -268,7 +270,10 @@ export default function MessagesIndex() {
               />
             </YStack>
 
-            <YStack gap="$1" flex={1}>
+            {/* No flex:1 here — inside the modal's auto-height (maxHeight-only)
+                container a flex:1 child collapses to zero on native, hiding the
+                member list. The inner ScrollView's maxHeight bounds it instead. */}
+            <YStack gap="$1" flexShrink={1}>
               <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                 MEMBERS ({selectedMembers.length} selected)
               </Text>
