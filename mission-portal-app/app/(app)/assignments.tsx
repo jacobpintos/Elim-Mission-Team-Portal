@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, Modal, View, TextInput, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { RecipientPicker } from '@/components/ui/RecipientPicker'
 import { YStack, XStack, Text, Input } from 'tamagui'
 import { Stack } from 'expo-router'
 import { collection, onSnapshot } from 'firebase/firestore'
@@ -235,12 +236,6 @@ function CreateTaskModal({
   const [selectedLead, setSelectedLead] = useState<string>('')
   const [saving, setSaving] = useState(false)
 
-  const toggleUser = (uid: string) => {
-    setSelectedUsers((prev) =>
-      prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]
-    )
-  }
-
   const groupMembers = (() => {
     if (targetType !== 'group' || !selectedGroup) return []
     const g = groups.find((g) => g.id === selectedGroup)
@@ -392,46 +387,21 @@ function CreateTaskModal({
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     SELECT ASSIGNEES ({selectedUsers.length} selected)
                   </Text>
-                  <ScrollView style={{ maxHeight: 220 }}>
-                    {nonPublicUsers.map((u) => {
-                      const sel = selectedUsers.includes(String(u.uid))
-                      return (
-                        <Pressable key={String(u.uid)} onPress={() => toggleUser(String(u.uid))}>
-                          <XStack
-                            paddingVertical="$2"
-                            paddingHorizontal="$2"
-                            gap="$3"
-                            alignItems="center"
-                            borderBottomWidth={1}
-                            borderBottomColor={colors.border}
-                            backgroundColor={sel ? colors.primary + '18' : 'transparent'}
-                          >
-                            <View
-                              style={{
-                                width: 18,
-                                height: 18,
-                                borderRadius: 4,
-                                borderWidth: 2,
-                                borderColor: sel ? colors.primary : colors.border,
-                                backgroundColor: sel ? colors.primary : 'transparent',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                            >
-                              {sel ? (
-                                <Text color="white" fontSize={11}>
-                                  ✓
-                                </Text>
-                              ) : null}
-                            </View>
-                            <Text color={colors.text} fontSize="$3">
-                              {u.displayName || u.email || String(u.uid)}
-                            </Text>
-                          </XStack>
-                        </Pressable>
-                      )
-                    })}
-                  </ScrollView>
+                  <RecipientPicker
+                    users={nonPublicUsers.map((u) => ({
+                      uid: u.uid,
+                      displayName: u.displayName,
+                      email: u.email,
+                    }))}
+                    groups={groups.map((g) => ({
+                      id: g.id,
+                      name: g.name,
+                      members: g.members,
+                    }))}
+                    value={selectedUsers}
+                    onChange={setSelectedUsers}
+                    placeholder="Search people or groups…"
+                  />
                 </YStack>
               ) : (
                 <YStack gap="$2">
