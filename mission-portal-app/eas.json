@@ -5,17 +5,29 @@
       "distribution": "internal",
       "channel": "preview",
       "ios": { "simulator": true },
-      "env": { "EXPO_PUBLIC_ENV": "preview" }
+      "env": {
+        "EXPO_PUBLIC_ENV": "preview",
+        "EXPO_PUBLIC_SUPPORT_EMAIL": "sunny.singh@thewellia.com",
+        "EXPO_PUBLIC_ORG_ADDRESS": "PO Box 552 North Liberty, IA 52317"
+      }
     },
     "staging": {
       "distribution": "internal",
       "channel": "staging",
-      "env": { "EXPO_PUBLIC_ENV": "staging" }
+      "env": {
+        "EXPO_PUBLIC_ENV": "staging",
+        "EXPO_PUBLIC_SUPPORT_EMAIL": "sunny.singh@thewellia.com",
+        "EXPO_PUBLIC_ORG_ADDRESS": "PO Box 552 North Liberty, IA 52317"
+      }
     },
     "production": {
       "channel": "production",
       "autoIncrement": true,
-      "env": { "EXPO_PUBLIC_ENV": "production" }
+      "env": {
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_SUPPORT_EMAIL": "sunny.singh@thewellia.com",
+        "EXPO_PUBLIC_ORG_ADDRESS": "PO Box 552 North Liberty, IA 52317"
+      }
     }
   },
   "submit": {
