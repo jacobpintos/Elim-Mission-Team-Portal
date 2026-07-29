@@ -114,10 +114,11 @@ export default function TermsScreen() {
 
         <Section title="4. Reporting and blocking">
           <Body>
-            Every message in the App can be reported. Tap “Report” beneath any message another
-            person sent, choose “Report message,” and tell us what is wrong with it. The same menu
-            lets you block that person — blocking hides their messages from you everywhere in the
-            App, including in group conversations created later.
+            Every message in the App can be reported. Tap the profile picture on any message
+            another person sent — or open “People” in the conversation header — and choose “Report
+            message,” then tell us what is wrong with it. The same menu lets you block that person.
+            Blocking hides their messages from you everywhere in the App, including in group
+            conversations created later.
           </Body>
           <Body>
             We review every report we receive and act on it within {MODERATION_SLA_HOURS} hours.

@@ -10,8 +10,11 @@ interface MessageBubbleProps {
   isMine: boolean
   displayName?: string
   photoURL?: string
-  /** Opens the report/block menu. Omitted for the viewer's own messages. */
-  onLongPress?: () => void
+  /**
+   * Opens the report/block menu. Omitted for the viewer's own messages, which
+   * is what makes the avatar tappable only on other people's.
+   */
+  onShowActions?: () => void
 }
 
 export function MessageBubble({
@@ -19,7 +22,7 @@ export function MessageBubble({
   isMine,
   displayName,
   photoURL,
-  onLongPress,
+  onShowActions,
 }: MessageBubbleProps) {
   const colors = useThemeColors()
   const bubbleColor = isMine ? colors.primary : colors.surface
@@ -33,10 +36,31 @@ export function MessageBubble({
       paddingHorizontal="$2"
       alignItems="flex-end"
     >
-      {!isMine ? <Avatar uri={photoURL} displayName={displayName} size={32} /> : null}
+      {/* Tapping someone's avatar opens report/block. Dims and shows a pointer
+          on hover so the target reads as interactive on web; long-pressing the
+          bubble does the same thing on touch. */}
+      {!isMine ? (
+        <Pressable onPress={onShowActions} accessibilityLabel={`Options for ${displayName ?? 'this person'}`}>
+          <XStack
+            borderRadius={999}
+            cursor="pointer"
+            hoverStyle={{ opacity: 0.7 }}
+            pressStyle={{ opacity: 0.5 }}
+          >
+            <Avatar uri={photoURL} displayName={displayName} size={32} />
+          </XStack>
+        </Pressable>
+      ) : null}
       <YStack gap={2} maxWidth="75%">
         {!isMine && displayName ? (
-          <Text color={colors.textMuted} fontSize="$2" paddingLeft="$1">
+          <Text
+            color={colors.textMuted}
+            fontSize="$2"
+            paddingLeft="$1"
+            cursor="pointer"
+            hoverStyle={{ textDecorationLine: 'underline' }}
+            onPress={onShowActions}
+          >
             {displayName}
           </Text>
         ) : null}
@@ -47,7 +71,7 @@ export function MessageBubble({
           borderBottomRightRadius={isMine ? '$1' : '$3'}
           padding="$2"
           gap="$1"
-          onLongPress={onLongPress}
+          onLongPress={onShowActions}
         >
           {message.text ? (
             <Text color={textColor} fontSize="$3">
@@ -67,33 +91,13 @@ export function MessageBubble({
             </Text>
           ) : null}
         </YStack>
-        <XStack gap="$2" alignItems="center" alignSelf={isMine ? 'flex-end' : 'flex-start'}>
-          <Text color={colors.textMuted} fontSize={10}>
-            {shortTime(message.ts)}
-          </Text>
-          {/* Visible entry point to report/block. Spelled out rather than shown
-              as a bare "⋯" — users (and App Review testers) have to be able to
-              find this without guessing, and a long-press-only affordance is
-              invisible. Only rendered on other people's messages. */}
-          {onLongPress ? (
-            <Pressable onPress={onLongPress} hitSlop={10} accessibilityLabel="Report or block">
-              <XStack
-                alignItems="center"
-                gap="$1"
-                paddingHorizontal="$2"
-                paddingVertical={2}
-                borderRadius="$2"
-                borderWidth={1}
-                borderColor={colors.border}
-              >
-                <Text fontSize={9}>🚩</Text>
-                <Text color={colors.textMuted} fontSize={10} fontWeight="600">
-                  Report
-                </Text>
-              </XStack>
-            </Pressable>
-          ) : null}
-        </XStack>
+        <Text
+          color={colors.textMuted}
+          fontSize={10}
+          alignSelf={isMine ? 'flex-end' : 'flex-start'}
+        >
+          {shortTime(message.ts)}
+        </Text>
       </YStack>
     </XStack>
   )

@@ -69,8 +69,8 @@ export default function BlockedUsersScreen() {
       <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
         <Text color={colors.textMuted} fontSize="$3" lineHeight={20}>
           You do not see messages from anyone on this list, in any conversation — including group
-          chats created later. To block someone, tap “🚩 Report” under any message they sent and
-          choose Block.
+          chats created later. To block someone, tap their profile picture on any message they
+          sent, or open “👥 People” in a conversation.
         </Text>
 
         {blocked.length === 0 ? (

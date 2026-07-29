@@ -189,7 +189,7 @@ export default function ThreadScreen() {
           isMine={isMine}
           displayName={displayName}
           photoURL={photoURL}
-          onLongPress={isMine ? undefined : () => setActionsFor(item)}
+          onShowActions={isMine ? undefined : () => setActionsFor(item)}
         />
       )
     },
