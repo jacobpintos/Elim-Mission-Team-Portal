@@ -3,6 +3,8 @@ import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storag
 import { doc, updateDoc } from 'firebase/firestore'
 import { db, storage } from '@/lib/firebase'
 
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024
+
 /**
  * Downscale + re-encode a data URL using a canvas. Web only — `document` and
  * `window.Image` do not exist in React Native.
@@ -65,16 +67,6 @@ interface PickAvatarCallbacks {
  * Returns the new photo URL, or `null` if the user cancelled or denied access.
  * Native only — on web use {@link uploadAvatarFromFile} with a file input.
  *
- * The picker's own `quality` option only sets JPEG compression, not pixel
- * dimensions — a 1:1 crop from a modern phone's camera can still be several
- * thousand pixels wide, and base64-encoding that is slow, memory-heavy on
- * older devices, and can land close to or over Storage's 5MB avatar limit,
- * which fails the upload with a rules rejection that the caller then reports
- * as a generic "Failed to upload photo". expo-image-manipulator resizes to a
- * fixed 512px before encoding, mirroring the maxDim the web path already
- * enforces via canvas, so the output size is bounded regardless of the
- * source photo's resolution.
- *
  * Reads the asset as base64 and uploads it as a data URL rather than going
  * through `fetch(uri).blob()`, which is unreliable for `file://` URIs on React
  * Native.
@@ -97,24 +89,22 @@ export async function pickAndUploadAvatar(
     mediaTypes: ['images'],
     allowsEditing: true,
     aspect: [1, 1],
-    quality: 0.8,
+    quality: 0.6,
+    base64: true,
   })
   if (result.canceled) return null
   const asset = result.assets?.[0]
-  if (!asset?.uri) return null
+  if (!asset?.base64) return null
 
   callbacks.onUploadStart?.()
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ImageManipulator = require('expo-image-manipulator')
-  const resized = await ImageManipulator.manipulateAsync(asset.uri, [{ resize: { width: 512 } }], {
-    compress: 0.78,
-    format: ImageManipulator.SaveFormat.JPEG,
-    base64: true,
-  })
-  if (!resized.base64) throw new Error('Could not process the selected photo')
+  // Storage rules reject avatars at 5MB. Checking here turns what would be an
+  // opaque rules rejection into something the user can act on.
+  if (asset.base64.length * 0.75 >= AVATAR_MAX_BYTES) {
+    throw new Error('That photo is too large — please choose a smaller one')
+  }
 
-  const dataUrl = `data:image/jpeg;base64,${resized.base64}`
+  const dataUrl = `data:image/jpeg;base64,${asset.base64}`
   const sref = storageRef(storage, `avatars/${uid}`)
   await uploadString(sref, dataUrl, 'data_url')
   const photoURL = await getDownloadURL(sref)
