@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
-import { ref as storageRef, uploadString, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
 import { defaults } from '@/theme/defaults'
 import { autoTextColor } from '@/theme/contrast'
@@ -17,7 +17,7 @@ interface ThemeStore {
   unsubscribe: () => void
   setMode: (mode: Mode) => void
   publishTheme: (patch: Partial<ThemeDoc>, uid: string) => Promise<void>
-  setLogo: (dataUrl: string, uid: string) => Promise<void>
+  setLogo: (blob: Blob, contentType: string, uid: string) => Promise<void>
   revertLogo: (uid: string) => Promise<void>
   onPrimary: () => string
 }
@@ -52,7 +52,7 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
     )
   },
 
-  setLogo: async (dataUrl, uid) => {
+  setLogo: async (blob, contentType, uid) => {
     const theme = get().theme
 
     // Clean up expired backup from storage silently
@@ -62,7 +62,9 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
 
     const path = `logos/logo_${Date.now()}`
     const sref = storageRef(storage, path)
-    await uploadString(sref, dataUrl, 'data_url')
+    // uploadString cannot be used here: it decodes to a Uint8Array and hands
+    // that to the Blob constructor, which React Native rejects.
+    await uploadBytes(sref, blob, { contentType })
     const url = await getDownloadURL(sref)
 
     const backup =

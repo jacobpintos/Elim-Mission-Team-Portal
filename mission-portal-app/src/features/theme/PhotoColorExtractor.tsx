@@ -1,13 +1,24 @@
 import { useRef, useState } from 'react'
-import { Platform, Pressable, ActivityIndicator } from 'react-native'
+import { Platform, Pressable, ActivityIndicator, Image as RNImage } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { uriToBlob } from '@/lib/uriToBlob'
+import { useColorExtraction } from './useColorExtraction'
 
 const STORAGE_KEY = 'theme.photoColors'
+
+/** The picked photo, in both the forms the two consumers need. */
+interface PickedPhoto {
+  /** For the swatch preview and, on web, the extractor input. */
+  previewUri: string
+  /** What gets uploaded if the admin promotes this photo to the app logo. */
+  blob: Blob
+  contentType: string
+}
 
 interface PhotoColorExtractorProps {
   onSetPrimary: (hex: string) => void
   onSetSecondary: (hex: string) => void
-  onSetLogo?: (dataUrl: string) => Promise<void>
+  onSetLogo?: (blob: Blob, contentType: string) => Promise<void>
 }
 
 function loadStoredColors(): string[] {
@@ -30,81 +41,42 @@ function storeColors(colors: string[]) {
   }
 }
 
-function rgbToHex(r: number, g: number, b: number): string {
-  const h = (n: number) => Math.round(n).toString(16).padStart(2, '0')
-  return `#${h(r)}${h(g)}${h(b)}`
-}
-
-function colorDistance(a: [number, number, number], b: [number, number, number]): number {
-  return Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
-}
-
-// Downscale the photo to a small canvas, bucket pixels into coarse RGB bins,
-// then pick the most frequent buckets that are sufficiently distinct from
-// each other. Runs entirely in the browser — the image never leaves the device.
-async function extractColors(dataUrl: string): Promise<string[]> {
-  const img = new window.Image()
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve()
-    img.onerror = () => reject(new Error('Could not read image'))
-    img.src = dataUrl
-  })
-
-  const SIZE = 64
-  const canvas = document.createElement('canvas')
-  canvas.width = SIZE
-  canvas.height = SIZE
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('Canvas unavailable')
-  ctx.drawImage(img, 0, 0, SIZE, SIZE)
-  const { data } = ctx.getImageData(0, 0, SIZE, SIZE)
-
-  // Bucket by top 4 bits per channel, averaging the real pixel values in
-  // each bucket so the swatch matches the photo rather than the bin center.
-  const buckets = new Map<number, { r: number; g: number; b: number; n: number }>()
-  for (let i = 0; i < data.length; i += 4) {
-    if (data[i + 3] < 128) continue
-    const r = data[i], g = data[i + 1], b = data[i + 2]
-    const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4)
-    const bucket = buckets.get(key)
-    if (bucket) {
-      bucket.r += r; bucket.g += g; bucket.b += b; bucket.n++
-    } else {
-      buckets.set(key, { r, g, b, n: 1 })
-    }
-  }
-
-  const ranked = [...buckets.values()]
-    .map((b) => ({ rgb: [b.r / b.n, b.g / b.n, b.b / b.n] as [number, number, number], n: b.n }))
-    .sort((a, b) => b.n - a.n)
-
-  const picked: [number, number, number][] = []
-  for (const { rgb } of ranked) {
-    if (picked.length >= 8) break
-    if (picked.every((p) => colorDistance(p, rgb) > 60)) picked.push(rgb)
-  }
-
-  return picked.map(([r, g, b]) => rgbToHex(r, g, b))
-}
-
-export function PhotoColorExtractor({ onSetPrimary, onSetSecondary, onSetLogo }: PhotoColorExtractorProps) {
+export function PhotoColorExtractor({
+  onSetPrimary,
+  onSetSecondary,
+  onSetLogo,
+}: PhotoColorExtractorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [colors, setColors] = useState<string[]>(loadStoredColors)
   const [selected, setSelected] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [capturedDataUrl, setCapturedDataUrl] = useState<string | null>(null)
+  const [captured, setCaptured] = useState<PickedPhoto | null>(null)
   const [settingLogo, setSettingLogo] = useState(false)
+  const { extract, bridge } = useColorExtraction()
 
-  if (Platform.OS !== 'web') return null
+  /** Shared tail of both pick paths: analyze, then offer the logo swap. */
+  const analyze = async (dataUrl: string, photo: PickedPhoto) => {
+    setAnalyzing(true)
+    setError(null)
+    setSelected(null)
+    setCaptured(null)
+    try {
+      const extracted = await extract(dataUrl)
+      setColors(extracted)
+      storeColors(extracted)
+      // Keep the photo only when logo replacement is available
+      if (onSetLogo) setCaptured(photo)
+    } catch {
+      setError('Could not analyze that photo. Try a different image.')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setAnalyzing(true)
-    setError(null)
-    setSelected(null)
-    setCapturedDataUrl(null)
     try {
       const reader = new FileReader()
       const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -112,33 +84,67 @@ export function PhotoColorExtractor({ onSetPrimary, onSetSecondary, onSetLogo }:
         reader.onerror = reject
         reader.readAsDataURL(file)
       })
-      const extracted = await extractColors(dataUrl)
-      setColors(extracted)
-      storeColors(extracted)
-      // Keep the dataUrl only when logo replacement is available
-      if (onSetLogo) setCapturedDataUrl(dataUrl)
-    } catch {
-      setError('Could not analyze that photo. Try a different image.')
+      await analyze(dataUrl, {
+        previewUri: dataUrl,
+        blob: file,
+        contentType: file.type || 'image/jpeg',
+      })
     } finally {
-      setAnalyzing(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const pickPhoto = async () => {
+    if (Platform.OS === 'web') {
+      fileInputRef.current?.click()
+      return
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ImagePicker = require('expo-image-picker')
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      setError('Enable photo access for Mission Portal in your device settings')
+      return
+    }
+
+    // base64 feeds the extractor; the URI is what gets read into a Blob for
+    // upload, since React Native cannot build one from bytes.
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.6,
+      base64: true,
+    })
+    if (result.canceled) return
+    const asset = result.assets?.[0]
+    if (!asset?.uri || !asset.base64) return
+
+    const contentType = asset.mimeType ?? 'image/jpeg'
+    try {
+      await analyze(`data:${contentType};base64,${asset.base64}`, {
+        previewUri: asset.uri,
+        blob: await uriToBlob(asset.uri),
+        contentType,
+      })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not read that photo')
     }
   }
 
   const handleClear = () => {
     setColors([])
     setSelected(null)
-    setCapturedDataUrl(null)
+    setCaptured(null)
     storeColors([])
   }
 
   const handleSetLogo = async () => {
-    if (!capturedDataUrl || !onSetLogo) return
+    if (!captured || !onSetLogo) return
     setSettingLogo(true)
     setError(null)
     try {
-      await onSetLogo(capturedDataUrl)
-      setCapturedDataUrl(null)
+      await onSetLogo(captured.blob, captured.contentType)
+      setCaptured(null)
     } catch {
       setError('Failed to update logo. Try again.')
     } finally {
@@ -158,16 +164,19 @@ export function PhotoColorExtractor({ onSetPrimary, onSetSecondary, onSetLogo }:
           : ' The photo is analyzed on your device and deleted after the colors are extracted.'}
       </Text>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
+      {Platform.OS === 'web' ? (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+      ) : null}
+      {bridge}
 
       <XStack gap="$2" alignItems="center">
-        <Pressable onPress={() => fileInputRef.current?.click()} disabled={analyzing}>
+        <Pressable onPress={pickPhoto} disabled={analyzing}>
           <XStack
             borderWidth={1}
             borderColor="$gray8"
@@ -260,7 +269,7 @@ export function PhotoColorExtractor({ onSetPrimary, onSetSecondary, onSetLogo }:
         </XStack>
       ) : null}
 
-      {onSetLogo && capturedDataUrl ? (
+      {onSetLogo && captured ? (
         <YStack
           gap="$2"
           paddingTop="$3"
@@ -269,10 +278,11 @@ export function PhotoColorExtractor({ onSetPrimary, onSetSecondary, onSetLogo }:
           borderTopColor="$gray6"
         >
           <XStack gap="$3" alignItems="center">
-            <img
-              src={capturedDataUrl}
-              alt="Uploaded photo"
-              style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
+            <RNImage
+              source={{ uri: captured.previewUri }}
+              accessibilityLabel="Uploaded photo"
+              resizeMode="cover"
+              style={{ width: 56, height: 56, borderRadius: 6, flexShrink: 0 }}
             />
             <Text fontSize="$2" flex={1}>
               Replace the app logo with this photo? The existing logo will be backed up for 30 days.
@@ -296,7 +306,7 @@ export function PhotoColorExtractor({ onSetPrimary, onSetSecondary, onSetLogo }:
                 </Text>
               </XStack>
             </Pressable>
-            <Pressable onPress={() => setCapturedDataUrl(null)} disabled={settingLogo}>
+            <Pressable onPress={() => setCaptured(null)} disabled={settingLogo}>
               <XStack paddingHorizontal="$3" paddingVertical="$2">
                 <Text fontSize="$2" color="$gray10">
                   No thanks

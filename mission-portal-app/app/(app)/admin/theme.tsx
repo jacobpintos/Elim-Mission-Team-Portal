@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { Platform, useWindowDimensions } from 'react-native'
-import { ScrollView } from 'react-native'
+import { Image as RNImage, ScrollView, useWindowDimensions } from 'react-native'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { useThemeStore } from '@/stores/themeStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -79,8 +78,8 @@ export default function AdminTheme() {
     setPreview({ ...defaults })
   }
 
-  const handleSetLogo = async (dataUrl: string) => {
-    await setLogo(dataUrl, profile?.uid ?? '')
+  const handleSetLogo = async (blob: Blob, contentType: string) => {
+    await setLogo(blob, contentType, profile?.uid ?? '')
     toast('Logo updated!', 'success')
   }
 
@@ -192,13 +191,15 @@ export default function AdminTheme() {
             <Text fontWeight="700" fontSize="$3">
               Current Logo
             </Text>
-            {Platform.OS === 'web' ? (
-              <img
-                src={theme.logoUrl}
-                alt="Current app logo"
-                style={{ maxWidth: 200, height: 'auto', objectFit: 'contain' }}
-              />
-            ) : null}
+            {/* Was a web-only <img>, so native admins saw a "Current Logo"
+                card with no logo in it — and a revert flow for a logo they
+                could not see. */}
+            <RNImage
+              source={{ uri: theme.logoUrl }}
+              accessibilityLabel="Current app logo"
+              resizeMode="contain"
+              style={{ width: 200, height: 80 }}
+            />
             {hasBackup ? (
               <YStack gap="$2">
                 <Text fontSize="$2" color="$gray10">
