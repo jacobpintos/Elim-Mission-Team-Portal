@@ -12,6 +12,7 @@ import {
   setDoc,
   serverTimestamp,
   startAfter,
+  where,
 } from 'firebase/firestore'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { db } from '@/lib/firebase'
@@ -20,6 +21,8 @@ import type { Room, Message, MessageAttachment } from '@/types/events'
 
 interface MessagesStore {
   rooms: Room[]
+  /** Set when the rooms listener is rejected, so the UI can say so. */
+  roomsError: string | null
   activeRoomId: string | number | null
   messages: Message[]
   loading: boolean
@@ -32,7 +35,7 @@ interface MessagesStore {
   unreadCount: (uid: string) => number
   roomById: (id: string | number) => Room | undefined
   // actions
-  subscribe: () => void
+  subscribe: (uid: string, admin?: boolean) => void
   unsubscribe: () => void
   createRoom: (name: string, members: string[]) => Promise<void>
   openRoom: (roomId: string | number) => void
@@ -44,6 +47,7 @@ interface MessagesStore {
 
 export const useMessagesStore = create<MessagesStore>((set, get) => ({
   rooms: [],
+  roomsError: null,
   activeRoomId: null,
   messages: [],
   loading: false,
@@ -62,20 +66,47 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
 
   roomById: (id) => get().rooms.find((r) => sameId(r.id, id)),
 
-  subscribe: () => {
+  subscribe: (uid, admin = false) => {
     if (get()._unsubRooms) return
-    set({ loading: true })
-    const unsub = onSnapshot(collection(db, 'rooms'), (snap) => {
-      const rooms = snap.docs.map((d) => ({ ...(d.data() as Room), id: d.id }))
-      set({ rooms, loading: false })
-    })
+    if (!uid && !admin) return
+    set({ loading: true, roomsError: null })
+
+    // The rules allow reading a room only if you are a member of it, or an
+    // admin. Firestore refuses any query it cannot prove is safe, so an
+    // unfiltered `collection('rooms')` read is denied outright for non-admins —
+    // which silently produced an empty room list for every ordinary member.
+    // Filtering by membership makes the query provably satisfiable, and mirrors
+    // the rule exactly. Admins can still read the whole collection.
+    const base = collection(db, 'rooms')
+    const q = admin ? base : query(base, where('members', 'array-contains', uid))
+
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const rooms = snap.docs.map((d) => ({ ...(d.data() as Room), id: d.id }))
+        set({ rooms, loading: false, roomsError: null })
+      },
+      (err) => {
+        // Previously absent, so a denied query left `loading` stuck true and the
+        // screen claiming the user was in no rooms at all.
+        console.warn('rooms listener failed', err)
+        set({ loading: false, roomsError: err.message })
+      }
+    )
     set({ _unsubRooms: unsub })
   },
 
   unsubscribe: () => {
     get()._unsubRooms?.()
     get()._unsubMessages?.()
-    set({ _unsubRooms: null, _unsubMessages: null, rooms: [], messages: [], activeRoomId: null })
+    set({
+      _unsubRooms: null,
+      _unsubMessages: null,
+      rooms: [],
+      roomsError: null,
+      messages: [],
+      activeRoomId: null,
+    })
   },
 
   createRoom: async (name, members) => {

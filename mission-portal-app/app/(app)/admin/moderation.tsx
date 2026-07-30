@@ -82,7 +82,7 @@ export default function AdminModeration() {
 
   useEffect(() => {
     subscribe()
-    subRooms()
+    subRooms(profile?.uid ?? '', true)
     const q = query(collection(db, 'contentReports'), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setReports(snap.docs.map((d) => ({ ...(d.data() as ContentReport), id: d.id })))

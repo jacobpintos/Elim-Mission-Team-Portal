@@ -23,7 +23,7 @@ export default function MessagesIndex() {
   const admin = isAdmin(profile)
   const toast = useUIStore((s) => s.toast)
 
-  const { rooms, loading, subscribe, unsubscribe, createRoom } = useMessagesStore()
+  const { rooms, roomsError, loading, subscribe, unsubscribe, createRoom } = useMessagesStore()
   const { users, subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
   const { groups, subscribe: subGroups, unsubscribe: unsubGroups } = useGroupsStore()
 
@@ -33,7 +33,7 @@ export default function MessagesIndex() {
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    subscribe()
+    subscribe(uid, admin)
     subUsers()
     subGroups()
     return () => {
@@ -42,7 +42,7 @@ export default function MessagesIndex() {
       unsubGroups()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [uid, admin])
 
   // Only show rooms the current user is a member of
   const myRooms = rooms.filter((r) => r.members.some((m) => sameId(m, uid)))
@@ -84,6 +84,18 @@ export default function MessagesIndex() {
       {loading ? (
         <YStack flex={1} alignItems="center" justifyContent="center">
           <Text color={colors.textMuted}>Loading rooms…</Text>
+        </YStack>
+      ) : roomsError ? (
+        // Distinguish "we could not load your rooms" from "you have none" —
+        // conflating them told members they were in no conversations when the
+        // query had actually been rejected.
+        <YStack flex={1} alignItems="center" justifyContent="center" padding="$4" gap="$2">
+          <Text color={colors.text} textAlign="center" fontWeight="600">
+            Could not load your conversations
+          </Text>
+          <Text color={colors.textMuted} textAlign="center" fontSize="$2">
+            {roomsError}
+          </Text>
         </YStack>
       ) : displayRooms.length === 0 ? (
         <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">

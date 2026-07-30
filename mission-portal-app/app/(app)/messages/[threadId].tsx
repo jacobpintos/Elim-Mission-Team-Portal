@@ -71,7 +71,7 @@ export default function ThreadScreen() {
   const room = rooms.find((r) => sameId(r.id, threadId))
 
   useEffect(() => {
-    subscribe()
+    subscribe(uid, admin)
     subUsers()
     if (threadId) openRoom(threadId)
     return () => {
@@ -80,7 +80,7 @@ export default function ThreadScreen() {
       unsubUsers()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId])
+  }, [threadId, uid, admin])
 
   // Mark messages as read when they arrive
   useEffect(() => {
