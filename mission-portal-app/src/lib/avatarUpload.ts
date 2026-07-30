@@ -1,7 +1,8 @@
 import { Platform } from 'react-native'
-import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage'
+import { ref as storageRef, uploadString, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db, storage } from '@/lib/firebase'
+import { uriToBlob } from '@/lib/uriToBlob'
 
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024
 
@@ -67,9 +68,8 @@ interface PickAvatarCallbacks {
  * Returns the new photo URL, or `null` if the user cancelled or denied access.
  * Native only — on web use {@link uploadAvatarFromFile} with a file input.
  *
- * Reads the asset as base64 and uploads it as a data URL rather than going
- * through `fetch(uri).blob()`, which is unreliable for `file://` URIs on React
- * Native.
+ * The picked file is read back into a Blob before uploading — see
+ * {@link uriToBlob} for why base64 and `uploadString` cannot work here.
  */
 export async function pickAndUploadAvatar(
   uid: string,
@@ -90,23 +90,26 @@ export async function pickAndUploadAvatar(
     allowsEditing: true,
     aspect: [1, 1],
     quality: 0.6,
-    base64: true,
   })
   if (result.canceled) return null
   const asset = result.assets?.[0]
-  if (!asset?.base64) return null
+  if (!asset?.uri) return null
 
   callbacks.onUploadStart?.()
 
+  const blob = await uriToBlob(asset.uri)
+
   // Storage rules reject avatars at 5MB. Checking here turns what would be an
   // opaque rules rejection into something the user can act on.
-  if (asset.base64.length * 0.75 >= AVATAR_MAX_BYTES) {
+  if (blob.size >= AVATAR_MAX_BYTES) {
     throw new Error('That photo is too large — please choose a smaller one')
   }
 
-  const dataUrl = `data:image/jpeg;base64,${asset.base64}`
+  // The rules also require an image/* content type. A Blob read off a file://
+  // URI does not reliably carry one, so set it explicitly.
+  const contentType = asset.mimeType ?? 'image/jpeg'
   const sref = storageRef(storage, `avatars/${uid}`)
-  await uploadString(sref, dataUrl, 'data_url')
+  await uploadBytes(sref, blob, { contentType })
   const photoURL = await getDownloadURL(sref)
   await updateDoc(doc(db, 'users', uid), { photoURL })
   return photoURL

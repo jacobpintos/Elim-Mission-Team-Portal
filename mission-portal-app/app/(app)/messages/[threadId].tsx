@@ -23,6 +23,7 @@ import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { partitionHiddenMessages } from '@/lib/moderation'
 import { useBackTo } from '@/lib/useBackTo'
+import { uriToBlob } from '@/lib/uriToBlob'
 import { updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -109,7 +110,7 @@ export default function ThreadScreen() {
     try {
       const ImagePicker = await import('expo-image-picker')
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         quality: 0.8,
       })
       if (!result.canceled && result.assets.length > 0) {
@@ -119,14 +120,17 @@ export default function ThreadScreen() {
         const { storage } = await import('@/lib/firebase')
         const filename = `${Date.now()}_${uid}_${asset.fileName ?? 'image.jpg'}`
         const sRef = storageRef(storage, `rooms/${threadId}/attachments/${filename}`)
-        const blob = await (await fetch(asset.uri)).blob()
-        await uploadBytes(sRef, blob)
+        const blob = await uriToBlob(asset.uri)
+        // The Storage rule requires an image/* content type, which a Blob read
+        // off a file:// URI does not reliably carry.
+        await uploadBytes(sRef, blob, { contentType: asset.mimeType ?? 'image/jpeg' })
         const url = await getDownloadURL(sRef)
         const attachment: MessageAttachment = { type: 'image', url, name: filename }
         await sendMessageAs(String(threadId), uid, '', attachment)
       }
-    } catch {
-      toast('Failed to attach image', 'error')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      toast(`Failed to attach image: ${message}`, 'error')
     }
   }
 
