@@ -22,6 +22,7 @@ import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
 import { confirmAsync } from '@/lib/confirm'
 import type { NotificationPrefs } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import * as Sentry from '@sentry/react-native'
 
 type NotifKey = keyof Pick<
   NotificationPrefs,
@@ -179,8 +180,13 @@ export default function SettingsScreen() {
         onUploadStart: () => setPhotoUploading(true),
       })
       if (result) toast('Photo updated', 'success')
-    } catch {
-      toast('Failed to upload photo', 'error')
+    } catch (err: unknown) {
+      // Was a bare "Failed to upload photo" with the actual cause discarded,
+      // which made a real device failure unreportable. Sentry.captureException
+      // gets the real reason into the dashboard; the toast now shows it too.
+      Sentry.captureException(err)
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      toast(`Failed to upload photo: ${message}`, 'error')
     } finally {
       setPhotoUploading(false)
     }

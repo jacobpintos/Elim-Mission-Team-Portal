@@ -15,6 +15,7 @@ import {
   platformKey,
 } from '@/lib/notifications'
 import type { NotificationPrefs } from '@/types/user'
+import * as Sentry from '@sentry/react-native'
 
 const STEP_COUNT = 3
 
@@ -75,8 +76,13 @@ export default function OnboardingScreen() {
         setPhotoURL(url)
         toast('Photo updated', 'success')
       }
-    } catch {
-      toast('Failed to upload photo', 'error')
+    } catch (err: unknown) {
+      // Was a bare "Failed to upload photo" with the actual cause discarded,
+      // which made a real device failure unreportable. Sentry.captureException
+      // gets the real reason into the dashboard; the toast now shows it too.
+      Sentry.captureException(err)
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      toast(`Failed to upload photo: ${message}`, 'error')
     } finally {
       setPhotoUploading(false)
     }

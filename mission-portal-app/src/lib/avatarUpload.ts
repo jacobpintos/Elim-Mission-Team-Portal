@@ -65,10 +65,19 @@ interface PickAvatarCallbacks {
  * Returns the new photo URL, or `null` if the user cancelled or denied access.
  * Native only — on web use {@link uploadAvatarFromFile} with a file input.
  *
+ * The picker's own `quality` option only sets JPEG compression, not pixel
+ * dimensions — a 1:1 crop from a modern phone's camera can still be several
+ * thousand pixels wide, and base64-encoding that is slow, memory-heavy on
+ * older devices, and can land close to or over Storage's 5MB avatar limit,
+ * which fails the upload with a rules rejection that the caller then reports
+ * as a generic "Failed to upload photo". expo-image-manipulator resizes to a
+ * fixed 512px before encoding, mirroring the maxDim the web path already
+ * enforces via canvas, so the output size is bounded regardless of the
+ * source photo's resolution.
+ *
  * Reads the asset as base64 and uploads it as a data URL rather than going
  * through `fetch(uri).blob()`, which is unreliable for `file://` URIs on React
- * Native. expo-image-picker's `quality` option handles the downscaling, so the
- * web-only canvas compression step is skipped here.
+ * Native.
  */
 export async function pickAndUploadAvatar(
   uid: string,
@@ -88,15 +97,24 @@ export async function pickAndUploadAvatar(
     mediaTypes: ['images'],
     allowsEditing: true,
     aspect: [1, 1],
-    quality: 0.5,
-    base64: true,
+    quality: 0.8,
   })
   if (result.canceled) return null
   const asset = result.assets?.[0]
-  if (!asset?.base64) return null
+  if (!asset?.uri) return null
 
   callbacks.onUploadStart?.()
-  const dataUrl = `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ImageManipulator = require('expo-image-manipulator')
+  const resized = await ImageManipulator.manipulateAsync(asset.uri, [{ resize: { width: 512 } }], {
+    compress: 0.78,
+    format: ImageManipulator.SaveFormat.JPEG,
+    base64: true,
+  })
+  if (!resized.base64) throw new Error('Could not process the selected photo')
+
+  const dataUrl = `data:image/jpeg;base64,${resized.base64}`
   const sref = storageRef(storage, `avatars/${uid}`)
   await uploadString(sref, dataUrl, 'data_url')
   const photoURL = await getDownloadURL(sref)
