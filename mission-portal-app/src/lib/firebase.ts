@@ -48,7 +48,20 @@ export const auth = getFirebaseAuth()
 // task status update), which otherwise fails the whole write.
 export const db = (() => {
   try {
-    return initializeFirestore(app, { ignoreUndefinedProperties: true })
+    return initializeFirestore(app, {
+      ignoreUndefinedProperties: true,
+      // Firestore's default transport is WebChannel streaming, which relies on
+      // browser behaviour React Native does not reproduce faithfully. On device
+      // the stream opens and then stalls: listeners deliver nothing until the
+      // SDK's auto-detection finally gives up and falls back, which took around
+      // ten minutes in testing — long enough to look like "you have no
+      // conversations" rather than "still loading".
+      //
+      // Forcing long polling on native skips that detection entirely and makes
+      // the first snapshot arrive immediately. Web keeps WebChannel, where it
+      // works correctly and is faster.
+      ...(Platform.OS === 'web' ? {} : { experimentalForceLongPolling: true }),
+    })
   } catch {
     // Already initialized (e.g. Fast Refresh) — reuse the existing instance.
     return getFirestore(app)
