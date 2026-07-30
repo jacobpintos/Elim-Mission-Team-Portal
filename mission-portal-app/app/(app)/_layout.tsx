@@ -19,6 +19,7 @@ import { visibleTabs, isSecurity, isPublic, hasRole, isWorship } from '@/lib/rol
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { ReportFormModal } from '@/features/security/ReportFormModal'
+import type { ReportPhoto } from '@/features/security/ReportFormModal'
 import { TourHost } from '@/features/tour/TourHost'
 import { useTourStore } from '@/features/tour/tourStore'
 import { buildTabTour } from '@/features/tour/flows'
@@ -248,7 +249,7 @@ export default function AppLayout() {
     description: string
     location: string
     witnesses: string
-    photoFile: File | null
+    photo: ReportPhoto | null
   }) => {
     try {
       await createReport(
@@ -259,7 +260,7 @@ export default function AppLayout() {
           reportedBy: String(profile?.uid ?? ''),
           reporterName: profile?.displayName ?? 'Unknown',
         },
-        data.photoFile
+        data.photo
       )
       const sendNotif = httpsCallable(functions, 'sendNotification')
       securityReportAudience.forEach((u) => {

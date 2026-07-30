@@ -11,6 +11,14 @@ import {
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { uriToBlob } from '@/lib/uriToBlob'
+
+export interface ReportPhoto {
+  /** A web `File` or, on native, a Blob read back off the picked file's URI. */
+  blob: Blob
+  /** The Storage rule requires image/*, which a native Blob may not carry. */
+  contentType: string
+}
 
 interface ReportFormModalProps {
   visible: boolean
@@ -19,7 +27,7 @@ interface ReportFormModalProps {
     description: string
     location: string
     witnesses: string
-    photoFile: File | null
+    photo: ReportPhoto | null
   }) => Promise<void>
 }
 
@@ -28,8 +36,9 @@ export function ReportFormModal({ visible, onClose, onSubmit }: ReportFormModalP
   const [description, setDescription] = useState('')
   const [location, setLocation] = useState('')
   const [witnesses, setWitnesses] = useState('')
-  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photo, setPhoto] = useState<ReportPhoto | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -37,7 +46,7 @@ export function ReportFormModal({ visible, onClose, onSubmit }: ReportFormModalP
     setDescription('')
     setLocation('')
     setWitnesses('')
-    setPhotoFile(null)
+    setPhoto(null)
     setPhotoPreview(null)
   }
 
@@ -46,9 +55,39 @@ export function ReportFormModal({ visible, onClose, onSubmit }: ReportFormModalP
     onClose()
   }
 
-  const pickPhoto = () => {
+  // Was web-only, which left the picker below rendered but inert on iOS and
+  // Android — tapping it did nothing at all.
+  const pickPhoto = async () => {
     if (Platform.OS === 'web') {
       fileInputRef.current?.click()
+      return
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ImagePicker = require('expo-image-picker')
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      setPhotoError('Enable photo access for Mission Portal in your device settings')
+      return
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.6,
+    })
+    if (result.canceled) return
+    const asset = result.assets?.[0]
+    if (!asset?.uri) return
+
+    try {
+      setPhoto({
+        blob: await uriToBlob(asset.uri),
+        contentType: asset.mimeType ?? 'image/jpeg',
+      })
+      setPhotoPreview(asset.uri)
+      setPhotoError(null)
+    } catch (err: unknown) {
+      setPhotoError(err instanceof Error ? err.message : 'Could not attach that photo')
     }
   }
 
@@ -56,7 +95,7 @@ export function ReportFormModal({ visible, onClose, onSubmit }: ReportFormModalP
     const target = e.target as HTMLInputElement
     const file = target.files?.[0]
     if (!file) return
-    setPhotoFile(file)
+    setPhoto({ blob: file, contentType: file.type || 'image/jpeg' })
     const url = URL.createObjectURL(file)
     setPhotoPreview(url)
     target.value = ''
@@ -70,7 +109,7 @@ export function ReportFormModal({ visible, onClose, onSubmit }: ReportFormModalP
         description: description.trim(),
         location: location.trim(),
         witnesses: witnesses.trim(),
-        photoFile,
+        photo,
       })
       reset()
     } finally {
@@ -180,7 +219,7 @@ export function ReportFormModal({ visible, onClose, onSubmit }: ReportFormModalP
                     />
                     <Pressable
                       onPress={() => {
-                        setPhotoFile(null)
+                        setPhoto(null)
                         setPhotoPreview(null)
                       }}
                     >
@@ -208,6 +247,11 @@ export function ReportFormModal({ visible, onClose, onSubmit }: ReportFormModalP
                     </XStack>
                   </Pressable>
                 )}
+                {photoError ? (
+                  <Text color="#c0392b" fontSize="$2">
+                    {photoError}
+                  </Text>
+                ) : null}
               </YStack>
 
               <Pressable

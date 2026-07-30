@@ -11,6 +11,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin, isSecurity } from '@/lib/roles'
 import { ReportFormModal } from '@/features/security/ReportFormModal'
+import type { ReportPhoto } from '@/features/security/ReportFormModal'
 import { ReportDetailModal } from '@/features/security/ReportDetailModal'
 import type { SecurityReport } from '@/types/security'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -81,7 +82,7 @@ export default function SecurityScreen() {
     description: string
     location: string
     witnesses: string
-    photoFile: File | null
+    photo: ReportPhoto | null
   }) => {
     try {
       await createReport(
@@ -92,7 +93,7 @@ export default function SecurityScreen() {
           reportedBy: uid,
           reporterName: displayName,
         },
-        data.photoFile
+        data.photo
       )
 
       // Notify all security and admin users

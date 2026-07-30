@@ -15,6 +15,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
 import type { SecurityReport } from '@/types/security'
+import type { ReportPhoto } from '@/features/security/ReportFormModal'
 
 interface SecurityStore {
   reports: SecurityReport[]
@@ -32,7 +33,7 @@ interface SecurityStore {
       SecurityReport,
       'description' | 'location' | 'witnesses' | 'reportedBy' | 'reporterName'
     >,
-    photoFile?: File | null
+    photo?: ReportPhoto | null
   ) => Promise<string | number>
   setOnMyWay: (id: string | number, responderId: string, responderName: string) => Promise<void>
   resolveReport: (id: string | number, resolution: string) => Promise<void>
@@ -88,13 +89,15 @@ export const useSecurityStore = create<SecurityStore>((set, get) => ({
     set({ _unsubResolved: null, resolved: [] })
   },
 
-  createReport: async (data, photoFile) => {
+  createReport: async (data, photo) => {
     const id = await nextId('nReport')
     let photoURL: string | null = null
 
-    if (photoFile) {
+    if (photo) {
       const storageRef = ref(storage, `securityReports/${id}/photo`)
-      await uploadBytes(storageRef, photoFile)
+      // The Storage rule requires an image/* content type, which a Blob read
+      // off a native file:// URI does not reliably carry.
+      await uploadBytes(storageRef, photo.blob, { contentType: photo.contentType })
       photoURL = await getDownloadURL(storageRef)
     }
 
