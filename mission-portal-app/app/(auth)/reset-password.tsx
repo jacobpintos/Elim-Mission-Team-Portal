@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
 import { Link } from 'expo-router'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -44,70 +45,86 @@ export default function ResetPasswordScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      <YStack flex={1} padding="$6" justifyContent="center" gap="$4">
-        <H1>Reset password</H1>
+      {/* Without this the keyboard covers the fields below whatever is focused:
+          the form is vertically centred with no scroll, so on a phone the
+          password field and Sign in button sit underneath the keyboard with no
+          way to reach them. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+        >
+          <YStack padding="$6" gap="$4">
+            <H1>Reset password</H1>
 
-        {sent ? (
-          <YStack gap="$3">
-            <Paragraph color="$green9">
-              A password reset link has been sent to your email address.
-            </Paragraph>
-            <Link href="/(auth)/login">
-              <Text color="$primary">Back to sign in</Text>
-            </Link>
-          </YStack>
-        ) : (
-          <YStack gap="$3">
-            <Paragraph color="$colorMuted">
-              Enter your email address and we&apos;ll send you a link to reset your password.
-            </Paragraph>
+            {sent ? (
+              <YStack gap="$3">
+                <Paragraph color="$green9">
+                  A password reset link has been sent to your email address.
+                </Paragraph>
+                <Link href="/(auth)/login">
+                  <Text color="$primary">Back to sign in</Text>
+                </Link>
+              </YStack>
+            ) : (
+              <YStack gap="$3">
+                <Paragraph color="$colorMuted">
+                  Enter your email address and we&apos;ll send you a link to reset your password.
+                </Paragraph>
 
-            <Controller
-              control={control}
-              name="email"
-              render={({ field }) => (
-                <YStack gap="$1">
-                  <Input
-                    placeholder="Email"
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    autoComplete="email"
-                    value={field.value}
-                    onChangeText={field.onChange}
-                    onBlur={field.onBlur}
-                    returnKeyType="go"
-                    onSubmitEditing={() => void handleSubmit(onSubmit)()}
-                    borderColor={errors.email ? '$red9' : '$borderColor'}
-                  />
-                  {errors.email && (
-                    <Text color="$red9" fontSize="$2">
-                      {errors.email.message}
-                    </Text>
+                <Controller
+                  control={control}
+                  name="email"
+                  render={({ field }) => (
+                    <YStack gap="$1">
+                      <Input
+                        placeholder="Email"
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                        autoComplete="email"
+                        value={field.value}
+                        onChangeText={field.onChange}
+                        onBlur={field.onBlur}
+                        returnKeyType="go"
+                        onSubmitEditing={() => void handleSubmit(onSubmit)()}
+                        borderColor={errors.email ? '$red9' : '$borderColor'}
+                      />
+                      {errors.email && (
+                        <Text color="$red9" fontSize="$2">
+                          {errors.email.message}
+                        </Text>
+                      )}
+                    </YStack>
                   )}
-                </YStack>
-              )}
-            />
+                />
 
-            <Button
-              theme="active"
-              backgroundColor="$primary"
-              onPress={handleSubmit(onSubmit)}
-              disabled={loading}
-              opacity={loading ? 0.7 : 1}
-            >
-              {loading ? 'Sending…' : 'Send reset link'}
-            </Button>
+                <Button
+                  theme="active"
+                  backgroundColor="$primary"
+                  onPress={handleSubmit(onSubmit)}
+                  disabled={loading}
+                  opacity={loading ? 0.7 : 1}
+                >
+                  {loading ? 'Sending…' : 'Send reset link'}
+                </Button>
 
-            <XStack justifyContent="center">
-              <Link href="/(auth)/login">
-                <Text color="$colorMuted" fontSize="$3">
-                  Back to sign in
-                </Text>
-              </Link>
-            </XStack>
+                <XStack justifyContent="center">
+                  <Link href="/(auth)/login">
+                    <Text color="$colorMuted" fontSize="$3">
+                      Back to sign in
+                    </Text>
+                  </Link>
+                </XStack>
+              </YStack>
+            )}
           </YStack>
-        )}
-      </YStack>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }

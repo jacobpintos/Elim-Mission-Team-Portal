@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
 import { useRouter, Link } from 'expo-router'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -69,235 +70,251 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      <YStack flex={1} padding="$6" justifyContent="center" gap="$4">
-        <H1>Create account</H1>
-        <Paragraph color="$colorMuted">Join the Mission Portal team</Paragraph>
-
-        <YStack gap="$3">
-          <Controller
-            control={control}
-            name="displayName"
-            render={({ field }) => (
-              <YStack gap="$1">
-                <Input
-                  placeholder="Your name"
-                  autoCapitalize="words"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  onBlur={field.onBlur}
-                  borderColor={errors.displayName ? '$red9' : '$borderColor'}
-                />
-                {errors.displayName && (
-                  <Text color="$red9" fontSize="$2">
-                    {errors.displayName.message}
-                  </Text>
-                )}
-              </YStack>
-            )}
-          />
-
-          <Controller
-            control={control}
-            name="email"
-            render={({ field }) => (
-              <YStack gap="$1">
-                <Input
-                  placeholder="Email"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoComplete="email"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  onBlur={field.onBlur}
-                  borderColor={errors.email ? '$red9' : '$borderColor'}
-                />
-                {errors.email && (
-                  <Text color="$red9" fontSize="$2">
-                    {errors.email.message}
-                  </Text>
-                )}
-              </YStack>
-            )}
-          />
-
-          <Controller
-            control={control}
-            name="password"
-            render={({ field }) => (
-              <YStack gap="$1">
-                <Input
-                  placeholder="Password (min 8 chars)"
-                  {...passwordInputProps(true)}
-                  autoComplete="new-password"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  onBlur={field.onBlur}
-                  borderColor={errors.password ? '$red9' : '$borderColor'}
-                />
-                {errors.password && (
-                  <Text color="$red9" fontSize="$2">
-                    {errors.password.message}
-                  </Text>
-                )}
-              </YStack>
-            )}
-          />
-
-          <Controller
-            control={control}
-            name="confirmPassword"
-            render={({ field }) => (
-              <YStack gap="$1">
-                <Input
-                  placeholder="Confirm password"
-                  {...passwordInputProps(true)}
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  onBlur={field.onBlur}
-                  returnKeyType="go"
-                  onSubmitEditing={() => void handleSubmit(onSubmit)()}
-                  borderColor={errors.confirmPassword ? '$red9' : '$borderColor'}
-                />
-                {errors.confirmPassword && (
-                  <Text color="$red9" fontSize="$2">
-                    {errors.confirmPassword.message}
-                  </Text>
-                )}
-              </YStack>
-            )}
-          />
-
-          <Controller
-            control={control}
-            name="ageConfirm"
-            render={({ field }) => (
-              <YStack gap="$1">
-                <XStack
-                  gap="$2.5"
-                  alignItems="center"
-                  onPress={() => field.onChange(!field.value)}
-                  cursor="pointer"
-                >
-                  <View
-                    width={22}
-                    height={22}
-                    borderRadius={6}
-                    borderWidth={2}
-                    borderColor={
-                      field.value ? '$primary' : errors.ageConfirm ? '$red9' : '$borderColor'
-                    }
-                    backgroundColor={field.value ? '$primary' : 'transparent'}
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    {field.value ? (
-                      <Text color="white" fontSize={13} fontWeight="900">
-                        ✓
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Text color="$colorMuted" fontSize="$3" flex={1}>
-                    I confirm I am 13 years of age or older
-                  </Text>
-                </XStack>
-                {errors.ageConfirm && (
-                  <Text color="$red9" fontSize="$2">
-                    {errors.ageConfirm.message}
-                  </Text>
-                )}
-              </YStack>
-            )}
-          />
-
-          <Controller
-            control={control}
-            name="termsAccept"
-            render={({ field }) => (
-              <YStack gap="$1">
-                <XStack gap="$2.5" alignItems="center">
-                  <View
-                    onPress={() => field.onChange(!field.value)}
-                    cursor="pointer"
-                    width={22}
-                    height={22}
-                    borderRadius={6}
-                    borderWidth={2}
-                    borderColor={
-                      field.value ? '$primary' : errors.termsAccept ? '$red9' : '$borderColor'
-                    }
-                    backgroundColor={field.value ? '$primary' : 'transparent'}
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    {field.value ? (
-                      <Text color="white" fontSize={13} fontWeight="900">
-                        ✓
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Text color="$colorMuted" fontSize="$3" flex={1}>
-                    I agree to the{' '}
-                    <Text
-                      color="$primary"
-                      textDecorationLine="underline"
-                      onPress={() => router.push('/(auth)/terms')}
-                    >
-                      Terms of Use
-                    </Text>{' '}
-                    and{' '}
-                    <Text
-                      color="$primary"
-                      textDecorationLine="underline"
-                      onPress={() => router.push('/(auth)/privacy')}
-                    >
-                      Privacy Policy
-                    </Text>
-                    . I understand that objectionable content and abusive behaviour are not
-                    tolerated and can get my account removed.
-                  </Text>
-                </XStack>
-                {errors.termsAccept && (
-                  <Text color="$red9" fontSize="$2">
-                    {errors.termsAccept.message}
-                  </Text>
-                )}
-              </YStack>
-            )}
-          />
-        </YStack>
-
-        <Button
-          backgroundColor="$primary"
-          onPress={handleSubmit(onSubmit)}
-          disabled={loading}
-          opacity={loading ? 0.7 : 1}
+      {/* Without this the keyboard covers the fields below whatever is focused:
+          the form is vertically centred with no scroll, so on a phone the
+          password field and Sign in button sit underneath the keyboard with no
+          way to reach them. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
         >
-          {loading ? 'Creating account…' : 'Create account'}
-        </Button>
+          <YStack padding="$6" gap="$4">
+            <H1>Create account</H1>
+            <Paragraph color="$colorMuted">Join the Mission Portal team</Paragraph>
 
-        <XStack justifyContent="center" gap="$2">
-          <Paragraph color="$colorMuted">Already have an account?</Paragraph>
-          <Link href="/(auth)/login">
-            <Text color="$primary">Sign in</Text>
-          </Link>
-        </XStack>
+            <YStack gap="$3">
+              <Controller
+                control={control}
+                name="displayName"
+                render={({ field }) => (
+                  <YStack gap="$1">
+                    <Input
+                      placeholder="Your name"
+                      autoCapitalize="words"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      onBlur={field.onBlur}
+                      borderColor={errors.displayName ? '$red9' : '$borderColor'}
+                    />
+                    {errors.displayName && (
+                      <Text color="$red9" fontSize="$2">
+                        {errors.displayName.message}
+                      </Text>
+                    )}
+                  </YStack>
+                )}
+              />
 
-        <XStack justifyContent="center" gap="$2">
-          <Link href="/(auth)/terms">
-            <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
-              Terms of Use
-            </Text>
-          </Link>
-          <Paragraph color="$colorMuted" fontSize="$2">
-            ·
-          </Paragraph>
-          <Link href="/(auth)/privacy">
-            <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
-              Privacy Policy
-            </Text>
-          </Link>
-        </XStack>
-      </YStack>
+              <Controller
+                control={control}
+                name="email"
+                render={({ field }) => (
+                  <YStack gap="$1">
+                    <Input
+                      placeholder="Email"
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      autoComplete="email"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      onBlur={field.onBlur}
+                      borderColor={errors.email ? '$red9' : '$borderColor'}
+                    />
+                    {errors.email && (
+                      <Text color="$red9" fontSize="$2">
+                        {errors.email.message}
+                      </Text>
+                    )}
+                  </YStack>
+                )}
+              />
+
+              <Controller
+                control={control}
+                name="password"
+                render={({ field }) => (
+                  <YStack gap="$1">
+                    <Input
+                      placeholder="Password (min 8 chars)"
+                      {...passwordInputProps(true)}
+                      autoComplete="new-password"
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      onBlur={field.onBlur}
+                      borderColor={errors.password ? '$red9' : '$borderColor'}
+                    />
+                    {errors.password && (
+                      <Text color="$red9" fontSize="$2">
+                        {errors.password.message}
+                      </Text>
+                    )}
+                  </YStack>
+                )}
+              />
+
+              <Controller
+                control={control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <YStack gap="$1">
+                    <Input
+                      placeholder="Confirm password"
+                      {...passwordInputProps(true)}
+                      value={field.value}
+                      onChangeText={field.onChange}
+                      onBlur={field.onBlur}
+                      returnKeyType="go"
+                      onSubmitEditing={() => void handleSubmit(onSubmit)()}
+                      borderColor={errors.confirmPassword ? '$red9' : '$borderColor'}
+                    />
+                    {errors.confirmPassword && (
+                      <Text color="$red9" fontSize="$2">
+                        {errors.confirmPassword.message}
+                      </Text>
+                    )}
+                  </YStack>
+                )}
+              />
+
+              <Controller
+                control={control}
+                name="ageConfirm"
+                render={({ field }) => (
+                  <YStack gap="$1">
+                    <XStack
+                      gap="$2.5"
+                      alignItems="center"
+                      onPress={() => field.onChange(!field.value)}
+                      cursor="pointer"
+                    >
+                      <View
+                        width={22}
+                        height={22}
+                        borderRadius={6}
+                        borderWidth={2}
+                        borderColor={
+                          field.value ? '$primary' : errors.ageConfirm ? '$red9' : '$borderColor'
+                        }
+                        backgroundColor={field.value ? '$primary' : 'transparent'}
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        {field.value ? (
+                          <Text color="white" fontSize={13} fontWeight="900">
+                            ✓
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Text color="$colorMuted" fontSize="$3" flex={1}>
+                        I confirm I am 13 years of age or older
+                      </Text>
+                    </XStack>
+                    {errors.ageConfirm && (
+                      <Text color="$red9" fontSize="$2">
+                        {errors.ageConfirm.message}
+                      </Text>
+                    )}
+                  </YStack>
+                )}
+              />
+
+              <Controller
+                control={control}
+                name="termsAccept"
+                render={({ field }) => (
+                  <YStack gap="$1">
+                    <XStack gap="$2.5" alignItems="center">
+                      <View
+                        onPress={() => field.onChange(!field.value)}
+                        cursor="pointer"
+                        width={22}
+                        height={22}
+                        borderRadius={6}
+                        borderWidth={2}
+                        borderColor={
+                          field.value ? '$primary' : errors.termsAccept ? '$red9' : '$borderColor'
+                        }
+                        backgroundColor={field.value ? '$primary' : 'transparent'}
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        {field.value ? (
+                          <Text color="white" fontSize={13} fontWeight="900">
+                            ✓
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Text color="$colorMuted" fontSize="$3" flex={1}>
+                        I agree to the{' '}
+                        <Text
+                          color="$primary"
+                          textDecorationLine="underline"
+                          onPress={() => router.push('/(auth)/terms')}
+                        >
+                          Terms of Use
+                        </Text>{' '}
+                        and{' '}
+                        <Text
+                          color="$primary"
+                          textDecorationLine="underline"
+                          onPress={() => router.push('/(auth)/privacy')}
+                        >
+                          Privacy Policy
+                        </Text>
+                        . I understand that objectionable content and abusive behaviour are not
+                        tolerated and can get my account removed.
+                      </Text>
+                    </XStack>
+                    {errors.termsAccept && (
+                      <Text color="$red9" fontSize="$2">
+                        {errors.termsAccept.message}
+                      </Text>
+                    )}
+                  </YStack>
+                )}
+              />
+            </YStack>
+
+            <Button
+              backgroundColor="$primary"
+              onPress={handleSubmit(onSubmit)}
+              disabled={loading}
+              opacity={loading ? 0.7 : 1}
+            >
+              {loading ? 'Creating account…' : 'Create account'}
+            </Button>
+
+            <XStack justifyContent="center" gap="$2">
+              <Paragraph color="$colorMuted">Already have an account?</Paragraph>
+              <Link href="/(auth)/login">
+                <Text color="$primary">Sign in</Text>
+              </Link>
+            </XStack>
+
+            <XStack justifyContent="center" gap="$2">
+              <Link href="/(auth)/terms">
+                <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
+                  Terms of Use
+                </Text>
+              </Link>
+              <Paragraph color="$colorMuted" fontSize="$2">
+                ·
+              </Paragraph>
+              <Link href="/(auth)/privacy">
+                <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
+                  Privacy Policy
+                </Text>
+              </Link>
+            </XStack>
+          </YStack>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }
