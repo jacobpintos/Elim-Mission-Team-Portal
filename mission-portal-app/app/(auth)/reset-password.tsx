@@ -8,6 +8,7 @@ import { YStack, XStack, H1, Paragraph, Button, Input, Text } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { useLightModeScreen } from '@/theme/useLightModeScreen'
 
 const schema = z.object({
   email: z.string().email('Invalid email address'),
@@ -16,6 +17,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function ResetPasswordScreen() {
+  useLightModeScreen()
   const resetPassword = useAuthStore((s) => s.resetPassword)
   const { toast } = useUIStore()
   const [loading, setLoading] = useState(false)

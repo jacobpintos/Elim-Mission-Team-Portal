@@ -44,12 +44,19 @@ export function AppLogo({ size = 'md', showSlogan = true }: AppLogoProps) {
           />
         )
       ) : (
+        // The fallback is the app icon, which has no alpha channel — it is an
+        // opaque white tile. The CSS filter below hides that on web in dark
+        // mode, but filters do not exist in React Native, so on iOS it renders
+        // as a white square. Rounding it makes it read as an app badge rather
+        // than a rendering fault. Configuring a transparent logo in
+        // Admin → Theme replaces this branch entirely.
         <Image
           source={localIcon}
           style={{
             width,
             height: width,
             resizeMode: 'contain',
+            borderRadius: Math.round(width * 0.22),
             ...(Platform.OS === 'web' && isDark ? {
               filter: 'invert(1) hue-rotate(180deg)',
               mixBlendMode: 'screen' as const,

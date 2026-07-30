@@ -4,8 +4,10 @@ import { YStack, H1, Paragraph, Button } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { useLightModeScreen } from '@/theme/useLightModeScreen'
 
 export default function VerifyEmailScreen() {
+  useLightModeScreen()
   const router = useRouter()
   const { fbUser, resendVerification, signOutNow } = useAuthStore()
   const { toast } = useUIStore()

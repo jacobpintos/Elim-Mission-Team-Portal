@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { AppLogo } from '@/components/ui/AppLogo'
+import { useLightModeScreen } from '@/theme/useLightModeScreen'
 import { passwordInputProps } from '@/lib/passwordInput'
 
 const schema = z.object({
@@ -19,6 +20,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function LoginScreen() {
+  useLightModeScreen()
   const router = useRouter()
   const signIn = useAuthStore((s) => s.signIn)
   const { toast } = useUIStore()
