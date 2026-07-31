@@ -756,13 +756,13 @@ export function PlanningBoardCanvas({
     setDrawPoints([])
   }
 
-  function finalizeShape(sx: number, sy: number, ex: number, ey: number) {
+  async function finalizeShape(sx: number, sy: number, ex: number, ey: number) {
     if (!boardId) return
     const x = Math.min(sx, ex)
     const y = Math.min(sy, ey)
     const width = Math.max(Math.abs(ex - sx), 30)
     const height = Math.max(Math.abs(ey - sy), 30)
-    addItem(boardId, {
+    const id = await addItem(boardId, {
       type: 'shape',
       x,
       y,
@@ -772,6 +772,13 @@ export function PlanningBoardCanvas({
       shapeType: shapeModeRef.current,
       color: activeColorRef.current,
     })
+    // Hand a drawn shape over the same way a tapped one is handed over, so it
+    // can be dragged somewhere else straight away instead of leaving the shape
+    // tool armed and the new shape unreachable.
+    if (id) {
+      updateTool('select')
+      setSelectedId(id)
+    }
   }
 
   function openCreateModal(type: PlanningItemType, vx: number, vy: number) {
@@ -901,8 +908,9 @@ export function PlanningBoardCanvas({
     setCreateModal({ visible: true, type: item.type, vx: item.x, vy: item.y, editItemId: item.id })
   }
 
-  function handleCreateSubmit() {
+  async function handleCreateSubmit() {
     if (!boardId) return
+    let newId: string | null = null
     const { type, vx, vy, editItemId, w, h } = createModal
     const sizes = DEFAULT_SIZES[type] ?? { width: 200, height: 100 }
     const textboxFormat = {
@@ -923,7 +931,7 @@ export function PlanningBoardCanvas({
       })
     } else if (type === 'textbox' && w != null && h != null) {
       // Drawn text box — use the drawn geometry verbatim.
-      addItem(boardId, {
+      newId = await addItem(boardId, {
         type,
         x: vx,
         y: vy,
@@ -933,7 +941,7 @@ export function PlanningBoardCanvas({
         ...textboxFormat,
       })
     } else {
-      addItem(boardId, {
+      newId = await addItem(boardId, {
         type,
         x: vx - sizes.width / 2,
         y: vy - sizes.height / 2,
@@ -946,7 +954,13 @@ export function PlanningBoardCanvas({
       })
     }
     setCreateModal(defaultCreateModal)
-    setSelectedId(null)
+    // Leave whatever was just created selected and the select tool active, so
+    // it can be moved or resized without a detour through the toolbar. An edit
+    // keeps its existing selection.
+    if (newId) {
+      updateTool('select')
+      setSelectedId(newId)
+    }
   }
 
   // Gestures
