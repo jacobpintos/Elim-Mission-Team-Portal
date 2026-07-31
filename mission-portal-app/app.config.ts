@@ -147,7 +147,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   scheme: 'mission',
   extra: {
     eas: {
-      projectId: process.env.EAS_PROJECT_ID,
+      // eas.json exports EAS_PROJECT_ID during `eas build`, but nothing sets
+      // it for `eas submit` — fall back to the literal ID so submit can
+      // resolve which EAS project this is without that env var.
+      projectId: process.env.EAS_PROJECT_ID ?? '79c8ec55-2787-4ed3-8813-2ed6758f9065',
     },
   },
 })
