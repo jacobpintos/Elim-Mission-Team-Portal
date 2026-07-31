@@ -17,3 +17,7 @@ android/.gradle/
 # Claude Code on the web
 .superpowers/
 .claude/
+
+# Firebase emulator logs, written by `npm run test:rules`
+*-debug.log
+.firebase/

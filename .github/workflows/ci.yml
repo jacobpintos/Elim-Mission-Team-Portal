@@ -37,6 +37,17 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # The Firestore and Storage emulators the rules tests run against are
+      # Java processes.
+      - name: Set up Java for the Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Security rules tests
+        run: npm run test:rules
+
       - name: Export web build
         env:
           EXPO_PUBLIC_FIREBASE_API_KEY: placeholder
