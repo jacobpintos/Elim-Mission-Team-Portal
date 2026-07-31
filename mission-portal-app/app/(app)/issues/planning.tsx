@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { Stack } from 'expo-router'
-import { ScrollView, Pressable, Modal, TextInput, StyleSheet } from 'react-native'
+import {
+  ScrollView,
+  Pressable,
+  Modal,
+  TextInput,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useAuthStore } from '@/stores/authStore'
@@ -15,8 +23,16 @@ export default function Planning() {
   const { profile } = useAuthStore()
   const uid = profile?.uid ?? ''
 
-  const { boards, loading, subscribe, unsubscribe, createBoard, renameBoard, linkToEvent, deleteBoard } =
-    usePlanningStore()
+  const {
+    boards,
+    loading,
+    subscribe,
+    unsubscribe,
+    createBoard,
+    renameBoard,
+    linkToEvent,
+    deleteBoard,
+  } = usePlanningStore()
   const { templates, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
 
   // Subscribe on mount
@@ -185,9 +201,7 @@ export default function Planning() {
                 </Pressable>
 
                 <Pressable
-                  onPress={() =>
-                    setLinkModal({ boardId: board.id, currentEventId: board.eventId })
-                  }
+                  onPress={() => setLinkModal({ boardId: board.id, currentEventId: board.eventId })}
                   style={[styles.adminBtn, { borderColor: colors.border }]}
                 >
                   <Text color={colors.text} fontSize={12}>
@@ -216,32 +230,60 @@ export default function Planning() {
         animationType="slide"
         onRequestClose={() => setNewBoardModal(false)}
       >
-        <Pressable style={styles.backdrop} onPress={() => setNewBoardModal(false)}>
-          <Pressable
-            style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text color={colors.text} fontWeight="700" fontSize={16} marginBottom={12}>
-              New Planning Board
-            </Text>
-            <TextInput
-              placeholder="Board name"
-              placeholderTextColor={colors.textMuted}
-              value={newBoardName}
-              onChangeText={setNewBoardName}
-              style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background }]}
-              autoFocus
-            />
-            <XStack gap={10} marginTop={14} justifyContent="flex-end">
-              <Pressable onPress={() => setNewBoardModal(false)} style={[styles.btnOutline, { borderColor: colors.border }]}>
-                <Text color={colors.textMuted} fontSize={13}>Cancel</Text>
-              </Pressable>
-              <Pressable onPress={handleCreateBoard} style={[styles.btnPrimary, { backgroundColor: colors.primary }]}>
-                <Text color={colors.onPrimary} fontSize={13} fontWeight="600">Create</Text>
-              </Pressable>
-            </XStack>
+        {/* These sheets sit against the bottom edge, which is where the
+          keyboard appears — without this it covers the field and the
+          confirm button. */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={styles.backdrop} onPress={() => setNewBoardModal(false)}>
+            <Pressable
+              style={[
+                styles.sheet,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text color={colors.text} fontWeight="700" fontSize={16} marginBottom={12}>
+                New Planning Board
+              </Text>
+              <TextInput
+                placeholder="Board name"
+                placeholderTextColor={colors.textMuted}
+                value={newBoardName}
+                onChangeText={setNewBoardName}
+                style={[
+                  styles.input,
+                  {
+                    borderColor: colors.border,
+                    color: colors.text,
+                    backgroundColor: colors.background,
+                  },
+                ]}
+                autoFocus
+              />
+              <XStack gap={10} marginTop={14} justifyContent="flex-end">
+                <Pressable
+                  onPress={() => setNewBoardModal(false)}
+                  style={[styles.btnOutline, { borderColor: colors.border }]}
+                >
+                  <Text color={colors.textMuted} fontSize={13}>
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleCreateBoard}
+                  style={[styles.btnPrimary, { backgroundColor: colors.primary }]}
+                >
+                  <Text color={colors.onPrimary} fontSize={13} fontWeight="600">
+                    Create
+                  </Text>
+                </Pressable>
+              </XStack>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Rename Modal */}
@@ -251,32 +293,60 @@ export default function Planning() {
         animationType="slide"
         onRequestClose={() => setRenameModal(null)}
       >
-        <Pressable style={styles.backdrop} onPress={() => setRenameModal(null)}>
-          <Pressable
-            style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text color={colors.text} fontWeight="700" fontSize={16} marginBottom={12}>
-              Rename Board
-            </Text>
-            <TextInput
-              placeholder="New name"
-              placeholderTextColor={colors.textMuted}
-              value={renameName}
-              onChangeText={setRenameName}
-              style={[styles.input, { borderColor: colors.border, color: colors.text, backgroundColor: colors.background }]}
-              autoFocus
-            />
-            <XStack gap={10} marginTop={14} justifyContent="flex-end">
-              <Pressable onPress={() => setRenameModal(null)} style={[styles.btnOutline, { borderColor: colors.border }]}>
-                <Text color={colors.textMuted} fontSize={13}>Cancel</Text>
-              </Pressable>
-              <Pressable onPress={handleRename} style={[styles.btnPrimary, { backgroundColor: colors.primary }]}>
-                <Text color={colors.onPrimary} fontSize={13} fontWeight="600">Save</Text>
-              </Pressable>
-            </XStack>
+        {/* These sheets sit against the bottom edge, which is where the
+          keyboard appears — without this it covers the field and the
+          confirm button. */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={styles.backdrop} onPress={() => setRenameModal(null)}>
+            <Pressable
+              style={[
+                styles.sheet,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text color={colors.text} fontWeight="700" fontSize={16} marginBottom={12}>
+                Rename Board
+              </Text>
+              <TextInput
+                placeholder="New name"
+                placeholderTextColor={colors.textMuted}
+                value={renameName}
+                onChangeText={setRenameName}
+                style={[
+                  styles.input,
+                  {
+                    borderColor: colors.border,
+                    color: colors.text,
+                    backgroundColor: colors.background,
+                  },
+                ]}
+                autoFocus
+              />
+              <XStack gap={10} marginTop={14} justifyContent="flex-end">
+                <Pressable
+                  onPress={() => setRenameModal(null)}
+                  style={[styles.btnOutline, { borderColor: colors.border }]}
+                >
+                  <Text color={colors.textMuted} fontSize={13}>
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleRename}
+                  style={[styles.btnPrimary, { backgroundColor: colors.primary }]}
+                >
+                  <Text color={colors.onPrimary} fontSize={13} fontWeight="600">
+                    Save
+                  </Text>
+                </Pressable>
+              </XStack>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Link Event Modal */}
@@ -286,56 +356,76 @@ export default function Planning() {
         animationType="slide"
         onRequestClose={() => setLinkModal(null)}
       >
-        <Pressable style={styles.backdrop} onPress={() => setLinkModal(null)}>
-          <Pressable
-            style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.border, maxHeight: '70%' }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text color={colors.text} fontWeight="700" fontSize={16} marginBottom={12}>
-              Link to Event
-            </Text>
-            <ScrollView style={{ maxHeight: 300 }}>
-              {linkModal?.currentEventId != null && (
-                <Pressable
-                  onPress={() => handleLinkEvent(null)}
-                  style={[styles.eventRow, { borderColor: '#e53935' }]}
-                >
-                  <Text color="#e53935" fontSize={13}>
-                    ✕ Remove link
-                  </Text>
-                </Pressable>
-              )}
-              {templates.map((tmpl) => {
-                const isLinked = linkModal?.currentEventId != null && sameId(tmpl.id, linkModal.currentEventId)
-                return (
+        {/* These sheets sit against the bottom edge, which is where the
+          keyboard appears — without this it covers the field and the
+          confirm button. */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={styles.backdrop} onPress={() => setLinkModal(null)}>
+            <Pressable
+              style={[
+                styles.sheet,
+                { backgroundColor: colors.surface, borderColor: colors.border, maxHeight: '70%' },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text color={colors.text} fontWeight="700" fontSize={16} marginBottom={12}>
+                Link to Event
+              </Text>
+              <ScrollView style={{ maxHeight: 300 }}>
+                {linkModal?.currentEventId != null && (
                   <Pressable
-                    key={String(tmpl.id)}
-                    onPress={() => handleLinkEvent(tmpl.id)}
-                    style={[
-                      styles.eventRow,
-                      {
-                        borderColor: isLinked ? colors.primary : colors.border,
-                        backgroundColor: isLinked ? `${colors.primary}18` : 'transparent',
-                      },
-                    ]}
+                    onPress={() => handleLinkEvent(null)}
+                    style={[styles.eventRow, { borderColor: '#e53935' }]}
                   >
-                    <Text color={colors.text} fontSize={13} numberOfLines={1}>
-                      {tmpl.title}
+                    <Text color="#e53935" fontSize={13}>
+                      ✕ Remove link
                     </Text>
-                    {isLinked && (
-                      <Text color={colors.primary} fontSize={11}>
-                        ✓ Current
-                      </Text>
-                    )}
                   </Pressable>
-                )
-              })}
-            </ScrollView>
-            <Pressable onPress={() => setLinkModal(null)} style={[styles.btnOutline, { borderColor: colors.border, marginTop: 12, alignSelf: 'flex-end' }]}>
-              <Text color={colors.textMuted} fontSize={13}>Close</Text>
+                )}
+                {templates.map((tmpl) => {
+                  const isLinked =
+                    linkModal?.currentEventId != null && sameId(tmpl.id, linkModal.currentEventId)
+                  return (
+                    <Pressable
+                      key={String(tmpl.id)}
+                      onPress={() => handleLinkEvent(tmpl.id)}
+                      style={[
+                        styles.eventRow,
+                        {
+                          borderColor: isLinked ? colors.primary : colors.border,
+                          backgroundColor: isLinked ? `${colors.primary}18` : 'transparent',
+                        },
+                      ]}
+                    >
+                      <Text color={colors.text} fontSize={13} numberOfLines={1}>
+                        {tmpl.title}
+                      </Text>
+                      {isLinked && (
+                        <Text color={colors.primary} fontSize={11}>
+                          ✓ Current
+                        </Text>
+                      )}
+                    </Pressable>
+                  )
+                })}
+              </ScrollView>
+              <Pressable
+                onPress={() => setLinkModal(null)}
+                style={[
+                  styles.btnOutline,
+                  { borderColor: colors.border, marginTop: 12, alignSelf: 'flex-end' },
+                ]}
+              >
+                <Text color={colors.textMuted} fontSize={13}>
+                  Close
+                </Text>
+              </Pressable>
             </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Delete Confirm Modal */}
@@ -345,30 +435,48 @@ export default function Planning() {
         animationType="fade"
         onRequestClose={() => setDeleteConfirm(null)}
       >
-        <Pressable style={styles.backdrop} onPress={() => setDeleteConfirm(null)}>
-          <Pressable
-            style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text color={colors.text} fontWeight="700" fontSize={16} marginBottom={8}>
-              Delete Board?
-            </Text>
-            <Text color={colors.textMuted} fontSize={13} marginBottom={16}>
-              This will permanently delete the board and all its items.
-            </Text>
-            <XStack gap={10} justifyContent="flex-end">
-              <Pressable onPress={() => setDeleteConfirm(null)} style={[styles.btnOutline, { borderColor: colors.border }]}>
-                <Text color={colors.textMuted} fontSize={13}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => deleteConfirm !== null && handleDeleteBoard(deleteConfirm)}
-                style={[styles.btnPrimary, { backgroundColor: '#e53935' }]}
-              >
-                <Text color="#fff" fontSize={13} fontWeight="600">Delete</Text>
-              </Pressable>
-            </XStack>
+        {/* These sheets sit against the bottom edge, which is where the
+          keyboard appears — without this it covers the field and the
+          confirm button. */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={styles.backdrop} onPress={() => setDeleteConfirm(null)}>
+            <Pressable
+              style={[
+                styles.sheet,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text color={colors.text} fontWeight="700" fontSize={16} marginBottom={8}>
+                Delete Board?
+              </Text>
+              <Text color={colors.textMuted} fontSize={13} marginBottom={16}>
+                This will permanently delete the board and all its items.
+              </Text>
+              <XStack gap={10} justifyContent="flex-end">
+                <Pressable
+                  onPress={() => setDeleteConfirm(null)}
+                  style={[styles.btnOutline, { borderColor: colors.border }]}
+                >
+                  <Text color={colors.textMuted} fontSize={13}>
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => deleteConfirm !== null && handleDeleteBoard(deleteConfirm)}
+                  style={[styles.btnPrimary, { backgroundColor: '#e53935' }]}
+                >
+                  <Text color="#fff" fontSize={13} fontWeight="600">
+                    Delete
+                  </Text>
+                </Pressable>
+              </XStack>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Planning Board Canvas */}

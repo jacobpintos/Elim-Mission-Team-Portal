@@ -271,6 +271,29 @@ function ItemCard({
       runOnJS(onUpdateItem)(boardId, item.id, { width: sizeW.value, height: sizeH.value })
     })
 
+  // Pinch the object to size it, instead of hunting for the corner handle.
+  // The board's pinch-to-zoom lives on an outer detector, so a pinch that
+  // starts on an object is claimed here and the board stays put.
+  const pinchResize = Gesture.Pinch()
+    .onStart(() => {
+      startW.value = sizeW.value
+      startH.value = sizeH.value
+      // eslint-disable-next-line react-hooks/immutability
+      isResizing.value = true
+    })
+    .onUpdate((e) => {
+      // eslint-disable-next-line react-hooks/immutability
+      sizeW.value = Math.max(40, startW.value * e.scale)
+      // eslint-disable-next-line react-hooks/immutability
+      sizeH.value = Math.max(30, startH.value * e.scale)
+    })
+    .onEnd(() => {
+      // eslint-disable-next-line react-hooks/immutability
+      isResizing.value = false
+      if (!boardId) return
+      runOnJS(onUpdateItem)(boardId, item.id, { width: sizeW.value, height: sizeH.value })
+    })
+
   const eraserTap = Gesture.Tap().onEnd(() => {
     if (!boardId) return
     runOnJS(onDeleteItem)(boardId, item.id)
@@ -302,7 +325,9 @@ function ItemCard({
     // While typing, the body belongs to the text input — dragging then only
     // happens from the edge band, so a touch meant for the caret does not
     // shove the object across the board.
-    itemGesture = isEditing ? Gesture.Tap() : Gesture.Simultaneous(selectTap, dragGesture)
+    itemGesture = isEditing
+      ? Gesture.Simultaneous(Gesture.Tap(), pinchResize)
+      : Gesture.Simultaneous(selectTap, dragGesture, pinchResize)
   } else {
     itemGesture = Gesture.Tap()
   }
@@ -629,7 +654,14 @@ export function PlanningBoardCanvas({
 
   // Draw
   const [drawPoints, setDrawPoints] = useState<DrawPoint[]>([])
-  const isDrawing = useRef(false)
+  // The stroke is mirrored on a ref because the gesture callbacks are
+  // worklets: they capture drawPoints by value when created, so passing that
+  // state to finalizeDraw handed it the empty array it started with and every
+  // stroke was discarded for having fewer than two points. The flag is a
+  // shared value for the same reason — a React ref written on the UI thread
+  // does not read back.
+  const drawPointsRef = useRef<DrawPoint[]>([])
+  const isDrawing = useSharedValue(false)
 
   // Shape drag preview
   const shapeDragStartX = useSharedValue(0)
@@ -689,14 +721,21 @@ export function PlanningBoardCanvas({
     }
   })
 
-  function addPoint(x: number, y: number) {
-    setDrawPoints((prev) => [...prev, { x, y }])
+  function startStroke(x: number, y: number) {
+    drawPointsRef.current = [{ x, y }]
+    setDrawPoints(drawPointsRef.current)
   }
 
-  function finalizeDraw(pts: DrawPoint[]) {
+  function addPoint(x: number, y: number) {
+    drawPointsRef.current = [...drawPointsRef.current, { x, y }]
+    setDrawPoints(drawPointsRef.current)
+  }
+
+  function finalizeDraw() {
+    const pts = drawPointsRef.current
     if (!boardId || pts.length < 2) {
+      drawPointsRef.current = []
       setDrawPoints([])
-      isDrawing.current = false
       return
     }
     const xs = pts.map((p) => p.x),
@@ -713,8 +752,8 @@ export function PlanningBoardCanvas({
       points: pts,
       color: activeColorRef.current,
     })
+    drawPointsRef.current = []
     setDrawPoints([])
-    isDrawing.current = false
   }
 
   function finalizeShape(sx: number, sy: number, ex: number, ey: number) {
@@ -799,8 +838,12 @@ export function PlanningBoardCanvas({
       width: size.width,
       height: size.height,
       content: '',
-      ...(type === 'shape' ? { shapeType: shapeModeRef.current } : {}),
-      ...(type === 'note' || type === 'shape' ? { color: activeColorRef.current } : {}),
+      ...(type === 'shape'
+        ? { shapeType: shapeModeRef.current, color: activeColorRef.current }
+        : {}),
+      // A note's colour is its paper, not its ink. Using the draw palette here
+      // made every tapped note a near-black card with near-black text on it.
+      ...(type === 'note' ? { color: NOTE_COLORS[0] } : {}),
       ...(type === 'textbox'
         ? {
             color: activeColorRef.current,
@@ -813,6 +856,10 @@ export function PlanningBoardCanvas({
     })
 
     if (id) {
+      // Drop back to select so the thing just placed is immediately
+      // manipulable — otherwise the tool is still armed, the next tap makes
+      // another object, and the new one cannot be grabbed at all.
+      updateTool('select')
       setSelectedId(id)
       // A link needs its URL, which is not inline-editable, so send it to the
       // modal that can collect one.
@@ -904,6 +951,11 @@ export function PlanningBoardCanvas({
 
   // Gestures
   const pinch = Gesture.Pinch()
+    // With an object selected, a pinch is meant to size that object, and its
+    // own Pinch handler sits on an inner detector. Standing this one down
+    // stops the board zooming underneath at the same time. Tapping empty
+    // space clears the selection and gives zoom back.
+    .enabled(!(tool === 'select' && selectedId !== null))
     .onUpdate((e) => {
       // eslint-disable-next-line react-hooks/immutability
       sc.value = Math.min(4, Math.max(0.2, savedSc.value * e.scale))
@@ -936,26 +988,27 @@ export function PlanningBoardCanvas({
       runOnJS(handleBgTap)(e.absoluteX, e.absoluteY)
     })
 
+  /* eslint-disable react-hooks/refs, react-hooks/immutability */
   const drawPan = Gesture.Pan()
     .enabled(tool === 'draw')
-    // eslint-disable-next-line react-hooks/refs
     .onStart((e) => {
-      isDrawing.current = true
+      isDrawing.value = true
       const vx = (e.absoluteX - tx.value) / sc.value
       const vy = (e.absoluteY - ty.value) / sc.value
-      runOnJS(setDrawPoints)([{ x: vx, y: vy }])
+      runOnJS(startStroke)(vx, vy)
     })
-    // eslint-disable-next-line react-hooks/refs
     .onUpdate((e) => {
-      if (!isDrawing.current) return
+      if (!isDrawing.value) return
       const vx = (e.absoluteX - tx.value) / sc.value
       const vy = (e.absoluteY - ty.value) / sc.value
       runOnJS(addPoint)(vx, vy)
     })
-    // eslint-disable-next-line react-hooks/refs
     .onEnd(() => {
-      if (isDrawing.current) runOnJS(finalizeDraw)(drawPoints)
+      if (!isDrawing.value) return
+      isDrawing.value = false
+      runOnJS(finalizeDraw)()
     })
+  /* eslint-enable react-hooks/refs, react-hooks/immutability */
 
   /* eslint-disable react-hooks/refs, react-hooks/immutability */
   const shapeDragPan = Gesture.Pan()
