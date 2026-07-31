@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Image,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -119,161 +120,169 @@ export function ReportFormModal({ visible, onClose, onSubmit }: ReportFormModalP
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={styles.overlay}>
-        <YStack
-          backgroundColor={colors.surface}
-          borderRadius="$4"
-          padding="$4"
-          gap="$3"
-          width="92%"
-          maxWidth={560}
-          maxHeight="92%"
-        >
-          <XStack justifyContent="space-between" alignItems="center">
-            <Text color={colors.text} fontSize="$5" fontWeight="700">
-              Report Security Concern
-            </Text>
-            <Pressable onPress={handleClose}>
-              <Text color={colors.textMuted} fontSize="$4">
-                ✕
+      {/* The card is vertically centered in the overlay, so on iOS the
+          keyboard covered the lower fields and the Submit button with no way
+          to scroll to them. Lifting the overlay keeps them reachable. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.overlay}>
+          <YStack
+            backgroundColor={colors.surface}
+            borderRadius="$4"
+            padding="$4"
+            gap="$3"
+            width="92%"
+            maxWidth={560}
+            maxHeight="92%"
+          >
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text color={colors.text} fontSize="$5" fontWeight="700">
+                Report Security Concern
               </Text>
-            </Pressable>
-          </XStack>
-
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <YStack gap="$3">
-              <YStack gap="$1">
-                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                  DESCRIPTION *
+              <Pressable onPress={handleClose}>
+                <Text color={colors.textMuted} fontSize="$4">
+                  ✕
                 </Text>
-                <TextInput
-                  style={[
-                    styles.textarea,
-                    {
-                      color: colors.text,
-                      borderColor: colors.border,
-                      backgroundColor: colors.background,
-                    },
-                  ]}
-                  value={description}
-                  onChangeText={setDescription}
-                  placeholder="Describe the security concern in detail…"
-                  placeholderTextColor={colors.textMuted}
-                  multiline
-                  numberOfLines={4}
-                />
-              </YStack>
-
-              <YStack gap="$1">
-                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                  LOCATION *
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: colors.text,
-                      borderColor: colors.border,
-                      backgroundColor: colors.background,
-                    },
-                  ]}
-                  value={location}
-                  onChangeText={setLocation}
-                  placeholder="Where did this occur?"
-                  placeholderTextColor={colors.textMuted}
-                />
-              </YStack>
-
-              <YStack gap="$1">
-                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                  WITNESSES (optional)
-                </Text>
-                <TextInput
-                  style={[
-                    styles.textarea,
-                    {
-                      color: colors.text,
-                      borderColor: colors.border,
-                      backgroundColor: colors.background,
-                    },
-                  ]}
-                  value={witnesses}
-                  onChangeText={setWitnesses}
-                  placeholder="Names of any witnesses…"
-                  placeholderTextColor={colors.textMuted}
-                  multiline
-                  numberOfLines={2}
-                />
-              </YStack>
-
-              <YStack gap="$1">
-                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                  PHOTO (optional)
-                </Text>
-                {photoPreview ? (
-                  <YStack gap="$2">
-                    <Image
-                      source={{ uri: photoPreview }}
-                      style={styles.preview}
-                      resizeMode="cover"
-                    />
-                    <Pressable
-                      onPress={() => {
-                        setPhoto(null)
-                        setPhotoPreview(null)
-                      }}
-                    >
-                      <Text color="#c0392b" fontSize="$2">
-                        ✕ Remove photo
-                      </Text>
-                    </Pressable>
-                  </YStack>
-                ) : (
-                  <Pressable onPress={pickPhoto}>
-                    <XStack
-                      backgroundColor={colors.background}
-                      borderRadius="$2"
-                      borderWidth={1}
-                      borderColor={colors.border}
-                      borderStyle="dashed"
-                      paddingVertical="$4"
-                      justifyContent="center"
-                      alignItems="center"
-                      gap="$2"
-                    >
-                      <Text color={colors.textMuted} fontSize="$3">
-                        📷 Attach a photo
-                      </Text>
-                    </XStack>
-                  </Pressable>
-                )}
-                {photoError ? (
-                  <Text color="#c0392b" fontSize="$2">
-                    {photoError}
-                  </Text>
-                ) : null}
-              </YStack>
-
-              <Pressable
-                onPress={handleSubmit}
-                disabled={submitting || !description.trim() || !location.trim()}
-              >
-                <XStack
-                  backgroundColor="#c0392b"
-                  borderRadius="$2"
-                  paddingVertical="$3"
-                  justifyContent="center"
-                  opacity={submitting || !description.trim() || !location.trim() ? 0.5 : 1}
-                >
-                  <Text color="white" fontWeight="700" fontSize="$3">
-                    {submitting ? 'Submitting…' : 'Submit Report'}
-                  </Text>
-                </XStack>
               </Pressable>
-            </YStack>
-          </ScrollView>
-        </YStack>
-      </View>
+            </XStack>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <YStack gap="$3">
+                <YStack gap="$1">
+                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                    DESCRIPTION *
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.textarea,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
+                    value={description}
+                    onChangeText={setDescription}
+                    placeholder="Describe the security concern in detail…"
+                    placeholderTextColor={colors.textMuted}
+                    multiline
+                    numberOfLines={4}
+                  />
+                </YStack>
+
+                <YStack gap="$1">
+                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                    LOCATION *
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
+                    value={location}
+                    onChangeText={setLocation}
+                    placeholder="Where did this occur?"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </YStack>
+
+                <YStack gap="$1">
+                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                    WITNESSES (optional)
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.textarea,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
+                    value={witnesses}
+                    onChangeText={setWitnesses}
+                    placeholder="Names of any witnesses…"
+                    placeholderTextColor={colors.textMuted}
+                    multiline
+                    numberOfLines={2}
+                  />
+                </YStack>
+
+                <YStack gap="$1">
+                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                    PHOTO (optional)
+                  </Text>
+                  {photoPreview ? (
+                    <YStack gap="$2">
+                      <Image
+                        source={{ uri: photoPreview }}
+                        style={styles.preview}
+                        resizeMode="cover"
+                      />
+                      <Pressable
+                        onPress={() => {
+                          setPhoto(null)
+                          setPhotoPreview(null)
+                        }}
+                      >
+                        <Text color="#c0392b" fontSize="$2">
+                          ✕ Remove photo
+                        </Text>
+                      </Pressable>
+                    </YStack>
+                  ) : (
+                    <Pressable onPress={pickPhoto}>
+                      <XStack
+                        backgroundColor={colors.background}
+                        borderRadius="$2"
+                        borderWidth={1}
+                        borderColor={colors.border}
+                        borderStyle="dashed"
+                        paddingVertical="$4"
+                        justifyContent="center"
+                        alignItems="center"
+                        gap="$2"
+                      >
+                        <Text color={colors.textMuted} fontSize="$3">
+                          📷 Attach a photo
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  )}
+                  {photoError ? (
+                    <Text color="#c0392b" fontSize="$2">
+                      {photoError}
+                    </Text>
+                  ) : null}
+                </YStack>
+
+                <Pressable
+                  onPress={handleSubmit}
+                  disabled={submitting || !description.trim() || !location.trim()}
+                >
+                  <XStack
+                    backgroundColor="#c0392b"
+                    borderRadius="$2"
+                    paddingVertical="$3"
+                    justifyContent="center"
+                    opacity={submitting || !description.trim() || !location.trim() ? 0.5 : 1}
+                  >
+                    <Text color="white" fontWeight="700" fontSize="$3">
+                      {submitting ? 'Submitting…' : 'Submit Report'}
+                    </Text>
+                  </XStack>
+                </Pressable>
+              </YStack>
+            </ScrollView>
+          </YStack>
+        </View>
+      </KeyboardAvoidingView>
 
       {Platform.OS === 'web' ? (
         <input

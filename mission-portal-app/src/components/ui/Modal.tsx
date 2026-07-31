@@ -1,4 +1,6 @@
 import { Dialog, Sheet, ScrollView, Text, type DialogProps, useWindowDimensions } from 'tamagui'
+import { ScrollView as RNScrollView } from 'react-native'
+import { useKeyboardHeight } from '@/lib/useKeyboardHeight'
 
 interface ModalProps extends Omit<DialogProps, 'children'> {
   title?: string
@@ -14,6 +16,7 @@ interface ModalProps extends Omit<DialogProps, 'children'> {
 export function Modal({ title, children, open, onOpenChange, scrollable, ...props }: ModalProps) {
   const { width } = useWindowDimensions()
   const isLarge = width >= 768
+  const keyboardHeight = useKeyboardHeight()
 
   if (isLarge) {
     return (
@@ -54,7 +57,25 @@ export function Modal({ title, children, open, onOpenChange, scrollable, ...prop
             {title}
           </Text>
         )}
-        <Sheet.ScrollView showsVerticalScrollIndicator={false}>{children}</Sheet.ScrollView>
+        {/* A plain ScrollView, not Sheet.ScrollView. Sheet.ScrollView exists to
+            bridge scrolling into the sheet's drag gesture, which disableDrag
+            above already rules out — and its fallback path (taken whenever
+            @tamagui/native/setup-gesture-handler is not imported, as here)
+            attaches responder handlers that call scrollTo({ y:
+            currentScrollOffset.current }). That ref is only ever assigned on
+            its react-native-gesture-handler path, so in this one it stays 0
+            and every downward scroll snapped the form back to the top. */}
+        <RNScrollView
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          // Sheet.ScrollView padded for the keyboard itself; a plain one does
+          // not, and the sheet frame is already positioned so shrinking it
+          // with KeyboardAvoidingView fights the sheet's own layout.
+          contentContainerStyle={{ paddingBottom: keyboardHeight }}
+        >
+          {children}
+        </RNScrollView>
       </Sheet.Frame>
     </Sheet>
   )
