@@ -34,6 +34,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Unit tests
+        run: npm test
+
       - name: Export web build
         env:
           EXPO_PUBLIC_FIREBASE_API_KEY: placeholder

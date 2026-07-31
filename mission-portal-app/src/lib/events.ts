@@ -158,3 +158,31 @@ function icsDate(dateStr?: string, timeStr?: string): string {
   if (ampm === 'AM' && h === 12) h = 0
   return `${d}T${String(h).padStart(2, '0')}${String(mn).padStart(2, '0')}00`
 }
+
+/**
+ * When a template's task is due, relative to the event it was created from.
+ *
+ * Extracted from EventFormModal so it can be tested: it was interleaved with
+ * the Firestore writes that create each task, which made its edge cases —
+ * recurring events having no single date, and post-event tasks counting
+ * forward rather than back — unreachable from a test.
+ *
+ * Returns null when there is no date to anchor to, which is the case for
+ * recurring events.
+ */
+export function taskDueDate(
+  eventDate: string | null,
+  task: { daysBefore?: number; daysAfterEvent?: number }
+): string | null {
+  if (!eventDate) return null
+
+  const daysAfter = task.daysAfterEvent ?? 0
+  const offset = daysAfter > 0 ? daysAfter : -(task.daysBefore ?? 0)
+  if (offset === 0) return null
+
+  // Parsed at midday so a date-only string cannot slip a day when the shift
+  // crosses a daylight-saving boundary.
+  const d = new Date(`${eventDate}T12:00:00`)
+  d.setDate(d.getDate() + offset)
+  return d.toISOString().split('T')[0]
+}

@@ -19,7 +19,15 @@ import { DressCodeEditor } from './DressCodeEditor'
 import { LodgingEditor } from './LodgingEditor'
 import { FlightEditor } from './FlightEditor'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
-import type { EventTemplate, CarpoolCarData, EventTeam, DressCodeEntry, LodgingEntry, FlightEntry } from '@/types/events'
+import { taskDueDate } from '@/lib/events'
+import type {
+  EventTemplate,
+  CarpoolCarData,
+  EventTeam,
+  DressCodeEntry,
+  LodgingEntry,
+  FlightEntry,
+} from '@/types/events'
 
 interface GroupDoc {
   id: string
@@ -74,13 +82,21 @@ function displayToIso(display: string): string {
   const match = display.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
   if (!match) return ''
   const [, m, d, y] = match
-  const mn = Number(m), dn = Number(d)
+  const mn = Number(m),
+    dn = Number(d)
   if (mn < 1 || mn > 12 || dn < 1 || dn > 31) return ''
   const fullYear = y.length <= 2 ? `20${y.padStart(2, '0')}` : y
   return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
 }
 
-export function EventFormModal({ event, open, onClose, onDelete, selectedDate, instanceKey }: EventFormModalProps) {
+export function EventFormModal({
+  event,
+  open,
+  onClose,
+  onDelete,
+  selectedDate,
+  instanceKey,
+}: EventFormModalProps) {
   const colors = useThemeColors()
   const { createEvent, updateEvent, deleteEvent, setOverride } = useEventsStore()
   const { users: allStoreUsers } = useUsersStore()
@@ -103,7 +119,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
     const unsubGroups = onSnapshot(collection(db, 'groups'), (snap) => {
       setAllGroups(
         snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as GroupDoc))
+          .map((d) => ({ id: d.id, ...d.data() }) as GroupDoc)
           .sort((a, b) => {
             if (a.name === 'All') return -1
             if (b.name === 'All') return 1
@@ -156,7 +172,10 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
   const [saving, setSaving] = useState(false)
   const [editScope, setEditScope] = useState<'instance' | 'all'>(instanceKey ? 'instance' : 'all')
 
-  const [carpoolPicker, setCarpoolPicker] = useState<{ carId: string; role: 'driver' | 'rider' } | null>(null)
+  const [carpoolPicker, setCarpoolPicker] = useState<{
+    carId: string
+    role: 'driver' | 'rider'
+  } | null>(null)
   const [carpoolSearch, setCarpoolSearch] = useState('')
 
   const field = (key: keyof FormData) => (val: string | boolean | number) =>
@@ -304,18 +323,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
             for (const taskItem of tpl.tasks ?? []) {
               if (!taskItem.title.trim()) continue
               const isPostEvent = (taskItem.daysAfterEvent ?? 0) > 0
-              let dueDate: string | null = null
-              if (eventDate) {
-                if (isPostEvent) {
-                  const d = new Date(eventDate)
-                  d.setDate(d.getDate() + (taskItem.daysAfterEvent ?? 1))
-                  dueDate = d.toISOString().split('T')[0]
-                } else if (taskItem.daysBefore > 0) {
-                  const d = new Date(eventDate)
-                  d.setDate(d.getDate() - taskItem.daysBefore)
-                  dueDate = d.toISOString().split('T')[0]
-                }
-              }
+              const dueDate = taskDueDate(eventDate, taskItem)
               await createTask({
                 title: taskItem.title,
                 assignees: taskItem.assignees ?? [],
@@ -412,7 +420,10 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
       }
       Alert.alert('Team Members Not Assigned', msg, [
         { text: 'Go Back', style: 'cancel' },
-        { text: 'Add & Save', onPress: () => doSave([...form.users, ...unassignedTeamMembers], saveAsDraft) },
+        {
+          text: 'Add & Save',
+          onPress: () => doSave([...form.users, ...unassignedTeamMembers], saveAsDraft),
+        },
       ])
       return
     }
@@ -540,10 +551,18 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
                   alignItems="center"
                   gap="$1"
                 >
-                  <Text color={editScope === 'instance' ? 'white' : colors.text} fontSize="$3" fontWeight="600">
+                  <Text
+                    color={editScope === 'instance' ? 'white' : colors.text}
+                    fontSize="$3"
+                    fontWeight="600"
+                  >
                     This date only
                   </Text>
-                  <Text color={editScope === 'instance' ? 'rgba(255,255,255,0.8)' : colors.textMuted} fontSize="$1" textAlign="center">
+                  <Text
+                    color={editScope === 'instance' ? 'rgba(255,255,255,0.8)' : colors.textMuted}
+                    fontSize="$1"
+                    textAlign="center"
+                  >
                     {instanceKey.split('_').pop()}
                   </Text>
                 </YStack>
@@ -559,10 +578,18 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
                   alignItems="center"
                   gap="$1"
                 >
-                  <Text color={editScope === 'all' ? 'white' : colors.text} fontSize="$3" fontWeight="600">
+                  <Text
+                    color={editScope === 'all' ? 'white' : colors.text}
+                    fontSize="$3"
+                    fontWeight="600"
+                  >
                     All occurrences
                   </Text>
-                  <Text color={editScope === 'all' ? 'rgba(255,255,255,0.8)' : colors.textMuted} fontSize="$1" textAlign="center">
+                  <Text
+                    color={editScope === 'all' ? 'rgba(255,255,255,0.8)' : colors.textMuted}
+                    fontSize="$1"
+                    textAlign="center"
+                  >
                     Edits the series
                   </Text>
                 </YStack>
@@ -848,7 +875,11 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
                   borderWidth={1}
                   borderColor={form.isRec ? colors.primary : colors.border}
                 >
-                  <Text color={form.isRec ? 'white' : colors.textMuted} fontSize="$2" fontWeight="600">
+                  <Text
+                    color={form.isRec ? 'white' : colors.textMuted}
+                    fontSize="$2"
+                    fontWeight="600"
+                  >
                     {form.isRec ? 'ON' : 'OFF'}
                   </Text>
                 </XStack>
@@ -1208,8 +1239,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
                       />
                       {allUsers
                         .filter((u) => {
-                          if (carpoolPicker?.role === 'driver' && u.uid === car.driver)
-                            return false
+                          if (carpoolPicker?.role === 'driver' && u.uid === car.driver) return false
                           if (carpoolPicker?.role === 'rider' && car.riders.includes(u.uid))
                             return false
                           if (
@@ -1238,11 +1268,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
                               setCarpoolSearch('')
                             }}
                           >
-                            <XStack
-                              padding="$2"
-                              borderRadius="$1"
-                              backgroundColor={colors.surface}
-                            >
+                            <XStack padding="$2" borderRadius="$1" backgroundColor={colors.surface}>
                               <Text color={colors.text} fontSize="$3">
                                 {u.displayName || u.email || String(u.uid)}
                               </Text>
@@ -1282,7 +1308,9 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
               const next = !form.lodging
               field('lodging')(next)
               if (next && lodgingEntries.length === 0) {
-                setLodgingEntries([{ id: Date.now().toString(), name: '', room: '', assignees: [] }])
+                setLodgingEntries([
+                  { id: Date.now().toString(), name: '', room: '', assignees: [] },
+                ])
               }
             }}
           >
@@ -1340,11 +1368,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
           </Pressable>
         </XStack>
         {form.flights ? (
-          <FlightEditor
-            entries={flightEntries}
-            onChange={setFlightEntries}
-            allUsers={allUsers}
-          />
+          <FlightEditor entries={flightEntries} onChange={setFlightEntries} allUsers={allUsers} />
         ) : null}
 
         {/* Task Template selector — only for series edits */}
@@ -1359,9 +1383,7 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
                   <XStack
                     borderWidth={1}
                     borderColor={form.taskTemplateId === t.id ? colors.primary : colors.border}
-                    backgroundColor={
-                      form.taskTemplateId === t.id ? colors.primary : 'transparent'
-                    }
+                    backgroundColor={form.taskTemplateId === t.id ? colors.primary : 'transparent'}
                     borderRadius="$2"
                     paddingHorizontal="$2"
                     paddingVertical="$1"
@@ -1421,7 +1443,11 @@ export function EventFormModal({ event, open, onClose, onDelete, selectedDate, i
                   opacity={saving ? 0.6 : 1}
                 >
                   <Text color="white" fontWeight="600">
-                    {saving ? 'Saving…' : instanceKey && editScope === 'instance' ? 'Save This Date' : 'Update'}
+                    {saving
+                      ? 'Saving…'
+                      : instanceKey && editScope === 'instance'
+                        ? 'Save This Date'
+                        : 'Update'}
                   </Text>
                 </XStack>
               </Pressable>
