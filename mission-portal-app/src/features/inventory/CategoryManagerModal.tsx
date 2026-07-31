@@ -1,5 +1,14 @@
 import { useState } from 'react'
-import { Modal, View, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native'
+import {
+  Modal,
+  View,
+  TextInput,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import type { InventoryCategory, InventoryItem } from '@/types/inventory'
@@ -14,7 +23,12 @@ interface CategoryManagerModalProps {
 }
 
 export function CategoryManagerModal({
-  visible, onClose, categories, items, onCreate, onDelete,
+  visible,
+  onClose,
+  categories,
+  items,
+  onCreate,
+  onDelete,
 }: CategoryManagerModalProps) {
   const colors = useThemeColors()
   const [newName, setNewName] = useState('')
@@ -42,7 +56,10 @@ export function CategoryManagerModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <YStack
           backgroundColor={colors.surface}
           borderRadius="$4"
@@ -53,16 +70,28 @@ export function CategoryManagerModal({
           maxHeight="80%"
         >
           <XStack justifyContent="space-between" alignItems="center">
-            <Text color={colors.text} fontWeight="700" fontSize="$4">Manage Categories</Text>
+            <Text color={colors.text} fontWeight="700" fontSize="$4">
+              Manage Categories
+            </Text>
             <Pressable onPress={onClose}>
-              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
             </Pressable>
           </XStack>
 
           {/* Add new */}
           <XStack gap="$2" alignItems="center">
             <TextInput
-              style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+              style={[
+                styles.input,
+                {
+                  flex: 1,
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
               value={newName}
               onChangeText={setNewName}
               placeholder="New category name…"
@@ -71,16 +100,26 @@ export function CategoryManagerModal({
             <Pressable
               onPress={handleCreate}
               disabled={saving || !newName.trim()}
-              style={[styles.addBtn, { backgroundColor: colors.primary, opacity: saving || !newName.trim() ? 0.5 : 1 }]}
+              style={[
+                styles.addBtn,
+                { backgroundColor: colors.primary, opacity: saving || !newName.trim() ? 0.5 : 1 },
+              ]}
             >
-              <Text color="white" fontWeight="700">Add</Text>
+              <Text color="white" fontWeight="700">
+                Add
+              </Text>
             </Pressable>
           </XStack>
 
           <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
             <YStack gap="$1">
               {categories.length === 0 ? (
-                <Text color={colors.textMuted} fontSize="$2" textAlign="center" paddingVertical="$4">
+                <Text
+                  color={colors.textMuted}
+                  fontSize="$2"
+                  textAlign="center"
+                  paddingVertical="$4"
+                >
                   No categories yet.
                 </Text>
               ) : (
@@ -98,27 +137,53 @@ export function CategoryManagerModal({
                       justifyContent="space-between"
                     >
                       <YStack>
-                        <Text color={colors.text} fontWeight="600">{cat.name}</Text>
-                        <Text color={colors.textMuted} fontSize="$1">{count} item{count !== 1 ? 's' : ''}</Text>
+                        <Text color={colors.text} fontWeight="600">
+                          {cat.name}
+                        </Text>
+                        <Text color={colors.textMuted} fontSize="$1">
+                          {count} item{count !== 1 ? 's' : ''}
+                        </Text>
                       </YStack>
                       <XStack gap="$1">
                         {isConfirming ? (
                           <>
                             <Pressable onPress={() => setConfirmDeleteId(null)}>
                               <View style={[styles.actionBtn, { borderColor: colors.border }]}>
-                                <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>Cancel</Text>
+                                <Text
+                                  style={{
+                                    color: colors.textMuted,
+                                    fontSize: 12,
+                                    fontWeight: '600',
+                                  }}
+                                >
+                                  Cancel
+                                </Text>
                               </View>
                             </Pressable>
                             <Pressable onPress={() => handleDelete(cat.id)}>
-                              <View style={[styles.actionBtn, { backgroundColor: '#c0392b', borderColor: '#c0392b' }]}>
-                                <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>Confirm</Text>
+                              <View
+                                style={[
+                                  styles.actionBtn,
+                                  { backgroundColor: '#c0392b', borderColor: '#c0392b' },
+                                ]}
+                              >
+                                <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>
+                                  Confirm
+                                </Text>
                               </View>
                             </Pressable>
                           </>
                         ) : (
                           <Pressable onPress={() => setConfirmDeleteId(cat.id)}>
-                            <View style={[styles.actionBtn, { backgroundColor: '#c0392b18', borderColor: '#c0392b44' }]}>
-                              <Text style={{ color: '#c0392b', fontSize: 12, fontWeight: '600' }}>Delete</Text>
+                            <View
+                              style={[
+                                styles.actionBtn,
+                                { backgroundColor: '#c0392b18', borderColor: '#c0392b44' },
+                              ]}
+                            >
+                              <Text style={{ color: '#c0392b', fontSize: 12, fontWeight: '600' }}>
+                                Delete
+                              </Text>
                             </View>
                           </Pressable>
                         )}
@@ -130,7 +195,7 @@ export function CategoryManagerModal({
             </YStack>
           </ScrollView>
         </YStack>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }

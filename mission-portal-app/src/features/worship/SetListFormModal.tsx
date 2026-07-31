@@ -1,5 +1,14 @@
 import { useState } from 'react'
-import { Modal, View, ScrollView, Pressable, TextInput, StyleSheet } from 'react-native'
+import {
+  Modal,
+  View,
+  ScrollView,
+  Pressable,
+  TextInput,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { EventPickerModal } from './EventPickerModal'
@@ -147,9 +156,7 @@ function SongNameComboBox({
 
   const suggestions =
     value.trim().length > 0
-      ? chordSheets
-          .filter((cs) => cs.title.toLowerCase().includes(value.toLowerCase()))
-          .slice(0, 6)
+      ? chordSheets.filter((cs) => cs.title.toLowerCase().includes(value.toLowerCase())).slice(0, 6)
       : []
 
   const showDropdown = focused && suggestions.length > 0
@@ -197,11 +204,7 @@ function SongNameComboBox({
                   setFocused(false)
                 }}
               >
-                <XStack
-                  paddingHorizontal="$3"
-                  paddingVertical="$2"
-                  backgroundColor="transparent"
-                >
+                <XStack paddingHorizontal="$3" paddingVertical="$2" backgroundColor="transparent">
                   <Text color={colors.text} fontSize={13} numberOfLines={1}>
                     {cs.title}
                     {cs.artist ? ` — ${cs.artist}` : ''}
@@ -268,7 +271,10 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
   return (
     <>
       <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-        <View style={styles.overlay}>
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <YStack
             backgroundColor={colors.surface}
             borderRadius="$4"
@@ -489,7 +495,7 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
               </XStack>
             </Pressable>
           </YStack>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <EventPickerModal

@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Modal, View, TextInput, Pressable, StyleSheet } from 'react-native'
+import {
+  Modal,
+  View,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import type { InventoryItem, InventoryCategory } from '@/types/inventory'
@@ -14,7 +22,13 @@ interface ItemFormModalProps {
 
 const EMPTY = { name: '', categoryId: null as string | number | null, qty: '', price: '' }
 
-export function ItemFormModal({ visible, onClose, onSave, editItem, categories }: ItemFormModalProps) {
+export function ItemFormModal({
+  visible,
+  onClose,
+  onSave,
+  editItem,
+  categories,
+}: ItemFormModalProps) {
   const colors = useThemeColors()
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
@@ -57,7 +71,10 @@ export function ItemFormModal({ visible, onClose, onSave, editItem, categories }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <YStack
           backgroundColor={colors.surface}
           borderRadius="$4"
@@ -71,14 +88,25 @@ export function ItemFormModal({ visible, onClose, onSave, editItem, categories }
               {editItem ? 'Edit Item' : 'New Item'}
             </Text>
             <Pressable onPress={onClose}>
-              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
             </Pressable>
           </XStack>
 
           <YStack gap="$1">
-            <Text color={colors.textMuted} fontSize="$2">Item Name *</Text>
+            <Text color={colors.textMuted} fontSize="$2">
+              Item Name *
+            </Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
               value={form.name}
               onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
               placeholder="e.g. T-Shirt (Large)"
@@ -87,10 +115,15 @@ export function ItemFormModal({ visible, onClose, onSave, editItem, categories }
           </YStack>
 
           <YStack gap="$1">
-            <Text color={colors.textMuted} fontSize="$2">Category</Text>
+            <Text color={colors.textMuted} fontSize="$2">
+              Category
+            </Text>
             <Pressable onPress={() => setShowCatPicker((v) => !v)}>
               <XStack
-                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.background }]}
+                style={[
+                  styles.input,
+                  { borderColor: colors.border, backgroundColor: colors.background },
+                ]}
                 justifyContent="space-between"
                 alignItems="center"
               >
@@ -108,13 +141,23 @@ export function ItemFormModal({ visible, onClose, onSave, editItem, categories }
                 borderColor={colors.border}
                 overflow="hidden"
               >
-                <Pressable onPress={() => { setForm((f) => ({ ...f, categoryId: null })); setShowCatPicker(false) }}>
+                <Pressable
+                  onPress={() => {
+                    setForm((f) => ({ ...f, categoryId: null }))
+                    setShowCatPicker(false)
+                  }}
+                >
                   <XStack
                     paddingHorizontal="$3"
                     paddingVertical="$2"
-                    backgroundColor={form.categoryId == null ? colors.primary + '22' : 'transparent'}
+                    backgroundColor={
+                      form.categoryId == null ? colors.primary + '22' : 'transparent'
+                    }
                   >
-                    <Text color={form.categoryId == null ? colors.primary : colors.text} fontSize="$2">
+                    <Text
+                      color={form.categoryId == null ? colors.primary : colors.text}
+                      fontSize="$2"
+                    >
                       None
                     </Text>
                   </XStack>
@@ -122,15 +165,24 @@ export function ItemFormModal({ visible, onClose, onSave, editItem, categories }
                 {categories.map((cat) => (
                   <Pressable
                     key={String(cat.id)}
-                    onPress={() => { setForm((f) => ({ ...f, categoryId: cat.id })); setShowCatPicker(false) }}
+                    onPress={() => {
+                      setForm((f) => ({ ...f, categoryId: cat.id }))
+                      setShowCatPicker(false)
+                    }}
                   >
                     <XStack
                       paddingHorizontal="$3"
                       paddingVertical="$2"
-                      backgroundColor={String(form.categoryId) === String(cat.id) ? colors.primary + '22' : 'transparent'}
+                      backgroundColor={
+                        String(form.categoryId) === String(cat.id)
+                          ? colors.primary + '22'
+                          : 'transparent'
+                      }
                     >
                       <Text
-                        color={String(form.categoryId) === String(cat.id) ? colors.primary : colors.text}
+                        color={
+                          String(form.categoryId) === String(cat.id) ? colors.primary : colors.text
+                        }
                         fontSize="$2"
                       >
                         {cat.name}
@@ -144,9 +196,18 @@ export function ItemFormModal({ visible, onClose, onSave, editItem, categories }
 
           <XStack gap="$2">
             <YStack flex={1} gap="$1">
-              <Text color={colors.textMuted} fontSize="$2">Qty</Text>
+              <Text color={colors.textMuted} fontSize="$2">
+                Qty
+              </Text>
               <TextInput
-                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
                 value={form.qty}
                 onChangeText={(v) => setForm((f) => ({ ...f, qty: v }))}
                 placeholder="0"
@@ -155,9 +216,18 @@ export function ItemFormModal({ visible, onClose, onSave, editItem, categories }
               />
             </YStack>
             <YStack flex={1} gap="$1">
-              <Text color={colors.textMuted} fontSize="$2">Price ($)</Text>
+              <Text color={colors.textMuted} fontSize="$2">
+                Price ($)
+              </Text>
               <TextInput
-                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
                 value={form.price}
                 onChangeText={(v) => setForm((f) => ({ ...f, price: v }))}
                 placeholder="0.00"
@@ -169,18 +239,29 @@ export function ItemFormModal({ visible, onClose, onSave, editItem, categories }
 
           <XStack gap="$2" justifyContent="flex-end" marginTop="$1">
             <Pressable onPress={onClose} style={[styles.btn, { borderColor: colors.border }]}>
-              <Text color={colors.textMuted} fontWeight="600">Cancel</Text>
+              <Text color={colors.textMuted} fontWeight="600">
+                Cancel
+              </Text>
             </Pressable>
             <Pressable
               onPress={handleSave}
               disabled={saving || !form.name.trim()}
-              style={[styles.btn, { backgroundColor: colors.primary, borderColor: colors.primary, opacity: saving || !form.name.trim() ? 0.5 : 1 }]}
+              style={[
+                styles.btn,
+                {
+                  backgroundColor: colors.primary,
+                  borderColor: colors.primary,
+                  opacity: saving || !form.name.trim() ? 0.5 : 1,
+                },
+              ]}
             >
-              <Text color="white" fontWeight="700">{saving ? 'Saving…' : 'Save'}</Text>
+              <Text color="white" fontWeight="700">
+                {saving ? 'Saving…' : 'Save'}
+              </Text>
             </Pressable>
           </XStack>
         </YStack>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }

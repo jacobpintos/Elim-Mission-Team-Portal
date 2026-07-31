@@ -1,5 +1,15 @@
 import { useState } from 'react'
-import { Modal, View, ScrollView, Pressable, TextInput, StyleSheet, Image } from 'react-native'
+import {
+  Modal,
+  View,
+  ScrollView,
+  Pressable,
+  TextInput,
+  StyleSheet,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import type { SecurityReport } from '@/types/security'
@@ -77,7 +87,10 @@ export function ReportDetailModal({
 
   return (
     <Modal visible={!!report} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <YStack
           backgroundColor={colors.surface}
           borderRadius="$4"
@@ -313,7 +326,7 @@ export function ReportDetailModal({
             </YStack>
           </ScrollView>
         </YStack>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }

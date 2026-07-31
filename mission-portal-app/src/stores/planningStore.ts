@@ -28,8 +28,13 @@ interface PlanningStore {
     currentEventId?: string | number | null
   ) => Promise<void>
   deleteBoard: (id: string | number) => Promise<void>
-  addItem: (boardId: string | number, item: Omit<PlanningItem, 'id'>) => Promise<void>
-  updateItem: (boardId: string | number, itemId: string, patch: Partial<PlanningItem>) => Promise<void>
+  /** Resolves to the new item's id, so callers can select or focus it. */
+  addItem: (boardId: string | number, item: Omit<PlanningItem, 'id'>) => Promise<string>
+  updateItem: (
+    boardId: string | number,
+    itemId: string,
+    patch: Partial<PlanningItem>
+  ) => Promise<void>
   deleteItem: (boardId: string | number, itemId: string) => Promise<void>
 }
 
@@ -111,11 +116,12 @@ export const usePlanningStore = create<PlanningStore>((set, get) => ({
       ),
     }))
     const board = get().boards.find((b) => sameId(b.id, boardId))
-    if (!board) return
+    if (!board) return itemId
     await updateDoc(doc(db, 'planningBoards', String(boardId)), {
       items: board.items,
       updatedAt: serverTimestamp(),
     })
+    return itemId
   },
 
   updateItem: async (boardId, itemId, patch) => {
@@ -137,9 +143,7 @@ export const usePlanningStore = create<PlanningStore>((set, get) => ({
   deleteItem: async (boardId, itemId) => {
     set((s) => ({
       boards: s.boards.map((b) =>
-        sameId(b.id, boardId)
-          ? { ...b, items: b.items.filter((it) => it.id !== itemId) }
-          : b
+        sameId(b.id, boardId) ? { ...b, items: b.items.filter((it) => it.id !== itemId) } : b
       ),
     }))
     const board = get().boards.find((b) => sameId(b.id, boardId))
