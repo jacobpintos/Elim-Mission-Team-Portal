@@ -7,6 +7,10 @@ import { describe, it, expect } from 'vitest'
  * test runner does not compile it. These copies exist so the parsing rules —
  * which decide whether someone is woken at 3am — are pinned by tests. If the
  * function changes, these must change with it.
+ *
+ * The reminder is queued when a flight is written rather than swept for, so
+ * what matters here is which legs get scheduled and when, not whether a
+ * given moment is "due".
  */
 const DEFAULT_LEAD_HOURS = 3
 const MIN_LEAD_HOURS = 1
@@ -44,10 +48,24 @@ function leadHoursFor(stored: unknown): number {
   return Math.min(MAX_LEAD_HOURS, Math.max(MIN_LEAD_HOURS, Math.round(n)))
 }
 
-function isDue(departsAt: number, now: number, leadHours: number): boolean {
-  const lead = leadHours * 60 * 60 * 1000
-  const msUntil = departsAt - now
-  return msUntil <= lead && msUntil > 0
+interface Leg {
+  leg: 'out' | 'ret'
+  date?: string
+  time?: string
+}
+
+function upcomingLegs(
+  entry: { outDate?: string; outTime?: string; retDate?: string; retTime?: string },
+  now: number
+) {
+  return (
+    [
+      { leg: 'out' as const, date: entry.outDate, time: entry.outTime },
+      { leg: 'ret' as const, date: entry.retDate, time: entry.retTime },
+    ] satisfies Leg[]
+  )
+    .map((l) => ({ ...l, departsAt: parseDeparture(l.date, l.time) }))
+    .filter((l): l is typeof l & { departsAt: number } => l.departsAt !== null && l.departsAt > now)
 }
 
 const at = (iso: string) => Date.parse(iso)
@@ -108,30 +126,53 @@ describe('leadHoursFor', () => {
   })
 })
 
-describe('isDue', () => {
-  const departs = at('2026-03-10T14:00:00Z')
+describe('upcomingLegs', () => {
+  const now = at('2026-03-01T00:00:00Z')
 
-  it('is not due before the window opens', () => {
-    expect(isDue(departs, at('2026-03-10T10:00:00Z'), 3)).toBe(false)
+  it('returns both legs of a round trip', () => {
+    const out = upcomingLegs(
+      { outDate: '2026-03-10', outTime: '14:00', retDate: '2026-03-17', retTime: '09:00' },
+      now
+    )
+
+    expect(out.map((l) => l.leg)).toEqual(['out', 'ret'])
   })
 
-  it('is due inside the window', () => {
-    expect(isDue(departs, at('2026-03-10T11:30:00Z'), 3)).toBe(true)
-    expect(isDue(departs, at('2026-03-10T13:59:00Z'), 3)).toBe(true)
-  })
-
-  it('is due exactly on the boundary', () => {
-    expect(isDue(departs, at('2026-03-10T11:00:00Z'), 3)).toBe(true)
-  })
-
-  it('stops once the flight has left', () => {
+  it('drops a leg that has already departed', () => {
     // Nobody wants a reminder about a plane already in the air.
-    expect(isDue(departs, at('2026-03-10T14:00:00Z'), 3)).toBe(false)
-    expect(isDue(departs, at('2026-03-10T15:00:00Z'), 3)).toBe(false)
+    const out = upcomingLegs(
+      { outDate: '2026-02-01', outTime: '14:00', retDate: '2026-03-17', retTime: '09:00' },
+      now
+    )
+
+    expect(out.map((l) => l.leg)).toEqual(['ret'])
   })
 
-  it('respects a longer chosen lead time', () => {
-    expect(isDue(departs, at('2026-03-10T04:00:00Z'), 3)).toBe(false)
-    expect(isDue(departs, at('2026-03-10T04:00:00Z'), 12)).toBe(true)
+  it('drops a leg whose time cannot be read', () => {
+    const out = upcomingLegs({ outDate: '2026-03-10', outTime: 'morning' }, now)
+
+    expect(out).toEqual([])
+  })
+
+  it('drops a leg with no date or time at all', () => {
+    // A one-way flight has no return half to schedule.
+    const out = upcomingLegs({ outDate: '2026-03-10', outTime: '14:00' }, now)
+
+    expect(out.map((l) => l.leg)).toEqual(['out'])
+  })
+
+  it('carries the parsed departure through, which is what gets scheduled', () => {
+    const out = upcomingLegs({ outDate: '2026-03-10', outTime: '14:00' }, now)
+
+    expect(out[0].departsAt).toBe(at('2026-03-10T14:00:00Z'))
+  })
+})
+
+describe('scheduling arithmetic', () => {
+  it('fires a lead time before departure', () => {
+    const departsAt = at('2026-03-10T14:00:00Z')
+
+    expect(departsAt - 3 * 60 * 60 * 1000).toBe(at('2026-03-10T11:00:00Z'))
+    expect(departsAt - 12 * 60 * 60 * 1000).toBe(at('2026-03-10T02:00:00Z'))
   })
 })

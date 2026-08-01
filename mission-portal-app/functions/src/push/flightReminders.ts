@@ -1,4 +1,6 @@
-import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { onDocumentWritten } from 'firebase-functions/v2/firestore'
+import { onTaskDispatched } from 'firebase-functions/v2/tasks'
+import { getFunctions } from 'firebase-admin/functions'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 import { RESEND_API_KEY } from '../email/client'
@@ -13,27 +15,36 @@ const DEFAULT_LEAD_HOURS = 3
 const MIN_LEAD_HOURS = 1
 const MAX_LEAD_HOURS = 48
 
+const QUEUE = 'flightReminderTask'
+
 interface FlightRaw {
   id?: string
   uid?: string | number
   outDate?: string
   outTime?: string
   outAirport?: string
-  outAirline?: string
-  outFlight?: string
   retDate?: string
   retTime?: string
   retAirport?: string
-  retAirline?: string
-  retFlight?: string
-  /** Legs already reminded, so a leg never fires twice. */
-  remindedLegs?: string[]
+  /**
+   * When a reminder is currently scheduled for each leg, as an epoch ms.
+   * A dispatched task compares against this; if it no longer matches, the
+   * flight moved after the task was queued and the task is stale.
+   */
+  reminderScheduledFor?: Record<string, number>
 }
 
 interface EventRaw {
-  id?: string | number
   title?: string
+  date?: string
   flightEntries?: FlightRaw[]
+}
+
+interface ReminderPayload {
+  eventId: string
+  entryId: string
+  leg: 'out' | 'ret'
+  scheduledFor: number
 }
 
 /**
@@ -85,93 +96,157 @@ export function leadHoursFor(stored: unknown): number {
   return Math.min(MAX_LEAD_HOURS, Math.max(MIN_LEAD_HOURS, Math.round(n)))
 }
 
-/**
- * Should this leg be reminded about now?
- *
- * True once we are inside the user's lead window and the flight has not
- * already left. The window has a floor so a leg is not missed when the
- * scheduler runs slightly late.
- */
-export function isDue(departsAt: number, now: number, leadHours: number): boolean {
-  const lead = leadHours * 60 * 60 * 1000
-  const msUntil = departsAt - now
-  return msUntil <= lead && msUntil > 0
+/** The legs of an entry that have a readable departure still in the future. */
+export function upcomingLegs(entry: FlightRaw, now: number) {
+  return (
+    [
+      { leg: 'out' as const, label: 'outbound flight', date: entry.outDate, time: entry.outTime },
+      { leg: 'ret' as const, label: 'return flight', date: entry.retDate, time: entry.retTime },
+    ]
+      .map((l) => ({ ...l, departsAt: parseDeparture(l.date, l.time) }))
+      // A leg that cannot be read, or has already gone, needs no reminder.
+      .filter((l): l is typeof l & { departsAt: number } => l.departsAt !== null && l.departsAt > now)
+  )
+}
+
+async function leadHoursForUser(db: admin.firestore.Firestore, uid: string): Promise<number> {
+  const snap = await db.collection('users').doc(uid).get()
+  return leadHoursFor(snap.data()?.flightReminderHours)
 }
 
 /**
- * Flight reminders.
+ * Queue reminders when a flight is written, rather than sweeping for them.
  *
- * Runs every 15 minutes because lead times are per-user and a coarser tick
- * would push someone's 3-hour reminder well off the mark. Each leg is
- * recorded on the event once sent so it never repeats.
+ * Nothing needs to run in between: the reminder is scheduled the moment a
+ * flight is entered and re-scheduled if it moves. Each leg records the time
+ * its reminder is queued for, and a dispatched task that finds a different
+ * time knows the flight changed underneath it and stops.
  */
-export const flightReminders = onSchedule(
-  { schedule: '*/15 * * * *', secrets: [RESEND_API_KEY] },
-  async () => {
-    const db = admin.firestore()
-    const now = Date.now()
+export const onFlightWritten = onDocumentWritten('events/{eventId}', async (event) => {
+  const db = admin.firestore()
+  const after = event.data?.after?.data() as EventRaw | undefined
+  if (!after) return
 
-    const eventsSnap = await db.collection('events').get()
-    const userCache = new Map<string, number>()
+  const now = Date.now()
+  const entries = after.flightEntries ?? []
+  if (entries.length === 0) return
 
-    for (const eventDoc of eventsSnap.docs) {
-      const event = eventDoc.data() as EventRaw
-      const entries = event.flightEntries ?? []
-      if (entries.length === 0) continue
+  const updated = entries.map((e) => ({ ...e }))
+  let changed = false
 
-      let changed = false
-      const updated = entries.map((entry) => ({ ...entry }))
+  for (const entry of updated) {
+    const uid = entry.uid ? String(entry.uid) : ''
+    if (!uid) continue
 
-      for (const entry of updated) {
-        const uid = entry.uid ? String(entry.uid) : ''
-        if (!uid) continue
+    const leadHours = await leadHoursForUser(db, uid)
+    const scheduled: Record<string, number> = { ...(entry.reminderScheduledFor ?? {}) }
 
-        if (!userCache.has(uid)) {
-          const userSnap = await db.collection('users').doc(uid).get()
-          userCache.set(uid, leadHoursFor(userSnap.data()?.flightReminderHours))
-        }
-        const leadHours = userCache.get(uid) ?? DEFAULT_LEAD_HOURS
+    for (const leg of upcomingLegs(entry, now)) {
+      const fireAt = leg.departsAt - leadHours * 60 * 60 * 1000
+      // Already queued for this exact moment — the write that reaches here
+      // after our own update is the common case, and must not re-queue.
+      if (scheduled[leg.leg] === fireAt) continue
 
-        const legs = [
-          {
-            key: 'out',
-            label: 'outbound flight',
-            departsAt: parseDeparture(entry.outDate, entry.outTime),
-            airport: entry.outAirport,
-            time: entry.outTime,
-          },
-          {
-            key: 'ret',
-            label: 'return flight',
-            departsAt: parseDeparture(entry.retDate, entry.retTime),
-            airport: entry.retAirport,
-            time: entry.retTime,
-          },
-        ]
-
-        for (const leg of legs) {
-          if (leg.departsAt === null) continue
-          const legId = `${entry.id ?? 'f'}_${leg.key}`
-          if ((entry.remindedLegs ?? []).includes(legId)) continue
-          if (!isDue(leg.departsAt, now, leadHours)) continue
-
-          await notifyUser(uid, 'flightReminder', {
-            eventTitle: event.title ?? 'an event',
-            legLabel: leg.label,
-            departsAt: [leg.time, leg.airport].filter(Boolean).join(' from '),
-            // Opens the event card, where the flight details live.
-            link: `/(app)/events/${eventDoc.id}`,
-          })
-
-          entry.remindedLegs = [...(entry.remindedLegs ?? []), legId]
-          changed = true
-          logger.info(`flightReminders: notified ${uid} about ${legId}`)
-        }
+      const payload: ReminderPayload = {
+        eventId: event.params.eventId,
+        entryId: String(entry.id ?? 'f'),
+        leg: leg.leg,
+        scheduledFor: fireAt,
       }
 
-      if (changed) {
-        await eventDoc.ref.update({ flightEntries: updated })
-      }
+      await getFunctions()
+        .taskQueue<ReminderPayload>(QUEUE)
+        .enqueue(payload, {
+          // A departure already inside the lead window fires immediately.
+          scheduleTime: new Date(Math.max(fireAt, now + 1000)),
+        })
+
+      scheduled[leg.leg] = fireAt
+      changed = true
+      logger.info(
+        `onFlightWritten: queued ${payload.entryId}_${leg.leg} for ${new Date(fireAt).toISOString()}`
+      )
     }
+
+    entry.reminderScheduledFor = scheduled
+  }
+
+  if (changed) {
+    await event.data!.after!.ref.update({ flightEntries: updated })
+  }
+})
+
+/**
+ * Send one flight reminder.
+ *
+ * The lead time is read here rather than trusted from the queued task, so a
+ * user who changed it after booking still gets the reminder they asked for:
+ * if the task arrives early the handler re-queues itself for the right
+ * moment, and if it arrives late it sends anyway.
+ */
+export const flightReminderTask = onTaskDispatched<ReminderPayload>(
+  { retryConfig: { maxAttempts: 3 }, secrets: [RESEND_API_KEY] },
+  async (req) => {
+    const { eventId, entryId, leg, scheduledFor } = req.data
+    const db = admin.firestore()
+
+    const eventSnap = await db.collection('events').doc(eventId).get()
+    const event = eventSnap.data() as EventRaw | undefined
+    if (!event) return
+
+    const entry = (event.flightEntries ?? []).find((e) => String(e.id ?? 'f') === entryId)
+    if (!entry) return
+
+    // The flight moved after this task was queued; a newer task owns it.
+    if (entry.reminderScheduledFor?.[leg] !== scheduledFor) {
+      logger.info(`flightReminderTask: ${entryId}_${leg} superseded, dropping`)
+      return
+    }
+
+    const uid = entry.uid ? String(entry.uid) : ''
+    if (!uid) return
+
+    const departsAt = parseDeparture(
+      leg === 'out' ? entry.outDate : entry.retDate,
+      leg === 'out' ? entry.outTime : entry.retTime
+    )
+    if (departsAt === null || departsAt <= Date.now()) return
+
+    const leadHours = await leadHoursForUser(db, uid)
+    const wantAt = departsAt - leadHours * 60 * 60 * 1000
+
+    // The user lengthened their lead time after this was queued, so it is not
+    // due yet — put it back for the moment they actually asked for.
+    if (Date.now() < wantAt - 60 * 1000) {
+      await getFunctions()
+        .taskQueue<ReminderPayload>(QUEUE)
+        .enqueue(
+          { eventId, entryId, leg, scheduledFor: wantAt },
+          { scheduleTime: new Date(wantAt) }
+        )
+      await eventSnap.ref.update({
+        flightEntries: (event.flightEntries ?? []).map((e) =>
+          String(e.id ?? 'f') === entryId
+            ? { ...e, reminderScheduledFor: { ...(e.reminderScheduledFor ?? {}), [leg]: wantAt } }
+            : e
+        ),
+      })
+      return
+    }
+
+    await notifyUser(uid, 'flightReminder', {
+      eventTitle: event.title ?? 'an event',
+      legLabel: leg === 'out' ? 'outbound flight' : 'return flight',
+      departsAt: [
+        leg === 'out' ? entry.outTime : entry.retTime,
+        leg === 'out' ? entry.outAirport : entry.retAirport,
+      ]
+        .filter(Boolean)
+        .join(' from '),
+      // Opens the event card, where the flight details live.
+      link: `/(app)/events/${eventId}`,
+    })
+
+    logger.info(`flightReminderTask: notified ${uid} about ${entryId}_${leg}`)
   }
 )

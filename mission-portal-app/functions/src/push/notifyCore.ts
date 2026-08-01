@@ -46,6 +46,10 @@ export const BATCHED_TYPES = new Set<NotificationType>([
   'kaizenSubmission',
   'issueSubmission',
   'weatherAlertAdmin',
+  // Food sign-ups arrive in bursts — one per invitee when an event opens, and
+  // again on the three-day nudge — and none of them is urgent.
+  'foodSignupOpen',
+  'foodSignupReminder',
 ])
 
 // How long a user's batch window stays open after the first push in it.
