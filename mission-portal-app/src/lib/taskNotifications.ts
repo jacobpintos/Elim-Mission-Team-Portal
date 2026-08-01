@@ -39,14 +39,15 @@ export function notifyAssignees(
 export function notifyAdminsTaskBehind(
   users: UserProfile[],
   taskTitle: string,
-  taskId: string | number,
-  reportedBy: string
+  taskId: string | number
 ) {
   const sendNotif = httpsCallable(functions, 'sendNotification')
   users
+    // Every admin, including whoever flagged it. Skipping the actor looks
+    // sensible until you are the one admin on the portal — then flagging a
+    // task behind notifies nobody, which is indistinguishable from the
+    // notification being broken.
     .filter(isAdmin)
-    // Whoever flagged it does not need telling.
-    .filter((u) => String(u.uid) !== reportedBy)
     .forEach((u) => {
       sendNotif({
         uid: String(u.uid),

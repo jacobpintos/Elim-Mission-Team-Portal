@@ -1339,7 +1339,7 @@ export default function Assignments() {
         projectedDate: storedDate,
       })
       if (status === 'behind') {
-        notifyAdminsTaskBehind(allUsers, updateTaskItem.title, updateTaskItem.id, uid)
+        notifyAdminsTaskBehind(allUsers, updateTaskItem.title, updateTaskItem.id)
       }
       toast('Task updated', 'success')
       setUpdateTaskItem(null)
