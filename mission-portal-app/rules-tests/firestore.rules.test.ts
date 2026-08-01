@@ -20,6 +20,8 @@ let env: RulesTestEnvironment
 const ADMIN = 'admin-uid'
 const MEMBER = 'member-uid'
 const OUTSIDER = 'outsider-uid'
+const GUEST = 'guest-uid'
+const WORSHIP = 'worship-uid'
 
 beforeAll(async () => {
   env = await initializeTestEnvironment({
@@ -42,6 +44,12 @@ beforeEach(async () => {
     await setDoc(doc(db, 'users', ADMIN), { roles: ['admin'], displayName: 'Admin' })
     await setDoc(doc(db, 'users', MEMBER), { roles: ['regular'], displayName: 'Member' })
     await setDoc(doc(db, 'users', OUTSIDER), { roles: ['regular'], displayName: 'Outsider' })
+    await setDoc(doc(db, 'users', GUEST), { roles: ['guest'], displayName: 'Guest' })
+    await setDoc(doc(db, 'users', WORSHIP), { roles: ['worship'], displayName: 'Worship' })
+    await setDoc(doc(db, 'setLists', 'sl1'), { title: 'Sunday' })
+    await setDoc(doc(db, 'chordSheets', 'cs1'), { title: 'Song' })
+    await setDoc(doc(db, 'inputList', 'main'), { rows: [] })
+    await setDoc(doc(db, 'tasks', 'gt1'), { title: 'Do', status: 'pending' })
     await setDoc(doc(db, 'rooms', 'r1'), { name: 'Team', members: [MEMBER], reviewers: [] })
     await setDoc(doc(db, 'rooms', 'r1', 'messages', 'm1'), {
       uid: MEMBER,
@@ -228,5 +236,67 @@ describe('events', () => {
     await assertFails(getDoc(doc(anon(), 'events/e1')))
     await assertFails(updateDoc(doc(as(MEMBER), 'events/e1'), { title: 'Hacked' }))
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'events/e1'), { title: 'Moved' }))
+  })
+})
+
+describe('guests', () => {
+  it('reads set lists and chord sheets', () => {
+    // The worship tab they were given would render nothing without this.
+    return Promise.all([
+      assertSucceeds(getDoc(doc(as(GUEST), 'setLists/sl1'))),
+      assertSucceeds(getDoc(doc(as(GUEST), 'chordSheets/cs1'))),
+    ])
+  })
+
+  it('cannot write set lists or chord sheets', async () => {
+    await assertFails(updateDoc(doc(as(GUEST), 'setLists/sl1'), { title: 'Hijacked' }))
+    await assertFails(updateDoc(doc(as(GUEST), 'chordSheets/cs1'), { title: 'Hijacked' }))
+    await assertFails(setDoc(doc(as(GUEST), 'setLists/sl2'), { title: 'New' }))
+  })
+
+  it('cannot reach the input list', async () => {
+    // Stage plumbing is not a visitor's business, in the rules as well as the UI.
+    await assertFails(getDoc(doc(as(GUEST), 'inputList/main')))
+    await assertFails(updateDoc(doc(as(GUEST), 'inputList/main'), { rows: [] }))
+  })
+
+  it('cannot move a task status, which members can', async () => {
+    await assertFails(updateDoc(doc(as(GUEST), 'tasks/gt1'), { status: 'done' }))
+    await assertSucceeds(updateDoc(doc(as(MEMBER), 'tasks/gt1'), { status: 'done' }))
+  })
+
+  it('cannot create or edit events', async () => {
+    await assertFails(setDoc(doc(as(GUEST), 'events/e9'), { title: 'Mine' }))
+  })
+
+  it('cannot promote itself out of being a guest', async () => {
+    await assertFails(updateDoc(doc(as(GUEST), 'users', GUEST), { roles: ['admin'] }))
+  })
+
+  it('can still post in a room it was added to', async () => {
+    // Guests are explicitly allowed to send messages.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'rooms', 'gr1'), {
+        name: 'Trip',
+        members: [GUEST],
+        reviewers: [],
+      })
+    })
+
+    await assertSucceeds(getDoc(doc(as(GUEST), 'rooms/gr1')))
+    await assertSucceeds(
+      setDoc(doc(as(GUEST), 'rooms/gr1/messages/gm1'), { uid: GUEST, text: 'hi', ts: 1 })
+    )
+  })
+
+  it('still cannot reach a room it was not added to', async () => {
+    await assertFails(getDoc(doc(as(GUEST), 'rooms/r1')))
+  })
+
+  it('does not shut worship users out of what it can read', async () => {
+    // The guest clause is additive; it must not narrow anyone else.
+    await assertSucceeds(getDoc(doc(as(WORSHIP), 'setLists/sl1')))
+    await assertSucceeds(updateDoc(doc(as(WORSHIP), 'setLists/sl1'), { title: 'Edited' }))
+    await assertSucceeds(getDoc(doc(as(WORSHIP), 'inputList/main')))
   })
 })

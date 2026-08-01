@@ -8,6 +8,13 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.hasAny(['admin']);
     }
     function isSelf(uid) { return isSignedIn() && request.auth.uid == uid; }
+    // A guest is along for one trip: they may read the worship material they
+    // have been added to, and change nothing.
+    function isGuest() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+          .hasAny(['guest']);
+    }
     function isWorshipOrAdmin() {
       return isSignedIn() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
@@ -53,8 +60,9 @@ service cloud.firestore {
 
     match /tasks/{id} {
       allow read: if isSignedIn();
+      // Members may move a task's status; a guest may not, being read-only.
       allow write: if isAdmin() ||
-        (isSignedIn() &&
+        (isSignedIn() && !isGuest() &&
          request.resource.data.diff(resource.data).affectedKeys()
            .hasOnly(['status', 'overdueNotified', '_updatedAt']));
     }
@@ -161,13 +169,15 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
+    // Guests read set lists and chord sheets but never write them. Without the
+    // read they would have been given a worship tab that renders nothing.
     match /setLists/{id} {
-      allow read: if isWorshipOrAdmin();
+      allow read: if isWorshipOrAdmin() || isGuest();
       allow write: if isWorshipOrAdmin();
     }
 
     match /chordSheets/{id} {
-      allow read: if isWorshipOrAdmin();
+      allow read: if isWorshipOrAdmin() || isGuest();
       allow write: if isWorshipOrAdmin();
     }
 
