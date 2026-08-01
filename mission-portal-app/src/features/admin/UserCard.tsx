@@ -8,6 +8,7 @@ const ROLE_LABELS: Record<string, string> = {
   worship: 'Worship',
   regular: 'Member',
   intern: 'Intern',
+  guest: 'Guest',
   public: 'Public',
 }
 
@@ -22,6 +23,7 @@ const ROLE_COLORS: Record<string, string> = {
   worship: '#9b59b6',
   regular: '#16a085',
   intern: '#d4a017',
+  guest: '#7f8c8d',
   public: '#95a5a6',
 }
 

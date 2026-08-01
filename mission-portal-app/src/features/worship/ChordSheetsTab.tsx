@@ -10,11 +10,14 @@ import type { ChordSheet } from '@/types/chordSheet'
 
 interface ChordSheetsTabProps {
   createdBy: string | number
+  /** Guests may read chord sheets but not add or change them. */
+  readOnly?: boolean
 }
 
-export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
+export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabProps) {
   const colors = useThemeColors()
-  const { chordSheets, createChordSheet, updateChordSheet, deleteChordSheet } = useChordSheetsStore()
+  const { chordSheets, createChordSheet, updateChordSheet, deleteChordSheet } =
+    useChordSheetsStore()
   const toast = useUIStore((s) => s.toast)
 
   const [search, setSearch] = useState('')
@@ -27,10 +30,7 @@ export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
     .filter((s) => {
       if (!search.trim()) return true
       const q = search.toLowerCase()
-      return (
-        s.title.toLowerCase().includes(q) ||
-        (s.artist ?? '').toLowerCase().includes(q)
-      )
+      return s.title.toLowerCase().includes(q) || (s.artist ?? '').toLowerCase().includes(q)
     })
     .sort((a, b) => String(a.title).localeCompare(String(b.title)))
 
@@ -97,14 +97,13 @@ export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
           placeholder="Search chord sheets…"
           placeholderTextColor={colors.textMuted}
         />
-        <Pressable
-          onPress={openNew}
-          style={[styles.newBtn, { backgroundColor: colors.primary }]}
-        >
-          <Text color="white" fontWeight="700" fontSize="$2">
-            + New
-          </Text>
-        </Pressable>
+        {readOnly ? null : (
+          <Pressable onPress={openNew} style={[styles.newBtn, { backgroundColor: colors.primary }]}>
+            <Text color="white" fontWeight="700" fontSize="$2">
+              + New
+            </Text>
+          </Pressable>
+        )}
       </XStack>
 
       {/* List */}
@@ -113,7 +112,7 @@ export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
           <Text color={colors.textMuted} textAlign="center">
             {search.trim() ? 'No chord sheets match your search.' : 'No chord sheets yet.'}
           </Text>
-          {!search.trim() ? (
+          {!search.trim() && !readOnly ? (
             <Text color={colors.textMuted} fontSize="$2" textAlign="center" marginTop="$2">
               Tap + New to create one.
             </Text>
@@ -157,12 +156,24 @@ export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
                   {confirmDeleteId === sheet.id ? (
                     <>
                       <Pressable onPress={() => setConfirmDeleteId(null)}>
-                        <View style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                          <Text style={[styles.actionBtnText, { color: colors.textMuted }]}>Cancel</Text>
+                        <View
+                          style={[
+                            styles.actionBtn,
+                            { backgroundColor: colors.surface, borderColor: colors.border },
+                          ]}
+                        >
+                          <Text style={[styles.actionBtnText, { color: colors.textMuted }]}>
+                            Cancel
+                          </Text>
                         </View>
                       </Pressable>
                       <Pressable onPress={() => handleDeleteConfirmed(sheet)}>
-                        <View style={[styles.actionBtn, { backgroundColor: '#c0392b', borderColor: '#c0392b' }]}>
+                        <View
+                          style={[
+                            styles.actionBtn,
+                            { backgroundColor: '#c0392b', borderColor: '#c0392b' },
+                          ]}
+                        >
                           <Text style={[styles.actionBtnText, { color: 'white' }]}>Confirm</Text>
                         </View>
                       </Pressable>
@@ -170,12 +181,27 @@ export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
                   ) : (
                     <>
                       <Pressable onPress={() => openEdit(sheet)}>
-                        <View style={[styles.actionBtn, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '44' }]}>
-                          <Text style={[styles.actionBtnText, { color: colors.primary }]}>Edit</Text>
+                        <View
+                          style={[
+                            styles.actionBtn,
+                            {
+                              backgroundColor: colors.primary + '18',
+                              borderColor: colors.primary + '44',
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.actionBtnText, { color: colors.primary }]}>
+                            Edit
+                          </Text>
                         </View>
                       </Pressable>
                       <Pressable onPress={() => setConfirmDeleteId(sheet.id)}>
-                        <View style={[styles.actionBtn, { backgroundColor: '#c0392b18', borderColor: '#c0392b44' }]}>
+                        <View
+                          style={[
+                            styles.actionBtn,
+                            { backgroundColor: '#c0392b18', borderColor: '#c0392b44' },
+                          ]}
+                        >
                           <Text style={[styles.actionBtnText, { color: '#c0392b' }]}>Delete</Text>
                         </View>
                       </Pressable>
@@ -199,10 +225,7 @@ export function ChordSheetsTab({ createdBy }: ChordSheetsTabProps) {
         createdBy={createdBy}
       />
 
-      <ChordSheetViewer
-        sheet={viewSheet}
-        onClose={() => setViewSheet(null)}
-      />
+      <ChordSheetViewer sheet={viewSheet} onClose={() => setViewSheet(null)} />
     </YStack>
   )
 }

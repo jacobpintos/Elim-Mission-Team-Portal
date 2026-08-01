@@ -16,7 +16,9 @@ interface GroupCardProps {
 export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
   const loading = useUsersStore((s) => s.loading)
   const getDisplayName = useUsersStore((s) => s.displayName)
-  const isAllGroup = group.name === 'All'
+  // 'All' and 'Guest' are structural: user creation puts new accounts into one
+  // or the other, so neither can be renamed or deleted out from under it.
+  const isAllGroup = group.name === 'All' || group.name === 'Guest'
   const members = group.members ?? []
 
   return (

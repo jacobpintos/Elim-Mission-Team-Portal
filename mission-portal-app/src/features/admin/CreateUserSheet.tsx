@@ -54,10 +54,14 @@ export function CreateUserSheet({ open, onClose }: CreateUserSheetProps) {
       })
       const { uid } = result.data as { uid: string }
 
-      // Add uid to "All" group (skip public-only users)
+      // Members join "All"; guests get their own group instead, so anything
+      // addressed to the whole team does not reach someone who is only along
+      // for one trip. Public-only accounts join neither.
       const isPublicOnly = roles.length === 1 && roles[0] === 'public'
+      const isGuestUser = roles.includes('guest')
+      const groupName = isGuestUser ? 'Guest' : 'All'
       if (!isPublicOnly) {
-        const groupsQuery = query(collection(db, 'groups'), where('name', '==', 'All'))
+        const groupsQuery = query(collection(db, 'groups'), where('name', '==', groupName))
         const groupsSnap = await getDocs(groupsQuery)
         if (!groupsSnap.empty) {
           const groupDoc = groupsSnap.docs[0]
@@ -95,12 +99,7 @@ export function CreateUserSheet({ open, onClose }: CreateUserSheetProps) {
             <Text fontSize="$3" fontWeight="600">
               Full Name *
             </Text>
-            <Input
-              placeholder="Full Name"
-              value={name}
-              onChangeText={setName}
-              size="$3"
-            />
+            <Input placeholder="Full Name" value={name} onChangeText={setName} size="$3" />
             {errors.name && (
               <Text fontSize="$2" color="$red10">
                 {errors.name}

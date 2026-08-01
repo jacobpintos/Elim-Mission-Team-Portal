@@ -3,7 +3,12 @@ import { ScrollView, Pressable, TextInput } from 'react-native'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
 import { MemberAndGroupPicker } from './MemberAndGroupPicker'
-import { TASK_SECTIONS, type TaskItem, type TaskSection, type TaskTemplate } from './TaskTemplateCard'
+import {
+  TASK_SECTIONS,
+  type TaskItem,
+  type TaskSection,
+  type TaskTemplate,
+} from './TaskTemplateCard'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
@@ -11,12 +16,22 @@ import { collection, addDoc, doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
 const SECTION_COLORS = [
-  '#f56c5a', '#2980b9', '#27ae60', '#f39c12',
-  '#9b59b6', '#1abc9c', '#e91e8c', '#607d8b',
+  '#f56c5a',
+  '#2980b9',
+  '#27ae60',
+  '#f39c12',
+  '#9b59b6',
+  '#1abc9c',
+  '#e91e8c',
+  '#607d8b',
 ]
 
 function slugify(label: string, existing: string[]): string {
-  const base = label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || 'section'
+  const base =
+    label
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '') || 'section'
   if (!existing.includes(base)) return base
   let i = 2
   while (existing.includes(`${base}_${i}`)) i++
@@ -124,7 +139,10 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
   const addSection = () => {
     const label = newSectionLabel.trim()
     if (!label) return
-    const id = slugify(label, templateSections.map((s) => s.id))
+    const id = slugify(
+      label,
+      templateSections.map((s) => s.id)
+    )
     const newSec: TaskSection = { id, label, color: newSectionColor }
     setTemplateSections((prev) => [...prev, newSec])
     setSectionTasks((prev) => ({ ...prev, [id]: [] }))
@@ -221,11 +239,19 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
       }
       if (template) {
         await updateDoc(doc(db, 'taskTemplates', String(template.id)), payload)
-        await audit('taskTemplate.updated', `Updated task template "${name.trim()}"`, profile?.displayName ?? '')
+        await audit(
+          'taskTemplate.updated',
+          `Updated task template "${name.trim()}"`,
+          profile?.displayName ?? ''
+        )
         toast('Template updated!', 'success')
       } else {
         await addDoc(collection(db, 'taskTemplates'), { ...payload, createdAt: new Date() })
-        await audit('taskTemplate.created', `Created task template "${name.trim()}"`, profile?.displayName ?? '')
+        await audit(
+          'taskTemplate.created',
+          `Created task template "${name.trim()}"`,
+          profile?.displayName ?? ''
+        )
         toast('Template created!', 'success')
       }
       onClose()
@@ -237,11 +263,17 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
   }
 
   return (
-    <Modal open={open} onOpenChange={(v) => !v && onClose()} title={template ? 'Edit Template' : 'New Template'}>
+    <Modal
+      open={open}
+      onOpenChange={(v) => !v && onClose()}
+      title={template ? 'Edit Template' : 'New Template'}
+    >
       <ScrollView style={{ maxHeight: 600 }}>
         <YStack gap="$3" padding="$2">
           <YStack gap="$1">
-            <Text fontSize="$3" fontWeight="600">Template Name *</Text>
+            <Text fontSize="$3" fontWeight="600">
+              Template Name *
+            </Text>
             <Input placeholder="Template Name" value={name} onChangeText={setName} size="$3" />
           </YStack>
 
@@ -278,10 +310,19 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                     <TextInput
                       value={section.label}
                       onChangeText={(v) => updateSectionLabel(section.id, v)}
-                      style={{ fontWeight: '700', fontSize: 14, color: section.color, minWidth: 60, maxWidth: 160, padding: 0 }}
+                      style={{
+                        fontWeight: '700',
+                        fontSize: 14,
+                        color: section.color,
+                        minWidth: 60,
+                        maxWidth: 160,
+                        padding: 0,
+                      }}
                       placeholder="Category name"
                     />
-                    <Text fontSize="$2" color="$gray10">({tasks.length})</Text>
+                    <Text fontSize="$2" color="$gray10">
+                      ({tasks.length})
+                    </Text>
                   </XStack>
 
                   <XStack alignItems="center" gap="$1">
@@ -289,17 +330,28 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                     {isConfirmingRemove ? (
                       <>
                         <Pressable onPress={() => setConfirmRemove(null)}>
-                          <Text fontSize="$2" color="$gray10" paddingHorizontal="$2">Cancel</Text>
+                          <Text fontSize="$2" color="$gray10" paddingHorizontal="$2">
+                            Cancel
+                          </Text>
                         </Pressable>
                         <Pressable onPress={() => removeSection(section.id)}>
-                          <XStack backgroundColor="#c0392b" borderRadius="$1" paddingHorizontal="$2" paddingVertical="$0.5">
-                            <Text fontSize="$2" color="white" fontWeight="700">Remove</Text>
+                          <XStack
+                            backgroundColor="#c0392b"
+                            borderRadius="$1"
+                            paddingHorizontal="$2"
+                            paddingVertical="$0.5"
+                          >
+                            <Text fontSize="$2" color="white" fontWeight="700">
+                              Remove
+                            </Text>
                           </XStack>
                         </Pressable>
                       </>
                     ) : (
                       <Pressable onPress={() => setConfirmRemove(section.id)}>
-                        <Text fontSize="$3" color="$gray8" paddingHorizontal="$1">✕</Text>
+                        <Text fontSize="$3" color="$gray8" paddingHorizontal="$1">
+                          ✕
+                        </Text>
                       </Pressable>
                     )}
                     <Pressable onPress={() => toggleSection(section.id)}>
@@ -327,15 +379,26 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                       <MemberAndGroupPicker
                         selectedUsers={bulk.userIds}
                         onUsersChange={(uids) =>
-                          setBulkAssign((prev) => ({ ...prev, [section.id]: { ...bulk, userIds: uids } }))
+                          setBulkAssign((prev) => ({
+                            ...prev,
+                            [section.id]: { ...bulk, userIds: uids },
+                          }))
                         }
                         selectedGroups={bulk.groupIds}
                         onGroupsChange={(gids) =>
-                          setBulkAssign((prev) => ({ ...prev, [section.id]: { ...bulk, groupIds: gids } }))
+                          setBulkAssign((prev) => ({
+                            ...prev,
+                            [section.id]: { ...bulk, groupIds: gids },
+                          }))
                         }
                       />
                       {hasBulk && tasks.length > 0 ? (
-                        <Button size="$2" theme="active" alignSelf="flex-start" onPress={() => applyBulkAssign(section.id)}>
+                        <Button
+                          size="$2"
+                          theme="active"
+                          alignSelf="flex-start"
+                          onPress={() => applyBulkAssign(section.id)}
+                        >
                           Apply to all {tasks.length} task{tasks.length !== 1 ? 's' : ''}
                         </Button>
                       ) : null}
@@ -343,10 +406,24 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
 
                     {/* Individual tasks */}
                     {tasks.map((task, index) => (
-                      <YStack key={index} gap="$2" padding="$2" backgroundColor="$gray2" borderRadius="$2">
+                      <YStack
+                        key={index}
+                        gap="$2"
+                        padding="$2"
+                        backgroundColor="$gray2"
+                        borderRadius="$2"
+                      >
                         <XStack alignItems="center" justifyContent="space-between">
-                          <Text fontSize="$2" fontWeight="600" color="$gray10">Task {index + 1}</Text>
-                          <Button size="$1" onPress={() => removeTask(section.id, index)} theme="red">Remove</Button>
+                          <Text fontSize="$2" fontWeight="600" color="$gray10">
+                            Task {index + 1}
+                          </Text>
+                          <Button
+                            size="$1"
+                            onPress={() => removeTask(section.id, index)}
+                            theme="red"
+                          >
+                            Remove
+                          </Button>
                         </XStack>
 
                         <Input
@@ -357,24 +434,44 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                         />
 
                         <XStack alignItems="center" gap="$2" flexWrap="wrap">
-                          <XStack borderWidth={1} borderColor="$borderColor" borderRadius="$2" overflow="hidden">
+                          <XStack
+                            borderWidth={1}
+                            borderColor="$borderColor"
+                            borderRadius="$2"
+                            overflow="hidden"
+                          >
                             {(['before', 'after'] as const).map((side) => {
-                              const active = side === 'after'
-                                ? (task.daysAfterEvent ?? 0) > 0
-                                : !(task.daysAfterEvent && task.daysAfterEvent > 0)
+                              const active =
+                                side === 'after'
+                                  ? (task.daysAfterEvent ?? 0) > 0
+                                  : !(task.daysAfterEvent && task.daysAfterEvent > 0)
                               return (
                                 <Pressable
                                   key={side}
                                   onPress={() => {
                                     if (side === 'after') {
-                                      updateTask(section.id, index, { daysAfterEvent: task.daysAfterEvent || 1, daysBefore: 0 })
+                                      updateTask(section.id, index, {
+                                        daysAfterEvent: task.daysAfterEvent || 1,
+                                        daysBefore: 0,
+                                      })
                                     } else {
-                                      updateTask(section.id, index, { daysAfterEvent: undefined, daysBefore: task.daysBefore || 7 })
+                                      updateTask(section.id, index, {
+                                        daysAfterEvent: undefined,
+                                        daysBefore: task.daysBefore || 7,
+                                      })
                                     }
                                   }}
                                 >
-                                  <XStack paddingHorizontal="$2" paddingVertical="$1" backgroundColor={active ? '$blue9' : 'transparent'}>
-                                    <Text fontSize="$2" color={active ? 'white' : '$gray10'} fontWeight={active ? '700' : '400'}>
+                                  <XStack
+                                    paddingHorizontal="$2"
+                                    paddingVertical="$1"
+                                    backgroundColor={active ? '$blue9' : 'transparent'}
+                                  >
+                                    <Text
+                                      fontSize="$2"
+                                      color={active ? 'white' : '$gray10'}
+                                      fontWeight={active ? '700' : '400'}
+                                    >
                                       {side === 'before' ? 'Before' : 'After'}
                                     </Text>
                                   </XStack>
@@ -387,24 +484,34 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                               <Input
                                 placeholder="1"
                                 value={String(task.daysAfterEvent ?? 1)}
-                                onChangeText={(v) => updateTask(section.id, index, { daysAfterEvent: parseInt(v) || 1 })}
+                                onChangeText={(v) =>
+                                  updateTask(section.id, index, {
+                                    daysAfterEvent: parseInt(v) || 1,
+                                  })
+                                }
                                 keyboardType="numeric"
                                 size="$3"
                                 width={70}
                               />
-                              <Text fontSize="$2" color="$gray10">days after event</Text>
+                              <Text fontSize="$2" color="$gray10">
+                                days after event
+                              </Text>
                             </>
                           ) : (
                             <>
                               <Input
                                 placeholder="7"
                                 value={String(task.daysBefore)}
-                                onChangeText={(v) => updateTask(section.id, index, { daysBefore: parseInt(v) || 0 })}
+                                onChangeText={(v) =>
+                                  updateTask(section.id, index, { daysBefore: parseInt(v) || 0 })
+                                }
                                 keyboardType="numeric"
                                 size="$3"
                                 width={70}
                               />
-                              <Text fontSize="$2" color="$gray10">days before event</Text>
+                              <Text fontSize="$2" color="$gray10">
+                                days before event
+                              </Text>
                             </>
                           )}
                         </XStack>
@@ -413,13 +520,20 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                           selectedUsers={task.assignees}
                           onUsersChange={(v) => updateTask(section.id, index, { assignees: v })}
                           selectedGroups={task.assigneeGroups ?? []}
-                          onGroupsChange={(v) => updateTask(section.id, index, { assigneeGroups: v })}
+                          onGroupsChange={(v) =>
+                            updateTask(section.id, index, { assigneeGroups: v })
+                          }
                           label="Assignees"
                         />
                       </YStack>
                     ))}
 
-                    <Button size="$2" onPress={() => addTask(section.id)} theme="active" alignSelf="flex-start">
+                    <Button
+                      size="$2"
+                      onPress={() => addTask(section.id)}
+                      theme="active"
+                      alignSelf="flex-start"
+                    >
                       + Add Task
                     </Button>
                   </YStack>
@@ -430,8 +544,16 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
 
           {/* Add category */}
           {addingSection ? (
-            <YStack gap="$2" padding="$2" borderWidth={1} borderColor="$borderColor" borderRadius="$2">
-              <Text fontSize="$3" fontWeight="600">New Category</Text>
+            <YStack
+              gap="$2"
+              padding="$2"
+              borderWidth={1}
+              borderColor="$borderColor"
+              borderRadius="$2"
+            >
+              <Text fontSize="$3" fontWeight="600">
+                New Category
+              </Text>
               <Input
                 placeholder="Category name"
                 value={newSectionLabel}
@@ -449,16 +571,30 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                       backgroundColor={c}
                       borderWidth={newSectionColor === c ? 3 : 0}
                       borderColor="white"
-                      style={{ outline: newSectionColor === c ? `2px solid ${c}` : 'none' } as object}
+                      style={
+                        { outline: newSectionColor === c ? `2px solid ${c}` : 'none' } as object
+                      }
                     />
                   </Pressable>
                 ))}
               </XStack>
               <XStack gap="$2">
-                <Button size="$2" theme="gray" onPress={() => { setAddingSection(false); setNewSectionLabel('') }}>
+                <Button
+                  size="$2"
+                  theme="gray"
+                  onPress={() => {
+                    setAddingSection(false)
+                    setNewSectionLabel('')
+                  }}
+                >
                   Cancel
                 </Button>
-                <Button size="$2" theme="active" onPress={addSection} disabled={!newSectionLabel.trim()}>
+                <Button
+                  size="$2"
+                  theme="active"
+                  onPress={addSection}
+                  disabled={!newSectionLabel.trim()}
+                >
                   Add
                 </Button>
               </XStack>
@@ -474,14 +610,20 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
                 justifyContent="center"
                 gap="$2"
               >
-                <Text fontSize="$3" color="$gray10">+</Text>
-                <Text fontSize="$3" color="$gray10">Add Category</Text>
+                <Text fontSize="$3" color="$gray10">
+                  +
+                </Text>
+                <Text fontSize="$3" color="$gray10">
+                  Add Category
+                </Text>
               </XStack>
             </Pressable>
           )}
 
           <XStack gap="$2" justifyContent="flex-end">
-            <Button size="$3" onPress={onClose} theme="gray">Cancel</Button>
+            <Button size="$3" onPress={onClose} theme="gray">
+              Cancel
+            </Button>
             <Button size="$3" onPress={handleSave} disabled={saving} theme="active">
               {saving ? <Spinner size="small" /> : 'Save Template'}
             </Button>

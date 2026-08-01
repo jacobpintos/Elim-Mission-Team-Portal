@@ -14,7 +14,12 @@ interface AuditEntryProps {
 
 function formatTimestamp(ts: unknown): string {
   if (!ts) return ''
-  if (ts && typeof ts === 'object' && 'toDate' in ts && typeof (ts as { toDate: unknown }).toDate === 'function') {
+  if (
+    ts &&
+    typeof ts === 'object' &&
+    'toDate' in ts &&
+    typeof (ts as { toDate: unknown }).toDate === 'function'
+  ) {
     const date = (ts as { toDate: () => Date }).toDate()
     return date.toLocaleString()
   }

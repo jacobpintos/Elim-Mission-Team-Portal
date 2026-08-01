@@ -9,7 +9,7 @@ import { sameId } from '@/lib/ids'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { EventFormModal } from '@/features/events/EventFormModal'
 import { AvailQueueBanner } from '@/features/events/AvailQueueBanner'
-import { isAdmin, isPublic } from '@/lib/roles'
+import { isAdmin, isPublic, isGuest } from '@/lib/roles'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { FD } from '@/lib/format'
 import type { EventInstance, EventTemplate } from '@/types/events'
@@ -107,14 +107,18 @@ export default function EventsScreen() {
   const unpublishedEvents = admin
     ? templates.filter((t) => t.unpublished === true && !t.deleted)
     : []
-  const monthEvents = allMonthInstances.filter(
-    (ev) =>
-      ev.unpublished !== true &&
-      (ev.isPublic ||
-        admin ||
-        ev.users?.some((x) => sameId(x, uid)) ||
-        (ev.groups?.length ? getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)) : false))
-  )
+  // A guest sees only what they were added to. Everyone else also sees public
+  // events; for a guest that would surface the whole public calendar, which is
+  // the opposite of being invited to one trip.
+  const guest = isGuest(profile)
+  const monthEvents = allMonthInstances.filter((ev) => {
+    if (ev.unpublished === true) return false
+    const invited =
+      ev.users?.some((x) => sameId(x, uid)) ||
+      (ev.groups?.length ? getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)) : false)
+    if (guest) return invited
+    return ev.isPublic || admin || invited
+  })
 
   // Group events by date string
   const byDate: Record<string, EventInstance[]> = {}

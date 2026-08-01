@@ -38,16 +38,18 @@ export function MemberAndGroupPicker({
       )
     : users
 
-  const filteredGroups = q
-    ? groups.filter((g) => g.name.toLowerCase().includes(q))
-    : groups
+  const filteredGroups = q ? groups.filter((g) => g.name.toLowerCase().includes(q)) : groups
 
   const toggleUser = (uid: string) => {
-    onUsersChange(safeUsers.includes(uid) ? safeUsers.filter((id) => id !== uid) : [...safeUsers, uid])
+    onUsersChange(
+      safeUsers.includes(uid) ? safeUsers.filter((id) => id !== uid) : [...safeUsers, uid]
+    )
   }
 
   const toggleGroup = (gid: string) => {
-    onGroupsChange(safeGroups.includes(gid) ? safeGroups.filter((id) => id !== gid) : [...safeGroups, gid])
+    onGroupsChange(
+      safeGroups.includes(gid) ? safeGroups.filter((id) => id !== gid) : [...safeGroups, gid]
+    )
   }
 
   const selectedUserObjs = users.filter((u) => safeUsers.includes(u.uid))
@@ -57,7 +59,9 @@ export function MemberAndGroupPicker({
   return (
     <YStack gap="$2">
       {label ? (
-        <Text fontWeight="600" fontSize="$3">{label}</Text>
+        <Text fontWeight="600" fontSize="$3">
+          {label}
+        </Text>
       ) : null}
 
       {/* Selected chips */}
@@ -77,7 +81,9 @@ export function MemberAndGroupPicker({
                 {u.displayName || u.email || u.uid}
               </Text>
               <Pressable onPress={() => toggleUser(u.uid)}>
-                <Text color="white" fontSize="$2" fontWeight="700">×</Text>
+                <Text color="white" fontSize="$2" fontWeight="700">
+                  ×
+                </Text>
               </Pressable>
             </XStack>
           ))}
@@ -91,9 +97,13 @@ export function MemberAndGroupPicker({
               alignItems="center"
               gap="$1"
             >
-              <Text color="white" fontSize="$2">⬡ {g.name}</Text>
+              <Text color="white" fontSize="$2">
+                ⬡ {g.name}
+              </Text>
               <Pressable onPress={() => toggleGroup(g.id)}>
-                <Text color="white" fontSize="$2" fontWeight="700">×</Text>
+                <Text color="white" fontSize="$2" fontWeight="700">
+                  ×
+                </Text>
               </Pressable>
             </XStack>
           ))}
@@ -101,15 +111,31 @@ export function MemberAndGroupPicker({
       ) : null}
 
       {/* Tab toggle */}
-      <XStack borderWidth={1} borderColor="$borderColor" borderRadius="$2" overflow="hidden" alignSelf="flex-start">
+      <XStack
+        borderWidth={1}
+        borderColor="$borderColor"
+        borderRadius="$2"
+        overflow="hidden"
+        alignSelf="flex-start"
+      >
         {(['people', 'groups'] as Tab[]).map((t) => (
-          <Pressable key={t} onPress={() => { setTab(t); setSearch('') }}>
+          <Pressable
+            key={t}
+            onPress={() => {
+              setTab(t)
+              setSearch('')
+            }}
+          >
             <XStack
               paddingHorizontal="$3"
               paddingVertical="$1"
               backgroundColor={tab === t ? '$blue9' : 'transparent'}
             >
-              <Text fontSize="$2" color={tab === t ? 'white' : '$gray10'} fontWeight={tab === t ? '700' : '400'}>
+              <Text
+                fontSize="$2"
+                color={tab === t ? 'white' : '$gray10'}
+                fontWeight={tab === t ? '700' : '400'}
+              >
                 {t === 'people' ? 'People' : 'Groups'}
               </Text>
             </XStack>
@@ -125,85 +151,99 @@ export function MemberAndGroupPicker({
       />
 
       {!q ? null : (
-      <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-        {tab === 'people'
-          ? filteredUsers.slice(0, 50).map((u) => {
-              const isSel = safeUsers.includes(u.uid)
-              return (
-                <Pressable key={u.uid} onPress={() => toggleUser(u.uid)}>
-                  <XStack
-                    padding="$2"
-                    borderRadius="$2"
-                    backgroundColor={isSel ? '$primary' : 'transparent'}
-                    alignItems="center"
-                    gap="$2"
-                  >
-                    <YStack
-                      width={28}
-                      height={28}
-                      borderRadius={14}
-                      backgroundColor={isSel ? 'rgba(255,255,255,0.3)' : '$gray5'}
+        <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+          {tab === 'people'
+            ? filteredUsers.slice(0, 50).map((u) => {
+                const isSel = safeUsers.includes(u.uid)
+                return (
+                  <Pressable key={u.uid} onPress={() => toggleUser(u.uid)}>
+                    <XStack
+                      padding="$2"
+                      borderRadius="$2"
+                      backgroundColor={isSel ? '$primary' : 'transparent'}
                       alignItems="center"
-                      justifyContent="center"
+                      gap="$2"
                     >
-                      <Text fontSize="$1" fontWeight="700" color={isSel ? 'white' : '$gray11'}>
-                        {(u.displayName || u.email || u.uid).slice(0, 2).toUpperCase()}
-                      </Text>
-                    </YStack>
-                    <YStack flex={1}>
-                      <Text fontSize="$3" color={isSel ? 'white' : '$color'}>
-                        {u.displayName || u.email || u.uid}
-                      </Text>
-                      <Text fontSize="$2" color={isSel ? 'rgba(255,255,255,0.7)' : '$gray10'}>
-                        {u.email ?? ''}
-                      </Text>
-                    </YStack>
-                    {isSel ? <Text color="white" fontSize="$3">✓</Text> : null}
-                  </XStack>
-                </Pressable>
-              )
-            })
-          : filteredGroups.map((g) => {
-              const isSel = safeGroups.includes(g.id)
-              return (
-                <Pressable key={g.id} onPress={() => toggleGroup(g.id)}>
-                  <XStack
-                    padding="$2"
-                    borderRadius="$2"
-                    backgroundColor={isSel ? '$blue9' : 'transparent'}
-                    alignItems="center"
-                    gap="$2"
-                  >
-                    <YStack
-                      width={28}
-                      height={28}
-                      borderRadius={14}
-                      backgroundColor={isSel ? 'rgba(255,255,255,0.3)' : '$gray5'}
+                      <YStack
+                        width={28}
+                        height={28}
+                        borderRadius={14}
+                        backgroundColor={isSel ? 'rgba(255,255,255,0.3)' : '$gray5'}
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <Text fontSize="$1" fontWeight="700" color={isSel ? 'white' : '$gray11'}>
+                          {(u.displayName || u.email || u.uid).slice(0, 2).toUpperCase()}
+                        </Text>
+                      </YStack>
+                      <YStack flex={1}>
+                        <Text fontSize="$3" color={isSel ? 'white' : '$color'}>
+                          {u.displayName || u.email || u.uid}
+                        </Text>
+                        <Text fontSize="$2" color={isSel ? 'rgba(255,255,255,0.7)' : '$gray10'}>
+                          {u.email ?? ''}
+                        </Text>
+                      </YStack>
+                      {isSel ? (
+                        <Text color="white" fontSize="$3">
+                          ✓
+                        </Text>
+                      ) : null}
+                    </XStack>
+                  </Pressable>
+                )
+              })
+            : filteredGroups.map((g) => {
+                const isSel = safeGroups.includes(g.id)
+                return (
+                  <Pressable key={g.id} onPress={() => toggleGroup(g.id)}>
+                    <XStack
+                      padding="$2"
+                      borderRadius="$2"
+                      backgroundColor={isSel ? '$blue9' : 'transparent'}
                       alignItems="center"
-                      justifyContent="center"
+                      gap="$2"
                     >
-                      <Text fontSize="$1" fontWeight="700" color={isSel ? 'white' : '$gray11'}>
-                        ⬡
-                      </Text>
-                    </YStack>
-                    <YStack flex={1}>
-                      <Text fontSize="$3" color={isSel ? 'white' : '$color'}>{g.name}</Text>
-                      <Text fontSize="$2" color={isSel ? 'rgba(255,255,255,0.7)' : '$gray10'}>
-                        {g.members.length} member{g.members.length !== 1 ? 's' : ''}
-                      </Text>
-                    </YStack>
-                    {isSel ? <Text color="white" fontSize="$3">✓</Text> : null}
-                  </XStack>
-                </Pressable>
-              )
-            })}
-        {tab === 'people' && filteredUsers.length === 0 ? (
-          <Text padding="$2" color="$gray10" fontSize="$3">No people found</Text>
-        ) : null}
-        {tab === 'groups' && filteredGroups.length === 0 ? (
-          <Text padding="$2" color="$gray10" fontSize="$3">No groups found</Text>
-        ) : null}
-      </ScrollView>
+                      <YStack
+                        width={28}
+                        height={28}
+                        borderRadius={14}
+                        backgroundColor={isSel ? 'rgba(255,255,255,0.3)' : '$gray5'}
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <Text fontSize="$1" fontWeight="700" color={isSel ? 'white' : '$gray11'}>
+                          ⬡
+                        </Text>
+                      </YStack>
+                      <YStack flex={1}>
+                        <Text fontSize="$3" color={isSel ? 'white' : '$color'}>
+                          {g.name}
+                        </Text>
+                        <Text fontSize="$2" color={isSel ? 'rgba(255,255,255,0.7)' : '$gray10'}>
+                          {g.members.length} member{g.members.length !== 1 ? 's' : ''}
+                        </Text>
+                      </YStack>
+                      {isSel ? (
+                        <Text color="white" fontSize="$3">
+                          ✓
+                        </Text>
+                      ) : null}
+                    </XStack>
+                  </Pressable>
+                )
+              })}
+          {tab === 'people' && filteredUsers.length === 0 ? (
+            <Text padding="$2" color="$gray10" fontSize="$3">
+              No people found
+            </Text>
+          ) : null}
+          {tab === 'groups' && filteredGroups.length === 0 ? (
+            <Text padding="$2" color="$gray10" fontSize="$3">
+              No groups found
+            </Text>
+          ) : null}
+        </ScrollView>
       )}
     </YStack>
   )

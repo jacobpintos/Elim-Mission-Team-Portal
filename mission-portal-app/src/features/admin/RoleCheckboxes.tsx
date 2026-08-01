@@ -6,6 +6,7 @@ export const ALL_ROLES = [
   'worship',
   'regular',
   'intern',
+  'guest',
   'public',
 ] as const
 

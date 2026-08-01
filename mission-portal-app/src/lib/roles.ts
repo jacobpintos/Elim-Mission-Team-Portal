@@ -8,6 +8,19 @@ export const isPublic = (u: UserProfile | null) => hasRole(u, 'public')
 export const isIntern = (u: UserProfile | null) => hasRole(u, 'intern')
 
 /**
+ * A guest: someone brought along for a specific trip.
+ *
+ * Guests hold no member role, so every permission check that asks "is this a
+ * member" answers no and they are treated exactly like a public user. What
+ * they get on top is reach — they can be added to events, message rooms and
+ * set lists individually — and everything they reach is read-only.
+ */
+export const isGuest = (u: UserProfile | null) => hasRole(u, 'guest')
+
+/** Guests may read what they have been added to, but never change it. */
+export const isReadOnly = (u: UserProfile | null) => isGuest(u) && !isAdmin(u)
+
+/**
  * Roles that no longer exist, and what a user carrying one becomes.
  *
  * 'merch' was removed as a user type. A profile that still lists it keeps
@@ -53,6 +66,21 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
 
   const MEMBER_ROLES: Role[] = ['admin', 'security', 'regular', 'intern', 'worship']
   const isMember = u.roles?.some((r) => MEMBER_ROLES.includes(r)) ?? false
+
+  // Guests sit between public and member: their own tab set, and no member
+  // role, so permission checks elsewhere treat them as public.
+  if (isGuest(u) && !isMember) {
+    return [
+      'dashboard',
+      'events',
+      'assignments',
+      'messages',
+      'announce',
+      'worship',
+      'music',
+      'settings',
+    ]
+  }
 
   // Users with no member role get public-facing tabs only
   if (!isMember)

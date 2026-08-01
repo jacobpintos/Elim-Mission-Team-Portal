@@ -13,7 +13,7 @@ import { useUsersStore } from '@/stores/usersStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { isWorship } from '@/lib/roles'
+import { isWorship, isReadOnly } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { SetListFormModal } from '@/features/worship/SetListFormModal'
 import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
@@ -36,6 +36,7 @@ export default function WorshipScreen() {
   const tasksStore = useTasksStore()
   const toast = useUIStore((s) => s.toast)
 
+  const readOnly = isReadOnly(profile)
   const [activeTab, setActiveTab] = useState<'setlists' | 'chords' | 'inputs'>('setlists')
   const [showForm, setShowForm] = useState(false)
   const [detailSetList, setDetailSetList] = useState<SetList | null>(null)
@@ -149,12 +150,7 @@ export default function WorshipScreen() {
       <ScreenTitle options={{ title: 'Worship' }} />
 
       {/* Tab switcher */}
-      <XStack
-        paddingHorizontal="$3"
-        paddingTop="$3"
-        paddingBottom="$2"
-        gap="$2"
-      >
+      <XStack paddingHorizontal="$3" paddingTop="$3" paddingBottom="$2" gap="$2">
         <Pressable onPress={() => setActiveTab('setlists')}>
           <XStack
             backgroundColor={activeTab === 'setlists' ? colors.primary : colors.surface}
@@ -191,24 +187,28 @@ export default function WorshipScreen() {
             </Text>
           </XStack>
         </Pressable>
-        <Pressable onPress={() => setActiveTab('inputs')}>
-          <XStack
-            backgroundColor={activeTab === 'inputs' ? colors.primary : colors.surface}
-            borderRadius={99}
-            borderWidth={1}
-            borderColor={activeTab === 'inputs' ? colors.primary : colors.border}
-            paddingHorizontal="$3"
-            paddingVertical="$1"
-          >
-            <Text
-              color={activeTab === 'inputs' ? 'white' : colors.textMuted}
-              fontWeight={activeTab === 'inputs' ? '700' : '400'}
-              fontSize="$3"
+        {/* Guests get the worship tab without the input list — that is stage
+            plumbing, not something a visitor needs. */}
+        {readOnly ? null : (
+          <Pressable onPress={() => setActiveTab('inputs')}>
+            <XStack
+              backgroundColor={activeTab === 'inputs' ? colors.primary : colors.surface}
+              borderRadius={99}
+              borderWidth={1}
+              borderColor={activeTab === 'inputs' ? colors.primary : colors.border}
+              paddingHorizontal="$3"
+              paddingVertical="$1"
             >
-              Input List
-            </Text>
-          </XStack>
-        </Pressable>
+              <Text
+                color={activeTab === 'inputs' ? 'white' : colors.textMuted}
+                fontWeight={activeTab === 'inputs' ? '700' : '400'}
+                fontSize="$3"
+              >
+                Input List
+              </Text>
+            </XStack>
+          </Pressable>
+        )}
       </XStack>
 
       {activeTab === 'setlists' ? (
@@ -222,15 +222,25 @@ export default function WorshipScreen() {
               <Text color={colors.textMuted} textAlign="center">
                 No set lists yet.
               </Text>
-              <Pressable
-                onPress={() => setShowForm(true)}
-                style={[styles.fab, { backgroundColor: colors.primary, position: 'relative', bottom: 0, right: 0 }]}
-              >
-                <Text color="white" fontWeight="700" fontSize="$3">⊕ New Set List</Text>
-              </Pressable>
+              {readOnly ? null : (
+                <Pressable
+                  onPress={() => setShowForm(true)}
+                  style={[
+                    styles.fab,
+                    { backgroundColor: colors.primary, position: 'relative', bottom: 0, right: 0 },
+                  ]}
+                >
+                  <Text color="white" fontWeight="700" fontSize="$3">
+                    ⊕ New Set List
+                  </Text>
+                </Pressable>
+              )}
             </YStack>
           ) : (
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+            >
               <YStack padding="$3" gap="$3">
                 {sorted.map((sl) => {
                   const evTemplate = sl.eventTemplateId
@@ -317,14 +327,16 @@ export default function WorshipScreen() {
             </ScrollView>
           )}
 
-          <Pressable
-            onPress={() => setShowForm(true)}
-            style={[styles.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 16 }]}
-          >
-            <Text color="white" fontWeight="700" fontSize="$3">
-              ⊕ New Set List
-            </Text>
-          </Pressable>
+          {readOnly ? null : (
+            <Pressable
+              onPress={() => setShowForm(true)}
+              style={[styles.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 16 }]}
+            >
+              <Text color="white" fontWeight="700" fontSize="$3">
+                ⊕ New Set List
+              </Text>
+            </Pressable>
+          )}
 
           <SetListFormModal
             visible={showForm}
@@ -336,7 +348,7 @@ export default function WorshipScreen() {
           <SetListDetailModal setList={detailSetList} onClose={() => setDetailSetList(null)} />
         </>
       ) : activeTab === 'chords' ? (
-        <ChordSheetsTab createdBy={uid} />
+        <ChordSheetsTab createdBy={uid} readOnly={readOnly} />
       ) : (
         <InputListTab />
       )}

@@ -4,6 +4,7 @@ export type Role =
   | 'regular'
   | 'intern'
   | 'worship'
+  | 'guest'
   | 'public'
 
 export interface NotificationPrefs {

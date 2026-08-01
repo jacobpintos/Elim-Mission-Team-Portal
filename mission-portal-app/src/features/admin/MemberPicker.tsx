@@ -71,12 +71,7 @@ export function MemberPicker({ selected, onChange, label }: MemberPickerProps) {
       )}
 
       {/* Search input */}
-      <Input
-        placeholder="Search users..."
-        value={search}
-        onChangeText={setSearch}
-        size="$3"
-      />
+      <Input placeholder="Search users..." value={search} onChangeText={setSearch} size="$3" />
 
       {/* User list */}
       <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>

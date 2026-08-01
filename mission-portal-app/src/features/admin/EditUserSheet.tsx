@@ -39,7 +39,11 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
     try {
       const resetUserPassword = httpsCallable(functions, 'resetUserPassword')
       await resetUserPassword({ uid: user.uid })
-      await audit('user.passwordReset', `Reset password for ${user.email}`, profile?.displayName ?? '')
+      await audit(
+        'user.passwordReset',
+        `Reset password for ${user.email}`,
+        profile?.displayName ?? ''
+      )
       toast('Password reset to 12345678', 'success')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to reset password'

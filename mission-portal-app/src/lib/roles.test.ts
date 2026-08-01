@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { hasRole, isAdmin, isSecurity, isPublic, visibleTabs, migrateRetiredRoles } from './roles'
+import {
+  hasRole,
+  isAdmin,
+  isSecurity,
+  isPublic,
+  isGuest,
+  isReadOnly,
+  visibleTabs,
+  migrateRetiredRoles,
+} from './roles'
 import type { UserProfile, Role } from '@/types/user'
 
 const user = (...roles: Role[]) => ({ uid: 'u1', roles }) as UserProfile
@@ -113,5 +122,64 @@ describe('migrateRetiredRoles', () => {
   it('leaves the migrated account a member', () => {
     const migrated = migrateRetiredRoles(['merch'])!
     expect(visibleTabs({ uid: 'u1', roles: migrated } as never)).toContain('messages')
+  })
+})
+
+describe('guests', () => {
+  const guest = user('guest')
+
+  it('is not a member, so member-only permission checks say no', () => {
+    // "Treated as public for permissions" is the whole design: guests hold no
+    // member role, so anything gating on one excludes them without needing to
+    // know guests exist.
+    expect(isGuest(guest)).toBe(true)
+    expect(isAdmin(guest)).toBe(false)
+    expect(isSecurity(guest)).toBe(false)
+    expect(hasRole(guest, 'regular')).toBe(false)
+  })
+
+  it('is read-only', () => {
+    expect(isReadOnly(guest)).toBe(true)
+    expect(isReadOnly(user('regular'))).toBe(false)
+    // An admin who somehow also carries guest keeps their edit rights.
+    expect(isReadOnly(user('guest', 'admin'))).toBe(false)
+  })
+
+  it('gets its own tab set, not the public one', () => {
+    const tabs = visibleTabs(guest)
+
+    expect(tabs).toContain('events')
+    expect(tabs).toContain('messages')
+    expect(tabs).toContain('worship')
+    expect(tabs).toContain('music')
+    expect(tabs).toContain('settings')
+  })
+
+  it('does not get member-only or public-only surfaces', () => {
+    const tabs = visibleTabs(guest)
+
+    // Operations belong to the team, not a visitor.
+    expect(tabs).not.toContain('issues')
+    expect(tabs).not.toContain('security')
+    expect(tabs).not.toContain('inventory')
+    expect(tabs).not.toContain('admin')
+    // The wider public content set is deliberately not theirs either.
+    expect(tabs).not.toContain('giving')
+    expect(tabs).not.toContain('story')
+    expect(tabs).not.toContain('posts')
+    expect(tabs).not.toContain('connect')
+  })
+
+  it('does not become a guest tab set once a real role is added', () => {
+    // A guest promoted to regular should get the member tabs.
+    const promoted = visibleTabs(user('guest', 'regular'))
+
+    expect(promoted).toContain('issues')
+    expect(promoted).toContain('dashboard')
+  })
+
+  it('is distinct from public', () => {
+    expect(isPublic(guest)).toBe(false)
+    expect(visibleTabs(guest)).not.toEqual(visibleTabs(user('public')))
   })
 })
