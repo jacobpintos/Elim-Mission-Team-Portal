@@ -69,6 +69,8 @@ export default function EventsScreen() {
   const [editInstance, setEditInstance] = useState<EventInstance | null>(null)
   const [editDraft, setEditDraft] = useState<EventTemplate | null>(null)
   const [view, setView] = useState<'calendar' | 'list'>('calendar')
+  // Guests default to their own events; 'all' widens to public ones too.
+  const [guestScope, setGuestScope] = useState<'mine' | 'all'>('mine')
 
   // Opening a draft swaps the form's key and flips it open in the same render,
   // which remounts it already-open instead of transitioning into view — and
@@ -116,7 +118,10 @@ export default function EventsScreen() {
     const invited =
       ev.users?.some((x) => sameId(x, uid)) ||
       (ev.groups?.length ? getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)) : false)
-    if (guest) return invited
+    // A guest starts on their own trip and can opt into the public calendar.
+    // Without the toggle they would either be shown every public event by
+    // default, or have no way to reach one at all.
+    if (guest) return guestScope === 'mine' ? invited : invited || ev.isPublic
     return ev.isPublic || admin || invited
   })
 
@@ -218,6 +223,31 @@ export default function EventsScreen() {
             </Pressable>
           ))}
         </XStack>
+        {guest ? (
+          <XStack gap="$1">
+            {(
+              [
+                ['mine', 'My events'],
+                ['all', 'All events'],
+              ] as const
+            ).map(([scope, label]) => (
+              <Pressable key={scope} onPress={() => setGuestScope(scope)}>
+                <XStack
+                  paddingHorizontal="$3"
+                  paddingVertical="$1"
+                  borderRadius="$2"
+                  backgroundColor={guestScope === scope ? colors.primary : 'transparent'}
+                  borderWidth={1}
+                  borderColor={guestScope === scope ? colors.primary : colors.border}
+                >
+                  <Text color={guestScope === scope ? 'white' : colors.text} fontSize="$2">
+                    {label}
+                  </Text>
+                </XStack>
+              </Pressable>
+            ))}
+          </XStack>
+        ) : null}
         {admin ? (
           <XStack gap="$2" alignItems="center">
             {/* The interactive map (Mapbox) is web-only — there's no native

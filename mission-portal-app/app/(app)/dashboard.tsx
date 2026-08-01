@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, useWindowDimensions } from 'react-native'
+import { ScrollView, useWindowDimensions, Pressable } from 'react-native'
 import { YStack, XStack, Text, H3, Button } from 'tamagui'
 import { Stack, useRouter } from 'expo-router'
 import { AppLogo } from '@/components/ui/AppLogo'
@@ -17,10 +17,12 @@ import { todayStr, dateStr } from '@/lib/events'
 import { timeOfDay } from '@/lib/format'
 import { sameId } from '@/lib/ids'
 import { isOverdue } from '@/lib/availability'
-import { isAdmin } from '@/lib/roles'
+import { isAdmin, isGuest } from '@/lib/roles'
 import { usePWAInstallPrompt } from '@/lib/pwaInstall'
 import type { EventInstance } from '@/types/events'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { useWorshipStore } from '@/stores/worshipStore'
+import { guestLodging, guestFlights, worshipEventsFor } from '@/lib/guestItinerary'
 
 export default function Dashboard() {
   const colors = useThemeColors()
@@ -32,6 +34,7 @@ export default function Dashboard() {
   const { instances, avail, setSelectedEvent } = useEventsStore()
   const { tasks } = useTasksStore()
   const { items: notifs, markRead } = useNotifsStore()
+  const { setLists, subscribe: subWorship, unsubscribe: unsubWorship } = useWorshipStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
   const { subscribe: subNotifs, unsubscribe: unsubNotifs } = useNotifsStore()
@@ -43,15 +46,18 @@ export default function Dashboard() {
 
   const uid = profile?.uid ?? ''
   const admin = isAdmin(profile)
+  const guest = isGuest(profile)
 
   useEffect(() => {
     subEvents()
     subTasks()
     if (uid) subNotifs(uid)
+    subWorship()
     return () => {
       unsubEvents()
       unsubTasks()
       unsubNotifs()
+      unsubWorship()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid])
@@ -66,9 +72,13 @@ export default function Dashboard() {
   }
 
   const upcoming60 = (() => {
-    const all = instances(today, in60).filter(
-      (ev) => ev.unpublished !== true && (ev.isPublic || admin || ev.users?.some((x) => sameId(x, uid)))
-    )
+    const all = instances(today, in60).filter((ev) => {
+      if (ev.unpublished === true) return false
+      const invited = ev.users?.some((x) => sameId(x, uid))
+      // A guest's dashboard is their trip, not the public calendar.
+      if (guest) return !!invited
+      return ev.isPublic || admin || invited
+    })
     const seen = new Set<string>()
     return all.filter((ev) => {
       const key = String(ev.templateId)
@@ -113,10 +123,105 @@ export default function Dashboard() {
         sameId(t.evId ?? t.evTemplateId, ev.templateId) || sameId(t.evTemplateId, ev.taskTemplateId)
     )
 
+  // A guest is here for the practical details: where they sleep, when they
+  // fly, and the set list if they are singing. Those sit above everything else
+  // rather than buried inside each event card.
+  const myLodging = guest ? guestLodging(upcoming60, uid) : []
+  const myFlights = guest ? guestFlights(upcoming60, uid) : []
+  const myWorshipEvents = guest ? worshipEventsFor(upcoming60, uid) : []
+  const myWorshipSetLists = myWorshipEvents.flatMap((ev) =>
+    setLists
+      .filter((sl) => sameId(sl.eventTemplateId ?? '', ev.templateId ?? ev.id))
+      .map((sl) => ({ event: ev, setList: sl }))
+  )
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
       <ScreenTitle options={{ title: 'Dashboard' }} />
       <YStack padding="$4" gap="$4">
+        {guest && (myLodging.length > 0 || myFlights.length > 0 || myWorshipSetLists.length > 0) ? (
+          <YStack gap="$2">
+            <H3 color={colors.text}>Your trip</H3>
+
+            {myFlights.map(({ event, entry }) => (
+              <Pressable key={`f-${entry.id}`} onPress={() => openDetail(event)}>
+                <YStack
+                  backgroundColor={colors.surface}
+                  borderRadius="$3"
+                  padding="$3"
+                  borderWidth={1}
+                  borderColor={colors.primary}
+                  gap="$1"
+                >
+                  <Text color={colors.primary} fontSize="$2" fontWeight="700">
+                    ✈ FLIGHT · {event.title}
+                  </Text>
+                  {entry.outDate || entry.outTime ? (
+                    <Text color={colors.text} fontSize="$3">
+                      Out:{' '}
+                      {[entry.outDate, entry.outTime, entry.outAirport, entry.outFlight]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  ) : null}
+                  {entry.retDate || entry.retTime ? (
+                    <Text color={colors.text} fontSize="$3">
+                      Return:{' '}
+                      {[entry.retDate, entry.retTime, entry.retAirport, entry.retFlight]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  ) : null}
+                </YStack>
+              </Pressable>
+            ))}
+
+            {myLodging.map(({ event, entry }) => (
+              <Pressable key={`l-${entry.id}`} onPress={() => openDetail(event)}>
+                <YStack
+                  backgroundColor={colors.surface}
+                  borderRadius="$3"
+                  padding="$3"
+                  borderWidth={1}
+                  borderColor={colors.primary}
+                  gap="$1"
+                >
+                  <Text color={colors.primary} fontSize="$2" fontWeight="700">
+                    🏨 HOTEL · {event.title}
+                  </Text>
+                  <Text color={colors.text} fontSize="$3">
+                    {[entry.name, entry.room ? `Room ${entry.room}` : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                </YStack>
+              </Pressable>
+            ))}
+
+            {myWorshipSetLists.map(({ event, setList }) => (
+              <Pressable
+                key={`s-${setList.id}`}
+                onPress={() => router.push('/(app)/worship' as never)}
+              >
+                <YStack
+                  backgroundColor={colors.surface}
+                  borderRadius="$3"
+                  padding="$3"
+                  borderWidth={1}
+                  borderColor={colors.primary}
+                  gap="$1"
+                >
+                  <Text color={colors.primary} fontSize="$2" fontWeight="700">
+                    ♫ SET LIST · {event.title}
+                  </Text>
+                  <Text color={colors.text} fontSize="$3">
+                    {setList.title}
+                  </Text>
+                </YStack>
+              </Pressable>
+            ))}
+          </YStack>
+        ) : null}
         {/* PWA install banner — web only, shown when browser install prompt is available */}
         {canInstall && (
           <XStack
