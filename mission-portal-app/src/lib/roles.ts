@@ -143,3 +143,16 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
   tabs.push('public', 'settings')
   return tabs
 }
+
+/**
+ * How a group's name is shown to people.
+ *
+ * "All" is the group every new member account joins, and guests deliberately
+ * do not — they get their own. The stored name has to stay "All" because
+ * user creation, event assignment and the group screens all match on it, so
+ * the clarification lives in the label rather than the data.
+ */
+export function groupDisplayName(name: string): string {
+  if (name === 'All') return 'All (team — excludes guests)'
+  return name
+}

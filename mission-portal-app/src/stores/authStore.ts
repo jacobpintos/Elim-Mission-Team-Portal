@@ -186,5 +186,7 @@ function defaultNotificationPrefs() {
     weatherAlertAdmin: { push: true, email: false },
     eventLogistics: { push: true, email: false },
     flightReminder: { push: true, email: false },
+    foodSignupOpen: { push: true, email: false },
+    foodSignupReminder: { push: true, email: false },
   }
 }

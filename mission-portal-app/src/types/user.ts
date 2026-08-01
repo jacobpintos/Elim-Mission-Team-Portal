@@ -28,6 +28,10 @@ export interface NotificationPrefs {
   eventLogistics: { push: boolean; email: boolean }
   /** Reminder before a flight you are booked on. */
   flightReminder: { push: boolean; email: boolean }
+  /** An event you are on opened a food sign-up. */
+  foodSignupOpen: { push: boolean; email: boolean }
+  /** Items are still unclaimed a few days before the event. */
+  foodSignupReminder: { push: boolean; email: boolean }
   // Public-user specific
   publicAnnouncement: { push: boolean; email: boolean }
   publicEvent: { push: boolean; email: boolean }

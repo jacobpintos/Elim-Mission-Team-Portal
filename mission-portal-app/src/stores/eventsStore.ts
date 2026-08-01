@@ -180,7 +180,7 @@ async function notifyEventChanges(old: EventTemplate, updated: EventTemplate) {
 }
 
 /** Union of every uid assigned to an event via direct users, groups, or teams. */
-function resolveAssignedUids(t: EventTemplate): Set<string> {
+export function resolveAssignedUids(t: EventTemplate): Set<string> {
   const { getMemberUids } = useGroupsStore.getState()
   const set = new Set<string>()
   ;(t.users ?? []).forEach((u) => set.add(String(u)))

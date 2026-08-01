@@ -3,6 +3,7 @@ import { ScrollView, Pressable } from 'react-native'
 import { XStack, YStack, Text, Input } from 'tamagui'
 import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
+import { groupDisplayName } from '@/lib/roles'
 
 interface MemberAndGroupPickerProps {
   selectedUsers: string[]
@@ -98,7 +99,7 @@ export function MemberAndGroupPicker({
               gap="$1"
             >
               <Text color="white" fontSize="$2">
-                ⬡ {g.name}
+                ⬡ {groupDisplayName(g.name)}
               </Text>
               <Pressable onPress={() => toggleGroup(g.id)}>
                 <Text color="white" fontSize="$2" fontWeight="700">
@@ -218,7 +219,7 @@ export function MemberAndGroupPicker({
                       </YStack>
                       <YStack flex={1}>
                         <Text fontSize="$3" color={isSel ? 'white' : '$color'}>
-                          {g.name}
+                          {groupDisplayName(g.name)}
                         </Text>
                         <Text fontSize="$2" color={isSel ? 'rgba(255,255,255,0.7)' : '$gray10'}>
                           {g.members.length} member{g.members.length !== 1 ? 's' : ''}

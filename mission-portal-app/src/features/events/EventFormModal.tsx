@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Pressable, Alert, Platform } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
-import { collection, onSnapshot } from 'firebase/firestore'
+import { collection, onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore'
 import { Modal } from '@/components/ui/Modal'
 import { db } from '@/lib/firebase'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { useEventsStore } from '@/stores/eventsStore'
+import { useEventsStore, resolveAssignedUids } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useConfigStore } from '@/stores/configStore'
 import { geocodeCity } from '@/lib/geocode'
-import { isPublic } from '@/lib/roles'
+import { isPublic, groupDisplayName } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { TeamsEditor } from './TeamsEditor'
 import { DressCodeEditor } from './DressCodeEditor'
@@ -20,7 +20,11 @@ import { LodgingEditor } from './LodgingEditor'
 import { FlightEditor } from './FlightEditor'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import { taskDueDate } from '@/lib/events'
-import { notifyAssignees, notifyLogisticsAssigned } from '@/lib/taskNotifications'
+import {
+  notifyAssignees,
+  notifyLogisticsAssigned,
+  notifyFoodSignupOpen,
+} from '@/lib/taskNotifications'
 import { newLogisticsAssignments } from '@/lib/guestItinerary'
 import type {
   EventTemplate,
@@ -179,6 +183,11 @@ export function EventFormModal({
     role: 'driver' | 'rider'
   } | null>(null)
   const [carpoolSearch, setCarpoolSearch] = useState('')
+  // Admin-assigned food items, keyed by item index. Written into the same
+  // foodSignups doc that self-signup uses, so both routes agree on who is
+  // bringing what.
+  const [foodAssignees, setFoodAssignees] = useState<Record<number, string>>({})
+  const [foodPickerIndex, setFoodPickerIndex] = useState<number | null>(null)
 
   const field = (key: keyof FormData) => (val: string | boolean | number) =>
     setForm((f) => {
@@ -225,6 +234,27 @@ export function EventFormModal({
     setForm((f) => ({ ...f, foodItems: f.foodItems.filter((_, idx) => idx !== i) }))
   const updateFoodItem = (i: number, val: string) =>
     setForm((f) => ({ ...f, foodItems: f.foodItems.map((x, idx) => (idx === i ? val : x)) }))
+
+  /**
+   * Write the admin's food assignments into foodSignups.
+   *
+   * Merged rather than replaced: someone may have signed themselves up while
+   * the event was being edited, and an admin who touched nothing should not
+   * wipe that.
+   */
+  async function persistFoodAssignments(templateId: string, isoDate: string) {
+    const entries = Object.entries(foodAssignees)
+    if (entries.length === 0 || !isoDate) return
+    const key = `${templateId}_${isoDate}`
+    const ref = doc(db, 'foodSignups', key)
+    const existing = ((await getDoc(ref)).data()?.signups ?? {}) as Record<string, unknown>
+    const merged = { ...existing }
+    for (const [index, assigneeUid] of entries) {
+      const person = allStoreUsers.find((u) => sameId(u.uid, assigneeUid))
+      merged[index] = { uid: String(assigneeUid), displayName: person?.displayName ?? '' }
+    }
+    await setDoc(ref, { signups: merged }, { merge: true })
+  }
 
   const toggleUser = (uid: string) => {
     setForm((f) => {
@@ -315,6 +345,7 @@ export function EventFormModal({
         onClose()
       } else if (event) {
         await updateEvent(event.id, payload)
+        await persistFoodAssignments(String(event.id), event.date ?? displayToIso(form.date))
         // Only what changed — an event is saved many times and re-announcing
         // every hotel room each save would train people to ignore these.
         notifyLogisticsAssigned(
@@ -754,7 +785,7 @@ export function EventFormModal({
                     alignItems="center"
                   >
                     <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                      {g.name}
+                      {groupDisplayName(g.name)}
                     </Text>
                     <Text color={colors.primary} fontSize="$1">
                       ✕
@@ -786,7 +817,7 @@ export function EventFormModal({
                     </Text>
                     <YStack flex={1}>
                       <Text color={colors.text} fontSize="$3">
-                        {g.name}
+                        {groupDisplayName(g.name)}
                       </Text>
                       <Text color={colors.textMuted} fontSize="$1">
                         {g.members.length} member{g.members.length !== 1 ? 's' : ''}
@@ -1058,22 +1089,80 @@ export function EventFormModal({
               Food items
             </Text>
             {form.foodItems.map((item, i) => (
-              <XStack key={i} gap="$2" alignItems="center">
-                <Input
-                  flex={1}
-                  value={item}
-                  onChangeText={(v) => updateFoodItem(i, v)}
-                  placeholder=""
-                  backgroundColor={colors.surface}
-                  color={colors.text}
-                  borderColor={colors.border}
-                />
-                <Pressable onPress={() => removeFoodItem(i)}>
-                  <Text color="$red10" fontSize="$3">
-                    ✕
-                  </Text>
-                </Pressable>
-              </XStack>
+              <YStack key={i} gap="$1">
+                <XStack gap="$2" alignItems="center">
+                  <Input
+                    flex={1}
+                    value={item}
+                    onChangeText={(v) => updateFoodItem(i, v)}
+                    placeholder=""
+                    backgroundColor={colors.surface}
+                    color={colors.text}
+                    borderColor={colors.border}
+                  />
+                  <Pressable onPress={() => setFoodPickerIndex(i)}>
+                    <XStack
+                      paddingHorizontal="$2"
+                      paddingVertical="$1"
+                      borderRadius="$2"
+                      borderWidth={1}
+                      borderColor={colors.border}
+                    >
+                      <Text color={colors.text} fontSize="$2">
+                        {foodAssignees[i]
+                          ? (allUsers.find((u) => sameId(u.uid, foodAssignees[i]))?.displayName ??
+                            'Assigned')
+                          : 'Assign'}
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                  <Pressable onPress={() => removeFoodItem(i)}>
+                    <Text color="$red10" fontSize="$3">
+                      ✕
+                    </Text>
+                  </Pressable>
+                </XStack>
+                {foodPickerIndex === i ? (
+                  <YStack
+                    gap="$1"
+                    padding="$2"
+                    backgroundColor={colors.surface}
+                    borderRadius="$2"
+                    borderWidth={1}
+                    borderColor={colors.border}
+                  >
+                    {foodAssignees[i] ? (
+                      <Pressable
+                        onPress={() => {
+                          setFoodAssignees((prev) => {
+                            const next = { ...prev }
+                            delete next[i]
+                            return next
+                          })
+                          setFoodPickerIndex(null)
+                        }}
+                      >
+                        <Text color="$red10" fontSize="$2">
+                          Clear assignment
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                    {allUsers.slice(0, 8).map((u) => (
+                      <Pressable
+                        key={u.uid}
+                        onPress={() => {
+                          setFoodAssignees((prev) => ({ ...prev, [i]: String(u.uid) }))
+                          setFoodPickerIndex(null)
+                        }}
+                      >
+                        <Text color={colors.text} fontSize="$2">
+                          {u.displayName}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </YStack>
+                ) : null}
+              </YStack>
             ))}
             <Pressable onPress={addFoodItem}>
               <XStack

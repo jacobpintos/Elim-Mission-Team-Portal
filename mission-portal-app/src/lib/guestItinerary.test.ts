@@ -194,3 +194,40 @@ describe('newLogisticsAssignments', () => {
     expect(out).toHaveLength(2)
   })
 })
+
+/**
+ * Mirror of the food reminder's open-item rule. functions/ builds separately
+ * and is not compiled by this runner, so the rule is pinned here.
+ */
+function openItemIndexes(items: string[], signups: Record<string, unknown> | undefined): number[] {
+  return items
+    .map((label, i) => ({ label, i }))
+    .filter(({ label, i }) => label.trim() !== '' && !signups?.[String(i)])
+    .map(({ i }) => i)
+}
+
+describe('openItemIndexes', () => {
+  it('lists items nobody has claimed', () => {
+    expect(openItemIndexes(['Salad', 'Bread'], {})).toEqual([0, 1])
+  })
+
+  it('drops items that are taken', () => {
+    expect(openItemIndexes(['Salad', 'Bread'], { '0': { uid: 'u1' } })).toEqual([1])
+  })
+
+  it('ignores blank rows', () => {
+    // The form seeds a new event with one empty item, and an empty string is
+    // not something anyone can bring.
+    expect(openItemIndexes(['Salad', '', '   '], {})).toEqual([0])
+  })
+
+  it('returns nothing when everything is claimed, so no nudge is sent', () => {
+    const signups = { '0': { uid: 'u1' }, '1': { uid: 'u2' } }
+
+    expect(openItemIndexes(['Salad', 'Bread'], signups)).toEqual([])
+  })
+
+  it('copes with no signup doc at all', () => {
+    expect(openItemIndexes(['Salad'], undefined)).toEqual([0])
+  })
+})

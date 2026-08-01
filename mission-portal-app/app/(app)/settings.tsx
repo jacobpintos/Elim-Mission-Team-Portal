@@ -44,6 +44,8 @@ type NotifKey = keyof Pick<
   | 'weatherAlertAdmin'
   | 'eventLogistics'
   | 'flightReminder'
+  | 'foodSignupOpen'
+  | 'foodSignupReminder'
 >
 
 // Admin-only notification keys — hidden from the toggle list for non-admins,
@@ -58,6 +60,8 @@ const ADMIN_ONLY_NOTIF_KEYS: NotifKey[] = [
   'weatherAlertAdmin',
   'eventLogistics',
   'flightReminder',
+  'foodSignupOpen',
+  'foodSignupReminder',
 ]
 
 const NOTIF_LABELS: Record<NotifKey, string> = {
@@ -79,6 +83,8 @@ const NOTIF_LABELS: Record<NotifKey, string> = {
   weatherAlertAdmin: 'Weather alert',
   eventLogistics: 'Travel details assigned',
   flightReminder: 'Flight reminder',
+  foodSignupOpen: 'Food sign-up opened',
+  foodSignupReminder: 'Food items still open',
 }
 
 type PublicNotifKey = keyof Pick<
@@ -176,6 +182,8 @@ export default function SettingsScreen() {
     weatherAlertAdmin: { push: true, email: false },
     eventLogistics: { push: true, email: false },
     flightReminder: { push: true, email: false },
+    foodSignupOpen: { push: true, email: false },
+    foodSignupReminder: { push: true, email: false },
     publicAnnouncement: { push: true, email: false },
     publicEvent: { push: true, email: false },
     contentFeatured: { push: true, email: false },

@@ -1,5 +1,6 @@
 import { XStack, YStack, Text, Button } from 'tamagui'
 import { useUsersStore } from '@/stores/usersStore'
+import { groupDisplayName } from '@/lib/roles'
 
 interface GroupDoc {
   id: string
@@ -33,7 +34,7 @@ export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
       <XStack alignItems="center" justifyContent="space-between">
         <XStack alignItems="center" gap="$2">
           <Text fontWeight="700" fontSize="$4">
-            {group.name}
+            {groupDisplayName(group.name)}
           </Text>
           <XStack
             backgroundColor="$gray5"

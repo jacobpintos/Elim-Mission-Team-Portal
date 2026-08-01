@@ -26,6 +26,8 @@ export type NotificationType =
   | 'weatherAlertAdmin'
   | 'eventLogistics'
   | 'flightReminder'
+  | 'foodSignupOpen'
+  | 'foodSignupReminder'
 
 /**
  * Notification types the user asked to be "bulk" (starred in their spec):
@@ -109,6 +111,10 @@ export function inAppMessage(type: NotificationType, data: Record<string, unknow
       return `${data.alertEvent ?? 'Weather alert'} for ${data.eventTitle ?? 'an event'}: ${data.headline ?? ''}`
     case 'eventLogistics':
       return `${data.itemLabel ?? 'A travel detail'} was assigned to you for ${data.eventTitle ?? 'an event'}`
+    case 'foodSignupOpen':
+      return `${data.eventTitle ?? 'An event'} has a food sign-up — pick what you'll bring`
+    case 'foodSignupReminder':
+      return `${data.openCount ?? 'Some'} food items are still unclaimed for ${data.eventTitle ?? 'an event'}`
     case 'flightReminder':
       return `Your ${data.legLabel ?? 'flight'} for ${data.eventTitle ?? 'an event'} departs at ${data.departsAt ?? 'soon'}`
     default:
@@ -136,6 +142,8 @@ function subjectFor(type: NotificationType, _data: Record<string, unknown>): str
     chatFlagged: 'Chat flagged — Mission Portal',
     eventLogistics: 'Travel details assigned — Mission Portal',
     flightReminder: 'Flight reminder — Mission Portal',
+    foodSignupOpen: 'Food sign-up open — Mission Portal',
+    foodSignupReminder: 'Food items still open — Mission Portal',
     securityReport: 'Security report — Mission Portal',
     weatherAlertAdmin: 'Weather alert — Mission Portal',
   }

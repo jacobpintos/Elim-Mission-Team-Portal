@@ -1,7 +1,7 @@
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import type { UserProfile } from '@/types/user'
-import { isAdmin } from '@/lib/roles'
+import { isAdmin, isGuest } from '@/lib/roles'
 
 /**
  * Task notifications.
@@ -90,4 +90,27 @@ export function notifyLogisticsAssigned(
       },
     }).catch(() => {})
   })
+}
+
+/**
+ * Tell the people on an event that it has a food sign-up waiting.
+ *
+ * Guests are excluded — they are along for the trip and are not asked to
+ * bring a dish.
+ */
+export function notifyFoodSignupOpen(
+  invitees: UserProfile[],
+  eventTitle: string,
+  instanceKey: string
+) {
+  const sendNotif = httpsCallable(functions, 'sendNotification')
+  invitees
+    .filter((u) => !isGuest(u))
+    .forEach((u) => {
+      sendNotif({
+        uid: String(u.uid),
+        type: 'foodSignupOpen',
+        data: { eventTitle, link: `/(app)/events/${instanceKey}` },
+      }).catch(() => {})
+    })
 }

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { TextInput, Pressable, ScrollView, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { groupDisplayName } from '@/lib/roles'
 
 interface UserLike {
   uid: string | number
@@ -148,7 +149,7 @@ export function RecipientPicker({
                   >
                     <Text fontSize={14}>👥</Text>
                     <Text color={colors.text} fontSize={13} flex={1} numberOfLines={1}>
-                      {g.name}
+                      {groupDisplayName(g.name)}
                     </Text>
                     <Text color={allSelected ? colors.primary : colors.textMuted} fontSize={11}>
                       {allSelected ? 'All added' : `+ ${count}`}
