@@ -1,11 +1,7 @@
-export type Role =
-  | 'admin'
-  | 'security'
-  | 'regular'
-  | 'intern'
-  | 'worship'
-  | 'guest'
-  | 'public'
+export type Role = 'admin' | 'security' | 'regular' | 'intern' | 'worship' | 'guest' | 'public'
+
+/** Default hours before departure that a flight reminder is sent. */
+export const DEFAULT_FLIGHT_REMINDER_HOURS = 3
 
 export interface NotificationPrefs {
   newAssignment: { push: boolean; email: boolean }
@@ -28,6 +24,10 @@ export interface NotificationPrefs {
   chatFlagged: { push: boolean; email: boolean }
   securityReport: { push: boolean; email: boolean }
   weatherAlertAdmin: { push: boolean; email: boolean }
+  /** A flight, hotel, carpool seat or food item was assigned to you. */
+  eventLogistics: { push: boolean; email: boolean }
+  /** Reminder before a flight you are booked on. */
+  flightReminder: { push: boolean; email: boolean }
   // Public-user specific
   publicAnnouncement: { push: boolean; email: boolean }
   publicEvent: { push: boolean; email: boolean }
@@ -35,6 +35,11 @@ export interface NotificationPrefs {
 }
 
 export interface UserProfile {
+  /**
+   * Hours before departure to send a flight reminder. Unset means
+   * DEFAULT_FLIGHT_REMINDER_HOURS.
+   */
+  flightReminderHours?: number
   uid: string
   email: string
   displayName: string

@@ -62,3 +62,58 @@ export function onWorshipTeam(event: EventInstance, uid: string): boolean {
 export function worshipEventsFor(events: EventInstance[], uid: string): EventInstance[] {
   return events.filter((event) => onWorshipTeam(event, uid))
 }
+
+/**
+ * Everything a person can be handed on an event, flattened to uid + label.
+ *
+ * Food is deliberately absent: foodItems is a plain list of strings on the
+ * event with no assignee field, so there is nobody to notify. Making food
+ * assignable is a data-model change, not a notification one.
+ */
+function logisticsFor(event: {
+  lodgingEntries?: LodgingEntry[]
+  flightEntries?: FlightEntry[]
+  carpoolCars?: { id: string; label?: string; driver?: string; riders?: string[] }[]
+}): Map<string, string> {
+  // Keyed by "uid|label" so the same person getting two different things
+  // produces two entries, but the same thing twice produces one.
+  const out = new Map<string, string>()
+  const add = (uid: unknown, label: string) => {
+    if (uid === undefined || uid === null || uid === '') return
+    out.set(`${String(uid)}|${label}`, label)
+  }
+
+  for (const l of event.lodgingEntries ?? []) {
+    const label = l.room ? `${l.name}, room ${l.room}` : l.name
+    ;(l.assignees ?? []).forEach((a) => add(a, label))
+  }
+  for (const f of event.flightEntries ?? []) {
+    add(f.uid, [f.outAirline, f.outFlight].filter(Boolean).join(' ') || 'A flight')
+  }
+  for (const c of event.carpoolCars ?? []) {
+    const label = c.label ? `Carpool: ${c.label}` : 'A carpool seat'
+    add(c.driver, label)
+    ;(c.riders ?? []).forEach((r) => add(r, label))
+  }
+  return out
+}
+
+/**
+ * Which travel assignments are new since the previous version of an event.
+ *
+ * An event is edited many times; without this every save would re-announce
+ * every hotel room on it.
+ */
+export function newLogisticsAssignments(
+  previous: Parameters<typeof logisticsFor>[0] | null | undefined,
+  next: Parameters<typeof logisticsFor>[0]
+): { uid: string; itemLabel: string }[] {
+  const before = previous ? logisticsFor(previous) : new Map<string, string>()
+  const after = logisticsFor(next)
+  const added: { uid: string; itemLabel: string }[] = []
+  for (const [key, itemLabel] of after) {
+    if (before.has(key)) continue
+    added.push({ uid: key.split('|')[0], itemLabel })
+  }
+  return added
+}

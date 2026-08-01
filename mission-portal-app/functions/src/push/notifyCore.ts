@@ -24,6 +24,8 @@ export type NotificationType =
   | 'chatFlagged'
   | 'securityReport'
   | 'weatherAlertAdmin'
+  | 'eventLogistics'
+  | 'flightReminder'
 
 /**
  * Notification types the user asked to be "bulk" (starred in their spec):
@@ -105,6 +107,10 @@ export function inAppMessage(type: NotificationType, data: Record<string, unknow
       return String(data.message ?? 'Security report update')
     case 'weatherAlertAdmin':
       return `${data.alertEvent ?? 'Weather alert'} for ${data.eventTitle ?? 'an event'}: ${data.headline ?? ''}`
+    case 'eventLogistics':
+      return `${data.itemLabel ?? 'A travel detail'} was assigned to you for ${data.eventTitle ?? 'an event'}`
+    case 'flightReminder':
+      return `Your ${data.legLabel ?? 'flight'} for ${data.eventTitle ?? 'an event'} departs at ${data.departsAt ?? 'soon'}`
     default:
       return 'New notification from Mission Portal'
   }
@@ -128,6 +134,8 @@ function subjectFor(type: NotificationType, _data: Record<string, unknown>): str
     issueSubmission: 'New issue submission — Mission Portal',
     eventHealthBehind: 'Event health alert — Mission Portal',
     chatFlagged: 'Chat flagged — Mission Portal',
+    eventLogistics: 'Travel details assigned — Mission Portal',
+    flightReminder: 'Flight reminder — Mission Portal',
     securityReport: 'Security report — Mission Portal',
     weatherAlertAdmin: 'Weather alert — Mission Portal',
   }

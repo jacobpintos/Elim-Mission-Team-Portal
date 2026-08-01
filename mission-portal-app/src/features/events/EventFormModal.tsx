@@ -20,7 +20,8 @@ import { LodgingEditor } from './LodgingEditor'
 import { FlightEditor } from './FlightEditor'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import { taskDueDate } from '@/lib/events'
-import { notifyAssignees } from '@/lib/taskNotifications'
+import { notifyAssignees, notifyLogisticsAssigned } from '@/lib/taskNotifications'
+import { newLogisticsAssignments } from '@/lib/guestItinerary'
 import type {
   EventTemplate,
   CarpoolCarData,
@@ -314,9 +315,29 @@ export function EventFormModal({
         onClose()
       } else if (event) {
         await updateEvent(event.id, payload)
+        // Only what changed — an event is saved many times and re-announcing
+        // every hotel room each save would train people to ignore these.
+        notifyLogisticsAssigned(
+          newLogisticsAssignments(event, {
+            lodgingEntries,
+            flightEntries,
+            carpoolCars: form.carpoolCars,
+          }),
+          form.title,
+          instanceKey ?? String(event.id)
+        )
         toast(saveAsDraft ? 'Draft saved' : 'Event updated', 'success')
       } else {
         const newEventId = await createEvent(payload)
+        notifyLogisticsAssigned(
+          newLogisticsAssignments(null, {
+            lodgingEntries,
+            flightEntries,
+            carpoolCars: form.carpoolCars,
+          }),
+          form.title,
+          String(newEventId)
+        )
         if (form.taskTemplateId && newEventId) {
           const tpl = taskTemplates.find((tt) => String(tt.id) === form.taskTemplateId)
           if (tpl) {

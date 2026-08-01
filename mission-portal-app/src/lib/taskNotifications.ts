@@ -56,3 +56,38 @@ export function notifyAdminsTaskBehind(
       }).catch(() => {})
     })
 }
+
+/** A travel detail assigned to someone on an event. */
+export interface LogisticsAssignment {
+  uid: string
+  /** What they were given, e.g. "A flight" or "Hotel Ibis, room 12". */
+  itemLabel: string
+}
+
+/**
+ * Tell people about a flight, hotel room, carpool seat or food item they were
+ * just given on an event.
+ *
+ * Only the assignments that are new since the last save are passed in — an
+ * event gets edited repeatedly, and re-announcing the same hotel room on every
+ * save would train people to ignore these.
+ */
+export function notifyLogisticsAssigned(
+  assignments: LogisticsAssignment[],
+  eventTitle: string,
+  instanceKey: string
+) {
+  const sendNotif = httpsCallable(functions, 'sendNotification')
+  assignments.forEach(({ uid, itemLabel }) => {
+    sendNotif({
+      uid: String(uid),
+      type: 'eventLogistics',
+      data: {
+        eventTitle,
+        itemLabel,
+        // Tapping the notification opens the event card it refers to.
+        link: `/(app)/events/${instanceKey}`,
+      },
+    }).catch(() => {})
+  })
+}

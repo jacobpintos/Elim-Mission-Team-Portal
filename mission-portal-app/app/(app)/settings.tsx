@@ -20,7 +20,7 @@ import { isAdmin, isPublic } from '@/lib/roles'
 import { geocodeCity } from '@/lib/geocode'
 import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
 import { confirmAsync } from '@/lib/confirm'
-import type { NotificationPrefs } from '@/types/user'
+import { DEFAULT_FLIGHT_REMINDER_HOURS, type NotificationPrefs } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import * as Sentry from '@sentry/react-native'
 
@@ -42,6 +42,8 @@ type NotifKey = keyof Pick<
   | 'chatFlagged'
   | 'securityReport'
   | 'weatherAlertAdmin'
+  | 'eventLogistics'
+  | 'flightReminder'
 >
 
 // Admin-only notification keys — hidden from the toggle list for non-admins,
@@ -54,6 +56,8 @@ const ADMIN_ONLY_NOTIF_KEYS: NotifKey[] = [
   'chatFlagged',
   'securityReport',
   'weatherAlertAdmin',
+  'eventLogistics',
+  'flightReminder',
 ]
 
 const NOTIF_LABELS: Record<NotifKey, string> = {
@@ -73,6 +77,8 @@ const NOTIF_LABELS: Record<NotifKey, string> = {
   chatFlagged: 'Chat flagged',
   securityReport: 'Security report',
   weatherAlertAdmin: 'Weather alert',
+  eventLogistics: 'Travel details assigned',
+  flightReminder: 'Flight reminder',
 }
 
 type PublicNotifKey = keyof Pick<
@@ -90,7 +96,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   const colors = useThemeColors()
   return (
     <YStack gap="$3">
-      <Text color={colors.textMuted} fontSize="$2" fontWeight="700" textTransform="uppercase" letterSpacing={1}>
+      <Text
+        color={colors.textMuted}
+        fontSize="$2"
+        fontWeight="700"
+        textTransform="uppercase"
+        letterSpacing={1}
+      >
         {title}
       </Text>
       {children}
@@ -103,7 +115,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   const colors = useThemeColors()
   return (
     <YStack gap="$1">
-      <Text color={colors.textMuted} fontSize="$2">{label}</Text>
+      <Text color={colors.textMuted} fontSize="$2">
+        {label}
+      </Text>
       {children}
     </YStack>
   )
@@ -138,7 +152,6 @@ export default function SettingsScreen() {
   const [radius, setRadius] = useState(String(profile?.locationPref?.radius ?? 50))
   const [savingLoc, setSavingLoc] = useState(false)
 
-
   if (!profile || !fbUser) return null
 
   const pub = isPublic(profile)
@@ -161,6 +174,8 @@ export default function SettingsScreen() {
     chatFlagged: { push: true, email: false },
     securityReport: { push: true, email: false },
     weatherAlertAdmin: { push: true, email: false },
+    eventLogistics: { push: true, email: false },
+    flightReminder: { push: true, email: false },
     publicAnnouncement: { push: true, email: false },
     publicEvent: { push: true, email: false },
     contentFeatured: { push: true, email: false },
@@ -242,15 +257,23 @@ export default function SettingsScreen() {
   // ── Change password ───────────────────────────────────────────────────────
   const handleChangePassword = async () => {
     if (!currentPw || !newPw || !confirmPw) return
-    if (newPw !== confirmPw) { toast('Passwords do not match', 'error'); return }
-    if (newPw.length < 6) { toast('Password must be at least 6 characters', 'error'); return }
+    if (newPw !== confirmPw) {
+      toast('Passwords do not match', 'error')
+      return
+    }
+    if (newPw.length < 6) {
+      toast('Password must be at least 6 characters', 'error')
+      return
+    }
     setSavingPw(true)
     try {
       const credential = EmailAuthProvider.credential(fbUser.email!, currentPw)
       await reauthenticateWithCredential(fbUser, credential)
       await updatePassword(fbUser, newPw)
       toast('Password updated', 'success')
-      setCurrentPw(''); setNewPw(''); setConfirmPw('')
+      setCurrentPw('')
+      setNewPw('')
+      setConfirmPw('')
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Failed to update password', 'error')
     } finally {
@@ -263,7 +286,12 @@ export default function SettingsScreen() {
     setSavingLoc(true)
     try {
       const coords = await geocodeCity(city, stateVal)
-      const locationPref = { city, state: stateVal, radius: Number(radius) || 50, ...(coords ?? {}) }
+      const locationPref = {
+        city,
+        state: stateVal,
+        radius: Number(radius) || 50,
+        ...(coords ?? {}),
+      }
       await updateDoc(doc(db, 'users', fbUser.uid), { locationPref })
       toast('Location saved', 'success')
     } catch {
@@ -279,7 +307,9 @@ export default function SettingsScreen() {
       await updateDoc(doc(db, 'users', fbUser.uid), {
         notificationPrefs: { ...prefs, [key]: { ...prefs[key], email: value } },
       })
-    } catch { toast('Failed', 'error') }
+    } catch {
+      toast('Failed', 'error')
+    }
   }
 
   const togglePushPref = async (key: NotifKey, value: boolean) => {
@@ -287,7 +317,20 @@ export default function SettingsScreen() {
       await updateDoc(doc(db, 'users', fbUser.uid), {
         notificationPrefs: { ...prefs, [key]: { ...prefs[key], push: value } },
       })
-    } catch { toast('Failed', 'error') }
+    } catch {
+      toast('Failed', 'error')
+    }
+  }
+
+  // Lives on the profile rather than in notificationPrefs because the
+  // scheduled function reads it per user when deciding how early to fire.
+  const flightHours = profile?.flightReminderHours ?? DEFAULT_FLIGHT_REMINDER_HOURS
+  const saveFlightReminderHours = async (hours: number) => {
+    try {
+      await updateDoc(doc(db, 'users', fbUser.uid), { flightReminderHours: hours })
+    } catch {
+      toast('Failed', 'error')
+    }
   }
 
   const toggleDigest = async (key: 'weeklyDigest' | 'monthlyDigest', value: boolean) => {
@@ -295,7 +338,9 @@ export default function SettingsScreen() {
       await updateDoc(doc(db, 'users', fbUser.uid), {
         [`notificationPrefs.${key}`]: value,
       })
-    } catch { toast('Failed', 'error') }
+    } catch {
+      toast('Failed', 'error')
+    }
   }
 
   const togglePublicPushPref = async (key: PublicNotifKey, value: boolean) => {
@@ -303,7 +348,9 @@ export default function SettingsScreen() {
       await updateDoc(doc(db, 'users', fbUser.uid), {
         notificationPrefs: { ...prefs, [key]: { ...prefs[key], push: value } },
       })
-    } catch { toast('Failed', 'error') }
+    } catch {
+      toast('Failed', 'error')
+    }
   }
 
   const togglePublicEmailPref = async (key: PublicNotifKey, value: boolean) => {
@@ -311,7 +358,9 @@ export default function SettingsScreen() {
       await updateDoc(doc(db, 'users', fbUser.uid), {
         notificationPrefs: { ...prefs, [key]: { ...prefs[key], email: value } },
       })
-    } catch { toast('Failed', 'error') }
+    } catch {
+      toast('Failed', 'error')
+    }
   }
 
   // ── Sign out ──────────────────────────────────────────────────────────────
@@ -319,7 +368,6 @@ export default function SettingsScreen() {
     await signOutNow()
     router.replace('/(auth)/login')
   }
-
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
@@ -338,7 +386,6 @@ export default function SettingsScreen() {
       ) : null}
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 24 }}>
-
         {/* Profile Photo + Name */}
         <Section title="Profile">
           {!pub ? (
@@ -355,7 +402,15 @@ export default function SettingsScreen() {
                 <Field label="Display name">
                   <XStack gap="$2">
                     <TextInput
-                      style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface, flex: 1 }]}
+                      style={[
+                        styles.input,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surface,
+                          flex: 1,
+                        },
+                      ]}
                       value={displayName}
                       onChangeText={setDisplayName}
                       placeholder="Your name"
@@ -365,8 +420,19 @@ export default function SettingsScreen() {
                       onPress={handleSaveName}
                       disabled={savingName || displayName.trim() === profile.displayName}
                     >
-                      <View style={[styles.btn, { backgroundColor: colors.primary, opacity: savingName || displayName.trim() === profile.displayName ? 0.5 : 1 }]}>
-                        <Text color="white" fontSize="$2" fontWeight="700">Save</Text>
+                      <View
+                        style={[
+                          styles.btn,
+                          {
+                            backgroundColor: colors.primary,
+                            opacity:
+                              savingName || displayName.trim() === profile.displayName ? 0.5 : 1,
+                          },
+                        ]}
+                      >
+                        <Text color="white" fontSize="$2" fontWeight="700">
+                          Save
+                        </Text>
                       </View>
                     </Pressable>
                   </XStack>
@@ -377,15 +443,36 @@ export default function SettingsScreen() {
             <Field label="Display name">
               <XStack gap="$2">
                 <TextInput
-                  style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface, flex: 1 }]}
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                      flex: 1,
+                    },
+                  ]}
                   value={displayName}
                   onChangeText={setDisplayName}
                   placeholder="Your name"
                   placeholderTextColor={colors.textMuted}
                 />
-                <Pressable onPress={handleSaveName} disabled={savingName || displayName.trim() === profile.displayName}>
-                  <View style={[styles.btn, { backgroundColor: colors.primary, opacity: savingName || displayName.trim() === profile.displayName ? 0.5 : 1 }]}>
-                    <Text color="white" fontSize="$2" fontWeight="700">Save</Text>
+                <Pressable
+                  onPress={handleSaveName}
+                  disabled={savingName || displayName.trim() === profile.displayName}
+                >
+                  <View
+                    style={[
+                      styles.btn,
+                      {
+                        backgroundColor: colors.primary,
+                        opacity: savingName || displayName.trim() === profile.displayName ? 0.5 : 1,
+                      },
+                    ]}
+                  >
+                    <Text color="white" fontSize="$2" fontWeight="700">
+                      Save
+                    </Text>
                   </View>
                 </Pressable>
               </XStack>
@@ -394,8 +481,15 @@ export default function SettingsScreen() {
 
           <Field label="Email">
             <XStack gap="$2" alignItems="center">
-              <Text color={colors.text} fontSize="$3">{fbUser.email}</Text>
-              <View style={[styles.badge, { backgroundColor: fbUser.emailVerified ? '#27ae60' : '#e67e22' }]}>
+              <Text color={colors.text} fontSize="$3">
+                {fbUser.email}
+              </Text>
+              <View
+                style={[
+                  styles.badge,
+                  { backgroundColor: fbUser.emailVerified ? '#27ae60' : '#e67e22' },
+                ]}
+              >
                 <Text color="white" fontSize={11} fontWeight="700">
                   {fbUser.emailVerified ? '✓ Verified' : 'Unverified'}
                 </Text>
@@ -408,7 +502,10 @@ export default function SettingsScreen() {
         <Section title="Change Email">
           <Field label="New email address">
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}
               value={newEmail}
               onChangeText={setNewEmail}
               placeholder="new@email.com"
@@ -419,7 +516,10 @@ export default function SettingsScreen() {
           </Field>
           <Field label="Current password (to confirm)">
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}
               value={emailPassword}
               onChangeText={setEmailPassword}
               placeholder="Current password"
@@ -427,8 +527,19 @@ export default function SettingsScreen() {
               secureTextEntry
             />
           </Field>
-          <Pressable onPress={handleChangeEmail} disabled={savingEmail || !newEmail.trim() || !emailPassword}>
-            <View style={[styles.btn, { backgroundColor: colors.primary, opacity: savingEmail || !newEmail.trim() || !emailPassword ? 0.5 : 1 }]}>
+          <Pressable
+            onPress={handleChangeEmail}
+            disabled={savingEmail || !newEmail.trim() || !emailPassword}
+          >
+            <View
+              style={[
+                styles.btn,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: savingEmail || !newEmail.trim() || !emailPassword ? 0.5 : 1,
+                },
+              ]}
+            >
               <Text color="white" fontWeight="700">
                 {savingEmail ? 'Sending verification…' : 'Update email'}
               </Text>
@@ -440,7 +551,10 @@ export default function SettingsScreen() {
         <Section title="Change Password">
           <Field label="Current password">
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}
               value={currentPw}
               onChangeText={setCurrentPw}
               placeholder="Current password"
@@ -450,7 +564,10 @@ export default function SettingsScreen() {
           </Field>
           <Field label="New password">
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}
               value={newPw}
               onChangeText={setNewPw}
               placeholder="Min. 6 characters"
@@ -460,7 +577,10 @@ export default function SettingsScreen() {
           </Field>
           <Field label="Confirm new password">
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}
               value={confirmPw}
               onChangeText={setConfirmPw}
               placeholder="Confirm password"
@@ -468,8 +588,19 @@ export default function SettingsScreen() {
               secureTextEntry
             />
           </Field>
-          <Pressable onPress={handleChangePassword} disabled={savingPw || !currentPw || !newPw || !confirmPw}>
-            <View style={[styles.btn, { backgroundColor: colors.primary, opacity: savingPw || !currentPw || !newPw || !confirmPw ? 0.5 : 1 }]}>
+          <Pressable
+            onPress={handleChangePassword}
+            disabled={savingPw || !currentPw || !newPw || !confirmPw}
+          >
+            <View
+              style={[
+                styles.btn,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: savingPw || !currentPw || !newPw || !confirmPw ? 0.5 : 1,
+                },
+              ]}
+            >
               <Text color="white" fontWeight="700">
                 {savingPw ? 'Updating…' : 'Update password'}
               </Text>
@@ -479,11 +610,21 @@ export default function SettingsScreen() {
 
         {/* Location */}
         <Section title="Location">
-          <Text color={colors.textMuted} fontSize="$2">Used to show events near you.</Text>
+          <Text color={colors.textMuted} fontSize="$2">
+            Used to show events near you.
+          </Text>
           <XStack gap="$2">
             <Field label="City">
               <TextInput
-                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface, minWidth: 140 }]}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    minWidth: 140,
+                  },
+                ]}
                 value={city}
                 onChangeText={setCity}
                 placeholder="Iowa City"
@@ -492,7 +633,15 @@ export default function SettingsScreen() {
             </Field>
             <Field label="State">
               <TextInput
-                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface, width: 60 }]}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    width: 60,
+                  },
+                ]}
                 value={stateVal}
                 onChangeText={setStateVal}
                 placeholder="IA"
@@ -503,7 +652,15 @@ export default function SettingsScreen() {
             </Field>
             <Field label="Radius (mi)">
               <TextInput
-                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface, width: 70 }]}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    width: 70,
+                  },
+                ]}
                 value={radius}
                 onChangeText={setRadius}
                 placeholder="50"
@@ -513,8 +670,15 @@ export default function SettingsScreen() {
             </Field>
           </XStack>
           <Pressable onPress={handleSaveLocation} disabled={savingLoc}>
-            <View style={[styles.btn, { backgroundColor: colors.primary, opacity: savingLoc ? 0.5 : 1 }]}>
-              <Text color="white" fontWeight="700">{savingLoc ? 'Saving…' : 'Save location'}</Text>
+            <View
+              style={[
+                styles.btn,
+                { backgroundColor: colors.primary, opacity: savingLoc ? 0.5 : 1 },
+              ]}
+            >
+              <Text color="white" fontWeight="700">
+                {savingLoc ? 'Saving…' : 'Save location'}
+              </Text>
             </View>
           </Pressable>
         </Section>
@@ -523,7 +687,10 @@ export default function SettingsScreen() {
         <Section title="Appearance">
           <XStack alignItems="center" justifyContent="space-between">
             <Label>Dark mode</Label>
-            <Switch checked={mode === 'dark'} onCheckedChange={(v) => setMode(v ? 'dark' : 'light')}>
+            <Switch
+              checked={mode === 'dark'}
+              onCheckedChange={(v) => setMode(v ? 'dark' : 'light')}
+            >
               <Switch.Thumb />
             </Switch>
           </XStack>
@@ -533,23 +700,39 @@ export default function SettingsScreen() {
         {pub ? (
           <Section title="Notifications">
             <XStack marginBottom="$1">
-              <Text flex={1} color={colors.textMuted} fontSize="$2" fontWeight="700">Type</Text>
+              <Text flex={1} color={colors.textMuted} fontSize="$2" fontWeight="700">
+                Type
+              </Text>
               <XStack gap="$3" width={110}>
-                <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">Push</Text>
-                <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">Email</Text>
+                <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">
+                  Push
+                </Text>
+                <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">
+                  Email
+                </Text>
               </XStack>
             </XStack>
             {(Object.keys(PUBLIC_NOTIF_LABELS) as PublicNotifKey[]).map((key) => (
               <XStack key={key} alignItems="center">
-                <Label flex={1} fontSize="$3">{PUBLIC_NOTIF_LABELS[key]}</Label>
+                <Label flex={1} fontSize="$3">
+                  {PUBLIC_NOTIF_LABELS[key]}
+                </Label>
                 <XStack gap="$3" width={110} alignItems="center">
                   <YStack flex={1} alignItems="center">
-                    <Switch size="$2" checked={prefs[key]?.push ?? true} onCheckedChange={(v) => togglePublicPushPref(key, v)}>
+                    <Switch
+                      size="$2"
+                      checked={prefs[key]?.push ?? true}
+                      onCheckedChange={(v) => togglePublicPushPref(key, v)}
+                    >
                       <Switch.Thumb />
                     </Switch>
                   </YStack>
                   <YStack flex={1} alignItems="center">
-                    <Switch size="$2" checked={prefs[key]?.email ?? false} onCheckedChange={(v) => togglePublicEmailPref(key, v)}>
+                    <Switch
+                      size="$2"
+                      checked={prefs[key]?.email ?? false}
+                      onCheckedChange={(v) => togglePublicEmailPref(key, v)}
+                    >
                       <Switch.Thumb />
                     </Switch>
                   </YStack>
@@ -558,7 +741,11 @@ export default function SettingsScreen() {
             ))}
             <XStack alignItems="center" justifyContent="space-between">
               <Label fontSize="$3">Monthly digest</Label>
-              <Switch size="$2" checked={prefs.monthlyDigest ?? false} onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}>
+              <Switch
+                size="$2"
+                checked={prefs.monthlyDigest ?? false}
+                onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}
+              >
                 <Switch.Thumb />
               </Switch>
             </XStack>
@@ -566,41 +753,94 @@ export default function SettingsScreen() {
         ) : (
           <Section title="Notifications">
             <XStack marginBottom="$1">
-              <Text flex={1} color={colors.textMuted} fontSize="$2" fontWeight="700">Event</Text>
+              <Text flex={1} color={colors.textMuted} fontSize="$2" fontWeight="700">
+                Event
+              </Text>
               <XStack gap="$3" width={110}>
-                <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">Push</Text>
-                <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">Email</Text>
+                <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">
+                  Push
+                </Text>
+                <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">
+                  Email
+                </Text>
               </XStack>
             </XStack>
-            {(Object.keys(NOTIF_LABELS) as NotifKey[]).filter((k) => {
-              if (isAdmin(profile)) return true
-              return k !== 'issueAssigned' && !ADMIN_ONLY_NOTIF_KEYS.includes(k)
-            }).map((key) => (
-              <XStack key={key} alignItems="center">
-                <Label flex={1} fontSize="$3">{NOTIF_LABELS[key]}</Label>
-                <XStack gap="$3" width={110} alignItems="center">
-                  <YStack flex={1} alignItems="center">
-                    <Switch size="$2" checked={prefs[key]?.push ?? false} onCheckedChange={(v) => togglePushPref(key, v)}>
-                      <Switch.Thumb />
-                    </Switch>
-                  </YStack>
-                  <YStack flex={1} alignItems="center">
-                    <Switch size="$2" checked={prefs[key]?.email ?? false} onCheckedChange={(v) => toggleEmailPref(key, v)}>
-                      <Switch.Thumb />
-                    </Switch>
-                  </YStack>
+            {(Object.keys(NOTIF_LABELS) as NotifKey[])
+              .filter((k) => {
+                if (isAdmin(profile)) return true
+                return k !== 'issueAssigned' && !ADMIN_ONLY_NOTIF_KEYS.includes(k)
+              })
+              .map((key) => (
+                <XStack key={key} alignItems="center">
+                  <Label flex={1} fontSize="$3">
+                    {NOTIF_LABELS[key]}
+                  </Label>
+                  <XStack gap="$3" width={110} alignItems="center">
+                    <YStack flex={1} alignItems="center">
+                      <Switch
+                        size="$2"
+                        checked={prefs[key]?.push ?? false}
+                        onCheckedChange={(v) => togglePushPref(key, v)}
+                      >
+                        <Switch.Thumb />
+                      </Switch>
+                    </YStack>
+                    <YStack flex={1} alignItems="center">
+                      <Switch
+                        size="$2"
+                        checked={prefs[key]?.email ?? false}
+                        onCheckedChange={(v) => toggleEmailPref(key, v)}
+                      >
+                        <Switch.Thumb />
+                      </Switch>
+                    </YStack>
+                  </XStack>
+                </XStack>
+              ))}
+            {/* How far ahead the flight reminder lands. Only worth showing to
+                someone who wants the reminder at all. */}
+            {prefs.flightReminder?.push || prefs.flightReminder?.email ? (
+              <XStack alignItems="center" justifyContent="space-between" gap="$2">
+                <Label flex={1} fontSize="$3">
+                  Flight reminder lead time
+                </Label>
+                <XStack gap="$1" alignItems="center">
+                  {[1, 3, 6, 12, 24].map((h) => (
+                    <Pressable key={h} onPress={() => saveFlightReminderHours(h)}>
+                      <XStack
+                        paddingHorizontal="$2"
+                        paddingVertical="$1"
+                        borderRadius="$2"
+                        borderWidth={1}
+                        backgroundColor={flightHours === h ? colors.primary : 'transparent'}
+                        borderColor={flightHours === h ? colors.primary : colors.border}
+                      >
+                        <Text color={flightHours === h ? 'white' : colors.text} fontSize="$2">
+                          {h}h
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  ))}
                 </XStack>
               </XStack>
-            ))}
+            ) : null}
             <XStack alignItems="center" justifyContent="space-between">
               <Label fontSize="$3">Weekly digest</Label>
-              <Switch size="$2" checked={prefs.weeklyDigest ?? false} onCheckedChange={(v) => toggleDigest('weeklyDigest', v)}>
+              <Switch
+                size="$2"
+                checked={prefs.weeklyDigest ?? false}
+                onCheckedChange={(v) => toggleDigest('weeklyDigest', v)}
+              >
                 <Switch.Thumb />
               </Switch>
             </XStack>
             <XStack alignItems="center" justifyContent="space-between">
               <Label fontSize="$3">Monthly digest</Label>
-              <Switch size="$2" checked={prefs.monthlyDigest ?? false} onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}>
+              <Switch
+                size="$2"
+                checked={prefs.monthlyDigest ?? false}
+                onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}
+              >
                 <Switch.Thumb />
               </Switch>
             </XStack>
@@ -611,20 +851,32 @@ export default function SettingsScreen() {
         <Section title="Legal">
           <Pressable onPress={() => router.push('/(auth)/privacy')}>
             <XStack alignItems="center" justifyContent="space-between" paddingVertical="$2">
-              <Text color={colors.text} fontSize="$4">Privacy Policy</Text>
-              <Text color={colors.textMuted} fontSize="$4">›</Text>
+              <Text color={colors.text} fontSize="$4">
+                Privacy Policy
+              </Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ›
+              </Text>
             </XStack>
           </Pressable>
           <Pressable onPress={() => router.push('/(auth)/terms')}>
             <XStack alignItems="center" justifyContent="space-between" paddingVertical="$2">
-              <Text color={colors.text} fontSize="$4">Terms of Use</Text>
-              <Text color={colors.textMuted} fontSize="$4">›</Text>
+              <Text color={colors.text} fontSize="$4">
+                Terms of Use
+              </Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ›
+              </Text>
             </XStack>
           </Pressable>
           <Pressable onPress={() => router.push('/(app)/blocked')}>
             <XStack alignItems="center" justifyContent="space-between" paddingVertical="$2">
-              <Text color={colors.text} fontSize="$4">Blocked users</Text>
-              <Text color={colors.textMuted} fontSize="$4">›</Text>
+              <Text color={colors.text} fontSize="$4">
+                Blocked users
+              </Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ›
+              </Text>
             </XStack>
           </Pressable>
         </Section>
@@ -634,8 +886,12 @@ export default function SettingsScreen() {
         <Section title="Account">
           <Pressable onPress={() => router.push('/(app)/delete-account')}>
             <XStack alignItems="center" justifyContent="space-between" paddingVertical="$2">
-              <Text color="#c0392b" fontSize="$4">Delete account</Text>
-              <Text color={colors.textMuted} fontSize="$4">›</Text>
+              <Text color="#c0392b" fontSize="$4">
+                Delete account
+              </Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ›
+              </Text>
             </XStack>
           </Pressable>
         </Section>
@@ -643,7 +899,9 @@ export default function SettingsScreen() {
         {/* Sign out */}
         <Pressable onPress={handleSignOut}>
           <View style={[styles.signOutBtn, { borderColor: '#c0392b' }]}>
-            <Text color="#c0392b" fontWeight="700" fontSize="$4">Sign out</Text>
+            <Text color="#c0392b" fontWeight="700" fontSize="$4">
+              Sign out
+            </Text>
           </View>
         </Pressable>
 

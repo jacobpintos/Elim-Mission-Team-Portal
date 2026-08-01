@@ -184,5 +184,7 @@ function defaultNotificationPrefs() {
     chatFlagged: { push: true, email: false },
     securityReport: { push: true, email: false },
     weatherAlertAdmin: { push: true, email: false },
+    eventLogistics: { push: true, email: false },
+    flightReminder: { push: true, email: false },
   }
 }

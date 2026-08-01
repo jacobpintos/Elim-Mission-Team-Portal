@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { guestLodging, guestFlights, onWorshipTeam, worshipEventsFor } from './guestItinerary'
+import {
+  guestLodging,
+  guestFlights,
+  onWorshipTeam,
+  worshipEventsFor,
+  newLogisticsAssignments,
+} from './guestItinerary'
 import type { EventInstance } from '@/types/events'
 
 const ev = (over: Partial<EventInstance> = {}) =>
@@ -108,5 +114,83 @@ describe('worshipEventsFor', () => {
     const b = ev({ id: 'b', teams: [{ name: 'Setup', members: ['u1'], leaders: [] }] })
 
     expect(worshipEventsFor([a, b], 'u1').map((e) => e.id)).toEqual(['a'])
+  })
+})
+
+describe('newLogisticsAssignments', () => {
+  const hotel = (assignees: string[]) => ({
+    lodgingEntries: [{ id: 'l1', name: 'Ibis', room: '12', assignees }],
+  })
+
+  it('announces everything on a brand new event', () => {
+    const out = newLogisticsAssignments(null, hotel(['u1']))
+
+    expect(out).toEqual([{ uid: 'u1', itemLabel: 'Ibis, room 12' }])
+  })
+
+  it('says nothing when an edit changed none of it', () => {
+    // The whole point: an event gets saved repeatedly and must not
+    // re-announce the same hotel room every time.
+    expect(newLogisticsAssignments(hotel(['u1']), hotel(['u1']))).toEqual([])
+  })
+
+  it('announces only the person newly added', () => {
+    const out = newLogisticsAssignments(hotel(['u1']), hotel(['u1', 'u2']))
+
+    expect(out).toEqual([{ uid: 'u2', itemLabel: 'Ibis, room 12' }])
+  })
+
+  it('announces a room change to someone already on the booking', () => {
+    const before = { lodgingEntries: [{ id: 'l1', name: 'Ibis', room: '12', assignees: ['u1'] }] }
+    const after = { lodgingEntries: [{ id: 'l1', name: 'Ibis', room: '34', assignees: ['u1'] }] }
+
+    expect(newLogisticsAssignments(before, after)).toEqual([
+      { uid: 'u1', itemLabel: 'Ibis, room 34' },
+    ])
+  })
+
+  it('says nothing when someone is removed', () => {
+    // Removal is not an assignment; there is nothing to announce to them.
+    expect(newLogisticsAssignments(hotel(['u1', 'u2']), hotel(['u1']))).toEqual([])
+  })
+
+  it('covers flights, and names the airline when there is one', () => {
+    const out = newLogisticsAssignments(null, {
+      flightEntries: [{ id: 'f1', uid: 'u1', outAirline: 'BA', outFlight: '117' }],
+    })
+
+    expect(out).toEqual([{ uid: 'u1', itemLabel: 'BA 117' }])
+  })
+
+  it('falls back to a generic flight label when the airline is blank', () => {
+    const out = newLogisticsAssignments(null, { flightEntries: [{ id: 'f1', uid: 'u1' }] })
+
+    expect(out).toEqual([{ uid: 'u1', itemLabel: 'A flight' }])
+  })
+
+  it('covers both the driver and the riders of a carpool', () => {
+    const out = newLogisticsAssignments(null, {
+      carpoolCars: [{ id: 'c1', label: 'Van', driver: 'u1', riders: ['u2', 'u3'] }],
+    })
+
+    expect(out.map((a) => a.uid).sort()).toEqual(['u1', 'u2', 'u3'])
+    expect(out.every((a) => a.itemLabel === 'Carpool: Van')).toBe(true)
+  })
+
+  it('ignores an empty driver slot', () => {
+    const out = newLogisticsAssignments(null, {
+      carpoolCars: [{ id: 'c1', label: 'Van', driver: '', riders: [] }],
+    })
+
+    expect(out).toEqual([])
+  })
+
+  it('gives one person two entries when they get two different things', () => {
+    const out = newLogisticsAssignments(null, {
+      ...hotel(['u1']),
+      flightEntries: [{ id: 'f1', uid: 'u1', outAirline: 'BA', outFlight: '117' }],
+    })
+
+    expect(out).toHaveLength(2)
   })
 })
