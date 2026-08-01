@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hasRole, isAdmin, isSecurity, isPublic, visibleTabs } from './roles'
+import { hasRole, isAdmin, isSecurity, isPublic, visibleTabs, migrateRetiredRoles } from './roles'
 import type { UserProfile, Role } from '@/types/user'
 
 const user = (...roles: Role[]) => ({ uid: 'u1', roles }) as UserProfile
@@ -66,7 +66,6 @@ describe('visibleTabs', () => {
   it('adds specialty tabs to an intern who also holds that role', () => {
     expect(visibleTabs(user('intern', 'worship'))).toContain('worship')
     expect(visibleTabs(user('intern', 'security'))).toContain('security')
-    expect(visibleTabs(user('intern', 'merch'))).toContain('inventory')
   })
 
   it('never returns a duplicate tab', () => {
@@ -74,7 +73,7 @@ describe('visibleTabs', () => {
     // produce the same tab twice or the navigator gets duplicate keys.
     for (const u of [
       user('admin', 'security', 'worship'),
-      user('intern', 'worship', 'security', 'merch'),
+      user('intern', 'worship', 'security'),
       user('regular', 'worship'),
     ]) {
       const tabs = visibleTabs(u)
@@ -88,5 +87,31 @@ describe('visibleTabs', () => {
     for (const u of [user('public'), user('admin'), user('intern'), user('regular')]) {
       expect(visibleTabs(u)).toContain('settings')
     }
+  })
+})
+
+describe('migrateRetiredRoles', () => {
+  it('leaves a profile without a retired role alone', () => {
+    // Returning null lets the caller skip the write entirely.
+    expect(migrateRetiredRoles(['regular'])).toBeNull()
+    expect(migrateRetiredRoles(['admin', 'worship'])).toBeNull()
+    expect(migrateRetiredRoles([])).toBeNull()
+    expect(migrateRetiredRoles(undefined)).toBeNull()
+  })
+
+  it('drops merch and keeps the rest', () => {
+    expect(migrateRetiredRoles(['merch', 'worship'])).toEqual(['worship'])
+    expect(migrateRetiredRoles(['admin', 'merch'])).toEqual(['admin'])
+  })
+
+  it('makes a merch-only account regular rather than role-less', () => {
+    // Dropping to [] would leave them with public-only access, which is a
+    // demotion nobody asked for.
+    expect(migrateRetiredRoles(['merch'])).toEqual(['regular'])
+  })
+
+  it('leaves the migrated account a member', () => {
+    const migrated = migrateRetiredRoles(['merch'])!
+    expect(visibleTabs({ uid: 'u1', roles: migrated } as never)).toContain('messages')
   })
 })

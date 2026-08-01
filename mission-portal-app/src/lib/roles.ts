@@ -4,9 +4,28 @@ export const hasRole = (u: UserProfile | null, r: Role) => !!u?.roles?.includes(
 export const isAdmin = (u: UserProfile | null) => hasRole(u, 'admin')
 export const isSecurity = (u: UserProfile | null) => hasRole(u, 'security') || isAdmin(u)
 export const isWorship = (u: UserProfile | null) => hasRole(u, 'worship') || isAdmin(u)
-export const isMerch = (u: UserProfile | null) => hasRole(u, 'merch') || isAdmin(u)
 export const isPublic = (u: UserProfile | null) => hasRole(u, 'public')
 export const isIntern = (u: UserProfile | null) => hasRole(u, 'intern')
+
+/**
+ * Roles that no longer exist, and what a user carrying one becomes.
+ *
+ * 'merch' was removed as a user type. A profile that still lists it keeps
+ * whatever else it has; if that leaves nothing, it falls back to 'regular' so
+ * the account does not silently drop to public-only access.
+ */
+const RETIRED_ROLES = ['merch']
+
+/**
+ * Drop retired roles from a stored profile, keeping the account a member.
+ *
+ * Returns null when there is nothing to change, so callers can skip the write.
+ */
+export function migrateRetiredRoles(roles: string[] | undefined): Role[] | null {
+  if (!roles?.some((r) => RETIRED_ROLES.includes(r))) return null
+  const kept = roles.filter((r) => !RETIRED_ROLES.includes(r)) as Role[]
+  return kept.length > 0 ? kept : ['regular']
+}
 
 export type Tab =
   | 'dashboard'
@@ -32,29 +51,56 @@ export type Tab =
 export function visibleTabs(u: UserProfile | null): Tab[] {
   if (!u) return []
 
-  const MEMBER_ROLES: Role[] = ['admin', 'security', 'regular', 'intern', 'merch', 'worship']
+  const MEMBER_ROLES: Role[] = ['admin', 'security', 'regular', 'intern', 'worship']
   const isMember = u.roles?.some((r) => MEMBER_ROLES.includes(r)) ?? false
 
   // Users with no member role get public-facing tabs only
   if (!isMember)
-    return ['home', 'events', 'announce', 'connect', 'music', 'giving', 'story', 'posts', 'settings']
+    return [
+      'home',
+      'events',
+      'announce',
+      'connect',
+      'music',
+      'giving',
+      'story',
+      'posts',
+      'settings',
+    ]
 
   if (isAdmin(u)) {
     return [
-      'dashboard', 'events', 'assignments', 'messages', 'announce', 'issues',
-      'security', 'worship', 'rolehub', 'public', 'settings',
+      'dashboard',
+      'events',
+      'assignments',
+      'messages',
+      'announce',
+      'issues',
+      'security',
+      'worship',
+      'rolehub',
+      'public',
+      'settings',
     ]
   }
 
   // Intern: public base + assignments + operations + specialty tabs. No dashboard or messages.
   if (isIntern(u) && !hasRole(u, 'regular')) {
     const tabs: Tab[] = [
-      'home', 'events', 'assignments', 'announce', 'issues',
-      'connect', 'music', 'giving', 'story', 'posts', 'settings',
+      'home',
+      'events',
+      'assignments',
+      'announce',
+      'issues',
+      'connect',
+      'music',
+      'giving',
+      'story',
+      'posts',
+      'settings',
     ]
     if (hasRole(u, 'worship')) tabs.splice(tabs.indexOf('issues') + 1, 0, 'worship')
     if (hasRole(u, 'security')) tabs.splice(1, 0, 'security')
-    if (hasRole(u, 'merch')) tabs.push('inventory')
     return tabs
   }
 
@@ -63,7 +109,8 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
 
   if (isWorship(u)) tabs.push('worship')
   if (isSecurity(u)) tabs.push('security')
-  if (isMerch(u)) tabs.push('inventory')
+  // Inventory was gated on the merch role; with that gone it is admin-only,
+  // and admins take the branch above, so nobody reaches it from here.
 
   tabs.push('public', 'settings')
   return tabs

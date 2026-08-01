@@ -16,6 +16,7 @@ import {
   clearPushToken,
   platformKey,
 } from '@/lib/notifications'
+import { migrateRetiredRoles } from '@/lib/roles'
 import type { UserProfile } from '@/types/user'
 
 interface AuthStore {
@@ -81,6 +82,17 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
                   console.warn('Push notification registration failed', err)
                 })
             }, 4000)
+          }
+          // 'merch' was retired as a user type. Rewriting the stored roles the
+          // first time such a profile loads means no separate migration pass,
+          // and an account that was merch-only stays a member rather than
+          // dropping to public access.
+          if (userProfile) {
+            const migrated = migrateRetiredRoles(userProfile.roles)
+            if (migrated) {
+              userProfile.roles = migrated
+              updateDoc(doc(db, 'users', fbUser.uid), { roles: migrated }).catch(() => {})
+            }
           }
           set({ profile: userProfile, loading: false })
         },

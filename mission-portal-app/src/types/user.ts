@@ -3,7 +3,6 @@ export type Role =
   | 'security'
   | 'regular'
   | 'intern'
-  | 'merch'
   | 'worship'
   | 'public'
 

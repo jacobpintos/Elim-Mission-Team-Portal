@@ -3,7 +3,6 @@ import { XStack, Text, Checkbox, Label } from 'tamagui'
 export const ALL_ROLES = [
   'admin',
   'security',
-  'merch',
   'worship',
   'regular',
   'intern',

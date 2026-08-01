@@ -16,7 +16,7 @@ import { TaskCard } from '@/components/ui/TaskCard'
 import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
 import { WeatherDetailSheet } from '@/features/events/WeatherDetailSheet'
 import { AvailModal } from '@/features/events/AvailModal'
-import { isAdmin, isSecurity, isMerch, isWorship } from '@/lib/roles'
+import { isAdmin, isSecurity, isWorship } from '@/lib/roles'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { Img } from '@/components/ui/Img'
 import { todayStr, dateStr } from '@/lib/events'
@@ -723,7 +723,6 @@ export default function Home() {
     isAdmin(profile) ||
     isSecurity(profile) ||
     isWorship(profile) ||
-    isMerch(profile) ||
     profile?.roles?.includes('regular')
 
   if (!isMember) {

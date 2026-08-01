@@ -5,7 +5,6 @@ import type { UserProfile } from '@/types/user'
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
   security: 'Security',
-  merch: 'Merch',
   worship: 'Worship',
   regular: 'Member',
   intern: 'Intern',
@@ -20,7 +19,6 @@ export function userRoleDisplay(user: UserProfile): string {
 const ROLE_COLORS: Record<string, string> = {
   admin: '#f56c5a',
   security: '#e74c3c',
-  merch: '#27ae60',
   worship: '#9b59b6',
   regular: '#16a085',
   intern: '#d4a017',
