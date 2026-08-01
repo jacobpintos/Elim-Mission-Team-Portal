@@ -1,8 +1,9 @@
-import { Linking, Pressable } from 'react-native'
+import { Pressable } from 'react-native'
 import { YStack, Text } from 'tamagui'
 import { useThemeStore } from '@/stores/themeStore'
 import { autoTextColor } from '@/theme/contrast'
 import type { ButtonData } from '@/types/pages'
+import { openExternalUrl } from '@/lib/externalUrl'
 
 interface ButtonBlockProps {
   data: ButtonData
@@ -11,12 +12,11 @@ interface ButtonBlockProps {
 export function ButtonBlock({ data }: ButtonBlockProps) {
   const { theme } = useThemeStore()
   const align = data.align ?? 'center'
-  const flexAlign =
-    align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center'
+  const flexAlign = align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center'
 
   const handlePress = () => {
     if (data.url) {
-      Linking.openURL(data.url).catch(() => {})
+      openExternalUrl(data.url)
     }
   }
 

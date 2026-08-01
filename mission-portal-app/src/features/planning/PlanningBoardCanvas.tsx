@@ -7,7 +7,6 @@ import {
   TextInput,
   StyleSheet,
   useWindowDimensions,
-  Linking,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native'
@@ -20,6 +19,7 @@ import { usePlanningStore } from '@/stores/planningStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { sameId } from '@/lib/ids'
 import type { PlanningItem, PlanningItemType, DrawPoint } from '@/types/operations'
+import { openExternalUrl } from '@/lib/externalUrl'
 
 const CANVAS_W = 4000
 const CANVAS_H = 4000
@@ -509,7 +509,7 @@ function ItemCard({
             </Text>
             <Pressable
               onPress={() => {
-                if (item.url) Linking.openURL(item.url)
+                openExternalUrl(item.url)
               }}
             >
               <Text color={colors.primary} fontSize={12}>

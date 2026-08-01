@@ -1,8 +1,9 @@
-import { Linking, Pressable } from 'react-native'
+import { Pressable } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeStore } from '@/stores/themeStore'
 import { autoTextColor } from '@/theme/contrast'
 import type { SocialData } from '@/types/pages'
+import { openExternalUrl } from '@/lib/externalUrl'
 
 interface SocialBlockProps {
   data: SocialData
@@ -13,7 +14,7 @@ export function SocialBlock({ data }: SocialBlockProps) {
   const links = data.links ?? []
 
   const handlePress = (url: string) => {
-    if (url) Linking.openURL(url).catch(() => {})
+    openExternalUrl(url)
   }
 
   return (

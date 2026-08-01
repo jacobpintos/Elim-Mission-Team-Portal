@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Modal, View, ScrollView, Pressable, StyleSheet, Linking } from 'react-native'
+import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useTasksStore } from '@/stores/tasksStore'
@@ -9,6 +9,7 @@ import { ChordSheetViewer } from './ChordSheetViewer'
 import type { SetList } from '@/types/worship'
 import type { Task } from '@/types/events'
 import type { ChordSheet } from '@/types/chordSheet'
+import { openExternalUrl } from '@/lib/externalUrl'
 
 interface SetListDetailModalProps {
   setList: SetList | null
@@ -46,7 +47,10 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
       <ChordSheetViewer
         key={viewSheet ? `${String(viewSheet.id)}-${viewSheetKey}` : 'closed'}
         sheet={viewSheet}
-        onClose={() => { setViewSheet(null); setViewSheetKey('') }}
+        onClose={() => {
+          setViewSheet(null)
+          setViewSheetKey('')
+        }}
         initialKey={viewSheetKey}
       />
       <Modal visible={!!setList} animationType="slide" transparent onRequestClose={onClose}>
@@ -142,7 +146,12 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                               (c) => String(c.id) === String(song.chordSheetId)
                             )
                             return cs ? (
-                              <Pressable onPress={() => { setViewSheet(cs); setViewSheetKey(song.key ?? '') }}>
+                              <Pressable
+                                onPress={() => {
+                                  setViewSheet(cs)
+                                  setViewSheetKey(song.key ?? '')
+                                }}
+                              >
                                 <Text color={colors.primary} fontSize="$2">
                                   🎸 {cs.title}
                                   {cs.artist ? ` — ${cs.artist}` : ''}
@@ -153,7 +162,7 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                         : null}
 
                       {song.link ? (
-                        <Pressable onPress={() => Linking.openURL(song.link).catch(() => {})}>
+                        <Pressable onPress={() => openExternalUrl(song.link)}>
                           <Text color={colors.primary} fontSize="$2" numberOfLines={1}>
                             🔗 {song.link}
                           </Text>

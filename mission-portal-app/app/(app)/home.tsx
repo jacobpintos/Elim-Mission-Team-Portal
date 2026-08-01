@@ -27,6 +27,7 @@ import { db } from '@/lib/firebase'
 import type { EventInstance, PostPage } from '@/types/events'
 import type { MusicItem } from '@/stores/musicStore'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { openExternalUrl } from '@/lib/externalUrl'
 
 function isItemNew(item: MusicItem): boolean {
   if (!item.isNew) return false
@@ -125,7 +126,10 @@ function PubHomeContent() {
       if (coords) {
         toast('Location saved — nearby events will appear below.', 'success')
       } else {
-        toast('Location saved. Could not geocode city — Events Near Me may not update until a valid city/state is set.', 'error')
+        toast(
+          'Location saved. Could not geocode city — Events Near Me may not update until a valid city/state is set.',
+          'error'
+        )
       }
     } catch {
       toast('Failed to save location', 'error')
@@ -305,18 +309,21 @@ function PubHomeContent() {
                         ev._geocodeLat,
                         ev._geocodeLng
                       )
-                    )} mi · {estimatedDriveTime(
+                    )}{' '}
+                    mi ·{' '}
+                    {estimatedDriveTime(
                       haversineMiles(
                         profile.locationPref.lat,
                         profile.locationPref.lng!,
                         ev._geocodeLat,
                         ev._geocodeLng
                       )
-                    )} (est.)
+                    )}{' '}
+                    (est.)
                   </Text>
                 ) : null}
                 {ev.isVirtual && ev.virtualLink ? (
-                  <Pressable onPress={() => Linking.openURL(ev.virtualLink!)}>
+                  <Pressable onPress={() => openExternalUrl(ev.virtualLink)}>
                     <Text color="#8e44ad" fontSize="$2" textDecorationLine="underline">
                       Join Here
                     </Text>
@@ -432,27 +439,94 @@ function PubHomeContent() {
               {pages.map((page) => {
                 const unseen = hasUnseen(page)
                 return (
-                  <Pressable key={page.id} onPress={() => router.push(`/posts/${page.id}` as never)}>
-                    <View style={{ borderRadius: 14, overflow: 'hidden', minHeight: 82, flexDirection: 'row', borderWidth: 1, borderColor: unseen ? colors.primary : colors.border }}>
+                  <Pressable
+                    key={page.id}
+                    onPress={() => router.push(`/posts/${page.id}` as never)}
+                  >
+                    <View
+                      style={{
+                        borderRadius: 14,
+                        overflow: 'hidden',
+                        minHeight: 82,
+                        flexDirection: 'row',
+                        borderWidth: 1,
+                        borderColor: unseen ? colors.primary : colors.border,
+                      }}
+                    >
                       {/* Left: photo panel */}
-                      <View style={{ width: 90, alignSelf: 'stretch', overflow: 'hidden', position: 'relative' }}>
+                      <View
+                        style={{
+                          width: 90,
+                          alignSelf: 'stretch',
+                          overflow: 'hidden',
+                          position: 'relative',
+                        }}
+                      >
                         {page.bgImage ? (
-                          <Img src={page.bgImage} alt="" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <Img
+                            src={page.bgImage}
+                            alt=""
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                            }}
+                          />
                         ) : (
-                          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.primary + '77' }} />
+                          <View
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              backgroundColor: colors.primary + '77',
+                            }}
+                          />
                         )}
                       </View>
                       {/* Right: text panel */}
-                      <View style={{ flex: 1, minWidth: 0, overflow: 'hidden', paddingHorizontal: 16, paddingVertical: 14, justifyContent: 'center', backgroundColor: colors.surface }}>
+                      <View
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          paddingHorizontal: 16,
+                          paddingVertical: 14,
+                          justifyContent: 'center',
+                          backgroundColor: colors.surface,
+                        }}
+                      >
                         {unseen ? (
                           <XStack gap={4} alignItems="center" marginBottom={2}>
-                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
-                            <Text color={colors.primary} fontSize={11} fontWeight="600">New</Text>
+                            <View
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: 3,
+                                backgroundColor: colors.primary,
+                              }}
+                            />
+                            <Text color={colors.primary} fontSize={11} fontWeight="600">
+                              New
+                            </Text>
                           </XStack>
                         ) : null}
-                        <Text color={colors.text} fontWeight="700" fontSize={15} numberOfLines={1}>{page.label}</Text>
+                        <Text color={colors.text} fontWeight="700" fontSize={15} numberOfLines={1}>
+                          {page.label}
+                        </Text>
                         {page.desc ? (
-                          <Text color={colors.textMuted} fontSize={12} numberOfLines={1} marginTop={2}>{page.desc}</Text>
+                          <Text
+                            color={colors.textMuted}
+                            fontSize={12}
+                            numberOfLines={1}
+                            marginTop={2}
+                          >
+                            {page.desc}
+                          </Text>
                         ) : null}
                       </View>
                     </View>

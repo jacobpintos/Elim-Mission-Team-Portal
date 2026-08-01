@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { ScrollView, Pressable, TextInput, StyleSheet, View, Modal, Linking } from 'react-native'
+import { ScrollView, Pressable, TextInput, StyleSheet, View, Modal } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useInventoryStore } from '@/stores/inventoryStore'
 import { useUIStore } from '@/stores/uiStore'
 import type { ReorderItem } from '@/types/inventory'
+import { openExternalUrl } from '@/lib/externalUrl'
 
 interface ReorderTabProps {
   isAdmin: boolean
@@ -29,8 +30,12 @@ function ReorderFormModal({ visible, onClose, onSave, editItem }: ReorderFormMod
       /* eslint-disable react-hooks/set-state-in-effect */
       setForm(
         editItem
-          ? { name: editItem.name, price: editItem.price != null ? String(editItem.price) : '', link: editItem.link }
-          : EMPTY_FORM,
+          ? {
+              name: editItem.name,
+              price: editItem.price != null ? String(editItem.price) : '',
+              link: editItem.link,
+            }
+          : EMPTY_FORM
       )
       /* eslint-enable react-hooks/set-state-in-effect */
     }
@@ -67,14 +72,25 @@ function ReorderFormModal({ visible, onClose, onSave, editItem }: ReorderFormMod
               {editItem ? 'Edit Reorder Item' : 'New Reorder Item'}
             </Text>
             <Pressable onPress={onClose}>
-              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
             </Pressable>
           </XStack>
 
           <YStack gap="$1">
-            <Text color={colors.textMuted} fontSize="$2">Item *</Text>
+            <Text color={colors.textMuted} fontSize="$2">
+              Item *
+            </Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
               value={form.name}
               onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
               placeholder="Item name…"
@@ -83,9 +99,18 @@ function ReorderFormModal({ visible, onClose, onSave, editItem }: ReorderFormMod
           </YStack>
 
           <YStack gap="$1">
-            <Text color={colors.textMuted} fontSize="$2">Price ($)</Text>
+            <Text color={colors.textMuted} fontSize="$2">
+              Price ($)
+            </Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
               value={form.price}
               onChangeText={(v) => setForm((f) => ({ ...f, price: v }))}
               placeholder="0.00"
@@ -95,9 +120,18 @@ function ReorderFormModal({ visible, onClose, onSave, editItem }: ReorderFormMod
           </YStack>
 
           <YStack gap="$1">
-            <Text color={colors.textMuted} fontSize="$2">Link (URL)</Text>
+            <Text color={colors.textMuted} fontSize="$2">
+              Link (URL)
+            </Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
               value={form.link}
               onChangeText={(v) => setForm((f) => ({ ...f, link: v }))}
               placeholder="https://…"
@@ -109,14 +143,25 @@ function ReorderFormModal({ visible, onClose, onSave, editItem }: ReorderFormMod
 
           <XStack gap="$2" justifyContent="flex-end">
             <Pressable onPress={onClose} style={[styles.btn, { borderColor: colors.border }]}>
-              <Text color={colors.textMuted} fontWeight="600">Cancel</Text>
+              <Text color={colors.textMuted} fontWeight="600">
+                Cancel
+              </Text>
             </Pressable>
             <Pressable
               onPress={handleSave}
               disabled={saving || !form.name.trim()}
-              style={[styles.btn, { backgroundColor: colors.primary, borderColor: colors.primary, opacity: saving || !form.name.trim() ? 0.5 : 1 }]}
+              style={[
+                styles.btn,
+                {
+                  backgroundColor: colors.primary,
+                  borderColor: colors.primary,
+                  opacity: saving || !form.name.trim() ? 0.5 : 1,
+                },
+              ]}
             >
-              <Text color="white" fontWeight="700">{saving ? 'Saving…' : 'Save'}</Text>
+              <Text color="white" fontWeight="700">
+                {saving ? 'Saving…' : 'Save'}
+              </Text>
             </Pressable>
           </XStack>
         </YStack>
@@ -127,7 +172,8 @@ function ReorderFormModal({ visible, onClose, onSave, editItem }: ReorderFormMod
 
 export function ReorderTab({ isAdmin }: ReorderTabProps) {
   const colors = useThemeColors()
-  const { reorderItems, createReorderItem, updateReorderItem, deleteReorderItem } = useInventoryStore()
+  const { reorderItems, createReorderItem, updateReorderItem, deleteReorderItem } =
+    useInventoryStore()
   const toast = useUIStore((s) => s.toast)
 
   const [search, setSearch] = useState('')
@@ -171,7 +217,15 @@ export function ReorderTab({ isAdmin }: ReorderTabProps) {
       {/* Search + Add */}
       <XStack paddingHorizontal="$3" paddingVertical="$2" gap="$2" alignItems="center">
         <TextInput
-          style={[styles.search, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface, flex: 1 }]}
+          style={[
+            styles.search,
+            {
+              color: colors.text,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              flex: 1,
+            },
+          ]}
           value={search}
           onChangeText={setSearch}
           placeholder="Search items…"
@@ -179,19 +233,35 @@ export function ReorderTab({ isAdmin }: ReorderTabProps) {
         />
         {isAdmin ? (
           <Pressable
-            onPress={() => { setEditItem(null); setShowForm(true) }}
+            onPress={() => {
+              setEditItem(null)
+              setShowForm(true)
+            }}
             style={[styles.btn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
           >
-            <Text color="white" fontSize="$1" fontWeight="700">+ Add</Text>
+            <Text color="white" fontSize="$1" fontWeight="700">
+              + Add
+            </Text>
           </Pressable>
         ) : null}
       </XStack>
 
       {/* Table header */}
-      <View style={[styles.headerRow, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-        <Text style={styles.colItem} color={colors.textMuted} fontWeight="700" fontSize={12}>ITEM</Text>
-        <Text style={styles.colPrice} color={colors.textMuted} fontWeight="700" fontSize={12}>PRICE</Text>
-        <Text style={styles.colLink} color={colors.textMuted} fontWeight="700" fontSize={12}>LINK</Text>
+      <View
+        style={[
+          styles.headerRow,
+          { borderBottomColor: colors.border, backgroundColor: colors.surface },
+        ]}
+      >
+        <Text style={styles.colItem} color={colors.textMuted} fontWeight="700" fontSize={12}>
+          ITEM
+        </Text>
+        <Text style={styles.colPrice} color={colors.textMuted} fontWeight="700" fontSize={12}>
+          PRICE
+        </Text>
+        <Text style={styles.colLink} color={colors.textMuted} fontWeight="700" fontSize={12}>
+          LINK
+        </Text>
         {isAdmin ? <View style={styles.colActions} /> : null}
       </View>
 
@@ -211,22 +281,34 @@ export function ReorderTab({ isAdmin }: ReorderTabProps) {
                   key={String(item.id)}
                   style={[
                     styles.dataRow,
-                    { backgroundColor: idx % 2 === 0 ? colors.surface : colors.background, borderBottomColor: colors.border },
+                    {
+                      backgroundColor: idx % 2 === 0 ? colors.surface : colors.background,
+                      borderBottomColor: colors.border,
+                    },
                   ]}
                 >
-                  <Text style={styles.colItem} color={colors.text} fontSize={13} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.colItem} color={colors.text} fontSize={13} numberOfLines={1}>
+                    {item.name}
+                  </Text>
                   <Text style={styles.colPrice} color={colors.text} fontSize={13}>
                     {item.price != null ? `$${item.price.toFixed(2)}` : '—'}
                   </Text>
                   <View style={styles.colLink}>
                     {item.link ? (
-                      <Pressable onPress={() => Linking.openURL(item.link).catch(() => {})}>
-                        <Text color={colors.primary} fontSize={13} numberOfLines={1} style={{ textDecorationLine: 'underline' }}>
+                      <Pressable onPress={() => openExternalUrl(item.link)}>
+                        <Text
+                          color={colors.primary}
+                          fontSize={13}
+                          numberOfLines={1}
+                          style={{ textDecorationLine: 'underline' }}
+                        >
                           Open ↗
                         </Text>
                       </Pressable>
                     ) : (
-                      <Text color={colors.textMuted} fontSize={13}>—</Text>
+                      <Text color={colors.textMuted} fontSize={13}>
+                        —
+                      </Text>
                     )}
                   </View>
                   {isAdmin ? (
@@ -235,25 +317,60 @@ export function ReorderTab({ isAdmin }: ReorderTabProps) {
                         <XStack gap={4}>
                           <Pressable onPress={() => setConfirmDeleteId(null)}>
                             <View style={[styles.actionBtn, { borderColor: colors.border }]}>
-                              <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}>Cancel</Text>
+                              <Text
+                                style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}
+                              >
+                                Cancel
+                              </Text>
                             </View>
                           </Pressable>
                           <Pressable onPress={() => handleDelete(item.id)}>
-                            <View style={[styles.actionBtn, { backgroundColor: '#c0392b', borderColor: '#c0392b' }]}>
-                              <Text style={{ color: 'white', fontSize: 11, fontWeight: '600' }}>Confirm</Text>
+                            <View
+                              style={[
+                                styles.actionBtn,
+                                { backgroundColor: '#c0392b', borderColor: '#c0392b' },
+                              ]}
+                            >
+                              <Text style={{ color: 'white', fontSize: 11, fontWeight: '600' }}>
+                                Confirm
+                              </Text>
                             </View>
                           </Pressable>
                         </XStack>
                       ) : (
                         <XStack gap={4}>
-                          <Pressable onPress={() => { setEditItem(item); setShowForm(true) }}>
-                            <View style={[styles.actionBtn, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '44' }]}>
-                              <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '600' }}>Edit</Text>
+                          <Pressable
+                            onPress={() => {
+                              setEditItem(item)
+                              setShowForm(true)
+                            }}
+                          >
+                            <View
+                              style={[
+                                styles.actionBtn,
+                                {
+                                  backgroundColor: colors.primary + '18',
+                                  borderColor: colors.primary + '44',
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={{ color: colors.primary, fontSize: 11, fontWeight: '600' }}
+                              >
+                                Edit
+                              </Text>
                             </View>
                           </Pressable>
                           <Pressable onPress={() => setConfirmDeleteId(item.id)}>
-                            <View style={[styles.actionBtn, { backgroundColor: '#c0392b18', borderColor: '#c0392b44' }]}>
-                              <Text style={{ color: '#c0392b', fontSize: 11, fontWeight: '600' }}>Delete</Text>
+                            <View
+                              style={[
+                                styles.actionBtn,
+                                { backgroundColor: '#c0392b18', borderColor: '#c0392b44' },
+                              ]}
+                            >
+                              <Text style={{ color: '#c0392b', fontSize: 11, fontWeight: '600' }}>
+                                Delete
+                              </Text>
                             </View>
                           </Pressable>
                         </XStack>
@@ -269,7 +386,10 @@ export function ReorderTab({ isAdmin }: ReorderTabProps) {
 
       <ReorderFormModal
         visible={showForm}
-        onClose={() => { setShowForm(false); setEditItem(null) }}
+        onClose={() => {
+          setShowForm(false)
+          setEditItem(null)
+        }}
         onSave={handleSave}
         editItem={editItem}
       />

@@ -20,13 +20,7 @@ import type { EventInstance } from '@/types/events'
 import { fetchWeather, fetchNWSAlerts, type WeatherData, type NWSAlert } from '@/lib/weather'
 import { WeatherDetailSheet } from './WeatherDetailSheet'
 
-export function TeamsDisplay({
-  event,
-  uid,
-}: {
-  event: EventInstance
-  uid: string
-}) {
+export function TeamsDisplay({ event, uid }: { event: EventInstance; uid: string }) {
   const colors = useThemeColors()
   const { users } = useUsersStore()
   const [showAll, setShowAll] = useState(false)
@@ -35,8 +29,7 @@ export function TeamsDisplay({
     users.find((u) => sameId(u.uid, id))?.displayName ?? String(id)
 
   const myTeam = (event.teams ?? []).find(
-    (t) =>
-      t.members.some((m) => sameId(m, uid)) || t.leaders.some((m) => sameId(m, uid))
+    (t) => t.members.some((m) => sameId(m, uid)) || t.leaders.some((m) => sameId(m, uid))
   )
 
   return (
@@ -74,9 +67,7 @@ export function TeamsDisplay({
 
       <Pressable onPress={() => setShowAll((s) => !s)}>
         <Text color={colors.primary} fontSize="$2">
-          {showAll
-            ? 'Hide teams'
-            : `Show all teams (${event.teams?.length ?? 0})`}
+          {showAll ? 'Hide teams' : `Show all teams (${event.teams?.length ?? 0})`}
         </Text>
       </Pressable>
 
@@ -93,11 +84,7 @@ export function TeamsDisplay({
                 borderColor={isMine ? colors.primary : colors.border}
                 gap="$1"
               >
-                <Text
-                  color={isMine ? colors.primary : colors.text}
-                  fontWeight="600"
-                  fontSize="$3"
-                >
+                <Text color={isMine ? colors.primary : colors.text} fontWeight="600" fontSize="$3">
                   {team.name}
                 </Text>
                 {team.leaders.length > 0 ? (
@@ -132,9 +119,7 @@ export function LodgingDisplay({
   const getName = (id: string | number) =>
     users.find((u) => sameId(u.uid, id))?.displayName ?? String(id)
 
-  const myEntry = (event.lodgingEntries ?? []).find((e) =>
-    e.assignees.some((a) => sameId(a, uid))
-  )
+  const myEntry = (event.lodgingEntries ?? []).find((e) => e.assignees.some((a) => sameId(a, uid)))
 
   return (
     <YStack gap="$2">
@@ -161,8 +146,10 @@ export function LodgingDisplay({
           ) : null}
           <Text color={colors.textMuted} fontSize="$2">
             With:{' '}
-            {myEntry.assignees.filter((a) => !sameId(a, uid)).map(getName).join(', ') ||
-              'Just you'}
+            {myEntry.assignees
+              .filter((a) => !sameId(a, uid))
+              .map(getName)
+              .join(', ') || 'Just you'}
           </Text>
         </YStack>
       ) : (
@@ -194,11 +181,7 @@ export function LodgingDisplay({
                 borderColor={isMine ? colors.primary : colors.border}
                 gap="$1"
               >
-                <Text
-                  color={isMine ? colors.primary : colors.text}
-                  fontWeight="600"
-                  fontSize="$3"
-                >
+                <Text color={isMine ? colors.primary : colors.text} fontWeight="600" fontSize="$3">
                   {entry.name}
                   {entry.room ? ` — ${entry.room}` : ''}
                 </Text>
@@ -242,7 +225,8 @@ function FlightBlock({
   arrival?: string
   contact?: string
 }) {
-  const hasAny = date || time || airport || airline || flight || ticket || confirmation || arrival || contact
+  const hasAny =
+    date || time || airport || airline || flight || ticket || confirmation || arrival || contact
   if (!hasAny) return null
   return (
     <YStack gap="$1">
@@ -274,7 +258,9 @@ function FlightBlock({
         statusLink ? (
           <Pressable
             onPress={() =>
-              Linking.openURL(/^https?:\/\//i.test(statusLink) ? statusLink : `https://${statusLink}`)
+              Linking.openURL(
+                /^https?:\/\//i.test(statusLink) ? statusLink : `https://${statusLink}`
+              )
             }
           >
             <Text color={colors.primary} fontSize="$2" textDecorationLine="underline">
@@ -312,6 +298,7 @@ function FlightBlock({
 }
 
 import type { FlightEntry } from '@/types/events'
+import { openExternalUrl } from '@/lib/externalUrl'
 
 function FlightEntryCard({
   colors,
@@ -435,20 +422,13 @@ export function FlightDisplay({
   )
 }
 
-export function DressCodeDisplay({
-  event,
-  uid,
-}: {
-  event: EventInstance
-  uid: string
-}) {
+export function DressCodeDisplay({ event, uid }: { event: EventInstance; uid: string }) {
   const colors = useThemeColors()
 
   // New structured dress code
   if (event.dressCode?.length) {
     const myTeam = (event.teams ?? []).find(
-      (t) =>
-        t.members.some((m) => sameId(m, uid)) || t.leaders.some((m) => sameId(m, uid))
+      (t) => t.members.some((m) => sameId(m, uid)) || t.leaders.some((m) => sameId(m, uid))
     )
     const groupName = myTeam?.name ?? 'Unassigned'
     const specific = event.dressCode.find((e) => e.group === groupName)
@@ -1079,7 +1059,8 @@ export function EventDetailModal({
   const alerts = alertsEntry?.key === eventWeatherKey ? alertsEntry.data : []
 
   useEffect(() => {
-    if (!open || !event?._geocodeLat || !event?._geocodeLng || !event?.date || event?.isVirtual) return
+    if (!open || !event?._geocodeLat || !event?._geocodeLng || !event?.date || event?.isVirtual)
+      return
     if (!isMember && !isAdmin) return
     const key = `${event.templateId}_${event.date}`
     fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then((w) => {
@@ -1103,308 +1084,310 @@ export function EventDetailModal({
 
   return (
     <>
-    <Modal
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) {
-          setShowWeather(false)
-          onClose()
-        }
-      }}
-      title={event.title}
-      scrollable
-    >
-      <YStack gap="$3" paddingBottom="$4">
-        {/* Date & Time */}
-        <YStack gap="$1">
-          <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-            DATE & TIME
-          </Text>
-          <Text color={colors.text} fontSize="$3">
-            {FD(event.date, { weekday: true })}
-          </Text>
-          {event.startTime ? (
-            <Text color={colors.text} fontSize="$3">
-              Start: {event.startTime}
-            </Text>
-          ) : null}
-          {isMember && event.rtp ? (
-            <Text color={colors.text} fontSize="$3">
-              Report (Production): {event.rtp}
-            </Text>
-          ) : null}
-          {isMember && event.rtm ? (
-            <Text color={colors.text} fontSize="$3">
-              Report (Mission): {event.rtm}
-            </Text>
-          ) : null}
-        </YStack>
-
-        {/* Weather forecast */}
-        {weather ? (
-          <Pressable onPress={() => setShowWeather(true)}>
-            <XStack
-              backgroundColor={colors.surface}
-              borderRadius="$2"
-              padding="$2"
-              borderWidth={1}
-              borderColor={alerts.length > 0 ? '#e74c3c' : colors.border}
-              alignItems="center"
-              gap="$3"
-            >
-              <Text fontSize={24}>{weather.icon}</Text>
-              <YStack flex={1}>
-                <Text color={colors.text} fontSize="$3" fontWeight="600">
-                  {weather.label}
-                </Text>
-                <Text color={colors.textMuted} fontSize="$2">
-                  {weather.high}°F / {weather.low}°F · {weather.precipPct}% chance of rain
-                </Text>
-              </YStack>
-              {alerts.length > 0 ? (
-                <XStack
-                  backgroundColor="#e74c3c"
-                  borderRadius={99}
-                  paddingHorizontal={8}
-                  paddingVertical={3}
-                  alignItems="center"
-                  gap="$1"
-                >
-                  <Text color="white" fontSize={11} fontWeight="700">
-                    ⚠ {alerts.length}
-                  </Text>
-                </XStack>
-              ) : null}
-              <Text color={colors.textMuted} fontSize="$2">›</Text>
-            </XStack>
-          </Pressable>
-        ) : null}
-
-        {/* Location */}
-        {event.location || event.address || event.city ? (
+      <Modal
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) {
+            setShowWeather(false)
+            onClose()
+          }
+        }}
+        title={event.title}
+        scrollable
+      >
+        <YStack gap="$3" paddingBottom="$4">
+          {/* Date & Time */}
           <YStack gap="$1">
             <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-              LOCATION
+              DATE & TIME
             </Text>
-            {event.location ? (
+            <Text color={colors.text} fontSize="$3">
+              {FD(event.date, { weekday: true })}
+            </Text>
+            {event.startTime ? (
               <Text color={colors.text} fontSize="$3">
-                {event.location}
+                Start: {event.startTime}
               </Text>
             ) : null}
-            {event.address ? (
+            {isMember && event.rtp ? (
               <Text color={colors.text} fontSize="$3">
-                {event.address}
+                Report (Production): {event.rtp}
               </Text>
             ) : null}
-            {event.city ? (
+            {isMember && event.rtm ? (
               <Text color={colors.text} fontSize="$3">
-                {event.city}
-                {event.state ? `, ${event.state}` : ''}
+                Report (Mission): {event.rtm}
               </Text>
             ) : null}
-            <Pressable onPress={() => openLocationInMaps(eventMapQuery(event))}>
-              <Text color={colors.primary} textDecorationLine="underline" fontSize="$2">
-                Get Directions →
-              </Text>
-            </Pressable>
           </YStack>
-        ) : null}
 
-        {/* Virtual join link */}
-        {event.isVirtual ? (
-          <YStack gap="$1">
-            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-              VIRTUAL EVENT
-            </Text>
-            <XStack gap="$2" alignItems="center">
-              <Text fontSize="$3">🖥</Text>
-              <Text color={colors.text} fontSize="$3">
-                Virtual Event
+          {/* Weather forecast */}
+          {weather ? (
+            <Pressable onPress={() => setShowWeather(true)}>
+              <XStack
+                backgroundColor={colors.surface}
+                borderRadius="$2"
+                padding="$2"
+                borderWidth={1}
+                borderColor={alerts.length > 0 ? '#e74c3c' : colors.border}
+                alignItems="center"
+                gap="$3"
+              >
+                <Text fontSize={24}>{weather.icon}</Text>
+                <YStack flex={1}>
+                  <Text color={colors.text} fontSize="$3" fontWeight="600">
+                    {weather.label}
+                  </Text>
+                  <Text color={colors.textMuted} fontSize="$2">
+                    {weather.high}°F / {weather.low}°F · {weather.precipPct}% chance of rain
+                  </Text>
+                </YStack>
+                {alerts.length > 0 ? (
+                  <XStack
+                    backgroundColor="#e74c3c"
+                    borderRadius={99}
+                    paddingHorizontal={8}
+                    paddingVertical={3}
+                    alignItems="center"
+                    gap="$1"
+                  >
+                    <Text color="white" fontSize={11} fontWeight="700">
+                      ⚠ {alerts.length}
+                    </Text>
+                  </XStack>
+                ) : null}
+                <Text color={colors.textMuted} fontSize="$2">
+                  ›
+                </Text>
+              </XStack>
+            </Pressable>
+          ) : null}
+
+          {/* Location */}
+          {event.location || event.address || event.city ? (
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                LOCATION
               </Text>
-            </XStack>
-            {event.virtualLink ? (
-              <Pressable onPress={() => Linking.openURL(event.virtualLink!)}>
-                <Text color={colors.primary} textDecorationLine="underline" fontSize="$3">
-                  {event.virtualLink}
+              {event.location ? (
+                <Text color={colors.text} fontSize="$3">
+                  {event.location}
+                </Text>
+              ) : null}
+              {event.address ? (
+                <Text color={colors.text} fontSize="$3">
+                  {event.address}
+                </Text>
+              ) : null}
+              {event.city ? (
+                <Text color={colors.text} fontSize="$3">
+                  {event.city}
+                  {event.state ? `, ${event.state}` : ''}
+                </Text>
+              ) : null}
+              <Pressable onPress={() => openLocationInMaps(eventMapQuery(event))}>
+                <Text color={colors.primary} textDecorationLine="underline" fontSize="$2">
+                  Get Directions →
                 </Text>
               </Pressable>
-            ) : null}
-          </YStack>
-        ) : null}
+            </YStack>
+          ) : null}
 
-        {/* Dress Code — members only */}
-        {isMember ? <DressCodeDisplay event={event} uid={uid} /> : null}
-
-        {/* Food — members only */}
-        {isMember && event.food ? (
-          <FoodPanel event={event} uid={uid} myDisplayName={myDisplayName} />
-        ) : null}
-
-        {/* Carpool — members only */}
-        {isMember && event.carpool ? (
-          event.carpoolCars && event.carpoolCars.length > 0 ? (
-            <CarpoolReadOnly event={event} uid={uid} isAdmin={isAdmin} />
-          ) : (
-            <CarpoolPanel event={event} uid={uid} isAdmin={isAdmin} />
-          )
-        ) : null}
-
-        {/* Teams — members only */}
-        {isMember && event.teams && event.teams.length > 0 ? (
-          <TeamsDisplay event={event} uid={uid} />
-        ) : null}
-
-        {/* Lodging — members only */}
-        {isMember && event.lodging && event.lodgingEntries && event.lodgingEntries.length > 0 ? (
-          <LodgingDisplay event={event} uid={uid} isAdmin={isAdmin} />
-        ) : null}
-
-        {/* Flights — members only */}
-        {isMember && event.flights && event.flightEntries && event.flightEntries.length > 0 ? (
-          <FlightDisplay event={event} uid={uid} isAdmin={isAdmin} />
-        ) : null}
-
-        {/* Sign up link — visible to all */}
-        {event.signUpLink ? (
-          <Pressable onPress={() => Linking.openURL(event.signUpLink!)}>
-            <Text color={colors.primary} textDecorationLine="underline">
-              Sign Up →
-            </Text>
-          </Pressable>
-        ) : null}
-
-        {/* Availability — members only */}
-        {isMember ? (
-          <YStack gap="$2">
-            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-              YOUR AVAILABILITY
-            </Text>
-            <XStack gap="$2" alignItems="center">
-              <AvailBadge status={myAvail?.status} />
-              {myAvail?.note ? (
-                <Text color={colors.textMuted} fontSize="$2">
-                  {myAvail.note}
-                </Text>
-              ) : null}
-              {event.isRec && instanceAvail ? (
-                <Text color={colors.textMuted} fontSize={11}>
-                  (this date only)
-                </Text>
-              ) : event.isRec && myAvail ? (
-                <Text color={colors.textMuted} fontSize={11}>
-                  (series)
-                </Text>
-              ) : null}
-            </XStack>
-            {event.isRec && !hasSeriesResponse ? (
-              <Text color={colors.textMuted} fontSize="$2">
-                Set your series availability in the banner above first.
+          {/* Virtual join link */}
+          {event.isVirtual ? (
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                VIRTUAL EVENT
               </Text>
-            ) : onAvail ? (
-              <Pressable onPress={onAvail}>
+              <XStack gap="$2" alignItems="center">
+                <Text fontSize="$3">🖥</Text>
+                <Text color={colors.text} fontSize="$3">
+                  Virtual Event
+                </Text>
+              </XStack>
+              {event.virtualLink ? (
+                <Pressable onPress={() => openExternalUrl(event.virtualLink)}>
+                  <Text color={colors.primary} textDecorationLine="underline" fontSize="$3">
+                    {event.virtualLink}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </YStack>
+          ) : null}
+
+          {/* Dress Code — members only */}
+          {isMember ? <DressCodeDisplay event={event} uid={uid} /> : null}
+
+          {/* Food — members only */}
+          {isMember && event.food ? (
+            <FoodPanel event={event} uid={uid} myDisplayName={myDisplayName} />
+          ) : null}
+
+          {/* Carpool — members only */}
+          {isMember && event.carpool ? (
+            event.carpoolCars && event.carpoolCars.length > 0 ? (
+              <CarpoolReadOnly event={event} uid={uid} isAdmin={isAdmin} />
+            ) : (
+              <CarpoolPanel event={event} uid={uid} isAdmin={isAdmin} />
+            )
+          ) : null}
+
+          {/* Teams — members only */}
+          {isMember && event.teams && event.teams.length > 0 ? (
+            <TeamsDisplay event={event} uid={uid} />
+          ) : null}
+
+          {/* Lodging — members only */}
+          {isMember && event.lodging && event.lodgingEntries && event.lodgingEntries.length > 0 ? (
+            <LodgingDisplay event={event} uid={uid} isAdmin={isAdmin} />
+          ) : null}
+
+          {/* Flights — members only */}
+          {isMember && event.flights && event.flightEntries && event.flightEntries.length > 0 ? (
+            <FlightDisplay event={event} uid={uid} isAdmin={isAdmin} />
+          ) : null}
+
+          {/* Sign up link — visible to all */}
+          {event.signUpLink ? (
+            <Pressable onPress={() => openExternalUrl(event.signUpLink)}>
+              <Text color={colors.primary} textDecorationLine="underline">
+                Sign Up →
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {/* Availability — members only */}
+          {isMember ? (
+            <YStack gap="$2">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                YOUR AVAILABILITY
+              </Text>
+              <XStack gap="$2" alignItems="center">
+                <AvailBadge status={myAvail?.status} />
+                {myAvail?.note ? (
+                  <Text color={colors.textMuted} fontSize="$2">
+                    {myAvail.note}
+                  </Text>
+                ) : null}
+                {event.isRec && instanceAvail ? (
+                  <Text color={colors.textMuted} fontSize={11}>
+                    (this date only)
+                  </Text>
+                ) : event.isRec && myAvail ? (
+                  <Text color={colors.textMuted} fontSize={11}>
+                    (series)
+                  </Text>
+                ) : null}
+              </XStack>
+              {event.isRec && !hasSeriesResponse ? (
+                <Text color={colors.textMuted} fontSize="$2">
+                  Set your series availability in the banner above first.
+                </Text>
+              ) : onAvail ? (
+                <Pressable onPress={onAvail}>
+                  <XStack
+                    borderWidth={1}
+                    borderColor={colors.primary}
+                    borderRadius="$2"
+                    paddingHorizontal="$3"
+                    paddingVertical="$2"
+                    alignSelf="flex-start"
+                  >
+                    <Text color={colors.primary} fontWeight="600" fontSize="$3">
+                      {instanceAvail
+                        ? 'Change This Date'
+                        : myAvail
+                          ? 'Override This Date'
+                          : 'Set RSVP'}
+                    </Text>
+                  </XStack>
+                </Pressable>
+              ) : null}
+            </YStack>
+          ) : null}
+
+          {/* Planning Board — members only */}
+          {isMember && linkedBoard ? (
+            <YStack gap="$1">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                PLANNING BOARD
+              </Text>
+              <Pressable onPress={() => setShowBoard(true)}>
                 <XStack
+                  backgroundColor={colors.surface}
                   borderWidth={1}
-                  borderColor={colors.primary}
+                  borderColor={colors.border}
                   borderRadius="$2"
                   paddingHorizontal="$3"
                   paddingVertical="$2"
                   alignSelf="flex-start"
+                  gap="$2"
                 >
-                  <Text color={colors.primary} fontWeight="600" fontSize="$3">
-                    {instanceAvail
-                      ? 'Change This Date'
-                      : myAvail
-                      ? 'Override This Date'
-                      : 'Set RSVP'}
+                  <Text>📋</Text>
+                  <Text color={colors.text} fontSize="$3">
+                    {linkedBoard.name}
+                  </Text>
+                  <Text color={colors.primary} fontSize="$3">
+                    →
                   </Text>
                 </XStack>
               </Pressable>
-            ) : null}
-          </YStack>
-        ) : null}
+            </YStack>
+          ) : null}
 
-        {/* Planning Board — members only */}
-        {isMember && linkedBoard ? (
-          <YStack gap="$1">
-            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-              PLANNING BOARD
-            </Text>
-            <Pressable onPress={() => setShowBoard(true)}>
-              <XStack
-                backgroundColor={colors.surface}
-                borderWidth={1}
-                borderColor={colors.border}
-                borderRadius="$2"
-                paddingHorizontal="$3"
-                paddingVertical="$2"
-                alignSelf="flex-start"
-                gap="$2"
-              >
-                <Text>📋</Text>
-                <Text color={colors.text} fontSize="$3">
-                  {linkedBoard.name}
-                </Text>
-                <Text color={colors.primary} fontSize="$3">
-                  →
-                </Text>
-              </XStack>
-            </Pressable>
-          </YStack>
-        ) : null}
-
-        {/* ICS Export — visible to all */}
-        <Pressable onPress={handleExportICS}>
-          <XStack
-            backgroundColor={colors.surface}
-            borderWidth={1}
-            borderColor={colors.border}
-            borderRadius="$2"
-            paddingHorizontal="$3"
-            paddingVertical="$2"
-            alignSelf="flex-start"
-            gap="$2"
-          >
-            <Text>📅</Text>
-            <Text color={colors.text} fontSize="$3">
-              Add to Calendar (.ics)
-            </Text>
-          </XStack>
-        </Pressable>
-
-        {/* Admin Edit */}
-        {onEdit ? (
-          <Pressable onPress={onEdit}>
+          {/* ICS Export — visible to all */}
+          <Pressable onPress={handleExportICS}>
             <XStack
-              backgroundColor={colors.primary}
+              backgroundColor={colors.surface}
+              borderWidth={1}
+              borderColor={colors.border}
               borderRadius="$2"
               paddingHorizontal="$3"
               paddingVertical="$2"
               alignSelf="flex-start"
               gap="$2"
             >
-              <Text color="white" fontWeight="600" fontSize="$3">
-                ✎ Edit Event
+              <Text>📅</Text>
+              <Text color={colors.text} fontSize="$3">
+                Add to Calendar (.ics)
               </Text>
             </XStack>
           </Pressable>
-        ) : null}
-      </YStack>
 
-      <PlanningBoardCanvas
-        boardId={linkedBoard?.id ?? null}
-        readOnly
-        visible={showBoard}
-        onClose={() => setShowBoard(false)}
-      />
-    </Modal>
+          {/* Admin Edit */}
+          {onEdit ? (
+            <Pressable onPress={onEdit}>
+              <XStack
+                backgroundColor={colors.primary}
+                borderRadius="$2"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                alignSelf="flex-start"
+                gap="$2"
+              >
+                <Text color="white" fontWeight="600" fontSize="$3">
+                  ✎ Edit Event
+                </Text>
+              </XStack>
+            </Pressable>
+          ) : null}
+        </YStack>
 
-    {event ? (
-      <WeatherDetailSheet
-        open={open && showWeather}
-        onClose={() => setShowWeather(false)}
-        event={event}
-      />
-    ) : null}
-  </>
+        <PlanningBoardCanvas
+          boardId={linkedBoard?.id ?? null}
+          readOnly
+          visible={showBoard}
+          onClose={() => setShowBoard(false)}
+        />
+      </Modal>
+
+      {event ? (
+        <WeatherDetailSheet
+          open={open && showWeather}
+          onClose={() => setShowWeather(false)}
+          event={event}
+        />
+      ) : null}
+    </>
   )
 }
