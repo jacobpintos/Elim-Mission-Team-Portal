@@ -20,6 +20,7 @@ import { LodgingEditor } from './LodgingEditor'
 import { FlightEditor } from './FlightEditor'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import { taskDueDate } from '@/lib/events'
+import { notifyAssignees } from '@/lib/taskNotifications'
 import type {
   EventTemplate,
   CarpoolCarData,
@@ -324,7 +325,7 @@ export function EventFormModal({
               if (!taskItem.title.trim()) continue
               const isPostEvent = (taskItem.daysAfterEvent ?? 0) > 0
               const dueDate = taskDueDate(eventDate, taskItem)
-              await createTask({
+              const newTaskId = await createTask({
                 title: taskItem.title,
                 assignees: taskItem.assignees ?? [],
                 lead: (taskItem.assignees ?? [])[0] ?? null,
@@ -335,6 +336,11 @@ export function EventFormModal({
                 dueDate,
                 ...(isPostEvent ? { isPostEvent: true } : {}),
               })
+              // Tasks spawned from a template notify their assignees the same
+              // way a hand-assigned task does. This was the gap that made
+              // assigning yourself a task through an event silently produce
+              // nothing.
+              notifyAssignees(taskItem.assignees ?? [], taskItem.title, newTaskId)
             }
           }
         }
@@ -617,7 +623,7 @@ export function EventFormModal({
         {!(instanceKey && editScope === 'instance') && (
           <YStack gap="$1">
             <Text color={colors.text} fontSize="$3">
-              Date (MM/DD/YY)
+              Date (MM/DD/YY) {!form.isRec ? '*' : ''}
             </Text>
             <Input
               value={form.date}
@@ -633,7 +639,7 @@ export function EventFormModal({
         {/* Venue Name */}
         <YStack gap="$1">
           <Text color={colors.text} fontSize="$3">
-            Venue Name
+            Venue Name {!form.isVirtual ? '*' : ''}
           </Text>
           <Input
             value={form.location}
@@ -693,7 +699,7 @@ export function EventFormModal({
         {/* Start Time */}
         <YStack gap="$1">
           <Text color={colors.text} fontSize="$3">
-            Start Time
+            Start Time *
           </Text>
           <Input
             value={form.startTime}
@@ -992,7 +998,7 @@ export function EventFormModal({
         {form.isVirtual ? (
           <YStack gap="$1">
             <Text color={colors.text} fontSize="$3">
-              Meeting Link
+              Meeting Link *
             </Text>
             <Input
               value={form.virtualLink}

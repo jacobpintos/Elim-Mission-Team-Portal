@@ -19,6 +19,7 @@ import { TaskCard } from '@/components/ui/TaskCard'
 import { EventKanban } from '@/features/events/EventKanban'
 import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
 import { isAdmin } from '@/lib/roles'
+import { notifyAssignees, notifyAdminsTaskBehind } from '@/lib/taskNotifications'
 import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
@@ -689,9 +690,13 @@ function AdminTaskEditModal({
         maxHeight="90%"
       >
         <XStack justifyContent="space-between" alignItems="center">
-          <Text color={colors.text} fontSize="$5" fontWeight="700">Edit Task</Text>
+          <Text color={colors.text} fontSize="$5" fontWeight="700">
+            Edit Task
+          </Text>
           <Pressable onPress={onClose}>
-            <Text color={colors.textMuted} fontSize="$4">✕</Text>
+            <Text color={colors.textMuted} fontSize="$4">
+              ✕
+            </Text>
           </Pressable>
         </XStack>
 
@@ -699,9 +704,18 @@ function AdminTaskEditModal({
           <YStack gap="$3">
             {/* Title */}
             <YStack gap="$1">
-              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">TITLE</Text>
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                TITLE
+              </Text>
               <TextInput
-                style={[ctStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                style={[
+                  ctStyles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
                 value={title}
                 onChangeText={setTitle}
                 placeholder="Task title"
@@ -711,7 +725,9 @@ function AdminTaskEditModal({
 
             {/* Status */}
             <YStack gap="$1">
-              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">STATUS</Text>
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                STATUS
+              </Text>
               <XStack gap="$2" flexWrap="wrap">
                 {statusOptions.map((s) => {
                   const active = status === s.value
@@ -737,9 +753,18 @@ function AdminTaskEditModal({
 
             {/* Due date */}
             <YStack gap="$1">
-              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">DUE DATE</Text>
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                DUE DATE
+              </Text>
               <TextInput
-                style={[ctStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                style={[
+                  ctStyles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
                 value={dueDate}
                 onChangeText={(v) => setDueDate(formatDateInput(v))}
                 placeholder="mm/dd/yy"
@@ -752,9 +777,18 @@ function AdminTaskEditModal({
             {/* Projected date — only when Behind */}
             {status === 'behind' ? (
               <YStack gap="$1">
-                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">PROJECTED DATE</Text>
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                  PROJECTED DATE
+                </Text>
                 <TextInput
-                  style={[ctStyles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                  style={[
+                    ctStyles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.background,
+                    },
+                  ]}
                   value={projectedDate}
                   onChangeText={(v) => setProjectedDate(formatDateInput(v))}
                   placeholder="mm/dd/yy"
@@ -803,7 +837,11 @@ function AdminTaskEditModal({
                             justifyContent: 'center',
                           }}
                         >
-                          {sel ? <Text color="white" fontSize={11}>✓</Text> : null}
+                          {sel ? (
+                            <Text color="white" fontSize={11}>
+                              ✓
+                            </Text>
+                          ) : null}
                         </View>
                         <Text color={colors.text} fontSize="$3">
                           {u.displayName || u.email || String(u.uid)}
@@ -821,26 +859,58 @@ function AdminTaskEditModal({
         {confirming ? (
           <XStack gap="$2">
             <Pressable onPress={() => setConfirming(false)} style={{ flex: 1 }}>
-              <XStack borderWidth={1} borderColor={colors.border} borderRadius="$2" paddingVertical="$2" justifyContent="center">
-                <Text color={colors.text} fontWeight="600" fontSize="$3">Cancel</Text>
+              <XStack
+                borderWidth={1}
+                borderColor={colors.border}
+                borderRadius="$2"
+                paddingVertical="$2"
+                justifyContent="center"
+              >
+                <Text color={colors.text} fontWeight="600" fontSize="$3">
+                  Cancel
+                </Text>
               </XStack>
             </Pressable>
             <Pressable onPress={handleDelete} disabled={deleting} style={{ flex: 1 }}>
-              <XStack backgroundColor="#c0392b" borderRadius="$2" paddingVertical="$2" justifyContent="center" opacity={deleting ? 0.5 : 1}>
-                <Text color="white" fontWeight="600" fontSize="$3">{deleting ? 'Deleting…' : 'Confirm Delete'}</Text>
+              <XStack
+                backgroundColor="#c0392b"
+                borderRadius="$2"
+                paddingVertical="$2"
+                justifyContent="center"
+                opacity={deleting ? 0.5 : 1}
+              >
+                <Text color="white" fontWeight="600" fontSize="$3">
+                  {deleting ? 'Deleting…' : 'Confirm Delete'}
+                </Text>
               </XStack>
             </Pressable>
           </XStack>
         ) : (
           <XStack gap="$2">
             <Pressable onPress={() => setConfirming(true)} style={{ flex: 1 }}>
-              <XStack borderWidth={1} borderColor="#c0392b" borderRadius="$2" paddingVertical="$2" justifyContent="center">
-                <Text color="#c0392b" fontWeight="600" fontSize="$3">Delete</Text>
+              <XStack
+                borderWidth={1}
+                borderColor="#c0392b"
+                borderRadius="$2"
+                paddingVertical="$2"
+                justifyContent="center"
+              >
+                <Text color="#c0392b" fontWeight="600" fontSize="$3">
+                  Delete
+                </Text>
               </XStack>
             </Pressable>
             <Pressable onPress={handleSave} disabled={saving || !title.trim()} style={{ flex: 2 }}>
-              <XStack backgroundColor={colors.primary} borderRadius="$2" paddingVertical="$2" justifyContent="center" opacity={saving ? 0.5 : 1}>
-                <Text color="white" fontWeight="700" fontSize="$3">{saving ? 'Saving…' : 'Save'}</Text>
+              <XStack
+                backgroundColor={colors.primary}
+                borderRadius="$2"
+                paddingVertical="$2"
+                justifyContent="center"
+                opacity={saving ? 0.5 : 1}
+              >
+                <Text color="white" fontWeight="700" fontSize="$3">
+                  {saving ? 'Saving…' : 'Save'}
+                </Text>
               </XStack>
             </Pressable>
           </XStack>
@@ -951,7 +1021,9 @@ function TaskUpdateModalInner({
               </Pressable>
             ) : null}
             <Pressable onPress={onClose}>
-              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
             </Pressable>
           </XStack>
         </XStack>
@@ -1050,7 +1122,13 @@ function TaskUpdateModal({
   return (
     <Modal visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
       {task ? (
-        <TaskUpdateModalInner key={String(task.id)} task={task} onClose={onClose} onSave={onSave} onEdit={onEdit} />
+        <TaskUpdateModalInner
+          key={String(task.id)}
+          task={task}
+          onClose={onClose}
+          onSave={onSave}
+          onEdit={onEdit}
+        />
       ) : (
         <View />
       )}
@@ -1072,23 +1150,6 @@ const tuStyles = StyleSheet.create({
     fontSize: 14,
   },
 })
-
-// The "New assignment" notification preference has existed in Settings (and
-// the sendNotification Cloud Function fully supports it) but nothing ever
-// called it when a task was created — so assigning someone a task, including
-// assigning yourself, never notified anyone. Fire it for every assignee
-// whenever a task is created (both the manual "Assign Task" flow and
-// event-template task spawning).
-function notifyAssignees(assignees: (string | number)[], taskTitle: string, taskId: string | number) {
-  const sendNotif = httpsCallable(functions, 'sendNotification')
-  assignees.forEach((assigneeUid) => {
-    sendNotif({
-      uid: String(assigneeUid),
-      type: 'newAssignment',
-      data: { taskId: String(taskId), taskTitle },
-    }).catch(() => {})
-  })
-}
 
 export default function Assignments() {
   const colors = useThemeColors()
@@ -1203,7 +1264,8 @@ export default function Assignments() {
       t.taskType === 'kaizen_verification' ||
       t.taskType === 'kaizen_action' ||
       t.taskType === 'issue_corrective'
-    ) return
+    )
+      return
     if (!admin && !t.assignees.some((a) => String(a) === String(uid))) return
     if (!admin && t.status === 'done') return
     if (t.taskType === 'worship_setlist_ack') {
@@ -1261,7 +1323,10 @@ export default function Assignments() {
     }
   }
 
-  const handleUpdateTask = async (status: 'pending' | 'in_progress' | 'behind', projectedDate: string) => {
+  const handleUpdateTask = async (
+    status: 'pending' | 'in_progress' | 'behind',
+    projectedDate: string
+  ) => {
     if (!updateTaskItem) return
     let storedDate: string | undefined
     if (projectedDate && projectedDate.length === 8) {
@@ -1273,6 +1338,9 @@ export default function Assignments() {
         status,
         projectedDate: storedDate,
       })
+      if (status === 'behind') {
+        notifyAdminsTaskBehind(allUsers, updateTaskItem.title, updateTaskItem.id, uid)
+      }
       toast('Task updated', 'success')
       setUpdateTaskItem(null)
     } catch {
@@ -1323,11 +1391,20 @@ export default function Assignments() {
       const tplSections = tpl?.sections ?? TASK_SECTIONS
       const sectionStatus = tplSections.flatMap((s) => {
         if (!tpl || evTasks.length === 0) return []
-        const sectionTitles = (tpl.tasks ?? []).filter((t) => t.section === s.id).map((t) => t.title)
+        const sectionTitles = (tpl.tasks ?? [])
+          .filter((t) => t.section === s.id)
+          .map((t) => t.title)
         if (sectionTitles.length === 0) return []
         const sTasks = evTasks.filter((t) => sectionTitles.includes(t.title))
         if (sTasks.length === 0) return []
-        return [{ id: s.id, label: s.label, color: s.color, hasProblem: sTasks.some((t) => t.status === 'behind' || isOverdue(t)) }]
+        return [
+          {
+            id: s.id,
+            label: s.label,
+            color: s.color,
+            hasProblem: sTasks.some((t) => t.status === 'behind' || isOverdue(t)),
+          },
+        ]
       })
       result.push({
         templateId: ev.id,
@@ -1369,9 +1446,7 @@ export default function Assignments() {
           dueDate = d.toISOString().split('T')[0]
         }
         const groupUids = getMemberUids(taskItem.assigneeGroups ?? [])
-        const allAssignees = [
-          ...new Set([...(taskItem.assignees ?? []), ...groupUids]),
-        ]
+        const allAssignees = [...new Set([...(taskItem.assignees ?? []), ...groupUids])]
         const taskId = await createTask({
           title: taskItem.title,
           assignees: allAssignees,
@@ -1495,7 +1570,11 @@ export default function Assignments() {
               eventHealthCards.map((card) => (
                 <Pressable
                   key={String(card.templateId)}
-                  onPress={card.canSpawn ? undefined : () => setKanbanEvent({ title: card.title, tasks: card.tasks })}
+                  onPress={
+                    card.canSpawn
+                      ? undefined
+                      : () => setKanbanEvent({ title: card.title, tasks: card.tasks })
+                  }
                   style={{ width: 300 }}
                 >
                   <YStack
@@ -1517,7 +1596,9 @@ export default function Assignments() {
                     {card.canSpawn ? (
                       <Pressable onPress={() => spawnTasksForEvent(card)}>
                         <XStack
-                          backgroundColor={spawning === card.templateId ? colors.border : colors.primary}
+                          backgroundColor={
+                            spawning === card.templateId ? colors.border : colors.primary
+                          }
                           borderRadius={99}
                           paddingHorizontal={10}
                           paddingVertical={4}
@@ -1736,7 +1817,14 @@ export default function Assignments() {
         uid={uid}
         onClose={() => setUpdateTaskItem(null)}
         onSave={handleUpdateTask}
-        onEdit={admin ? () => { setEditTaskItem(updateTaskItem); setUpdateTaskItem(null) } : undefined}
+        onEdit={
+          admin
+            ? () => {
+                setEditTaskItem(updateTaskItem)
+                setUpdateTaskItem(null)
+              }
+            : undefined
+        }
       />
 
       {/* Full admin task edit modal */}

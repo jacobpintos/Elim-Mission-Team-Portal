@@ -70,6 +70,20 @@ export default function EventsScreen() {
   const [editDraft, setEditDraft] = useState<EventTemplate | null>(null)
   const [view, setView] = useState<'calendar' | 'list'>('calendar')
 
+  // Opening a draft swaps the form's key and flips it open in the same render,
+  // which remounts it already-open instead of transitioning into view — and
+  // nothing appeared. Letting the open flag land a render later gives the
+  // sheet the closed-to-open change it needs. Creating a new event never hit
+  // this because its key does not change.
+  const formWanted = showCreateModal || !!editInstance || !!editDraft
+  const [formOpen, setFormOpen] = useState(false)
+  useEffect(() => {
+    // Deferred by a frame so the form mounts closed and then opens, rather
+    // than both happening in the render that also changes its key.
+    const frame = requestAnimationFrame(() => setFormOpen(formWanted))
+    return () => cancelAnimationFrame(frame)
+  }, [formWanted])
+
   const openDetail = (ev: EventInstance) => {
     setSelectedEvent(ev)
     router.push(`/(app)/events/${ev.instanceKey}` as never)
@@ -150,7 +164,11 @@ export default function EventsScreen() {
         borderBottomWidth={1}
         borderBottomColor={colors.border}
       >
-        <Pressable onPress={prevMonth} hitSlop={12} style={{ paddingVertical: 6, paddingHorizontal: 16 }}>
+        <Pressable
+          onPress={prevMonth}
+          hitSlop={12}
+          style={{ paddingVertical: 6, paddingHorizontal: 16 }}
+        >
           <Text color={colors.primary} fontSize={30} lineHeight={32} fontWeight="700">
             ‹
           </Text>
@@ -158,7 +176,11 @@ export default function EventsScreen() {
         <Text color={colors.text} fontWeight="700" fontSize="$4">
           {MONTH_NAMES[calM - 1]} {calY}
         </Text>
-        <Pressable onPress={nextMonth} hitSlop={12} style={{ paddingVertical: 6, paddingHorizontal: 16 }}>
+        <Pressable
+          onPress={nextMonth}
+          hitSlop={12}
+          style={{ paddingVertical: 6, paddingHorizontal: 16 }}
+        >
           <Text color={colors.primary} fontSize={30} lineHeight={32} fontWeight="700">
             ›
           </Text>
@@ -296,20 +318,26 @@ export default function EventsScreen() {
                           {day}
                         </Text>
                         {evs.length > 0 ? (
-                          <XStack flexWrap="wrap" gap={2} justifyContent="center">
+                          // The dots are a count, not a control. Each used to be
+                          // its own Pressable that jumped straight into one
+                          // event, so on a day with several, clipping a 6px dot
+                          // took you to whichever one you happened to hit. Taps
+                          // now fall through to the day cell and the list below
+                          // is where an event gets picked.
+                          <XStack
+                            flexWrap="wrap"
+                            gap={2}
+                            justifyContent="center"
+                            pointerEvents="none"
+                          >
                             {evs.slice(0, 3).map((ev) => (
-                              <Pressable
+                              <YStack
                                 key={ev.instanceKey}
-                                onPress={() => openDetail(ev)}
-                                hitSlop={6}
-                              >
-                                <YStack
-                                  width={6}
-                                  height={6}
-                                  borderRadius={3}
-                                  backgroundColor={ev.isVirtual ? VIRTUAL_COLOR : colors.primary}
-                                />
-                              </Pressable>
+                                width={6}
+                                height={6}
+                                borderRadius={3}
+                                backgroundColor={ev.isVirtual ? VIRTUAL_COLOR : colors.primary}
+                              />
                             ))}
                           </XStack>
                         ) : null}
@@ -501,7 +529,7 @@ export default function EventsScreen() {
           key={editInstance?.instanceKey ?? String(editDraft?.id ?? 'create')}
           event={editInstance ?? editDraft}
           instanceKey={editInstance?.isRec ? editInstance.instanceKey : undefined}
-          open={showCreateModal || !!editInstance || !!editDraft}
+          open={formOpen}
           onClose={() => {
             setShowCreateModal(false)
             setEditInstance(null)
