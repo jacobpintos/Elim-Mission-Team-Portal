@@ -10,6 +10,7 @@ import { useWorshipStore } from '@/stores/worshipStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
+import { useConfigStore } from '@/stores/configStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -33,6 +34,10 @@ export default function WorshipScreen() {
   const { subscribe: subChords, unsubscribe: unsubChords } = useChordSheetsStore()
   const { templates, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
   const { users, subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
+  // The CCLI license lives in config and has to be printed on every chord
+  // sheet. Held for the whole tab rather than only while a sheet is open, so
+  // it is already loaded by the time one is.
+  const { subscribe: subConfig, unsubscribe: unsubConfig } = useConfigStore()
   const tasksStore = useTasksStore()
   const toast = useUIStore((s) => s.toast)
 
@@ -50,12 +55,14 @@ export default function WorshipScreen() {
     subChords()
     subEvents()
     subUsers()
+    subConfig()
     tasksStore.subscribe()
     return () => {
       unsubscribe()
       unsubChords()
       unsubEvents()
       unsubUsers()
+      unsubConfig()
       tasksStore.unsubscribe()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

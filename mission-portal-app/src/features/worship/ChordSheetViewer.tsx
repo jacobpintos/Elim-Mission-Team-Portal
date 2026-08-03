@@ -77,7 +77,19 @@ interface ChordSheetViewerProps {
 
 export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewerProps) {
   const colors = useThemeColors()
+
+  // CCLI requires the license number on every sheet we reproduce, so this
+  // screen loads it itself. It used to only read the value and rely on some
+  // other screen having subscribed, which meant the number was missing until
+  // someone happened to open the admin licensing tab — reproducing songs
+  // without the credit CCLI licenses us to print.
   const ccliLicense = useConfigStore((s) => s.ccliLicense)
+  const subConfig = useConfigStore((s) => s.subscribe)
+  const unsubConfig = useConfigStore((s) => s.unsubscribe)
+  useEffect(() => {
+    subConfig()
+    return () => unsubConfig()
+  }, [subConfig, unsubConfig])
 
   // Text size is a per-reader preference (stage lighting, eyesight, phone vs
   // tablet), so it's adjustable and persisted rather than a fixed size.
