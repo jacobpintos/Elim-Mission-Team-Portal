@@ -26,7 +26,13 @@ import { FD } from '@/lib/format'
 import { openLocationInMaps, eventMapQuery } from '@/lib/location'
 import { downloadICS } from '@/lib/icsExport'
 import { availKey, effectiveAvail, getSeriesAvail } from '@/lib/availability'
-import { fetchWeather, fetchNWSAlerts, type WeatherData, type NWSAlert } from '@/lib/weather'
+import {
+  fetchWeather,
+  fetchNWSAlerts,
+  alertsForDate,
+  type WeatherData,
+  type NWSAlert,
+} from '@/lib/weather'
 import { isAdmin, isPublic } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { useUIStore } from '@/stores/uiStore'
@@ -81,12 +87,7 @@ export default function EventDetailScreen() {
   }, [])
 
   // Resolve event: prefer selectedEvent matching this id, fallback to lookup
-  const event =
-    selectedEvent?.instanceKey === id
-      ? selectedEvent
-      : id
-      ? getInstanceByKey(id)
-      : null
+  const event = selectedEvent?.instanceKey === id ? selectedEvent : id ? getInstanceByKey(id) : null
 
   const isUnpublished = event?.unpublished === true
 
@@ -108,8 +109,10 @@ export default function EventDetailScreen() {
     fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then((w) => {
       if (w) setWeatherEntry({ key, data: w })
     })
+    // Same filter as the modal — only alerts covering this event's day.
+    const eventDate = event.date
     fetchNWSAlerts(event._geocodeLat, event._geocodeLng).then((a) =>
-      setAlertsEntry({ key, data: a })
+      setAlertsEntry({ key, data: alertsForDate(a, eventDate) })
     )
   }, [event?.date, event?._geocodeLat, event?._geocodeLng, isMember, admin])
 
@@ -141,7 +144,9 @@ export default function EventDetailScreen() {
         <ScreenTitle options={{ title: 'Event' }} />
         <Text color={colors.textMuted}>Event not found.</Text>
         <Pressable onPress={() => router.push('/(app)/events' as never)}>
-          <Text color={colors.primary} marginTop="$3">← Go back</Text>
+          <Text color={colors.primary} marginTop="$3">
+            ← Go back
+          </Text>
         </Pressable>
       </YStack>
     )
@@ -160,13 +165,16 @@ export default function EventDetailScreen() {
           borderBottomColor={colors.border}
           gap="$1"
         >
-          <Text color={colors.primary} fontSize="$4">‹</Text>
-          <Text color={colors.primary} fontSize="$3" fontWeight="600">Events</Text>
+          <Text color={colors.primary} fontSize="$4">
+            ‹
+          </Text>
+          <Text color={colors.primary} fontSize="$3" fontWeight="600">
+            Events
+          </Text>
         </XStack>
       </Pressable>
       <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
         <YStack padding="$4" gap="$4" paddingBottom="$8">
-
           {/* Unpublished banner */}
           {isUnpublished ? (
             <XStack
@@ -184,7 +192,8 @@ export default function EventDetailScreen() {
                   Unpublished Draft
                 </Text>
                 <Text color={EMPTY_COLOR} fontSize="$2">
-                  Only admins can see this event. Highlighted fields need to be completed before publishing.
+                  Only admins can see this event. Highlighted fields need to be completed before
+                  publishing.
                 </Text>
               </YStack>
               {admin ? (
@@ -268,13 +277,15 @@ export default function EventDetailScreen() {
                     </Text>
                   </XStack>
                 ) : null}
-                <Text color={colors.textMuted} fontSize="$2">›</Text>
+                <Text color={colors.textMuted} fontSize="$2">
+                  ›
+                </Text>
               </XStack>
             </Pressable>
           ) : null}
 
           {/* Location */}
-          {(event.location || event.address || event.city || isUnpublished) ? (
+          {event.location || event.address || event.city || isUnpublished ? (
             <YStack gap="$2">
               <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                 LOCATION
@@ -299,7 +310,7 @@ export default function EventDetailScreen() {
               ) : isUnpublished && !event.isVirtual ? (
                 <EmptyField label="City & state" />
               ) : null}
-              {(event.location || event.city) ? (
+              {event.location || event.city ? (
                 <Pressable onPress={() => openLocationInMaps(eventMapQuery(event))}>
                   <Text color={colors.primary} textDecorationLine="underline" fontSize="$2">
                     Get Directions →
@@ -415,8 +426,8 @@ export default function EventDetailScreen() {
                       {instanceAvail
                         ? 'Change This Date'
                         : myAvail
-                        ? 'Override This Date'
-                        : 'Set RSVP'}
+                          ? 'Override This Date'
+                          : 'Set RSVP'}
                     </Text>
                   </XStack>
                 </Pressable>
@@ -519,11 +530,7 @@ export default function EventDetailScreen() {
         onClose={() => setShowBoard(false)}
       />
 
-      <WeatherDetailSheet
-        open={showWeather}
-        onClose={() => setShowWeather(false)}
-        event={event}
-      />
+      <WeatherDetailSheet open={showWeather} onClose={() => setShowWeather(false)} event={event} />
     </>
   )
 }

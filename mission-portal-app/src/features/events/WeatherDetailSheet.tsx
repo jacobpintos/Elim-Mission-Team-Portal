@@ -2,7 +2,13 @@ import { useState, useEffect } from 'react'
 import { Pressable } from 'react-native'
 import { Sheet, YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { fetchHourlyForecast, fetchNWSAlerts, type HourlyPoint, type NWSAlert } from '@/lib/weather'
+import {
+  fetchHourlyForecast,
+  fetchNWSAlerts,
+  alertsForDate,
+  type HourlyPoint,
+  type NWSAlert,
+} from '@/lib/weather'
 import type { EventInstance } from '@/types/events'
 
 interface WeatherDetailSheetProps {
@@ -39,6 +45,16 @@ function formatHour(time: string): string {
   return `${h12} ${ampm}`
 }
 
+/** "Mar 10, 2:00 PM – Mar 12, 6:00 AM", or one end when only one is known. */
+function formatWindow(effective: string, expires: string): string {
+  const from = formatExpires(effective)
+  const to = formatExpires(expires)
+  if (from && to) return `${from} – ${to}`
+  if (to) return `Until ${to}`
+  if (from) return `From ${from}`
+  return ''
+}
+
 function formatExpires(iso: string): string {
   if (!iso) return ''
   try {
@@ -58,6 +74,7 @@ export function WeatherDetailSheet({ open, onClose, event }: WeatherDetailSheetP
   const colors = useThemeColors()
   const [hourly, setHourly] = useState<HourlyPoint[]>([])
   const [alerts, setAlerts] = useState<NWSAlert[]>([])
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !event._geocodeLat || !event._geocodeLng || !event.date) return
@@ -66,7 +83,10 @@ export function WeatherDetailSheet({ open, onClose, event }: WeatherDetailSheetP
       fetchNWSAlerts(event._geocodeLat, event._geocodeLng),
     ]).then(([h, a]) => {
       setHourly(h)
-      setAlerts(a)
+      // api.weather.gov returns everything active at the location regardless
+      // of when the event is, which put today's warning on every event in the
+      // area. Only what covers this event's day belongs here.
+      setAlerts(alertsForDate(a, event.date))
     })
   }, [open, event._geocodeLat, event._geocodeLng, event.date])
 
@@ -116,50 +136,61 @@ export function WeatherDetailSheet({ open, onClose, event }: WeatherDetailSheetP
               <YStack gap="$2">
                 {alerts.map((alert) => {
                   const sc = SEVERITY[alert.severity]
+                  const expanded = expandedId === alert.id
+                  const body = alert.description?.trim()
                   return (
-                    <YStack
+                    <Pressable
                       key={alert.id}
-                      backgroundColor={sc.bg}
-                      borderRadius="$2"
-                      padding="$3"
-                      gap="$1"
+                      onPress={() => setExpandedId(expanded ? null : alert.id)}
+                      disabled={!body}
                     >
-                      <XStack alignItems="center" gap="$2">
-                        <Text fontSize={16}>{alertIcon(alert.event)}</Text>
-                        <Text
-                          color={sc.fg}
-                          fontWeight="700"
-                          fontSize="$3"
-                          flex={1}
-                          numberOfLines={1}
-                        >
-                          {alert.event}
-                        </Text>
-                        <XStack
-                          backgroundColor="rgba(0,0,0,0.2)"
-                          borderRadius={99}
-                          paddingHorizontal={8}
-                          paddingVertical={2}
-                        >
-                          <Text color={sc.fg} fontSize={10} fontWeight="700">
-                            {alert.severity.toUpperCase()}
+                      <YStack backgroundColor={sc.bg} borderRadius="$2" padding="$3" gap="$1">
+                        <XStack alignItems="center" gap="$2">
+                          <Text fontSize={16}>{alertIcon(alert.event)}</Text>
+                          <Text color={sc.fg} fontWeight="700" fontSize="$3" flex={1}>
+                            {alert.event}
                           </Text>
+                          <XStack
+                            backgroundColor="rgba(0,0,0,0.2)"
+                            borderRadius={99}
+                            paddingHorizontal={8}
+                            paddingVertical={2}
+                          >
+                            <Text color={sc.fg} fontSize={10} fontWeight="700">
+                              {alert.severity.toUpperCase()}
+                            </Text>
+                          </XStack>
                         </XStack>
-                      </XStack>
-                      <Text color={sc.fg} fontSize="$2" opacity={0.95}>
-                        {alert.headline}
-                      </Text>
-                      {alert.expires ? (
-                        <Text color={sc.fg} fontSize={11} opacity={0.75}>
-                          Expires {formatExpires(alert.expires)}
+                        <Text color={sc.fg} fontSize="$2" opacity={0.95}>
+                          {alert.headline}
                         </Text>
-                      ) : null}
-                      {alert.instruction ? (
-                        <Text color={sc.fg} fontSize="$2" opacity={0.9} marginTop="$1">
-                          {alert.instruction}
-                        </Text>
-                      ) : null}
-                    </YStack>
+                        {/* When it is in force, not just when it was issued —
+                          "expires" alone leaves you guessing at the start. */}
+                        {formatWindow(alert.effective, alert.expires) ? (
+                          <Text color={sc.fg} fontSize={11} opacity={0.75}>
+                            In effect {formatWindow(alert.effective, alert.expires)}
+                          </Text>
+                        ) : null}
+                        {alert.instruction ? (
+                          <Text color={sc.fg} fontSize="$2" opacity={0.9} marginTop="$1">
+                            {alert.instruction}
+                          </Text>
+                        ) : null}
+                        {/* The statement itself. It is long, so it stays folded
+                          away until asked for — but it has to be reachable. */}
+                        {body ? (
+                          expanded ? (
+                            <Text color={sc.fg} fontSize="$2" opacity={0.9} marginTop="$2">
+                              {body}
+                            </Text>
+                          ) : (
+                            <Text color={sc.fg} fontSize={11} fontWeight="700" marginTop="$1">
+                              Tap to read the full statement
+                            </Text>
+                          )
+                        ) : null}
+                      </YStack>
+                    </Pressable>
                   )
                 })}
               </YStack>

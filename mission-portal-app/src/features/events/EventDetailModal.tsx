@@ -17,7 +17,13 @@ import { useUsersStore } from '@/stores/usersStore'
 import { sameId } from '@/lib/ids'
 import { PlanningBoardCanvas } from '@/features/planning/PlanningBoardCanvas'
 import type { EventInstance } from '@/types/events'
-import { fetchWeather, fetchNWSAlerts, type WeatherData, type NWSAlert } from '@/lib/weather'
+import {
+  fetchWeather,
+  fetchNWSAlerts,
+  alertsForDate,
+  type WeatherData,
+  type NWSAlert,
+} from '@/lib/weather'
 import { WeatherDetailSheet } from './WeatherDetailSheet'
 
 export function TeamsDisplay({ event, uid }: { event: EventInstance; uid: string }) {
@@ -1066,8 +1072,11 @@ export function EventDetailModal({
     fetchWeather(event._geocodeLat, event._geocodeLng, event.date).then((w) => {
       if (w) setWeatherEntry({ key, data: w })
     })
+    // Filtered to this event's day, so the badge counts what actually
+    // applies rather than everything active in the area.
+    const eventDate = event.date
     fetchNWSAlerts(event._geocodeLat, event._geocodeLng).then((a) =>
-      setAlertsEntry({ key, data: a })
+      setAlertsEntry({ key, data: alertsForDate(a, eventDate) })
     )
   }, [open, event?.date, event?._geocodeLat, event?._geocodeLng, isMember, isAdmin])
 

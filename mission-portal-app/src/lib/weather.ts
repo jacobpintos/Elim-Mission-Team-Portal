@@ -224,3 +224,46 @@ export async function fetchNWSAlerts(lat: number, lng: number): Promise<NWSAlert
   }
 }
 
+/**
+ * Does this alert cover the day an event happens?
+ *
+ * api.weather.gov returns everything currently active for a location, with no
+ * regard for when the event is. Showing that unfiltered put a warning issued
+ * for this afternoon on an event three months out, on every card in the same
+ * area — which is how a warning stops meaning anything.
+ *
+ * Compared by calendar day rather than instant: an event has a date but no
+ * end time, so "does the alert window touch that day" is the most it can
+ * honestly answer.
+ */
+export function alertCoversDate(
+  alert: Pick<NWSAlert, 'effective' | 'expires'>,
+  eventDate: string
+): boolean {
+  if (!eventDate) return false
+
+  const day = (iso: string): string | null => {
+    if (!iso) return null
+    const ts = Date.parse(iso)
+    return Number.isNaN(ts) ? null : new Date(ts).toISOString().split('T')[0]
+  }
+
+  const from = day(alert.effective)
+  const to = day(alert.expires)
+
+  // An alert with no window at all cannot be placed, so it is shown rather
+  // than hidden — a warning missed is worse than one shown early.
+  if (!from && !to) return true
+
+  if (from && eventDate < from) return false
+  if (to && eventDate > to) return false
+  return true
+}
+
+/** The alerts among `alerts` that cover the day of `eventDate`. */
+export function alertsForDate<T extends Pick<NWSAlert, 'effective' | 'expires'>>(
+  alerts: T[],
+  eventDate: string
+): T[] {
+  return alerts.filter((a) => alertCoversDate(a, eventDate))
+}
