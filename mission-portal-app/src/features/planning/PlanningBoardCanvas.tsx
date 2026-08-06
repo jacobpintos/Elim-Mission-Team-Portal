@@ -12,7 +12,12 @@ import {
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedReaction,
+  runOnJS,
+} from 'react-native-reanimated'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Svg, { Polyline, Line } from 'react-native-svg'
 import { usePlanningStore } from '@/stores/planningStore'
@@ -20,9 +25,12 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { sameId } from '@/lib/ids'
 import type { PlanningItem, PlanningItemType, DrawPoint } from '@/types/operations'
 import { openExternalUrl } from '@/lib/externalUrl'
+import { MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, clampZoom, zoomAbout } from './canvasZoom'
+import { connectorExists, idsToDeleteWith } from './connectors'
 
 const CANVAS_W = 4000
 const CANVAS_H = 4000
+
 
 type ToolType =
   | 'pan'
@@ -164,6 +172,74 @@ interface CreateModalState {
 }
 
 const defaultCreateModal: CreateModalState = { visible: false, type: 'note', vx: 0, vy: 0 }
+
+// ---------------------------------------------------------------------------
+// ConnectorHandle
+// ---------------------------------------------------------------------------
+/** Diameter on screen, held there whatever the board is zoomed to. */
+const HANDLE_SIZE = 28
+
+/** The palette has no danger token, and a delete control needs to read as one. */
+const DANGER = '#ef4444'
+
+/**
+ * The ✕ that removes a connector, sitting at the midpoint of its line.
+ *
+ * Counter-scaled against the board so it stays the same size under the finger
+ * — at 20% zoom a fixed-size handle would be six pixels across and unhittable,
+ * and at 400% it would blot out the objects it sits between.
+ */
+function ConnectorHandle({
+  x,
+  y,
+  sc,
+  colors,
+  onPress,
+}: {
+  x: number
+  y: number
+  sc: ReturnType<typeof useSharedValue<number>>
+  colors: ReturnType<typeof useThemeColors>
+  onPress: () => void
+}) {
+  'use no memo'
+
+  // Scaling happens about the view's own centre, so offsetting by half the
+  // size puts that centre on the line and keeps it there at any zoom.
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 / sc.value }] }))
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          left: x - HANDLE_SIZE / 2,
+          top: y - HANDLE_SIZE / 2,
+          width: HANDLE_SIZE,
+          height: HANDLE_SIZE,
+        },
+        style,
+      ]}
+    >
+      <Pressable
+        onPress={onPress}
+        style={{
+          flex: 1,
+          borderRadius: HANDLE_SIZE / 2,
+          backgroundColor: colors.surface,
+          borderWidth: 2,
+          borderColor: DANGER,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text fontSize={13} color={DANGER} fontWeight="700">
+          ✕
+        </Text>
+      </Pressable>
+    </Animated.View>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // ItemCard
@@ -617,8 +693,21 @@ export function PlanningBoardCanvas({
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const { width: screenW, height: screenH } = useWindowDimensions()
-  const { boards, addItem, updateItem, deleteItem } = usePlanningStore()
+  const { boards, addItem, updateItem, deleteItems } = usePlanningStore()
   const board = boards.find((b) => sameId(b.id, boardId ?? ''))
+
+  /**
+   * The board's items as they are right now.
+   *
+   * Callbacks reached through runOnJS hold whatever the board looked like when
+   * their gesture was built, so anything that has to reason about what is
+   * currently on the canvas — which connectors touch an object, whether a pair
+   * is already joined — asks the store instead of closing over the array.
+   */
+  function currentItems(): PlanningItem[] {
+    const b = usePlanningStore.getState().boards.find((x) => sameId(x.id, boardId ?? ''))
+    return b?.items ?? []
+  }
 
   const tx = useSharedValue(-(CANVAS_W / 2 - screenW / 2))
   const ty = useSharedValue(-(CANVAS_H / 2 - screenH / 2))
@@ -626,6 +715,66 @@ export function PlanningBoardCanvas({
   const savedTx = useSharedValue(-(CANVAS_W / 2 - screenW / 2))
   const savedTy = useSharedValue(-(CANVAS_H / 2 - screenH / 2))
   const savedSc = useSharedValue(1)
+
+  // The size of the visible canvas area, measured rather than assumed: the
+  // toolbar wraps onto a second row on narrow screens, so how much of the
+  // window the board actually gets is not knowable up front. Zooming with the
+  // buttons anchors on the middle of this, which needs its real size.
+  const viewportRef = useRef({ width: screenW, height: screenH })
+
+  // Shown next to the zoom buttons. Mirrored into React state because the
+  // scale itself lives on the UI thread, where a pinch can change it without
+  // React hearing about it.
+  const [zoomPct, setZoomPct] = useState(100)
+  useAnimatedReaction(
+    () => sc.value,
+    (value, previous) => {
+      const pct = Math.round(value * 100)
+      if (previous !== null && pct === Math.round(previous * 100)) return
+      runOnJS(setZoomPct)(pct)
+    }
+  )
+
+  /**
+   * Zoom about the middle of the screen.
+   *
+   * Scaling alone would pull the board towards its own origin and throw
+   * whatever was being looked at off the edge, so the translation is corrected
+   * to hold the centre point still: the board grows around what is in front of
+   * you rather than sliding away from it.
+   */
+  function zoomTo(next: number) {
+    const clamped = clampZoom(next)
+    if (clamped === sc.value) return
+    const { width, height } = viewportRef.current
+    const moved = zoomAbout(
+      { tx: tx.value, ty: ty.value, sc: sc.value },
+      clamped,
+      width / 2,
+      height / 2
+    )
+    tx.value = moved.tx
+    ty.value = moved.ty
+    // eslint-disable-next-line react-hooks/immutability
+    sc.value = moved.sc
+    savedTx.value = moved.tx
+    savedTy.value = moved.ty
+    savedSc.value = moved.sc
+    setZoomPct(Math.round(moved.sc * 100))
+  }
+
+  /** Back to actual size, with the middle of the board in view. */
+  function resetZoom() {
+    const { width, height } = viewportRef.current
+    tx.value = -(CANVAS_W / 2 - width / 2)
+    ty.value = -(CANVAS_H / 2 - height / 2)
+    // eslint-disable-next-line react-hooks/immutability
+    sc.value = 1
+    savedTx.value = tx.value
+    savedTy.value = ty.value
+    savedSc.value = 1
+    setZoomPct(100)
+  }
 
   // Tool state
   const [tool, setTool] = useState<ToolType>('pan')
@@ -673,7 +822,20 @@ export function PlanningBoardCanvas({
   const shapePreviewRadius = useSharedValue(4)
 
   // Connector / selection
+  //
+  // Mirrored on a ref for the same reason as the tool and colour above: the
+  // tap that picks the second item runs through runOnJS out of a gesture
+  // worklet, which captured this callback — and everything it closes over —
+  // when the gesture was built. Reading the state variable there gave the
+  // value from before the first item was picked, i.e. always null, so the
+  // second tap re-armed the connector on the item just tapped instead of
+  // joining the two and no line was ever drawn.
   const [connectorFrom, setConnectorFrom] = useState<string | null>(null)
+  const connectorFromRef = useRef<string | null>(null)
+  function updateConnectorFrom(id: string | null) {
+    connectorFromRef.current = id
+    setConnectorFrom(id)
+  }
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // Item whose text is being typed into in place.
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -877,9 +1039,19 @@ export function PlanningBoardCanvas({
 
   function handleConnectorTap(itemId: string) {
     if (!boardId) return
-    if (connectorFrom === null) {
-      setConnectorFrom(itemId)
-    } else if (connectorFrom !== itemId) {
+    const from = connectorFromRef.current
+    if (from === null) {
+      updateConnectorFrom(itemId)
+      return
+    }
+    // Tapping the armed item again is how you back out.
+    if (from === itemId) {
+      updateConnectorFrom(null)
+      return
+    }
+    // Joining the same pair twice would stack identical lines on top of each
+    // other, and only the top one could ever be removed.
+    if (!connectorExists(currentItems(), from, itemId)) {
       addItem(boardId, {
         type: 'connector',
         x: 0,
@@ -887,13 +1059,24 @@ export function PlanningBoardCanvas({
         width: 1,
         height: 1,
         content: '',
-        fromId: connectorFrom,
+        fromId: from,
         toId: itemId,
       })
-      setConnectorFrom(null)
-    } else {
-      setConnectorFrom(null)
     }
+    updateConnectorFrom(null)
+  }
+
+  /**
+   * Delete an object and any connector attached to it.
+   *
+   * A connector is stored as its two endpoint ids, not as geometry, so one
+   * left behind when an endpoint goes renders as nothing at all — invisible,
+   * unreachable, and still in the board data.
+   */
+  function handleDeleteItem(bId: string | number, itemId: string) {
+    deleteItems(bId, idsToDeleteWith(currentItems(), itemId))
+    if (connectorFromRef.current === itemId) updateConnectorFrom(null)
+    if (selectedId === itemId) setSelectedId(null)
   }
 
   function handleEditItem(item: PlanningItem) {
@@ -972,7 +1155,7 @@ export function PlanningBoardCanvas({
     .enabled(!(tool === 'select' && selectedId !== null))
     .onUpdate((e) => {
       // eslint-disable-next-line react-hooks/immutability
-      sc.value = Math.min(4, Math.max(0.2, savedSc.value * e.scale))
+      sc.value = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, savedSc.value * e.scale))
     })
     .onEnd(() => {
       savedSc.value = sc.value
@@ -1139,7 +1322,7 @@ export function PlanningBoardCanvas({
                     key={btn.type}
                     onPress={() => {
                       updateTool(btn.type)
-                      setConnectorFrom(null)
+                      updateConnectorFrom(null)
                       setSelectedId(null)
                       setShowColorPicker(false)
                     }}
@@ -1189,10 +1372,18 @@ export function PlanningBoardCanvas({
                   </Text>
                 </Pressable>
 
-                {connectorFrom !== null && (
+                {tool === 'connector' && (
                   <View style={{ justifyContent: 'center', paddingHorizontal: 8 }}>
                     <Text color={colors.primary} fontSize={11}>
-                      Tap target item
+                      {connectorFrom !== null ? 'Tap the second item' : 'Tap the first item'}
+                    </Text>
+                  </View>
+                )}
+
+                {tool === 'eraser' && (
+                  <View style={{ justifyContent: 'center', paddingHorizontal: 8 }}>
+                    <Text color={colors.textMuted} fontSize={11}>
+                      Tap an item, or a ✕ to cut a link
                     </Text>
                   </View>
                 )}
@@ -1277,7 +1468,14 @@ export function PlanningBoardCanvas({
           )}
 
           {/* Canvas area */}
-          <View style={{ flex: 1, overflow: 'hidden' }} collapsable={false}>
+          <View
+            style={{ flex: 1, overflow: 'hidden' }}
+            collapsable={false}
+            onLayout={(e) => {
+              const { width, height } = e.nativeEvent.layout
+              viewportRef.current = { width, height }
+            }}
+          >
             <GestureDetector gesture={viewportGesture}>
               <Animated.View style={[StyleSheet.absoluteFill, canvasTransformStyle]}>
                 <GestureDetector gesture={bgGesture}>
@@ -1331,6 +1529,32 @@ export function PlanningBoardCanvas({
                     {/* Shape drag preview */}
                     <Animated.View style={shapePreviewStyle} pointerEvents="none" />
 
+                    {/* Connector delete handles.
+                        A connector is a line drawn into the SVG layer, which
+                        takes no touches, so there was nothing to aim the
+                        eraser at and no way to remove one short of deleting an
+                        object it was attached to. These appear only while the
+                        eraser is out, so they do not clutter the board. */}
+                    {!readOnly &&
+                      tool === 'eraser' &&
+                      items
+                        .filter((i) => i.type === 'connector')
+                        .map((connector) => {
+                          const from = items.find((i) => i.id === connector.fromId)
+                          const to = items.find((i) => i.id === connector.toId)
+                          if (!from || !to) return null
+                          return (
+                            <ConnectorHandle
+                              key={`h_${connector.id}`}
+                              x={(from.x + from.width / 2 + to.x + to.width / 2) / 2}
+                              y={(from.y + from.height / 2 + to.y + to.height / 2) / 2}
+                              sc={sc}
+                              colors={colors}
+                              onPress={() => boardId && deleteItems(boardId, [connector.id])}
+                            />
+                          )
+                        })}
+
                     {/* Item cards */}
                     {nonSvgItems.map((item) => (
                       <ItemCard
@@ -1348,7 +1572,7 @@ export function PlanningBoardCanvas({
                         onStartEdit={setEditingId}
                         onConnectorTap={handleConnectorTap}
                         onEditItem={handleEditItem}
-                        onDeleteItem={deleteItem}
+                        onDeleteItem={handleDeleteItem}
                         onUpdateItem={updateItem}
                       />
                     ))}
@@ -1356,6 +1580,66 @@ export function PlanningBoardCanvas({
                 </GestureDetector>
               </Animated.View>
             </GestureDetector>
+          </View>
+
+          {/* Zoom controls.
+              Pinching already zoomed, but it needs two fingers and stands down
+              entirely while an object is selected so that a pinch sizes the
+              object instead. These always work, and the readout tells you
+              where you are — at 30% on a 4000px board it is otherwise hard to
+              tell whether you are lost or merely far out. */}
+          <View
+            style={{
+              position: 'absolute',
+              right: 12,
+              bottom: 16 + insets.bottom,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 22,
+              flexDirection: 'row',
+              alignItems: 'center',
+              overflow: 'hidden',
+              zIndex: 100,
+            }}
+          >
+            <Pressable
+              onPress={() => zoomTo(sc.value / ZOOM_STEP)}
+              disabled={zoomPct <= MIN_ZOOM * 100}
+              hitSlop={6}
+              style={{ paddingHorizontal: 14, paddingVertical: 9 }}
+            >
+              <Text
+                color={zoomPct <= MIN_ZOOM * 100 ? colors.textMuted : colors.text}
+                fontSize={18}
+                fontWeight="700"
+              >
+                −
+              </Text>
+            </Pressable>
+
+            {/* Tapping the readout is the way back to actual size — the number
+                is the thing you are looking at when you want that. */}
+            <Pressable onPress={resetZoom} hitSlop={6} style={{ paddingHorizontal: 4 }}>
+              <Text color={colors.textMuted} fontSize={12} minWidth={44} textAlign="center">
+                {zoomPct}%
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => zoomTo(sc.value * ZOOM_STEP)}
+              disabled={zoomPct >= MAX_ZOOM * 100}
+              hitSlop={6}
+              style={{ paddingHorizontal: 14, paddingVertical: 9 }}
+            >
+              <Text
+                color={zoomPct >= MAX_ZOOM * 100 ? colors.textMuted : colors.text}
+                fontSize={18}
+                fontWeight="700"
+              >
+                +
+              </Text>
+            </Pressable>
           </View>
 
           {/* Close button */}

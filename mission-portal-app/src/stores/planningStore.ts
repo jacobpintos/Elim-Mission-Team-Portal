@@ -36,6 +36,7 @@ interface PlanningStore {
     patch: Partial<PlanningItem>
   ) => Promise<void>
   deleteItem: (boardId: string | number, itemId: string) => Promise<void>
+  deleteItems: (boardId: string | number, itemIds: string[]) => Promise<void>
 }
 
 export const usePlanningStore = create<PlanningStore>((set, get) => ({
@@ -141,9 +142,23 @@ export const usePlanningStore = create<PlanningStore>((set, get) => ({
   },
 
   deleteItem: async (boardId, itemId) => {
+    await get().deleteItems(boardId, [itemId])
+  },
+
+  /**
+   * Remove several items in one write.
+   *
+   * The whole items array is sent on every change, so deleting an object and
+   * the connectors attached to it one call at a time would send the board
+   * several times over and leave a moment where a connector points at
+   * something that is gone.
+   */
+  deleteItems: async (boardId, itemIds) => {
+    if (itemIds.length === 0) return
+    const doomed = new Set(itemIds)
     set((s) => ({
       boards: s.boards.map((b) =>
-        sameId(b.id, boardId) ? { ...b, items: b.items.filter((it) => it.id !== itemId) } : b
+        sameId(b.id, boardId) ? { ...b, items: b.items.filter((it) => !doomed.has(it.id)) } : b
       ),
     }))
     const board = get().boards.find((b) => sameId(b.id, boardId))
