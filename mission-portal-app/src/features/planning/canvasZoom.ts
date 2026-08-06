@@ -55,7 +55,53 @@ export function zoomAbout(view: Viewport, nextScale: number, cx: number, cy: num
   }
 }
 
-/** Where a board point currently sits on screen. */
-export function boardToScreen(view: Viewport, x: number, y: number): { x: number; y: number } {
-  return { x: x * view.sc + view.tx, y: y * view.sc + view.ty }
+/**
+ * Where the board is drawn, in window coordinates.
+ *
+ * The board sits inside the canvas area, which starts below the toolbar — a
+ * toolbar that wraps to a second row on narrow screens and is absent entirely
+ * in read-only mode, so this offset has to be measured, never assumed.
+ */
+export interface CanvasArea {
+  x: number
+  y: number
+}
+
+/**
+ * Turn a point reported by a gesture into a point on the board.
+ *
+ * Gestures report where a touch landed in the window. Subtracting only the pan
+ * offset and not the canvas area's own position puts everything placed by a
+ * tap or a drag about a toolbar's height away from the finger — and further
+ * off the further out you are zoomed, because the uncorrected gap is divided
+ * by the scale along with everything else.
+ *
+ * Marked as a worklet so the gesture callbacks, which run on the UI thread,
+ * can use this same implementation rather than a copy of it.
+ */
+export function windowToBoard(
+  view: Viewport,
+  area: CanvasArea,
+  absX: number,
+  absY: number
+): { x: number; y: number } {
+  'worklet'
+  return {
+    x: (absX - area.x - view.tx) / view.sc,
+    y: (absY - area.y - view.ty) / view.sc,
+  }
+}
+
+/** Where a board point currently sits in the window. The exact inverse. */
+export function boardToWindow(
+  view: Viewport,
+  area: CanvasArea,
+  x: number,
+  y: number
+): { x: number; y: number } {
+  'worklet'
+  return {
+    x: x * view.sc + view.tx + area.x,
+    y: y * view.sc + view.ty + area.y,
+  }
 }

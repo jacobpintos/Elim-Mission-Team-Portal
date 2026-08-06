@@ -5,9 +5,13 @@ import {
   ZOOM_STEP,
   clampZoom,
   zoomAbout,
-  boardToScreen,
+  windowToBoard,
+  boardToWindow,
   type Viewport,
 } from './canvasZoom'
+
+/** The canvas area sits flush with the window unless a test says otherwise. */
+const FLUSH = { x: 0, y: 0 }
 
 /** A viewport 800 wide and 600 tall, so its middle is (400, 300). */
 const CX = 400
@@ -51,7 +55,7 @@ describe('zoomAbout', () => {
     }
 
     const after = zoomAbout(before, 2, CX, CY)
-    const onScreen = boardToScreen(after, boardPointAtCentre.x, boardPointAtCentre.y)
+    const onScreen = boardToWindow(after, FLUSH, boardPointAtCentre.x, boardPointAtCentre.y)
 
     expect(onScreen.x).toBeCloseTo(CX, 6)
     expect(onScreen.y).toBeCloseTo(CY, 6)
@@ -65,7 +69,7 @@ describe('zoomAbout', () => {
     }
 
     const after = zoomAbout(before, 0.5, CX, CY)
-    const onScreen = boardToScreen(after, boardPointAtCentre.x, boardPointAtCentre.y)
+    const onScreen = boardToWindow(after, FLUSH, boardPointAtCentre.x, boardPointAtCentre.y)
 
     expect(onScreen.x).toBeCloseTo(CX, 6)
     expect(onScreen.y).toBeCloseTo(CY, 6)
@@ -84,7 +88,7 @@ describe('zoomAbout', () => {
     expect(after.sc).toBe(MAX_ZOOM)
 
     const boardPointAtCentre = { x: (CX - before.tx) / before.sc, y: (CY - before.ty) / before.sc }
-    const onScreen = boardToScreen(after, boardPointAtCentre.x, boardPointAtCentre.y)
+    const onScreen = boardToWindow(after, FLUSH, boardPointAtCentre.x, boardPointAtCentre.y)
     expect(onScreen.x).toBeCloseTo(CX, 6)
     expect(onScreen.y).toBeCloseTo(CY, 6)
   })
@@ -114,6 +118,67 @@ describe('zoomAbout', () => {
 
     expect(after.tx).toBe(0)
     expect(after.ty).toBe(0)
+  })
+})
+
+describe('windowToBoard', () => {
+  /** A toolbar two rows deep, which is what a narrow screen produces. */
+  const BELOW_TOOLBAR = { x: 0, y: 118 }
+
+  it('subtracts the canvas area offset', () => {
+    // The bug this exists for: a touch at the very top of the canvas area is
+    // at the top of the board, not 118px down it. Ignoring the offset put
+    // everything placed by a tap a toolbar's height away from the finger.
+    const at = windowToBoard(view(0, 0, 1), BELOW_TOOLBAR, 40, 118)
+
+    expect(at).toEqual({ x: 40, y: 0 })
+  })
+
+  it('would be off by exactly the toolbar height without the offset', () => {
+    // Pins the size of the error, so a regression is recognisable rather than
+    // just "placement feels wrong".
+    const withOffset = windowToBoard(view(0, 0, 1), BELOW_TOOLBAR, 40, 300)
+    const withoutOffset = windowToBoard(view(0, 0, 1), FLUSH, 40, 300)
+
+    expect(withoutOffset.y - withOffset.y).toBe(BELOW_TOOLBAR.y)
+  })
+
+  it('divides the offset by the scale like everything else', () => {
+    // Why the error grew as you zoomed out: the uncorrected gap is in window
+    // pixels, so at 25% it was four times as many board units.
+    const at = windowToBoard(view(0, 0, 0.25), BELOW_TOOLBAR, 0, 118 + 50)
+
+    expect(at.y).toBe(200)
+  })
+
+  it('accounts for the pan offset', () => {
+    expect(windowToBoard(view(-500, -300, 1), BELOW_TOOLBAR, 40, 118)).toEqual({ x: 540, y: 300 })
+  })
+
+  it('accounts for pan, zoom and the area offset together', () => {
+    const at = windowToBoard(view(-500, -300, 2), BELOW_TOOLBAR, 140, 218)
+
+    expect(at).toEqual({ x: (140 + 500) / 2, y: (218 - 118 + 300) / 2 })
+  })
+
+  it('inverts boardToWindow exactly', () => {
+    // The two are used against each other — a tap places an object, and the
+    // object is drawn back where the tap was. Any disagreement shows up as the
+    // thing you placed not being under your finger.
+    const v = view(-137, -211, 1.75)
+    const area = { x: 3, y: 118 }
+
+    for (const [x, y] of [
+      [0, 0],
+      [2000, 2000],
+      [-40, 3999],
+    ]) {
+      const win = boardToWindow(v, area, x, y)
+      const back = windowToBoard(v, area, win.x, win.y)
+
+      expect(back.x).toBeCloseTo(x, 6)
+      expect(back.y).toBeCloseTo(y, 6)
+    }
   })
 })
 

@@ -25,7 +25,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { sameId } from '@/lib/ids'
 import type { PlanningItem, PlanningItemType, DrawPoint } from '@/types/operations'
 import { openExternalUrl } from '@/lib/externalUrl'
-import { MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, clampZoom, zoomAbout } from './canvasZoom'
+import { MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, clampZoom, zoomAbout, windowToBoard } from './canvasZoom'
 import { connectorExists, idsToDeleteWith } from './connectors'
 
 const CANVAS_W = 4000
@@ -716,11 +716,35 @@ export function PlanningBoardCanvas({
   const savedTy = useSharedValue(-(CANVAS_H / 2 - screenH / 2))
   const savedSc = useSharedValue(1)
 
-  // The size of the visible canvas area, measured rather than assumed: the
-  // toolbar wraps onto a second row on narrow screens, so how much of the
-  // window the board actually gets is not knowable up front. Zooming with the
-  // buttons anchors on the middle of this, which needs its real size.
-  const viewportRef = useRef({ width: screenW, height: screenH })
+  // Where the visible canvas area sits in the window, and how big it is.
+  //
+  // Measured rather than assumed: the toolbar above it wraps onto a second row
+  // on narrow screens and is absent entirely in read-only mode, so neither the
+  // offset nor the size is knowable up front. Shared values rather than a ref
+  // because the gesture callbacks that need them are worklets, where a React
+  // ref written on the JS thread does not read back.
+  const canvasAreaRef = useRef<View>(null)
+  const viewX = useSharedValue(0)
+  const viewY = useSharedValue(0)
+  const viewW = useSharedValue(screenW)
+  const viewH = useSharedValue(screenH)
+
+  /**
+   * Where a touch landed, in board coordinates.
+   *
+   * A worklet, so the gesture callbacks and the plain JS handlers both go
+   * through the one implementation — the arithmetic lives in canvasZoom, where
+   * it can be tested.
+   */
+  function toBoard(absX: number, absY: number): { x: number; y: number } {
+    'worklet'
+    return windowToBoard(
+      { tx: tx.value, ty: ty.value, sc: sc.value },
+      { x: viewX.value, y: viewY.value },
+      absX,
+      absY
+    )
+  }
 
   // Shown next to the zoom buttons. Mirrored into React state because the
   // scale itself lives on the UI thread, where a pinch can change it without
@@ -746,12 +770,11 @@ export function PlanningBoardCanvas({
   function zoomTo(next: number) {
     const clamped = clampZoom(next)
     if (clamped === sc.value) return
-    const { width, height } = viewportRef.current
     const moved = zoomAbout(
       { tx: tx.value, ty: ty.value, sc: sc.value },
       clamped,
-      width / 2,
-      height / 2
+      viewW.value / 2,
+      viewH.value / 2
     )
     tx.value = moved.tx
     ty.value = moved.ty
@@ -765,9 +788,8 @@ export function PlanningBoardCanvas({
 
   /** Back to actual size, with the middle of the board in view. */
   function resetZoom() {
-    const { width, height } = viewportRef.current
-    tx.value = -(CANVAS_W / 2 - width / 2)
-    ty.value = -(CANVAS_H / 2 - height / 2)
+    tx.value = -(CANVAS_W / 2 - viewW.value / 2)
+    ty.value = -(CANVAS_H / 2 - viewH.value / 2)
     // eslint-disable-next-line react-hooks/immutability
     sc.value = 1
     savedTx.value = tx.value
@@ -986,8 +1008,7 @@ export function PlanningBoardCanvas({
    */
   async function handleBgTap(absX: number, absY: number) {
     const currentTool = toolRef.current
-    const vx = (absX - tx.value) / sc.value
-    const vy = (absY - ty.value) / sc.value
+    const { x: vx, y: vy } = toBoard(absX, absY)
 
     if (!PLACEABLE_TOOLS.includes(currentTool as PlanningItemType)) {
       setSelectedId(null)
@@ -1190,14 +1211,16 @@ export function PlanningBoardCanvas({
     .enabled(tool === 'draw')
     .onStart((e) => {
       isDrawing.value = true
-      const vx = (e.absoluteX - tx.value) / sc.value
-      const vy = (e.absoluteY - ty.value) / sc.value
+      const p = toBoard(e.absoluteX, e.absoluteY)
+      const vx = p.x
+      const vy = p.y
       runOnJS(startStroke)(vx, vy)
     })
     .onUpdate((e) => {
       if (!isDrawing.value) return
-      const vx = (e.absoluteX - tx.value) / sc.value
-      const vy = (e.absoluteY - ty.value) / sc.value
+      const p = toBoard(e.absoluteX, e.absoluteY)
+      const vx = p.x
+      const vy = p.y
       runOnJS(addPoint)(vx, vy)
     })
     .onEnd(() => {
@@ -1211,8 +1234,9 @@ export function PlanningBoardCanvas({
   const shapeDragPan = Gesture.Pan()
     .enabled(tool === 'shape')
     .onStart((e) => {
-      const vx = (e.absoluteX - tx.value) / sc.value
-      const vy = (e.absoluteY - ty.value) / sc.value
+      const p = toBoard(e.absoluteX, e.absoluteY)
+      const vx = p.x
+      const vy = p.y
       shapeDragStartX.value = vx
       shapeDragStartY.value = vy
       shapeDragCurX.value = vx
@@ -1222,8 +1246,9 @@ export function PlanningBoardCanvas({
       isDraggingShape.value = true
     })
     .onUpdate((e) => {
-      const vx = (e.absoluteX - tx.value) / sc.value
-      const vy = (e.absoluteY - ty.value) / sc.value
+      const p = toBoard(e.absoluteX, e.absoluteY)
+      const vx = p.x
+      const vy = p.y
       shapeDragCurX.value = vx
       shapeDragCurY.value = vy
     })
@@ -1241,8 +1266,9 @@ export function PlanningBoardCanvas({
   const textboxDragPan = Gesture.Pan()
     .enabled(tool === 'textbox')
     .onStart((e) => {
-      const vx = (e.absoluteX - tx.value) / sc.value
-      const vy = (e.absoluteY - ty.value) / sc.value
+      const p = toBoard(e.absoluteX, e.absoluteY)
+      const vx = p.x
+      const vy = p.y
       shapeDragStartX.value = vx
       shapeDragStartY.value = vy
       shapeDragCurX.value = vx
@@ -1252,8 +1278,9 @@ export function PlanningBoardCanvas({
       isDraggingShape.value = true
     })
     .onUpdate((e) => {
-      const vx = (e.absoluteX - tx.value) / sc.value
-      const vy = (e.absoluteY - ty.value) / sc.value
+      const p = toBoard(e.absoluteX, e.absoluteY)
+      const vx = p.x
+      const vy = p.y
       shapeDragCurX.value = vx
       shapeDragCurY.value = vy
     })
@@ -1469,11 +1496,21 @@ export function PlanningBoardCanvas({
 
           {/* Canvas area */}
           <View
+            ref={canvasAreaRef}
             style={{ flex: 1, overflow: 'hidden' }}
             collapsable={false}
             onLayout={(e) => {
               const { width, height } = e.nativeEvent.layout
-              viewportRef.current = { width, height }
+              viewW.value = width
+              viewH.value = height
+              // measureInWindow rather than the layout x/y, which are relative
+              // to the parent: gestures report window coordinates, so the
+              // offset has to be measured against the same origin they use or
+              // the correction is wrong by however much the ancestors inset.
+              canvasAreaRef.current?.measureInWindow((x, y) => {
+                viewX.value = x
+                viewY.value = y
+              })
             }}
           >
             <GestureDetector gesture={viewportGesture}>
