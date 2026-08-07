@@ -23,6 +23,19 @@ export interface NotificationPrefs {
   eventHealthBehind: { push: boolean; email: boolean }
   chatFlagged: { push: boolean; email: boolean }
   securityReport: { push: boolean; email: boolean }
+  /**
+   * Let an incident report break through Focus and Do Not Disturb.
+   *
+   * A plain flag rather than a push/email pair: it changes how the security
+   * report push is delivered, not whether it is sent at all. Only has any
+   * effect for users who answer reports (security role or admin) — see
+   * interruptionLevelFor() in functions/src/push/notifyCore.ts. Defaults to on
+   * when absent, so a responder who never opens Settings stays reachable.
+   *
+   * Does not ring through the physical mute switch; that needs Apple's
+   * critical-alerts entitlement.
+   */
+  securityReportUrgent?: boolean
   weatherAlertAdmin: { push: boolean; email: boolean }
   /** A flight, hotel, carpool seat or food item was assigned to you. */
   eventLogistics: { push: boolean; email: boolean }

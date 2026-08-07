@@ -1,7 +1,7 @@
 import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
 import { resend, MAIL_FROM } from '../email/client'
-import { sendExpoPush } from './expoPush'
+import { sendExpoPush, type InterruptionLevel } from './expoPush'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -54,6 +54,44 @@ export const BATCHED_TYPES = new Set<NotificationType>([
 
 // How long a user's batch window stays open after the first push in it.
 export const BATCH_WINDOW_MS = 20 * 60 * 1000 // 20 minutes
+
+/**
+ * Does this user answer security reports?
+ *
+ * Mirrors isSecurity() in src/lib/roles.ts — admins count, because they are the
+ * escalation path when nobody holding the security role picks it up. functions/
+ * is a separate TypeScript project and cannot import from the app, so the two
+ * have to be kept in step by hand.
+ */
+export function isSecurityUser(roles: unknown): boolean {
+  return Array.isArray(roles) && (roles.includes('security') || roles.includes('admin'))
+}
+
+/**
+ * Whether a notification is allowed to break through the recipient's Focus.
+ *
+ * Deliberately narrow. Only an incident report, and only for the people whose
+ * job is to answer one — everything else in the app can wait for someone to
+ * pick up their phone, and a notification that cries wolf gets the whole app
+ * muted in Settings.
+ *
+ * On by default rather than opt-in: a responder who never finds the setting
+ * should still be reachable. Anyone who does not want it turns
+ * securityReportUrgent off and drops back to an ordinary notification.
+ *
+ * This does NOT ring through the physical mute switch — only Apple's
+ * critical-alerts entitlement does that, and it is granted case by case. If
+ * that is ever obtained, this is the one line that changes.
+ */
+export function interruptionLevelFor(
+  type: NotificationType,
+  profile: { roles?: unknown; notificationPrefs?: Record<string, unknown> } | undefined
+): InterruptionLevel | undefined {
+  if (type !== 'securityReport') return undefined
+  if (!profile || !isSecurityUser(profile.roles)) return undefined
+  if (profile.notificationPrefs?.securityReportUrgent === false) return undefined
+  return 'time-sensitive'
+}
 
 function nanoid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
@@ -225,10 +263,16 @@ export async function deliverNotification(
     const tokens = extractTokens(profile.pushTokens)
     if (tokens.length > 0) {
       try {
-        await sendExpoPush(tokens, subjectFor(type, data), notifMsg, {
-          type,
-          ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v ?? '')])),
-        })
+        await sendExpoPush(
+          tokens,
+          subjectFor(type, data),
+          notifMsg,
+          {
+            type,
+            ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v ?? '')])),
+          },
+          { interruptionLevel: interruptionLevelFor(type, profile) }
+        )
       } catch (err) {
         logger.error('Push send failed', err)
       }

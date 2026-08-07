@@ -16,7 +16,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { Avatar } from '@/components/ui/Avatar'
-import { isAdmin, isPublic } from '@/lib/roles'
+import { isAdmin, isPublic, isSecurity } from '@/lib/roles'
 import { geocodeCity } from '@/lib/geocode'
 import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
 import { confirmAsync } from '@/lib/confirm'
@@ -179,6 +179,7 @@ export default function SettingsScreen() {
     eventHealthBehind: { push: true, email: false },
     chatFlagged: { push: true, email: false },
     securityReport: { push: true, email: false },
+    securityReportUrgent: true,
     weatherAlertAdmin: { push: true, email: false },
     eventLogistics: { push: true, email: false },
     flightReminder: { push: true, email: false },
@@ -341,7 +342,12 @@ export default function SettingsScreen() {
     }
   }
 
-  const toggleDigest = async (key: 'weeklyDigest' | 'monthlyDigest', value: boolean) => {
+  // Flat boolean prefs, written by dot path so one flag cannot clobber the
+  // rest of the object.
+  const toggleDigest = async (
+    key: 'weeklyDigest' | 'monthlyDigest' | 'securityReportUrgent',
+    value: boolean
+  ) => {
     try {
       await updateDoc(doc(db, 'users', fbUser.uid), {
         [`notificationPrefs.${key}`]: value,
@@ -830,6 +836,26 @@ export default function SettingsScreen() {
                     </Pressable>
                   ))}
                 </XStack>
+              </XStack>
+            ) : null}
+            {/* Only meaningful to someone who answers incident reports, and
+                only if they are getting the push at all. */}
+            {isSecurity(profile) && prefs.securityReport?.push ? (
+              <XStack alignItems="center" justifyContent="space-between" gap="$2">
+                <YStack flex={1}>
+                  <Label fontSize="$3">Urgent security alerts</Label>
+                  <Text color={colors.textMuted} fontSize="$1">
+                    Incident reports break through Do Not Disturb and Focus. Does not override
+                    the silent switch.
+                  </Text>
+                </YStack>
+                <Switch
+                  size="$2"
+                  checked={prefs.securityReportUrgent ?? true}
+                  onCheckedChange={(v) => toggleDigest('securityReportUrgent', v)}
+                >
+                  <Switch.Thumb />
+                </Switch>
               </XStack>
             ) : null}
             <XStack alignItems="center" justifyContent="space-between">

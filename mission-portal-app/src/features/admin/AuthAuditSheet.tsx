@@ -190,6 +190,7 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
         eventHealthBehind: { push: true, email: false },
         chatFlagged: { push: true, email: false },
         securityReport: { push: true, email: false },
+        securityReportUrgent: true,
         weatherAlertAdmin: { push: true, email: false },
       },
       pushTokens: {},

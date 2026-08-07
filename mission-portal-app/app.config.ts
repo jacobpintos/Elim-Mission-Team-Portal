@@ -14,6 +14,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     config: {
       usesNonExemptEncryption: false,
     },
+    entitlements: {
+      // Lets a notification marked time-sensitive break through Focus modes
+      // and Do Not Disturb. Used for one thing only — a security incident
+      // report reaching the people who answer them — and switchable off per
+      // user in Settings.
+      //
+      // Freely available, unlike the critical-alerts entitlement, which is the
+      // only way to override the physical silent switch and is granted by
+      // Apple case by case on request.
+      'com.apple.developer.usernotifications.time-sensitive': true,
+    },
     infoPlist: {
       // Declares the app uses no non-exempt encryption, so App Store Connect
       // stops asking the export-compliance question on every submission.
