@@ -1,8 +1,15 @@
 import type { UserProfile } from '@/types/user'
-import { visibleTabs, isAdmin } from '@/lib/roles'
+import { visibleTabs, isAdmin, canUseMessages } from '@/lib/roles'
 import type { Tab } from '@/lib/roles'
 import type { TourFlow, TourStep } from '../types'
-import { welcomeFlow, adminFlow, inventoryFlow, worshipFlow, TAB_FLOWS } from './definitions'
+import {
+  welcomeFlow,
+  adminFlow,
+  inventoryFlow,
+  announceFlow,
+  messagesFlow,
+  TAB_FLOWS,
+} from './definitions'
 
 const byId: Record<string, TourFlow> = Object.fromEntries(TAB_FLOWS.map((f) => [f.id, f]))
 
@@ -17,11 +24,18 @@ function filterFlow(flow: TourFlow, profile: UserProfile | null): TourStep[] {
 }
 
 /**
- * The "rolehub" tab is a hub for the Admin panel plus the Inventory/Worship
- * role tools, so expand it into those flows for the full tour.
+ * Expand a drawer tab into the flows it actually covers.
+ *
+ * Two tabs hold more than their own name suggests: "rolehub" is a hub for the
+ * Admin panel and the Inventory tools, and "announce" carries messages for
+ * anyone who has them. Without this the messages tour would be unreachable,
+ * since messages stopped being a tab of its own.
  */
-function flowsForTab(tab: Tab): TourFlow[] {
-  if (tab === 'rolehub') return [adminFlow, inventoryFlow, worshipFlow]
+function flowsForTab(tab: Tab, profile: UserProfile | null): TourFlow[] {
+  if (tab === 'rolehub') return [adminFlow, inventoryFlow]
+  if (tab === 'announce') {
+    return [announceFlow, ...(canUseMessages(profile) ? [messagesFlow] : [])]
+  }
   const f = byId[tab]
   return f ? [f] : []
 }
@@ -37,7 +51,7 @@ export function buildFullTour(profile: UserProfile | null): TourStep[] {
   const seen = new Set<string>()
   const ordered: TourFlow[] = []
   for (const tab of visibleTabs(profile)) {
-    for (const f of flowsForTab(tab)) {
+    for (const f of flowsForTab(tab, profile)) {
       if (seen.has(f.id)) continue
       seen.add(f.id)
       ordered.push(f)

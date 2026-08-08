@@ -141,7 +141,7 @@ export default function ThreadScreen() {
     // Already flagged: send the admin to the queue rather than silently
     // re-flagging, which is the only place the flag can be acted on or cleared.
     if (isFlagged) {
-      router.push('/(app)/admin/moderation' as never)
+      router.push('/(app)/messages/moderation' as never)
       return
     }
     try {

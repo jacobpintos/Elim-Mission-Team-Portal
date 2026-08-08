@@ -5,6 +5,10 @@
  * shown inside the admin screens (`admin/_layout.tsx`). Keep this as the single
  * source of truth — when the two lists were maintained separately they drifted,
  * leaving sections reachable from one entry point but not the other.
+ *
+ * Moderation is deliberately not here. It lives beside the conversations it
+ * moderates, as a subtab of the Inbox, rather than several screens away in the
+ * admin area.
  */
 export interface AdminSection {
   /** Last path segment, used to mark the active tab. */
@@ -19,7 +23,6 @@ export interface AdminSection {
 
 export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'users', label: 'User Management', path: '/(app)/admin/users', icon: '👥' },
-  { key: 'moderation', label: 'Moderation', path: '/(app)/admin/moderation', icon: '🚩' },
   { key: 'avail', label: 'Availability', path: '/(app)/admin/avail', icon: '📆' },
   { key: 'groups', label: 'Groups', path: '/(app)/admin/groups', icon: '🗂' },
   { key: 'teams', label: 'Common Teams', path: '/(app)/admin/teams', icon: '🤝' },

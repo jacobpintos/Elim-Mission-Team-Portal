@@ -3,9 +3,11 @@ import { ScrollView, Pressable } from 'react-native'
 import { XStack, YStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 
+// Worship deliberately absent: it has its own top-level tab, and the entry
+// here was a bare re-export of that same screen, so admins — who see both —
+// were given the identical screen under two different names.
 const TABS = [
   { key: 'inventory', label: 'Inventory', path: '/(app)/rolehub/inventory' },
-  { key: 'worship', label: 'Worship', path: '/(app)/rolehub/worship' },
   { key: 'admin', label: 'Admin', path: '/(app)/rolehub/admin' },
 ]
 

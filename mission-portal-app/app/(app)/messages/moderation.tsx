@@ -23,6 +23,8 @@ import { audit } from '@/lib/audit'
 import { sameId } from '@/lib/ids'
 import { MODERATION_SLA_HOURS } from '@/lib/orgInfo'
 import type { ContentReport } from '@/lib/moderation'
+import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { InboxTabs, INBOX_TITLE } from '@/features/inbox/InboxTabs'
 
 /** Fields written when an admin closes out a report. */
 function resolution(status: 'actioned' | 'dismissed', adminUid: string) {
@@ -258,8 +260,14 @@ export default function AdminModeration() {
     )
   }
 
+  // Its own frame now. This used to sit inside the admin layout, which
+  // supplied the title and tab bar; it lives beside the conversations it
+  // moderates instead.
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <YStack flex={1} backgroundColor={colors.background}>
+      <ScreenTitle options={{ title: INBOX_TITLE(profile) }} />
+      <InboxTabs active="moderation" />
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
       <Text color={colors.textMuted} fontSize="$2" lineHeight={18}>
         Reports filed by users about messages in the app. The Terms of Use commit to acting on every
         report within {MODERATION_SLA_HOURS} hours: warn the sender, delete their account, remove
@@ -554,6 +562,7 @@ export default function AdminModeration() {
           </YStack>
         ))
       )}
-    </ScrollView>
+      </ScrollView>
+    </YStack>
   )
 }

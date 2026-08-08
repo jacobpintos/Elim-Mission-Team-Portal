@@ -24,6 +24,7 @@ import { TourHost } from '@/features/tour/TourHost'
 import { useTourStore } from '@/features/tour/tourStore'
 import { buildTabTour } from '@/features/tour/flows'
 import type { Tab } from '@/lib/roles'
+import { INBOX_TITLE } from '@/features/inbox/InboxTabs'
 
 const DRAWER_W = 260
 
@@ -227,6 +228,10 @@ export default function AppLayout() {
     posts: 'public',
     blocked: 'settings',
     'delete-account': 'settings',
+    // Messages share the announce tab now. The routes are untouched — a link
+    // to a specific thread still works — they just no longer have a drawer
+    // entry of their own.
+    messages: 'announce',
   }
   const pathSeg = pathname.split('/').filter(Boolean)[0] ?? ''
   const owner = SUB_ROUTE_OWNERS[pathSeg]
@@ -281,7 +286,14 @@ export default function AppLayout() {
 
   // Determine current screen title from pathname
   const firstSeg = pathname.split('/').filter(Boolean)[0] as Tab | undefined
-  const currentTitle = firstSeg && firstSeg in TAB_LABELS ? TAB_LABELS[firstSeg as Tab] : 'Menu'
+  // Announcements and messages are one tab, so both segments carry its name
+  // rather than the header changing when you cross between them.
+  const currentTitle =
+    firstSeg === 'announce' || firstSeg === 'messages'
+      ? INBOX_TITLE(effectiveProfile)
+      : firstSeg && firstSeg in TAB_LABELS
+        ? TAB_LABELS[firstSeg as Tab]
+        : 'Menu'
 
   function openDrawer() {
     setIsOpen(true)
@@ -335,7 +347,12 @@ export default function AppLayout() {
           <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
             <YStack paddingVertical="$2">
               {tabs.map((tab) => {
-                const isActive = pathname === `/${tab}` || pathname.startsWith(`/${tab}/`)
+                // A tab stays lit while one of the routes it owns is open,
+                // otherwise opening Messages would leave nothing highlighted.
+                const isActive =
+                  pathname === `/${tab}` ||
+                  pathname.startsWith(`/${tab}/`) ||
+                  SUB_ROUTE_OWNERS[pathSeg] === tab
                 return (
                   <Pressable
                     key={tab}
@@ -359,7 +376,7 @@ export default function AppLayout() {
                         fontWeight={isActive ? '700' : '400'}
                         fontSize="$3"
                       >
-                        {TAB_LABELS[tab]}
+                        {tab === 'announce' ? INBOX_TITLE(effectiveProfile) : TAB_LABELS[tab]}
                       </Text>
                     </XStack>
                   </Pressable>
@@ -490,6 +507,7 @@ export default function AppLayout() {
                 {/* Sub-routes hidden from tab bar */}
                 <Tabs.Screen name="events/[id]" options={{ href: null }} />
                 <Tabs.Screen name="messages/[threadId]" options={{ href: null }} />
+                <Tabs.Screen name="messages/moderation" options={{ href: null }} />
                 <Tabs.Screen name="issues/[id]" options={{ href: null }} />
                 <Tabs.Screen name="issues/kaizen" options={{ href: null }} />
                 <Tabs.Screen name="issues/planning" options={{ href: null }} />
@@ -516,7 +534,6 @@ export default function AppLayout() {
                 <Tabs.Screen name="public/music" options={{ href: null }} />
                 <Tabs.Screen name="public/photos" options={{ href: null }} />
                 <Tabs.Screen name="rolehub/inventory" options={{ href: null }} />
-                <Tabs.Screen name="rolehub/worship" options={{ href: null }} />
                 <Tabs.Screen name="rolehub/admin" options={{ href: null }} />
                 <Tabs.Screen name="profile" options={{ href: null }} />
               </>

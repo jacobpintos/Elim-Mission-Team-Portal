@@ -3,6 +3,7 @@ import {
   hasRole,
   isAdmin,
   isSecurity,
+  canUseMessages,
   isPublic,
   isGuest,
   isReadOnly,
@@ -43,7 +44,6 @@ describe('visibleTabs', () => {
   it('keeps member-only tabs away from public users', () => {
     const tabs = visibleTabs(user('public'))
 
-    expect(tabs).not.toContain('messages')
     expect(tabs).not.toContain('dashboard')
     expect(tabs).not.toContain('assignments')
     expect(tabs).toContain('home')
@@ -52,7 +52,6 @@ describe('visibleTabs', () => {
   it('treats a user with no roles at all as public', () => {
     const tabs = visibleTabs(user())
 
-    expect(tabs).not.toContain('messages')
     expect(tabs).toContain('home')
   })
 
@@ -60,15 +59,13 @@ describe('visibleTabs', () => {
     const tabs = visibleTabs(user('admin'))
 
     expect(tabs).toContain('dashboard')
-    expect(tabs).toContain('messages')
     expect(tabs).toContain('rolehub')
   })
 
-  it('withholds dashboard and messages from interns', () => {
+  it('withholds the dashboard from interns', () => {
     const tabs = visibleTabs(user('intern'))
 
     expect(tabs).not.toContain('dashboard')
-    expect(tabs).not.toContain('messages')
     expect(tabs).toContain('assignments')
   })
 
@@ -121,7 +118,45 @@ describe('migrateRetiredRoles', () => {
 
   it('leaves the migrated account a member', () => {
     const migrated = migrateRetiredRoles(['merch'])!
-    expect(visibleTabs({ uid: 'u1', roles: migrated } as never)).toContain('messages')
+    expect(visibleTabs({ uid: 'u1', roles: migrated } as never)).toContain('dashboard')
+  })
+})
+
+describe('canUseMessages', () => {
+  // Announcements and messages share one tab now, so who has messages is
+  // asked separately from what appears in the drawer. These pin the same
+  // answers the tab list used to give.
+  it('gives messages to members', () => {
+    expect(canUseMessages(user('admin'))).toBe(true)
+    expect(canUseMessages(user('regular'))).toBe(true)
+    expect(canUseMessages(user('worship'))).toBe(true)
+    expect(canUseMessages(user('security'))).toBe(true)
+  })
+
+  it('gives messages to guests, who are messaged individually', () => {
+    expect(canUseMessages(user('guest'))).toBe(true)
+  })
+
+  it('withholds messages from interns and the public', () => {
+    expect(canUseMessages(user('intern'))).toBe(false)
+    expect(canUseMessages(user('public'))).toBe(false)
+    expect(canUseMessages(user())).toBe(false)
+  })
+
+  it('gives messages to an intern who is also a regular member', () => {
+    expect(canUseMessages(user('intern', 'regular'))).toBe(true)
+  })
+
+  it('says no before a profile exists', () => {
+    expect(canUseMessages(null)).toBe(false)
+  })
+
+  it('keeps announcements for everyone who has an account', () => {
+    // The half that is not gated: whatever else changes, the tab itself has
+    // to stay reachable or public users lose announcements entirely.
+    for (const u of [user('public'), user('intern'), user('guest'), user('regular')]) {
+      expect(visibleTabs(u)).toContain('announce')
+    }
   })
 })
 
@@ -149,7 +184,6 @@ describe('guests', () => {
     const tabs = visibleTabs(guest)
 
     expect(tabs).toContain('events')
-    expect(tabs).toContain('messages')
     expect(tabs).toContain('worship')
     expect(tabs).toContain('music')
     expect(tabs).toContain('settings')

@@ -61,10 +61,30 @@ export type Tab =
   | 'rolehub'
   | 'settings'
 
+/** Roles that make an account a team member rather than a public follower. */
+const MEMBER_ROLES: Role[] = ['admin', 'security', 'regular', 'intern', 'worship']
+
+/**
+ * Can this user reach direct messages?
+ *
+ * Announcements and messages share one tab for people who have both, so
+ * whether messages exist for a user is now asked separately from what goes in
+ * the drawer. Interns and public users get announcements only; everyone else
+ * with an account that can be messaged gets the pair.
+ */
+export function canUseMessages(u: UserProfile | null): boolean {
+  if (!u) return false
+  const isMember = u.roles?.some((r) => MEMBER_ROLES.includes(r)) ?? false
+  if (isGuest(u) && !isMember) return true
+  if (!isMember) return false
+  if (isAdmin(u)) return true
+  // An intern who is not also a regular member has no messages tab.
+  return !(isIntern(u) && !hasRole(u, 'regular'))
+}
+
 export function visibleTabs(u: UserProfile | null): Tab[] {
   if (!u) return []
 
-  const MEMBER_ROLES: Role[] = ['admin', 'security', 'regular', 'intern', 'worship']
   const isMember = u.roles?.some((r) => MEMBER_ROLES.includes(r)) ?? false
 
   // Guests sit between public and member: their own tab set, and no member
@@ -74,7 +94,6 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
       'dashboard',
       'events',
       'assignments',
-      'messages',
       'announce',
       'worship',
       'music',
@@ -101,7 +120,6 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
       'dashboard',
       'events',
       'assignments',
-      'messages',
       'announce',
       'issues',
       'security',
@@ -133,7 +151,7 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
   }
 
   // Regular and specialty members
-  const tabs: Tab[] = ['dashboard', 'events', 'assignments', 'messages', 'announce', 'issues']
+  const tabs: Tab[] = ['dashboard', 'events', 'assignments', 'announce', 'issues']
 
   if (isWorship(u)) tabs.push('worship')
   if (isSecurity(u)) tabs.push('security')

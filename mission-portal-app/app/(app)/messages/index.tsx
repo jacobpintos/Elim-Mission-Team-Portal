@@ -12,6 +12,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { InboxTabs, INBOX_TITLE } from '@/features/inbox/InboxTabs'
 import { RecipientPicker } from '@/components/ui/RecipientPicker'
 
 export default function MessagesIndex() {
@@ -79,7 +80,8 @@ export default function MessagesIndex() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <ScreenTitle options={{ title: 'Messages' }} />
+      <ScreenTitle options={{ title: INBOX_TITLE(profile) }} />
+      <InboxTabs active="messages" />
 
       {loading ? (
         <YStack flex={1} alignItems="center" justifyContent="center">

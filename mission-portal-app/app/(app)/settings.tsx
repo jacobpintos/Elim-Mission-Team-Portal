@@ -158,6 +158,9 @@ export default function SettingsScreen() {
   const [radius, setRadius] = useState(String(profile?.locationPref?.radius ?? 50))
   const [savingLoc, setSavingLoc] = useState(false)
 
+  // Notifications
+  const [notifSearch, setNotifSearch] = useState('')
+
   if (!profile || !fbUser) return null
 
   const pub = isPublic(profile)
@@ -311,6 +314,51 @@ export default function SettingsScreen() {
   }
 
   // ── Notification prefs ────────────────────────────────────────────────────
+  // The list runs to twenty-odd rows, which is more than anyone wants to read
+  // to find the one they came for.
+  const notifQuery = notifSearch.trim().toLowerCase()
+
+  // Every row this user actually has, before searching. The master switches
+  // act on this whole set — narrowing them to the search results as well would
+  // make "all" mean something different depending on what was typed.
+  const memberNotifKeys = (Object.keys(NOTIF_LABELS) as NotifKey[]).filter((k) =>
+    isAdmin(profile) ? true : k !== 'issueAssigned' && !ADMIN_ONLY_NOTIF_KEYS.includes(k)
+  )
+  const shownNotifKeys = memberNotifKeys.filter((k) =>
+    NOTIF_LABELS[k].toLowerCase().includes(notifQuery)
+  )
+  const publicNotifKeys = Object.keys(PUBLIC_NOTIF_LABELS) as PublicNotifKey[]
+  const shownPublicKeys = publicNotifKeys.filter((k) =>
+    PUBLIC_NOTIF_LABELS[k].toLowerCase().includes(notifQuery)
+  )
+
+  /**
+   * Turn one channel on or off for every row in a section.
+   *
+   * One write rather than a loop of them: the whole prefs object is sent on
+   * each update, so twenty sequential writes would race each other and the
+   * last to land would undo the rest.
+   */
+  const setAllPrefs = async (
+    keys: (NotifKey | PublicNotifKey)[],
+    field: 'push' | 'email',
+    value: boolean
+  ) => {
+    try {
+      const next = { ...prefs }
+      for (const k of keys) {
+        next[k] = { ...(prefs[k] ?? { push: false, email: false }), [field]: value }
+      }
+      await updateDoc(doc(db, 'users', fbUser.uid), { notificationPrefs: next })
+    } catch {
+      toast('Failed', 'error')
+    }
+  }
+
+  /** Whether every row in a section already has this channel on. */
+  const allOn = (keys: (NotifKey | PublicNotifKey)[], field: 'push' | 'email') =>
+    keys.length > 0 && keys.every((k) => prefs[k]?.[field])
+
   const toggleEmailPref = async (key: NotifKey, value: boolean) => {
     try {
       await updateDoc(doc(db, 'users', fbUser.uid), {
@@ -713,6 +761,21 @@ export default function SettingsScreen() {
         {/* Notifications */}
         {pub ? (
           <Section title="Notifications">
+            <TextInput
+              value={notifSearch}
+              onChangeText={setNotifSearch}
+              placeholder="Search notifications"
+              placeholderTextColor={colors.textMuted}
+              style={{
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                color: colors.text,
+                backgroundColor: colors.background,
+              }}
+            />
             <XStack marginBottom="$1">
               <Text flex={1} color={colors.textMuted} fontSize="$2" fontWeight="700">
                 Type
@@ -726,7 +789,42 @@ export default function SettingsScreen() {
                 </Text>
               </XStack>
             </XStack>
-            {(Object.keys(PUBLIC_NOTIF_LABELS) as PublicNotifKey[]).map((key) => (
+            {/* Everything at once. Reflects reality rather than a
+                remembered position: it reads as on only when every row below
+                is on, so it flips back the moment one is turned off. Acts on
+                the whole section, not just the search results. */}
+            <XStack alignItems="center">
+              <Label flex={1} fontSize="$3" fontWeight="700">
+                All notifications
+              </Label>
+              <XStack gap="$3" width={110} alignItems="center">
+                <YStack flex={1} alignItems="center">
+                  <Switch
+                    size="$2"
+                    checked={allOn(publicNotifKeys, 'push')}
+                    onCheckedChange={(v) => setAllPrefs(publicNotifKeys, 'push', v)}
+                  >
+                    <Switch.Thumb />
+                  </Switch>
+                </YStack>
+                <YStack flex={1} alignItems="center">
+                  <Switch
+                    size="$2"
+                    checked={allOn(publicNotifKeys, 'email')}
+                    onCheckedChange={(v) => setAllPrefs(publicNotifKeys, 'email', v)}
+                  >
+                    <Switch.Thumb />
+                  </Switch>
+                </YStack>
+              </XStack>
+            </XStack>
+            <Separator />
+            {shownPublicKeys.length === 0 ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                Nothing matches &ldquo;{notifSearch.trim()}&rdquo;.
+              </Text>
+            ) : null}
+            {shownPublicKeys.map((key) => (
               <XStack key={key} alignItems="center">
                 <Label flex={1} fontSize="$3">
                   {PUBLIC_NOTIF_LABELS[key]}
@@ -766,6 +864,21 @@ export default function SettingsScreen() {
           </Section>
         ) : (
           <Section title="Notifications">
+            <TextInput
+              value={notifSearch}
+              onChangeText={setNotifSearch}
+              placeholder="Search notifications"
+              placeholderTextColor={colors.textMuted}
+              style={{
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                color: colors.text,
+                backgroundColor: colors.background,
+              }}
+            />
             <XStack marginBottom="$1">
               <Text flex={1} color={colors.textMuted} fontSize="$2" fontWeight="700">
                 Event
@@ -779,12 +892,42 @@ export default function SettingsScreen() {
                 </Text>
               </XStack>
             </XStack>
-            {(Object.keys(NOTIF_LABELS) as NotifKey[])
-              .filter((k) => {
-                if (isAdmin(profile)) return true
-                return k !== 'issueAssigned' && !ADMIN_ONLY_NOTIF_KEYS.includes(k)
-              })
-              .map((key) => (
+            {/* Everything at once. Reflects reality rather than a
+                remembered position: it reads as on only when every row below
+                is on, so it flips back the moment one is turned off. Acts on
+                the whole section, not just the search results. */}
+            <XStack alignItems="center">
+              <Label flex={1} fontSize="$3" fontWeight="700">
+                All notifications
+              </Label>
+              <XStack gap="$3" width={110} alignItems="center">
+                <YStack flex={1} alignItems="center">
+                  <Switch
+                    size="$2"
+                    checked={allOn(memberNotifKeys, 'push')}
+                    onCheckedChange={(v) => setAllPrefs(memberNotifKeys, 'push', v)}
+                  >
+                    <Switch.Thumb />
+                  </Switch>
+                </YStack>
+                <YStack flex={1} alignItems="center">
+                  <Switch
+                    size="$2"
+                    checked={allOn(memberNotifKeys, 'email')}
+                    onCheckedChange={(v) => setAllPrefs(memberNotifKeys, 'email', v)}
+                  >
+                    <Switch.Thumb />
+                  </Switch>
+                </YStack>
+              </XStack>
+            </XStack>
+            <Separator />
+            {shownNotifKeys.length === 0 ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                Nothing matches &ldquo;{notifSearch.trim()}&rdquo;.
+              </Text>
+            ) : null}
+            {shownNotifKeys.map((key) => (
                 <XStack key={key} alignItems="center">
                   <Label flex={1} fontSize="$3">
                     {NOTIF_LABELS[key]}
