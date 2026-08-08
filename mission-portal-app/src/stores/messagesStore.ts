@@ -35,6 +35,7 @@ interface MessagesStore {
   unreadCount: (uid: string) => number
   roomById: (id: string | number) => Room | undefined
   // actions
+  _refCount: number
   subscribe: (uid: string, admin?: boolean) => void
   unsubscribe: () => void
   createRoom: (name: string, members: string[]) => Promise<void>
@@ -47,6 +48,7 @@ interface MessagesStore {
 
 export const useMessagesStore = create<MessagesStore>((set, get) => ({
   rooms: [],
+  _refCount: 0,
   roomsError: null,
   activeRoomId: null,
   messages: [],
@@ -67,8 +69,18 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
   roomById: (id) => get().rooms.find((r) => sameId(r.id, id)),
 
   subscribe: (uid, admin = false) => {
-    if (get()._unsubRooms) return
-    if (!uid && !admin) return
+    // Reference counted. Messages and Moderation are two subtabs of the same
+    // Inbox tab and both want the room list, so moving between them subscribes
+    // again before the screen being left unsubscribes — and an unconditional
+    // teardown there closed the listener for the screen just opened, leaving
+    // it with an empty room list and no way to notice.
+    const count = get()._refCount + 1
+    set({ _refCount: count })
+    if (count > 1) return
+    if (!uid && !admin) {
+      set({ _refCount: count - 1 })
+      return
+    }
     set({ loading: true, roomsError: null })
 
     // The rules allow reading a room only if you are a member of it, or an
@@ -97,6 +109,9 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
   },
 
   unsubscribe: () => {
+    const count = Math.max(0, get()._refCount - 1)
+    set({ _refCount: count })
+    if (count > 0) return
     get()._unsubRooms?.()
     get()._unsubMessages?.()
     set({

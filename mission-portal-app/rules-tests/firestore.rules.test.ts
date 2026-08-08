@@ -5,7 +5,17 @@ import {
   assertFails,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore'
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+} from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -186,6 +196,73 @@ describe('contentReports — the moderation queue', () => {
       updateDoc(doc(as(ADMIN), 'contentReports/rep1'), { status: 'resolved', resolvedBy: ADMIN })
     )
     await assertFails(updateDoc(doc(as(ADMIN), 'contentReports/rep1'), { reportedBy: OUTSIDER }))
+  })
+
+  it('lets an admin count what is still open, and nobody else', async () => {
+    // The badge on the Moderation tab runs exactly this query. If the rules
+    // refused it the count would silently read zero and an unattended queue
+    // would look like an empty one.
+    const openOnly = (db: ReturnType<typeof as>) =>
+      getDocs(query(collection(db, 'contentReports'), where('status', '==', 'open')))
+
+    await assertSucceeds(openOnly(as(ADMIN)))
+    await assertFails(openOnly(as(MEMBER)))
+  })
+
+  it('counts only the reports still waiting', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'contentReports', 'rep2'), { status: 'actioned', reportedBy: MEMBER })
+      await setDoc(doc(db, 'contentReports', 'rep3'), { status: 'dismissed', reportedBy: MEMBER })
+      await setDoc(doc(db, 'contentReports', 'rep4'), { status: 'open', reportedBy: MEMBER })
+    })
+
+    const snap = await getDocs(
+      query(collection(as(ADMIN), 'contentReports'), where('status', '==', 'open'))
+    )
+
+    expect(snap.docs.map((d) => d.id).sort()).toEqual(['rep1', 'rep4'])
+  })
+})
+
+describe('flagged conversations — the other half of the queue', () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'rooms', 'never'), { name: 'never flagged', members: [MEMBER] })
+      await setDoc(doc(db, 'rooms', 'cleared'), {
+        name: 'flag cleared',
+        members: [MEMBER],
+        reviewers: [],
+      })
+      await setDoc(doc(db, 'rooms', 'flagged'), {
+        name: 'flagged',
+        members: [MEMBER],
+        reviewers: [ADMIN],
+      })
+    })
+  })
+
+  const flaggedOnly = (db: ReturnType<typeof as>) =>
+    getDocs(query(collection(db, 'rooms'), where('reviewers', '!=', [])))
+
+  it('lets an admin ask which rooms are flagged', async () => {
+    await assertSucceeds(flaggedOnly(as(ADMIN)))
+  })
+
+  it('does not let an ordinary member run it', async () => {
+    // An unfiltered rooms query is refused for anyone who is not an admin,
+    // which is why the badge only ever subscribes for one.
+    await assertFails(flaggedOnly(as(MEMBER)))
+  })
+
+  it('finds flagged rooms and skips both kinds of unflagged', async () => {
+    // "Non-empty array" cannot be asked directly, so it is asked as "not
+    // empty". That has to skip a room nobody ever flagged — where the field
+    // is absent entirely — as well as one whose flag was cleared to [].
+    const snap = await flaggedOnly(as(ADMIN))
+
+    expect(snap.docs.map((d) => d.id)).toEqual(['flagged'])
   })
 })
 
