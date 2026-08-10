@@ -181,6 +181,17 @@ export function aheadWindow(todayStr: string): { fromStr: string; limitStr: stri
   return { fromStr: addDaysStr(todayStr, -1), limitStr: addDaysStr(todayStr, 7) }
 }
 
+/**
+ * Name the events an alert affects, without letting the message run away.
+ *
+ * Past a few, the names stop being the useful part — that a storm covers the
+ * whole day is the point, and the detail is in the app.
+ */
+export function joinTitles(titles: string[]): string {
+  if (titles.length <= 3) return titles.join(', ')
+  return `${titles.slice(0, 2).join(', ')} and ${titles.length - 2} more`
+}
+
 /** One venue that needs watching on one day. */
 export interface WatchEntry {
   /** Event id, or the instance key when a single occurrence was moved. */
@@ -312,6 +323,12 @@ async function runWeatherCheck(
 ): Promise<void> {
   const db = admin.firestore()
 
+  // What counts as "today" for the purpose of skipping the batching window.
+  // The same day either side as everywhere else, because a date on its own
+  // does not say which timezone it belongs to.
+  const today = nowWindow(todayUTCStr())
+  const isToday = (d: string) => d >= today.fromStr && d <= today.limitStr
+
   // One entry per venue, carrying the days it is being watched for — so an
   // alert is checked against those days rather than sent for merely being
   // active nearby.
@@ -370,6 +387,19 @@ async function runWeatherCheck(
     for (const alert of rawAlerts) {
       if (!alert.id) continue
 
+      // Everything at this venue the alert covers and has not been announced.
+      //
+      // One notification for the lot rather than one each: several events at
+      // the same building under one storm is one thing to know about, and
+      // three pushes saying the same thing is how an alert gets ignored. The
+      // sent-record stays per event, so an event added to the day afterwards
+      // still gets announced — just on its own.
+      const pending: Array<{
+        entry: WatchEntry & { dates: string[] }
+        covered: string
+        ref: admin.firestore.DocumentReference
+      }> = []
+
       for (const entry of watched.values()) {
         // An alert active at the venue used to be sent whatever days it
         // covered, so one running today reached admins about an event next
@@ -378,29 +408,45 @@ async function runWeatherCheck(
         if (!covered) continue
 
         const sentDocId = `${alert.id.replace(/\//g, '_')}_${entry.id}`
-        const sentRef = db.doc(`weatherAlertsSent/${sentDocId}`)
-        const sentSnap = await sentRef.get()
-        if (sentSnap.exists) continue
+        const ref = db.doc(`weatherAlertsSent/${sentDocId}`)
+        if ((await ref.get()).exists) continue
+        pending.push({ entry, covered, ref })
+      }
 
-        for (const uid of adminUids) {
-          await notifyUser(uid, 'weatherAlertAdmin', {
-            eventTitle: entry.title,
+      if (pending.length === 0) continue
+
+      // Held behind the twenty-minute batching window, a warning for something
+      // happening today arrives after the thing it was warning about. A
+      // warning for next Saturday can wait, and batching it keeps the
+      // lookahead from being noisy.
+      const immediate = pending.some((p) => isToday(p.covered))
+
+      for (const uid of adminUids) {
+        await notifyUser(
+          uid,
+          'weatherAlertAdmin',
+          {
+            eventTitle: joinTitles(pending.map((p) => p.entry.title)),
             alertEvent: alert.event,
             headline: alert.headline,
-            eventDate: covered,
-            eventId: entry.id,
+            eventDate: pending[0].covered,
+            eventId: pending[0].entry.id,
             alertId: alert.id,
-          })
-        }
-        if (adminUids.length > 0) {
-          logger.info(
-            `Weather alert "${alert.event}" sent to ${adminUids.length} admin(s) for event "${entry.title}"`
-          )
-        }
+          },
+          { immediate }
+        )
+      }
+      if (adminUids.length > 0) {
+        logger.info(
+          `Weather alert "${alert.event}" sent to ${adminUids.length} admin(s) for ` +
+            `${pending.length} event(s)${immediate ? ' (today, unbatched)' : ''}`
+        )
+      }
 
-        await sentRef.set({
+      for (const p of pending) {
+        await p.ref.set({
           alertId: alert.id,
-          eventId: entry.id,
+          eventId: p.entry.id,
           alertEvent: alert.event,
           sentAt: admin.firestore.FieldValue.serverTimestamp(),
           expires: alert.expires,

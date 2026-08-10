@@ -288,12 +288,26 @@ export async function deliverNotification(
  * Single entry point every trigger should call. Transparently routes through
  * the batching engine for BATCHED_TYPES; everything else delivers immediately.
  */
+export interface NotifyOptions {
+  /**
+   * Send now, even for a type that is normally batched.
+   *
+   * For the one case where the batching window is the wrong trade: a weather
+   * alert for an event happening today. Held for twenty minutes behind an
+   * unrelated notification, a tornado warning arrives after the event it was
+   * warning about. The same alert a week out stays batched, because that one
+   * genuinely can wait.
+   */
+  immediate?: boolean
+}
+
 export async function notifyUser(
   uid: string,
   type: NotificationType,
-  data: Record<string, unknown> = {}
+  data: Record<string, unknown> = {},
+  options: NotifyOptions = {}
 ): Promise<void> {
-  if (!BATCHED_TYPES.has(type)) {
+  if (options.immediate || !BATCHED_TYPES.has(type)) {
     await deliverNotification(uid, type, data)
     return
   }

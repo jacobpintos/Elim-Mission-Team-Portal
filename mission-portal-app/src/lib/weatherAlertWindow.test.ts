@@ -507,3 +507,78 @@ describe('buildWatchDays', () => {
     expect(Object.keys(days)).toHaveLength(0)
   })
 })
+
+/**
+ * Mirrors of the two rules that decide how a weather alert is delivered.
+ *
+ * Both live in functions/src/weatherAlerts.ts, which the app test runner does
+ * not compile. If those change, these must change with them.
+ */
+function joinTitles(titles: string[]): string {
+  if (titles.length <= 3) return titles.join(', ')
+  return `${titles.slice(0, 2).join(', ')} and ${titles.length - 2} more`
+}
+
+/** An alert for something happening today skips the batching window. */
+const isTodayFor = (utcToday: string) => {
+  const { fromStr, limitStr } = nowWindow(utcToday)
+  return (d: string) => d >= fromStr && d <= limitStr
+}
+
+describe('naming the events an alert affects', () => {
+  it('lists them when there are few', () => {
+    expect(joinTitles(['Sunday Service'])).toBe('Sunday Service')
+    expect(joinTitles(['Sunday Service', 'Youth Night'])).toBe('Sunday Service, Youth Night')
+  })
+
+  it('lists three in full', () => {
+    expect(joinTitles(['A', 'B', 'C'])).toBe('A, B, C')
+  })
+
+  it('stops naming them past a few', () => {
+    // That the storm covers the whole day is the point; the detail is in the
+    // app, and a notification is not the place for a roster.
+    expect(joinTitles(['A', 'B', 'C', 'D'])).toBe('A, B and 2 more')
+    expect(joinTitles(['A', 'B', 'C', 'D', 'E'])).toBe('A, B and 3 more')
+  })
+
+  it('handles nothing gracefully', () => {
+    expect(joinTitles([])).toBe('')
+  })
+})
+
+describe('batched or not', () => {
+  // 2026-08-16 in UTC is the evening of the 15th in Central time.
+  const UTC_TODAY = '2026-08-16'
+  const isToday = isTodayFor(UTC_TODAY)
+
+  it('sends straight away for something happening today', () => {
+    // Held behind the twenty-minute window, a warning for tonight's event
+    // arrives after the event.
+    expect(isToday('2026-08-16')).toBe(true)
+  })
+
+  it('counts this evening as today even though UTC has rolled over', () => {
+    expect(isToday('2026-08-15')).toBe(true)
+  })
+
+  it('batches a warning for later in the week', () => {
+    // Not urgent, and batching keeps the lookahead from being noisy.
+    expect(isToday('2026-08-22')).toBe(false)
+    expect(isToday('2026-08-18')).toBe(false)
+  })
+
+  it('sends the whole group straight away if any of it is today', () => {
+    // One notification covers several events; if one of them is today, the
+    // notification cannot wait.
+    const covered = ['2026-08-22', '2026-08-16']
+
+    expect(covered.some(isToday)).toBe(true)
+  })
+
+  it('batches a group with nothing in it happening today', () => {
+    const covered = ['2026-08-21', '2026-08-22']
+
+    expect(covered.some(isToday)).toBe(false)
+  })
+})
