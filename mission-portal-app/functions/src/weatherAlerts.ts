@@ -90,14 +90,14 @@ function addDaysStr(dateStr: string, days: number): string {
  */
 export function upcomingDates(
   t: EventTemplateRaw,
-  todayStr: string,
+  fromStr: string,
   limitStr: string
 ): string[] {
   if (t.isVirtual) return []
   if (!t._geocodeLat || !t._geocodeLng) return []
-  if (t.recEnd && t.recEnd < todayStr) return []
+  if (t.recEnd && t.recEnd < fromStr) return []
 
-  const inWindow = (d?: string): boolean => !!d && d >= todayStr && d <= limitStr
+  const inWindow = (d?: string): boolean => !!d && d >= fromStr && d <= limitStr
 
   if (!t.isRec) {
     // A multi-day event happens on all of its days. Only the first was
@@ -108,10 +108,10 @@ export function upcomingDates(
   }
 
   const limit = t.recEnd && t.recEnd < limitStr ? t.recEnd : limitStr
-  if (limit < todayStr) return []
+  if (limit < fromStr) return []
 
   const step = t.recur === 'biweekly' ? 14 : t.recur === 'monthly' ? 30 : 7
-  const d = new Date(todayStr + 'T00:00:00Z')
+  const d = new Date(fromStr + 'T00:00:00Z')
   const end = new Date(limit + 'T00:00:00Z')
 
   // An event with no weekday set has no occurrence to place, so nothing is
@@ -167,6 +167,20 @@ export const weatherAlertCheck = onSchedule(
   async () => {
   const db = admin.firestore()
   const todayStr = todayUTCStr()
+  // The scan reaches back a day as well as forward.
+  //
+  // "Today" here is today in UTC, which becomes tomorrow's date at 7pm
+  // Central — so the evening run no longer counted an event happening that
+  // very evening as upcoming, and it dropped out of the scan. Any alert issued
+  // after about 3pm local on the day of an evening event was therefore never
+  // delivered: a missed warning during exactly the hours a storm warning for
+  // that evening arrives.
+  //
+  // Reaching back one day covers every timezone's version of "today". It
+  // cannot produce spurious notifications, because what actually gets sent is
+  // decided by whether the alert's own window covers one of the event's days —
+  // the scan only chooses whose weather to look up.
+  const fromStr = addDaysStr(todayStr, -1)
   const limitStr = addDaysStr(todayStr, 7)
 
   // Load all events and filter to upcoming events with geocoords
@@ -189,7 +203,7 @@ export const weatherAlertCheck = onSchedule(
     const templateDoc = { id: d.id, ...t }
 
     // Template-level location
-    const dates = upcomingDates(t, todayStr, limitStr)
+    const dates = upcomingDates(t, fromStr, limitStr)
     if (t._geocodeLat && t._geocodeLng && dates.length > 0) {
       const locKey = `${t._geocodeLat.toFixed(3)},${t._geocodeLng.toFixed(3)}`
       if (!locMap.has(locKey)) {
@@ -206,7 +220,7 @@ export const weatherAlertCheck = onSchedule(
         // Confirm this instance date falls within the alert window
         const parts = instanceKey.split('_')
         const instanceDate = parts[parts.length - 1]
-        if (!instanceDate || instanceDate < todayStr || instanceDate > limitStr) continue
+        if (!instanceDate || instanceDate < fromStr || instanceDate > limitStr) continue
         // Skip if location is same as template (already handled above)
         if (ov._geocodeLat === t._geocodeLat && ov._geocodeLng === t._geocodeLng) continue
         const locKey = `${ov._geocodeLat.toFixed(3)},${ov._geocodeLng.toFixed(3)}`

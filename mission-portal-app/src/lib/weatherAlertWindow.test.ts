@@ -24,12 +24,12 @@ interface TemplateRaw {
   _geocodeLng?: number
 }
 
-function upcomingDates(t: TemplateRaw, todayStr: string, limitStr: string): string[] {
+function upcomingDates(t: TemplateRaw, fromStr: string, limitStr: string): string[] {
   if (t.isVirtual) return []
   if (!t._geocodeLat || !t._geocodeLng) return []
-  if (t.recEnd && t.recEnd < todayStr) return []
+  if (t.recEnd && t.recEnd < fromStr) return []
 
-  const inWindow = (d?: string): boolean => !!d && d >= todayStr && d <= limitStr
+  const inWindow = (d?: string): boolean => !!d && d >= fromStr && d <= limitStr
 
   if (!t.isRec) {
     const days = [t.date, ...(t.extraDays ?? []).map((e) => e.date)].filter(inWindow) as string[]
@@ -37,10 +37,10 @@ function upcomingDates(t: TemplateRaw, todayStr: string, limitStr: string): stri
   }
 
   const limit = t.recEnd && t.recEnd < limitStr ? t.recEnd : limitStr
-  if (limit < todayStr) return []
+  if (limit < fromStr) return []
 
   const step = t.recur === 'biweekly' ? 14 : t.recur === 'monthly' ? 30 : 7
-  const d = new Date(todayStr + 'T00:00:00Z')
+  const d = new Date(fromStr + 'T00:00:00Z')
   const end = new Date(limit + 'T00:00:00Z')
 
   if (t.recDay === undefined) return []
@@ -171,6 +171,59 @@ describe('upcomingDates', () => {
     const out = upcomingDates(placed({ isRec: true, recur: 'weekly' }), TODAY, LIMIT)
 
     expect(out).toEqual([])
+  })
+})
+
+describe('an evening event on the day it happens', () => {
+  /**
+   * The scan reaches back a day so that an event happening this evening is
+   * still in scope after the UTC date has rolled over.
+   *
+   * "Today" in UTC becomes tomorrow's date at 7pm Central. The evening run
+   * therefore stopped counting an event happening that very evening as
+   * upcoming, and any alert issued after about 3pm local was never delivered.
+   */
+  const EVENT_DAY = '2026-08-15'
+  // The 00:00 UTC run, which is 7pm Central on the day of the event.
+  const UTC_TODAY = '2026-08-16'
+  const FROM = '2026-08-15'
+  const LIMIT_7 = '2026-08-23'
+
+  it('is still in scope at the evening run', () => {
+    const ev = placed({ date: EVENT_DAY })
+
+    expect(upcomingDates(ev, FROM, LIMIT_7)).toEqual([EVENT_DAY])
+  })
+
+  it('would have dropped out without reaching back', () => {
+    // What the old window did: an event happening in an hour, invisible.
+    const ev = placed({ date: EVENT_DAY })
+
+    expect(upcomingDates(ev, UTC_TODAY, LIMIT_7)).toEqual([])
+  })
+
+  it('still delivers an alert issued that afternoon', () => {
+    const ev = placed({ date: EVENT_DAY })
+    const dates = upcomingDates(ev, FROM, LIMIT_7)
+    const thatEvening = {
+      effective: '2026-08-15T21:00:00Z',
+      expires: '2026-08-16T03:00:00Z',
+    }
+
+    expect(dates.some((d) => alertCoversDate(thatEvening, d))).toBe(true)
+  })
+
+  it('does not turn the extra day into a source of stray alerts', () => {
+    // Reaching back cannot cause a spurious notification: what is sent is
+    // still decided by whether the alert covers one of the event's days.
+    const ev = placed({ date: EVENT_DAY })
+    const dates = upcomingDates(ev, FROM, LIMIT_7)
+    const unrelated = {
+      effective: '2026-08-20T00:00:00Z',
+      expires: '2026-08-20T12:00:00Z',
+    }
+
+    expect(dates.some((d) => alertCoversDate(unrelated, d))).toBe(false)
   })
 })
 
