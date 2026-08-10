@@ -1,19 +1,15 @@
-// Facebook Graph API v20.0 utilities.
-// These functions are wired in after Facebook app review approval.
-// Until then, the feed uses Firestore posts written by Zapier or demo data.
-
-export interface FbPost {
-  id: string
-  message?: string
-  story?: string
-  fullPicture?: string
-  permalinkUrl?: string
-  createdTime: string
-  likesCount: number
-  commentsCount: number
-  sharesCount: number
-  topComments: FbComment[]
-}
+// Shapes for Facebook Page posts as the sync functions store them.
+//
+// There is no Graph API client here on purpose. Reading a Page needs a Page
+// access token, and shipping one to a device would hand every member a
+// credential that can act as the Page — so the sync runs in Cloud Functions
+// (`functions/src/facebook/`) and writes into Firestore, and the app only
+// ever reads what landed there.
+//
+// Writing back to Facebook is not possible at all: Meta removed publishing on
+// behalf of a user with `publish_actions` in Graph API v3.0 and never replaced
+// it, and a Page token would post as the Page rather than as the member who
+// tapped. Members act on a post by opening it on Facebook via `permalinkUrl`.
 
 export interface FbComment {
   id: string
@@ -23,88 +19,30 @@ export interface FbComment {
   createdTime: string
 }
 
-const BASE = 'https://graph.facebook.com/v20.0'
-const FIELDS = [
-  'id',
-  'message',
-  'story',
-  'full_picture',
-  'permalink_url',
-  'created_time',
-  'likes.summary(true)',
-  'comments.limit(3).summary(true){id,from{name,picture{url}},message,created_time}',
-  'shares',
-].join(',')
-
-type RawPost = Record<string, unknown>
-type RawComment = { id: string; from?: { name?: string; picture?: { url?: string } }; message: string; created_time: string }
-
-function mapPost(raw: RawPost): FbPost {
-  const likes = raw.likes as { summary: { total_count: number } } | undefined
-  const comments = raw.comments as { summary: { total_count: number }; data?: RawComment[] } | undefined
-  const shares = raw.shares as { count: number } | undefined
-  return {
-    id: raw.id as string,
-    message: raw.message as string | undefined,
-    story: raw.story as string | undefined,
-    fullPicture: raw.full_picture as string | undefined,
-    permalinkUrl: raw.permalink_url as string | undefined,
-    createdTime: raw.created_time as string,
-    likesCount: likes?.summary?.total_count ?? 0,
-    commentsCount: comments?.summary?.total_count ?? 0,
-    sharesCount: shares?.count ?? 0,
-    topComments: (comments?.data ?? []).map((c) => ({
-      id: c.id,
-      fromName: c.from?.name ?? 'Facebook User',
-      fromPicture: c.from?.picture?.url,
-      message: c.message,
-      createdTime: c.created_time,
-    })),
-  }
+export interface FbPost {
+  id: string
+  message?: string
+  story?: string
+  /** Mirrored into our own Storage bucket; Graph's own URLs expire. */
+  fullPicture?: string
+  /** Canonical Facebook URL for the post — every action button opens this. */
+  permalinkUrl?: string
+  createdTime: string
+  likesCount: number
+  commentsCount: number
+  sharesCount: number
+  topComments: FbComment[]
 }
 
-export async function fetchPagePosts(
-  fbPageId: string,
-  token: string,
-  after?: string
-): Promise<{ posts: FbPost[]; nextCursor?: string }> {
-  const params = new URLSearchParams({ fields: FIELDS, access_token: token, limit: '10' })
-  if (after) params.set('after', after)
-  const res = await fetch(`${BASE}/${fbPageId}/posts?${params}`)
-  const data = (await res.json()) as { data?: RawPost[]; paging?: { cursors?: { after?: string } }; error?: { message: string } }
-  if (data.error) throw new Error(data.error.message)
-  return {
-    posts: (data.data ?? []).map(mapPost),
-    nextCursor: data.paging?.cursors?.after,
-  }
-}
+/** Firestore path holding a Page's synced posts. */
+export const postsPath = (fbPageId: string) => ['fbPagePosts', fbPageId, 'posts'] as const
 
-export async function likeFbPost(postId: string, token: string): Promise<void> {
-  const res = await fetch(`${BASE}/${postId}/likes`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ access_token: token }).toString(),
-  })
-  const data = (await res.json()) as { error?: { message: string } }
-  if (data.error) throw new Error(data.error.message)
-}
-
-export async function unlikeFbPost(postId: string, token: string): Promise<void> {
-  const res = await fetch(`${BASE}/${postId}/likes`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ access_token: token }).toString(),
-  })
-  const data = (await res.json()) as { error?: { message: string } }
-  if (data.error) throw new Error(data.error.message)
-}
-
-export async function postFbComment(postId: string, token: string, message: string): Promise<void> {
-  const res = await fetch(`${BASE}/${postId}/comments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ access_token: token, message }).toString(),
-  })
-  const data = (await res.json()) as { error?: { message: string } }
-  if (data.error) throw new Error(data.error.message)
+/**
+ * Where a member should land when they tap through.
+ *
+ * Falls back to the Page itself when a post has no permalink, which happens
+ * for a few post types, so a tap never dead-ends.
+ */
+export function facebookUrlFor(post: FbPost, fbPageId?: string): string {
+  return post.permalinkUrl ?? `https://www.facebook.com/${fbPageId ?? ''}`
 }

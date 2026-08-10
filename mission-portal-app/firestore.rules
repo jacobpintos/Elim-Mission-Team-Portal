@@ -226,6 +226,37 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Facebook Page posts, mirrored in by the sync functions.
+    //
+    // Members read them; nobody writes from a client. The whole collection is
+    // a cache of someone else's content, so a client write could only ever put
+    // it out of step with Facebook.
+    match /fbPagePosts/{pageId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+
+      match /posts/{postId} {
+        allow read: if isSignedIn();
+        allow write: if false;
+      }
+    }
+
+    // Page access tokens. Deliberately unreachable from any client, including
+    // admins — the Admin SDK bypasses these rules, and nothing on a device
+    // ever needs the token. Admin screens read connection health through the
+    // `listFbConnections` callable, which returns everything except the token.
+    match /fbConnections/{pageId} {
+      allow read, write: if false;
+    }
+
+    // One-time connect invitations, consumed by the fbConnect web flow.
+    match /fbConnectInvites/{inviteId} {
+      allow read, write: if false;
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
+
     match /securityReports/{id} {
       function isSecurityOrAdmin() {
         return isSignedIn() &&

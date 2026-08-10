@@ -26,3 +26,12 @@ export { createAuthForOrphans } from './createAuthForOrphans'
 export { deleteAuthAccount } from './deleteAuthAccount'
 export { deleteOwnAccount } from './deleteOwnAccount'
 export { reportContent } from './moderation/reportContent'
+export { fbConnect } from './facebook/connect'
+export { fbWebhook } from './facebook/webhook'
+export { fbPostsBackfill } from './facebook/scheduled'
+export {
+  createFbConnectLink,
+  listFbConnections,
+  syncFbPageNow,
+  disconnectFbPage,
+} from './facebook/admin'

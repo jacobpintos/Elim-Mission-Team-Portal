@@ -1,0 +1,743 @@
+<title>Connecting Your Facebook Page — Elim Mission Team Portal</title>
+<style>
+  :root {
+    --ground: #f4f6f5;
+    --surface: #ffffff;
+    --surface-sunk: #eceff0;
+    --ink: #16211f;
+    --ink-soft: #4a5a58;
+    --ink-faint: #78878a;
+    --rule: #d9dfde;
+    --rule-strong: #c2cbca;
+    --accent: #0d5f5c;
+    --accent-ink: #ffffff;
+    --accent-wash: #e3efed;
+    --warn: #8a5610;
+    --warn-wash: #f8efdf;
+    --stop: #9b3030;
+    --stop-wash: #f8e8e6;
+    --shadow: 0 1px 2px rgba(22, 33, 31, .06), 0 8px 24px -12px rgba(22, 33, 31, .18);
+
+    --display: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #101817;
+      --surface: #17211f;
+      --surface-sunk: #121b1a;
+      --ink: #e8eeec;
+      --ink-soft: #a8b8b5;
+      --ink-faint: #7d8c8a;
+      --rule: #2a3634;
+      --rule-strong: #3a4846;
+      --accent: #5cc0b6;
+      --accent-ink: #08211f;
+      --accent-wash: #17302e;
+      --warn: #e0ac5c;
+      --warn-wash: #2d2618;
+      --stop: #e58a80;
+      --stop-wash: #2e1c1a;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .7);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #101817;
+    --surface: #17211f;
+    --surface-sunk: #121b1a;
+    --ink: #e8eeec;
+    --ink-soft: #a8b8b5;
+    --ink-faint: #7d8c8a;
+    --rule: #2a3634;
+    --rule-strong: #3a4846;
+    --accent: #5cc0b6;
+    --accent-ink: #08211f;
+    --accent-wash: #17302e;
+    --warn: #e0ac5c;
+    --warn-wash: #2d2618;
+    --stop: #e58a80;
+    --stop-wash: #2e1c1a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0 20px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  /* ---- masthead ---- */
+
+  .masthead {
+    padding: 64px 0 36px;
+    border-bottom: 2px solid var(--rule-strong);
+    margin-bottom: 44px;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 18px;
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(34px, 6.2vw, 50px);
+    line-height: 1.12;
+    letter-spacing: -.015em;
+    text-wrap: balance;
+    margin: 0 0 20px;
+  }
+
+  .standfirst {
+    font-size: 19px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    margin: 0;
+    max-width: 58ch;
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 28px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .chip b { color: var(--ink); font-weight: 700; }
+
+  /* ---- sections ---- */
+
+  section { margin-bottom: 52px; }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 27px;
+    line-height: 1.25;
+    letter-spacing: -.01em;
+    text-wrap: balance;
+    margin: 0 0 8px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .section-note {
+    color: var(--ink-faint);
+    font-size: 15px;
+    margin: 0 0 28px;
+  }
+
+  p { margin: 0 0 16px; max-width: 66ch; }
+  p:last-child { margin-bottom: 0; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, .chip:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: .875em;
+    background: var(--surface-sunk);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1px 6px;
+    word-break: break-word;
+  }
+
+  .ui {
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  /* ---- checklist ---- */
+
+  .checklist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .checklist li {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 14px;
+    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+
+  .box {
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    border: 2px solid var(--rule-strong);
+    border-radius: 4px;
+  }
+
+  .checklist strong { display: block; margin-bottom: 2px; }
+  .checklist span { color: var(--ink-soft); font-size: 15.5px; }
+
+  /* ---- steps ---- */
+
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    counter-reset: step;
+  }
+
+  .steps > li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 46px 1fr;
+    gap: 20px;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+  }
+
+  .steps > li::before {
+    content: counter(step);
+    font-family: var(--display);
+    font-size: 22px;
+    line-height: 40px;
+    text-align: center;
+    height: 40px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-radius: 50%;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .steps h3 {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.4;
+    margin: 6px 0 8px;
+    text-wrap: balance;
+  }
+
+  .steps p { font-size: 16px; color: var(--ink-soft); }
+  .steps p strong { color: var(--ink); }
+
+  .step-body > *:first-child { margin-top: 0; }
+
+  /* ---- callouts ---- */
+
+  .callout {
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin: 16px 0 0;
+    font-size: 15.5px;
+    line-height: 1.55;
+    border: 1px solid;
+  }
+
+  .callout p { font-size: inherit; margin-bottom: 10px; }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .callout-label {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 800;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .warn {
+    background: var(--warn-wash);
+    border-color: color-mix(in srgb, var(--warn) 30%, transparent);
+    color: var(--ink);
+  }
+  .warn .callout-label { color: var(--warn); }
+
+  .stop {
+    background: var(--stop-wash);
+    border-color: color-mix(in srgb, var(--stop) 32%, transparent);
+    color: var(--ink);
+  }
+  .stop .callout-label { color: var(--stop); }
+
+  .note {
+    background: var(--accent-wash);
+    border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+    color: var(--ink);
+  }
+  .note .callout-label { color: var(--accent); }
+
+  /* ---- permissions table ---- */
+
+  .perms {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+
+  @media (max-width: 620px) {
+    .perms { grid-template-columns: 1fr; }
+  }
+
+  .perm-card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 20px 22px;
+  }
+
+  .perm-card h3 {
+    font-size: 15px;
+    margin: 0 0 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+    letter-spacing: .02em;
+  }
+
+  .perm-card ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    font-size: 15.5px;
+    color: var(--ink-soft);
+  }
+
+  .perm-card li {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    gap: 11px;
+    align-items: start;
+  }
+
+  .mark { font-weight: 800; line-height: 1.5; }
+  .yes .mark { color: var(--accent); }
+  .no .mark { color: var(--stop); }
+  .yes h3 { color: var(--accent); }
+  .no h3 { color: var(--stop); }
+
+  /* ---- trouble ---- */
+
+  .trouble {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .trouble > div {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .trouble > div:last-child { border-bottom: 0; }
+
+  .trouble h3 {
+    font-size: 16px;
+    margin: 0 0 6px;
+    font-weight: 700;
+  }
+
+  .trouble p {
+    margin: 0;
+    font-size: 15.5px;
+    color: var(--ink-soft);
+  }
+
+  /* ---- fill-in placeholder ---- */
+
+  .fill {
+    background: var(--warn-wash);
+    border-bottom: 2px solid var(--warn);
+    padding: 1px 7px;
+    border-radius: 3px 3px 0 0;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  /* ---- footer ---- */
+
+  .signoff {
+    margin-top: 64px;
+    padding-top: 28px;
+    border-top: 2px solid var(--rule-strong);
+    color: var(--ink-faint);
+    font-size: 15px;
+  }
+
+  @media print {
+    body { background: #fff; color: #000; font-size: 12pt; padding: 0; }
+    .steps > li, .perm-card, .checklist li, .trouble { box-shadow: none; break-inside: avoid; }
+    section { break-inside: auto; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Elim Mission Team Portal</p>
+    <h1>Connecting your Facebook Page to the Team Portal</h1>
+    <p class="standfirst">
+      This lets our team app show your Page's public posts to mission team members inside the
+      portal. It takes about ten minutes, and you only ever have to do it once.
+    </p>
+    <div class="meta-row">
+      <span class="chip">⏱ <b>~10 minutes</b></span>
+      <span class="chip">💻 <b>Use a computer</b> if you can</span>
+      <span class="chip">🔁 <b>One time only</b></span>
+    </div>
+  </header>
+
+  <section>
+    <h2>What you're agreeing to</h2>
+    <p class="section-note">Read this part before anything else — it's the whole point of the request.</p>
+    <p>
+      Our mission team has an app where volunteers see schedules, events and announcements. We'd
+      like your Page's posts to appear there too, so team members see your updates without leaving
+      the app.
+    </p>
+    <p>
+      To do that, Facebook needs <em>you</em> to give our app permission to read your Page — we
+      can't do it from our side. The permission you'll grant is <strong>read-only</strong>, and it
+      covers only things already visible to the public on your Page.
+    </p>
+
+    <div class="perms">
+      <div class="perm-card yes">
+        <h3>What this allows</h3>
+        <ul>
+          <li><span class="mark">✓</span><span>Reading posts you've published publicly</span></li>
+          <li><span class="mark">✓</span><span>Reading the photos attached to those posts</span></li>
+          <li><span class="mark">✓</span><span>Seeing how many likes and comments a post has</span></li>
+          <li><span class="mark">✓</span><span>Reading your Page's name and profile picture</span></li>
+        </ul>
+      </div>
+      <div class="perm-card no">
+        <h3>What this does not allow</h3>
+        <ul>
+          <li><span class="mark">✕</span><span>Posting, editing or deleting anything as your Page</span></li>
+          <li><span class="mark">✕</span><span>Reading your Page's messages or inbox</span></li>
+          <li><span class="mark">✕</span><span>Touching ads, billing or payment information</span></li>
+          <li><span class="mark">✕</span><span>Seeing your personal profile, friends or private activity</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout note">
+      <span class="callout-label">You stay in control</span>
+      <p>
+        You can disconnect at any moment, without asking us — instructions are at the bottom of this
+        page. Nothing about your Page changes when you connect, and your followers see no difference.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Before you start</h2>
+    <p class="section-note">Check all four. If any one is missing, contact us before continuing.</p>
+    <ul class="checklist">
+      <li>
+        <span class="box" aria-hidden="true"></span>
+        <div>
+          <strong>You can log in to the Facebook account that manages the Page</strong>
+          <span>Not the Page itself — the personal account you use to administer it.</span>
+        </div>
+      </li>
+      <li>
+        <span class="box" aria-hidden="true"></span>
+        <div>
+          <strong>You have full control of the Page</strong>
+          <span>If you're only an Editor or Moderator, the Page won't appear in step 7 and someone with full control will need to do this instead.</span>
+        </div>
+      </li>
+      <li>
+        <span class="box" aria-hidden="true"></span>
+        <div>
+          <strong>You're on a laptop or desktop computer</strong>
+          <span>It works on a phone, but the screens are cramped and easy to mis-tap. A computer is much easier.</span>
+        </div>
+      </li>
+      <li>
+        <span class="box" aria-hidden="true"></span>
+        <div>
+          <strong>You have the link we sent you</strong>
+          <span>A web address ending in our portal's name. If you don't have it, ask us for it before starting.</span>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Part one — Accept our invitation</h2>
+    <p class="section-note">
+      A one-time step that tells Facebook we're allowed to ask. Do this first, or part two will fail.
+    </p>
+
+    <ol class="steps">
+      <li>
+        <div class="step-body">
+          <h3>Log in to Facebook as the account that manages the Page</h3>
+          <p>
+            This matters more than it sounds. Many people have more than one Facebook login, or are
+            signed in as a different Page. If you're not sure, click your profile picture in the top
+            corner and check the name shown.
+          </p>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h3>Go to the invitations page</h3>
+          <p>
+            In the same browser, visit
+            <code>developers.facebook.com/requests</code>. You'll see a list of pending invitations —
+            ours will be from an app called <span class="fill">[APP NAME]</span>.
+          </p>
+          <div class="callout warn">
+            <span class="callout-label">If the page looks empty</span>
+            <p>
+              An empty list almost always means you're logged in as a different account than the one
+              we invited. Switch accounts and reload. If it's still empty, tell us and we'll re-send
+              the invitation.
+            </p>
+          </div>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h3>Click <span class="ui">Confirm</span> on our invitation</h3>
+          <p>
+            You're accepting a role called <strong>Tester</strong>. That's just Facebook's word for
+            "this person is allowed to connect their Page to this app." It gives us nothing on its
+            own — the actual permission comes in part two.
+          </p>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h3>If Facebook asks you to agree to developer terms, accept</h3>
+          <p>
+            Facebook may ask you to register as a developer and agree to their policies, and it may
+            ask you to confirm your email or phone number. This is a formality Facebook requires for
+            anyone accepting an app invitation. It doesn't change your account, doesn't cost
+            anything, and doesn't make anything public.
+          </p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Part two — Connect the Page</h2>
+    <p class="section-note">The actual connection. Stay logged in as the same account.</p>
+
+    <ol class="steps" start="5" style="counter-reset: step 4;">
+      <li>
+        <div class="step-body">
+          <h3>Open the link we sent you</h3>
+          <p>
+            Paste it into the same browser where you just accepted the invitation:
+            <span class="fill">[CONNECT LINK]</span>
+          </p>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h3>Read the page, then click <span class="ui">Continue to Facebook</span></h3>
+          <p>
+            The page explains what's being shared before anything happens. When you click through,
+            everything until step 10 happens on Facebook's own website, not ours.
+          </p>
+          <div class="callout stop">
+            <span class="callout-label">Never share your password</span>
+            <p>
+              If Facebook asks you to log in, you're typing your password into
+              <strong>facebook.com</strong> — never into our app, and never into an email or text
+              message. Nobody from our team will ever ask you for your Facebook password, or for a
+              code, token or screenshot of one. If anyone does, it isn't us.
+            </p>
+          </div>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h3>Choose your Page — and make sure it's ticked</h3>
+          <p>
+            Facebook shows a list of Pages you manage with checkboxes. <strong>Tick the box next to
+            the Page you want connected</strong>, then continue. If your Page isn't in the list, you
+            don't have full control of it — stop here and tell us.
+          </p>
+          <div class="callout warn">
+            <span class="callout-label">The most common mistake</span>
+            <p>
+              People click straight through this screen without ticking anything. Facebook accepts
+              that quite happily and then connects nothing at all. Look for the tick before moving on.
+            </p>
+          </div>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h3>Leave every switch turned on</h3>
+          <p>
+            The next screen lists what our app is asking for, each with a toggle. They're all on by
+            default — <strong>leave them that way</strong>. Turning any of them off breaks the
+            connection, and the error Facebook shows afterwards won't explain why.
+          </p>
+          <p>
+            These are the read-only permissions described at the top of this page. Nothing here lets
+            us post as your Page.
+          </p>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h3>Click <span class="ui">Done</span>, then <span class="ui">OK</span></h3>
+          <p>
+            Facebook usually shows a confirmation screen after you finish. Click through it and the
+            window will close by itself.
+          </p>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h3>Look for the green tick</h3>
+          <p>
+            You'll land back on our page, and it should say <strong>your Page name is
+            connected</strong>. That's the confirmation — your posts will start appearing in the team
+            app within a few minutes. You can close the window.
+          </p>
+          <div class="callout warn">
+            <span class="callout-label">If you manage several Pages</span>
+            <p>
+              You'll get one extra screen first, asking which Page to connect. Pick the one you want
+              in the team app — the others are left completely untouched.
+            </p>
+          </div>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h3>Let us know you're done</h3>
+          <p>
+            Send a quick message to <span class="fill">[YOUR NAME AND CONTACT]</span> so we can
+            confirm it's working on our end. That's everything — you won't need to do this again.
+          </p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>If something goes wrong</h2>
+    <p class="section-note">The four problems that actually come up.</p>
+
+    <div class="trouble">
+      <div>
+        <h3>The invitations page is empty</h3>
+        <p>
+          You're signed in as a different Facebook account than the one we invited. Click your
+          profile picture, check which account you're using, switch if needed, and reload.
+        </p>
+      </div>
+      <div>
+        <h3>My Page isn't in the list</h3>
+        <p>
+          Facebook only offers Pages you have full control of. If you're an Editor or Moderator,
+          whoever holds full control will need to do this instead — or give you full control first.
+        </p>
+      </div>
+      <div>
+        <h3>It says "Something went wrong"</h3>
+        <p>
+          Nearly always a permission switch that got turned off in step 8. Start again from step 5
+          and leave all of them on. If it happens twice, send us a screenshot of the error.
+        </p>
+      </div>
+      <div>
+        <h3>It said Connected, but no posts are showing</h3>
+        <p>
+          Give it fifteen minutes — the first sync isn't instant. After that, tell us, and we'll look
+          from our side. Don't redo these steps; connecting twice doesn't help.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Disconnecting later</h2>
+    <p class="section-note">You don't need our permission, and you don't need to tell us first.</p>
+    <p>
+      On Facebook, go to <span class="ui">Settings &amp; Privacy</span> →
+      <span class="ui">Settings</span> → <span class="ui">Business Integrations</span>. Find
+      <span class="fill">[APP NAME]</span> in the list and choose <span class="ui">Remove</span>.
+      Access stops immediately.
+    </p>
+    <p>
+      Posts already showing in the team app will stop updating, and nothing on your Facebook Page is
+      affected in any way. A note to us afterwards would be appreciated so we're not troubleshooting
+      a problem that doesn't exist.
+    </p>
+  </section>
+
+  <p class="signoff">
+    Questions before you start are very welcome — it's easier to answer them now than to untangle a
+    half-finished connection later. Reach us at <span class="fill">[YOUR NAME AND CONTACT]</span>.
+  </p>
+
+</div>

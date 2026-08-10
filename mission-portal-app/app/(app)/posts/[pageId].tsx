@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, Pressable, TextInput, View, StyleSheet, Linking, Platform } from 'react-native'
+import { ScrollView, Pressable, View, StyleSheet, Linking, Platform, Share } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
@@ -9,108 +9,9 @@ import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
-import { likeFbPost, unlikeFbPost, postFbComment } from '@/lib/fbGraph'
+import { facebookUrlFor, type FbPost } from '@/lib/fbGraph'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { Img } from '@/components/ui/Img'
-
-// Shape of posts — from Firestore (Zapier) or demo fallback
-interface FbPost {
-  id: string
-  message?: string
-  story?: string
-  fullPicture?: string
-  permalinkUrl?: string
-  createdTime: string
-  likesCount: number
-  commentsCount: number
-  sharesCount: number
-  topComments: { id: string; fromName: string; fromPicture?: string; message: string; createdTime: string }[]
-}
-
-// Demo posts shown while the Facebook integration is pending approval.
-// Replace with real data after Zapier + Graph API are wired in.
-const DEMO_POSTS: FbPost[] = [
-  {
-    id: 'demo_1',
-    message:
-      "What an incredible Sunday service! The worship team led us into such a powerful time of praise, and the message on John 15 — abiding in Christ — was exactly what our hearts needed. Thank you to everyone who joined us in person and online. We'll see you next week! 🙌",
-    fullPicture: 'https://picsum.photos/seed/elim-worship/600/340',
-    permalinkUrl: 'https://www.facebook.com/',
-    createdTime: new Date(Date.now() - 2 * 3600000).toISOString(),
-    likesCount: 47,
-    commentsCount: 12,
-    sharesCount: 8,
-    topComments: [
-      { id: 'c1', fromName: 'Maria L.', message: 'Such a beautiful service! Pastor really hit it out of the park 🙏', createdTime: new Date(Date.now() - 90 * 60000).toISOString() },
-      { id: 'c2', fromName: 'James K.', message: 'The worship was amazing today! Blessed to be part of this church family.', createdTime: new Date(Date.now() - 60 * 60000).toISOString() },
-    ],
-  },
-  {
-    id: 'demo_2',
-    message:
-      'Our Youth Mission Team just returned from an amazing weekend serving in the community! They cooked and distributed over 200 hot meals, prayed with families, and shared the love of Christ with those in need. We are SO proud of these young servants of God. This is what the church is all about. 🙏❤️',
-    fullPicture: 'https://picsum.photos/seed/elim-mission/600/340',
-    permalinkUrl: 'https://www.facebook.com/',
-    createdTime: new Date(Date.now() - 2 * 86400000).toISOString(),
-    likesCount: 83,
-    commentsCount: 24,
-    sharesCount: 15,
-    topComments: [
-      { id: 'c3', fromName: 'Sarah T.', message: 'So proud of our youth! What a testimony 🔥', createdTime: new Date(Date.now() - 44 * 3600000).toISOString() },
-    ],
-  },
-  {
-    id: 'demo_3',
-    message:
-      '📅 SAVE THE DATE — Elim Summer Conference 2025 is July 18–20!\n\nThree days of powerful worship, anointed teaching, and deep fellowship. Guest speakers will be announced soon. Early registration is now open — spots are limited!\n\nTap the link in our bio to register or visit our website.',
-    fullPicture: 'https://picsum.photos/seed/elim-conference/600/340',
-    permalinkUrl: 'https://www.facebook.com/',
-    createdTime: new Date(Date.now() - 4 * 86400000).toISOString(),
-    likesCount: 61,
-    commentsCount: 18,
-    sharesCount: 31,
-    topComments: [],
-  },
-]
-
-const DEMO_ARCHIVE: FbPost[] = [
-  {
-    id: 'arc_1',
-    message:
-      'Congratulations to our newest baptism class! 💦 What a beautiful and holy moment as 14 members made their public declaration of faith in Jesus Christ. Heaven is celebrating today — and so are we! Welcome to the family.',
-    fullPicture: 'https://picsum.photos/seed/elim-baptism/600/340',
-    permalinkUrl: 'https://www.facebook.com/',
-    createdTime: new Date(Date.now() - 10 * 86400000).toISOString(),
-    likesCount: 156,
-    commentsCount: 43,
-    sharesCount: 28,
-    topComments: [],
-  },
-  {
-    id: 'arc_2',
-    message:
-      "A huge thank you to every single volunteer who served at last Sunday's special service event! From setup to hospitality to teardown — your faithfulness and sacrifice make this ministry possible. God sees every act of service, and so do we. ❤️",
-    fullPicture: undefined,
-    permalinkUrl: 'https://www.facebook.com/',
-    createdTime: new Date(Date.now() - 17 * 86400000).toISOString(),
-    likesCount: 92,
-    commentsCount: 17,
-    sharesCount: 6,
-    topComments: [],
-  },
-  {
-    id: 'arc_3',
-    message:
-      "📢 New sermon series starting this Sunday: \"Rooted\" — a 6-week journey through the book of Colossians exploring what it means to be grounded in Christ. Bring a friend — you won't want to miss this one!",
-    fullPicture: 'https://picsum.photos/seed/elim-series/600/340',
-    permalinkUrl: 'https://www.facebook.com/',
-    createdTime: new Date(Date.now() - 24 * 86400000).toISOString(),
-    likesCount: 44,
-    commentsCount: 9,
-    sharesCount: 19,
-    topComments: [],
-  },
-]
 
 function timeSince(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime()
@@ -122,7 +23,20 @@ function timeSince(isoString: string): string {
   const days = Math.floor(hrs / 24)
   if (days < 7) return `${days}d ago`
   const d = new Date(isoString)
-  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const MONTHS = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ]
   return `${MONTHS[d.getMonth()]} ${d.getDate()}`
 }
 
@@ -136,13 +50,10 @@ export default function PageFeed() {
   const postsStore = usePostsStore()
 
   const [loadingConfig, setLoadingConfig] = useState(true)
-  const [firestorePosts, setFirestorePosts] = useState<FbPost[] | null>(null)
-  const [localLikes, setLocalLikes] = useState<Record<string, boolean>>({})
+  // Tagged with the Page it came from, so switching pages shows a loading
+  // state rather than briefly rendering the previous Page's posts.
+  const [feed, setFeed] = useState<{ pageId: string; posts: FbPost[] } | null>(null)
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
-  const [commentText, setCommentText] = useState<Record<string, string>>({})
-  const [posting, setPosting] = useState<Record<string, boolean>>({})
-  const [localComments, setLocalComments] = useState<Record<string, FbPost['topComments']>>({})
-  const [showArchive, setShowArchive] = useState(false)
 
   useEffect(() => {
     postsStore.refreshConfig().finally(() => setLoadingConfig(false))
@@ -150,27 +61,42 @@ export default function PageFeed() {
   }, [])
 
   const page = postsStore.config.pages.find((p) => p.id === pageId) ?? null
+  const fbPageId = page?.fbPageId
 
-  // Subscribe to Firestore posts written by Zapier once fbPageId is configured
+  // Live feed. The sync functions write these documents; new posts arrive
+  // here on their own, without a refresh or a pull-to-reload.
   useEffect(() => {
-    if (!page?.fbPageId) return
+    if (!fbPageId) return
     const q = query(
-      collection(db, 'fbPagePosts', page.fbPageId, 'posts'),
+      collection(db, 'fbPagePosts', fbPageId, 'posts'),
       orderBy('createdTime', 'desc')
     )
-    const unsub = onSnapshot(q, (snap) => {
-      const posts = snap.docs.map((d) => {
-        const data = d.data() as Omit<FbPost, 'id'>
-        return { ...data, id: d.id, topComments: data.topComments ?? [] }
-      })
-      setFirestorePosts(posts)
-    })
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setFeed({
+          pageId: fbPageId,
+          posts: snap.docs.map((d) => {
+            const data = d.data() as Omit<FbPost, 'id'>
+            return { ...data, id: d.id, topComments: data.topComments ?? [] }
+          }),
+        })
+      },
+      () => setFeed({ pageId: fbPageId, posts: [] })
+    )
     return () => unsub()
-  }, [page?.fbPageId])
+  }, [fbPageId])
+
+  const posts = feed && feed.pageId === fbPageId ? feed.posts : null
 
   if (loadingConfig) {
     return (
-      <YStack flex={1} backgroundColor={colors.background} alignItems="center" justifyContent="center">
+      <YStack
+        flex={1}
+        backgroundColor={colors.background}
+        alignItems="center"
+        justifyContent="center"
+      >
         <ScreenTitle options={{ title: 'Posts' }} />
         <Text color={colors.textMuted}>Loading…</Text>
       </YStack>
@@ -182,87 +108,58 @@ export default function PageFeed() {
       <YStack flex={1} backgroundColor={colors.background}>
         <ScreenTitle options={{ title: 'Posts' }} />
         <Pressable onPress={() => router.back()}>
-          <XStack paddingHorizontal="$3" paddingVertical="$2" alignItems="center" borderBottomWidth={1} borderBottomColor={colors.border}>
-            <Text color={colors.primary} fontSize={14}>‹ Posts</Text>
+          <XStack
+            paddingHorizontal="$3"
+            paddingVertical="$2"
+            alignItems="center"
+            borderBottomWidth={1}
+            borderBottomColor={colors.border}
+          >
+            <Text color={colors.primary} fontSize={14}>
+              ‹ Posts
+            </Text>
           </XStack>
         </Pressable>
         <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
-          <Text color={colors.textMuted} textAlign="center">Page not found.</Text>
+          <Text color={colors.textMuted} textAlign="center">
+            Page not found.
+          </Text>
         </YStack>
       </YStack>
     )
   }
 
-  // Use Firestore posts if available, otherwise show demo data
-  const isLive = firestorePosts !== null && firestorePosts.length > 0
-  const allPosts: FbPost[] = isLive ? firestorePosts : DEMO_POSTS
-  const archivePosts: FbPost[] = isLive ? [] : DEMO_ARCHIVE
-
-  const handleLike = async (post: FbPost) => {
-    const wasLiked = !!localLikes[post.id]
-    setLocalLikes((prev) => ({ ...prev, [post.id]: !wasLiked }))
-
-    if (page.fbToken) {
-      try {
-        if (wasLiked) {
-          await unlikeFbPost(post.id, page.fbToken)
-        } else {
-          await likeFbPost(post.id, page.fbToken)
-        }
-      } catch {
-        setLocalLikes((prev) => ({ ...prev, [post.id]: wasLiked }))
-        toast('Could not post reaction to Facebook', 'error')
-      }
-    }
-  }
-
-  // `window.open` does not exist in React Native — route through Linking, which
-  // opens a popup on web and the Facebook app / Safari on device.
+  // `window.open` does not exist in React Native — route through Linking,
+  // which opens the Facebook app on device and a tab on web.
   const openExternal = (url: string, popup = false) => {
     if (Platform.OS === 'web' && popup) {
-      window.open(url, '_blank', 'width=600,height=400')
+      window.open(url, '_blank', 'width=600,height=500')
       return
     }
     Linking.openURL(url).catch(() => toast('Could not open Facebook', 'error'))
   }
 
-  const handleShare = (post: FbPost) => {
-    const url = post.permalinkUrl ?? `https://www.facebook.com/${page.fbPageId ?? ''}`
-    openExternal(
-      `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
-      true
-    )
-  }
+  /**
+   * Every action leaves the app.
+   *
+   * Meta has no API for liking or commenting as the signed-in member — that
+   * went away with `publish_actions` and was never replaced — so the honest
+   * version is to hand them the real post, where they are already themselves.
+   */
+  const openOnFacebook = (post: FbPost) => openExternal(facebookUrlFor(post, fbPageId))
 
-  const handleComment = async (post: FbPost) => {
-    const text = commentText[post.id]?.trim()
-    if (!text) return
-
-    if (!page.fbToken) {
-      openExternal(post.permalinkUrl ?? `https://www.facebook.com/${page.fbPageId ?? ''}`)
-      toast('Opening Facebook to post your comment', 'info')
+  const handleShare = async (post: FbPost) => {
+    const url = facebookUrlFor(post, fbPageId)
+    if (Platform.OS === 'web') {
+      openExternal(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, true)
       return
     }
-
-    setPosting((prev) => ({ ...prev, [post.id]: true }))
+    // The OS sheet reaches Messenger, SMS and everything else, and works even
+    // when the Facebook app is not installed.
     try {
-      await postFbComment(post.id, page.fbToken, text)
-      const newComment = {
-        id: `local_${Date.now()}`,
-        fromName: profile?.displayName ?? 'You',
-        message: text,
-        createdTime: new Date().toISOString(),
-      }
-      setLocalComments((prev) => ({
-        ...prev,
-        [post.id]: [...(prev[post.id] ?? post.topComments), newComment],
-      }))
-      setCommentText((prev) => ({ ...prev, [post.id]: '' }))
-      toast('Comment posted', 'success')
+      await Share.share({ message: `${page.label}\n${url}`, url })
     } catch {
-      toast('Could not post comment to Facebook', 'error')
-    } finally {
-      setPosting((prev) => ({ ...prev, [post.id]: false }))
+      // Dismissing the sheet is a normal outcome, not an error worth a toast.
     }
   }
 
@@ -276,10 +173,8 @@ export default function PageFeed() {
   }
 
   const renderPost = (post: FbPost) => {
-    const liked = !!localLikes[post.id]
-    const likeCount = post.likesCount + (liked ? 1 : 0)
     const showComments = expandedComments.has(post.id)
-    const comments = localComments[post.id] ?? post.topComments
+    const body = post.message ?? post.story
 
     return (
       <YStack
@@ -290,7 +185,6 @@ export default function PageFeed() {
         borderColor={colors.border}
         overflow="hidden"
       >
-        {/* Post header */}
         <XStack padding="$3" gap="$2" alignItems="center">
           <View style={styles.pageAvatar}>
             {page.bgImage ? (
@@ -307,7 +201,10 @@ export default function PageFeed() {
               <Text color={colors.textMuted} fontSize={11}>
                 {timeSince(post.createdTime)}
               </Text>
-              <Text color={colors.textMuted} fontSize={11}> · </Text>
+              <Text color={colors.textMuted} fontSize={11}>
+                {' '}
+                ·{' '}
+              </Text>
               <Text color="#1877F2" fontSize={11} fontWeight="700">
                 f
               </Text>
@@ -315,32 +212,23 @@ export default function PageFeed() {
           </YStack>
         </XStack>
 
-        {/* Post text */}
-        {post.message ? (
+        {body ? (
           <YStack paddingHorizontal="$3" paddingBottom="$2">
             <Text color={colors.text} fontSize="$3" lineHeight={20}>
-              {post.message}
-            </Text>
-          </YStack>
-        ) : post.story ? (
-          <YStack paddingHorizontal="$3" paddingBottom="$2">
-            <Text color={colors.text} fontSize="$3" lineHeight={20}>
-              {post.story}
+              {body}
             </Text>
           </YStack>
         ) : null}
 
-        {/* Post image */}
         {post.fullPicture ? (
-          <Img
-            src={post.fullPicture}
-            alt="Post"
-            style={styles.postImage}
-          />
+          <Pressable onPress={() => openOnFacebook(post)}>
+            <Img src={post.fullPicture} alt="Post" style={styles.postImage} />
+          </Pressable>
         ) : null}
 
-        {/* Reaction / share counts */}
-        {likeCount > 0 || post.commentsCount > 0 || post.sharesCount > 0 ? (
+        {/* Counts come from Facebook at the last sync, so they are shown as a
+            read-only summary rather than something that reacts to a tap. */}
+        {post.likesCount > 0 || post.commentsCount > 0 || post.sharesCount > 0 ? (
           <XStack
             paddingHorizontal="$3"
             paddingVertical="$2"
@@ -349,11 +237,11 @@ export default function PageFeed() {
             borderBottomWidth={1}
             borderBottomColor={colors.border}
           >
-            {likeCount > 0 ? (
+            {post.likesCount > 0 ? (
               <XStack gap="$1" alignItems="center">
                 <Text fontSize={12}>👍</Text>
                 <Text color={colors.textMuted} fontSize={12}>
-                  {likeCount}
+                  {post.likesCount}
                 </Text>
               </XStack>
             ) : (
@@ -376,32 +264,23 @@ export default function PageFeed() {
           </XStack>
         ) : null}
 
-        {/* Action buttons */}
         <XStack borderTopWidth={1} borderTopColor={colors.border}>
           {(
             [
-              { label: liked ? 'Liked' : 'Like', icon: liked ? '👍' : '👍', onPress: () => handleLike(post), active: liked },
-              { label: 'Comment', icon: '💬', onPress: () => toggleComments(post.id), active: false },
-              { label: 'Share', icon: '↗', onPress: () => handleShare(post), active: false },
+              {
+                key: 'like',
+                label: 'Like on Facebook',
+                icon: '👍',
+                onPress: () => openOnFacebook(post),
+              },
+              { key: 'comment', label: 'Comment', icon: '💬', onPress: () => openOnFacebook(post) },
+              { key: 'share', label: 'Share', icon: '↗', onPress: () => handleShare(post) },
             ] as const
           ).map((action) => (
-            <Pressable
-              key={action.label}
-              onPress={action.onPress}
-              style={{ flex: 1 }}
-            >
-              <XStack
-                paddingVertical="$2"
-                justifyContent="center"
-                alignItems="center"
-                gap="$1"
-              >
+            <Pressable key={action.key} onPress={action.onPress} style={{ flex: 1 }}>
+              <XStack paddingVertical="$2" justifyContent="center" alignItems="center" gap="$1">
                 <Text fontSize={13}>{action.icon}</Text>
-                <Text
-                  color={action.active ? '#1877F2' : colors.textMuted}
-                  fontSize={12}
-                  fontWeight={action.active ? '700' : '400'}
-                >
+                <Text color={colors.textMuted} fontSize={12} numberOfLines={1}>
                   {action.label}
                 </Text>
               </XStack>
@@ -409,10 +288,9 @@ export default function PageFeed() {
           ))}
         </XStack>
 
-        {/* Comments section */}
-        {showComments ? (
+        {showComments && post.topComments.length > 0 ? (
           <YStack borderTopWidth={1} borderTopColor={colors.border} padding="$2" gap="$2">
-            {comments.map((c) => (
+            {post.topComments.map((c) => (
               <XStack key={c.id} gap="$2" alignItems="flex-start">
                 <View style={styles.commentAvatar}>
                   {c.fromPicture ? (
@@ -423,12 +301,7 @@ export default function PageFeed() {
                     </Text>
                   )}
                 </View>
-                <YStack
-                  flex={1}
-                  backgroundColor={colors.background}
-                  borderRadius="$2"
-                  padding="$2"
-                >
+                <YStack flex={1} backgroundColor={colors.background} borderRadius="$2" padding="$2">
                   <Text color={colors.text} fontWeight="600" fontSize={12}>
                     {c.fromName}
                   </Text>
@@ -442,61 +315,45 @@ export default function PageFeed() {
               </XStack>
             ))}
 
-            {/* Comment input */}
-            <XStack gap="$2" alignItems="center" marginTop="$1">
-              <View style={[styles.commentAvatar, { backgroundColor: colors.primary }]}>
-                <Text color="white" fontSize={11} fontWeight="700">
-                  {(profile?.displayName ?? 'Y').charAt(0).toUpperCase()}
+            <Pressable onPress={() => openOnFacebook(post)}>
+              <XStack paddingVertical="$2" justifyContent="center">
+                <Text color="#1877F2" fontSize={12} fontWeight="600">
+                  {post.commentsCount > post.topComments.length
+                    ? `View all ${post.commentsCount} comments on Facebook`
+                    : 'Reply on Facebook'}
                 </Text>
-              </View>
-              <TextInput
-                style={[
-                  styles.commentInput,
-                  { color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
-                ]}
-                value={commentText[post.id] ?? ''}
-                onChangeText={(v) => setCommentText((prev) => ({ ...prev, [post.id]: v }))}
-                placeholder="Write a comment…"
-                placeholderTextColor={colors.textMuted}
-                onSubmitEditing={() => handleComment(post)}
-                returnKeyType="send"
-              />
-              <Pressable
-                onPress={() => handleComment(post)}
-                disabled={posting[post.id] || !commentText[post.id]?.trim()}
-              >
-                <XStack
-                  backgroundColor={commentText[post.id]?.trim() ? '#1877F2' : colors.border}
-                  borderRadius={99}
-                  width={30}
-                  height={30}
-                  alignItems="center"
-                  justifyContent="center"
-                >
-                  <Text color="white" fontSize={14}>
-                    ↑
-                  </Text>
-                </XStack>
-              </Pressable>
-            </XStack>
+              </XStack>
+            </Pressable>
           </YStack>
         ) : null}
       </YStack>
     )
   }
 
+  const notLinked = !fbPageId
+  const loadingPosts = !notLinked && posts === null
+  const empty = !notLinked && posts !== null && posts.length === 0
+
   return (
     <YStack flex={1} backgroundColor={colors.background}>
       <ScreenTitle options={{ title: page.label }} />
 
-      {/* Back button — Tabs navigator has no native back, so provide one explicitly */}
+      {/* Back button — the Tabs navigator has no native back affordance. */}
       <Pressable onPress={() => router.back()}>
-        <XStack paddingHorizontal="$3" paddingVertical="$2" alignItems="center" borderBottomWidth={1} borderBottomColor={colors.border}>
-          <Text color={colors.primary} fontSize={14}>‹ Posts</Text>
+        <XStack
+          paddingHorizontal="$3"
+          paddingVertical="$2"
+          alignItems="center"
+          borderBottomWidth={1}
+          borderBottomColor={colors.border}
+        >
+          <Text color={colors.primary} fontSize={14}>
+            ‹ Posts
+          </Text>
         </XStack>
       </Pressable>
 
-      {!isLive && admin ? (
+      {notLinked && admin ? (
         <XStack
           backgroundColor={colors.primary + '18'}
           paddingHorizontal="$3"
@@ -508,45 +365,41 @@ export default function PageFeed() {
         >
           <Text fontSize={14}>ℹ️</Text>
           <Text color={colors.primary} fontSize={12} flex={1}>
-            Demo preview — real posts will appear here after Zapier &amp; Facebook are connected.
+            No Facebook Page linked yet. Open ⚙ Build on the Posts list to connect one.
           </Text>
         </XStack>
       ) : null}
 
       <ScrollView style={{ flex: 1 }}>
         <YStack padding="$3" gap="$3">
-          {allPosts.map(renderPost)}
-
-          {/* Archive section */}
-          {archivePosts.length > 0 || (isLive && firestorePosts && firestorePosts.length === 0) ? null : (
-            <YStack gap="$3">
-              <Pressable onPress={() => setShowArchive((v) => !v)}>
-                <XStack alignItems="center" gap="$2" paddingVertical="$2">
-                  <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-                  <XStack
-                    backgroundColor={colors.surface}
-                    borderRadius={99}
-                    paddingHorizontal="$3"
-                    paddingVertical="$1"
-                    borderWidth={1}
-                    borderColor={colors.border}
-                    gap="$1"
-                    alignItems="center"
-                  >
-                    <Text color={colors.textMuted} fontSize={12} fontWeight="600">
-                      📦 Past Posts
-                    </Text>
-                    <Text color={colors.textMuted} fontSize={11}>
-                      {showArchive ? '▲' : '▼'}
-                    </Text>
-                  </XStack>
-                  <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-                </XStack>
-              </Pressable>
-
-              {showArchive ? archivePosts.map(renderPost) : null}
+          {loadingPosts ? (
+            <YStack alignItems="center" padding="$6">
+              <Text color={colors.textMuted}>Loading posts…</Text>
             </YStack>
-          )}
+          ) : null}
+
+          {notLinked || empty ? (
+            <YStack alignItems="center" justifyContent="center" padding="$6" gap="$3">
+              <Text fontSize={32}>📰</Text>
+              <Text color={colors.text} fontWeight="700" fontSize="$5" textAlign="center">
+                {notLinked ? 'Not connected yet' : 'No posts yet'}
+              </Text>
+              <Text color={colors.textMuted} textAlign="center" fontSize="$3">
+                {notLinked
+                  ? 'This page will fill up once its Facebook Page has been connected.'
+                  : 'When this Facebook Page posts something, it will appear here automatically.'}
+              </Text>
+              {page.fbUrl ? (
+                <Pressable onPress={() => openExternal(page.fbUrl!)}>
+                  <Text color="#1877F2" fontSize={13} fontWeight="600">
+                    Visit the Page on Facebook
+                  </Text>
+                </Pressable>
+              ) : null}
+            </YStack>
+          ) : null}
+
+          {posts?.map(renderPost)}
         </YStack>
       </ScrollView>
     </YStack>
@@ -587,12 +440,4 @@ const styles = StyleSheet.create({
     height: '100%' as unknown as number,
     objectFit: 'cover' as unknown as 'cover',
   } as object,
-  commentInput: {
-    flex: 1,
-    height: 36,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderRadius: 18,
-    fontSize: 13,
-  },
 })

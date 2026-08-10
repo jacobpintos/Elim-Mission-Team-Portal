@@ -7,7 +7,7 @@ export interface LodgingEntry {
 
 export interface FlightEntry {
   id: string
-  uid: string        // required — who this entry belongs to
+  uid: string // required — who this entry belongs to
 
   // Outbound
   outDate?: string
@@ -214,8 +214,15 @@ export interface PostPage {
   label: string
   bgImage?: string
   fbUrl?: string
-  fbPageId?: string  // Facebook Page ID or username — Zapier path + Graph API (post-approval)
-  fbToken?: string   // Page Access Token — added after Facebook app approval
+  /**
+   * Facebook Page ID this portal page mirrors.
+   *
+   * Set by an admin to match a Page an owner connected through the
+   * `fbConnect` flow; it is the key into `fbPagePosts/{fbPageId}/posts`. The
+   * Page access token is deliberately not here — it lives server-side in
+   * `fbConnections` and never reaches a device.
+   */
+  fbPageId?: string
   desc?: string
   posts: Post[]
 }

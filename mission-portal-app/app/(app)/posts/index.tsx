@@ -8,6 +8,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
 import { Img } from '@/components/ui/Img'
+import { FacebookConnectPanel } from '@/components/posts/FacebookConnectPanel'
 import type { PostPage } from '@/types/events'
 
 function nanoid() {
@@ -19,7 +20,6 @@ type EditState = {
   label: string
   bgImage: string
   fbPageId: string
-  fbToken: string
   desc: string
   isNew: boolean
 }
@@ -30,7 +30,6 @@ function blankEdit(partial?: Partial<PostPage>): EditState {
     label: partial?.label ?? '',
     bgImage: partial?.bgImage ?? '',
     fbPageId: partial?.fbPageId ?? '',
-    fbToken: partial?.fbToken ?? '',
     desc: partial?.desc ?? '',
     isNew: !partial?.id,
   }
@@ -75,7 +74,6 @@ export default function PostsIndex() {
         label: editState.label.trim(),
         bgImage: editState.bgImage.trim(),
         fbPageId: editState.fbPageId.trim(),
-        fbToken: editState.fbToken.trim(),
         desc: editState.desc.trim(),
       }
       if (editState.isNew) {
@@ -134,11 +132,7 @@ export default function PostsIndex() {
               borderWidth={1}
               borderColor={buildMode ? colors.primary : colors.border}
             >
-              <Text
-                color={buildMode ? 'white' : colors.text}
-                fontSize={12}
-                fontWeight="600"
-              >
+              <Text color={buildMode ? 'white' : colors.text} fontSize={12} fontWeight="600">
                 {buildMode ? '✓ Done' : '⚙ Build'}
               </Text>
             </XStack>
@@ -165,13 +159,24 @@ export default function PostsIndex() {
           <YStack gap={GAP}>
             {pages.map((page) => (
               <Pressable key={page.id} onPress={() => handleCardPress(page)}>
-                <View style={[styles.pill, buildMode && styles.pillBuildMode, { borderColor: colors.border }]}>
+                <View
+                  style={[
+                    styles.pill,
+                    buildMode && styles.pillBuildMode,
+                    { borderColor: colors.border },
+                  ]}
+                >
                   {/* Left: photo panel */}
                   <View style={styles.pillLeft}>
                     {page.bgImage ? (
                       <Img src={page.bgImage} alt="" style={styles.pillImg} />
                     ) : (
-                      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.primary + '77' }]} />
+                      <View
+                        style={[
+                          StyleSheet.absoluteFill,
+                          { backgroundColor: colors.primary + '77' },
+                        ]}
+                      />
                     )}
                   </View>
 
@@ -186,16 +191,27 @@ export default function PostsIndex() {
                       </Text>
                     ) : null}
                     {!page.fbPageId && admin ? (
-                      <Text style={{ color: 'rgba(255,160,30,1)', fontSize: 10, fontWeight: '600', marginTop: 3 }}>
+                      <Text
+                        style={{
+                          color: 'rgba(255,160,30,1)',
+                          fontSize: 10,
+                          fontWeight: '600',
+                          marginTop: 3,
+                        }}
+                      >
                         ⚠ Facebook page not linked
                       </Text>
                     ) : null}
                     {page.fbPageId && !buildMode ? (
                       <XStack gap={4} alignItems="center" marginTop={3}>
                         <View style={styles.fbBadge}>
-                          <Text color="white" fontSize={9} fontWeight="700">f</Text>
+                          <Text color="white" fontSize={9} fontWeight="700">
+                            f
+                          </Text>
                         </View>
-                        <Text color={colors.textMuted} fontSize={10}>Facebook linked</Text>
+                        <Text color={colors.textMuted} fontSize={10}>
+                          Facebook linked
+                        </Text>
                       </XStack>
                     ) : null}
                   </View>
@@ -204,7 +220,9 @@ export default function PostsIndex() {
                   {buildMode ? (
                     <View style={styles.buildOverlay}>
                       <View style={styles.editChip}>
-                        <Text color={colors.primary} fontSize={12} fontWeight="700">✎ Edit</Text>
+                        <Text color={colors.primary} fontSize={12} fontWeight="700">
+                          ✎ Edit
+                        </Text>
                       </View>
                     </View>
                   ) : null}
@@ -216,13 +234,25 @@ export default function PostsIndex() {
             {buildMode ? (
               <Pressable onPress={() => openEdit()}>
                 <XStack
-                  style={[styles.pill, { borderColor: colors.primary, backgroundColor: colors.surface, borderStyle: 'dashed', borderWidth: 2 }]}
+                  style={[
+                    styles.pill,
+                    {
+                      borderColor: colors.primary,
+                      backgroundColor: colors.surface,
+                      borderStyle: 'dashed',
+                      borderWidth: 2,
+                    },
+                  ]}
                   alignItems="center"
                   justifyContent="center"
                   gap={8}
                 >
-                  <Text color={colors.primary} fontSize={22} fontWeight="300">+</Text>
-                  <Text color={colors.primary} fontSize={14} fontWeight="600">Add Page</Text>
+                  <Text color={colors.primary} fontSize={22} fontWeight="300">
+                    +
+                  </Text>
+                  <Text color={colors.primary} fontSize={14} fontWeight="600">
+                    Add Page
+                  </Text>
                 </XStack>
               </Pressable>
             ) : null}
@@ -252,7 +282,9 @@ export default function PostsIndex() {
                 {editState?.isNew ? 'Add Page' : 'Edit Page'}
               </Text>
               <Pressable onPress={() => setEditState(null)}>
-                <Text color={colors.textMuted} fontSize="$4">✕</Text>
+                <Text color={colors.textMuted} fontSize="$4">
+                  ✕
+                </Text>
               </Pressable>
             </XStack>
 
@@ -263,9 +295,16 @@ export default function PostsIndex() {
                     PAGE NAME *
                   </Text>
                   <TextInput
-                    style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                    style={[
+                      styles.input,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
                     value={editState?.label ?? ''}
-                    onChangeText={(v) => setEditState((s) => s ? { ...s, label: v } : s)}
+                    onChangeText={(v) => setEditState((s) => (s ? { ...s, label: v } : s))}
                     placeholder="e.g. Elim Church"
                     placeholderTextColor={colors.textMuted}
                   />
@@ -276,9 +315,16 @@ export default function PostsIndex() {
                     BACKGROUND IMAGE URL
                   </Text>
                   <TextInput
-                    style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                    style={[
+                      styles.input,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
                     value={editState?.bgImage ?? ''}
-                    onChangeText={(v) => setEditState((s) => s ? { ...s, bgImage: v } : s)}
+                    onChangeText={(v) => setEditState((s) => (s ? { ...s, bgImage: v } : s))}
                     placeholder="https://..."
                     placeholderTextColor={colors.textMuted}
                     autoCapitalize="none"
@@ -291,64 +337,25 @@ export default function PostsIndex() {
                     DESCRIPTION (optional)
                   </Text>
                   <TextInput
-                    style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                    style={[
+                      styles.input,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
                     value={editState?.desc ?? ''}
-                    onChangeText={(v) => setEditState((s) => s ? { ...s, desc: v } : s)}
+                    onChangeText={(v) => setEditState((s) => (s ? { ...s, desc: v } : s))}
                     placeholder="e.g. News & announcements"
                     placeholderTextColor={colors.textMuted}
                   />
                 </YStack>
 
-                <YStack
-                  borderWidth={1}
-                  borderColor={colors.border}
-                  borderRadius="$3"
-                  padding="$3"
-                  gap="$3"
-                  backgroundColor={colors.background}
-                >
-                  <XStack gap="$2" alignItems="center">
-                    <View style={[styles.fbBadge, { position: 'relative', top: 0, right: 0 }]}>
-                      <Text color="white" fontSize={11} fontWeight="700">f</Text>
-                    </View>
-                    <Text color={colors.text} fontWeight="700" fontSize="$3">
-                      Facebook Integration
-                    </Text>
-                  </XStack>
-                  <Text color={colors.textMuted} fontSize={12} lineHeight={18}>
-                    After Facebook app approval, add your Page ID and token here. Zapier will automatically
-                    sync new posts using the Page ID as the Firestore path.
-                  </Text>
-
-                  <YStack gap="$1">
-                    <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                      FACEBOOK PAGE ID / USERNAME
-                    </Text>
-                    <TextInput
-                      style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
-                      value={editState?.fbPageId ?? ''}
-                      onChangeText={(v) => setEditState((s) => s ? { ...s, fbPageId: v } : s)}
-                      placeholder="e.g. ElimFresno or 123456789"
-                      placeholderTextColor={colors.textMuted}
-                      autoCapitalize="none"
-                    />
-                  </YStack>
-
-                  <YStack gap="$1">
-                    <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                      PAGE ACCESS TOKEN
-                    </Text>
-                    <TextInput
-                      style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
-                      value={editState?.fbToken ?? ''}
-                      onChangeText={(v) => setEditState((s) => s ? { ...s, fbToken: v } : s)}
-                      placeholder="From Meta Business Suite → Integrations → Access Tokens"
-                      placeholderTextColor={colors.textMuted}
-                      autoCapitalize="none"
-                      secureTextEntry
-                    />
-                  </YStack>
-                </YStack>
+                <FacebookConnectPanel
+                  value={editState?.fbPageId ?? ''}
+                  onChange={(fbPageId) => setEditState((s) => (s ? { ...s, fbPageId } : s))}
+                />
 
                 <Pressable onPress={handleSave} disabled={saving || !editState?.label.trim()}>
                   <XStack
@@ -368,7 +375,9 @@ export default function PostsIndex() {
                   confirmDelete ? (
                     <YStack gap="$2">
                       <Text color="#c0392b" fontSize="$3" textAlign="center">
-                        {'Remove "'}{editState?.label}{'" — this cannot be undone.'}
+                        {'Remove "'}
+                        {editState?.label}
+                        {'" — this cannot be undone.'}
                       </Text>
                       <XStack gap="$2">
                         <Pressable onPress={() => setConfirmDelete(false)} style={{ flex: 1 }}>
@@ -379,7 +388,9 @@ export default function PostsIndex() {
                             paddingVertical="$2"
                             justifyContent="center"
                           >
-                            <Text color={colors.textMuted} fontSize="$3">Cancel</Text>
+                            <Text color={colors.textMuted} fontSize="$3">
+                              Cancel
+                            </Text>
                           </XStack>
                         </Pressable>
                         <Pressable onPress={handleDelete} disabled={saving} style={{ flex: 1 }}>

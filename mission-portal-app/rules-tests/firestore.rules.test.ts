@@ -377,3 +377,54 @@ describe('guests', () => {
     await assertSucceeds(getDoc(doc(as(WORSHIP), 'inputList/main')))
   })
 })
+
+describe('Facebook Page sync', () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'fbPagePosts', 'page1'), { pageName: 'Elim' })
+      await setDoc(doc(db, 'fbPagePosts', 'page1', 'posts', 'p1'), {
+        message: 'Hello',
+        createdTime: '2026-08-01T10:00:00+0000',
+        likesCount: 3,
+      })
+      await setDoc(doc(db, 'fbConnections', 'page1'), {
+        pageId: 'page1',
+        accessToken: 'super-secret-page-token',
+      })
+      await setDoc(doc(db, 'fbConnectInvites', 'inv1'), { createdBy: ADMIN })
+    })
+  })
+
+  it('lets any signed-in member read synced posts', async () => {
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'fbPagePosts/page1/posts/p1')))
+    await assertSucceeds(getDocs(collection(as(GUEST), 'fbPagePosts/page1/posts')))
+  })
+
+  it('shuts signed-out visitors out of the feed', async () => {
+    await assertFails(getDoc(doc(anon(), 'fbPagePosts/page1/posts/p1')))
+  })
+
+  it('refuses client writes to posts, admin included', async () => {
+    // The collection mirrors someone else's content; a client write could only
+    // ever put it out of step with Facebook.
+    await assertFails(setDoc(doc(as(ADMIN), 'fbPagePosts/page1/posts/p2'), { message: 'Forged' }))
+    await assertFails(updateDoc(doc(as(ADMIN), 'fbPagePosts/page1/posts/p1'), { likesCount: 999 }))
+    await assertFails(deleteDoc(doc(as(MEMBER), 'fbPagePosts/page1/posts/p1')))
+  })
+
+  it('keeps Page access tokens unreachable from every client', async () => {
+    // The whole point of storing tokens server-side: an admin account being
+    // compromised must not hand over a credential that can act as the Page.
+    await assertFails(getDoc(doc(as(ADMIN), 'fbConnections/page1')))
+    await assertFails(getDoc(doc(as(MEMBER), 'fbConnections/page1')))
+    await assertFails(getDoc(doc(anon(), 'fbConnections/page1')))
+    await assertFails(setDoc(doc(as(ADMIN), 'fbConnections/page2'), { accessToken: 'x' }))
+  })
+
+  it('keeps connect invitations unreadable, so a link cannot be lifted', async () => {
+    await assertFails(getDoc(doc(as(ADMIN), 'fbConnectInvites/inv1')))
+    await assertFails(getDoc(doc(as(MEMBER), 'fbConnectInvites/inv1')))
+    await assertFails(getDoc(doc(as(ADMIN), 'fbConnectInvites/inv1/pending/x')))
+  })
+})
