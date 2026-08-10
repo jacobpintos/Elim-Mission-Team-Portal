@@ -188,11 +188,43 @@ export function aheadWindow(todayStr: string): { fromStr: string; limitStr: stri
  * The record kept in weatherAlertsSent means an alert seen by both is still
  * only sent once.
  */
-async function runWeatherCheck(fromStr: string, limitStr: string): Promise<void> {
+async function runWeatherCheck(
+  fromStr: string,
+  limitStr: string,
+  options: { prune?: boolean } = {}
+): Promise<void> {
   const db = admin.firestore()
 
-  // Load all events and filter to those in the window with geocoords
-  const eventsSnap = await db.collection('events').get()
+  /*
+   * Ask for the events that could be in the window rather than reading the
+   * whole collection.
+   *
+   * Reading every event was affordable four times a day and is not every five
+   * minutes: it costs one read per event per run, so a few hundred events
+   * become millions of reads a month for a query that matches two of them.
+   *
+   * Two queries, because a recurring event has no single date to range over:
+   *
+   * - dated events from a month before the window, which is far enough back to
+   *   catch a multi-day event still running whose first day has passed
+   * - every recurring event, a small set, whose occurrences are worked out in
+   *   upcomingDates
+   *
+   * Both are supersets. upcomingDates still decides what actually counts, so
+   * asking for slightly too much here changes nothing but the bill.
+   */
+  const [datedSnap, recurringSnap] = await Promise.all([
+    db
+      .collection('events')
+      .where('date', '>=', addDaysStr(fromStr, -30))
+      .where('date', '<=', limitStr)
+      .get(),
+    db.collection('events').where('isRec', '==', true).get(),
+  ])
+
+  const eventDocs = new Map<string, admin.firestore.QueryDocumentSnapshot>()
+  for (const d of [...datedSnap.docs, ...recurringSnap.docs]) eventDocs.set(d.id, d)
+  const eventsSnap = { docs: [...eventDocs.values()] }
 
   // Deduplicate locations to minimize NWS API calls
   // Each entry carries the days that event falls on, so an alert can be
@@ -323,7 +355,13 @@ async function runWeatherCheck(fromStr: string, limitStr: string): Promise<void>
     }
   }
 
-  // Prune sent records older than 7 days
+  // Prune sent records older than 7 days.
+  //
+  // Only on the lookahead run: this is a query of up to 500 documents and
+  // there is no reason to pay for it every five minutes. Once every four hours
+  // clears the backlog just as well.
+  if (!options.prune) return
+
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
   const oldSnap = await db
@@ -348,7 +386,7 @@ export const weatherAlertCheck = onSchedule(
   { schedule: '0 */4 * * *', secrets: [RESEND_API_KEY] },
   async () => {
     const { fromStr, limitStr } = aheadWindow(todayUTCStr())
-    await runWeatherCheck(fromStr, limitStr)
+    await runWeatherCheck(fromStr, limitStr, { prune: true })
   }
 )
 
