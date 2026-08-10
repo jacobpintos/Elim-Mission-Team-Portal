@@ -44,9 +44,15 @@ interface EventOverrideRaw {
   teams?: EventTeamRaw[]
 }
 
+interface ExtraDayRaw {
+  date?: string
+}
+
 interface EventTemplateRaw {
   isRec?: boolean
   date?: string
+  /** Further days of a multi-day event, each with its own date. */
+  extraDays?: ExtraDayRaw[]
   recDay?: number
   recur?: string
   recEnd?: string | null
@@ -91,8 +97,14 @@ export function upcomingDates(
   if (!t._geocodeLat || !t._geocodeLng) return []
   if (t.recEnd && t.recEnd < todayStr) return []
 
+  const inWindow = (d?: string): boolean => !!d && d >= todayStr && d <= limitStr
+
   if (!t.isRec) {
-    return t.date && t.date >= todayStr && t.date <= limitStr ? [t.date] : []
+    // A multi-day event happens on all of its days. Only the first was
+    // considered before, so an alert covering day three was never matched and
+    // the later days of a trip went unchecked entirely.
+    const days = [t.date, ...(t.extraDays ?? []).map((e) => e.date)].filter(inWindow) as string[]
+    return [...new Set(days)].sort()
   }
 
   const limit = t.recEnd && t.recEnd < limitStr ? t.recEnd : limitStr

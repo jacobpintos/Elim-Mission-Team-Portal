@@ -15,6 +15,7 @@ import { alertCoversDate } from './weather'
 interface TemplateRaw {
   isRec?: boolean
   date?: string
+  extraDays?: { date?: string }[]
   recDay?: number
   recur?: string
   recEnd?: string | null
@@ -28,8 +29,11 @@ function upcomingDates(t: TemplateRaw, todayStr: string, limitStr: string): stri
   if (!t._geocodeLat || !t._geocodeLng) return []
   if (t.recEnd && t.recEnd < todayStr) return []
 
+  const inWindow = (d?: string): boolean => !!d && d >= todayStr && d <= limitStr
+
   if (!t.isRec) {
-    return t.date && t.date >= todayStr && t.date <= limitStr ? [t.date] : []
+    const days = [t.date, ...(t.extraDays ?? []).map((e) => e.date)].filter(inWindow) as string[]
+    return [...new Set(days)].sort()
   }
 
   const limit = t.recEnd && t.recEnd < limitStr ? t.recEnd : limitStr
@@ -66,6 +70,37 @@ const LIMIT = '2026-03-09'
 describe('upcomingDates', () => {
   it('gives a one-off event its own day', () => {
     expect(upcomingDates(placed({ date: '2026-03-05' }), TODAY, LIMIT)).toEqual(['2026-03-05'])
+  })
+
+  it('includes the further days of a multi-day event', () => {
+    // Only the first day counted before, so an alert covering day three was
+    // never matched and the rest of a trip went unchecked.
+    const trip = placed({
+      date: '2026-03-03',
+      extraDays: [{ date: '2026-03-04' }, { date: '2026-03-05' }],
+    })
+
+    expect(upcomingDates(trip, TODAY, LIMIT)).toEqual(['2026-03-03', '2026-03-04', '2026-03-05'])
+  })
+
+  it('keeps only the extra days that fall inside the window', () => {
+    const trip = placed({ date: '2026-03-03', extraDays: [{ date: '2026-06-01' }] })
+
+    expect(upcomingDates(trip, TODAY, LIMIT)).toEqual(['2026-03-03'])
+  })
+
+  it('still covers a trip whose first day has passed', () => {
+    // The event started before today but is still running, so its remaining
+    // days need watching.
+    const trip = placed({ date: '2026-02-28', extraDays: [{ date: '2026-03-04' }] })
+
+    expect(upcomingDates(trip, TODAY, LIMIT)).toEqual(['2026-03-04'])
+  })
+
+  it('does not list the same day twice', () => {
+    const trip = placed({ date: '2026-03-03', extraDays: [{ date: '2026-03-03' }] })
+
+    expect(upcomingDates(trip, TODAY, LIMIT)).toEqual(['2026-03-03'])
   })
 
   it('ignores a one-off outside the window', () => {
