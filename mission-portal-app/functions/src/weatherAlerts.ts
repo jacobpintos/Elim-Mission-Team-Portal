@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 import { RESEND_API_KEY } from './email/client'
@@ -180,39 +181,98 @@ export function aheadWindow(todayStr: string): { fromStr: string; limitStr: stri
   return { fromStr: addDaysStr(todayStr, -1), limitStr: addDaysStr(todayStr, 7) }
 }
 
-/**
- * Look up the weather for every event in the window and notify on what matters.
- *
- * Shared by both schedules. They differ only in how far ahead they look: one
- * watches the days around now, often; the other looks a week out, occasionally.
- * The record kept in weatherAlertsSent means an alert seen by both is still
- * only sent once.
- */
-async function runWeatherCheck(
-  fromStr: string,
-  limitStr: string,
-  options: { prune?: boolean } = {}
-): Promise<void> {
-  const db = admin.firestore()
+/** One venue that needs watching on one day. */
+export interface WatchEntry {
+  /** Event id, or the instance key when a single occurrence was moved. */
+  id: string
+  title: string
+  lat: number
+  lng: number
+}
 
-  /*
-   * Ask for the events that could be in the window rather than reading the
-   * whole collection.
-   *
-   * Reading every event was affordable four times a day and is not every five
-   * minutes: it costs one read per event per run, so a few hundred events
-   * become millions of reads a month for a query that matches two of them.
-   *
-   * Two queries, because a recurring event has no single date to range over:
-   *
-   * - dated events from a month before the window, which is far enough back to
-   *   catch a multi-day event still running whose first day has passed
-   * - every recurring event, a small set, whose occurrences are worked out in
-   *   upcomingDates
-   *
-   * Both are supersets. upcomingDates still decides what actually counts, so
-   * asking for slightly too much here changes nothing but the bill.
-   */
+/** day → the venues to watch that day. */
+export type WatchDays = Record<string, WatchEntry[]>
+
+interface WatchDoc {
+  days?: WatchDays
+  builtFor?: string
+}
+
+/**
+ * The watch list.
+ *
+ * One small document saying which venues need watching on which days. The
+ * five-minute run reads this and nothing else, so a day with no event costs
+ * exactly one document read — which is what makes that cadence affordable.
+ * Working it out from the events collection every five minutes cost one read
+ * per event per run instead.
+ */
+const WATCH_DOC = 'config/weatherWatch'
+
+/**
+ * Turn events into the day → venue list.
+ *
+ * Only days inside the window are kept, and the window never starts before
+ * today, so a finished event is never watched. A day either side of the UTC
+ * date is still allowed, because at 7pm Central the UTC date has already
+ * rolled over and this evening's event would otherwise look like yesterday's.
+ */
+export function buildWatchDays(
+  events: Array<{ id: string } & EventTemplateRaw>,
+  fromStr: string,
+  limitStr: string
+): WatchDays {
+  const days: WatchDays = {}
+  const add = (date: string, entry: WatchEntry) => {
+    const list = (days[date] ??= [])
+    if (!list.some((e) => e.id === entry.id)) list.push(entry)
+  }
+
+  for (const t of events) {
+    if (t._geocodeLat && t._geocodeLng) {
+      for (const date of upcomingDates(t, fromStr, limitStr)) {
+        add(date, {
+          id: t.id,
+          title: t.title ?? 'Upcoming Event',
+          lat: t._geocodeLat,
+          lng: t._geocodeLng,
+        })
+      }
+    }
+
+    // A single occurrence moved to another venue is watched at that venue.
+    if (t.isRec && t.overrides) {
+      for (const [instanceKey, ov] of Object.entries(t.overrides)) {
+        if (ov.deleted) continue
+        if (!ov._geocodeLat || !ov._geocodeLng) continue
+        if (ov._geocodeLat === t._geocodeLat && ov._geocodeLng === t._geocodeLng) continue
+        const instanceDate = instanceKey.split('_').pop()
+        if (!instanceDate || instanceDate < fromStr || instanceDate > limitStr) continue
+        add(instanceDate, {
+          id: instanceKey,
+          title: ov.title ?? t.title ?? 'Upcoming Event',
+          lat: ov._geocodeLat,
+          lng: ov._geocodeLng,
+        })
+      }
+    }
+  }
+  return days
+}
+
+/**
+ * Work the watch list out afresh and store it.
+ *
+ * Runs when an event changes and on the four-hourly sweep, so it is current
+ * without being recomputed on a timer. The dated query reaches back a month
+ * only to find a multi-day event that is still running — no day before today
+ * survives buildWatchDays, so nothing in the past is ever watched.
+ */
+export async function rebuildWatch(): Promise<WatchDays> {
+  const db = admin.firestore()
+  const todayStr = todayUTCStr()
+  const { fromStr, limitStr } = aheadWindow(todayStr)
+
   const [datedSnap, recurringSnap] = await Promise.all([
     db
       .collection('events')
@@ -222,60 +282,55 @@ async function runWeatherCheck(
     db.collection('events').where('isRec', '==', true).get(),
   ])
 
-  const eventDocs = new Map<string, admin.firestore.QueryDocumentSnapshot>()
-  for (const d of [...datedSnap.docs, ...recurringSnap.docs]) eventDocs.set(d.id, d)
-  const eventsSnap = { docs: [...eventDocs.values()] }
+  const byId = new Map<string, { id: string } & EventTemplateRaw>()
+  for (const d of [...datedSnap.docs, ...recurringSnap.docs]) {
+    byId.set(d.id, { id: d.id, ...(d.data() as EventTemplateRaw) })
+  }
 
-  // Deduplicate locations to minimize NWS API calls
-  // Each entry carries the days that event falls on, so an alert can be
-  // checked against them rather than sent for merely being active nearby.
+  const days = buildWatchDays([...byId.values()], fromStr, limitStr)
+  await db.doc(WATCH_DOC).set({
+    days,
+    builtFor: todayStr,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  return days
+}
+
+/**
+ * Look up the weather for the venues being watched and notify on what matters.
+ *
+ * Shared by both schedules. They differ only in how far ahead they look: one
+ * watches the days around now, often; the other looks a week out, occasionally.
+ * The record kept in weatherAlertsSent means an alert seen by both is still
+ * only sent once.
+ */
+async function runWeatherCheck(
+  days: WatchDays,
+  fromStr: string,
+  limitStr: string,
+  options: { prune?: boolean } = {}
+): Promise<void> {
+  const db = admin.firestore()
+
+  // One entry per venue, carrying the days it is being watched for — so an
+  // alert is checked against those days rather than sent for merely being
+  // active nearby.
   const locMap = new Map<
     string,
-    {
-      lat: number
-      lng: number
-      eventDocs: Array<{ id: string; dates: string[] } & EventTemplateRaw>
-    }
+    { lat: number; lng: number; watched: Map<string, WatchEntry & { dates: string[] }> }
   >()
 
-  for (const d of eventsSnap.docs) {
-    const t = d.data() as EventTemplateRaw
-    const templateDoc = { id: d.id, ...t }
-
-    // Template-level location
-    const dates = upcomingDates(t, fromStr, limitStr)
-    if (t._geocodeLat && t._geocodeLng && dates.length > 0) {
-      const locKey = `${t._geocodeLat.toFixed(3)},${t._geocodeLng.toFixed(3)}`
+  for (const [date, entries] of Object.entries(days)) {
+    if (date < fromStr || date > limitStr) continue
+    for (const entry of entries) {
+      const locKey = `${entry.lat.toFixed(3)},${entry.lng.toFixed(3)}`
       if (!locMap.has(locKey)) {
-        locMap.set(locKey, { lat: t._geocodeLat, lng: t._geocodeLng, eventDocs: [] })
+        locMap.set(locKey, { lat: entry.lat, lng: entry.lng, watched: new Map() })
       }
-      locMap.get(locKey)!.eventDocs.push({ ...templateDoc, dates })
-    }
-
-    // Per-instance location overrides (recurring only)
-    if (t.isRec && t.overrides) {
-      for (const [instanceKey, ov] of Object.entries(t.overrides)) {
-        if (ov.deleted) continue
-        if (!ov._geocodeLat || !ov._geocodeLng) continue
-        // Confirm this instance date falls within the alert window
-        const parts = instanceKey.split('_')
-        const instanceDate = parts[parts.length - 1]
-        if (!instanceDate || instanceDate < fromStr || instanceDate > limitStr) continue
-        // Skip if location is same as template (already handled above)
-        if (ov._geocodeLat === t._geocodeLat && ov._geocodeLng === t._geocodeLng) continue
-        const locKey = `${ov._geocodeLat.toFixed(3)},${ov._geocodeLng.toFixed(3)}`
-        if (!locMap.has(locKey)) {
-          locMap.set(locKey, { lat: ov._geocodeLat, lng: ov._geocodeLng, eventDocs: [] })
-        }
-        // Merge template + override so notification targets the right users.
-        // A single occurrence happens on exactly one day, its own.
-        locMap.get(locKey)!.eventDocs.push({
-          ...templateDoc,
-          ...ov,
-          id: instanceKey,
-          dates: [instanceDate],
-        })
-      }
+      const watched = locMap.get(locKey)!.watched
+      const existing = watched.get(entry.id)
+      if (existing) existing.dates.push(date)
+      else watched.set(entry.id, { ...entry, dates: [date] })
     }
   }
 
@@ -291,8 +346,7 @@ async function runWeatherCheck(
     .get()
   const adminUids = adminsSnap.docs.map((d) => d.id)
 
-  // For each location, fetch NWS alerts and notify
-  for (const [, { lat, lng, eventDocs }] of locMap) {
+  for (const [, { lat, lng, watched }] of locMap) {
     let rawAlerts: NWSAlertRaw[] = []
     try {
       const res = await fetch(
@@ -316,37 +370,37 @@ async function runWeatherCheck(
     for (const alert of rawAlerts) {
       if (!alert.id) continue
 
-      for (const evDoc of eventDocs) {
-        // The bug this closes: an alert active at the venue was sent whatever
-        // days it covered, so an alert running today reached admins about an
-        // event next week — a warning about a day with no event on it.
-        const covered = evDoc.dates.find((d) => alertCoversDate(alert, d))
+      for (const entry of watched.values()) {
+        // An alert active at the venue used to be sent whatever days it
+        // covered, so one running today reached admins about an event next
+        // week — a warning about a day with no event on it.
+        const covered = entry.dates.find((d) => alertCoversDate(alert, d))
         if (!covered) continue
 
-        const sentDocId = `${alert.id.replace(/\//g, '_')}_${evDoc.id}`
+        const sentDocId = `${alert.id.replace(/\//g, '_')}_${entry.id}`
         const sentRef = db.doc(`weatherAlertsSent/${sentDocId}`)
         const sentSnap = await sentRef.get()
         if (sentSnap.exists) continue
 
         for (const uid of adminUids) {
           await notifyUser(uid, 'weatherAlertAdmin', {
-            eventTitle: evDoc.title ?? 'Upcoming Event',
+            eventTitle: entry.title,
             alertEvent: alert.event,
             headline: alert.headline,
             eventDate: covered,
-            eventId: evDoc.id,
+            eventId: entry.id,
             alertId: alert.id,
           })
         }
         if (adminUids.length > 0) {
           logger.info(
-            `Weather alert "${alert.event}" sent to ${adminUids.length} admin(s) for event "${evDoc.title ?? evDoc.id}"`
+            `Weather alert "${alert.event}" sent to ${adminUids.length} admin(s) for event "${entry.title}"`
           )
         }
 
         await sentRef.set({
           alertId: alert.id,
-          eventId: evDoc.id,
+          eventId: entry.id,
           alertEvent: alert.event,
           sentAt: admin.firestore.FieldValue.serverTimestamp(),
           expires: alert.expires,
@@ -358,8 +412,8 @@ async function runWeatherCheck(
   // Prune sent records older than 7 days.
   //
   // Only on the lookahead run: this is a query of up to 500 documents and
-  // there is no reason to pay for it every five minutes. Once every four hours
-  // clears the backlog just as well.
+  // there is no reason to pay for it every five minutes when once every four
+  // hours clears the backlog just as well.
   if (!options.prune) return
 
   const sevenDaysAgo = new Date()
@@ -379,32 +433,47 @@ async function runWeatherCheck(
 /**
  * The lookahead: a week out, four times a day.
  *
- * This is the "there is a storm coming on Saturday" half — useful for deciding
- * whether to move an event, and not urgent enough to poll for.
+ * The "there is a storm coming on Saturday" half — useful for deciding whether
+ * to move an event, and not urgent enough to poll for. Rebuilds the watch list
+ * as it goes, which also rolls it forward as days pass.
  */
 export const weatherAlertCheck = onSchedule(
   { schedule: '0 */4 * * *', secrets: [RESEND_API_KEY] },
   async () => {
+    const days = await rebuildWatch()
     const { fromStr, limitStr } = aheadWindow(todayUTCStr())
-    await runWeatherCheck(fromStr, limitStr, { prune: true })
+    await runWeatherCheck(days, fromStr, limitStr, { prune: true })
   }
 )
 
 /**
  * The live watch: only the days around now, every five minutes.
  *
- * A tornado warning issued during an event is the case this exists for, and
- * finding out an hour later is no use. Four-hourly was the only cadence, so a
- * warning could sit unseen for most of an event.
+ * A tornado warning issued during an event is what this exists for, and
+ * finding out an hour later is no use.
  *
- * On a day with nothing on it this returns after a single Firestore read and
- * makes no weather calls at all, which is what makes five minutes affordable:
- * the polling only really happens on the days it matters.
+ * It reads the watch list and nothing else, so a day with no event costs one
+ * document read and makes no weather calls at all. The heavy work only happens
+ * on the days there is something to watch.
  */
 export const weatherAlertNow = onSchedule(
   { schedule: '*/5 * * * *', secrets: [RESEND_API_KEY] },
   async () => {
     const { fromStr, limitStr } = nowWindow(todayUTCStr())
-    await runWeatherCheck(fromStr, limitStr)
+    const snap = await admin.firestore().doc(WATCH_DOC).get()
+    const days = (snap.data() as WatchDoc | undefined)?.days ?? {}
+    if (!Object.keys(days).some((d) => d >= fromStr && d <= limitStr)) return
+    await runWeatherCheck(days, fromStr, limitStr)
   }
 )
+
+/**
+ * Keep the watch list current.
+ *
+ * An event created or rescheduled today has to be watched today, so the list
+ * is rebuilt when one changes rather than waiting up to four hours for the
+ * next sweep.
+ */
+export const onEventWrittenWeather = onDocumentWritten('events/{eventId}', async () => {
+  await rebuildWatch()
+})

@@ -343,3 +343,167 @@ describe('the two schedules', () => {
     expect(upcomingDates(saturday, fromStr, limitStr)).toEqual(['2026-08-22'])
   })
 })
+
+/**
+ * Mirror of buildWatchDays() in functions/src/weatherAlerts.ts.
+ *
+ * The watch list is one small document mapping each day to the venues that
+ * need watching. The five-minute run reads it and nothing else, so what ends
+ * up in it decides both what gets watched and what the polling costs.
+ */
+interface WatchEntry {
+  id: string
+  title: string
+  lat: number
+  lng: number
+}
+
+function buildWatchDays(
+  events: Array<{ id: string; title?: string; overrides?: Record<string, Record<string, unknown>> } & TemplateRaw>,
+  fromStr: string,
+  limitStr: string
+): Record<string, WatchEntry[]> {
+  const days: Record<string, WatchEntry[]> = {}
+  const add = (date: string, entry: WatchEntry) => {
+    const list = (days[date] ??= [])
+    if (!list.some((e) => e.id === entry.id)) list.push(entry)
+  }
+  for (const t of events) {
+    if (t._geocodeLat && t._geocodeLng) {
+      for (const date of upcomingDates(t, fromStr, limitStr)) {
+        add(date, {
+          id: t.id,
+          title: t.title ?? 'Upcoming Event',
+          lat: t._geocodeLat,
+          lng: t._geocodeLng,
+        })
+      }
+    }
+    if (t.isRec && t.overrides) {
+      for (const [instanceKey, ov] of Object.entries(t.overrides)) {
+        if (ov.deleted) continue
+        const lat = ov._geocodeLat as number | undefined
+        const lng = ov._geocodeLng as number | undefined
+        if (!lat || !lng) continue
+        if (lat === t._geocodeLat && lng === t._geocodeLng) continue
+        const instanceDate = instanceKey.split('_').pop()
+        if (!instanceDate || instanceDate < fromStr || instanceDate > limitStr) continue
+        add(instanceDate, {
+          id: instanceKey,
+          title: (ov.title as string) ?? t.title ?? 'Upcoming Event',
+          lat,
+          lng,
+        })
+      }
+    }
+  }
+  return days
+}
+
+describe('buildWatchDays', () => {
+  const FROM = '2026-03-02'
+  const LIMIT = '2026-03-09'
+
+  it('files an event under its own day', () => {
+    const days = buildWatchDays([{ id: '1', title: 'Outreach', ...placed({ date: '2026-03-05' }) }], FROM, LIMIT)
+
+    expect(Object.keys(days)).toEqual(['2026-03-05'])
+    expect(days['2026-03-05'][0]).toMatchObject({ id: '1', title: 'Outreach' })
+  })
+
+  it('never files a past day', () => {
+    // The window starts at fromStr, so a finished event is not watched and
+    // costs nothing on the days that follow it.
+    const days = buildWatchDays(
+      [{ id: '1', title: 'Done', ...placed({ date: '2026-01-01' }) }],
+      FROM,
+      LIMIT
+    )
+
+    expect(days).toEqual({})
+  })
+
+  it('files every day of a multi-day event separately', () => {
+    const days = buildWatchDays(
+      [
+        {
+          id: '1',
+          title: 'Trip',
+          ...placed({ date: '2026-03-03', extraDays: [{ date: '2026-03-05' }] }),
+        },
+      ],
+      FROM,
+      LIMIT
+    )
+
+    expect(Object.keys(days).sort()).toEqual(['2026-03-03', '2026-03-05'])
+  })
+
+  it('keeps a running trip whose first day has passed', () => {
+    const days = buildWatchDays(
+      [
+        {
+          id: '1',
+          title: 'Trip',
+          ...placed({ date: '2026-02-25', extraDays: [{ date: '2026-03-04' }] }),
+        },
+      ],
+      FROM,
+      LIMIT
+    )
+
+    expect(Object.keys(days)).toEqual(['2026-03-04'])
+    // The day that already happened is not among them.
+    expect(days['2026-02-25']).toBeUndefined()
+  })
+
+  it('skips events with no coordinates and virtual ones', () => {
+    const days = buildWatchDays(
+      [
+        { id: '1', title: 'Online', ...placed({ date: '2026-03-04', isVirtual: true }) },
+        { id: '2', title: 'Nowhere', date: '2026-03-04' },
+      ],
+      FROM,
+      LIMIT
+    )
+
+    expect(days).toEqual({})
+  })
+
+  it('watches a moved occurrence at the venue it moved to', () => {
+    const days = buildWatchDays(
+      [
+        {
+          id: '7',
+          title: 'Weekly',
+          ...placed({ isRec: true, recur: 'weekly', recDay: 3 }),
+          overrides: { '7_2026-03-04': { _geocodeLat: 30, _geocodeLng: -90 } },
+        },
+      ],
+      FROM,
+      LIMIT
+    )
+
+    const onTheDay = days['2026-03-04'].map((e) => e.id).sort()
+    expect(onTheDay).toEqual(['7', '7_2026-03-04'])
+  })
+
+  it('does not list the same event twice on one day', () => {
+    const ev = { id: '1', title: 'Outreach', ...placed({ date: '2026-03-05', extraDays: [{ date: '2026-03-05' }] }) }
+    const days = buildWatchDays([ev], FROM, LIMIT)
+
+    expect(days['2026-03-05']).toHaveLength(1)
+  })
+
+  it('is empty when nothing is coming up, which is what makes polling cheap', () => {
+    // The five-minute run reads this one document, finds no day in range, and
+    // stops — no weather calls, no event reads.
+    const days = buildWatchDays(
+      [{ id: '1', title: 'Later', ...placed({ date: '2026-12-25' }) }],
+      FROM,
+      LIMIT
+    )
+
+    expect(Object.keys(days)).toHaveLength(0)
+  })
+})
