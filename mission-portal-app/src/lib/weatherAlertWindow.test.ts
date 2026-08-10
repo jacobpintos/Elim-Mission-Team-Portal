@@ -56,6 +56,28 @@ function upcomingDates(t: TemplateRaw, fromStr: string, limitStr: string): strin
   return dates
 }
 
+/**
+ * Mirrors of the two windows the schedules run with.
+ *
+ * The live watch looks at the days around now, every five minutes; the
+ * lookahead reaches a week out, four times a day. Both reach back a day so an
+ * event happening this evening is still in scope once the UTC date has rolled
+ * over.
+ */
+const addDays = (dateStr: string, days: number): string => {
+  const d = new Date(dateStr + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().split('T')[0]
+}
+const nowWindow = (todayStr: string) => ({
+  fromStr: addDays(todayStr, -1),
+  limitStr: addDays(todayStr, 1),
+})
+const aheadWindow = (todayStr: string) => ({
+  fromStr: addDays(todayStr, -1),
+  limitStr: addDays(todayStr, 7),
+})
+
 /** A physical event with coordinates, which is all the check requires. */
 const placed = (extra: TemplateRaw = {}): TemplateRaw => ({
   _geocodeLat: 41.7,
@@ -276,5 +298,48 @@ describe('an alert is only sent for a day the event is on', () => {
     const anything = alert('2026-03-02T00:00:00Z', '2026-03-09T00:00:00Z')
 
     expect(dates.some((d) => alertCoversDate(anything, d))).toBe(false)
+  })
+})
+
+describe('the two schedules', () => {
+  // 2026-08-16 is what the UTC clock reads at 7pm Central on the 15th.
+  const UTC_TODAY = '2026-08-16'
+
+  it('both reach back a day, so tonight is still in scope', () => {
+    expect(nowWindow(UTC_TODAY).fromStr).toBe('2026-08-15')
+    expect(aheadWindow(UTC_TODAY).fromStr).toBe('2026-08-15')
+  })
+
+  it('the live watch looks no further than tomorrow', () => {
+    // Which is what lets it run every five minutes: on a day with nothing on
+    // it, no event matches and no weather is fetched at all.
+    expect(nowWindow(UTC_TODAY).limitStr).toBe('2026-08-17')
+  })
+
+  it('the lookahead reaches a week out', () => {
+    expect(aheadWindow(UTC_TODAY).limitStr).toBe('2026-08-23')
+  })
+
+  it('the live watch sees an event happening tonight', () => {
+    const { fromStr, limitStr } = nowWindow(UTC_TODAY)
+    const tonight = placed({ date: '2026-08-15' })
+
+    expect(upcomingDates(tonight, fromStr, limitStr)).toEqual(['2026-08-15'])
+  })
+
+  it('the live watch ignores an event later in the week', () => {
+    // It would only be polled for on its own day. The lookahead covers the
+    // advance warning.
+    const { fromStr, limitStr } = nowWindow(UTC_TODAY)
+    const saturday = placed({ date: '2026-08-22' })
+
+    expect(upcomingDates(saturday, fromStr, limitStr)).toEqual([])
+  })
+
+  it('the lookahead does see it', () => {
+    const { fromStr, limitStr } = aheadWindow(UTC_TODAY)
+    const saturday = placed({ date: '2026-08-22' })
+
+    expect(upcomingDates(saturday, fromStr, limitStr)).toEqual(['2026-08-22'])
   })
 })

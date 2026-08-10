@@ -162,28 +162,36 @@ export function alertCoversDate(
   return true
 }
 
-export const weatherAlertCheck = onSchedule(
-  { schedule: '0 */4 * * *', secrets: [RESEND_API_KEY] },
-  async () => {
-  const db = admin.firestore()
-  const todayStr = todayUTCStr()
-  // The scan reaches back a day as well as forward.
-  //
-  // "Today" here is today in UTC, which becomes tomorrow's date at 7pm
-  // Central — so the evening run no longer counted an event happening that
-  // very evening as upcoming, and it dropped out of the scan. Any alert issued
-  // after about 3pm local on the day of an evening event was therefore never
-  // delivered: a missed warning during exactly the hours a storm warning for
-  // that evening arrives.
-  //
-  // Reaching back one day covers every timezone's version of "today". It
-  // cannot produce spurious notifications, because what actually gets sent is
-  // decided by whether the alert's own window covers one of the event's days —
-  // the scan only chooses whose weather to look up.
-  const fromStr = addDaysStr(todayStr, -1)
-  const limitStr = addDaysStr(todayStr, 7)
+/**
+ * The days either side of now that count as "happening around now".
+ *
+ * A day either side covers every timezone's version of today: at 7pm Central
+ * the UTC date has already rolled over, and at 6am it has not yet caught up
+ * with events later that evening elsewhere. Which alerts are actually sent is
+ * still decided by whether the alert's window covers one of the event's days,
+ * so being generous here costs nothing.
+ */
+export function nowWindow(todayStr: string): { fromStr: string; limitStr: string } {
+  return { fromStr: addDaysStr(todayStr, -1), limitStr: addDaysStr(todayStr, 1) }
+}
 
-  // Load all events and filter to upcoming events with geocoords
+/** The lookahead window: the same reach back, plus a week of warning. */
+export function aheadWindow(todayStr: string): { fromStr: string; limitStr: string } {
+  return { fromStr: addDaysStr(todayStr, -1), limitStr: addDaysStr(todayStr, 7) }
+}
+
+/**
+ * Look up the weather for every event in the window and notify on what matters.
+ *
+ * Shared by both schedules. They differ only in how far ahead they look: one
+ * watches the days around now, often; the other looks a week out, occasionally.
+ * The record kept in weatherAlertsSent means an alert seen by both is still
+ * only sent once.
+ */
+async function runWeatherCheck(fromStr: string, limitStr: string): Promise<void> {
+  const db = admin.firestore()
+
+  // Load all events and filter to those in the window with geocoords
   const eventsSnap = await db.collection('events').get()
 
   // Deduplicate locations to minimize NWS API calls
@@ -323,10 +331,42 @@ export const weatherAlertCheck = onSchedule(
     .where('sentAt', '<', sevenDaysAgo)
     .limit(500)
     .get()
-    if (!oldSnap.empty) {
-      const batch = db.batch()
-      oldSnap.docs.forEach((d) => batch.delete(d.ref))
-      await batch.commit()
-    }
+  if (!oldSnap.empty) {
+    const batch = db.batch()
+    oldSnap.docs.forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+  }
+}
+
+/**
+ * The lookahead: a week out, four times a day.
+ *
+ * This is the "there is a storm coming on Saturday" half — useful for deciding
+ * whether to move an event, and not urgent enough to poll for.
+ */
+export const weatherAlertCheck = onSchedule(
+  { schedule: '0 */4 * * *', secrets: [RESEND_API_KEY] },
+  async () => {
+    const { fromStr, limitStr } = aheadWindow(todayUTCStr())
+    await runWeatherCheck(fromStr, limitStr)
+  }
+)
+
+/**
+ * The live watch: only the days around now, every five minutes.
+ *
+ * A tornado warning issued during an event is the case this exists for, and
+ * finding out an hour later is no use. Four-hourly was the only cadence, so a
+ * warning could sit unseen for most of an event.
+ *
+ * On a day with nothing on it this returns after a single Firestore read and
+ * makes no weather calls at all, which is what makes five minutes affordable:
+ * the polling only really happens on the days it matters.
+ */
+export const weatherAlertNow = onSchedule(
+  { schedule: '*/5 * * * *', secrets: [RESEND_API_KEY] },
+  async () => {
+    const { fromStr, limitStr } = nowWindow(todayUTCStr())
+    await runWeatherCheck(fromStr, limitStr)
   }
 )
