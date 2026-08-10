@@ -150,7 +150,11 @@ export function inAppMessage(type: NotificationType, data: Record<string, unknow
     case 'securityReport':
       return String(data.message ?? 'Security report update')
     case 'weatherAlertAdmin':
-      return `${data.alertEvent ?? 'Weather alert'} for ${data.eventTitle ?? 'an event'}: ${data.headline ?? ''}`
+      // The day is named because the alert is about a specific one. Without
+      // it there was no way to tell a relevant warning from a stray.
+      return `${data.alertEvent ?? 'Weather alert'} for ${data.eventTitle ?? 'an event'}${
+        data.eventDate ? ` on ${data.eventDate}` : ''
+      }: ${data.headline ?? ''}`
     case 'eventLogistics':
       return `${data.itemLabel ?? 'A travel detail'} was assigned to you for ${data.eventTitle ?? 'an event'}`
     case 'foodSignupOpen':

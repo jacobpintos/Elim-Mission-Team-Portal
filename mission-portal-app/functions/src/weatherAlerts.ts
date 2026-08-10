@@ -11,6 +11,8 @@ interface NWSAlertRaw {
   event: string
   severity: string
   headline: string
+  /** Start of the alert's window. Without it an alert cannot be placed in time. */
+  effective: string
   expires: string
 }
 
@@ -21,6 +23,7 @@ interface NWSFeatureRaw {
     event?: string
     severity?: string
     headline?: string
+    effective?: string
     expires?: string
   }
 }
@@ -67,36 +70,84 @@ function addDaysStr(dateStr: string, days: number): string {
   return d.toISOString().split('T')[0]
 }
 
-function isUpcomingInDays(t: EventTemplateRaw, todayStr: string, limitStr: string): boolean {
-  if (t.isVirtual) return false
-  if (!t._geocodeLat || !t._geocodeLng) return false
-
-  if (t.recEnd && t.recEnd < todayStr) return false
+/**
+ * The days this event actually happens on, within the alert window.
+ *
+ * Used to be a yes/no "is this event coming up", which was enough to decide
+ * whether to look at the weather but not enough to decide whether a given
+ * alert was relevant — so every alert active anywhere near the venue was sent,
+ * including ones whose own window covered a day the event does not fall on.
+ * Returning the dates lets each alert be checked against them.
+ *
+ * The stepping mirrors getInstances() in src/lib/events.ts: anchor to recDay,
+ * then step by the recurrence, stopping at recEnd.
+ */
+export function upcomingDates(
+  t: EventTemplateRaw,
+  todayStr: string,
+  limitStr: string
+): string[] {
+  if (t.isVirtual) return []
+  if (!t._geocodeLat || !t._geocodeLng) return []
+  if (t.recEnd && t.recEnd < todayStr) return []
 
   if (!t.isRec) {
-    return !!(t.date && t.date >= todayStr && t.date <= limitStr)
+    return t.date && t.date >= todayStr && t.date <= limitStr ? [t.date] : []
   }
 
-  if (t.recur === 'monthly') return true
+  const limit = t.recEnd && t.recEnd < limitStr ? t.recEnd : limitStr
+  if (limit < todayStr) return []
 
-  if (t.recDay === undefined) return true
+  const step = t.recur === 'biweekly' ? 14 : t.recur === 'monthly' ? 30 : 7
+  const d = new Date(todayStr + 'T00:00:00Z')
+  const end = new Date(limit + 'T00:00:00Z')
 
-  const step = t.recur === 'biweekly' ? 14 : 7
-  const today = new Date(todayStr + 'T00:00:00Z')
-  const limit = new Date(limitStr + 'T00:00:00Z')
+  // An event with no weekday set has no occurrence to place, so nothing is
+  // claimed for it rather than claiming every day.
+  if (t.recDay === undefined) return []
+  while (d.getUTCDay() !== t.recDay) d.setUTCDate(d.getUTCDate() + 1)
 
-  let d = new Date(today)
-  while (d.getUTCDay() !== t.recDay) {
-    d.setUTCDate(d.getUTCDate() + 1)
+  const dates: string[] = []
+  let n = 0
+  while (d <= end && n < 60) {
+    dates.push(d.toISOString().split('T')[0])
+    d.setUTCDate(d.getUTCDate() + step)
+    n++
   }
-  if (d <= limit) return true
+  return dates
+}
 
-  if (step === 14) {
-    d.setUTCDate(d.getUTCDate() + 7)
-    return d <= limit
+/**
+ * Does this alert's own window cover the given day?
+ *
+ * Mirrors alertCoversDate() in src/lib/weather.ts, which decides whether the
+ * alert is shown on an event card. The two have to agree: a push about an
+ * alert the card will not show sends people looking for something that is not
+ * there. functions/ is a separate TypeScript project and cannot import from
+ * the app, so they are kept in step by hand.
+ */
+export function alertCoversDate(
+  alert: { effective?: string; expires?: string },
+  eventDate: string
+): boolean {
+  if (!eventDate) return false
+
+  const day = (iso?: string): string | null => {
+    if (!iso) return null
+    const ts = Date.parse(iso)
+    return Number.isNaN(ts) ? null : new Date(ts).toISOString().split('T')[0]
   }
 
-  return false
+  const from = day(alert.effective)
+  const to = day(alert.expires)
+
+  // An alert with no window at all cannot be placed, so it is sent rather than
+  // dropped — a warning missed is worse than one sent early.
+  if (!from && !to) return true
+
+  if (from && eventDate < from) return false
+  if (to && eventDate > to) return false
+  return true
 }
 
 export const weatherAlertCheck = onSchedule(
@@ -110,9 +161,15 @@ export const weatherAlertCheck = onSchedule(
   const eventsSnap = await db.collection('events').get()
 
   // Deduplicate locations to minimize NWS API calls
+  // Each entry carries the days that event falls on, so an alert can be
+  // checked against them rather than sent for merely being active nearby.
   const locMap = new Map<
     string,
-    { lat: number; lng: number; eventDocs: Array<{ id: string } & EventTemplateRaw> }
+    {
+      lat: number
+      lng: number
+      eventDocs: Array<{ id: string; dates: string[] } & EventTemplateRaw>
+    }
   >()
 
   for (const d of eventsSnap.docs) {
@@ -120,12 +177,13 @@ export const weatherAlertCheck = onSchedule(
     const templateDoc = { id: d.id, ...t }
 
     // Template-level location
-    if (t._geocodeLat && t._geocodeLng && isUpcomingInDays(t, todayStr, limitStr)) {
+    const dates = upcomingDates(t, todayStr, limitStr)
+    if (t._geocodeLat && t._geocodeLng && dates.length > 0) {
       const locKey = `${t._geocodeLat.toFixed(3)},${t._geocodeLng.toFixed(3)}`
       if (!locMap.has(locKey)) {
         locMap.set(locKey, { lat: t._geocodeLat, lng: t._geocodeLng, eventDocs: [] })
       }
-      locMap.get(locKey)!.eventDocs.push(templateDoc)
+      locMap.get(locKey)!.eventDocs.push({ ...templateDoc, dates })
     }
 
     // Per-instance location overrides (recurring only)
@@ -143,8 +201,14 @@ export const weatherAlertCheck = onSchedule(
         if (!locMap.has(locKey)) {
           locMap.set(locKey, { lat: ov._geocodeLat, lng: ov._geocodeLng, eventDocs: [] })
         }
-        // Merge template + override so notification targets the right users
-        locMap.get(locKey)!.eventDocs.push({ ...templateDoc, ...ov, id: instanceKey })
+        // Merge template + override so notification targets the right users.
+        // A single occurrence happens on exactly one day, its own.
+        locMap.get(locKey)!.eventDocs.push({
+          ...templateDoc,
+          ...ov,
+          id: instanceKey,
+          dates: [instanceDate],
+        })
       }
     }
   }
@@ -176,6 +240,7 @@ export const weatherAlertCheck = onSchedule(
         event: f.properties?.event ?? '',
         severity: f.properties?.severity ?? 'Unknown',
         headline: f.properties?.headline ?? '',
+        effective: f.properties?.effective ?? '',
         expires: f.properties?.expires ?? '',
       }))
     } catch {
@@ -186,6 +251,12 @@ export const weatherAlertCheck = onSchedule(
       if (!alert.id) continue
 
       for (const evDoc of eventDocs) {
+        // The bug this closes: an alert active at the venue was sent whatever
+        // days it covered, so an alert running today reached admins about an
+        // event next week — a warning about a day with no event on it.
+        const covered = evDoc.dates.find((d) => alertCoversDate(alert, d))
+        if (!covered) continue
+
         const sentDocId = `${alert.id.replace(/\//g, '_')}_${evDoc.id}`
         const sentRef = db.doc(`weatherAlertsSent/${sentDocId}`)
         const sentSnap = await sentRef.get()
@@ -196,6 +267,7 @@ export const weatherAlertCheck = onSchedule(
             eventTitle: evDoc.title ?? 'Upcoming Event',
             alertEvent: alert.event,
             headline: alert.headline,
+            eventDate: covered,
             eventId: evDoc.id,
             alertId: alert.id,
           })
