@@ -1,5 +1,5 @@
 'use no memo'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Modal,
   View,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
+  Keyboard,
   KeyboardAvoidingView,
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
@@ -26,7 +27,12 @@ import { sameId } from '@/lib/ids'
 import type { PlanningItem, PlanningItemType, DrawPoint } from '@/types/operations'
 import { openExternalUrl } from '@/lib/externalUrl'
 import { MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, clampZoom, zoomAbout, windowToBoard } from './canvasZoom'
-import { connectorExists, idsToDeleteWith } from './connectors'
+import {
+  connectorExists,
+  idsToDeleteWith,
+  connectorSegment,
+  segmentMidpoint,
+} from './connectors'
 
 const CANVAS_W = 4000
 const CANVAS_H = 4000
@@ -285,8 +291,27 @@ function ItemCard({
   const isEditing = editingId === item.id
   const isTypeable = TYPEABLE_TYPES.includes(item.type)
   // Draft text lives here while typing so each keystroke does not round-trip
-  // through Firestore; it is committed on blur.
+  // through Firestore.
   const [draft, setDraft] = useState(item.content)
+
+  // Committing only on blur lost the text whenever editing ended some other
+  // way — tapping the board clears editingId, which unmounts the input, and
+  // React Native does not reliably fire onBlur on unmount. The ref is what the
+  // cleanup reads; a cleanup closing over `draft` would hold the value from
+  // the render that registered it, which is the empty string it started as.
+  const draftRef = useRef(draft)
+  useEffect(() => {
+    draftRef.current = draft
+  }, [draft])
+  useEffect(() => {
+    if (!isEditing) return
+    return () => {
+      if (boardId && draftRef.current !== item.content) {
+        onUpdateItem(boardId, item.id, { content: draftRef.current })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing])
 
   const dragX = useSharedValue(item.x)
   const dragY = useSharedValue(item.y)
@@ -429,12 +454,18 @@ function ItemCard({
           {
             backgroundColor: cardBg,
             borderRadius: 6,
-            borderWidth:
-              item.type === 'shape' || item.type === 'textbox'
+            // Shapes and text boxes carry no border of their own, but the
+            // object armed for a connection has to be obvious — it was being
+            // given a colour on a zero-width border, so picking the first of
+            // the pair looked like nothing had happened. Armed wins over
+            // selected, and is drawn thicker than either.
+            borderWidth: isConnectorSource
+              ? 3
+              : item.type === 'shape' || item.type === 'textbox'
                 ? isSelected
                   ? 2
                   : 0
-                : isSelected || isConnectorSource
+                : isSelected
                   ? 2
                   : 1,
             borderColor: isConnectorSource
@@ -471,12 +502,7 @@ function ItemCard({
               onChangeText={setDraft}
               autoFocus
               multiline
-              onBlur={() => {
-                if (boardId && draft !== item.content) {
-                  onUpdateItem(boardId, item.id, { content: draft })
-                }
-                onStartEdit(null)
-              }}
+              onBlur={() => onStartEdit(null)}
               style={{
                 flex: 1,
                 color: item.type === 'note' ? '#333' : colors.text,
@@ -1407,6 +1433,30 @@ export function PlanningBoardCanvas({
                   </View>
                 )}
 
+                {editingId !== null && (
+                  <Pressable
+                    onPress={() => {
+                      // Clearing this unmounts the input, and the cleanup that
+                      // runs commits whatever was typed.
+                      setEditingId(null)
+                      Keyboard.dismiss()
+                    }}
+                  >
+                    <XStack
+                      backgroundColor={colors.primary}
+                      borderRadius={6}
+                      paddingHorizontal={14}
+                      paddingVertical={8}
+                      alignItems="center"
+                      alignSelf="center"
+                    >
+                      <Text color={colors.onPrimary} fontSize={13} fontWeight="700">
+                        Done
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                )}
+
                 {tool === 'eraser' && (
                   <View style={{ justifyContent: 'center', paddingHorizontal: 8 }}>
                     <Text color={colors.textMuted} fontSize={11}>
@@ -1549,13 +1599,18 @@ export function PlanningBoardCanvas({
                           const from = items.find((i) => i.id === connector.fromId)
                           const to = items.find((i) => i.id === connector.toId)
                           if (!from || !to) return null
+                          // Edge to edge: drawn centre to centre the line ran
+                          // straight through both objects and out the far
+                          // side, reading as a line crossing them rather than
+                          // one joining them.
+                          const seg = connectorSegment(from, to)
                           return (
                             <Line
                               key={connector.id}
-                              x1={from.x + from.width / 2}
-                              y1={from.y + from.height / 2}
-                              x2={to.x + to.width / 2}
-                              y2={to.y + to.height / 2}
+                              x1={seg.x1}
+                              y1={seg.y1}
+                              x2={seg.x2}
+                              y2={seg.y2}
                               stroke={colors.textMuted}
                               strokeWidth={2}
                             />
@@ -1580,11 +1635,14 @@ export function PlanningBoardCanvas({
                           const from = items.find((i) => i.id === connector.fromId)
                           const to = items.find((i) => i.id === connector.toId)
                           if (!from || !to) return null
+                          // On the visible line, so the handle sits in the gap
+                          // between the objects rather than buried in one.
+                          const mid = segmentMidpoint(connectorSegment(from, to))
                           return (
                             <ConnectorHandle
                               key={`h_${connector.id}`}
-                              x={(from.x + from.width / 2 + to.x + to.width / 2) / 2}
-                              y={(from.y + from.height / 2 + to.y + to.height / 2) / 2}
+                              x={mid.x}
+                              y={mid.y}
                               sc={sc}
                               colors={colors}
                               onPress={() => boardId && deleteItems(boardId, [connector.id])}
