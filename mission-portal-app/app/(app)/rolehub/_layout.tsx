@@ -27,7 +27,8 @@ export default function RolehubLayout() {
       >
         <XStack>
           {TABS.map((tab) => {
-            const isActive = activeKey === tab.key || (activeKey === 'rolehub' && tab.key === 'inventory')
+            const isActive =
+              activeKey === tab.key || (activeKey === 'rolehub' && tab.key === 'inventory')
             return (
               <Pressable key={tab.key} onPress={() => router.push(tab.path as never)}>
                 <XStack

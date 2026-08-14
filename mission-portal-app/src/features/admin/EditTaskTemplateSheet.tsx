@@ -91,29 +91,28 @@ export function EditTaskTemplateSheet({ open, onClose, template }: EditTaskTempl
       const secs = template.sections ?? TASK_SECTIONS
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(template.name)
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+
       setTemplateSections(secs)
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+
       setSectionTasks(buildSectionTasks(template.tasks, secs))
     } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName('')
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+
       setTemplateSections([...TASK_SECTIONS])
       const initial: SectionTasks = {}
       for (const s of TASK_SECTIONS) initial[s.id] = []
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+
       setSectionTasks(initial)
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setBulkAssign({})
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setExpandedSections({})
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setConfirmRemove(null)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setAddingSection(false)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setNewSectionLabel('')
   }, [template, open])
 

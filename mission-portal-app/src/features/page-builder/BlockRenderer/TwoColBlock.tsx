@@ -17,11 +17,14 @@ export function TwoColBlock({ data }: TwoColBlockProps) {
           {data.leftHead}
         </Text>
       ) : null}
-      {(data.leftContent ?? '').split('\n').filter((p) => p.trim()).map((p, i) => (
-        <Text key={i} fontSize="$4" lineHeight={22} color="$color">
-          {p}
-        </Text>
-      ))}
+      {(data.leftContent ?? '')
+        .split('\n')
+        .filter((p) => p.trim())
+        .map((p, i) => (
+          <Text key={i} fontSize="$4" lineHeight={22} color="$color">
+            {p}
+          </Text>
+        ))}
     </YStack>
   )
 
@@ -34,11 +37,14 @@ export function TwoColBlock({ data }: TwoColBlockProps) {
           resizeMode="cover"
         />
       ) : null}
-      {(data.rightContent ?? '').split('\n').filter((p) => p.trim()).map((p, i) => (
-        <Text key={i} fontSize="$4" lineHeight={22} color="$color">
-          {p}
-        </Text>
-      ))}
+      {(data.rightContent ?? '')
+        .split('\n')
+        .filter((p) => p.trim())
+        .map((p, i) => (
+          <Text key={i} fontSize="$4" lineHeight={22} color="$color">
+            {p}
+          </Text>
+        ))}
     </YStack>
   )
 

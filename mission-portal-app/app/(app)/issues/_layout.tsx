@@ -19,7 +19,10 @@ export default function IssuesLayout() {
   const admin = isAdmin(profile)
 
   const tabs = ALL_TABS.filter((t) => !t.adminOnly || admin)
-  const activeKey = pathname === '/(app)/issues' || pathname.endsWith('/issues') ? 'index' : pathname.split('/').pop() ?? 'index'
+  const activeKey =
+    pathname === '/(app)/issues' || pathname.endsWith('/issues')
+      ? 'index'
+      : (pathname.split('/').pop() ?? 'index')
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>

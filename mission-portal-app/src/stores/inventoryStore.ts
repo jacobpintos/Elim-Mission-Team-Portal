@@ -23,10 +23,16 @@ interface InventoryStore {
   createCategory: (name: string) => Promise<void>
   deleteCategory: (id: string | number) => Promise<void>
   createItem: (data: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
-  updateItem: (id: string | number, data: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
+  updateItem: (
+    id: string | number,
+    data: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt'>
+  ) => Promise<void>
   deleteItem: (id: string | number) => Promise<void>
   createReorderItem: (data: Omit<ReorderItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
-  updateReorderItem: (id: string | number, data: Omit<ReorderItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
+  updateReorderItem: (
+    id: string | number,
+    data: Omit<ReorderItem, 'id' | 'createdAt' | 'updatedAt'>
+  ) => Promise<void>
   deleteReorderItem: (id: string | number) => Promise<void>
 }
 
@@ -42,15 +48,15 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
     set({ loading: true })
 
     const u1 = onSnapshot(collection(db, 'inventoryCategories'), (snap) => {
-      const categories = snap.docs.map((d) => ({ ...d.data(), id: d.id } as InventoryCategory))
+      const categories = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as InventoryCategory)
       set({ categories })
     })
     const u2 = onSnapshot(collection(db, 'inventoryItems'), (snap) => {
-      const items = snap.docs.map((d) => ({ ...d.data(), id: d.id } as InventoryItem))
+      const items = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as InventoryItem)
       set({ items, loading: false })
     })
     const u3 = onSnapshot(collection(db, 'reorderItems'), (snap) => {
-      const reorderItems = snap.docs.map((d) => ({ ...d.data(), id: d.id } as ReorderItem))
+      const reorderItems = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as ReorderItem)
       set({ reorderItems })
     })
 
@@ -78,16 +84,19 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
   createItem: async (data) => {
     const id = await nextId('nInventoryItem')
     const payload = Object.fromEntries(
-      Object.entries({ ...data, id, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
-        .filter(([, v]) => v !== undefined),
+      Object.entries({
+        ...data,
+        id,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }).filter(([, v]) => v !== undefined)
     )
     await setDoc(doc(db, 'inventoryItems', String(id)), payload)
   },
 
   updateItem: async (id, data) => {
     const payload = Object.fromEntries(
-      Object.entries({ ...data, updatedAt: serverTimestamp() })
-        .filter(([, v]) => v !== undefined),
+      Object.entries({ ...data, updatedAt: serverTimestamp() }).filter(([, v]) => v !== undefined)
     )
     await updateDoc(doc(db, 'inventoryItems', String(id)), payload)
   },
@@ -99,16 +108,19 @@ export const useInventoryStore = create<InventoryStore>((set, get) => ({
   createReorderItem: async (data) => {
     const id = await nextId('nReorderItem')
     const payload = Object.fromEntries(
-      Object.entries({ ...data, id, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
-        .filter(([, v]) => v !== undefined),
+      Object.entries({
+        ...data,
+        id,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }).filter(([, v]) => v !== undefined)
     )
     await setDoc(doc(db, 'reorderItems', String(id)), payload)
   },
 
   updateReorderItem: async (id, data) => {
     const payload = Object.fromEntries(
-      Object.entries({ ...data, updatedAt: serverTimestamp() })
-        .filter(([, v]) => v !== undefined),
+      Object.entries({ ...data, updatedAt: serverTimestamp() }).filter(([, v]) => v !== undefined)
     )
     await updateDoc(doc(db, 'reorderItems', String(id)), payload)
   },

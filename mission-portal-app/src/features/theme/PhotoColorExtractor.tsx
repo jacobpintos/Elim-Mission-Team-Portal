@@ -270,13 +270,7 @@ export function PhotoColorExtractor({
       ) : null}
 
       {onSetLogo && captured ? (
-        <YStack
-          gap="$2"
-          paddingTop="$3"
-          marginTop="$1"
-          borderTopWidth={1}
-          borderTopColor="$gray6"
-        >
+        <YStack gap="$2" paddingTop="$3" marginTop="$1" borderTopWidth={1} borderTopColor="$gray6">
           <XStack gap="$3" alignItems="center">
             <RNImage
               source={{ uri: captured.previewUri }}

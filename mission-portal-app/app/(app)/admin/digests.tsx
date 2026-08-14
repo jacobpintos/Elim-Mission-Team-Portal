@@ -10,7 +10,12 @@ import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 function formatTimestamp(ts: unknown): string {
   if (!ts) return 'N/A'
-  if (ts && typeof ts === 'object' && 'toDate' in ts && typeof (ts as { toDate: unknown }).toDate === 'function') {
+  if (
+    ts &&
+    typeof ts === 'object' &&
+    'toDate' in ts &&
+    typeof (ts as { toDate: unknown }).toDate === 'function'
+  ) {
     return (ts as { toDate: () => Date }).toDate().toLocaleString()
   }
   if (typeof ts === 'number') return new Date(ts).toLocaleString()
@@ -135,20 +140,10 @@ export default function AdminDigests() {
 
           {/* Send buttons */}
           <XStack gap="$3">
-            <Button
-              flex={1}
-              size="$3"
-              onPress={() => sendDigest('weekly')}
-              theme="active"
-            >
+            <Button flex={1} size="$3" onPress={() => sendDigest('weekly')} theme="active">
               Send Weekly Now
             </Button>
-            <Button
-              flex={1}
-              size="$3"
-              onPress={() => sendDigest('monthly')}
-              theme="active"
-            >
+            <Button flex={1} size="$3" onPress={() => sendDigest('monthly')} theme="active">
               Send Monthly Now
             </Button>
           </XStack>
@@ -175,7 +170,11 @@ export default function AdminDigests() {
                   paddingHorizontal="$2"
                   paddingVertical="$0.5"
                 >
-                  <Text fontSize="$1" color={item.type === 'weekly' ? '$blue10' : '$purple10'} fontWeight="600">
+                  <Text
+                    fontSize="$1"
+                    color={item.type === 'weekly' ? '$blue10' : '$purple10'}
+                    fontWeight="600"
+                  >
                     {item.type}
                   </Text>
                 </XStack>
@@ -184,7 +183,8 @@ export default function AdminDigests() {
                     {formatTimestamp(item.sentAt)}
                   </Text>
                   <Text fontSize="$2" color="$gray10">
-                    {item.recipients} recipients · {pct(item.delivered, item.recipients)} delivered · {pct(item.opened, item.recipients)} opened
+                    {item.recipients} recipients · {pct(item.delivered, item.recipients)} delivered
+                    · {pct(item.opened, item.recipients)} opened
                   </Text>
                 </YStack>
               </XStack>

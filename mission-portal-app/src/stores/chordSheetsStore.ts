@@ -31,7 +31,11 @@ function deserializeSection(raw: Record<string, unknown>): ChordSheetSection {
     chordTokens: Array.isArray(tokens)
       ? tokens.map((row: unknown) => {
           if (typeof row === 'string') {
-            try { return JSON.parse(row) as string[] } catch { return [] }
+            try {
+              return JSON.parse(row) as string[]
+            } catch {
+              return []
+            }
           }
           return Array.isArray(row) ? (row as string[]) : []
         })
@@ -47,11 +51,11 @@ interface ChordSheetsStore {
   subscribe: () => void
   unsubscribe: () => void
   createChordSheet: (
-    data: Omit<ChordSheet, 'id' | 'createdAt' | 'updatedAt'>,
+    data: Omit<ChordSheet, 'id' | 'createdAt' | 'updatedAt'>
   ) => Promise<string | number>
   updateChordSheet: (
     id: string | number,
-    data: Omit<ChordSheet, 'id' | 'createdAt' | 'updatedAt'>,
+    data: Omit<ChordSheet, 'id' | 'createdAt' | 'updatedAt'>
   ) => Promise<void>
   deleteChordSheet: (id: string | number) => Promise<void>
 }
@@ -86,7 +90,7 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
         console.error('[ChordSheetsStore] onSnapshot error:', err.code, err.message)
         // Clear _unsub so subscribe() can be retried (e.g. after auth is ready)
         set({ loading: false, _unsub: null })
-      },
+      }
     )
     set({ _unsub: unsub })
   },
@@ -109,7 +113,7 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
         sections: data.sections.map(serializeSection),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      }).filter(([, v]) => v !== undefined),
+      }).filter(([, v]) => v !== undefined)
     )
     await setDoc(doc(db, 'chordSheets', String(id)), payload)
     return id
@@ -121,7 +125,7 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
         ...data,
         sections: data.sections.map(serializeSection),
         updatedAt: serverTimestamp(),
-      }).filter(([, v]) => v !== undefined),
+      }).filter(([, v]) => v !== undefined)
     )
     await updateDoc(doc(db, 'chordSheets', String(id)), payload)
   },

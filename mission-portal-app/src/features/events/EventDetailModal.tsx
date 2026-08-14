@@ -16,7 +16,7 @@ import { usePlanningStore } from '@/stores/planningStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { sameId } from '@/lib/ids'
 import { PlanningBoardCanvas } from '@/features/planning/PlanningBoardCanvas'
-import type { EventInstance } from '@/types/events'
+import type { EventInstance, FlightEntry } from '@/types/events'
 import {
   fetchWeather,
   fetchNWSAlerts,
@@ -25,6 +25,8 @@ import {
   type NWSAlert,
 } from '@/lib/weather'
 import { WeatherDetailSheet } from './WeatherDetailSheet'
+
+import { openExternalUrl } from '@/lib/externalUrl'
 
 export function TeamsDisplay({ event, uid }: { event: EventInstance; uid: string }) {
   const colors = useThemeColors()
@@ -302,9 +304,6 @@ function FlightBlock({
     </YStack>
   )
 }
-
-import type { FlightEntry } from '@/types/events'
-import { openExternalUrl } from '@/lib/externalUrl'
 
 function FlightEntryCard({
   colors,

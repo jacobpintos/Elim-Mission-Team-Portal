@@ -85,11 +85,7 @@ export default function AdminGroups() {
           keyExtractor={(g) => g.id}
           renderItem={({ item }) => (
             <YStack marginBottom="$2">
-              <GroupCard
-                group={item}
-                onEdit={(g) => setEditTarget(g)}
-                onDelete={handleDelete}
-              />
+              <GroupCard group={item} onEdit={(g) => setEditTarget(g)} onDelete={handleDelete} />
             </YStack>
           )}
           ListEmptyComponent={

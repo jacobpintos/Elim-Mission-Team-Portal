@@ -33,9 +33,7 @@ export function DressCodeEditor({ entries, onChange, teams }: DressCodeEditorPro
         .map((e) => e.group)
         .filter(Boolean)
     )
-    const remUsedElsewhere = entries.some(
-      (e, i) => i !== idx && e.group === '_remainder_'
-    )
+    const remUsedElsewhere = entries.some((e, i) => i !== idx && e.group === '_remainder_')
     const result: string[] = []
     if (!remUsedElsewhere) result.push('_remainder_')
     for (const g of allGroups) {
@@ -99,10 +97,7 @@ export function DressCodeEditor({ entries, onChange, teams }: DressCodeEditorPro
                   justifyContent="space-between"
                   alignItems="center"
                 >
-                  <Text
-                    color={entry.group ? colors.text : colors.textMuted}
-                    fontSize="$3"
-                  >
+                  <Text color={entry.group ? colors.text : colors.textMuted} fontSize="$3">
                     {entry.group ? labelFor(entry.group, idx) : 'Select group…'}
                   </Text>
                   <Text color={colors.textMuted} fontSize="$2">
@@ -110,9 +105,7 @@ export function DressCodeEditor({ entries, onChange, teams }: DressCodeEditorPro
                   </Text>
                 </XStack>
               </Pressable>
-              <Pressable
-                onPress={() => onChange(entries.filter((_, i) => i !== idx))}
-              >
+              <Pressable onPress={() => onChange(entries.filter((_, i) => i !== idx))}>
                 <Text color="$red10" fontSize="$3">
                   ✕
                 </Text>
@@ -148,9 +141,7 @@ export function DressCodeEditor({ entries, onChange, teams }: DressCodeEditorPro
                       padding="$2"
                       borderTopWidth={1}
                       borderTopColor={colors.border}
-                      backgroundColor={
-                        entry.group === g ? colors.primary + '22' : 'transparent'
-                      }
+                      backgroundColor={entry.group === g ? colors.primary + '22' : 'transparent'}
                     >
                       <Text color={colors.text} fontSize="$3">
                         {labelFor(g, idx)}

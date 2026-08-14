@@ -88,10 +88,7 @@ export function edgePoint(box: ConnectableBox, toward: Point): Point {
       ? // Ellipse: solve (t·dx/hw)² + (t·dy/hh)² = 1
         1 / Math.hypot(dx / hw, dy / hh)
       : // Rectangle: the nearer of the vertical and horizontal sides.
-        Math.min(
-          dx === 0 ? Infinity : hw / Math.abs(dx),
-          dy === 0 ? Infinity : hh / Math.abs(dy)
-        )
+        Math.min(dx === 0 ? Infinity : hw / Math.abs(dx), dy === 0 ? Infinity : hh / Math.abs(dy))
 
   return { x: c.x + dx * t, y: c.y + dy * t }
 }

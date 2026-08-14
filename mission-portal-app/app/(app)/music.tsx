@@ -452,7 +452,9 @@ export default function MusicScreen() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [form, setForm] = useState<EditForm>(BLANK_FORM)
   const [saving, setSaving] = useState(false)
-  const [seeAllSection, setSeeAllSection] = useState<{ title: string; items: MusicItem[] } | null>(null)
+  const [seeAllSection, setSeeAllSection] = useState<{ title: string; items: MusicItem[] } | null>(
+    null
+  )
 
   useEffect(() => {
     load().catch(() => {})
@@ -711,7 +713,9 @@ export default function MusicScreen() {
               {seeAllSection?.title ?? ''}
             </Text>
             <Pressable onPress={() => setSeeAllSection(null)}>
-              <Text color={colors.textMuted} fontSize="$4">✕</Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
             </Pressable>
           </XStack>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
@@ -719,7 +723,10 @@ export default function MusicScreen() {
               {(seeAllSection?.items ?? []).map((item) => (
                 <Pressable
                   key={item.id}
-                  onPress={() => { setSeeAllSection(null); setPlayingItem(item) }}
+                  onPress={() => {
+                    setSeeAllSection(null)
+                    setPlayingItem(item)
+                  }}
                 >
                   <XStack
                     backgroundColor={colors.surface}
@@ -734,22 +741,31 @@ export default function MusicScreen() {
                         {item.title}
                       </Text>
                       {item.album ? (
-                        <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>{item.album}</Text>
+                        <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                          {item.album}
+                        </Text>
                       ) : null}
                       {item.type === 'podcast' && item.host ? (
                         <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
-                          {item.host}{item.guest ? ` ft. ${item.guest}` : ''}
+                          {item.host}
+                          {item.guest ? ` ft. ${item.guest}` : ''}
                         </Text>
                       ) : null}
                       {item.type === 'sermon' && item.preacher ? (
-                        <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>{item.preacher}</Text>
+                        <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                          {item.preacher}
+                        </Text>
                       ) : null}
                       {item.year ? (
-                        <Text color={colors.textMuted} fontSize={11}>{item.year}</Text>
+                        <Text color={colors.textMuted} fontSize={11}>
+                          {item.year}
+                        </Text>
                       ) : null}
                     </YStack>
                     <YStack alignItems="center" justifyContent="center" paddingRight="$3">
-                      <Text color={colors.primary} fontSize="$5">▶</Text>
+                      <Text color={colors.primary} fontSize="$5">
+                        ▶
+                      </Text>
                     </YStack>
                   </XStack>
                 </Pressable>

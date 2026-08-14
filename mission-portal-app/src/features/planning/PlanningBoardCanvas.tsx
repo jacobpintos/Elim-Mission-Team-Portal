@@ -27,16 +27,10 @@ import { sameId } from '@/lib/ids'
 import type { PlanningItem, PlanningItemType, DrawPoint } from '@/types/operations'
 import { openExternalUrl } from '@/lib/externalUrl'
 import { MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, clampZoom, zoomAbout, windowToBoard } from './canvasZoom'
-import {
-  connectorExists,
-  idsToDeleteWith,
-  connectorSegment,
-  segmentMidpoint,
-} from './connectors'
+import { connectorExists, idsToDeleteWith, connectorSegment, segmentMidpoint } from './connectors'
 
 const CANVAS_W = 4000
 const CANVAS_H = 4000
-
 
 type ToolType =
   | 'pan'
@@ -379,7 +373,7 @@ function ItemCard({
     .onStart(() => {
       startW.value = sizeW.value
       startH.value = sizeH.value
-      // eslint-disable-next-line react-hooks/immutability
+
       isResizing.value = true
     })
     .onUpdate((e) => {
@@ -389,7 +383,6 @@ function ItemCard({
       sizeH.value = Math.max(30, startH.value * e.scale)
     })
     .onEnd(() => {
-      // eslint-disable-next-line react-hooks/immutability
       isResizing.value = false
       if (!boardId) return
       runOnJS(onUpdateItem)(boardId, item.id, { width: sizeW.value, height: sizeH.value })
@@ -1224,7 +1217,6 @@ export function PlanningBoardCanvas({
 
   const viewportGesture = Gesture.Simultaneous(pinch, viewportPan)
 
-  // eslint-disable-next-line react-hooks/refs
   const bgTap = Gesture.Tap()
     .enabled(!readOnly)
     // eslint-disable-next-line react-hooks/refs
@@ -1232,7 +1224,7 @@ export function PlanningBoardCanvas({
       runOnJS(handleBgTap)(e.absoluteX, e.absoluteY)
     })
 
-  /* eslint-disable react-hooks/refs, react-hooks/immutability */
+  /* eslint-disable react-hooks/refs */
   const drawPan = Gesture.Pan()
     .enabled(tool === 'draw')
     .onStart((e) => {
@@ -1254,7 +1246,7 @@ export function PlanningBoardCanvas({
       isDrawing.value = false
       runOnJS(finalizeDraw)()
     })
-  /* eslint-enable react-hooks/refs, react-hooks/immutability */
+  /* eslint-enable react-hooks/refs */
 
   /* eslint-disable react-hooks/refs, react-hooks/immutability */
   const shapeDragPan = Gesture.Pan()
@@ -1325,14 +1317,14 @@ export function PlanningBoardCanvas({
     .enabled(tool === 'pan')
     .minPointers(1)
     .maxPointers(1)
-    // eslint-disable-next-line react-hooks/refs
+
     .onUpdate((e) => {
       // eslint-disable-next-line react-hooks/immutability
       tx.value = savedTx.value + e.translationX
       // eslint-disable-next-line react-hooks/immutability
       ty.value = savedTy.value + e.translationY
     })
-    // eslint-disable-next-line react-hooks/refs
+
     .onEnd(() => {
       savedTx.value = tx.value
       savedTy.value = ty.value

@@ -39,14 +39,30 @@ function FlightSection({
 
       <XStack gap="$2">
         <TextInput
-          style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+          style={[
+            styles.input,
+            {
+              flex: 1,
+              color: colors.text,
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
           value={f(`${prefix}Date`)}
           onChangeText={(v) => onUpdate({ [`${prefix}Date`]: v })}
           placeholder="Date (MM/DD/YY)"
           placeholderTextColor={colors.textMuted}
         />
         <TextInput
-          style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+          style={[
+            styles.input,
+            {
+              flex: 1,
+              color: colors.text,
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
           value={f(`${prefix}Time`)}
           onChangeText={(v) => onUpdate({ [`${prefix}Time`]: v })}
           placeholder="Time (10:00 AM)"
@@ -55,7 +71,10 @@ function FlightSection({
       </XStack>
 
       <TextInput
-        style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+        style={[
+          styles.input,
+          { color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
+        ]}
         value={f(`${prefix}Airport`)}
         onChangeText={(v) => onUpdate({ [`${prefix}Airport`]: v })}
         placeholder="Departing airport address"
@@ -63,7 +82,10 @@ function FlightSection({
       />
 
       <TextInput
-        style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+        style={[
+          styles.input,
+          { color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
+        ]}
         value={f(`${prefix}Airline`)}
         onChangeText={(v) => onUpdate({ [`${prefix}Airline`]: v })}
         placeholder="Airline name"
@@ -72,14 +94,30 @@ function FlightSection({
 
       <XStack gap="$2">
         <TextInput
-          style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+          style={[
+            styles.input,
+            {
+              flex: 1,
+              color: colors.text,
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
           value={f(`${prefix}Flight`)}
           onChangeText={(v) => onUpdate({ [`${prefix}Flight`]: v })}
           placeholder="Flight #"
           placeholderTextColor={colors.textMuted}
         />
         <TextInput
-          style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+          style={[
+            styles.input,
+            {
+              flex: 1,
+              color: colors.text,
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
           value={f(`${prefix}StatusLink`)}
           onChangeText={(v) => onUpdate({ [`${prefix}StatusLink`]: v })}
           placeholder="Flight status URL"
@@ -91,14 +129,30 @@ function FlightSection({
 
       <XStack gap="$2">
         <TextInput
-          style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+          style={[
+            styles.input,
+            {
+              flex: 1,
+              color: colors.text,
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
           value={f(`${prefix}Ticket`)}
           onChangeText={(v) => onUpdate({ [`${prefix}Ticket`]: v })}
           placeholder="Ticket #"
           placeholderTextColor={colors.textMuted}
         />
         <TextInput
-          style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+          style={[
+            styles.input,
+            {
+              flex: 1,
+              color: colors.text,
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
           value={f(`${prefix}Confirmation`)}
           onChangeText={(v) => onUpdate({ [`${prefix}Confirmation`]: v })}
           placeholder="Confirmation #"
@@ -108,7 +162,15 @@ function FlightSection({
 
       <XStack gap="$2">
         <TextInput
-          style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+          style={[
+            styles.input,
+            {
+              flex: 1,
+              color: colors.text,
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
           value={f(`${prefix}Arrival`)}
           onChangeText={(v) => onUpdate({ [`${prefix}Arrival`]: v })}
           placeholder="Est. arrival time"
@@ -116,7 +178,15 @@ function FlightSection({
         />
         {prefix === 'out' ? (
           <TextInput
-            style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+            style={[
+              styles.input,
+              {
+                flex: 1,
+                color: colors.text,
+                borderColor: colors.border,
+                backgroundColor: colors.background,
+              },
+            ]}
             value={f('outContact')}
             onChangeText={(v) => onUpdate({ outContact: v })}
             placeholder="Contact"
@@ -195,7 +265,9 @@ export function FlightEditor({ entries, onChange, allUsers }: FlightEditorProps)
                 </XStack>
               </Pressable>
               <Pressable onPress={() => removeEntry(entry.id)}>
-                <Text color="$red10" fontSize="$4">✕</Text>
+                <Text color="$red10" fontSize="$4">
+                  ✕
+                </Text>
               </Pressable>
             </XStack>
 
@@ -236,7 +308,9 @@ export function FlightEditor({ entries, onChange, allUsers }: FlightEditorProps)
             paddingVertical="$2"
             alignSelf="flex-start"
           >
-            <Text color={colors.primary} fontSize="$3">+ Add person</Text>
+            <Text color={colors.primary} fontSize="$3">
+              + Add person
+            </Text>
           </XStack>
         </Pressable>
       ) : (
@@ -249,14 +323,30 @@ export function FlightEditor({ entries, onChange, allUsers }: FlightEditorProps)
           borderColor={colors.border}
         >
           <XStack justifyContent="space-between" alignItems="center">
-            <Text color={colors.text} fontSize="$3" fontWeight="600">Select person</Text>
-            <Pressable onPress={() => { setShowPicker(false); setSearch('') }}>
-              <Text color={colors.textMuted} fontSize="$3">✕</Text>
+            <Text color={colors.text} fontSize="$3" fontWeight="600">
+              Select person
+            </Text>
+            <Pressable
+              onPress={() => {
+                setShowPicker(false)
+                setSearch('')
+              }}
+            >
+              <Text color={colors.textMuted} fontSize="$3">
+                ✕
+              </Text>
             </Pressable>
           </XStack>
 
           <TextInput
-            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+            style={[
+              styles.input,
+              {
+                color: colors.text,
+                borderColor: colors.border,
+                backgroundColor: colors.background,
+              },
+            ]}
             value={search}
             onChangeText={setSearch}
             placeholder="Search people…"

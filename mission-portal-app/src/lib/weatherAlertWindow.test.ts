@@ -359,7 +359,11 @@ interface WatchEntry {
 }
 
 function buildWatchDays(
-  events: Array<{ id: string; title?: string; overrides?: Record<string, Record<string, unknown>> } & TemplateRaw>,
+  events: ({
+    id: string
+    title?: string
+    overrides?: Record<string, Record<string, unknown>>
+  } & TemplateRaw)[],
   fromStr: string,
   limitStr: string
 ): Record<string, WatchEntry[]> {
@@ -405,7 +409,11 @@ describe('buildWatchDays', () => {
   const LIMIT = '2026-03-09'
 
   it('files an event under its own day', () => {
-    const days = buildWatchDays([{ id: '1', title: 'Outreach', ...placed({ date: '2026-03-05' }) }], FROM, LIMIT)
+    const days = buildWatchDays(
+      [{ id: '1', title: 'Outreach', ...placed({ date: '2026-03-05' }) }],
+      FROM,
+      LIMIT
+    )
 
     expect(Object.keys(days)).toEqual(['2026-03-05'])
     expect(days['2026-03-05'][0]).toMatchObject({ id: '1', title: 'Outreach' })
@@ -489,7 +497,11 @@ describe('buildWatchDays', () => {
   })
 
   it('does not list the same event twice on one day', () => {
-    const ev = { id: '1', title: 'Outreach', ...placed({ date: '2026-03-05', extraDays: [{ date: '2026-03-05' }] }) }
+    const ev = {
+      id: '1',
+      title: 'Outreach',
+      ...placed({ date: '2026-03-05', extraDays: [{ date: '2026-03-05' }] }),
+    }
     const days = buildWatchDays([ev], FROM, LIMIT)
 
     expect(days['2026-03-05']).toHaveLength(1)

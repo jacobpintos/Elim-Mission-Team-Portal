@@ -72,7 +72,15 @@ export default function DeleteAccountScreen() {
         borderBottomWidth={1}
         borderBottomColor={colors.border}
       >
-        <Button size="$4" variant="outlined" onPress={goBack} disabled={deleting} minHeight={44} paddingHorizontal="$4" cursor="pointer">
+        <Button
+          size="$4"
+          variant="outlined"
+          onPress={goBack}
+          disabled={deleting}
+          minHeight={44}
+          paddingHorizontal="$4"
+          cursor="pointer"
+        >
           ← Back
         </Button>
         <Text color={colors.text} fontSize={18} fontWeight="700" flex={1}>
@@ -113,8 +121,8 @@ export default function DeleteAccountScreen() {
             ))}
           </YStack>
           <Text color={colors.textMuted} fontSize="$2" lineHeight={18}>
-            Shared team records such as events and tasks are kept, but you are removed from them.
-            If you only want to stop receiving notifications, you can turn them off in Profile &amp;
+            Shared team records such as events and tasks are kept, but you are removed from them. If
+            you only want to stop receiving notifications, you can turn them off in Profile &amp;
             Settings instead.
           </Text>
         </YStack>

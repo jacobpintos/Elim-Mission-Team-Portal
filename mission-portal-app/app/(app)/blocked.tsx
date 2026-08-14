@@ -60,7 +60,14 @@ export default function BlockedUsersScreen() {
         borderBottomWidth={1}
         borderBottomColor={colors.border}
       >
-        <Button size="$4" variant="outlined" onPress={goBack} minHeight={44} paddingHorizontal="$4" cursor="pointer">
+        <Button
+          size="$4"
+          variant="outlined"
+          onPress={goBack}
+          minHeight={44}
+          paddingHorizontal="$4"
+          cursor="pointer"
+        >
           ← Back
         </Button>
         <Text color={colors.text} fontSize={18} fontWeight="700" flex={1}>
@@ -71,8 +78,8 @@ export default function BlockedUsersScreen() {
       <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
         <Text color={colors.textMuted} fontSize="$3" lineHeight={20}>
           You do not see messages from anyone on this list, in any conversation — including group
-          chats created later. To block someone, tap their profile picture on any message they
-          sent, or open “👥 People” in a conversation.
+          chats created later. To block someone, tap their profile picture on any message they sent,
+          or open “👥 People” in a conversation.
         </Text>
 
         {blocked.length === 0 ? (

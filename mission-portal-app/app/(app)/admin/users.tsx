@@ -10,14 +10,7 @@ import { AuthAuditSheet } from '@/features/admin/AuthAuditSheet'
 import { PendingDeletionCard, type PendingDeletion } from '@/features/admin/PendingDeletionCard'
 import { audit } from '@/lib/audit'
 import { useUIStore } from '@/stores/uiStore'
-import {
-  doc,
-  updateDoc,
-  onSnapshot,
-  writeBatch,
-  collection,
-  getDocs,
-} from 'firebase/firestore'
+import { doc, updateDoc, onSnapshot, writeBatch, collection, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { UserProfile } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -48,13 +41,13 @@ export default function AdminUsers() {
     return () => unsub()
   }, [])
 
-  const memberUsers = users.filter(
-    (u) => !(u.roles?.length === 1 && u.roles[0] === 'public')
-  )
+  const memberUsers = users.filter((u) => !(u.roles?.length === 1 && u.roles[0] === 'public'))
 
   const q = search.trim().toLowerCase()
+  // Search the same set the list shows. Filtering `users` here instead put
+  // public-only accounts back on screen the moment anyone typed.
   const filtered = q
-    ? users.filter(
+    ? memberUsers.filter(
         (u) =>
           (u.displayName ?? '').toLowerCase().includes(q) ||
           (u.email ?? '').toLowerCase().includes(q) ||

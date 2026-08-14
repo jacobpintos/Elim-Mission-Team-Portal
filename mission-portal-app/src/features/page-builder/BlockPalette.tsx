@@ -2,7 +2,7 @@ import { ScrollView } from 'react-native'
 import { XStack, Button, Text } from 'tamagui'
 import type { PageBlock, PageBlockType } from '@/types/pages'
 
-const BLOCK_TYPES: Array<{ type: PageBlockType; label: string }> = [
+const BLOCK_TYPES: { type: PageBlockType; label: string }[] = [
   { type: 'hero', label: 'Hero' },
   { type: 'text', label: 'Text' },
   { type: 'image', label: 'Image' },
@@ -32,12 +32,7 @@ export function BlockPalette({ onAdd }: BlockPaletteProps) {
     >
       <XStack gap="$2">
         {BLOCK_TYPES.map((bt) => (
-          <Button
-            key={bt.type}
-            size="$2"
-            onPress={() => addBlock(bt.type)}
-            theme="active"
-          >
+          <Button key={bt.type} size="$2" onPress={() => addBlock(bt.type)} theme="active">
             <Text fontSize="$2" color="white" fontWeight="600">
               + {bt.label}
             </Text>

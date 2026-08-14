@@ -1,4 +1,5 @@
 import { XStack, Text, Checkbox, Label } from 'tamagui'
+import { PUBLIC_SURFACE_ENABLED } from '@/lib/featureFlags'
 
 export const ALL_ROLES = [
   'admin',
@@ -11,6 +12,15 @@ export const ALL_ROLES = [
 ] as const
 
 export type AppRole = (typeof ALL_ROLES)[number]
+
+/**
+ * Roles an admin can hand out.
+ *
+ * `public` is withheld while the public-facing section is hidden: it would
+ * grant an account no tabs at all. Existing public profiles keep the role —
+ * this only stops new ones being created.
+ */
+export const ASSIGNABLE_ROLES = ALL_ROLES.filter((r) => r !== 'public' || PUBLIC_SURFACE_ENABLED)
 
 interface RoleCheckboxesProps {
   selected: string[]
@@ -25,7 +35,7 @@ export function RoleCheckboxes({ selected, onChange }: RoleCheckboxesProps) {
 
   return (
     <XStack flexWrap="wrap" gap="$2">
-      {ALL_ROLES.map((role) => (
+      {ASSIGNABLE_ROLES.map((role) => (
         <XStack key={role} alignItems="center" gap="$2" width="45%">
           <Checkbox
             id={`role-${role}`}

@@ -30,10 +30,12 @@ export function AppLogo({ size = 'md', showSlogan = true }: AppLogoProps) {
               height: 'auto',
               objectFit: 'contain',
               display: 'block',
-              ...(isDark ? {
-                filter: 'invert(1) hue-rotate(180deg)',
-                mixBlendMode: 'screen' as const,
-              } : {}),
+              ...(isDark
+                ? {
+                    filter: 'invert(1) hue-rotate(180deg)',
+                    mixBlendMode: 'screen' as const,
+                  }
+                : {}),
             }}
           />
         ) : (
@@ -57,10 +59,12 @@ export function AppLogo({ size = 'md', showSlogan = true }: AppLogoProps) {
             height: width,
             resizeMode: 'contain',
             borderRadius: Math.round(width * 0.22),
-            ...(Platform.OS === 'web' && isDark ? {
-              filter: 'invert(1) hue-rotate(180deg)',
-              mixBlendMode: 'screen' as const,
-            } : {}),
+            ...(Platform.OS === 'web' && isDark
+              ? {
+                  filter: 'invert(1) hue-rotate(180deg)',
+                  mixBlendMode: 'screen' as const,
+                }
+              : {}),
           }}
         />
       )}

@@ -40,7 +40,10 @@ export function MessageBubble({
           on hover so the target reads as interactive on web; long-pressing the
           bubble does the same thing on touch. */}
       {!isMine ? (
-        <Pressable onPress={onShowActions} accessibilityLabel={`Options for ${displayName ?? 'this person'}`}>
+        <Pressable
+          onPress={onShowActions}
+          accessibilityLabel={`Options for ${displayName ?? 'this person'}`}
+        >
           <XStack
             borderRadius={999}
             cursor="pointer"
@@ -91,11 +94,7 @@ export function MessageBubble({
             </Text>
           ) : null}
         </YStack>
-        <Text
-          color={colors.textMuted}
-          fontSize={10}
-          alignSelf={isMine ? 'flex-end' : 'flex-start'}
-        >
+        <Text color={colors.textMuted} fontSize={10} alignSelf={isMine ? 'flex-end' : 'flex-start'}>
           {shortTime(message.ts)}
         </Text>
       </YStack>

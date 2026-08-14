@@ -16,6 +16,7 @@ import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useSecurityStore } from '@/stores/securityStore'
 import { useUIStore } from '@/stores/uiStore'
 import { visibleTabs, isSecurity, isPublic, hasRole, isWorship } from '@/lib/roles'
+import { PUBLIC_SURFACE_ENABLED } from '@/lib/featureFlags'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { ReportFormModal } from '@/features/security/ReportFormModal'
@@ -110,12 +111,15 @@ export default function AppLayout() {
 
   // Stable reference required: Tabs processes screenOptions in useLayoutEffect.
   // A new inline object every render fires that effect → setState → re-render → loop.
-  const tabScreenOptions = useMemo(() => ({
-    headerShown: false,
-    tabBarStyle: { display: 'none' as const, height: 0 },
-    tabBarActiveTintColor: theme.primary,
-    sceneStyle: { backgroundColor: colors.background },
-  }), [theme.primary, colors.background])
+  const tabScreenOptions = useMemo(
+    () => ({
+      headerShown: false,
+      tabBarStyle: { display: 'none' as const, height: 0 },
+      tabBarActiveTintColor: theme.primary,
+      sceneStyle: { backgroundColor: colors.background },
+    }),
+    [theme.primary, colors.background]
+  )
 
   const tourActive = useTourStore((s) => s.active)
   const tourStart = useTourStore((s) => s.start)
@@ -123,7 +127,11 @@ export default function AppLayout() {
   const tabTour = useMemo(() => buildTabTour(currentSeg, profile ?? null), [currentSeg, profile])
 
   const drawerAnim = { transform: [{ translateX: drawerX }] }
-  const contentAnim = { transform: [{ translateX: contentX }], flex: 1 as const, zIndex: 1 as const }
+  const contentAnim = {
+    transform: [{ translateX: contentX }],
+    flex: 1 as const,
+    zIndex: 1 as const,
+  }
 
   useEffect(() => {
     subUsers()
@@ -160,8 +168,11 @@ export default function AppLayout() {
 
   // Non-public members can preview public view; always resets to false on login (store starts false)
   const isMemberUser = !isPublic(profile) || (profile.roles?.length ?? 0) > 1
+  // With the public surface hidden, a public profile resolves to no tabs at
+  // all — so honouring a stale `viewAsPublic` here would strand a member on
+  // the Account Pending screen with the toggle that got them there now gone.
   const effectiveProfile =
-    viewAsPublic && isMemberUser
+    PUBLIC_SURFACE_ENABLED && viewAsPublic && isMemberUser
       ? { ...profile, roles: ['public' as const] }
       : profile
 
@@ -246,7 +257,9 @@ export default function AppLayout() {
   // both roles should only be notified once).
   const securityReportAudience = Array.from(
     new Map(
-      users.filter((u) => isSecurity(u) || u.roles?.includes('admin')).map((u) => [String(u.uid), u])
+      users
+        .filter((u) => isSecurity(u) || u.roles?.includes('admin'))
+        .map((u) => [String(u.uid), u])
     ).values()
   )
 
@@ -382,12 +395,12 @@ export default function AppLayout() {
                   </Pressable>
                 )
               })}
-
             </YStack>
           </ScrollView>
 
-          {/* Public view toggle for non-public members */}
-          {isMemberUser && (
+          {/* Public view toggle for non-public members. Hidden along with the
+              section it previews — there is nothing left to preview. */}
+          {PUBLIC_SURFACE_ENABLED && isMemberUser && (
             <Pressable
               onPress={() => {
                 closeDrawer()
@@ -492,16 +505,17 @@ export default function AppLayout() {
                 Every back-navigation changes the Tabs navigation state, re-firing all those
                 effects with freshly created options objects → infinite update loop (error #185).
                 Routes work via file-system routing on web, so these registrations are unnecessary. */}
-            {Platform.OS !== 'web' && (Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
-              <Tabs.Screen
-                key={tab}
-                name={tab}
-                options={{
-                  title: TAB_LABELS[tab],
-                  href: tabs.includes(tab) ? undefined : null,
-                }}
-              />
-            ))}
+            {Platform.OS !== 'web' &&
+              (Object.keys(TAB_LABELS) as Tab[]).map((tab) => (
+                <Tabs.Screen
+                  key={tab}
+                  name={tab}
+                  options={{
+                    title: TAB_LABELS[tab],
+                    href: tabs.includes(tab) ? undefined : null,
+                  }}
+                />
+              ))}
             {Platform.OS !== 'web' && (
               <>
                 {/* Sub-routes hidden from tab bar */}

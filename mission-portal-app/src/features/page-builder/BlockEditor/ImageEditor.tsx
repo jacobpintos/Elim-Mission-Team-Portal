@@ -7,7 +7,7 @@ interface ImageEditorProps {
   onChange: (data: ImageData) => void
 }
 
-const ALIGNMENTS: Array<{ value: 'left' | 'center' | 'right'; label: string }> = [
+const ALIGNMENTS: { value: 'left' | 'center' | 'right'; label: string }[] = [
   { value: 'left', label: 'Left' },
   { value: 'center', label: 'Center' },
   { value: 'right', label: 'Right' },

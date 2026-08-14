@@ -43,7 +43,7 @@ export interface TwoColData extends Record<string, unknown> {
 }
 
 export interface TimelineData extends Record<string, unknown> {
-  entries?: Array<{ year: string; title: string; desc: string }>
+  entries?: { year: string; title: string; desc: string }[]
 }
 
 export interface ButtonData extends Record<string, unknown> {
@@ -61,7 +61,7 @@ export interface MeetingData extends Record<string, unknown> {
 
 export interface SocialData extends Record<string, unknown> {
   heading?: string
-  links?: Array<{ icon: string; label: string; url: string }>
+  links?: { icon: string; label: string; url: string }[]
 }
 
 export interface PageData {

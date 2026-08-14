@@ -15,6 +15,7 @@ import {
   platformKey,
 } from '@/lib/notifications'
 import type { NotificationPrefs } from '@/types/user'
+import { EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
 import * as Sentry from '@sentry/react-native'
 
 const STEP_COUNT = 3
@@ -168,49 +169,51 @@ export default function OnboardingScreen() {
               a future update.
             </Paragraph>
 
-            <YStack gap="$4" backgroundColor="$surface" borderRadius="$4" padding="$4">
-              <XStack alignItems="center" justifyContent="space-between">
-                <YStack flex={1} gap="$1">
-                  <Label fontWeight="600">Weekly digest</Label>
-                  <Text color="$colorMuted" fontSize="$2">
-                    Summary of the week&apos;s activities
-                  </Text>
-                </YStack>
-                <Switch
-                  checked={notifPrefs.weeklyDigest}
-                  onCheckedChange={(v) => setNotifPrefs((p) => ({ ...p, weeklyDigest: v }))}
-                >
-                  <Switch.Thumb />
-                </Switch>
-              </XStack>
+            {EMAIL_FEATURES_ENABLED ? (
+              <YStack gap="$4" backgroundColor="$surface" borderRadius="$4" padding="$4">
+                <XStack alignItems="center" justifyContent="space-between">
+                  <YStack flex={1} gap="$1">
+                    <Label fontWeight="600">Weekly digest</Label>
+                    <Text color="$colorMuted" fontSize="$2">
+                      Summary of the week&apos;s activities
+                    </Text>
+                  </YStack>
+                  <Switch
+                    checked={notifPrefs.weeklyDigest}
+                    onCheckedChange={(v) => setNotifPrefs((p) => ({ ...p, weeklyDigest: v }))}
+                  >
+                    <Switch.Thumb />
+                  </Switch>
+                </XStack>
 
-              <XStack alignItems="center" justifyContent="space-between">
-                <YStack flex={1} gap="$1">
-                  <XStack gap="$2" alignItems="center">
-                    <Label fontWeight="600">Monthly digest</Label>
-                    <YStack
-                      backgroundColor="$primary"
-                      borderRadius="$2"
-                      paddingHorizontal="$2"
-                      paddingVertical="$1"
-                    >
-                      <Text color="white" fontSize="$1">
-                        Public users
-                      </Text>
-                    </YStack>
-                  </XStack>
-                  <Text color="$colorMuted" fontSize="$2">
-                    Monthly summary for public visitors
-                  </Text>
-                </YStack>
-                <Switch
-                  checked={notifPrefs.monthlyDigest}
-                  onCheckedChange={(v) => setNotifPrefs((p) => ({ ...p, monthlyDigest: v }))}
-                >
-                  <Switch.Thumb />
-                </Switch>
-              </XStack>
-            </YStack>
+                <XStack alignItems="center" justifyContent="space-between">
+                  <YStack flex={1} gap="$1">
+                    <XStack gap="$2" alignItems="center">
+                      <Label fontWeight="600">Monthly digest</Label>
+                      <YStack
+                        backgroundColor="$primary"
+                        borderRadius="$2"
+                        paddingHorizontal="$2"
+                        paddingVertical="$1"
+                      >
+                        <Text color="white" fontSize="$1">
+                          Public users
+                        </Text>
+                      </YStack>
+                    </XStack>
+                    <Text color="$colorMuted" fontSize="$2">
+                      Monthly summary for public visitors
+                    </Text>
+                  </YStack>
+                  <Switch
+                    checked={notifPrefs.monthlyDigest}
+                    onCheckedChange={(v) => setNotifPrefs((p) => ({ ...p, monthlyDigest: v }))}
+                  >
+                    <Switch.Thumb />
+                  </Switch>
+                </XStack>
+              </YStack>
+            ) : null}
 
             <YStack
               backgroundColor="$surface"
@@ -221,13 +224,17 @@ export default function OnboardingScreen() {
             >
               <XStack gap="$2" alignItems="center" justifyContent="space-between" marginBottom="$2">
                 <Text fontWeight="600">Push notifications</Text>
-                <Switch checked={pushEnabled} onCheckedChange={handleTogglePush} disabled={pushBusy}>
+                <Switch
+                  checked={pushEnabled}
+                  onCheckedChange={handleTogglePush}
+                  disabled={pushBusy}
+                >
                   <Switch.Thumb />
                 </Switch>
               </XStack>
               <Paragraph color="$colorMuted" fontSize="$2">
-                Real-time alerts for assignments, messages, and events. You can change this any
-                time in Profile &amp; Settings.
+                Real-time alerts for assignments, messages, and events. You can change this any time
+                in Profile &amp; Settings.
               </Paragraph>
             </YStack>
           </YStack>

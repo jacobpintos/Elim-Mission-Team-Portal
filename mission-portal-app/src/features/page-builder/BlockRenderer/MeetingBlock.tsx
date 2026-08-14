@@ -261,12 +261,7 @@ export function MeetingBlock({ data }: MeetingBlockProps) {
               </Text>
             ) : null}
 
-            <Button
-              size="$3"
-              onPress={handleSubmit}
-              disabled={submitting}
-              theme="active"
-            >
+            <Button size="$3" onPress={handleSubmit} disabled={submitting} theme="active">
               {submitting ? <Spinner size="small" /> : 'Submit Request'}
             </Button>
           </>

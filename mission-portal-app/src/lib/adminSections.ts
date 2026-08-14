@@ -10,6 +10,8 @@
  * moderates, as a subtab of the Inbox, rather than several screens away in the
  * admin area.
  */
+import { PUBLIC_SURFACE_ENABLED, EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
+
 export interface AdminSection {
   /** Last path segment, used to mark the active tab. */
   key: string
@@ -21,7 +23,7 @@ export interface AdminSection {
   icon: string
 }
 
-export const ADMIN_SECTIONS: AdminSection[] = [
+const SECTIONS: AdminSection[] = [
   { key: 'users', label: 'User Management', path: '/(app)/admin/users', icon: '👥' },
   { key: 'avail', label: 'Availability', path: '/(app)/admin/avail', icon: '📆' },
   { key: 'groups', label: 'Groups', path: '/(app)/admin/groups', icon: '🗂' },
@@ -40,3 +42,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'digests', label: 'Digests', path: '/(app)/admin/digests', icon: '📰' },
   { key: 'licensing', label: 'Licensing', path: '/(app)/admin/licensing', icon: '📄' },
 ]
+
+/**
+ * Analytics reports on public users and nothing else, so it goes wherever the
+ * public-facing surface goes. Digests are email, and follow that flag.
+ */
+export const ADMIN_SECTIONS: AdminSection[] = SECTIONS.filter((s) => {
+  if (s.key === 'analytics') return PUBLIC_SURFACE_ENABLED
+  if (s.key === 'digests') return EMAIL_FEATURES_ENABLED
+  return true
+})

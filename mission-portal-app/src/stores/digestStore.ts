@@ -27,7 +27,7 @@ export const useDigestStore = create<DigestStore>((set) => ({
     const q = query(collection(db, 'digestStats'), orderBy('sentAt', 'desc'), limit(50))
     const snap = await getDocs(q)
     set({
-      stats: snap.docs.map((d) => ({ id: d.id, ...d.data() } as DigestStatDoc)),
+      stats: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as DigestStatDoc),
       loading: false,
     })
   },

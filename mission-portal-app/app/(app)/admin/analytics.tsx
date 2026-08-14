@@ -19,9 +19,17 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
       gap="$1"
       flex={1}
     >
-      <Text fontSize="$7" fontWeight="700">{value}</Text>
-      <Text fontSize="$3" fontWeight="600">{label}</Text>
-      {sub ? <Text fontSize="$2" color="$gray10">{sub}</Text> : null}
+      <Text fontSize="$7" fontWeight="700">
+        {value}
+      </Text>
+      <Text fontSize="$3" fontWeight="600">
+        {label}
+      </Text>
+      {sub ? (
+        <Text fontSize="$2" color="$gray10">
+          {sub}
+        </Text>
+      ) : null}
     </YStack>
   )
 }
@@ -54,7 +62,9 @@ export default function AdminAnalytics() {
     <YStack flex={1} padding="$4" gap="$4">
       <ScreenTitle options={{ title: 'Public Analytics', headerShown: false }} />
 
-      <Text fontSize="$6" fontWeight="700">Public Analytics</Text>
+      <Text fontSize="$6" fontWeight="700">
+        Public Analytics
+      </Text>
 
       {loading ? (
         <YStack alignItems="center" paddingVertical="$8">
@@ -75,7 +85,9 @@ export default function AdminAnalytics() {
             padding="$4"
             gap="$2"
           >
-            <Text fontSize="$4" fontWeight="700">App Downloads</Text>
+            <Text fontSize="$4" fontWeight="700">
+              App Downloads
+            </Text>
             <Text fontSize="$3" color="$gray10">
               Download tracking will be available once mobile apps are published to the App Store
               and Google Play.

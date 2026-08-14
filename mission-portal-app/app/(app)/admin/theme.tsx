@@ -133,25 +133,19 @@ export default function AdminTheme() {
         <ColorPicker
           label="Dark Background"
           value={preview.dark.background}
-          onChange={(v) =>
-            setPreview((p) => ({ ...p, dark: { ...p.dark, background: v } }))
-          }
+          onChange={(v) => setPreview((p) => ({ ...p, dark: { ...p.dark, background: v } }))}
         />
 
         <ColorPicker
           label="Dark Surface"
           value={preview.dark.surface}
-          onChange={(v) =>
-            setPreview((p) => ({ ...p, dark: { ...p.dark, surface: v } }))
-          }
+          onChange={(v) => setPreview((p) => ({ ...p, dark: { ...p.dark, surface: v } }))}
         />
 
         <ColorPicker
           label="Dark Text"
           value={preview.dark.text}
-          onChange={(v) =>
-            setPreview((p) => ({ ...p, dark: { ...p.dark, text: v } }))
-          }
+          onChange={(v) => setPreview((p) => ({ ...p, dark: { ...p.dark, text: v } }))}
         />
 
         {/* Contrast checks */}
@@ -181,13 +175,7 @@ export default function AdminTheme() {
 
         {/* Current logo */}
         {theme.logoUrl ? (
-          <YStack
-            gap="$2"
-            padding="$3"
-            backgroundColor="$gray2"
-            borderRadius="$3"
-            width="100%"
-          >
+          <YStack gap="$2" padding="$3" backgroundColor="$gray2" borderRadius="$3" width="100%">
             <Text fontWeight="700" fontSize="$3">
               Current Logo
             </Text>
@@ -203,25 +191,19 @@ export default function AdminTheme() {
             {hasBackup ? (
               <YStack gap="$2">
                 <Text fontSize="$2" color="$gray10">
-                  Previous logo backed up · {backupDaysLeft} day{backupDaysLeft !== 1 ? 's' : ''} remaining to revert
+                  Previous logo backed up · {backupDaysLeft} day{backupDaysLeft !== 1 ? 's' : ''}{' '}
+                  remaining to revert
                 </Text>
                 {confirmRevert ? (
                   <YStack gap="$2" padding="$2" backgroundColor="$gray3" borderRadius="$2">
-                    <Text fontSize="$2" fontWeight="600">Restore the previous logo?</Text>
+                    <Text fontSize="$2" fontWeight="600">
+                      Restore the previous logo?
+                    </Text>
                     <XStack gap="$2">
-                      <Button
-                        size="$3"
-                        onPress={doRevertLogo}
-                        disabled={reverting}
-                        theme="gray"
-                      >
+                      <Button size="$3" onPress={doRevertLogo} disabled={reverting} theme="gray">
                         {reverting ? <Spinner size="small" /> : 'Restore'}
                       </Button>
-                      <Button
-                        size="$3"
-                        onPress={() => setConfirmRevert(false)}
-                        theme="gray"
-                      >
+                      <Button size="$3" onPress={() => setConfirmRevert(false)} theme="gray">
                         Cancel
                       </Button>
                     </XStack>
@@ -240,7 +222,9 @@ export default function AdminTheme() {
 
         {confirmReset ? (
           <YStack gap="$2" padding="$3" backgroundColor="$gray2" borderRadius="$3">
-            <Text fontSize="$3" fontWeight="600">Reset preview to default theme?</Text>
+            <Text fontSize="$3" fontWeight="600">
+              Reset preview to default theme?
+            </Text>
             <XStack gap="$2">
               <Button size="$3" onPress={doReset} theme="red">
                 Reset
@@ -258,14 +242,14 @@ export default function AdminTheme() {
 
         {confirmPublish ? (
           <YStack gap="$2" padding="$3" backgroundColor="$gray2" borderRadius="$3">
-            <Text fontSize="$3" fontWeight="600">Apply this theme to all users?</Text>
+            <Text fontSize="$3" fontWeight="600">
+              Apply this theme to all users?
+            </Text>
             <XStack gap="$2">
-              <Button
-                size="$3"
-                onPress={doPublish}
-                backgroundColor={preview.primary}
-              >
-                <Text color="white" fontWeight="700">Publish</Text>
+              <Button size="$3" onPress={doPublish} backgroundColor={preview.primary}>
+                <Text color="white" fontWeight="700">
+                  Publish
+                </Text>
               </Button>
               <Button size="$3" onPress={() => setConfirmPublish(false)} theme="gray">
                 Cancel

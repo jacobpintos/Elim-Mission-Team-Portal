@@ -144,10 +144,7 @@ export default function AdminTeams() {
                     color: colors.text,
                   }}
                 />
-                <Button
-                  size="$2"
-                  onPress={() => setExpandedIdx(isExpanded ? null : index)}
-                >
+                <Button size="$2" onPress={() => setExpandedIdx(isExpanded ? null : index)}>
                   {isExpanded ? 'Done' : `Members (${item.members.length})`}
                 </Button>
                 <Button size="$2" theme="red" onPress={() => handleDelete(index)}>

@@ -1,4 +1,5 @@
 import type { Role, UserProfile } from '@/types/user'
+import { PUBLIC_SURFACE_ENABLED, PUBLIC_REPLACEMENT_TAB, isTabVisible } from '@/lib/featureFlags'
 
 export const hasRole = (u: UserProfile | null, r: Role) => !!u?.roles?.includes(r)
 export const isAdmin = (u: UserProfile | null) => hasRole(u, 'admin')
@@ -82,6 +83,17 @@ export function canUseMessages(u: UserProfile | null): boolean {
   return !(isIntern(u) && !hasRole(u, 'regular'))
 }
 
+/**
+ * The menu entry standing in for the public-facing section.
+ *
+ * While that section is hidden, the slot "Public Facing" occupied is given to
+ * Content — the one page in the set with real material behind it.
+ */
+const PUBLIC_SLOT = (PUBLIC_SURFACE_ENABLED ? 'public' : PUBLIC_REPLACEMENT_TAB) as Tab
+
+/** Drops tabs belonging to a hidden part of the public-facing surface. */
+const onlyVisible = (tabs: Tab[]): Tab[] => tabs.filter((t) => isTabVisible(t))
+
 export function visibleTabs(u: UserProfile | null): Tab[] {
   if (!u) return []
 
@@ -90,19 +102,21 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
   // Guests sit between public and member: their own tab set, and no member
   // role, so permission checks elsewhere treat them as public.
   if (isGuest(u) && !isMember) {
-    return [
-      'dashboard',
-      'events',
-      'assignments',
-      'announce',
-      'worship',
-      'music',
-      'settings',
-    ]
+    return ['dashboard', 'events', 'assignments', 'announce', 'worship', 'music', 'settings']
   }
 
-  // Users with no member role get public-facing tabs only
-  if (!isMember)
+  // Users with no member role get public-facing tabs only.
+  //
+  // With that section hidden there is nothing left for them to read, so they
+  // keep Settings and nothing else. Settings rather than an empty list on
+  // purpose: it holds account deletion, which Guideline 5.1.1(v) requires to
+  // stay reachable for anyone who has an account, and an empty list would
+  // drop them on the "Account Pending" screen with only a sign-out button.
+  //
+  // Self-registration is closed, so nothing new lands here — these are
+  // legacy public followers.
+  if (!isMember) {
+    if (!PUBLIC_SURFACE_ENABLED) return ['settings']
     return [
       'home',
       'events',
@@ -114,6 +128,7 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
       'posts',
       'settings',
     ]
+  }
 
   if (isAdmin(u)) {
     return [
@@ -125,7 +140,7 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
       'security',
       'worship',
       'rolehub',
-      'public',
+      PUBLIC_SLOT,
       'settings',
     ]
   }
@@ -147,7 +162,7 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
     ]
     if (hasRole(u, 'worship')) tabs.splice(tabs.indexOf('issues') + 1, 0, 'worship')
     if (hasRole(u, 'security')) tabs.splice(1, 0, 'security')
-    return tabs
+    return onlyVisible(tabs)
   }
 
   // Regular and specialty members
@@ -158,7 +173,7 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
   // Inventory was gated on the merch role; with that gone it is admin-only,
   // and admins take the branch above, so nobody reaches it from here.
 
-  tabs.push('public', 'settings')
+  tabs.push(PUBLIC_SLOT, 'settings')
   return tabs
 }
 

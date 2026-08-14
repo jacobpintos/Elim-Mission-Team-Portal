@@ -63,8 +63,15 @@ export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames 
               </Text>
             ) : null}
             {overdue ? (
-              <XStack backgroundColor="#c0392b" borderRadius={99} paddingHorizontal="$2" paddingVertical={2}>
-                <Text color="white" fontSize={10} fontWeight="600">Overdue</Text>
+              <XStack
+                backgroundColor="#c0392b"
+                borderRadius={99}
+                paddingHorizontal="$2"
+                paddingVertical={2}
+              >
+                <Text color="white" fontSize={10} fontWeight="600">
+                  Overdue
+                </Text>
               </XStack>
             ) : null}
             {task.status !== 'done' ? (
@@ -79,8 +86,15 @@ export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames 
                 </Text>
               </XStack>
             ) : !overdue ? (
-              <XStack backgroundColor={STATUS_COLORS.done} borderRadius={99} paddingHorizontal="$2" paddingVertical={2}>
-                <Text color="white" fontSize={10} fontWeight="600">Completed</Text>
+              <XStack
+                backgroundColor={STATUS_COLORS.done}
+                borderRadius={99}
+                paddingHorizontal="$2"
+                paddingVertical={2}
+              >
+                <Text color="white" fontSize={10} fontWeight="600">
+                  Completed
+                </Text>
               </XStack>
             ) : null}
           </XStack>

@@ -1,17 +1,15 @@
 import { create } from 'zustand'
-import {
-  collection,
-  onSnapshot,
-  doc,
-  setDoc,
-  updateDoc,
-  serverTimestamp,
-} from 'firebase/firestore'
+import { collection, onSnapshot, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
 import { useTasksStore } from '@/stores/tasksStore'
-import type { IssueReport, IssueCategory, IssueCorrectiveAction, IssueStatus } from '@/types/operations'
+import type {
+  IssueReport,
+  IssueCategory,
+  IssueCorrectiveAction,
+  IssueStatus,
+} from '@/types/operations'
 
 interface IssuesStore {
   issues: IssueReport[]

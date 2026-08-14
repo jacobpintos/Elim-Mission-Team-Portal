@@ -97,9 +97,7 @@ export const useKaizenStore = create<KaizenStore>((set, get) => ({
     const card = get().cards.find((c) => sameId(c.id, id))
     if (!card) return
     const hasVoted = card.upvotes.some((u) => sameId(u, uid))
-    const upvotes = hasVoted
-      ? card.upvotes.filter((u) => !sameId(u, uid))
-      : [...card.upvotes, uid]
+    const upvotes = hasVoted ? card.upvotes.filter((u) => !sameId(u, uid)) : [...card.upvotes, uid]
     set((s) => ({
       cards: s.cards.map((c) => (sameId(c.id, id) ? { ...c, upvotes } : c)),
     }))
@@ -222,8 +220,7 @@ export const useKaizenStore = create<KaizenStore>((set, get) => ({
       updatedAt: serverTimestamp(),
     })
 
-    const msgText =
-      `The kaizen card "${card.title}" has been deleted.\n\nReason: ${reason}`
+    const msgText = `The kaizen card "${card.title}" has been deleted.\n\nReason: ${reason}`
     await sendMessageAs(roomId, String(deletedBy), msgText)
 
     await deleteDoc(doc(db, 'kaizen', String(id)))

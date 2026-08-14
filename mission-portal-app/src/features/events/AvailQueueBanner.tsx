@@ -485,9 +485,7 @@ function InstancePickerView({
     const q = search.trim().toLowerCase()
     if (!q) return instances
     return instances.filter(
-      (ev) =>
-        ev.date.includes(q) ||
-        FD(ev.date, { weekday: true }).toLowerCase().includes(q)
+      (ev) => ev.date.includes(q) || FD(ev.date, { weekday: true }).toLowerCase().includes(q)
     )
   }, [instances, search])
 
@@ -654,12 +652,7 @@ function InstancePickerView({
       </ScrollView>
 
       {/* Status selector + save */}
-      <YStack
-        padding="$3"
-        gap="$2"
-        borderTopWidth={1}
-        borderTopColor={colors.border}
-      >
+      <YStack padding="$3" gap="$2" borderTopWidth={1} borderTopColor={colors.border}>
         <XStack gap="$2" flexWrap="wrap">
           {STATUSES.map((s) => (
             <StatusBtn
@@ -671,7 +664,7 @@ function InstancePickerView({
             />
           ))}
         </XStack>
-        {(pickStatus === 'partial' || pickStatus === 'tbd') ? (
+        {pickStatus === 'partial' || pickStatus === 'tbd' ? (
           <TextInput
             style={[
               styles.noteInput,
@@ -688,10 +681,7 @@ function InstancePickerView({
           />
         ) : null}
         <XStack justifyContent="flex-end">
-          <Pressable
-            onPress={handleSave}
-            disabled={saving || !pickStatus || checked.size === 0}
-          >
+          <Pressable onPress={handleSave} disabled={saving || !pickStatus || checked.size === 0}>
             <XStack
               backgroundColor={
                 pickStatus && checked.size > 0 ? AVAIL_COLORS[pickStatus] : colors.border
@@ -705,8 +695,8 @@ function InstancePickerView({
                 {saving
                   ? 'Saving…'
                   : checked.size > 0
-                  ? `Save ${checked.size} date${checked.size !== 1 ? 's' : ''}`
-                  : 'Select dates'}
+                    ? `Save ${checked.size} date${checked.size !== 1 ? 's' : ''}`
+                    : 'Select dates'}
               </Text>
             </XStack>
           </Pressable>
@@ -761,7 +751,7 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
   // Series queue: one entry per recurring template with no/TBD series response
   const seriesQueue = useMemo(() => {
     const seen = new Set<string>()
-    const result: Array<{ templateId: string | number; rep: EventInstance }> = []
+    const result: { templateId: string | number; rep: EventInstance }[] = []
     for (const ev of allAssigned) {
       if (!ev.isRec) continue
       const tid = String(ev.templateId ?? ev.id)
@@ -774,7 +764,6 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
       }
     }
     return result
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allAssigned, avail, uid, skipKeys])
 
   // One-time queue: instances with no/TBD response
@@ -785,13 +774,14 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
       const r = avail[availKey(ev)]?.[uid]
       return !r || r.status === 'tbd'
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allAssigned, avail, uid, skipKeys])
 
   const queueItems: QueueItem[] = useMemo(() => {
-    const series = seriesQueue.map(
-      ({ templateId, rep }) => ({ kind: 'series' as const, templateId, rep })
-    )
+    const series = seriesQueue.map(({ templateId, rep }) => ({
+      kind: 'series' as const,
+      templateId,
+      rep,
+    }))
     const instances = oneTimeQueue.map((event) => ({ kind: 'instance' as const, event }))
     return [...series, ...instances]
   }, [seriesQueue, oneTimeQueue])
@@ -801,24 +791,17 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
     const seen = new Set<string>()
     return allAssigned
       .filter((ev) => ev.isRec)
-      .reduce<Array<{ templateId: string | number; title: string; rep: EventInstance }>>(
-        (acc, ev) => {
-          const tid = String(ev.templateId ?? ev.id)
-          if (!seen.has(tid)) {
-            seen.add(tid)
-            acc.push({ templateId: ev.templateId ?? ev.id, title: ev.title, rep: ev })
-          }
-          return acc
-        },
-        []
-      )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .reduce<{ templateId: string | number; title: string; rep: EventInstance }[]>((acc, ev) => {
+        const tid = String(ev.templateId ?? ev.id)
+        if (!seen.has(tid)) {
+          seen.add(tid)
+          acc.push({ templateId: ev.templateId ?? ev.id, title: ev.title, rep: ev })
+        }
+        return acc
+      }, [])
   }, [allAssigned])
 
-  const pickOneTimeInstances = useMemo(
-    () => allAssigned.filter((ev) => !ev.isRec),
-    [allAssigned]
-  )
+  const pickOneTimeInstances = useMemo(() => allAssigned.filter((ev) => !ev.isRec), [allAssigned])
 
   const hasQueue = queueItems.length > 0
   const accentColor = hasQueue ? '#f39c12' : '#27ae60'
@@ -838,7 +821,11 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
   const currentItem = queueItems[0] ?? null
 
   return (
-    <YStack borderBottomWidth={1} borderBottomColor={colors.border} backgroundColor={colors.surface}>
+    <YStack
+      borderBottomWidth={1}
+      borderBottomColor={colors.border}
+      backgroundColor={colors.surface}
+    >
       {/* Header row */}
       <Pressable
         onPress={() => {
@@ -886,9 +873,7 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
             rep={currentItem.rep}
             uid={uid}
             queueCount={queueItems.length}
-            onSaved={() =>
-              setSkipKeys((p) => new Set([...p, `series_${currentItem.templateId}`]))
-            }
+            onSaved={() => setSkipKeys((p) => new Set([...p, `series_${currentItem.templateId}`]))}
           />
         ) : (
           <InstanceRsvpForm
@@ -896,9 +881,7 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
             event={currentItem.event}
             uid={uid}
             queueCount={queueItems.length}
-            onSaved={() =>
-              setSkipKeys((p) => new Set([...p, currentItem.event.instanceKey]))
-            }
+            onSaved={() => setSkipKeys((p) => new Set([...p, currentItem.event.instanceKey]))}
             onFailed={() =>
               setSkipKeys((p) => {
                 const next = new Set(p)
@@ -1042,11 +1025,7 @@ export function AvailQueueBanner({ uid }: AvailQueueBannerProps) {
                                 paddingHorizontal="$2"
                                 paddingVertical={2}
                               >
-                                <Text
-                                  color={AVAIL_COLORS[r.status]}
-                                  fontSize={11}
-                                  fontWeight="600"
-                                >
+                                <Text color={AVAIL_COLORS[r.status]} fontSize={11} fontWeight="600">
                                   {AVAIL_LABELS[r.status]}
                                 </Text>
                               </XStack>

@@ -10,6 +10,7 @@ import {
   visibleTabs,
   migrateRetiredRoles,
 } from './roles'
+import type { Tab } from './roles'
 import type { UserProfile, Role } from '@/types/user'
 
 const user = (...roles: Role[]) => ({ uid: 'u1', roles }) as UserProfile
@@ -46,13 +47,16 @@ describe('visibleTabs', () => {
 
     expect(tabs).not.toContain('dashboard')
     expect(tabs).not.toContain('assignments')
-    expect(tabs).toContain('home')
+  })
+
+  it('leaves a public user nothing but settings while the public surface is hidden', () => {
+    // Settings and not an empty list: it holds account deletion, which has to
+    // stay reachable for anyone who still has an account.
+    expect(visibleTabs(user('public'))).toEqual(['settings'])
   })
 
   it('treats a user with no roles at all as public', () => {
-    const tabs = visibleTabs(user())
-
-    expect(tabs).toContain('home')
+    expect(visibleTabs(user())).toEqual(['settings'])
   })
 
   it('gives admins the admin surfaces', () => {
@@ -151,10 +155,10 @@ describe('canUseMessages', () => {
     expect(canUseMessages(null)).toBe(false)
   })
 
-  it('keeps announcements for everyone who has an account', () => {
-    // The half that is not gated: whatever else changes, the tab itself has
-    // to stay reachable or public users lose announcements entirely.
-    for (const u of [user('public'), user('intern'), user('guest'), user('regular')]) {
+  it('keeps announcements for every role that still has a surface', () => {
+    // Public is excluded now, not because announcements were taken away from
+    // it, but because the whole public-facing surface is hidden.
+    for (const u of [user('intern'), user('guest'), user('regular')]) {
       expect(visibleTabs(u)).toContain('announce')
     }
   })
@@ -215,5 +219,54 @@ describe('guests', () => {
   it('is distinct from public', () => {
     expect(isPublic(guest)).toBe(false)
     expect(visibleTabs(guest)).not.toEqual(visibleTabs(user('public')))
+  })
+})
+
+describe('the hidden public-facing surface', () => {
+  // Everything here should invert the day PUBLIC_SURFACE_ENABLED flips back
+  // to true. They exist to catch a public page becoming reachable by accident.
+  const HIDDEN: Tab[] = ['posts', 'connect', 'giving', 'story']
+
+  it('keeps the Public Facing entry out of every menu', () => {
+    for (const u of [
+      user('admin'),
+      user('regular'),
+      user('intern'),
+      user('guest'),
+      user('public'),
+      user('regular', 'worship'),
+    ]) {
+      expect(visibleTabs(u)).not.toContain('public')
+    }
+  })
+
+  it('hides every public page except Content', () => {
+    for (const u of [user('admin'), user('regular'), user('intern'), user('guest')]) {
+      const tabs = visibleTabs(u)
+      for (const hidden of HIDDEN) expect(tabs).not.toContain(hidden)
+    }
+  })
+
+  it('gives Content the slot Public Facing used to hold', () => {
+    // Admins and regular members had no Content entry of their own before —
+    // they reached it through Public Facing, so it has to arrive here instead.
+    expect(visibleTabs(user('admin'))).toContain('music')
+    expect(visibleTabs(user('regular'))).toContain('music')
+  })
+
+  it('leaves Content where roles already had it', () => {
+    expect(visibleTabs(user('intern'))).toContain('music')
+    expect(visibleTabs(user('guest'))).toContain('music')
+  })
+
+  it('still returns no duplicates once Content is spliced in', () => {
+    for (const u of [
+      user('admin', 'worship'),
+      user('regular', 'worship', 'security'),
+      user('intern', 'worship'),
+    ]) {
+      const tabs = visibleTabs(u)
+      expect(new Set(tabs).size).toBe(tabs.length)
+    }
   })
 })

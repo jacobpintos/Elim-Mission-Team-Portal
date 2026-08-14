@@ -189,9 +189,7 @@ export function TeamsEditor({
       })}
 
       <XStack gap="$2" flexWrap="wrap">
-        <Pressable
-          onPress={() => onChange([...teams, { name: '', leaders: [], members: [] }])}
-        >
+        <Pressable onPress={() => onChange([...teams, { name: '', leaders: [], members: [] }])}>
           <XStack
             borderWidth={1}
             borderColor={colors.primary}
@@ -235,11 +233,7 @@ export function TeamsEditor({
               .filter((ct) => !teams.some((t) => t.name === ct.name))
               .map((ct) => (
                 <Pressable key={ct.name} onPress={() => addFromCommon(ct)}>
-                  <XStack
-                    padding="$3"
-                    borderBottomWidth={1}
-                    borderBottomColor={colors.border}
-                  >
+                  <XStack padding="$3" borderBottomWidth={1} borderBottomColor={colors.border}>
                     <YStack>
                       <Text color={colors.text} fontSize="$3">
                         {ct.name}

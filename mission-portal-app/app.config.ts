@@ -61,41 +61,31 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeEmailAddress',
           NSPrivacyCollectedDataTypeLinked: true,
           NSPrivacyCollectedDataTypeTracking: false,
-          NSPrivacyCollectedDataTypePurposes: [
-            'NSPrivacyCollectedDataTypePurposeAppFunctionality',
-          ],
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
         },
         {
           NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeName',
           NSPrivacyCollectedDataTypeLinked: true,
           NSPrivacyCollectedDataTypeTracking: false,
-          NSPrivacyCollectedDataTypePurposes: [
-            'NSPrivacyCollectedDataTypePurposeAppFunctionality',
-          ],
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
         },
         {
           NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypePhotosorVideos',
           NSPrivacyCollectedDataTypeLinked: true,
           NSPrivacyCollectedDataTypeTracking: false,
-          NSPrivacyCollectedDataTypePurposes: [
-            'NSPrivacyCollectedDataTypePurposeAppFunctionality',
-          ],
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
         },
         {
           NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeUserContent',
           NSPrivacyCollectedDataTypeLinked: true,
           NSPrivacyCollectedDataTypeTracking: false,
-          NSPrivacyCollectedDataTypePurposes: [
-            'NSPrivacyCollectedDataTypePurposeAppFunctionality',
-          ],
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
         },
         {
           NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeCoarseLocation',
           NSPrivacyCollectedDataTypeLinked: true,
           NSPrivacyCollectedDataTypeTracking: false,
-          NSPrivacyCollectedDataTypePurposes: [
-            'NSPrivacyCollectedDataTypePurposeAppFunctionality',
-          ],
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
         },
         {
           NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeCrashData',
@@ -115,10 +105,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     predictiveBackGestureEnabled: false,
     googleServicesFile: process.env.GOOGLE_SERVICES_JSON,
-    permissions: [
-      'android.permission.RECEIVE_BOOT_COMPLETED',
-      'android.permission.VIBRATE',
-    ],
+    permissions: ['android.permission.RECEIVE_BOOT_COMPLETED', 'android.permission.VIBRATE'],
   },
   web: {
     bundler: 'metro',

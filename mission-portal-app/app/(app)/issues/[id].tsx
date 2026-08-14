@@ -53,9 +53,20 @@ const WHY_LABELS = [
   'Why did that cause it?',
 ]
 
-function SectionHeader({ title, colors }: { title: string; colors: ReturnType<typeof useThemeColors> }) {
+function SectionHeader({
+  title,
+  colors,
+}: {
+  title: string
+  colors: ReturnType<typeof useThemeColors>
+}) {
   return (
-    <XStack borderBottomWidth={1} borderBottomColor={colors.border} paddingBottom="$2" marginBottom="$2">
+    <XStack
+      borderBottomWidth={1}
+      borderBottomColor={colors.border}
+      paddingBottom="$2"
+      marginBottom="$2"
+    >
       <Text color={colors.textMuted} fontSize="$2" fontWeight="700" letterSpacing={1}>
         {title.toUpperCase()}
       </Text>
@@ -71,7 +82,8 @@ export default function IssueDetail() {
   const admin = isAdmin(profile)
   const toast = useUIStore((s) => s.toast)
 
-  const { issues, subscribe, unsubscribe, saveRootCause, addCorrectiveAction, updateStatus } = useIssuesStore()
+  const { issues, subscribe, unsubscribe, saveRootCause, addCorrectiveAction, updateStatus } =
+    useIssuesStore()
   const { users } = useUsersStore()
   const { tasks } = useTasksStore()
 
@@ -100,7 +112,7 @@ export default function IssueDetail() {
   }, [issue?.whys])
 
   const whys = localWhys ?? issueWhys
-  const rootCause = localRootCause ?? (issue?.rootCause ?? '')
+  const rootCause = localRootCause ?? issue?.rootCause ?? ''
 
   const displayName = (uid: string | number) => {
     const u = users.find((x) => String(x.uid) === String(uid))
@@ -155,7 +167,13 @@ export default function IssueDetail() {
 
   if (!issue) {
     return (
-      <YStack flex={1} padding="$4" alignItems="center" justifyContent="center" backgroundColor={colors.background}>
+      <YStack
+        flex={1}
+        padding="$4"
+        alignItems="center"
+        justifyContent="center"
+        backgroundColor={colors.background}
+      >
         <ScreenTitle options={{ title: 'Issue Detail' }} />
         <Text color={colors.textMuted}>Issue not found.</Text>
       </YStack>
@@ -170,7 +188,6 @@ export default function IssueDetail() {
 
       <ScrollView style={{ flex: 1 }}>
         <YStack padding="$4" gap="$4">
-
           {/* Issue header */}
           <YStack gap="$2">
             <XStack justifyContent="space-between" alignItems="flex-start" gap="$2">
@@ -208,14 +225,18 @@ export default function IssueDetail() {
           {/* Description */}
           <YStack gap="$2">
             <SectionHeader title="Description" colors={colors} />
-            <Text color={colors.text} fontSize="$3">{issue.description}</Text>
+            <Text color={colors.text} fontSize="$3">
+              {issue.description}
+            </Text>
           </YStack>
 
           {/* Suggested action */}
           {issue.suggestedAction ? (
             <YStack gap="$2">
               <SectionHeader title="Suggested Action" colors={colors} />
-              <Text color={colors.text} fontSize="$3">{issue.suggestedAction}</Text>
+              <Text color={colors.text} fontSize="$3">
+                {issue.suggestedAction}
+              </Text>
             </YStack>
           ) : null}
 
@@ -226,16 +247,23 @@ export default function IssueDetail() {
               {WHY_LABELS.map((label, i) => (
                 <YStack key={i} gap="$1">
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                    WHY {i + 1}{i === 0 ? '' : ` — ${label}`}
+                    WHY {i + 1}
+                    {i === 0 ? '' : ` — ${label}`}
                     {i === 0 ? ` — ${label}` : ''}
                   </Text>
                   <TextInput
                     style={[
                       styles.input,
-                      { color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
                     ]}
                     value={whys[i]}
-                    onChangeText={(v) => setLocalWhys((w) => (w ?? issueWhys).map((x, j) => (j === i ? v : x)))}
+                    onChangeText={(v) =>
+                      setLocalWhys((w) => (w ?? issueWhys).map((x, j) => (j === i ? v : x)))
+                    }
                     placeholder={`Why ${i + 1}…`}
                     placeholderTextColor={colors.textMuted}
                   />
@@ -243,11 +271,17 @@ export default function IssueDetail() {
               ))}
 
               <YStack gap="$1" marginTop="$2">
-                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">ROOT CAUSE SUMMARY</Text>
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                  ROOT CAUSE SUMMARY
+                </Text>
                 <TextInput
                   style={[
                     styles.textarea,
-                    { color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.background,
+                    },
                   ]}
                   value={rootCause}
                   onChangeText={setLocalRootCause}
@@ -276,15 +310,25 @@ export default function IssueDetail() {
           ) : issue.rootCause ? (
             <YStack gap="$2">
               <SectionHeader title="Root Cause" colors={colors} />
-              {issue.whys.filter((w) => w.trim()).map((w, i) => (
-                <XStack key={i} gap="$2">
-                  <Text color={colors.textMuted} fontSize="$2" fontWeight="700">Why {i + 1}:</Text>
-                  <Text color={colors.text} fontSize="$2" flex={1}>{w}</Text>
-                </XStack>
-              ))}
+              {issue.whys
+                .filter((w) => w.trim())
+                .map((w, i) => (
+                  <XStack key={i} gap="$2">
+                    <Text color={colors.textMuted} fontSize="$2" fontWeight="700">
+                      Why {i + 1}:
+                    </Text>
+                    <Text color={colors.text} fontSize="$2" flex={1}>
+                      {w}
+                    </Text>
+                  </XStack>
+                ))}
               <XStack gap="$2" marginTop="$1">
-                <Text color={colors.textMuted} fontSize="$2" fontWeight="700">Root cause:</Text>
-                <Text color={colors.text} fontSize="$2" flex={1}>{issue.rootCause}</Text>
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="700">
+                  Root cause:
+                </Text>
+                <Text color={colors.text} fontSize="$2" flex={1}>
+                  {issue.rootCause}
+                </Text>
               </XStack>
             </YStack>
           ) : null}
@@ -305,7 +349,9 @@ export default function IssueDetail() {
                     borderWidth={1}
                     borderColor={colors.border}
                   >
-                    <Text color={colors.text} fontSize="$3" fontWeight="600">{ca.description}</Text>
+                    <Text color={colors.text} fontSize="$3" fontWeight="600">
+                      {ca.description}
+                    </Text>
                     <XStack gap="$3" flexWrap="wrap">
                       <Text color={colors.textMuted} fontSize="$2">
                         Assigned to {displayName(ca.assignee)}
@@ -330,7 +376,9 @@ export default function IssueDetail() {
                 )
               })
             ) : (
-              <Text color={colors.textMuted} fontSize="$2">No corrective actions yet.</Text>
+              <Text color={colors.textMuted} fontSize="$2">
+                No corrective actions yet.
+              </Text>
             )}
 
             {/* Add corrective action — admin only */}
@@ -344,10 +392,19 @@ export default function IssueDetail() {
                 borderColor={colors.border}
                 marginTop="$2"
               >
-                <Text color={colors.text} fontSize="$3" fontWeight="700">Add Corrective Action</Text>
+                <Text color={colors.text} fontSize="$3" fontWeight="700">
+                  Add Corrective Action
+                </Text>
 
                 <TextInput
-                  style={[styles.textarea, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                  style={[
+                    styles.textarea,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.background,
+                    },
+                  ]}
                   value={caDesc}
                   onChangeText={setCaDesc}
                   placeholder="Describe the corrective action"
@@ -371,9 +428,18 @@ export default function IssueDetail() {
                 </Pressable>
 
                 <YStack gap="$1">
-                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">DUE DATE</Text>
+                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                    DUE DATE
+                  </Text>
                   <TextInput
-                    style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                    style={[
+                      styles.input,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
                     value={caDueDate}
                     onChangeText={setCaDueDate}
                     placeholder="YYYY-MM-DD"
@@ -414,7 +480,9 @@ export default function IssueDetail() {
                       paddingHorizontal="$4"
                       paddingVertical="$2"
                     >
-                      <Text color="white" fontWeight="700" fontSize="$3">Mark Resolved</Text>
+                      <Text color="white" fontWeight="700" fontSize="$3">
+                        Mark Resolved
+                      </Text>
                     </XStack>
                   </Pressable>
                 ) : null}
@@ -426,11 +494,13 @@ export default function IssueDetail() {
                       paddingHorizontal="$4"
                       paddingVertical="$2"
                     >
-                      <Text color="white" fontWeight="700" fontSize="$3">Close Issue</Text>
+                      <Text color="white" fontWeight="700" fontSize="$3">
+                        Close Issue
+                      </Text>
                     </XStack>
                   </Pressable>
                 ) : null}
-                {(issue.status === 'resolved' || issue.status === 'closed') ? (
+                {issue.status === 'resolved' || issue.status === 'closed' ? (
                   <Pressable onPress={() => handleUpdateStatus('pending_review')}>
                     <XStack
                       borderRadius="$2"
@@ -439,19 +509,25 @@ export default function IssueDetail() {
                       borderWidth={1}
                       borderColor={colors.border}
                     >
-                      <Text color={colors.text} fontWeight="600" fontSize="$3">Reopen</Text>
+                      <Text color={colors.text} fontWeight="600" fontSize="$3">
+                        Reopen
+                      </Text>
                     </XStack>
                   </Pressable>
                 ) : null}
               </XStack>
             </YStack>
           ) : null}
-
         </YStack>
       </ScrollView>
 
       {/* Assignee picker modal */}
-      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+      <Modal
+        visible={pickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerOpen(false)}
+      >
         <View style={styles.overlay}>
           <YStack
             backgroundColor={colors.surface}
@@ -462,25 +538,36 @@ export default function IssueDetail() {
             maxHeight="70%"
           >
             <XStack justifyContent="space-between" alignItems="center" marginBottom="$3">
-              <Text color={colors.text} fontSize="$4" fontWeight="700">Select Assignee</Text>
+              <Text color={colors.text} fontSize="$4" fontWeight="700">
+                Select Assignee
+              </Text>
               <Pressable onPress={() => setPickerOpen(false)}>
-                <Text color={colors.textMuted} fontSize="$4">✕</Text>
+                <Text color={colors.textMuted} fontSize="$4">
+                  ✕
+                </Text>
               </Pressable>
             </XStack>
             <ScrollView>
               {nonPublicUsers.map((u) => (
                 <Pressable
                   key={String(u.uid)}
-                  onPress={() => { setCaAssignee(String(u.uid)); setPickerOpen(false) }}
+                  onPress={() => {
+                    setCaAssignee(String(u.uid))
+                    setPickerOpen(false)
+                  }}
                 >
                   <XStack
                     paddingVertical="$3"
                     paddingHorizontal="$2"
                     borderBottomWidth={1}
                     borderBottomColor={colors.border}
-                    backgroundColor={String(u.uid) === caAssignee ? colors.primary + '22' : 'transparent'}
+                    backgroundColor={
+                      String(u.uid) === caAssignee ? colors.primary + '22' : 'transparent'
+                    }
                   >
-                    <Text color={colors.text} fontSize="$3">{u.displayName || u.email || String(u.uid)}</Text>
+                    <Text color={colors.text} fontSize="$3">
+                      {u.displayName || u.email || String(u.uid)}
+                    </Text>
                   </XStack>
                 </Pressable>
               ))}

@@ -80,9 +80,7 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
 
   return (
     <TamaguiProvider {...tamaguiProps}>
-      <View style={{ flex: 1, backgroundColor: palette.background }}>
-        {children}
-      </View>
+      <View style={{ flex: 1, backgroundColor: palette.background }}>{children}</View>
     </TamaguiProvider>
   )
 }

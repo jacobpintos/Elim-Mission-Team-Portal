@@ -62,8 +62,8 @@ export default function AdminLicensing() {
               CCLI License Number
             </Text>
             <Text color={colors.textMuted} fontSize="$2">
-              Shown at the bottom of every chord sheet and included on PDF and printed
-              exports. Leave blank to hide the attribution entirely.
+              Shown at the bottom of every chord sheet and included on PDF and printed exports.
+              Leave blank to hide the attribution entirely.
             </Text>
           </YStack>
 

@@ -1,7 +1,6 @@
-import { useRouter } from 'expo-router'
+import { useRouter, Stack } from 'expo-router'
 import { ScrollView, Pressable } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack } from 'expo-router'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { ADMIN_SECTIONS } from '@/lib/adminSections'
@@ -29,7 +28,9 @@ export default function RolehubAdmin() {
               <Text color={colors.text} fontSize="$4" fontWeight="600" flex={1}>
                 {s.label}
               </Text>
-              <Text color={colors.textMuted} fontSize="$4">›</Text>
+              <Text color={colors.textMuted} fontSize="$4">
+                ›
+              </Text>
             </XStack>
           </Pressable>
         ))}

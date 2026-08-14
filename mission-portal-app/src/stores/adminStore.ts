@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 
-export type AdminTab = 'users' | 'groups' | 'teams' | 'templates' | 'leadership' | 'audit' | 'deletions'
+export type AdminTab =
+  | 'users'
+  | 'groups'
+  | 'teams'
+  | 'templates'
+  | 'leadership'
+  | 'audit'
+  | 'deletions'
 
 interface AdminStore {
   activeTab: AdminTab

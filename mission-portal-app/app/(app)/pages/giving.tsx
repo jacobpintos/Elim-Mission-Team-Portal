@@ -4,7 +4,9 @@ import { Stack } from 'expo-router'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const PageBuilderScreen = lazy(() =>
-  import('@/features/page-builder/PageBuilderScreen').then((m) => ({ default: m.PageBuilderScreen }))
+  import('@/features/page-builder/PageBuilderScreen').then((m) => ({
+    default: m.PageBuilderScreen,
+  }))
 )
 
 export default function GivingPage() {

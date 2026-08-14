@@ -62,11 +62,7 @@ export default function AdminModeration() {
   const router = useRouter()
   const { profile } = useAuthStore()
   const { users, subscribe, unsubscribe } = useUsersStore()
-  const {
-    rooms,
-    subscribe: subRooms,
-    unsubscribe: unsubRooms,
-  } = useMessagesStore()
+  const { rooms, subscribe: subRooms, unsubscribe: unsubRooms } = useMessagesStore()
   const toast = useUIStore((s) => s.toast)
   const [reports, setReports] = useState<ContentReport[]>([])
   const [loading, setLoading] = useState(true)
@@ -268,300 +264,297 @@ export default function AdminModeration() {
       <ScreenTitle options={{ title: INBOX_TITLE(profile) }} />
       <InboxTabs active="moderation" />
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-      <Text color={colors.textMuted} fontSize="$2" lineHeight={18}>
-        Reports filed by users about messages in the app. The Terms of Use commit to acting on every
-        report within {MODERATION_SLA_HOURS} hours: warn the sender, delete their account, remove
-        the message, or dismiss the report if the content is fine. Whichever you choose, the person
-        who reported it is told their report was reviewed — never what was decided.
-      </Text>
+        <Text color={colors.textMuted} fontSize="$2" lineHeight={18}>
+          Reports filed by users about messages in the app. The Terms of Use commit to acting on
+          every report within {MODERATION_SLA_HOURS} hours: warn the sender, delete their account,
+          remove the message, or dismiss the report if the content is fine. Whichever you choose,
+          the person who reported it is told their report was reviewed — never what was decided.
+        </Text>
 
-      {/* Conversations an admin flagged from the chat header */}
-      {flaggedRooms.length > 0 ? (
-        <YStack gap="$2">
-          <Text color={colors.text} fontSize="$3" fontWeight="700">
-            🚩 Flagged conversations ({flaggedRooms.length})
-          </Text>
-          {flaggedRooms.map((room) => (
+        {/* Conversations an admin flagged from the chat header */}
+        {flaggedRooms.length > 0 ? (
+          <YStack gap="$2">
+            <Text color={colors.text} fontSize="$3" fontWeight="700">
+              🚩 Flagged conversations ({flaggedRooms.length})
+            </Text>
+            {flaggedRooms.map((room) => (
+              <YStack
+                key={String(room.id)}
+                gap="$2"
+                padding="$3"
+                borderRadius="$3"
+                backgroundColor={colors.surface}
+                borderWidth={1}
+                borderColor="#e67e22"
+              >
+                <Text color={colors.text} fontSize="$4" fontWeight="600">
+                  {room.name ?? 'Conversation'}
+                </Text>
+                <Text color={colors.textMuted} fontSize="$2">
+                  Flagged by {(room.reviewers ?? []).map((r) => nameFor(String(r))).join(', ')}
+                  {room.members ? ` · ${room.members.length} members` : ''}
+                </Text>
+                <XStack gap="$2" marginTop="$1">
+                  <Pressable
+                    style={{ flex: 1 }}
+                    onPress={() => router.push(`/(app)/messages/${room.id}` as never)}
+                  >
+                    <XStack
+                      height={38}
+                      borderRadius={8}
+                      backgroundColor={colors.primary}
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      <Text color="white" fontSize="$3" fontWeight="700">
+                        Open conversation
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                  <Pressable
+                    style={{ flex: 1 }}
+                    onPress={() => clearRoomFlag(room.id, room.name ?? 'Conversation')}
+                    disabled={busy === String(room.id)}
+                  >
+                    <XStack
+                      height={38}
+                      borderRadius={8}
+                      borderWidth={1}
+                      borderColor={colors.border}
+                      alignItems="center"
+                      justifyContent="center"
+                      opacity={busy === String(room.id) ? 0.5 : 1}
+                    >
+                      <Text color={colors.text} fontSize="$3" fontWeight="700">
+                        Clear flag
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                </XStack>
+              </YStack>
+            ))}
+          </YStack>
+        ) : null}
+
+        <Text color={colors.text} fontSize="$3" fontWeight="700" marginTop="$2">
+          Reported messages
+        </Text>
+
+        <XStack gap="$2">
+          <Pressable onPress={() => setShowResolved(false)}>
+            <XStack
+              paddingHorizontal="$3"
+              paddingVertical="$2"
+              borderRadius="$3"
+              backgroundColor={!showResolved ? colors.primary : 'transparent'}
+              borderWidth={1}
+              borderColor={colors.border}
+            >
+              <Text color={!showResolved ? 'white' : colors.text} fontSize="$3" fontWeight="600">
+                Open ({open.length})
+              </Text>
+            </XStack>
+          </Pressable>
+          <Pressable onPress={() => setShowResolved(true)}>
+            <XStack
+              paddingHorizontal="$3"
+              paddingVertical="$2"
+              borderRadius="$3"
+              backgroundColor={showResolved ? colors.primary : 'transparent'}
+              borderWidth={1}
+              borderColor={colors.border}
+            >
+              <Text color={showResolved ? 'white' : colors.text} fontSize="$3" fontWeight="600">
+                Resolved ({resolved.length})
+              </Text>
+            </XStack>
+          </Pressable>
+        </XStack>
+
+        {shown.length === 0 ? (
+          <YStack paddingVertical="$6" alignItems="center">
+            <Text color={colors.textMuted}>
+              {showResolved ? 'Nothing resolved yet.' : 'No open reports. 🎉'}
+            </Text>
+          </YStack>
+        ) : (
+          shown.map((r) => (
             <YStack
-              key={String(room.id)}
+              key={r.id}
               gap="$2"
               padding="$3"
               borderRadius="$3"
               backgroundColor={colors.surface}
               borderWidth={1}
-              borderColor="#e67e22"
+              borderColor={r.status === 'open' ? '#e74c3c' : colors.border}
             >
-              <Text color={colors.text} fontSize="$4" fontWeight="600">
-                {room.name ?? 'Conversation'}
-              </Text>
-              <Text color={colors.textMuted} fontSize="$2">
-                Flagged by{' '}
-                {(room.reviewers ?? [])
-                  .map((r) => nameFor(String(r)))
-                  .join(', ')}
-                {room.members ? ` · ${room.members.length} members` : ''}
-              </Text>
-              <XStack gap="$2" marginTop="$1">
-                <Pressable
-                  style={{ flex: 1 }}
-                  onPress={() => router.push(`/(app)/messages/${room.id}` as never)}
-                >
-                  <XStack
-                    height={38}
-                    borderRadius={8}
-                    backgroundColor={colors.primary}
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    <Text color="white" fontSize="$3" fontWeight="700">
-                      Open conversation
-                    </Text>
-                  </XStack>
-                </Pressable>
-                <Pressable
-                  style={{ flex: 1 }}
-                  onPress={() => clearRoomFlag(room.id, room.name ?? 'Conversation')}
-                  disabled={busy === String(room.id)}
-                >
-                  <XStack
-                    height={38}
-                    borderRadius={8}
-                    borderWidth={1}
-                    borderColor={colors.border}
-                    alignItems="center"
-                    justifyContent="center"
-                    opacity={busy === String(room.id) ? 0.5 : 1}
-                  >
-                    <Text color={colors.text} fontSize="$3" fontWeight="700">
-                      Clear flag
-                    </Text>
-                  </XStack>
-                </Pressable>
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text color="#e74c3c" fontSize="$2" fontWeight="700">
+                  {r.reason}
+                </Text>
+                <Text color={colors.textMuted} fontSize="$1">
+                  {new Date(r.createdAt).toLocaleString()}
+                </Text>
               </XStack>
-            </YStack>
-          ))}
-        </YStack>
-      ) : null}
 
-      <Text color={colors.text} fontSize="$3" fontWeight="700" marginTop="$2">
-        Reported messages
-      </Text>
-
-      <XStack gap="$2">
-        <Pressable onPress={() => setShowResolved(false)}>
-          <XStack
-            paddingHorizontal="$3"
-            paddingVertical="$2"
-            borderRadius="$3"
-            backgroundColor={!showResolved ? colors.primary : 'transparent'}
-            borderWidth={1}
-            borderColor={colors.border}
-          >
-            <Text color={!showResolved ? 'white' : colors.text} fontSize="$3" fontWeight="600">
-              Open ({open.length})
-            </Text>
-          </XStack>
-        </Pressable>
-        <Pressable onPress={() => setShowResolved(true)}>
-          <XStack
-            paddingHorizontal="$3"
-            paddingVertical="$2"
-            borderRadius="$3"
-            backgroundColor={showResolved ? colors.primary : 'transparent'}
-            borderWidth={1}
-            borderColor={colors.border}
-          >
-            <Text color={showResolved ? 'white' : colors.text} fontSize="$3" fontWeight="600">
-              Resolved ({resolved.length})
-            </Text>
-          </XStack>
-        </Pressable>
-      </XStack>
-
-      {shown.length === 0 ? (
-        <YStack paddingVertical="$6" alignItems="center">
-          <Text color={colors.textMuted}>
-            {showResolved ? 'Nothing resolved yet.' : 'No open reports. 🎉'}
-          </Text>
-        </YStack>
-      ) : (
-        shown.map((r) => (
-          <YStack
-            key={r.id}
-            gap="$2"
-            padding="$3"
-            borderRadius="$3"
-            backgroundColor={colors.surface}
-            borderWidth={1}
-            borderColor={r.status === 'open' ? '#e74c3c' : colors.border}
-          >
-            <XStack justifyContent="space-between" alignItems="center">
-              <Text color="#e74c3c" fontSize="$2" fontWeight="700">
-                {r.reason}
-              </Text>
-              <Text color={colors.textMuted} fontSize="$1">
-                {new Date(r.createdAt).toLocaleString()}
-              </Text>
-            </XStack>
-
-            <Text color={colors.textMuted} fontSize="$2">
-              {nameFor(r.reporterUid)} reported {nameFor(r.authorUid)}
-            </Text>
-
-            <YStack
-              padding="$2"
-              borderRadius="$2"
-              backgroundColor={colors.background}
-              borderLeftWidth={3}
-              borderLeftColor={colors.border}
-            >
-              <Text color={colors.text} fontSize="$3">
-                {r.messageText || (r.attachment ? '(image only)' : '(no content captured)')}
+              <Text color={colors.textMuted} fontSize="$2">
+                {nameFor(r.reporterUid)} reported {nameFor(r.authorUid)}
               </Text>
 
-              {/* Reported images sit behind a tap so a moderator is not shown
+              <YStack
+                padding="$2"
+                borderRadius="$2"
+                backgroundColor={colors.background}
+                borderLeftWidth={3}
+                borderLeftColor={colors.border}
+              >
+                <Text color={colors.text} fontSize="$3">
+                  {r.messageText || (r.attachment ? '(image only)' : '(no content captured)')}
+                </Text>
+
+                {/* Reported images sit behind a tap so a moderator is not shown
                   potentially graphic content without choosing to look. */}
-              {r.attachment?.type === 'image' && r.attachment.url ? (
-                revealed.has(r.id) ? (
-                  <YStack gap="$1" marginTop="$2">
-                    <Image
-                      source={{ uri: r.attachment.url }}
-                      width={220}
-                      height={165}
-                      borderRadius="$2"
-                      resizeMode="contain"
-                    />
+                {r.attachment?.type === 'image' && r.attachment.url ? (
+                  revealed.has(r.id) ? (
+                    <YStack gap="$1" marginTop="$2">
+                      <Image
+                        source={{ uri: r.attachment.url }}
+                        width={220}
+                        height={165}
+                        borderRadius="$2"
+                        resizeMode="contain"
+                      />
+                      <Pressable onPress={() => toggleReveal(r.id)}>
+                        <Text color={colors.primary} fontSize="$2">
+                          Hide image
+                        </Text>
+                      </Pressable>
+                    </YStack>
+                  ) : (
                     <Pressable onPress={() => toggleReveal(r.id)}>
-                      <Text color={colors.primary} fontSize="$2">
-                        Hide image
-                      </Text>
+                      <XStack
+                        marginTop="$2"
+                        paddingHorizontal="$3"
+                        paddingVertical="$2"
+                        borderRadius="$2"
+                        borderWidth={1}
+                        borderColor={colors.border}
+                        alignSelf="flex-start"
+                        gap="$2"
+                        alignItems="center"
+                      >
+                        <Text fontSize="$3">🖼</Text>
+                        <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                          Show reported image
+                        </Text>
+                      </XStack>
                     </Pressable>
-                  </YStack>
-                ) : (
-                  <Pressable onPress={() => toggleReveal(r.id)}>
-                    <XStack
-                      marginTop="$2"
-                      paddingHorizontal="$3"
-                      paddingVertical="$2"
-                      borderRadius="$2"
-                      borderWidth={1}
-                      borderColor={colors.border}
-                      alignSelf="flex-start"
-                      gap="$2"
-                      alignItems="center"
-                    >
-                      <Text fontSize="$3">🖼</Text>
-                      <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                        Show reported image
-                      </Text>
-                    </XStack>
-                  </Pressable>
-                )
-              ) : r.attachment?.type === 'file' ? (
-                <Text color={colors.textMuted} fontSize="$2" marginTop="$2">
-                  📎 {r.attachment.name ?? 'File attachment'}
+                  )
+                ) : r.attachment?.type === 'file' ? (
+                  <Text color={colors.textMuted} fontSize="$2" marginTop="$2">
+                    📎 {r.attachment.name ?? 'File attachment'}
+                  </Text>
+                ) : null}
+              </YStack>
+
+              {r.details ? (
+                <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
+                  “{r.details}”
                 </Text>
               ) : null}
+
+              {r.status === 'open' ? (
+                <YStack gap="$2" marginTop="$1">
+                  <XStack gap="$2">
+                    <Pressable
+                      style={{ flex: 1 }}
+                      onPress={() => warnAuthor(r)}
+                      disabled={busy === r.id}
+                    >
+                      <XStack
+                        height={38}
+                        borderRadius={8}
+                        borderWidth={1}
+                        borderColor="#e67e22"
+                        alignItems="center"
+                        justifyContent="center"
+                        opacity={busy === r.id ? 0.5 : 1}
+                      >
+                        <Text color="#e67e22" fontSize="$3" fontWeight="700">
+                          ⚠️ Warn user
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                    <Pressable
+                      style={{ flex: 1 }}
+                      onPress={() => removeAuthor(r)}
+                      disabled={busy === r.id}
+                    >
+                      <XStack
+                        height={38}
+                        borderRadius={8}
+                        borderWidth={1}
+                        borderColor="#c0392b"
+                        alignItems="center"
+                        justifyContent="center"
+                        opacity={busy === r.id ? 0.5 : 1}
+                      >
+                        <Text color="#c0392b" fontSize="$3" fontWeight="700">
+                          Delete account
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  </XStack>
+                  <XStack gap="$2">
+                    <Pressable
+                      style={{ flex: 1 }}
+                      onPress={() => removeMessage(r)}
+                      disabled={busy === r.id}
+                    >
+                      <XStack
+                        height={38}
+                        borderRadius={8}
+                        backgroundColor="#c0392b"
+                        alignItems="center"
+                        justifyContent="center"
+                        opacity={busy === r.id ? 0.5 : 1}
+                      >
+                        <Text color="white" fontSize="$3" fontWeight="700">
+                          Remove message
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                    <Pressable
+                      style={{ flex: 1 }}
+                      onPress={() => resolve(r, 'dismissed')}
+                      disabled={busy === r.id}
+                    >
+                      <XStack
+                        height={38}
+                        borderRadius={8}
+                        borderWidth={1}
+                        borderColor={colors.border}
+                        alignItems="center"
+                        justifyContent="center"
+                        opacity={busy === r.id ? 0.5 : 1}
+                      >
+                        <Text color={colors.text} fontSize="$3" fontWeight="700">
+                          Dismiss
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  </XStack>
+                </YStack>
+              ) : (
+                <Text color={colors.textMuted} fontSize="$2">
+                  {r.status === 'actioned' ? 'Actioned' : 'Dismissed'}
+                  {r.resolvedBy ? ` by ${nameFor(r.resolvedBy)}` : ''}
+                  {r.resolvedAt ? ` · ${new Date(r.resolvedAt).toLocaleString()}` : ''}
+                </Text>
+              )}
             </YStack>
-
-            {r.details ? (
-              <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
-                “{r.details}”
-              </Text>
-            ) : null}
-
-            {r.status === 'open' ? (
-              <YStack gap="$2" marginTop="$1">
-              <XStack gap="$2">
-                <Pressable
-                  style={{ flex: 1 }}
-                  onPress={() => warnAuthor(r)}
-                  disabled={busy === r.id}
-                >
-                  <XStack
-                    height={38}
-                    borderRadius={8}
-                    borderWidth={1}
-                    borderColor="#e67e22"
-                    alignItems="center"
-                    justifyContent="center"
-                    opacity={busy === r.id ? 0.5 : 1}
-                  >
-                    <Text color="#e67e22" fontSize="$3" fontWeight="700">
-                      ⚠️ Warn user
-                    </Text>
-                  </XStack>
-                </Pressable>
-                <Pressable
-                  style={{ flex: 1 }}
-                  onPress={() => removeAuthor(r)}
-                  disabled={busy === r.id}
-                >
-                  <XStack
-                    height={38}
-                    borderRadius={8}
-                    borderWidth={1}
-                    borderColor="#c0392b"
-                    alignItems="center"
-                    justifyContent="center"
-                    opacity={busy === r.id ? 0.5 : 1}
-                  >
-                    <Text color="#c0392b" fontSize="$3" fontWeight="700">
-                      Delete account
-                    </Text>
-                  </XStack>
-                </Pressable>
-              </XStack>
-              <XStack gap="$2">
-                <Pressable
-                  style={{ flex: 1 }}
-                  onPress={() => removeMessage(r)}
-                  disabled={busy === r.id}
-                >
-                  <XStack
-                    height={38}
-                    borderRadius={8}
-                    backgroundColor="#c0392b"
-                    alignItems="center"
-                    justifyContent="center"
-                    opacity={busy === r.id ? 0.5 : 1}
-                  >
-                    <Text color="white" fontSize="$3" fontWeight="700">
-                      Remove message
-                    </Text>
-                  </XStack>
-                </Pressable>
-                <Pressable
-                  style={{ flex: 1 }}
-                  onPress={() => resolve(r, 'dismissed')}
-                  disabled={busy === r.id}
-                >
-                  <XStack
-                    height={38}
-                    borderRadius={8}
-                    borderWidth={1}
-                    borderColor={colors.border}
-                    alignItems="center"
-                    justifyContent="center"
-                    opacity={busy === r.id ? 0.5 : 1}
-                  >
-                    <Text color={colors.text} fontSize="$3" fontWeight="700">
-                      Dismiss
-                    </Text>
-                  </XStack>
-                </Pressable>
-              </XStack>
-              </YStack>
-            ) : (
-              <Text color={colors.textMuted} fontSize="$2">
-                {r.status === 'actioned' ? 'Actioned' : 'Dismissed'}
-                {r.resolvedBy ? ` by ${nameFor(r.resolvedBy)}` : ''}
-                {r.resolvedAt ? ` · ${new Date(r.resolvedAt).toLocaleString()}` : ''}
-              </Text>
-            )}
-          </YStack>
-        ))
-      )}
+          ))
+        )}
       </ScrollView>
     </YStack>
   )

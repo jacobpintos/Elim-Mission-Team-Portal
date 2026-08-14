@@ -14,8 +14,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { geocodeCity } from '@/lib/geocode'
 import { allInstances } from '@/lib/events'
-import { availKey, seriesAvailKey, getSeriesAvail } from '@/lib/availability'
-import { AVAIL_LABELS } from '@/lib/availability'
+import { availKey, seriesAvailKey, getSeriesAvail, AVAIL_LABELS } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { nextId } from '@/lib/counters'
 import { useGroupsStore } from '@/stores/groupsStore'
@@ -129,7 +128,7 @@ function getDCForUser(ev: EventTemplate, uid: string): string | null {
 }
 
 async function notifyEventChanges(old: EventTemplate, updated: EventTemplate) {
-  const notifications: Array<{ uid: string; msg: string }> = []
+  const notifications: { uid: string; msg: string }[] = []
 
   const teamUids = new Set([
     ...(old.teams ?? []).flatMap((t) => [...t.leaders, ...t.members].map(String)),
@@ -251,11 +250,15 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     const { getMemberUids } = useGroupsStore.getState()
     return all.filter((ev) => {
       if (ev.users?.some((x) => sameId(x, uid))) return true
-      if (ev.groups?.length && getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid))) return true
-      if (ev.teams?.some((team) =>
-        team.leaders.some((m) => sameId(m, uid)) ||
-        team.members.some((m) => sameId(m, uid))
-      )) return true
+      if (ev.groups?.length && getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)))
+        return true
+      if (
+        ev.teams?.some(
+          (team) =>
+            team.leaders.some((m) => sameId(m, uid)) || team.members.some((m) => sameId(m, uid))
+        )
+      )
+        return true
       return false
     })
   },
@@ -269,10 +272,11 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       const isAssigned =
         ev.users?.some((x) => sameId(x, uid)) ||
         (ev.groups?.length ? getMemberUids(ev.groups).some((gUid) => sameId(gUid, uid)) : false) ||
-        (ev.teams?.some((team) =>
-          team.leaders.some((m) => sameId(m, uid)) ||
-          team.members.some((m) => sameId(m, uid))
-        ) ?? false)
+        (ev.teams?.some(
+          (team) =>
+            team.leaders.some((m) => sameId(m, uid)) || team.members.some((m) => sameId(m, uid))
+        ) ??
+          false)
       if (!isAssigned) return false
 
       // For recurring: check series response
@@ -389,7 +393,10 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     if (old && (patch.teams !== undefined || patch.dressCode !== undefined)) {
       notifyEventChanges(old, { ...old, ...patch }).catch(() => {})
     }
-    if (old && (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined)) {
+    if (
+      old &&
+      (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined)
+    ) {
       notifyEventJoinRemoval(old, { ...old, ...patch }).catch(() => {})
     }
   },
@@ -410,7 +417,10 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       [`overrides.${instanceKey}`]: patch,
       _updatedAt: serverTimestamp(),
     })
-    if (before && (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined)) {
+    if (
+      before &&
+      (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined)
+    ) {
       notifyEventJoinRemoval(before, { ...before, ...patch }).catch(() => {})
     }
   },

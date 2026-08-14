@@ -6,7 +6,11 @@ import { sameId } from '@/lib/ids'
 import type { LodgingEntry, EventTeam } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 
-interface GroupDoc { id: string; name: string; members: string[] }
+interface GroupDoc {
+  id: string
+  name: string
+  members: string[]
+}
 
 interface LodgingEditorProps {
   entries: LodgingEntry[]
@@ -67,7 +71,9 @@ export function LodgingEditor({
     const entry = entries[idx]
     // Only add UIDs that are in the event and not already placed elsewhere
     const placedElsewhere = new Set(entries.flatMap((e, i) => (i === idx ? [] : e.assignees)))
-    const toAdd = uids.filter((uid) => assignedUids.has(uid) && !placedElsewhere.has(uid) && !entry.assignees.includes(uid))
+    const toAdd = uids.filter(
+      (uid) => assignedUids.has(uid) && !placedElsewhere.has(uid) && !entry.assignees.includes(uid)
+    )
     if (toAdd.length === 0) return
     updateEntry(idx, { assignees: [...entry.assignees, ...toAdd] })
   }
@@ -80,11 +86,12 @@ export function LodgingEditor({
         const q = search.trim().toLowerCase()
         const searchResults = q
           ? allUsers
-              .filter((u) =>
-                assignedUids.has(String(u.uid)) &&
-                !placedElsewhere.has(String(u.uid)) &&
-                ((u.displayName ?? '').toLowerCase().includes(q) ||
-                  (u.email ?? '').toLowerCase().includes(q))
+              .filter(
+                (u) =>
+                  assignedUids.has(String(u.uid)) &&
+                  !placedElsewhere.has(String(u.uid)) &&
+                  ((u.displayName ?? '').toLowerCase().includes(q) ||
+                    (u.email ?? '').toLowerCase().includes(q))
               )
               .slice(0, 10)
           : []
@@ -102,21 +109,39 @@ export function LodgingEditor({
             {/* Name + Room row */}
             <XStack gap="$2" alignItems="center">
               <TextInput
-                style={[styles.input, { flex: 2, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                style={[
+                  styles.input,
+                  {
+                    flex: 2,
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
                 value={entry.name}
                 onChangeText={(v) => updateEntry(idx, { name: v })}
                 placeholder="Hotel / Lodging name"
                 placeholderTextColor={colors.textMuted}
               />
               <TextInput
-                style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                style={[
+                  styles.input,
+                  {
+                    flex: 1,
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
                 value={entry.room ?? ''}
                 onChangeText={(v) => updateEntry(idx, { room: v })}
                 placeholder="Room / Location"
                 placeholderTextColor={colors.textMuted}
               />
               <Pressable onPress={() => removeEntry(idx)}>
-                <Text color="$red10" fontSize="$4">✕</Text>
+                <Text color="$red10" fontSize="$4">
+                  ✕
+                </Text>
               </Pressable>
             </XStack>
 
@@ -138,7 +163,9 @@ export function LodgingEditor({
                       <Text color={colors.primary} fontSize="$2">
                         {getName(uid, allUsers)}
                       </Text>
-                      <Text color={colors.primary} fontSize={10}>✕</Text>
+                      <Text color={colors.primary} fontSize={10}>
+                        ✕
+                      </Text>
                     </XStack>
                   </Pressable>
                 ))}
@@ -146,7 +173,12 @@ export function LodgingEditor({
             )}
 
             {/* Expand/collapse picker */}
-            <Pressable onPress={() => { setExpandedIdx(isExpanded ? null : idx); setSearch('') }}>
+            <Pressable
+              onPress={() => {
+                setExpandedIdx(isExpanded ? null : idx)
+                setSearch('')
+              }}
+            >
               <XStack
                 borderWidth={1}
                 borderColor={colors.border}
@@ -173,7 +205,9 @@ export function LodgingEditor({
                       paddingHorizontal="$2"
                       paddingVertical="$0.5"
                     >
-                      <Text fontSize="$2" color={colors.text}>All event attendees</Text>
+                      <Text fontSize="$2" color={colors.text}>
+                        All event attendees
+                      </Text>
                     </XStack>
                   </Pressable>
                   {teams.map((t) => {
@@ -187,7 +221,9 @@ export function LodgingEditor({
                           paddingHorizontal="$2"
                           paddingVertical="$0.5"
                         >
-                          <Text fontSize="$2" color={colors.text}>Team: {t.name}</Text>
+                          <Text fontSize="$2" color={colors.text}>
+                            Team: {t.name}
+                          </Text>
                         </XStack>
                       </Pressable>
                     )
@@ -201,7 +237,9 @@ export function LodgingEditor({
                         paddingHorizontal="$2"
                         paddingVertical="$0.5"
                       >
-                        <Text fontSize="$2" color={colors.text}>Group: {g.name}</Text>
+                        <Text fontSize="$2" color={colors.text}>
+                          Group: {g.name}
+                        </Text>
                       </XStack>
                     </Pressable>
                   ))}
@@ -209,7 +247,14 @@ export function LodgingEditor({
 
                 {/* Individual search */}
                 <TextInput
-                  style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.background,
+                    },
+                  ]}
                   value={search}
                   onChangeText={setSearch}
                   placeholder="Search people…"
@@ -230,7 +275,11 @@ export function LodgingEditor({
                         <Text flex={1} fontSize="$3" color={colors.text}>
                           {u.displayName || u.email || uid}
                         </Text>
-                        {isSel && <Text color={colors.primary} fontSize="$3">✓</Text>}
+                        {isSel && (
+                          <Text color={colors.primary} fontSize="$3">
+                            ✓
+                          </Text>
+                        )}
                       </XStack>
                     </Pressable>
                   )
@@ -251,7 +300,9 @@ export function LodgingEditor({
           paddingVertical="$2"
           alignSelf="flex-start"
         >
-          <Text color={colors.primary} fontSize="$3">+ Add location</Text>
+          <Text color={colors.primary} fontSize="$3">
+            + Add location
+          </Text>
         </XStack>
       </Pressable>
 
@@ -269,7 +320,8 @@ export function LodgingEditor({
           <Text fontSize="$3">⚠</Text>
           <YStack flex={1}>
             <Text fontSize="$2" color="#e67e22" fontWeight="700">
-              {unassigned.length} person{unassigned.length !== 1 ? 's' : ''} not yet assigned to lodging:
+              {unassigned.length} person{unassigned.length !== 1 ? 's' : ''} not yet assigned to
+              lodging:
             </Text>
             <Text fontSize="$2" color="#e67e22">
               {unassigned.map((uid) => getName(uid, allUsers)).join(', ')}

@@ -1,5 +1,12 @@
 import { useState, useCallback } from 'react'
-import { View, TextInput as RNTextInput, Modal, Pressable, Platform, ScrollView } from 'react-native'
+import {
+  View,
+  TextInput as RNTextInput,
+  Modal,
+  Pressable,
+  Platform,
+  ScrollView,
+} from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { ColorWheel } from './ColorWheel'
@@ -161,7 +168,11 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
 
       <XStack alignItems="center" gap="$3">
         {/* Clickable color swatch — opens color wheel */}
-        <Pressable onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel={`Open color picker for ${label}`}>
+        <Pressable
+          onPress={() => setOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Open color picker for ${label}`}
+        >
           <View
             style={{
               width: 48,
@@ -200,15 +211,15 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
       </XStack>
 
       {/* Color wheel modal */}
-      <Modal
-        visible={open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-      >
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         {/* Backdrop */}
         <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' }}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
           onPress={() => setOpen(false)}
         >
           {/* Panel — stop propagation */}
@@ -229,9 +240,7 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
             >
               {/* Header */}
               <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
-                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>
-                  {label}
-                </Text>
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{label}</Text>
                 {/* Live swatch */}
                 <View
                   style={{

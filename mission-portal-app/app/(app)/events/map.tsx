@@ -5,7 +5,13 @@ import { useThemeColors } from '@/theme/useThemeColors'
 export default function EventsMapScreen() {
   const colors = useThemeColors()
   return (
-    <YStack flex={1} backgroundColor={colors.background} alignItems="center" justifyContent="center" gap="$3">
+    <YStack
+      flex={1}
+      backgroundColor={colors.background}
+      alignItems="center"
+      justifyContent="center"
+      gap="$3"
+    >
       <ScreenTitle options={{ title: 'Events Map' }} />
       <Text fontSize={32}>🗺️</Text>
       <Text color={colors.text} fontWeight="700" fontSize="$4">

@@ -8,8 +8,7 @@ interface ImageBlockProps {
 
 export function ImageBlock({ data }: ImageBlockProps) {
   const align = data.align ?? 'center'
-  const flexAlign =
-    align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center'
+  const flexAlign = align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center'
 
   if (!data.src) {
     return (

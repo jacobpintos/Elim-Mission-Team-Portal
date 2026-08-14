@@ -42,10 +42,7 @@ function FullListModal({
   const colors = useThemeColors()
   return (
     <RNModal visible transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        style={styles.modalOverlay}
-        onPress={onClose}
-      >
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
         <Pressable style={[styles.modalBox, { backgroundColor: colors.surface }]}>
           <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
             <Text color={color} fontWeight="700" fontSize="$4">
@@ -236,7 +233,7 @@ function ExceptionRow({
   entries,
 }: {
   date: string
-  entries: Array<{ uid: string; name: string; response: AvailResponse; seriesStatus?: string }>
+  entries: { uid: string; name: string; response: AvailResponse; seriesStatus?: string }[]
 }) {
   const colors = useThemeColors()
   const [open, setOpen] = useState(false)
@@ -300,7 +297,13 @@ export default function AdminAvailScreen() {
     subscribe: subEvents,
     unsubscribe: unsubEvents,
   } = useEventsStore()
-  const { users, loading: usersLoading, subscribe: subUsers, unsubscribe: unsubUsers, displayName } = useUsersStore()
+  const {
+    users,
+    loading: usersLoading,
+    subscribe: subUsers,
+    unsubscribe: unsubUsers,
+    displayName,
+  } = useUsersStore()
   const { groups, subscribe: subGroups, unsubscribe: unsubGroups } = useGroupsStore()
 
   const [search, setSearch] = useState('')
@@ -380,8 +383,8 @@ export default function AdminAvailScreen() {
             ev.recur === 'biweekly'
               ? 'Every 2 weeks'
               : ev.recur === 'monthly'
-              ? 'Monthly'
-              : 'Weekly'
+                ? 'Monthly'
+                : 'Weekly'
 
           result.push({
             kind: 'series',
@@ -462,11 +465,11 @@ export default function AdminAvailScreen() {
   const getExceptions = (
     templateId: string | number,
     assignedUids: string[]
-  ): Record<string, Array<{ uid: string; name: string; response: AvailResponse }>> => {
+  ): Record<string, { uid: string; name: string; response: AvailResponse }[]> => {
     const tmpl = templates.find((t) => sameId(t.id, templateId))
     if (!tmpl) return {}
     const instances = allInstances([tmpl], overrides, todayStr(), '9999-12-31')
-    const byDate: Record<string, Array<{ uid: string; name: string; response: AvailResponse }>> = {}
+    const byDate: Record<string, { uid: string; name: string; response: AvailResponse }[]> = {}
 
     for (const ev of instances) {
       for (const uid of assignedUids) {
@@ -502,7 +505,12 @@ export default function AdminAvailScreen() {
 
   if (usersLoading && users.length === 0) {
     return (
-      <YStack flex={1} backgroundColor={colors.background} alignItems="center" justifyContent="center">
+      <YStack
+        flex={1}
+        backgroundColor={colors.background}
+        alignItems="center"
+        justifyContent="center"
+      >
         <ScreenTitle options={{ title: 'Availability Tracker' }} />
         <Text color={colors.textMuted}>Loading…</Text>
       </YStack>
@@ -645,59 +653,54 @@ export default function AdminAvailScreen() {
 
                   {/* Expanded: detailed response breakdown */}
                   {isOpen ? (
-                    <YStack
-                      borderTopWidth={1}
-                      borderTopColor={colors.border}
-                      padding="$3"
-                      gap="$2"
-                    >
+                    <YStack borderTopWidth={1} borderTopColor={colors.border} padding="$3" gap="$2">
                       <ResponseSummary
                         assignedUids={card.assignedUids}
                         responses={responses}
-                        onShowList={(users, label, color) =>
-                          setListModal({ users, label, color })
-                        }
+                        onShowList={(users, label, color) => setListModal({ users, label, color })}
                       />
 
                       {/* Exceptions for series cards */}
-                      {card.kind === 'series' ? (() => {
-                        const exceptions = getExceptions(card.templateId, card.assignedUids)
-                        const exDates = Object.keys(exceptions).sort()
-                        if (exDates.length === 0) return null
-                        const exKey = `ex_${card.templateId}`
-                        const exOpen = exceptionsExpanded.has(exKey)
-                        return (
-                          <YStack
-                            marginTop="$1"
-                            borderTopWidth={1}
-                            borderTopColor={colors.border}
-                            paddingTop="$2"
-                          >
-                            <Pressable onPress={() => toggleExceptions(exKey)}>
-                              <XStack justifyContent="space-between" alignItems="center">
-                                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                                  EXCEPTIONS ({exDates.length} date
-                                  {exDates.length !== 1 ? 's' : ''})
-                                </Text>
-                                <Text color={colors.textMuted} fontSize="$2">
-                                  {exOpen ? '▲' : '▼'}
-                                </Text>
-                              </XStack>
-                            </Pressable>
-                            {exOpen ? (
-                              <YStack marginTop="$1" gap="$0.5">
-                                {exDates.map((date) => (
-                                  <ExceptionRow
-                                    key={date}
-                                    date={date}
-                                    entries={exceptions[date]}
-                                  />
-                                ))}
+                      {card.kind === 'series'
+                        ? (() => {
+                            const exceptions = getExceptions(card.templateId, card.assignedUids)
+                            const exDates = Object.keys(exceptions).sort()
+                            if (exDates.length === 0) return null
+                            const exKey = `ex_${card.templateId}`
+                            const exOpen = exceptionsExpanded.has(exKey)
+                            return (
+                              <YStack
+                                marginTop="$1"
+                                borderTopWidth={1}
+                                borderTopColor={colors.border}
+                                paddingTop="$2"
+                              >
+                                <Pressable onPress={() => toggleExceptions(exKey)}>
+                                  <XStack justifyContent="space-between" alignItems="center">
+                                    <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                                      EXCEPTIONS ({exDates.length} date
+                                      {exDates.length !== 1 ? 's' : ''})
+                                    </Text>
+                                    <Text color={colors.textMuted} fontSize="$2">
+                                      {exOpen ? '▲' : '▼'}
+                                    </Text>
+                                  </XStack>
+                                </Pressable>
+                                {exOpen ? (
+                                  <YStack marginTop="$1" gap="$0.5">
+                                    {exDates.map((date) => (
+                                      <ExceptionRow
+                                        key={date}
+                                        date={date}
+                                        entries={exceptions[date]}
+                                      />
+                                    ))}
+                                  </YStack>
+                                ) : null}
                               </YStack>
-                            ) : null}
-                          </YStack>
-                        )
-                      })() : null}
+                            )
+                          })()
+                        : null}
                     </YStack>
                   ) : null}
                 </YStack>

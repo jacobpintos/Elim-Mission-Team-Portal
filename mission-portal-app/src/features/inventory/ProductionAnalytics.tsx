@@ -4,8 +4,16 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import type { InventoryItem, InventoryCategory } from '@/types/inventory'
 
 const CHART_COLORS = [
-  '#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
-  '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac',
+  '#4e79a7',
+  '#f28e2b',
+  '#e15759',
+  '#76b7b2',
+  '#59a14f',
+  '#edc948',
+  '#b07aa1',
+  '#ff9da7',
+  '#9c755f',
+  '#bab0ac',
 ]
 
 interface ProductionAnalyticsProps {
@@ -26,11 +34,20 @@ function BarRow({ label, value, maxValue, color, valueLabel }: BarRowProps) {
   const pct = maxValue > 0 ? Math.max((value / maxValue) * 100, value > 0 ? 2 : 0) : 0
   return (
     <XStack gap="$2" alignItems="center" paddingVertical={5}>
-      <Text style={styles.barLabel} color={colors.text} numberOfLines={1}>{label}</Text>
+      <Text style={styles.barLabel} color={colors.text} numberOfLines={1}>
+        {label}
+      </Text>
       <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
-        <View style={[styles.barFill, { width: `${pct}%` as unknown as number, backgroundColor: color }]} />
+        <View
+          style={[
+            styles.barFill,
+            { width: `${pct}%` as unknown as number, backgroundColor: color },
+          ]}
+        />
       </View>
-      <Text style={styles.barValue} color={colors.textMuted}>{valueLabel}</Text>
+      <Text style={styles.barValue} color={colors.textMuted}>
+        {valueLabel}
+      </Text>
     </XStack>
   )
 }
@@ -65,7 +82,9 @@ export function ProductionAnalytics({ items, categories }: ProductionAnalyticsPr
   if (items.length === 0) {
     return (
       <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
-        <Text color={colors.textMuted} textAlign="center">No items yet. Add items in the Items tab.</Text>
+        <Text color={colors.textMuted} textAlign="center">
+          No items yet. Add items in the Items tab.
+        </Text>
       </YStack>
     )
   }
@@ -73,7 +92,6 @@ export function ProductionAnalytics({ items, categories }: ProductionAnalyticsPr
   return (
     <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
       <YStack padding="$3" paddingBottom="$8" gap="$4">
-
         {/* Summary cards */}
         <XStack gap="$2">
           <YStack
@@ -85,9 +103,15 @@ export function ProductionAnalytics({ items, categories }: ProductionAnalyticsPr
             padding="$3"
             gap="$0.5"
           >
-            <Text color={colors.textMuted} fontSize="$2">Total Value</Text>
+            <Text color={colors.textMuted} fontSize="$2">
+              Total Value
+            </Text>
             <Text color={colors.primary} fontWeight="700" fontSize="$5">
-              ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              $
+              {totalValue.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </Text>
           </YStack>
           <YStack
@@ -99,7 +123,9 @@ export function ProductionAnalytics({ items, categories }: ProductionAnalyticsPr
             padding="$3"
             gap="$0.5"
           >
-            <Text color={colors.textMuted} fontSize="$2">Total Items</Text>
+            <Text color={colors.textMuted} fontSize="$2">
+              Total Items
+            </Text>
             <Text color={colors.primary} fontWeight="700" fontSize="$5">
               {totalQty.toLocaleString()}
             </Text>
@@ -115,7 +141,9 @@ export function ProductionAnalytics({ items, categories }: ProductionAnalyticsPr
           padding="$3"
           gap="$2"
         >
-          <Text color={colors.text} fontWeight="700" fontSize="$3">Inventory Value by Category</Text>
+          <Text color={colors.text} fontWeight="700" fontSize="$3">
+            Inventory Value by Category
+          </Text>
           {valueByCategory.map((cat, i) => (
             <BarRow
               key={cat.name}
@@ -130,7 +158,12 @@ export function ProductionAnalytics({ items, categories }: ProductionAnalyticsPr
           <XStack flexWrap="wrap" gap="$2" marginTop="$1">
             {valueByCategory.map((cat, i) => (
               <XStack key={cat.name} gap="$1" alignItems="center">
-                <View style={[styles.legendDot, { backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }]} />
+                <View
+                  style={[
+                    styles.legendDot,
+                    { backgroundColor: CHART_COLORS[i % CHART_COLORS.length] },
+                  ]}
+                />
                 <Text color={colors.textMuted} fontSize="$1">
                   {cat.name} ({totalValue > 0 ? ((cat.value / totalValue) * 100).toFixed(1) : '0'}%)
                 </Text>
@@ -148,7 +181,9 @@ export function ProductionAnalytics({ items, categories }: ProductionAnalyticsPr
           padding="$3"
           gap="$2"
         >
-          <Text color={colors.text} fontWeight="700" fontSize="$3">Quantity by Category</Text>
+          <Text color={colors.text} fontWeight="700" fontSize="$3">
+            Quantity by Category
+          </Text>
           {valueByCategory.map((cat, i) => (
             <BarRow
               key={cat.name}
@@ -160,7 +195,6 @@ export function ProductionAnalytics({ items, categories }: ProductionAnalyticsPr
             />
           ))}
         </YStack>
-
       </YStack>
     </ScrollView>
   )

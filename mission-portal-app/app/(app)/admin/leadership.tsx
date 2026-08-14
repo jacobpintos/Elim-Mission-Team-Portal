@@ -117,11 +117,7 @@ export default function AdminLeadership() {
               borderBottomWidth={1}
               borderBottomColor="$borderColor"
             >
-              <Avatar
-                uri={item.photoURL}
-                displayName={item.displayName}
-                size={40}
-              />
+              <Avatar uri={item.photoURL} displayName={item.displayName} size={40} />
 
               <YStack flex={1} gap="$1">
                 <Text fontWeight="600" fontSize="$3">
@@ -130,8 +126,12 @@ export default function AdminLeadership() {
                 <RNTextInput
                   placeholder="Title (e.g. Worship Leader)"
                   defaultValue={userWithTitle.title ?? ''}
-                  onChangeText={(v) => { titleDraft.current[item.uid] = v }}
-                  onBlur={() => saveTitle(item.uid, titleDraft.current[item.uid] ?? userWithTitle.title ?? '')}
+                  onChangeText={(v) => {
+                    titleDraft.current[item.uid] = v
+                  }}
+                  onBlur={() =>
+                    saveTitle(item.uid, titleDraft.current[item.uid] ?? userWithTitle.title ?? '')
+                  }
                   style={{
                     fontSize: 13,
                     color: '#888',

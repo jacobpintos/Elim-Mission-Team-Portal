@@ -53,11 +53,13 @@ export default function EventsMapScreen() {
     }
   }, [profile])
 
-
   // Build location groups from all instances in range
   const allLocGroups = useMemo<LocationGroup[]>(() => {
     const instances = allInstances(templates, overrides, startDate, endDate)
-    const locMap = new Map<string, { lat: number; lng: number; names: Set<string>; trips: number }>()
+    const locMap = new Map<
+      string,
+      { lat: number; lng: number; names: Set<string>; trips: number }
+    >()
 
     for (const ev of instances) {
       const lat = ev._geocodeLat
@@ -99,9 +101,7 @@ export default function EventsMapScreen() {
 
   const allSelected = deselected.size === 0
   const toggleAll = () => {
-    setDeselected(
-      allSelected ? new Set(allLocGroups.map((g) => g.key)) : new Set()
-    )
+    setDeselected(allSelected ? new Set(allLocGroups.map((g) => g.key)) : new Set())
   }
   const toggleGroup = (key: string) => {
     setDeselected((prev) => {
@@ -143,8 +143,11 @@ export default function EventsMapScreen() {
     // Home marker
     const homeEl = document.createElement('div')
     homeEl.style.cssText = [
-      'width:14px', 'height:14px', 'background:#2980b9',
-      'border:3px solid white', 'border-radius:50%',
+      'width:14px',
+      'height:14px',
+      'background:#2980b9',
+      'border:3px solid white',
+      'border-radius:50%',
       'box-shadow:0 1px 6px rgba(0,0,0,0.4)',
     ].join(';')
     new mapboxgl.Marker({ element: homeEl })
@@ -200,14 +203,22 @@ export default function EventsMapScreen() {
     for (const { lat, lng, names, trips, onewayMi } of activeGroups) {
       const el = document.createElement('div')
       el.style.cssText = [
-        'width:26px', 'height:26px', 'background:#f56c5a',
-        'border:3px solid white', 'border-radius:50% 50% 50% 0',
+        'width:26px',
+        'height:26px',
+        'background:#f56c5a',
+        'border:3px solid white',
+        'border-radius:50% 50% 50% 0',
         'transform:rotate(-45deg)',
         'box-shadow:0 2px 8px rgba(0,0,0,0.35)',
-        'cursor:pointer', 'transition:transform 0.15s ease',
+        'cursor:pointer',
+        'transition:transform 0.15s ease',
       ].join(';')
-      el.addEventListener('mouseenter', () => { el.style.transform = 'rotate(-45deg) scale(1.25)' })
-      el.addEventListener('mouseleave', () => { el.style.transform = 'rotate(-45deg) scale(1)' })
+      el.addEventListener('mouseenter', () => {
+        el.style.transform = 'rotate(-45deg) scale(1.25)'
+      })
+      el.addEventListener('mouseleave', () => {
+        el.style.transform = 'rotate(-45deg) scale(1)'
+      })
 
       const nameHtml = names.map((n) => `<strong>${n}</strong>`).join('<br/>')
       const popup = new mapboxgl.Popup({ offset: 20, closeButton: false, maxWidth: '220px' })
@@ -266,23 +277,33 @@ export default function EventsMapScreen() {
         flexWrap="wrap"
       >
         <XStack gap="$2" alignItems="center">
-          <Text color={colors.textMuted} fontSize="$2">From</Text>
+          <Text color={colors.textMuted} fontSize="$2">
+            From
+          </Text>
           <input
             type="date"
             value={startDate}
             max={endDate}
-            onChange={(e) => { setStartDate(e.target.value); setDeselected(new Set()) }}
+            onChange={(e) => {
+              setStartDate(e.target.value)
+              setDeselected(new Set())
+            }}
             style={inputStyle}
           />
         </XStack>
         <XStack gap="$2" alignItems="center">
-          <Text color={colors.textMuted} fontSize="$2">To</Text>
+          <Text color={colors.textMuted} fontSize="$2">
+            To
+          </Text>
           <input
             type="date"
             value={endDate}
             min={startDate}
             max={new Date().toISOString().split('T')[0]}
-            onChange={(e) => { setEndDate(e.target.value); setDeselected(new Set()) }}
+            onChange={(e) => {
+              setEndDate(e.target.value)
+              setDeselected(new Set())
+            }}
             style={inputStyle}
           />
         </XStack>
@@ -290,7 +311,8 @@ export default function EventsMapScreen() {
           {activeGroups.length > 0 ? (
             <>
               <Text color={colors.textMuted} fontSize="$2">
-                {activeGroups.length} location{activeGroups.length !== 1 ? 's' : ''} · {totalTrips} trip{totalTrips !== 1 ? 's' : ''}
+                {activeGroups.length} location{activeGroups.length !== 1 ? 's' : ''} · {totalTrips}{' '}
+                trip{totalTrips !== 1 ? 's' : ''}
               </Text>
               <XStack
                 backgroundColor={colors.primary + '18'}
@@ -304,7 +326,9 @@ export default function EventsMapScreen() {
               </XStack>
             </>
           ) : (
-            <Text color={colors.textMuted} fontSize="$2">No events in range</Text>
+            <Text color={colors.textMuted} fontSize="$2">
+              No events in range
+            </Text>
           )}
         </XStack>
       </XStack>
@@ -373,28 +397,30 @@ export default function EventsMapScreen() {
                         flexShrink={0}
                       >
                         {selected ? (
-                          <Text color="white" fontSize={11} fontWeight="700">✓</Text>
+                          <Text color="white" fontSize={11} fontWeight="700">
+                            ✓
+                          </Text>
                         ) : null}
                       </XStack>
 
                       {/* Info */}
                       <YStack flex={1} gap="$0.5">
-                        <Text
-                          color={colors.text}
-                          fontSize="$2"
-                          fontWeight="600"
-                          numberOfLines={2}
-                        >
+                        <Text color={colors.text} fontSize="$2" fontWeight="600" numberOfLines={2}>
                           {group.names.join(' / ')}
                         </Text>
                         <Text color={colors.textMuted} fontSize={11}>
-                          {group.trips} trip{group.trips !== 1 ? 's' : ''} · {Math.round(group.onewayMi)} mi one-way
+                          {group.trips} trip{group.trips !== 1 ? 's' : ''} ·{' '}
+                          {Math.round(group.onewayMi)} mi one-way
                         </Text>
                       </YStack>
 
                       {/* Round-trip total */}
                       <YStack alignItems="flex-end">
-                        <Text color={selected ? colors.primary : colors.textMuted} fontSize={11} fontWeight="600">
+                        <Text
+                          color={selected ? colors.primary : colors.textMuted}
+                          fontSize={11}
+                          fontWeight="600"
+                        >
                           {roundTripTotal} mi
                         </Text>
                         <Text color={colors.textMuted} fontSize={10}>
@@ -456,18 +482,32 @@ export default function EventsMapScreen() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                width: 12, height: 12, background: '#f56c5a',
-                borderRadius: '50% 50% 50% 0', transform: 'rotate(-45deg)',
-                border: '2px solid white', boxShadow: '0 1px 4px rgba(0,0,0,0.3)', flexShrink: 0,
-              }} />
+              <div
+                style={{
+                  width: 12,
+                  height: 12,
+                  background: '#f56c5a',
+                  borderRadius: '50% 50% 50% 0',
+                  transform: 'rotate(-45deg)',
+                  border: '2px solid white',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                  flexShrink: 0,
+                }}
+              />
               <span style={{ color: colors.text }}>Event location</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                width: 12, height: 12, background: '#2980b9', borderRadius: '50%',
-                border: '2px solid white', boxShadow: '0 1px 4px rgba(0,0,0,0.3)', flexShrink: 0,
-              }} />
+              <div
+                style={{
+                  width: 12,
+                  height: 12,
+                  background: '#2980b9',
+                  borderRadius: '50%',
+                  border: '2px solid white',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                  flexShrink: 0,
+                }}
+              />
               <span style={{ color: colors.text }}>North Liberty, IA</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

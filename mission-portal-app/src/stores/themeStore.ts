@@ -57,7 +57,9 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
 
     // Clean up expired backup from storage silently
     if (theme.logoBackup && theme.logoBackup.expiresAt < Date.now()) {
-      try { await deleteObject(storageRef(storage, theme.logoBackup.path)) } catch {}
+      try {
+        await deleteObject(storageRef(storage, theme.logoBackup.path))
+      } catch {}
     }
 
     const path = `logos/logo_${Date.now()}`
@@ -78,7 +80,13 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
 
     await setDoc(
       doc(db, 'appSettings', 'theme'),
-      { logoUrl: url, logoPath: path, logoBackup: backup, updatedAt: serverTimestamp(), updatedBy: uid },
+      {
+        logoUrl: url,
+        logoPath: path,
+        logoBackup: backup,
+        updatedAt: serverTimestamp(),
+        updatedBy: uid,
+      },
       { merge: true }
     )
   },
@@ -89,7 +97,9 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
 
     // Delete the recently-uploaded logo being reverted away from
     if (theme.logoPath) {
-      try { await deleteObject(storageRef(storage, theme.logoPath)) } catch {}
+      try {
+        await deleteObject(storageRef(storage, theme.logoPath))
+      } catch {}
     }
 
     await setDoc(

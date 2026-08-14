@@ -181,12 +181,7 @@ export function PageBuilderScreen({ pageKey, pageTitle }: PageBuilderScreenProps
           </XStack>
 
           {/* Page background bar */}
-          <YStack
-            backgroundColor="$gray2"
-            borderRadius="$2"
-            padding="$2"
-            gap="$2"
-          >
+          <YStack backgroundColor="$gray2" borderRadius="$2" padding="$2" gap="$2">
             <Text fontWeight="600" fontSize="$3">
               Page Background
             </Text>
@@ -241,12 +236,7 @@ export function PageBuilderScreen({ pageKey, pageTitle }: PageBuilderScreenProps
           ))}
 
           {localBlocks.length === 0 && (
-            <YStack
-              padding="$6"
-              alignItems="center"
-              backgroundColor="$gray2"
-              borderRadius="$3"
-            >
+            <YStack padding="$6" alignItems="center" backgroundColor="$gray2" borderRadius="$3">
               <Text color="$gray10" fontSize="$4">
                 No blocks yet. Add one above.
               </Text>

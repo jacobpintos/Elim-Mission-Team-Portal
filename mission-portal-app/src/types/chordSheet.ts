@@ -23,9 +23,9 @@ export const SECTION_LABELS: Record<SectionType, string> = {
 export interface ChordSheetSection {
   id: string
   type: SectionType
-  lyrics: string            // raw multiline text; empty for instrumentals
-  chordTokens: string[][]  // [lineIdx][wordIdx] = NNS token or ''; one row for instrumentals
-  sameAsPrevious?: boolean  // if true, viewer shows label only (or skips in Chords Only)
+  lyrics: string // raw multiline text; empty for instrumentals
+  chordTokens: string[][] // [lineIdx][wordIdx] = NNS token or ''; one row for instrumentals
+  sameAsPrevious?: boolean // if true, viewer shows label only (or skips in Chords Only)
 }
 
 export interface ChordSheet {

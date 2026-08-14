@@ -1,10 +1,9 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { ScrollView, TextInput, View, Pressable, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useInputListStore } from '@/stores/inputListStore'
 import type { InputListLocation } from '@/stores/inputListStore'
-import { useState } from 'react'
 
 const LOCATIONS: { key: InputListLocation; label: string }[] = [
   { key: 'sunday', label: 'Sunday' },
@@ -72,10 +71,21 @@ export function InputListTab() {
       ) : (
         <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
           {/* Table header */}
-          <View style={[styles.headerRow, { backgroundColor: colors.primary + '18', borderBottomColor: colors.border }]}>
-            <Text style={styles.numCell} color={colors.primary} fontWeight="700" fontSize={12}>#</Text>
-            <Text style={styles.inputCell} color={colors.primary} fontWeight="700" fontSize={12}>INPUT</Text>
-            <Text style={styles.outputCell} color={colors.primary} fontWeight="700" fontSize={12}>OUTPUT</Text>
+          <View
+            style={[
+              styles.headerRow,
+              { backgroundColor: colors.primary + '18', borderBottomColor: colors.border },
+            ]}
+          >
+            <Text style={styles.numCell} color={colors.primary} fontWeight="700" fontSize={12}>
+              #
+            </Text>
+            <Text style={styles.inputCell} color={colors.primary} fontWeight="700" fontSize={12}>
+              INPUT
+            </Text>
+            <Text style={styles.outputCell} color={colors.primary} fontWeight="700" fontSize={12}>
+              OUTPUT
+            </Text>
           </View>
 
           {currentRows.map((row, idx) => (
@@ -83,10 +93,15 @@ export function InputListTab() {
               key={idx}
               style={[
                 styles.dataRow,
-                { backgroundColor: idx % 2 === 0 ? evenBg : oddBg, borderBottomColor: colors.border },
+                {
+                  backgroundColor: idx % 2 === 0 ? evenBg : oddBg,
+                  borderBottomColor: colors.border,
+                },
               ]}
             >
-              <Text style={styles.numCell} color={colors.textMuted} fontSize={12}>{idx + 1}</Text>
+              <Text style={styles.numCell} color={colors.textMuted} fontSize={12}>
+                {idx + 1}
+              </Text>
               <View style={styles.inputCell}>
                 <TextInput
                   style={[styles.cellInput, { color: colors.text }]}

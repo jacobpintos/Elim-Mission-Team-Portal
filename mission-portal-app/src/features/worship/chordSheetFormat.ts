@@ -6,7 +6,11 @@ import { nashvilleToChord, getWordSlots } from '@/lib/nashvilleNumbers'
 export const PROGRESSION_END = '||'
 
 export function escHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 // A trailing "." on a chord token marks the end of a progression (used to
@@ -24,12 +28,16 @@ export function formatToken(raw: string, keyIdx: number, isMinor: boolean): stri
   if (!raw || raw === PROGRESSION_END) return raw
   const tok = stripBoundary(raw)
   if (!tok) return ''
-  const conv = (t: string) => keyIdx < 0 ? t.trim() : nashvilleToChord(t.trim(), keyIdx, isMinor)
+  const conv = (t: string) => (keyIdx < 0 ? t.trim() : nashvilleToChord(t.trim(), keyIdx, isMinor))
   if (tok.includes('>')) return tok.split('>').map(conv).join(' → ')
   if (keyIdx < 0) return tok
   // Space-separated: user packed multiple chords into one box — convert each independently
   if (tok.includes(' ')) {
-    return tok.trim().split(/\s+/).map((p) => p.split('/').map(conv).join('/')).join('  ')
+    return tok
+      .trim()
+      .split(/\s+/)
+      .map((p) => p.split('/').map(conv).join('/'))
+      .join('  ')
   }
   return tok.split('/').map(conv).join('/')
 }
@@ -42,14 +50,20 @@ export function splitByProgressionEnd(tokens: string[]): string[][] {
   let current: string[] = []
   for (const t of tokens) {
     if (t === PROGRESSION_END) {
-      if (current.length > 0) { groups.push(current); current = [] }
+      if (current.length > 0) {
+        groups.push(current)
+        current = []
+      }
       continue
     }
     if (!t) continue
     const isBoundary = t.endsWith('.')
     const chord = stripBoundary(t)
     if (chord) current.push(chord)
-    if (isBoundary && current.length > 0) { groups.push(current); current = [] }
+    if (isBoundary && current.length > 0) {
+      groups.push(current)
+      current = []
+    }
   }
   if (current.length > 0) groups.push(current)
   return groups
@@ -83,7 +97,10 @@ export function getPrevMatchingLabel(sections: ChordSheet['sections'], id: strin
   const idx = sections.findIndex((s) => s.id === id)
   if (idx <= 0) return ''
   const section = sections[idx]
-  const prev = sections.slice(0, idx).reverse().find((s) => s.type === section.type)
+  const prev = sections
+    .slice(0, idx)
+    .reverse()
+    .find((s) => s.type === section.type)
   if (!prev) return ''
   return getSectionLabel(sections, prev.id)
 }
@@ -95,12 +112,23 @@ export function getPrevMatchingSection(
   const idx = sections.findIndex((s) => s.id === id)
   if (idx <= 0) return null
   const section = sections[idx]
-  return sections.slice(0, idx).reverse().find((s) => s.type === section.type) ?? null
+  return (
+    sections
+      .slice(0, idx)
+      .reverse()
+      .find((s) => s.type === section.type) ?? null
+  )
 }
 
 export function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace('#', '')
-  const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean
+  const full =
+    clean.length === 3
+      ? clean
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : clean
   const n = parseInt(full, 16)
   if (Number.isNaN(n)) return [30, 30, 30]
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
@@ -112,7 +140,7 @@ export function buildChordSheetHtml(
   isMinor: boolean,
   keyIdx: number,
   primaryColor: string,
-  ccliLicense?: string,
+  ccliLicense?: string
 ): string {
   const disp = (raw: string) => formatToken(raw, keyIdx, isMinor)
 
@@ -138,8 +166,11 @@ export function buildChordSheetHtml(
     const hasLyrics = content.lyrics.trim().length > 0
 
     if (!hasLyrics) {
-      const toks = (content.chordTokens ?? []).flat().filter(Boolean)
-        .map((t) => (t === PROGRESSION_END ? ' | ' : disp(t))).join('  ')
+      const toks = (content.chordTokens ?? [])
+        .flat()
+        .filter(Boolean)
+        .map((t) => (t === PROGRESSION_END ? ' | ' : disp(t)))
+        .join('  ')
       body += `<div class="section"><div class="slabel">${escHtml(label)}</div>${noteHtml}${toks ? `<div class="instrumental">${escHtml(toks)}</div>` : ''}</div>\n`
       continue
     }
@@ -151,9 +182,13 @@ export function buildChordSheetHtml(
     for (let li = 0; li < content.lyrics.split('\n').length; li++) {
       const lyricLine = content.lyrics.split('\n')[li]
       const slots = getWordSlots(lyricLine)
-      if (!slots.length) { linesHtml += '<br>'; continue }
+      if (!slots.length) {
+        linesHtml += '<br>'
+        continue
+      }
       const rowTokens = lyricChordRows[li] ?? []
-      let cStr = '', lStr = ''
+      let cStr = '',
+        lStr = ''
       for (let wi = 0; wi < slots.length; wi++) {
         const slot = slots[wi]
         const word = slot.text + (slot.trailing === '-' ? '-' : slot.trailing === ' ' ? ' ' : '')

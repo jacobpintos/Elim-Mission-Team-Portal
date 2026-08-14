@@ -33,11 +33,7 @@ export function HeroBlock({ data }: HeroBlockProps) {
         </Text>
       ) : null}
       {data.subheading ? (
-        <Text
-          fontSize="$5"
-          textAlign="center"
-          style={{ color: textColor, opacity: 0.9 }}
-        >
+        <Text fontSize="$5" textAlign="center" style={{ color: textColor, opacity: 0.9 }}>
           {data.subheading}
         </Text>
       ) : null}

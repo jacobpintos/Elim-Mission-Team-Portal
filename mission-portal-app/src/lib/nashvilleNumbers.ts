@@ -1,17 +1,4 @@
-export const NNS_KEYS = [
-  'C',
-  'Db',
-  'D',
-  'Eb',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'Ab',
-  'A',
-  'Bb',
-  'B',
-] as const
+export const NNS_KEYS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const
 
 export type NNSKey = (typeof NNS_KEYS)[number]
 
@@ -20,7 +7,7 @@ const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11]
 const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10] // natural minor
 
 const CHROMATIC_SHARPS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-const CHROMATIC_FLATS  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
+const CHROMATIC_FLATS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
 
 // Roots that prefer flat note names (Db Eb F Ab Bb and their minor equivalents)
 const FLAT_ROOT_INDICES = new Set([1, 3, 5, 8, 10])
@@ -64,7 +51,7 @@ export function nashvilleToChord(token: string, keyIdx: number, isMinor = false)
       ? CHROMATIC_SHARPS.indexOf(rootName)
       : CHROMATIC_FLATS.indexOf(rootName)
 
-  const noteIdx = ((rootIdx + semitones) % 12 + 12) % 12
+  const noteIdx = (((rootIdx + semitones) % 12) + 12) % 12
   const useFlatNames = FLAT_ROOT_INDICES.has(keyIdx)
   const noteName = useFlatNames ? CHROMATIC_FLATS[noteIdx] : CHROMATIC_SHARPS[noteIdx]
 
@@ -73,7 +60,11 @@ export function nashvilleToChord(token: string, keyIdx: number, isMinor = false)
   const explicitMajor = quality === 'M'
   const effectiveQuality = explicitMajor ? '' : quality
 
-  const diatonicMinor = !isMinor && !explicitMajor && !effectiveQuality && (degree === 2 || degree === 3 || degree === 6)
+  const diatonicMinor =
+    !isMinor &&
+    !explicitMajor &&
+    !effectiveQuality &&
+    (degree === 2 || degree === 3 || degree === 6)
   if (diatonicMinor) return `${noteName}m`
 
   if (!effectiveQuality) return noteName

@@ -20,7 +20,10 @@ import {
 } from './chordSheetFormat'
 import { buildChordSheetPdfBlob } from './chordSheetPdf'
 
-interface KeyPrefs { key: string; isMinor: boolean }
+interface KeyPrefs {
+  key: string
+  isMinor: boolean
+}
 
 const getKeyPrefs = (): KeyPrefs => {
   try {
@@ -218,7 +221,8 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
         if (sectionGroups.length > 0) sectionGroups[sectionGroups.length - 1].count++
         continue
       }
-      const sig = (section.chordTokens ?? []).flat()
+      const sig = (section.chordTokens ?? [])
+        .flat()
         .filter((t) => Boolean(t) && t !== PROGRESSION_END)
         .map(stripBoundary)
         .join('\x00')
@@ -300,10 +304,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                   overflow="hidden"
                 >
                   {keyOptions.map((k) => (
-                    <Pressable
-                      key={k === '' ? '__none__' : k}
-                      onPress={() => handleSelectKey(k)}
-                    >
+                    <Pressable key={k === '' ? '__none__' : k} onPress={() => handleSelectKey(k)}>
                       <XStack
                         paddingHorizontal="$3"
                         paddingVertical="$2"
@@ -334,11 +335,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                   paddingHorizontal="$3"
                   paddingVertical="$1"
                 >
-                  <Text
-                    color={isMinor ? 'white' : colors.primary}
-                    fontSize="$2"
-                    fontWeight="600"
-                  >
+                  <Text color={isMinor ? 'white' : colors.primary} fontSize="$2" fontWeight="600">
                     {isMinor ? 'Minor' : 'Major'}
                   </Text>
                 </XStack>
@@ -355,11 +352,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                 paddingHorizontal="$3"
                 paddingVertical="$1"
               >
-                <Text
-                  color={chordsOnly ? 'white' : colors.primary}
-                  fontSize="$2"
-                  fontWeight="600"
-                >
+                <Text color={chordsOnly ? 'white' : colors.primary} fontSize="$2" fontWeight="600">
                   Chords Only
                 </Text>
               </XStack>
@@ -380,7 +373,11 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                 onPress={() => changeScale(-1)}
                 disabled={scaleIdx === 0}
                 hitSlop={6}
-                style={{ paddingHorizontal: 12, paddingVertical: 4, opacity: scaleIdx === 0 ? 0.4 : 1 }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 4,
+                  opacity: scaleIdx === 0 ? 0.4 : 1,
+                }}
               >
                 <Text color={colors.primary} fontSize={16} fontWeight="700">
                   −
@@ -447,10 +444,19 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                         {compressed.map(({ chords, count: pc }, gi) => (
                           <YStack key={gi}>
                             {gi > 0 && compressed.length > 1 ? (
-                              <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 4 }} />
+                              <View
+                                style={{
+                                  height: 1,
+                                  backgroundColor: colors.border,
+                                  marginVertical: 4,
+                                }}
+                              />
                             ) : null}
                             <XStack gap="$2" alignItems="center">
-                              <Text style={[styles.mono, { fontSize: monoSize }]} color={colors.text}>
+                              <Text
+                                style={[styles.mono, { fontSize: monoSize }]}
+                                color={colors.text}
+                              >
                                 {chords.map(displayToken).join('  ')}
                               </Text>
                               {pc > 1 ? (
@@ -498,7 +504,11 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                             <XStack flexWrap="wrap" gap="$2" alignItems="center">
                               {tokens.map((t, i) =>
                                 t === PROGRESSION_END ? (
-                                  <Text key={i} style={[styles.mono, { fontSize: monoSize }]} color={colors.border}>
+                                  <Text
+                                    key={i}
+                                    style={[styles.mono, { fontSize: monoSize }]}
+                                    color={colors.border}
+                                  >
                                     {'|'}
                                   </Text>
                                 ) : (
@@ -558,14 +568,22 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                                     <XStack key={wi} alignItems="flex-end">
                                       <YStack width={cw} alignItems="center" gap={0}>
                                         <Text
-                                          style={[styles.mono, styles.chordText, { fontSize: monoSize }]}
+                                          style={[
+                                            styles.mono,
+                                            styles.chordText,
+                                            { fontSize: monoSize },
+                                          ]}
                                           color={chord ? colors.primary : 'transparent'}
                                           numberOfLines={1}
                                         >
                                           {chord || ' '}
                                         </Text>
                                         <Text
-                                          style={[styles.mono, styles.lyricText, { fontSize: monoSize }]}
+                                          style={[
+                                            styles.mono,
+                                            styles.lyricText,
+                                            { fontSize: monoSize },
+                                          ]}
                                           color={colors.text}
                                           numberOfLines={1}
                                         >
@@ -590,14 +608,20 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                                   )
                                 })}
                               </XStack>
-                              <View style={{ height: 1, backgroundColor: colors.border, opacity: 0.35, marginTop: 3 }} />
+                              <View
+                                style={{
+                                  height: 1,
+                                  backgroundColor: colors.border,
+                                  opacity: 0.35,
+                                  marginTop: 3,
+                                }}
+                              />
                             </YStack>
                           )
                         })}
                       </YStack>
                     )
-                  })
-              }
+                  })}
             </YStack>
 
             {/* CCLI attribution — required on reproduced worship material. */}

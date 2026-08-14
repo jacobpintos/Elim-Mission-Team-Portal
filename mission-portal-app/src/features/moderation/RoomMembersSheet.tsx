@@ -115,11 +115,7 @@ export function RoomMembersSheet({
                     borderColor={blocked ? colors.border : '#c0392b'}
                     opacity={busy === uid ? 0.5 : 1}
                   >
-                    <Text
-                      color={blocked ? colors.text : '#c0392b'}
-                      fontSize="$3"
-                      fontWeight="600"
-                    >
+                    <Text color={blocked ? colors.text : '#c0392b'} fontSize="$3" fontWeight="600">
                       {busy === uid ? '…' : blocked ? 'Unblock' : 'Block'}
                     </Text>
                   </XStack>

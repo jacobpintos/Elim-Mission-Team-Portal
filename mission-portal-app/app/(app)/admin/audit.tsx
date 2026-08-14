@@ -3,14 +3,7 @@ import { Alert, Platform } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Input, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
-import {
-  collection,
-  getDocs,
-  orderBy,
-  query,
-  limit,
-  writeBatch,
-} from 'firebase/firestore'
+import { collection, getDocs, orderBy, query, limit, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useQuery } from '@tanstack/react-query'
 import { AuditEntry, type AuditDoc } from '@/features/admin/AuditEntry'
@@ -23,7 +16,7 @@ const PAGE_SIZE = 25
 async function fetchAuditLog(): Promise<AuditDoc[]> {
   const q = query(collection(db, 'auditLog'), orderBy('ts', 'desc'), limit(1000))
   const snap = await getDocs(q)
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as AuditDoc))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AuditDoc)
 }
 
 export default function AdminAudit() {
@@ -31,7 +24,11 @@ export default function AdminAudit() {
   const { toast } = useUIStore()
   const [clearing, setClearing] = useState(false)
 
-  const { data: allEntries = [], isLoading, refetch } = useQuery({
+  const {
+    data: allEntries = [],
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ['auditLog'],
     queryFn: fetchAuditLog,
   })
@@ -95,12 +92,7 @@ export default function AdminAudit() {
         <Text fontSize="$6" fontWeight="700">
           Audit Trail
         </Text>
-        <Button
-          size="$2"
-          onPress={handleClearLog}
-          theme="red"
-          disabled={clearing || isLoading}
-        >
+        <Button size="$2" onPress={handleClearLog} theme="red" disabled={clearing || isLoading}>
           {clearing ? <Spinner size="small" /> : 'Clear Log'}
         </Button>
       </XStack>

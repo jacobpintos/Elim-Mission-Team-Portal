@@ -15,7 +15,6 @@ export const INPUT_LIST_ROW_COUNTS: Record<InputListLocation, number> = {
   wh2: 32,
 }
 
-
 interface InputListStore {
   rows: Record<InputListLocation, InputListRow[] | null>
   loading: Record<InputListLocation, boolean>

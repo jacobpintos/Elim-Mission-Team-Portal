@@ -174,12 +174,8 @@ export function EventKanban({
   const resolve = resolveUser ?? ((uid: string | number) => String(uid))
 
   // Not Started column
-  const pendingOverdue = tasks
-    .filter((t) => t.status === 'pending' && isOverdue(t))
-    .sort(byDateAsc)
-  const pendingNormal = tasks
-    .filter((t) => t.status === 'pending' && !isOverdue(t))
-    .sort(byDateAsc)
+  const pendingOverdue = tasks.filter((t) => t.status === 'pending' && isOverdue(t)).sort(byDateAsc)
+  const pendingNormal = tasks.filter((t) => t.status === 'pending' && !isOverdue(t)).sort(byDateAsc)
 
   // In Progress column
   const inProgressOverdue = tasks
@@ -190,18 +186,17 @@ export function EventKanban({
     .sort(byDateAsc)
 
   // Behind column
-  const behindOverdue = tasks
-    .filter((t) => t.status === 'behind' && isOverdue(t))
-    .sort(byDateAsc)
-  const behindNormal = tasks
-    .filter((t) => t.status === 'behind' && !isOverdue(t))
-    .sort(byDateAsc)
+  const behindOverdue = tasks.filter((t) => t.status === 'behind' && isOverdue(t)).sort(byDateAsc)
+  const behindNormal = tasks.filter((t) => t.status === 'behind' && !isOverdue(t)).sort(byDateAsc)
 
   // Completed column
   const done = tasks.filter((t) => t.status === 'done').sort(byDateDesc)
 
   const hasProblems =
-    pendingOverdue.length > 0 || inProgressOverdue.length > 0 || behindOverdue.length > 0 || behindNormal.length > 0
+    pendingOverdue.length > 0 ||
+    inProgressOverdue.length > 0 ||
+    behindOverdue.length > 0 ||
+    behindNormal.length > 0
 
   const totalCount = tasks.length
   const colMaxHeight = height * 0.65

@@ -32,9 +32,7 @@ export function ThemePreview({ theme }: ThemePreviewProps) {
           justifyContent: 'space-between',
         }}
       >
-        <Text style={{ color: navTextColor, fontWeight: '700', fontSize: 16 }}>
-          Mission Portal
-        </Text>
+        <Text style={{ color: navTextColor, fontWeight: '700', fontSize: 16 }}>Mission Portal</Text>
         <View
           style={{
             width: 28,
@@ -60,9 +58,7 @@ export function ThemePreview({ theme }: ThemePreviewProps) {
             gap: 8,
           }}
         >
-          <Text style={{ color: cardText, fontWeight: '700', fontSize: 15 }}>
-            Upcoming Event
-          </Text>
+          <Text style={{ color: cardText, fontWeight: '700', fontSize: 15 }}>Upcoming Event</Text>
           <Text style={{ color: theme.dark.textMuted, fontSize: 13 }}>
             Sunday Service — Dec 8, 2024
           </Text>
@@ -76,9 +72,7 @@ export function ThemePreview({ theme }: ThemePreviewProps) {
                 paddingVertical: 3,
               }}
             >
-              <Text
-                style={{ color: autoTextColor(theme.accent), fontSize: 11, fontWeight: '600' }}
-              >
+              <Text style={{ color: autoTextColor(theme.accent), fontSize: 11, fontWeight: '600' }}>
                 Confirmed
               </Text>
             </View>
@@ -94,9 +88,7 @@ export function ThemePreview({ theme }: ThemePreviewProps) {
             alignItems: 'center',
           }}
         >
-          <Text style={{ color: btnText, fontWeight: '700', fontSize: 14 }}>
-            View Schedule
-          </Text>
+          <Text style={{ color: btnText, fontWeight: '700', fontSize: 14 }}>View Schedule</Text>
         </View>
 
         {/* Second card */}
@@ -108,9 +100,7 @@ export function ThemePreview({ theme }: ThemePreviewProps) {
             gap: 6,
           }}
         >
-          <Text style={{ color: cardText, fontWeight: '700', fontSize: 14 }}>
-            My Tasks
-          </Text>
+          <Text style={{ color: cardText, fontWeight: '700', fontSize: 14 }}>My Tasks</Text>
           {['Set up chairs', 'Sound check', 'Merch table'].map((task) => (
             <XStack key={task} alignItems="center" gap="$2">
               <View

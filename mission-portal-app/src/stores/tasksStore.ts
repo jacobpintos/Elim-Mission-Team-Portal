@@ -73,7 +73,11 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     return get()
       .myTasks(uid)
       .filter(
-        (t) => (t.status === 'pending' || t.status === 'in_progress') && t.dueDate != null && t.dueDate >= today && t.dueDate <= end
+        (t) =>
+          (t.status === 'pending' || t.status === 'in_progress') &&
+          t.dueDate != null &&
+          t.dueDate >= today &&
+          t.dueDate <= end
       )
   },
 
