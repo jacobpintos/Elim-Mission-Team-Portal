@@ -15,6 +15,44 @@ interface NWSAlertRaw {
   /** Start of the alert's window. Without it an alert cannot be placed in time. */
   effective: string
   expires: string
+  /** Alert | Update | Cancel | Ack | Error. */
+  messageType: string
+  /**
+   * Prior alerts this message supersedes.
+   *
+   * NWS mints a fresh id every time it updates, extends or continues an
+   * alert, so identity cannot come from the id alone — the same advisory
+   * arrives all afternoon under new ids, each one looking brand new.
+   */
+  references: string[]
+}
+
+/**
+ * Document id recording that one alert was announced for one event.
+ *
+ * Firestore ids cannot contain a slash and alert ids are URLs, so the slashes
+ * are flattened rather than escaped.
+ */
+function sentKey(alertId: string, eventId: string): string {
+  return `${alertId.replace(/\//g, '_')}_${eventId}`
+}
+
+/**
+ * The first of these prior alerts already announced for this event, if any.
+ *
+ * An NWS update carries references to what it supersedes; if we have already
+ * told people about one of them, this message is the same warning again.
+ */
+async function firstSent(
+  db: FirebaseFirestore.Firestore,
+  references: string[],
+  eventId: string
+): Promise<string | null> {
+  for (const priorId of references) {
+    const snap = await db.doc(`weatherAlertsSent/${sentKey(priorId, eventId)}`).get()
+    if (snap.exists) return priorId
+  }
+  return null
 }
 
 interface NWSFeatureRaw {
@@ -26,6 +64,8 @@ interface NWSFeatureRaw {
     headline?: string
     effective?: string
     expires?: string
+    messageType?: string
+    references?: { '@id'?: string; identifier?: string }[]
   }
 }
 
@@ -379,6 +419,10 @@ async function runWeatherCheck(
         headline: f.properties?.headline ?? '',
         effective: f.properties?.effective ?? '',
         expires: f.properties?.expires ?? '',
+        messageType: f.properties?.messageType ?? 'Alert',
+        references: (f.properties?.references ?? [])
+          .map((r) => r['@id'] ?? r.identifier ?? '')
+          .filter(Boolean),
       }))
     } catch {
       continue
@@ -386,6 +430,9 @@ async function runWeatherCheck(
 
     for (const alert of rawAlerts) {
       if (!alert.id) continue
+      // A cancellation is not a warning. Announcing one reads as a fresh alert
+      // for the thing that was just called off.
+      if (alert.messageType === 'Cancel') continue
 
       // Everything at this venue the alert covers and has not been announced.
       //
@@ -407,9 +454,25 @@ async function runWeatherCheck(
         const covered = entry.dates.find((d) => alertCoversDate(alert, d))
         if (!covered) continue
 
-        const sentDocId = `${alert.id.replace(/\//g, '_')}_${entry.id}`
-        const ref = db.doc(`weatherAlertsSent/${sentDocId}`)
+        const ref = db.doc(`weatherAlertsSent/${sentKey(alert.id, entry.id)}`)
         if ((await ref.get()).exists) continue
+
+        // The same advisory under a new id. Record it so this message becomes
+        // part of the chain — the next update references *it*, not the
+        // original, and would otherwise look new all over again.
+        const supersedes = await firstSent(db, alert.references, entry.id)
+        if (supersedes) {
+          await ref.set({
+            alertId: alert.id,
+            eventId: entry.id,
+            alertEvent: alert.event,
+            supersedes,
+            sentAt: admin.firestore.FieldValue.serverTimestamp(),
+            expires: alert.expires,
+          })
+          continue
+        }
+
         pending.push({ entry, covered, ref })
       }
 

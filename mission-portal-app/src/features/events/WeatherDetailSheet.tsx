@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Pressable } from 'react-native'
+import { Pressable, ScrollView as RNScrollView } from 'react-native'
 import { Sheet, YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import {
@@ -93,11 +93,19 @@ export function WeatherDetailSheet({ open, onClose, event }: WeatherDetailSheetP
   const hasData = hourly.length > 0 || alerts.length > 0
 
   return (
+    // disableDrag + a plain ScrollView, for the reason written up in
+    // components/ui/Modal.tsx: Sheet.ScrollView's fallback path (taken because
+    // @tamagui/native/setup-gesture-handler is never imported) attaches
+    // responder handlers that scrollTo a ref only its gesture-handler path
+    // ever assigns. It stays 0, so every downward scroll snapped back to the
+    // top — which is what expanding a long alert description here ran into.
+    // The ✕ in the header already closes the sheet without the drag gesture.
     <Sheet
       open={open}
       onOpenChange={(v: boolean) => !v && onClose()}
       snapPoints={[70]}
       dismissOnSnapToBottom
+      disableDrag
       modal
       zIndex={200000}
     >
@@ -129,7 +137,7 @@ export function WeatherDetailSheet({ open, onClose, event }: WeatherDetailSheetP
           </Pressable>
         </XStack>
 
-        <Sheet.ScrollView>
+        <RNScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
           <YStack padding="$4" gap="$4" paddingBottom="$8">
             {/* Alerts */}
             {alerts.length > 0 ? (
@@ -239,7 +247,7 @@ export function WeatherDetailSheet({ open, onClose, event }: WeatherDetailSheetP
               </Text>
             ) : null}
           </YStack>
-        </Sheet.ScrollView>
+        </RNScrollView>
       </Sheet.Frame>
     </Sheet>
   )
