@@ -21,12 +21,27 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
   const { toast } = useUIStore()
   const { profile } = useAuthStore()
 
-  // Initialized from user prop — parent must pass key={user.uid} to reset on user change
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
   const [roles, setRoles] = useState<string[]>(user?.roles ?? ['regular'])
   const [saving, setSaving] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [loadedUid, setLoadedUid] = useState(user?.uid)
+
+  // Reload the form when a different user is opened.
+  //
+  // This used to be done by keying the component on the uid from the parent,
+  // which threw the sheet away and mounted a fresh one already open — leaving
+  // the dialog's enter transition nothing to animate from, so nothing
+  // appeared. Adjusting state during render is React's supported way to
+  // derive state from props, and it keeps the sheet mounted so `open` can
+  // simply toggle.
+  if (user && user.uid !== loadedUid) {
+    setLoadedUid(user.uid)
+    setDisplayName(user.displayName ?? '')
+    setEmail(user.email ?? '')
+    setRoles(user.roles ?? ['regular'])
+  }
 
   const handleResetPassword = async () => {
     if (!user) return

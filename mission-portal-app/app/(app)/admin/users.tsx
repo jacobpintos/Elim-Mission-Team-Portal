@@ -233,8 +233,9 @@ export default function AdminUsers() {
 
       <AuthAuditSheet open={showAudit} onClose={() => setShowAudit(false)} />
       <CreateUserSheet open={showCreate} onClose={() => setShowCreate(false)} />
+      {/* No key: remounting this on each open gave the dialog no closed state
+          to animate from, and it never appeared. It resets itself instead. */}
       <EditUserSheet
-        key={editTarget?.uid ?? 'none'}
         open={editTarget !== null}
         onClose={() => setEditTarget(null)}
         user={editTarget}
