@@ -26,13 +26,21 @@ function filterFlow(flow: TourFlow, profile: UserProfile | null): TourStep[] {
 /**
  * Expand a drawer tab into the flows it actually covers.
  *
- * Two tabs hold more than their own name suggests: "rolehub" is a hub for the
- * Admin panel and the Inventory tools, and "announce" carries messages for
- * anyone who has them. Without this the messages tour would be unreachable,
- * since messages stopped being a tab of its own.
+ * Two tabs hold more than their own name suggests: "issues" is Operations,
+ * which carries the Inventory tools alongside its own screens, and "announce"
+ * carries messages for anyone who has them. Without this the messages tour
+ * would be unreachable, since messages stopped being a tab of its own.
+ *
+ * Inventory is admin-only, so it is offered only to admins — Operations
+ * itself is not.
  */
 function flowsForTab(tab: Tab, profile: UserProfile | null): TourFlow[] {
-  if (tab === 'rolehub') return [adminFlow, inventoryFlow]
+  // The Admin flow is filed under its own id, not the tab that reaches it.
+  if (tab === 'rolehub') return [adminFlow]
+  if (tab === 'issues') {
+    const operations = byId[tab]
+    return [...(operations ? [operations] : []), ...(isAdmin(profile) ? [inventoryFlow] : [])]
+  }
   if (tab === 'announce') {
     return [announceFlow, ...(canUseMessages(profile) ? [messagesFlow] : [])]
   }

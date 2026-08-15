@@ -47,7 +47,7 @@ const TAB_LABELS: Record<Tab, string> = {
   giving: 'Giving',
   story: 'Our Story',
   connect: 'Connect',
-  rolehub: 'Role-Specific',
+  rolehub: 'Admin',
   settings: 'Profile & Settings',
 }
 
@@ -69,7 +69,7 @@ const TAB_ICONS: Record<Tab, string> = {
   giving: '💝',
   story: '📖',
   connect: '🤝',
-  rolehub: '🏷',
+  rolehub: '⚙',
   settings: '⚙',
 }
 
@@ -235,7 +235,10 @@ export default function AppLayout() {
   // 'blocked' and 'delete-account' are reached from Settings, which every role has
   const SUB_ROUTE_OWNERS: Partial<Record<string, Tab>> = {
     admin: 'rolehub',
-    inventory: 'rolehub',
+    // Inventory sits under Operations now, which regular members also have —
+    // so reaching /inventory no longer implies permission to see it. The
+    // screen redirects anyone who is not an admin.
+    inventory: 'issues',
     posts: 'public',
     blocked: 'settings',
     'delete-account': 'settings',
@@ -525,6 +528,7 @@ export default function AppLayout() {
                 <Tabs.Screen name="issues/[id]" options={{ href: null }} />
                 <Tabs.Screen name="issues/kaizen" options={{ href: null }} />
                 <Tabs.Screen name="issues/planning" options={{ href: null }} />
+                <Tabs.Screen name="issues/inventory" options={{ href: null }} />
                 <Tabs.Screen name="pages/[slug]" options={{ href: null }} />
                 <Tabs.Screen name="pages/our-story" options={{ href: null }} />
                 <Tabs.Screen name="pages/connect" options={{ href: null }} />
@@ -547,7 +551,6 @@ export default function AppLayout() {
                 <Tabs.Screen name="public/story" options={{ href: null }} />
                 <Tabs.Screen name="public/music" options={{ href: null }} />
                 <Tabs.Screen name="public/photos" options={{ href: null }} />
-                <Tabs.Screen name="rolehub/inventory" options={{ href: null }} />
                 <Tabs.Screen name="rolehub/admin" options={{ href: null }} />
                 <Tabs.Screen name="profile" options={{ href: null }} />
               </>

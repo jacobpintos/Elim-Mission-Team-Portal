@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pressable } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack } from 'expo-router'
+import { Stack, Redirect } from 'expo-router'
 import { useInventoryStore } from '@/stores/inventoryStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -22,6 +22,14 @@ export default function InventoryScreen() {
     return () => unsubscribe()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Admin-only, enforced here rather than by which tab owns the route.
+  //
+  // It used to be reachable only under Role-Specific, a tab only admins have,
+  // so the drawer did the gating. Now that it sits under Operations — which
+  // regular members also have — the segment-level guard in the app layout
+  // would wave them through, since it only inspects the first path segment.
+  if (!admin) return <Redirect href="/dashboard" />
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
