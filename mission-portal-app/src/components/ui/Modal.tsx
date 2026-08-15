@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Dialog, Sheet, ScrollView, Text, type DialogProps, useWindowDimensions } from 'tamagui'
 import { ScrollView as RNScrollView } from 'react-native'
 import { useKeyboardHeight } from '@/lib/useKeyboardHeight'
@@ -18,9 +19,27 @@ export function Modal({ title, children, open, onOpenChange, scrollable, ...prop
   const isLarge = width >= 768
   const keyboardHeight = useKeyboardHeight()
 
+  // Never hand Tamagui an already-open modal on the very first render.
+  //
+  // Both Dialog and Sheet animate from a closed state, and a component that
+  // mounts open has none to animate from — the content is placed but never
+  // transitions in, so nothing appears and the press looks ignored. That is
+  // easy to hit from the outside: any caller that keys this on the record
+  // being edited (`key={target?.id ?? 'none'}`) remounts it at the exact
+  // moment it opens.
+  //
+  // Deferring by a frame gives the animation a closed state to start from,
+  // and costs one frame on modals that were already working.
+  const [painted, setPainted] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setPainted(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+  const isOpen = open && painted
+
   if (isLarge) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange} {...props}>
+      <Dialog open={isOpen} onOpenChange={onOpenChange} {...props}>
         <Dialog.Portal>
           <Dialog.Overlay key="overlay" opacity={0.5} backgroundColor="black" />
           <Dialog.Content bordered elevate key="content" gap="$4" minWidth={400} maxWidth={600}>
@@ -42,7 +61,7 @@ export function Modal({ title, children, open, onOpenChange, scrollable, ...prop
     // renders its own Cancel/Close control, so disabling the swipe-to-dismiss
     // gesture doesn't remove any way to close it.
     <Sheet
-      open={open}
+      open={isOpen}
       onOpenChange={onOpenChange}
       snapPoints={[85]}
       dismissOnSnapToBottom
