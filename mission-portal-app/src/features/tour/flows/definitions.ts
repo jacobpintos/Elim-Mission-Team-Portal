@@ -1,4 +1,6 @@
 import type { TourFlow } from '../types'
+import { ADMIN_SECTIONS } from '@/lib/adminSections'
+import { PUBLIC_SURFACE_ENABLED, EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
 
 /** The opening card — asks whether to take the tour. */
 export const welcomeFlow: TourFlow = {
@@ -244,20 +246,20 @@ export const inventoryFlow: TourFlow = {
   steps: [
     {
       id: 'inv-intro',
-      route: '/inventory',
+      route: '/issues/inventory',
       title: 'Inventory',
       body: 'Track merch and supplies across two tabs: Production (current stock) and Reorder (low-stock alerts). Adjust a count below.',
       showcase: 'inventory',
     },
     {
       id: 'inv-reorder',
-      route: '/inventory',
+      route: '/issues/inventory',
       title: 'Reorder alerts',
       body: 'Each item has a reorder threshold. When stock drops to or below it, the item automatically surfaces on the Reorder tab.',
     },
     {
       id: 'inv-admin',
-      route: '/inventory',
+      route: '/issues/inventory',
       title: 'Managing items',
       body: 'Admins can add, edit and delete items and organize them into categories.',
       adminOnly: true,
@@ -405,12 +407,8 @@ export const adminFlow: TourFlow = {
       id: 'admin-intro',
       route: '/admin/users',
       title: 'Admin Panel',
-      body: 'Everything that powers the rest of the app is configured here, across ten sections.',
-      bullets: [
-        'Users, Availability, Groups, Teams',
-        'Templates, Leadership',
-        'Analytics, Audit, Theme, Digests',
-      ],
+      body: `Everything that powers the rest of the app is configured here, across ${ADMIN_SECTIONS.length} sections.`,
+      bullets: ADMIN_SECTIONS.map((s) => s.label),
       adminOnly: true,
     },
     {
@@ -457,19 +455,36 @@ export const adminFlow: TourFlow = {
       adminOnly: true,
     },
     {
-      id: 'admin-analytics',
-      route: '/admin/analytics',
-      title: 'Analytics & Audit',
-      body: 'Track public-site engagement, and review an audit trail of who did what across the portal.',
+      id: 'admin-audit',
+      route: '/admin/audit',
+      title: 'Audit trail',
+      body: 'Review a record of who did what across the portal.',
       adminOnly: true,
     },
-    {
-      id: 'admin-digests',
-      route: '/admin/digests',
-      title: 'Email digests',
-      body: 'Configure the weekly and monthly email digests that go out to members and public subscribers.',
-      adminOnly: true,
-    },
+    // Both of these walk to a screen that is currently hidden, so they are
+    // included only while the section they describe is reachable.
+    ...(PUBLIC_SURFACE_ENABLED
+      ? [
+          {
+            id: 'admin-analytics',
+            route: '/admin/analytics',
+            title: 'Analytics',
+            body: 'Track engagement from public users of the app.',
+            adminOnly: true,
+          },
+        ]
+      : []),
+    ...(EMAIL_FEATURES_ENABLED
+      ? [
+          {
+            id: 'admin-digests',
+            route: '/admin/digests',
+            title: 'Email digests',
+            body: 'Configure the weekly and monthly email digests that go out to members.',
+            adminOnly: true,
+          },
+        ]
+      : []),
   ],
 }
 
@@ -583,7 +598,9 @@ export const settingsFlow: TourFlow = {
       id: 'settings-notifs',
       route: '/settings',
       title: 'Notifications & location',
-      body: 'Choose exactly which notifications you get by push and email, opt into digests, and set your location for nearby events.',
+      body: EMAIL_FEATURES_ENABLED
+        ? 'Choose exactly which notifications you get by push and email, opt into digests, and set your location for nearby events.'
+        : 'Choose exactly which notifications you get, and set your location so events near you are flagged.',
     },
   ],
 }
