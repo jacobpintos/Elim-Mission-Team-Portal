@@ -44,10 +44,15 @@ export default function AdminUsers() {
   const memberUsers = users.filter((u) => !(u.roles?.length === 1 && u.roles[0] === 'public'))
 
   const q = search.trim().toLowerCase()
-  // Search the same set the list shows. Filtering `users` here instead put
-  // public-only accounts back on screen the moment anyone typed.
+  // Search deliberately reaches past the list, across every account.
+  //
+  // Public-only profiles are kept out of the default view because they are
+  // noise, not because they are secret — and searching is the only way to
+  // reach one. Narrowing this to `memberUsers` stranded them: hidden from the
+  // list, unfindable by search, and with `public` no longer assignable, no
+  // route left to give one a real role.
   const filtered = q
-    ? memberUsers.filter(
+    ? users.filter(
         (u) =>
           (u.displayName ?? '').toLowerCase().includes(q) ||
           (u.email ?? '').toLowerCase().includes(q) ||

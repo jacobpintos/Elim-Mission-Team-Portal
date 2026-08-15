@@ -33,9 +33,16 @@ export function RoleCheckboxes({ selected, onChange }: RoleCheckboxesProps) {
     else onChange([...selected, role])
   }
 
+  // A withheld role still shows on an account that already holds it —
+  // otherwise editing a legacy public profile presents every box unchecked
+  // and offers no way to take the role off.
+  const shown = ALL_ROLES.filter(
+    (r) => (ASSIGNABLE_ROLES as readonly string[]).includes(r) || selected.includes(r)
+  )
+
   return (
     <XStack flexWrap="wrap" gap="$2">
-      {ASSIGNABLE_ROLES.map((role) => (
+      {shown.map((role) => (
         <XStack key={role} alignItems="center" gap="$2" width="45%">
           <Checkbox
             id={`role-${role}`}
