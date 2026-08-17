@@ -8,10 +8,9 @@ import type { UserProfile } from '@/types/user'
  * lied about this would still be refused by both.
  *
  * Must match OWNER_UID in `functions/src/owner.ts` and `ownerUid()` in
- * firestore.rules. Empty means no owner is configured, and every check here
- * is false.
+ * firestore.rules.
  */
-export const OWNER_UID = ''
+export const OWNER_UID = '0RUxDLC8QGQ6qBTLgBkoMSgYibJ2'
 
 export function isOwnerUid(uid: string | undefined): boolean {
   return !!OWNER_UID && !!uid && uid === OWNER_UID

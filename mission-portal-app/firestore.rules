@@ -14,9 +14,8 @@ service cloud.firestore {
     // A literal uid rather than a role: roles live in this very collection and
     // admins may write it, so an 'owner' role would be a lock whose key is on
     // the same ring. Must match OWNER_UID in functions/src/owner.ts and
-    // src/lib/owner.ts. Empty means no owner is configured, and every check
-    // below is simply false.
-    function ownerUid() { return ''; }
+    // src/lib/owner.ts.
+    function ownerUid() { return '0RUxDLC8QGQ6qBTLgBkoMSgYibJ2'; }
     function isOwnerUid(uid) { return ownerUid() != '' && uid == ownerUid(); }
     function isOwner() { return isSignedIn() && isOwnerUid(request.auth.uid); }
     // A guest is along for one trip: they may read the worship material they

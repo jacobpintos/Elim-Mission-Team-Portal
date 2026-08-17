@@ -430,30 +430,48 @@ describe('Facebook Page sync', () => {
 })
 
 describe('the owner account', () => {
-  // These assert the shape of the protection while no owner is configured:
-  // ownerUid() is empty, so isOwnerUid() is false for everyone and admins keep
-  // their existing reach. Setting OWNER_UID inverts the two marked cases, and
-  // the point of pinning them is that nothing else moves when it does.
-  it('leaves admins their normal reach while no owner is set', async () => {
+  // Must match ownerUid() in firestore.rules. If these drift, the rules stop
+  // protecting the account they name and these tests are how you find out.
+  const OWNER = '0RUxDLC8QGQ6qBTLgBkoMSgYibJ2'
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      // The owner is an admin too — the protection has to single them out by
+      // uid, not by role, or it would exclude every admin.
+      await setDoc(doc(ctx.firestore(), 'users', OWNER), {
+        roles: ['admin'],
+        displayName: 'Owner',
+      })
+    })
+  })
+
+  it('refuses an admin editing the owner', async () => {
+    await assertFails(updateDoc(doc(as(ADMIN), 'users', OWNER), { displayName: 'Seized' }))
+  })
+
+  it('refuses an admin stripping the owner of their roles', async () => {
+    // The whole point: an owner demoted to nothing is an owner in name only.
+    await assertFails(updateDoc(doc(as(ADMIN), 'users', OWNER), { roles: ['public'] }))
+  })
+
+  it('refuses an admin deleting the owner', async () => {
+    await assertFails(deleteDoc(doc(as(ADMIN), 'users', OWNER)))
+  })
+
+  it('lets the owner edit their own record', async () => {
+    // They hold admin, so the admin clause has to admit them for themselves or
+    // configuring an owner locks that account out of its own profile.
+    await assertSucceeds(updateDoc(doc(as(OWNER), 'users', OWNER), { displayName: 'Me' }))
+    await assertSucceeds(updateDoc(doc(as(OWNER), 'users', OWNER), { roles: ['admin'] }))
+  })
+
+  it('leaves an admin their normal reach over everyone else', async () => {
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', MEMBER), { displayName: 'Renamed' }))
     await assertSucceeds(deleteDoc(doc(as(ADMIN), 'users', MEMBER)))
   })
 
-  it('still lets a user edit their own profile', async () => {
-    // The owner holds admin too, so the admin clause has to admit them for
-    // themselves — otherwise configuring an owner locks them out of their own
-    // record.
-    await assertSucceeds(updateDoc(doc(as(MEMBER), 'users', MEMBER), { displayName: 'Me' }))
-  })
-
-  it("keeps roles beyond a user's own reach", async () => {
-    // Unchanged by the owner work, and worth holding: if this ever passed, an
-    // ordinary member could make themselves an admin and the owner boundary
-    // would not matter.
+  it("does not hand the owner's protection to ordinary users", async () => {
     await assertFails(updateDoc(doc(as(MEMBER), 'users', MEMBER), { roles: ['admin'] }))
-  })
-
-  it('does not let a non-admin delete anyone', async () => {
     await assertFails(deleteDoc(doc(as(MEMBER), 'users', OUTSIDER)))
   })
 })

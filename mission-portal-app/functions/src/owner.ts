@@ -17,11 +17,10 @@ if (!admin.apps.length) admin.initializeApp()
  *   - `src/lib/owner.ts`, for hiding owner-only controls
  *   - `isOwnerUid()` in firestore.rules, for direct document access
  *
- * While this is empty nobody is the owner: the owner-only callables refuse
- * everyone, and admins keep the protections that stop them reaching this
- * account. Set it before relying on any of it.
+ * Empty would mean nobody is the owner, and the owner-only callables would
+ * refuse everyone rather than fall back to admin.
  */
-export const OWNER_UID = ''
+export const OWNER_UID = '0RUxDLC8QGQ6qBTLgBkoMSgYibJ2'
 
 export function isOwner(uid: string | undefined): boolean {
   return !!OWNER_UID && !!uid && uid === OWNER_UID
