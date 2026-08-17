@@ -1,6 +1,7 @@
 import { XStack, YStack, Text, Button } from 'tamagui'
 import { Avatar } from '@/components/ui/Avatar'
 import type { UserProfile } from '@/types/user'
+import { isOwner } from '@/lib/owner'
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
@@ -94,9 +95,13 @@ export function UserCard({ user, currentUid, onEditRole, onDelete }: UserCardPro
           <Button size="$2" onPress={() => onEditRole(user)} theme="active">
             Edit Role
           </Button>
-          <Button size="$2" onPress={() => onDelete(user)} theme="red">
-            Delete
-          </Button>
+          {/* The owner's account cannot be deleted — the rules refuse it, so
+              offering the button would only produce a failed write. */}
+          {!isOwner(user) ? (
+            <Button size="$2" onPress={() => onDelete(user)} theme="red">
+              Delete
+            </Button>
+          ) : null}
         </YStack>
       )}
     </XStack>

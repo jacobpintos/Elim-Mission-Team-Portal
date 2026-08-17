@@ -15,6 +15,7 @@ import { db } from '@/lib/firebase'
 import type { UserProfile } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { confirmAsync } from '@/lib/confirm'
+import { isOwner } from '@/lib/owner'
 
 export default function AdminUsers() {
   const { users, subscribe, unsubscribe } = useUsersStore()
@@ -24,6 +25,10 @@ export default function AdminUsers() {
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [showAudit, setShowAudit] = useState(false)
+  // Auth Audit lists every login in the project, mints accounts with a known
+  // password and deletes them in bulk. The callables behind it refuse anyone
+  // else; this keeps the button from offering what it cannot deliver.
+  const owner = isOwner(profile)
   const [editTarget, setEditTarget] = useState<UserProfile | null>(null)
   const [pendingDel, setPendingDel] = useState<PendingDeletion[]>([])
 
@@ -179,9 +184,11 @@ export default function AdminUsers() {
           Users ({memberUsers.length})
         </Text>
         <XStack gap="$2">
-          <Button size="$3" onPress={() => setShowAudit(true)} theme="gray">
-            Auth Audit
-          </Button>
+          {owner ? (
+            <Button size="$3" onPress={() => setShowAudit(true)} theme="gray">
+              Auth Audit
+            </Button>
+          ) : null}
           <Button size="$3" onPress={() => setShowCreate(true)} theme="active">
             + Add User
           </Button>
@@ -231,7 +238,7 @@ export default function AdminUsers() {
         }
       />
 
-      <AuthAuditSheet open={showAudit} onClose={() => setShowAudit(false)} />
+      {owner ? <AuthAuditSheet open={showAudit} onClose={() => setShowAudit(false)} /> : null}
       <CreateUserSheet open={showCreate} onClose={() => setShowCreate(false)} />
       {/* No key: remounting this on each open gave the dialog no closed state
           to animate from, and it never appeared. It resets itself instead. */}

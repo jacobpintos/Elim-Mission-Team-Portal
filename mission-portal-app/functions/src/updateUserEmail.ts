@@ -1,17 +1,15 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
+import { requireAdmin, refuseIfOwnerTarget } from './owner'
 import * as admin from 'firebase-admin'
 
 if (!admin.apps.length) admin.initializeApp()
 
 export const updateUserEmail = onCall(async (req) => {
-  if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Must be signed in')
-
-  const callerSnap = await admin.firestore().collection('users').doc(req.auth.uid).get()
-  const callerRoles: string[] = callerSnap.data()?.roles ?? []
-  if (!callerRoles.includes('admin')) throw new HttpsError('permission-denied', 'Admins only')
+  await requireAdmin(req.auth?.uid)
 
   const { uid, newEmail } = req.data as { uid: string; newEmail: string }
   if (!uid || !newEmail) throw new HttpsError('invalid-argument', 'uid and newEmail are required')
+  refuseIfOwnerTarget(uid, req.auth?.uid)
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail.trim())) {
     throw new HttpsError('invalid-argument', 'Invalid email address')
   }

@@ -1,12 +1,13 @@
 import { onCall } from 'firebase-functions/v2/https'
+import { requireAdmin } from '../owner'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 import { sendExpoPush } from './expoPush'
 
 export const broadcastAnnouncement = onCall(async (req) => {
-  if (!req.auth?.token.admin) {
-    throw new Error('admin-only')
-  }
+  // Was `req.auth?.token.admin`, a custom claim nothing in this project ever
+  // sets — so this refused everyone, admins included. Roles live in Firestore.
+  await requireAdmin(req.auth?.uid)
 
   const { title, body, link } = req.data as {
     title: string

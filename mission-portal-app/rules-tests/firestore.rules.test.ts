@@ -428,3 +428,32 @@ describe('Facebook Page sync', () => {
     await assertFails(getDoc(doc(as(ADMIN), 'fbConnectInvites/inv1/pending/x')))
   })
 })
+
+describe('the owner account', () => {
+  // These assert the shape of the protection while no owner is configured:
+  // ownerUid() is empty, so isOwnerUid() is false for everyone and admins keep
+  // their existing reach. Setting OWNER_UID inverts the two marked cases, and
+  // the point of pinning them is that nothing else moves when it does.
+  it('leaves admins their normal reach while no owner is set', async () => {
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', MEMBER), { displayName: 'Renamed' }))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'users', MEMBER)))
+  })
+
+  it('still lets a user edit their own profile', async () => {
+    // The owner holds admin too, so the admin clause has to admit them for
+    // themselves — otherwise configuring an owner locks them out of their own
+    // record.
+    await assertSucceeds(updateDoc(doc(as(MEMBER), 'users', MEMBER), { displayName: 'Me' }))
+  })
+
+  it("keeps roles beyond a user's own reach", async () => {
+    // Unchanged by the owner work, and worth holding: if this ever passed, an
+    // ordinary member could make themselves an admin and the owner boundary
+    // would not matter.
+    await assertFails(updateDoc(doc(as(MEMBER), 'users', MEMBER), { roles: ['admin'] }))
+  })
+
+  it('does not let a non-admin delete anyone', async () => {
+    await assertFails(deleteDoc(doc(as(MEMBER), 'users', OUTSIDER)))
+  })
+})

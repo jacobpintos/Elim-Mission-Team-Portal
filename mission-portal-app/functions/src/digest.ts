@@ -1,5 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
+import { requireAdmin } from './owner'
 import { defineSecret } from 'firebase-functions/params'
 import * as admin from 'firebase-admin'
 import * as crypto from 'crypto'
@@ -311,7 +312,8 @@ export const monthlyDigest = onSchedule(
 
 // Manual callable — admin only
 export const sendDigestManual = onCall({ secrets: SECRETS }, async (req) => {
-  if (!req.auth?.token.admin) throw new HttpsError('permission-denied', 'Admins only')
+  // Same never-set claim as broadcastAnnouncement had; roles are in Firestore.
+  await requireAdmin(req.auth?.uid)
   const { type } = req.data as { type: 'weekly' | 'monthly' }
   if (!['weekly', 'monthly'].includes(type)) {
     throw new HttpsError('invalid-argument', 'type must be weekly or monthly')

@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
+import { requireOwner } from './owner'
 import * as admin from 'firebase-admin'
 
 if (!admin.apps.length) admin.initializeApp()
@@ -12,11 +13,8 @@ export type CreateAuthResult = {
 }
 
 export const createAuthForOrphans = onCall(async (req) => {
-  if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Must be signed in')
-
-  const callerSnap = await admin.firestore().collection('users').doc(req.auth.uid).get()
-  const callerRoles: string[] = callerSnap.data()?.roles ?? []
-  if (!callerRoles.includes('admin')) throw new HttpsError('permission-denied', 'Admins only')
+  // Owner-only. Mints logins with a known default password.
+  requireOwner(req.auth?.uid)
 
   const { uids } = req.data as { uids: string[] }
   if (!Array.isArray(uids) || uids.length === 0) {

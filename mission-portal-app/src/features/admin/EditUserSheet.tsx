@@ -9,6 +9,7 @@ import { doc, updateDoc } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
 import { confirmAsync } from '@/lib/confirm'
+import { isOwner } from '@/lib/owner'
 import type { UserProfile } from '@/types/user'
 
 interface EditUserSheetProps {
@@ -27,6 +28,7 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
   const [saving, setSaving] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [loadedUid, setLoadedUid] = useState(user?.uid)
+  const isSelf = !!user && user.uid === profile?.uid
 
   // Reload the form when a different user is opened.
   //
@@ -153,9 +155,16 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
         </YStack>
 
         <XStack gap="$2" justifyContent="space-between" alignItems="center">
-          <Button size="$3" onPress={handleResetPassword} disabled={resetting} theme="yellow">
-            {resetting ? <Spinner size="small" /> : 'Reset Password'}
-          </Button>
+          {/* Resetting the owner's password would hand their account to whoever
+              did it, so the callable refuses. Hidden rather than shown failing.
+              The owner can still reset their own from Settings. */}
+          {!isOwner(user) || isSelf ? (
+            <Button size="$3" onPress={handleResetPassword} disabled={resetting} theme="yellow">
+              {resetting ? <Spinner size="small" /> : 'Reset Password'}
+            </Button>
+          ) : (
+            <XStack />
+          )}
           <XStack gap="$2">
             <Button size="$3" onPress={onClose} theme="gray">
               Cancel
