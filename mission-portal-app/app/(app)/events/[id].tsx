@@ -3,7 +3,7 @@ import { ScrollView, Pressable, Linking } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
-import { useEventsStore } from '@/stores/eventsStore'
+import { useEventsStore, resolveAssignedUids } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { usePlanningStore } from '@/stores/planningStore'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -33,6 +33,7 @@ import {
   type WeatherData,
   type NWSAlert,
 } from '@/lib/weather'
+import { canViewEvent } from '@/lib/events'
 import { isAdmin, isPublic } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { useUIStore } from '@/stores/uiStore'
@@ -87,7 +88,22 @@ export default function EventDetailScreen() {
   }, [])
 
   // Resolve event: prefer selectedEvent matching this id, fallback to lookup
-  const event = selectedEvent?.instanceKey === id ? selectedEvent : id ? getInstanceByKey(id) : null
+  const resolved = selectedEvent?.instanceKey === id ? selectedEvent : id ? getInstanceByKey(id) : null
+
+  // Every signed-in user's app holds every event — the store subscribes to the
+  // whole collection — and this screen rendered whatever the id resolved to.
+  // So a link to /events/<id> showed an event the viewer was never on, and the
+  // ids are guessable: templateId_date, with the template id from a counter.
+  //
+  // Treating a refused event as "not found" rather than as a refusal is
+  // deliberate: it says nothing about whether the event exists.
+  const allowed =
+    !!resolved &&
+    canViewEvent(resolved, {
+      admin,
+      assigned: !!uid && resolveAssignedUids(resolved).has(String(uid)),
+    })
+  const event = allowed ? resolved : null
 
   const isUnpublished = event?.unpublished === true
 

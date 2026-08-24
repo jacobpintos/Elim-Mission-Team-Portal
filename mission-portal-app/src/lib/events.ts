@@ -99,6 +99,27 @@ export function allInstances(
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
+/**
+ * Whether this person is allowed to see this event at all.
+ *
+ * Separate from what the calendar chooses to *show*: the month view filters by
+ * a toggle and by date, which is presentation. This is the access question,
+ * and the detail screen had no answer to it — it rendered whatever event the
+ * id resolved to, so a direct link showed someone an event they were never on.
+ *
+ * Pure, taking the already-resolved assignment rather than reaching for the
+ * groups store, so the rule can be tested on its own.
+ */
+export function canViewEvent(
+  ev: { isPublic?: boolean; unpublished?: boolean },
+  viewer: { admin: boolean; assigned: boolean }
+): boolean {
+  // A draft is the admin's working copy and is not shown to anyone else,
+  // whoever is on it.
+  if (ev.unpublished === true) return viewer.admin
+  return viewer.admin || viewer.assigned || ev.isPublic === true
+}
+
 export function todayStr(): string {
   return new Date().toISOString().split('T')[0]
 }

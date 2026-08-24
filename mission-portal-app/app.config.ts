@@ -29,8 +29,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       // Declares the app uses no non-exempt encryption, so App Store Connect
       // stops asking the export-compliance question on every submission.
       ITSAppUsesNonExemptEncryption: false,
+      // Every route that reaches the photo library has to be named here.
+      // Security reports attach a photo of the incident, and leaving that out
+      // describes less than the app actually does with the permission.
       NSPhotoLibraryUsageDescription:
-        'Mission Portal needs photo library access to let you upload a profile photo and share images in team chats.',
+        'Mission Portal needs photo library access to let you upload a profile photo, share images in team chats, and attach a photo to a security report.',
       NSCameraUsageDescription:
         'Mission Portal needs camera access to let you take a profile photo.',
     },

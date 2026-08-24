@@ -10,6 +10,8 @@ import { useUsersStore } from '@/stores/usersStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { audit } from '@/lib/audit'
+import { confirmAsync } from '@/lib/confirm'
 import { useConfigStore } from '@/stores/configStore'
 import { geocodeCity } from '@/lib/geocode'
 import { isPublic, groupDisplayName } from '@/lib/roles'
@@ -93,6 +95,36 @@ function displayToIso(display: string): string {
   if (mn < 1 || mn > 12 || dn < 1 || dn > 31) return ''
   const fullYear = y.length <= 2 ? `20${y.padStart(2, '0')}` : y
   return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+}
+
+
+/**
+ * Record who changed an event and how.
+ *
+ * Events were the one significant thing in the app with no audit trail —
+ * user management, groups, task templates and moderation all keep one. So when
+ * a draft was published without anyone meaning to, there was no way to find
+ * out who or when; the only trace was _updatedAt, a bare timestamp with no
+ * actor.
+ *
+ * Publishing is called out separately from an ordinary update because it is
+ * the change that makes an event visible to everyone on it.
+ */
+type EventAuditAction =
+  | 'created'
+  | 'draftCreated'
+  | 'draftSaved'
+  | 'published'
+  | 'updated'
+  | 'occurrenceUpdated'
+
+const EVENT_AUDIT_DETAIL: Record<EventAuditAction, string> = {
+  created: 'Created event',
+  draftCreated: 'Created draft',
+  draftSaved: 'Saved draft',
+  published: 'Published draft',
+  updated: 'Updated event',
+  occurrenceUpdated: 'Updated a single occurrence of',
 }
 
 export function EventFormModal({
@@ -282,7 +314,23 @@ export function EventFormModal({
   )
   const assignedUids = new Set([...form.users.map(String), ...groupMemberUids])
 
+  async function auditEventSave(
+    action: EventAuditAction,
+    title: string,
+    id: string | number | null | undefined
+  ) {
+    // A failed audit write must not roll back the save that already happened.
+    await audit(
+      `event.${action}`,
+      `${EVENT_AUDIT_DETAIL[action]} "${title.trim() || 'Untitled'}" (#${id ?? '?'})`,
+      profile?.displayName ?? ''
+    ).catch(() => {})
+  }
+
   const doSave = async (finalUsers: (string | number)[], saveAsDraft = false) => {
+    // Captured before the write, because the payload sets unpublished and the
+    // difference between "updated" and "published" is what it used to be.
+    const wasDraft = event?.unpublished === true
     setSaving(true)
     try {
       const coords = form.isVirtual || saveAsDraft ? null : await geocodeCity(form.city, form.state)
@@ -341,6 +389,7 @@ export function EventFormModal({
           dressCode,
           ...(coords ? { _geocodeLat: coords.lat, _geocodeLng: coords.lng } : {}),
         })
+        await auditEventSave('occurrenceUpdated', form.title, event?.id ?? instanceKey)
         toast('This date updated', 'success')
         onClose()
       } else if (event) {
@@ -356,6 +405,11 @@ export function EventFormModal({
           }),
           form.title,
           instanceKey ?? String(event.id)
+        )
+        await auditEventSave(
+          saveAsDraft ? 'draftSaved' : wasDraft ? 'published' : 'updated',
+          form.title,
+          event.id
         )
         toast(saveAsDraft ? 'Draft saved' : 'Event updated', 'success')
       } else {
@@ -396,6 +450,11 @@ export function EventFormModal({
             }
           }
         }
+        await auditEventSave(
+          saveAsDraft ? 'draftCreated' : 'created',
+          form.title,
+          newEventId
+        )
         toast(saveAsDraft ? 'Draft saved' : 'Event created', 'success')
       }
       if (!form.isVirtual && !coords && !saveAsDraft) {
@@ -454,6 +513,18 @@ export function EventFormModal({
     }
 
     const saveAsDraft = mode === 'draft'
+
+    // Publishing is a one-way door with no undo: the event becomes visible to
+    // everyone on it the moment it saves. It used to happen on a single tap of
+    // the most prominent button on the form, which is how a draft went out
+    // half-finished without anyone meaning to.
+    if (isExistingDraft && !saveAsDraft) {
+      const ok = await confirmAsync(
+        `Publish "${form.title.trim()}"? It becomes visible to everyone on it.`,
+        { title: 'Publish event', confirmLabel: 'Publish' }
+      )
+      if (!ok) return
+    }
 
     // Check for team members not directly assigned to the event
     const teamMemberUids = [
@@ -1568,31 +1639,41 @@ export function EventFormModal({
                 </XStack>
               </Pressable>
             ) : (
-              /* New event or editing a draft: show Save as Draft + Publish */
+              /* New event or editing a draft: show Save as Draft + Publish.
+                 On an existing draft the emphasis is reversed — keeping it a
+                 draft is the ordinary act and publishing is the deliberate
+                 one, so the prominent button is the safe one. Creating a new
+                 event is the opposite: making it is what you came to do. */
               <>
                 <Pressable onPress={() => handleSave('draft')} disabled={saving}>
                   <XStack
-                    borderWidth={1}
+                    backgroundColor={isExistingDraft ? colors.primary : 'transparent'}
+                    borderWidth={isExistingDraft ? 0 : 1}
                     borderColor={colors.border}
                     borderRadius="$2"
-                    paddingHorizontal="$3"
+                    paddingHorizontal={isExistingDraft ? '$4' : '$3'}
                     paddingVertical="$2"
                     opacity={saving ? 0.6 : 1}
                   >
-                    <Text color={colors.textMuted} fontWeight="600">
+                    <Text color={isExistingDraft ? 'white' : colors.textMuted} fontWeight="600">
                       {saving ? 'Saving…' : 'Save as Draft'}
                     </Text>
                   </XStack>
                 </Pressable>
                 <Pressable onPress={() => handleSave('publish')} disabled={saving}>
                   <XStack
-                    backgroundColor={colors.primary}
+                    backgroundColor={isExistingDraft ? 'transparent' : colors.primary}
+                    borderWidth={isExistingDraft ? 1 : 0}
+                    borderColor={colors.primary}
                     borderRadius="$2"
                     paddingHorizontal="$4"
                     paddingVertical="$2"
                     opacity={saving ? 0.6 : 1}
                   >
-                    <Text color="white" fontWeight="600">
+                    <Text
+                      color={isExistingDraft ? colors.primary : 'white'}
+                      fontWeight="600"
+                    >
                       {saving ? 'Saving…' : isExistingDraft ? 'Publish' : 'Create'}
                     </Text>
                   </XStack>

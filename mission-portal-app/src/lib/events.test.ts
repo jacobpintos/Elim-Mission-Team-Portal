@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getInstances, allInstances, taskDueDate } from './events'
+import { getInstances, allInstances, taskDueDate, canViewEvent } from './events'
 import type { EventTemplate } from '@/types/events'
 
 const tmpl = (over: Partial<EventTemplate> = {}) =>
@@ -167,5 +167,47 @@ describe('taskDueDate', () => {
 
   it('handles a leap day', () => {
     expect(taskDueDate('2028-03-01', { daysBefore: 1 })).toBe('2028-02-29')
+  })
+})
+
+describe('canViewEvent', () => {
+  // The detail screen had no access check at all, so a direct link to
+  // /events/<id> rendered whatever the id resolved to — and every signed-in
+  // user's app already holds every event, because the store subscribes to the
+  // whole collection.
+  const nobody = { admin: false, assigned: false }
+
+  it('lets someone on the event see it', () => {
+    expect(canViewEvent({}, { admin: false, assigned: true })).toBe(true)
+  })
+
+  it('lets anyone see a public event', () => {
+    expect(canViewEvent({ isPublic: true }, nobody)).toBe(true)
+  })
+
+  it('refuses an event the viewer is not on and that is not public', () => {
+    // The case that was open: a guest opening a link to someone else's trip.
+    expect(canViewEvent({}, nobody)).toBe(false)
+    expect(canViewEvent({ isPublic: false }, nobody)).toBe(false)
+  })
+
+  it('lets an admin see anything', () => {
+    expect(canViewEvent({}, { admin: true, assigned: false })).toBe(true)
+  })
+
+  it('keeps a draft to admins, even from the people on it', () => {
+    // A draft is the admin's working copy. Being assigned to one does not make
+    // it ready to be seen.
+    expect(canViewEvent({ unpublished: true }, { admin: false, assigned: true })).toBe(false)
+    expect(canViewEvent({ unpublished: true }, { admin: true, assigned: false })).toBe(true)
+  })
+
+  it('does not let public override a draft', () => {
+    expect(canViewEvent({ unpublished: true, isPublic: true }, nobody)).toBe(false)
+  })
+
+  it('treats a missing flag as not public', () => {
+    // Older documents predate isPublic; absent must not read as permission.
+    expect(canViewEvent({ isPublic: undefined }, nobody)).toBe(false)
   })
 })

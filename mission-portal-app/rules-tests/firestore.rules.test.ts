@@ -15,6 +15,7 @@ import {
   getDocs,
   query,
   where,
+  documentId,
 } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -222,6 +223,64 @@ describe('contentReports — the moderation queue', () => {
     )
 
     expect(snap.docs.map((d) => d.id).sort()).toEqual(['rep1', 'rep4'])
+  })
+})
+
+describe('what a deleted event takes with it', () => {
+  /**
+   * onEventDeleted removes food sign-ups and availability responses along with
+   * the event. Neither points at the event with a field — both are named
+   * `${eventId}_${date}` — so they are found by a range over the document id,
+   * which is Firestore's nearest thing to a prefix match.
+   */
+  const HIGH = String.fromCharCode(0xf8ff)
+
+  const keyed = (db: ReturnType<typeof as>, name: string, eventId: string) =>
+    getDocs(
+      query(
+        collection(db, name),
+        where(documentId(), '>=', `${eventId}_`),
+        where(documentId(), '<', `${eventId}_${HIGH}`)
+      )
+    )
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      for (const id of ['4_2026-01-01', '4_2026-02-02', '40_2026-01-01', '41_2026-03-03', '4']) {
+        await setDoc(doc(db, 'foodSignups', id), { signups: {} })
+        await setDoc(doc(db, 'avail', id), { responses: {} })
+      }
+    })
+  })
+
+  it('finds every occurrence of the event', async () => {
+    const snap = await keyed(as(ADMIN), 'foodSignups', '4')
+
+    expect(snap.docs.map((d) => d.id).sort()).toEqual(['4_2026-01-01', '4_2026-02-02'])
+  })
+
+  it('does not reach a neighbouring event whose id shares a prefix', async () => {
+    // The separator is what makes this safe: "40_..." sorts below "4_" because
+    // '0' is below '_', so event 40 cannot be swept up by event 4's delete.
+    const snap = await keyed(as(ADMIN), 'foodSignups', '4')
+    const ids = snap.docs.map((d) => d.id)
+
+    expect(ids).not.toContain('40_2026-01-01')
+    expect(ids).not.toContain('41_2026-03-03')
+    expect(ids).not.toContain('4')
+  })
+
+  it('works the same for availability', async () => {
+    const snap = await keyed(as(ADMIN), 'avail', '4')
+
+    expect(snap.docs.map((d) => d.id).sort()).toEqual(['4_2026-01-01', '4_2026-02-02'])
+  })
+
+  it('finds nothing for an event that never had any', async () => {
+    const snap = await keyed(as(ADMIN), 'foodSignups', '999')
+
+    expect(snap.docs).toHaveLength(0)
   })
 })
 
