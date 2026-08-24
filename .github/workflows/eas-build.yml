@@ -31,10 +31,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      # eas-cli pulls @oclif/plugin-autocomplete, which requires Node >= 22.
+      # The action installs it with yarn, and yarn treats an unmet `engines`
+      # as a hard error rather than a warning, so Node 20 fails the install
+      # before the build is ever queued.
+      #
+      # This is only the machine that evaluates app.config.ts and hands the
+      # project to EAS — it is unrelated to the Node the functions run on,
+      # which is pinned to 20 in functions/package.json to match the deployed
+      # Cloud Functions runtime.
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: mission-portal-app/package-lock.json
 
