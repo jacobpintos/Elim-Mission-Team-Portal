@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Platform } from 'react-native'
+
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { doc, deleteDoc } from 'firebase/firestore'
@@ -10,6 +10,7 @@ import { EditGroupSheet } from '@/features/admin/EditGroupSheet'
 import { audit } from '@/lib/audit'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { confirmAsync } from '@/lib/confirm'
 import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -39,7 +40,7 @@ export default function AdminGroups() {
     return a.name.localeCompare(b.name)
   })
 
-  const handleDelete = (group: GroupDoc) => {
+  const handleDelete = async (group: GroupDoc) => {
     if (group.name === 'All') return
     const msg = `Delete group "${group.name}"? This cannot be undone.`
     const doDelete = async () => {
@@ -52,14 +53,12 @@ export default function AdminGroups() {
         toast(message, 'error')
       }
     }
-    if (Platform.OS === 'web') {
-      if (window.confirm(msg)) doDelete()
-      return
-    }
-    Alert.alert('Delete Group', msg, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: doDelete },
-    ])
+    const ok = await confirmAsync(msg, {
+      title: 'Delete Group',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (ok) await doDelete()
   }
 
   return (

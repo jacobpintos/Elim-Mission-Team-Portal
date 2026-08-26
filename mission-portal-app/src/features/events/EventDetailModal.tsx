@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Pressable, Linking, Alert, Platform } from 'react-native'
+import { Pressable, Linking } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { onSnapshot, doc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -11,6 +11,7 @@ import { downloadICS } from '@/lib/icsExport'
 import { availKey, effectiveAvail, getSeriesAvail } from '@/lib/availability'
 import { AvailBadge } from '@/components/ui/AvailBadge'
 import { useUIStore } from '@/stores/uiStore'
+import { confirmAsync } from '@/lib/confirm'
 import { useEventsStore } from '@/stores/eventsStore'
 import { usePlanningStore } from '@/stores/planningStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -526,14 +527,11 @@ export function FoodPanel({
         toast('Failed to sign up', 'error')
       }
     }
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Sign up to bring "${itemName}"?`)) doSignup()
-      return
-    }
-    Alert.alert(`Sign up to bring "${itemName}"?`, '', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Up', onPress: doSignup },
-    ])
+    const ok = await confirmAsync(`Sign up to bring "${itemName}"?`, {
+      title: 'Food Sign-up',
+      confirmLabel: 'Sign Up',
+    })
+    if (ok) await doSignup()
   }
 
   const items = event.foodItems ?? []
@@ -770,21 +768,19 @@ export function CarpoolPanel({
     save(cars.map((c) => (c.id === carId ? { ...c, driver: '' } : c)))
   }
 
-  const handleFinalize = () => {
+  const handleFinalize = async () => {
     if (unassigned.length === 0) {
       toast('All members assigned to carpool', 'success')
       return
     }
     const names = unassigned.map(getName).join(', ')
     const msg = `${unassigned.length} member(s) not yet in a car: ${names}\n\nFinalize anyway?`
-    if (Platform.OS === 'web') {
-      if (window.confirm(msg)) toast('Carpool finalized', 'success')
-      return
-    }
-    Alert.alert('Unassigned Members', msg, [
-      { text: 'Go Back', style: 'cancel' },
-      { text: 'Finalize', onPress: () => toast('Carpool finalized', 'success') },
-    ])
+    const ok = await confirmAsync(msg, {
+      title: 'Unassigned Members',
+      confirmLabel: 'Finalize',
+      cancelLabel: 'Go Back',
+    })
+    if (ok) toast('Carpool finalized', 'success')
   }
 
   // Find the current user's car

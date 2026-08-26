@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Pressable, Alert, Platform } from 'react-native'
+import { Pressable } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
 import { collection, onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore'
 import { Modal } from '@/components/ui/Modal'
@@ -96,7 +96,6 @@ function displayToIso(display: string): string {
   const fullYear = y.length <= 2 ? `20${y.padStart(2, '0')}` : y
   return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
 }
-
 
 /**
  * Record who changed an event and how.
@@ -450,11 +449,7 @@ export function EventFormModal({
             }
           }
         }
-        await auditEventSave(
-          saveAsDraft ? 'draftCreated' : 'created',
-          form.title,
-          newEventId
-        )
+        await auditEventSave(saveAsDraft ? 'draftCreated' : 'created', form.title, newEventId)
         toast(saveAsDraft ? 'Draft saved' : 'Event created', 'success')
       }
       if (!form.isVirtual && !coords && !saveAsDraft) {
@@ -543,17 +538,12 @@ export function EventFormModal({
         .join(', ')
       const label = unassignedTeamMembers.length > 1 ? 'These people are' : 'This person is'
       const msg = `${names}\n\n${label} on a team but not directly assigned to this event. Add them?`
-      if (Platform.OS === 'web') {
-        if (window.confirm(msg)) doSave([...form.users, ...unassignedTeamMembers], saveAsDraft)
-        return
-      }
-      Alert.alert('Team Members Not Assigned', msg, [
-        { text: 'Go Back', style: 'cancel' },
-        {
-          text: 'Add & Save',
-          onPress: () => doSave([...form.users, ...unassignedTeamMembers], saveAsDraft),
-        },
-      ])
+      const ok = await confirmAsync(msg, {
+        title: 'Team Members Not Assigned',
+        confirmLabel: 'Add & Save',
+        cancelLabel: 'Go Back',
+      })
+      if (ok) await doSave([...form.users, ...unassignedTeamMembers], saveAsDraft)
       return
     }
 
@@ -572,14 +562,12 @@ export function EventFormModal({
           .join(', ')
         const lodgingLabel = unassignedLodging.length > 1 ? 'These people are' : 'This person is'
         const lodgingMsg = `${names}\n\n${lodgingLabel} not assigned to any lodging. Save anyway?`
-        if (Platform.OS === 'web') {
-          if (window.confirm(lodgingMsg)) doSave(form.users, saveAsDraft)
-          return
-        }
-        Alert.alert('Unassigned Lodging', lodgingMsg, [
-          { text: 'Go Back', style: 'cancel' },
-          { text: 'Save Anyway', onPress: () => doSave(form.users, saveAsDraft) },
-        ])
+        const ok = await confirmAsync(lodgingMsg, {
+          title: 'Unassigned Lodging',
+          confirmLabel: 'Save Anyway',
+          cancelLabel: 'Go Back',
+        })
+        if (ok) await doSave(form.users, saveAsDraft)
         return
       }
     }
@@ -587,7 +575,7 @@ export function EventFormModal({
     await doSave(form.users, saveAsDraft)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!event) return
     const isInstanceOnly = !!(instanceKey && editScope === 'instance')
     const msg = isInstanceOnly
@@ -606,14 +594,12 @@ export function EventFormModal({
         toast(isInstanceOnly ? 'Failed to remove occurrence' : 'Failed to delete event', 'error')
       }
     }
-    if (Platform.OS === 'web') {
-      if (window.confirm(msg)) doDelete()
-      return
-    }
-    Alert.alert(isInstanceOnly ? 'Remove Occurrence' : 'Delete Event', msg, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: isInstanceOnly ? 'Remove' : 'Delete', style: 'destructive', onPress: doDelete },
-    ])
+    const ok = await confirmAsync(msg, {
+      title: isInstanceOnly ? 'Remove Occurrence' : 'Delete Event',
+      confirmLabel: isInstanceOnly ? 'Remove' : 'Delete',
+      destructive: true,
+    })
+    if (ok) await doDelete()
   }
 
   const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -1670,10 +1656,7 @@ export function EventFormModal({
                     paddingVertical="$2"
                     opacity={saving ? 0.6 : 1}
                   >
-                    <Text
-                      color={isExistingDraft ? colors.primary : 'white'}
-                      fontWeight="600"
-                    >
+                    <Text color={isExistingDraft ? colors.primary : 'white'} fontWeight="600">
                       {saving ? 'Saving…' : isExistingDraft ? 'Publish' : 'Create'}
                     </Text>
                   </XStack>

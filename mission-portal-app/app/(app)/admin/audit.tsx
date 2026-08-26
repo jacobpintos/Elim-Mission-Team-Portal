@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert, Platform } from 'react-native'
+
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Input, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AuditEntry, type AuditDoc } from '@/features/admin/AuditEntry'
 import { useAdminStore } from '@/stores/adminStore'
 import { useUIStore } from '@/stores/uiStore'
+import { confirmAsync } from '@/lib/confirm'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const PAGE_SIZE = 25
@@ -67,21 +68,13 @@ export default function AdminAudit() {
     }
   }
 
-  const handleClearLog = () => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('This will permanently delete all audit log entries. Are you sure?')) {
-        doClear()
-      }
-      return
-    }
-    Alert.alert(
-      'Clear Audit Log',
-      'This will permanently delete all audit log entries. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Clear All', style: 'destructive', onPress: doClear },
-      ]
-    )
+  const handleClearLog = async () => {
+    const ok = await confirmAsync('This will permanently delete all audit log entries.', {
+      title: 'Clear Audit Log',
+      confirmLabel: 'Clear All',
+      destructive: true,
+    })
+    if (ok) await doClear()
   }
 
   return (

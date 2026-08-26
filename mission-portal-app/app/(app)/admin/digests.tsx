@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
-import { Alert, Platform } from 'react-native'
+
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useDigestStore, type DigestStatDoc } from '@/stores/digestStore'
 import { useUIStore } from '@/stores/uiStore'
+import { confirmAsync } from '@/lib/confirm'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
@@ -100,22 +101,13 @@ export default function AdminDigests() {
     }
   }
 
-  const sendDigest = (type: 'weekly' | 'monthly') => {
+  const sendDigest = async (type: 'weekly' | 'monthly') => {
     const label = type === 'weekly' ? 'Weekly' : 'Monthly'
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Send the ${label.toLowerCase()} digest to all subscribers now?`)) {
-        doSend(type)
-      }
-      return
-    }
-    Alert.alert(
-      `Send ${label} Digest`,
+    const ok = await confirmAsync(
       `Send the ${label.toLowerCase()} digest to all subscribers now?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Send', onPress: () => doSend(type) },
-      ]
+      { title: `Send ${label} Digest`, confirmLabel: 'Send' }
     )
+    if (ok) await doSend(type)
   }
 
   return (

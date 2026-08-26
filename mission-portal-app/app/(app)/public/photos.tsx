@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { ScrollView, Pressable, Alert } from 'react-native'
+import { ScrollView, Pressable } from 'react-native'
 import { YStack, XStack, Text, Input, Spinner } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useAuthStore } from '@/stores/authStore'
 import { usePhotoAlbumsStore } from '@/stores/photoAlbumsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { audit } from '@/lib/audit'
+import { confirmAsync } from '@/lib/confirm'
 import { PhotoAlbumCard } from '@/features/photos/PhotoAlbumCard'
 import { PhotoGalleryModal } from '@/features/photos/PhotoGalleryModal'
 import { PhotoAlbumFormModal } from '@/features/photos/PhotoAlbumFormModal'
@@ -57,27 +58,24 @@ export default function PhotosPage() {
     [baptismAlbums, baptismsSearch]
   )
 
-  const handleDelete = (album: PhotoAlbum) => {
-    Alert.alert('Delete Album', `Delete "${album.title}"? This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteAlbum(album.id)
-            await audit(
-              'photoAlbum.deleted',
-              `Deleted album "${album.title}"`,
-              profile?.displayName ?? ''
-            )
-            toast('Album deleted', 'success')
-          } catch {
-            toast('Failed to delete album', 'error')
-          }
-        },
-      },
-    ])
+  const handleDelete = async (album: PhotoAlbum) => {
+    const ok = await confirmAsync(`Delete "${album.title}"? This cannot be undone.`, {
+      title: 'Delete Album',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
+    try {
+      await deleteAlbum(album.id)
+      await audit(
+        'photoAlbum.deleted',
+        `Deleted album "${album.title}"`,
+        profile?.displayName ?? ''
+      )
+      toast('Album deleted', 'success')
+    } catch {
+      toast('Failed to delete album', 'error')
+    }
   }
 
   const openCreate = () => {
