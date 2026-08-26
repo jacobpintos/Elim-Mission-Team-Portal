@@ -21,7 +21,7 @@ export default function ResetPasswordScreen() {
   const resetPassword = useAuthStore((s) => s.resetPassword)
   const { toast } = useUIStore()
   const [loading, setLoading] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [sentTo, setSentTo] = useState<string | null>(null)
 
   const {
     control,
@@ -36,9 +36,17 @@ export default function ResetPasswordScreen() {
     setLoading(true)
     try {
       await resetPassword(data.email)
-      setSent(true)
+      setSentTo(data.email.trim())
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to send reset email'
+      const code = (err as { code?: string }).code ?? ''
+      const message =
+        code === 'auth/invalid-email'
+          ? 'That does not look like an email address.'
+          : code === 'auth/too-many-requests'
+            ? 'Too many attempts. Try again later.'
+            : code === 'auth/network-request-failed'
+              ? 'Network error. Check your connection.'
+              : 'Could not send the reset link. Please try again.'
       toast(message, 'error')
     } finally {
       setLoading(false)
@@ -64,11 +72,24 @@ export default function ResetPasswordScreen() {
           <YStack padding="$6" gap="$4">
             <H1>Reset password</H1>
 
-            {sent ? (
+            {sentTo ? (
               <YStack gap="$3">
+                {/* Firebase answers the same way whether or not the address
+                    has an account — deliberately, so that this screen cannot
+                    be used to find out who has one. Claiming a link was sent
+                    would therefore be untrue half the time, and someone who
+                    mistyped their address would sit waiting for an email that
+                    was never going to arrive. */}
                 <Paragraph color="$green9">
-                  A password reset link has been sent to your email address.
+                  If an account exists for {sentTo}, a link to reset its password is on its way.
                 </Paragraph>
+                <Paragraph color="$colorMuted" fontSize="$3">
+                  It can take a minute to arrive, and it sometimes lands in spam. Nothing will be
+                  sent if that address has no account here.
+                </Paragraph>
+                <Button chromeless onPress={() => setSentTo(null)} alignSelf="flex-start">
+                  <Text color="$primary">Try a different address</Text>
+                </Button>
                 <Link href="/(auth)/login">
                   <Text color="$primary">Back to sign in</Text>
                 </Link>
