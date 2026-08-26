@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore'
+import { collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { sameId } from '@/lib/ids'
 import type { Announcement } from '@/types/events'
@@ -12,7 +12,12 @@ interface AnnounceStore {
   myAnnouncements: (uid: string) => Announcement[]
   subscribe: () => void
   unsubscribe: () => void
-  createAnnouncement: (data: Omit<Announcement, 'id'>) => Promise<void>
+  /** Returns the new document's id, so a photo can be filed under it. */
+  createAnnouncement: (data: Omit<Announcement, 'id'>) => Promise<string>
+  updateAnnouncement: (
+    id: string | number,
+    data: Partial<Omit<Announcement, 'id'>>
+  ) => Promise<void>
   deleteAnnouncement: (id: string | number) => Promise<void>
 }
 
@@ -52,7 +57,12 @@ export const useAnnounceStore = create<AnnounceStore>((set, get) => ({
   },
 
   createAnnouncement: async (data) => {
-    await addDoc(collection(db, 'announcements'), data)
+    const ref = await addDoc(collection(db, 'announcements'), data)
+    return ref.id
+  },
+
+  updateAnnouncement: async (id, data) => {
+    await updateDoc(doc(db, 'announcements', String(id)), data)
   },
 
   deleteAnnouncement: async (id) => {

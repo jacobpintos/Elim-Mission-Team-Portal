@@ -129,6 +129,32 @@ describe('security report photos', () => {
   })
 })
 
+describe('announcement photos', () => {
+  const path = 'announcements/a1/photo.jpg'
+
+  it('lets a signed-in user upload one', async () => {
+    // Firestore is what gates who may post an announcement; Storage rules
+    // cannot read it, so the check here is only that somebody is signed in.
+    await assertSucceeds(uploadBytes(ref(as(OWNER), path), blob(2048), IMAGE))
+  })
+
+  it('refuses an anonymous upload', async () => {
+    await assertFails(uploadBytes(ref(anon(), path), blob(2048), IMAGE))
+  })
+
+  it('refuses a non-image', async () => {
+    await assertFails(
+      uploadBytes(ref(as(OWNER), path), blob(2048, 'application/pdf'), {
+        contentType: 'application/pdf',
+      })
+    )
+  })
+
+  it('refuses one at or over the 10MB cap', async () => {
+    await assertFails(uploadBytes(ref(as(OWNER), path), blob(10 * 1024 * 1024), IMAGE))
+  })
+})
+
 describe('logos', () => {
   it('is readable without signing in, since the login screen shows it', async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {

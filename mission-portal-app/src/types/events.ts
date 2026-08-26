@@ -184,12 +184,39 @@ export interface Announcement {
   attachment: AnnouncementAttachment | null
   by: string | number
   ts: number
+  /**
+   * Last day this announcement is shown, as YYYY-MM-DD.
+   *
+   * Deleted outright the day after — document, and the photo in Storage with
+   * it — by expireAnnouncements. Absent means it stays until someone removes
+   * it by hand.
+   */
+  expiresAt?: string
+  /** When it was last edited, if it has been. */
+  editedTs?: number
 }
 
 export interface AnnouncementAttachment {
   type: 'image' | 'file'
   url: string
   name?: string
+  /**
+   * The photo's own pixel size, recorded at upload.
+   *
+   * Kept so a card can work out the height that preserves the proportions
+   * without downloading the image and measuring it first — which would mean
+   * every card jumping once the real size arrived.
+   */
+  width?: number
+  height?: number
+  /**
+   * The height an admin chose instead, in points.
+   *
+   * The photo always spans the card's width, so height is the only dimension
+   * there is to set. Absent means "whatever the proportions ask for". When it
+   * is set and differs, the photo is cropped to the box, never stretched.
+   */
+  displayHeight?: number
 }
 
 export interface PostComment {

@@ -34,6 +34,23 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
+    // Photos on announcements, written by the announce composer.
+    //
+    // Read is open to any signed-in user because an announcement's audience
+    // lives in Firestore and Storage rules cannot see it — the same limit the
+    // chat attachments above run into. Firestore is what gates who sees the
+    // announcement the photo belongs to.
+    //
+    // Delete is allowed so removing a photo, or an expiring announcement,
+    // takes the file with it rather than orphaning it in the bucket.
+    match /announcements/{announcementId}/{file} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+
     // Photos attached to security incident reports, written by
     // securityStore.createReport(). Same problem as above — previously denied.
     // dailyCleanup removes these with the Admin SDK when a report's retention
