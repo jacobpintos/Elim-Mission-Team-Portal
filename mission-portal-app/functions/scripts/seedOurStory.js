@@ -29,9 +29,11 @@ const IMG = {
   revived: 'https://images.squarespace-cdn.com/content/v1/6751456bc7917b1e18a60ac9/2660fa02-2b4d-42fa-bd34-b5ed1133f954/albumidea%3F%3F.png',
 }
 
-// Where the REVIVE ME excerpt button goes. Left pointing at the About page
-// until the real destination is known — change it here or in the app.
-const EXCERPT_URL = 'https://thewellofiowa.com/about'
+// Where the REVIVE ME excerpt button goes: the sample chapter, hosted on
+// Dropbox. The link carries its own key, so it opens for anyone without a
+// Dropbox account — but it dies if the file is moved or the share revoked.
+const EXCERPT_URL =
+  'https://www.dropbox.com/scl/fi/t74yx2rn3e1y5riy5biu6/ReviveMeBook-WhatTriggersRevival.pdf?rlkey=y62icb5m016no7er4kcefm0ff&st=uruxsdky&e=1&dl=0'
 
 // Block ids are Date.now() in the app; fixed offsets here keep them stable
 // and ordered across runs.

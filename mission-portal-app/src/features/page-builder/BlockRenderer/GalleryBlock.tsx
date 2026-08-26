@@ -35,7 +35,11 @@ export function GalleryBlock({ data }: GalleryBlockProps) {
   const rows = toRows(images, columns)
 
   return (
-    <YStack padding="$4" gap="$2">
+    // The grid is only ever as wide as MAX_WIDTH allows, so on a desktop
+    // browser it would otherwise sit in the left corner of a 1900px page.
+    // Centring the column also lines the covers up with the Image blocks
+    // above and below, which cap at the same width.
+    <YStack padding="$4" gap="$2" width="100%" maxWidth={MAX_WIDTH} alignSelf="center">
       {data.heading ? (
         <Text fontSize="$5" fontWeight="700">
           {data.heading}
