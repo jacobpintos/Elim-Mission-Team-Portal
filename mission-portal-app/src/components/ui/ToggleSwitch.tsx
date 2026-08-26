@@ -46,10 +46,18 @@ export function ToggleSwitch({
 }: ToggleSwitchProps) {
   const colors = useThemeColors()
 
+  // Omitted, not passed as undefined. Tamagui's `size` is a spread variant, so
+  // an explicit undefined runs its resolver with no value rather than falling
+  // through to the token default — the frame ends up with no dimensions and
+  // stretches to fill its parent, which is a full-height track and a thumb the
+  // size of a coin. Callers that never set a size must reach Switch with no
+  // size prop at all, exactly as they did before this component existed.
+  const sizeProps = size ? { size } : {}
+
   return (
     <YStack alignItems="center" gap="$1" opacity={disabled ? 0.5 : 1}>
       <Switch
-        size={size}
+        {...sizeProps}
         checked={checked}
         disabled={disabled}
         onCheckedChange={onCheckedChange}
