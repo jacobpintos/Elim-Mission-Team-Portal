@@ -1,32 +1,9 @@
 import { Pressable } from 'react-native'
 import { Image } from 'expo-image'
 import { YStack, XStack, Text } from 'tamagui'
-import {
-  Facebook,
-  Instagram,
-  Twitter,
-  Youtube,
-  Linkedin,
-  Github,
-  Twitch,
-  Mail,
-  Phone,
-  Smartphone,
-  Globe,
-  Link,
-  Music,
-  MessageCircle,
-  DollarSign,
-  HandCoins,
-  CreditCard,
-  Banknote,
-  Gift,
-  Heart,
-  Send,
-} from '@tamagui/lucide-icons'
 import { useThemeStore } from '@/stores/themeStore'
 import { autoTextColor } from '@/theme/contrast'
-import { resolveSocialIcon, type KnownIconName, type ResolvedIcon } from '@/lib/socialIcon'
+import { resolveSocialIcon, type ResolvedIcon } from '@/lib/socialIcon'
 import type { SocialData } from '@/types/pages'
 import { openExternalUrl } from '@/lib/externalUrl'
 
@@ -34,64 +11,38 @@ interface SocialBlockProps {
   data: SocialData
 }
 
-const ICONS: Record<KnownIconName, typeof Facebook> = {
-  Facebook,
-  Instagram,
-  Twitter,
-  Youtube,
-  Linkedin,
-  Github,
-  Twitch,
-  Mail,
-  Phone,
-  Smartphone,
-  Globe,
-  Link,
-  Music,
-  MessageCircle,
-  DollarSign,
-  HandCoins,
-  CreditCard,
-  Banknote,
-  Gift,
-  Heart,
-  Send,
-}
-
 const TILE = 64
 const COLUMN = 92
 
-/** Whatever stands in for the platform: its logo, its icon, or its initial. */
+/**
+ * Whatever stands in for the platform: its logo, an emoji, or its initial.
+ *
+ * Note there is no icon component here. @tamagui/lucide-icons is installed
+ * but unusable: its newest release is a major version behind the app's
+ * tamagui and bundles its own @tamagui/core, so an icon rendered inside the
+ * app's provider reads a theme context nothing ever filled in and throws,
+ * taking the whole page down with it.
+ */
 function Mark({ icon, color }: { icon: ResolvedIcon; color: string }) {
-  switch (icon.kind) {
-    case 'image':
-      return (
-        <Image
-          source={{ uri: icon.uri }}
-          style={{ width: TILE, height: TILE }}
-          contentFit="cover"
-        />
-      )
-    case 'named': {
-      const Named = ICONS[icon.name]
-      return <Named size={28} color={color} />
-    }
-    default:
-      return (
-        <Text fontSize={icon.kind === 'glyph' ? 28 : 24} fontWeight="700" color={color}>
-          {icon.text}
-        </Text>
-      )
+  if (icon.kind === 'image') {
+    return (
+      <Image source={{ uri: icon.uri }} style={{ width: TILE, height: TILE }} contentFit="cover" />
+    )
   }
+
+  return (
+    <Text fontSize={icon.kind === 'glyph' ? 28 : 24} fontWeight="700" color={color}>
+      {icon.text}
+    </Text>
+  )
 }
 
 /**
  * A row of places to go — social accounts, or the ways to give.
  *
  * The mark is the button and the name sits under it, rather than both being
- * crammed into one pill. A logo is what a reader recognises before they read
- * anything, and it gives the name somewhere to be that is not next to a
- * repeat of itself.
+ * crammed into one pill. What a reader recognises first is the logo, and it
+ * gives the name somewhere to be that is not next to a repeat of itself.
  */
 export function SocialBlock({ data }: SocialBlockProps) {
   const { theme } = useThemeStore()

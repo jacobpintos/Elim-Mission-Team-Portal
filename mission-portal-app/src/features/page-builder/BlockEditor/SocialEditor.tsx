@@ -71,9 +71,8 @@ export function SocialEditor({ data, onChange }: SocialEditorProps) {
             autoCapitalize="none"
           />
           <Text fontSize="$1" color="$gray10">
-            Leave blank and the label is used. Facebook, Instagram, YouTube, Venmo, Cash App,
-            Tithe.ly and the like have an icon built in; anything else shows its first letter unless
-            you paste the address of a logo image, which is then used as-is.
+            Paste the address of the platform&apos;s logo to use it as the button, or an emoji.
+            Leave it blank and the button shows the first letter of the label.
           </Text>
           <Input
             placeholder="Label (e.g. Facebook)"
