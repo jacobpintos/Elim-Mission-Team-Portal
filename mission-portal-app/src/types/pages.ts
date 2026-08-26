@@ -8,6 +8,7 @@ export type PageBlockType =
   | 'divider'
   | 'meeting'
   | 'social'
+  | 'embed'
 
 export interface PageBlock {
   id: number // Date.now() at creation
@@ -33,6 +34,20 @@ export interface ImageData extends Record<string, unknown> {
   src?: string
   caption?: string
   align?: 'left' | 'center' | 'right'
+}
+
+export interface EmbedData extends Record<string, unknown> {
+  url?: string
+  /** Shown above the frame, so the page still reads if the embed fails. */
+  heading?: string
+  /**
+   * How tall the frame is, in points.
+   *
+   * A web page has no natural height the app can measure, so it has to be
+   * declared. The block scrolls its own content inside this box, which is why
+   * getting it roughly right matters more than for an image.
+   */
+  height?: number
 }
 
 export interface TwoColData extends Record<string, unknown> {

@@ -12,6 +12,7 @@ const BLOCK_TYPES: { type: PageBlockType; label: string }[] = [
   { type: 'divider', label: 'Divider' },
   { type: 'meeting', label: 'Meeting' },
   { type: 'social', label: 'Social' },
+  { type: 'embed', label: 'Embed' },
 ]
 
 interface BlockPaletteProps {

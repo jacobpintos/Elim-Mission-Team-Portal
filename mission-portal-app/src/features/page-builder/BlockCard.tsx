@@ -2,6 +2,7 @@ import { YStack, XStack, Text, Button } from 'tamagui'
 import { HeroEditor } from './BlockEditor/HeroEditor'
 import { TextEditor } from './BlockEditor/TextEditor'
 import { ImageEditor } from './BlockEditor/ImageEditor'
+import { EmbedEditor } from './BlockEditor/EmbedEditor'
 import { TwoColEditor } from './BlockEditor/TwoColEditor'
 import { TimelineEditor } from './BlockEditor/TimelineEditor'
 import { ButtonEditor } from './BlockEditor/ButtonEditor'
@@ -64,6 +65,13 @@ export function BlockCard({
       case 'image':
         return (
           <ImageEditor
+            data={block.data as never}
+            onChange={(d) => onChange({ ...block, data: d })}
+          />
+        )
+      case 'embed':
+        return (
+          <EmbedEditor
             data={block.data as never}
             onChange={(d) => onChange({ ...block, data: d })}
           />
