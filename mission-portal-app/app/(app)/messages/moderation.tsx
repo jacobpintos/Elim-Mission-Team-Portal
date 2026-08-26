@@ -417,8 +417,12 @@ export default function AdminModeration() {
                 {r.attachment?.type === 'image' && r.attachment.url ? (
                   revealed.has(r.id) ? (
                     <YStack gap="$1" marginTop="$2">
+                      {/* `src`, not `source`: Tamagui's Image never reads a
+                          `source` prop — it rebuilds one from `src` and
+                          overwrites whatever was passed, so `source` renders
+                          an empty box the size you asked for. */}
                       <Image
-                        source={{ uri: r.attachment.url }}
+                        src={r.attachment.url}
                         width={220}
                         height={165}
                         borderRadius="$2"

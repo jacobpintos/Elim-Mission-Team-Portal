@@ -82,12 +82,12 @@ export function MessageBubble({
             </Text>
           ) : null}
           {message.attachment?.type === 'image' ? (
-            <Image
-              source={{ uri: message.attachment.url }}
-              width={200}
-              height={150}
-              borderRadius="$2"
-            />
+            // `src`, not `source`. Tamagui's Image does not destructure
+            // `source` at all — it builds one from `src` and sets it after
+            // spreading the rest of the props, so a `source` passed in is
+            // overwritten with { uri: undefined } and the image renders as an
+            // empty box at exactly the width and height requested.
+            <Image src={message.attachment.url} width={200} height={150} borderRadius="$2" />
           ) : message.attachment?.type === 'file' ? (
             <Text color={textColor} fontSize="$2" textDecorationLine="underline">
               📎 {message.attachment.name ?? 'File'}
