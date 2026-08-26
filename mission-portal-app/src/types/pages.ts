@@ -62,6 +62,13 @@ export interface QuoteData extends Record<string, unknown> {
 export interface GalleryData extends Record<string, unknown> {
   /** Image addresses, laid out in a grid in the order given. */
   images?: string[]
+  /**
+   * Where each picture goes when tapped, matched to `images` by position. A
+   * blank or missing entry means the picture opens full screen instead, which
+   * is what most of them should do — a link is for a cover that stands for
+   * something else, like a page or a download.
+   */
+  links?: string[]
   /** Columns. Two suits book covers; three suits snapshots. */
   columns?: number
   heading?: string

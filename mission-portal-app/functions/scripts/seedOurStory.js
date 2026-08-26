@@ -108,6 +108,10 @@ const blocks = [
     type: 'gallery',
     data: {
       images: [IMG.devotions, IMG.reviveMe, IMG.tentmakers, IMG.inYourHand],
+      // Matched to the images by position. Daily Devotions is a standing
+      // series rather than a book, so its cover goes to where they are
+      // posted; the three covers open full screen like any other picture.
+      links: ['https://www.facebook.com/pastorajai'],
       columns: 2,
     },
   },
