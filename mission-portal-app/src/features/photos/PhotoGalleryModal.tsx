@@ -1,10 +1,12 @@
 import { useState, useCallback } from 'react'
-import { Modal, Pressable, Linking, Alert, ScrollView, useWindowDimensions } from 'react-native'
+import { Modal, Pressable, ScrollView, useWindowDimensions } from 'react-native'
 import { Image } from 'expo-image'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { usePhotoAlbumsStore } from '@/stores/photoAlbumsStore'
 import { useUIStore } from '@/stores/uiStore'
+import { confirmAsync } from '@/lib/confirm'
+import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import type { PhotoAlbum, PhotoItem } from '@/types/photos'
 
 interface PhotoGalleryModalProps {
@@ -16,9 +18,19 @@ interface PhotoGalleryModalProps {
 const NUM_COLS = 3
 const GAP = 3
 
-export function PhotoGalleryModal({ album, isAdmin, onClose }: PhotoGalleryModalProps) {
+export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGalleryModalProps) {
   const colors = useThemeColors()
   const { addPhoto, removePhoto } = usePhotoAlbumsStore()
+  const liveAlbums = usePhotoAlbumsStore((s) => s.albums)
+
+  // The prop is whatever the album looked like when it was tapped, and it is
+  // never updated — so adding a photo wrote to Firestore, the store's snapshot
+  // listener fired, and this modal went on rendering the copy it was handed.
+  // The photo only appeared after closing and reopening. Removing one looked
+  // broken for the same reason, even when the write had succeeded.
+  const album = opened ? (liveAlbums.find((a) => a.id === opened.id) ?? opened) : null
+
+  const [viewing, setViewing] = useState<string | null>(null)
   const { toast } = useUIStore()
   const { width } = useWindowDimensions()
 
@@ -48,23 +60,23 @@ export function PhotoGalleryModal({ album, isAdmin, onClose }: PhotoGalleryModal
   }, [album, newUrl, newCaption, addPhoto, toast])
 
   const handleRemovePhoto = useCallback(
-    (photo: PhotoItem) => {
+    async (photo: PhotoItem) => {
       if (!album) return
-      Alert.alert('Remove Photo', 'Remove this photo from the album?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await removePhoto(album.id, photo)
-              toast('Photo removed', 'success')
-            } catch {
-              toast('Failed to remove photo', 'error')
-            }
-          },
-        },
-      ])
+      // Alert.alert renders nothing on web, so the prompt never appeared and
+      // the delete never ran — the button looked dead. confirmAsync is the
+      // cross-platform one this codebase already keeps for the purpose.
+      const ok = await confirmAsync('Remove this photo from the album?', {
+        title: 'Remove Photo',
+        confirmLabel: 'Remove',
+        destructive: true,
+      })
+      if (!ok) return
+      try {
+        await removePhoto(album.id, photo)
+        toast('Photo removed', 'success')
+      } catch {
+        toast('Failed to remove photo', 'error')
+      }
     },
     [album, removePhoto, toast]
   )
@@ -198,7 +210,7 @@ export function PhotoGalleryModal({ album, isAdmin, onClose }: PhotoGalleryModal
                 <XStack key={ri} gap={GAP}>
                   {row.map((photo, ci) => (
                     <YStack key={`${ri}-${ci}`} position="relative">
-                      <Pressable onPress={() => Linking.openURL(photo.url)}>
+                      <Pressable onPress={() => setViewing(photo.url)}>
                         <Image
                           source={{ uri: photo.url }}
                           style={{ width: imgSize, height: imgSize }}
@@ -240,6 +252,10 @@ export function PhotoGalleryModal({ album, isAdmin, onClose }: PhotoGalleryModal
             </YStack>
           )}
         </ScrollView>
+
+        {/* key on the url so each photo opens a fresh viewer at its default
+            zoom, rather than inheriting where the last one was left. */}
+        <ImageLightbox key={viewing ?? 'none'} uri={viewing} onClose={() => setViewing(null)} />
       </YStack>
     </Modal>
   )

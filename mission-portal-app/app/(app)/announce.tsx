@@ -33,6 +33,7 @@ import {
 import { uploadAnnouncementImage, deleteAnnouncementImage } from '@/lib/announcementUpload'
 import { todayStr } from '@/lib/events'
 import { confirmAsync } from '@/lib/confirm'
+import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import type { Announcement, AnnouncementAttachment } from '@/types/events'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -104,6 +105,8 @@ export default function AnnounceScreen() {
   const [aExpires, setAExpires] = useState('')
   const [aAttachment, setAAttachment] = useState<AnnouncementAttachment | null>(null)
   const [photoBusy, setPhotoBusy] = useState(false)
+  // The announcement photo opened full screen, if any.
+  const [viewing, setViewing] = useState<string | null>(null)
   // Fixed when the composer opens. Reading the clock during render is impure
   // and makes the preview's date churn on every keystroke.
   const [composerTs, setComposerTs] = useState(0)
@@ -332,13 +335,21 @@ export default function AnnounceScreen() {
                     resizeMode 'cover' is what keeps the proportions when the
                     admin has set a height: it crops rather than stretches. */}
                 {a.attachment?.type === 'image' && a.attachment.url ? (
-                  <Image
-                    src={a.attachment.url}
-                    width={cardWidth}
-                    height={cardImageHeight(a.attachment, cardWidth)}
-                    resizeMode="cover"
-                    borderRadius="$2"
-                  />
+                  // Tap to open it full screen, where it can be zoomed, saved
+                  // and copied. A card photo is often cropped to a chosen
+                  // height, so this is the only way to see the whole thing.
+                  <Pressable
+                    onPress={() => setViewing(a.attachment?.url ?? null)}
+                    accessibilityLabel="Open image"
+                  >
+                    <Image
+                      src={a.attachment.url}
+                      width={cardWidth}
+                      height={cardImageHeight(a.attachment, cardWidth)}
+                      resizeMode="cover"
+                      borderRadius="$2"
+                    />
+                  </Pressable>
                 ) : null}
 
                 <Text color={colors.text} fontSize="$3" lineHeight={20}>
@@ -386,6 +397,10 @@ export default function AnnounceScreen() {
           </YStack>
         </ScrollView>
       )}
+
+      {/* key on the url so each photo opens a fresh viewer at its default
+          zoom rather than inheriting where the last one was left. */}
+      <ImageLightbox key={viewing ?? 'none'} uri={viewing} onClose={() => setViewing(null)} />
 
       {/* Create Modal */}
       <Modal
