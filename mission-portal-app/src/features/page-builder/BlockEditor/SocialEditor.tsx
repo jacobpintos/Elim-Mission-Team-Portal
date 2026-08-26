@@ -64,12 +64,17 @@ export function SocialEditor({ data, onChange }: SocialEditorProps) {
           </XStack>
 
           <Input
-            placeholder="Icon name (e.g. facebook, instagram)"
+            placeholder="Icon — platform name, emoji, or a logo address"
             value={link.icon}
             onChangeText={(v) => updateLink(index, { icon: v })}
             size="$3"
             autoCapitalize="none"
           />
+          <Text fontSize="$1" color="$gray10">
+            Leave blank and the label is used. Facebook, Instagram, YouTube, Venmo, Cash App,
+            Tithe.ly and the like have an icon built in; anything else shows its first letter unless
+            you paste the address of a logo image, which is then used as-is.
+          </Text>
           <Input
             placeholder="Label (e.g. Facebook)"
             value={link.label}
