@@ -56,6 +56,23 @@ service cloud.firestore {
       allow delete: if isAdmin() && !isOwnerUid(uid);
     }
 
+    // The name behind a uid, for everyone signed in.
+    //
+    // `users` above is readable only by its owner and by admins, because it
+    // holds push tokens, emails, locations, block lists and report history.
+    // That is right for those fields and wrong as an answer to "who is this
+    // uid?" — which every member's app asks constantly, for team rosters,
+    // message authors and assignment lists. Denied, they rendered raw uids.
+    //
+    // Mirrored from users/{uid} by mirrorPublicProfile, which runs with Admin
+    // SDK privileges and so is unaffected by the closed write rule here. No
+    // client may write it: a member editing this collection directly could
+    // rename anyone in everyone else's copy of the directory.
+    match /publicProfiles/{uid} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     match /auditLog/{doc} {
       allow read: if isAdmin();
       allow create: if isSignedIn();

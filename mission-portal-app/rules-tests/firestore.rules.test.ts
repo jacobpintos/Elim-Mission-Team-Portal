@@ -169,6 +169,47 @@ describe('users', () => {
     await assertFails(deleteDoc(doc(as(MEMBER), 'users', MEMBER)))
     await assertSucceeds(deleteDoc(doc(as(ADMIN), 'users', MEMBER)))
   })
+
+  it('refuses a member listing the whole collection', async () => {
+    // The bug the directory exists for. A collection query is refused outright
+    // when it could return a document the caller may not read — it is not
+    // filtered down — so this is what every non-admin's name lookup hit, and
+    // why members saw raw uids wherever a name belonged.
+    await assertFails(getDocs(collection(as(MEMBER), 'users')))
+    await assertSucceeds(getDocs(collection(as(ADMIN), 'users')))
+  })
+})
+
+describe('publicProfiles — who is this uid?', () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'publicProfiles', MEMBER), {
+        uid: MEMBER,
+        displayName: 'A Member',
+      })
+    })
+  })
+
+  it('lets any signed-in user read the whole directory', async () => {
+    // Both the single document and the collection query, since it is the
+    // query that the store actually runs and the query that was refused.
+    await assertSucceeds(getDoc(doc(as(OUTSIDER), 'publicProfiles', MEMBER)))
+    await assertSucceeds(getDocs(collection(as(OUTSIDER), 'publicProfiles')))
+    await assertSucceeds(getDocs(collection(as(GUEST), 'publicProfiles')))
+  })
+
+  it('refuses an unauthenticated read', async () => {
+    await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'publicProfiles')))
+  })
+
+  it('lets nobody write it, not even an admin or the named user', async () => {
+    // Only mirrorPublicProfile writes this, with Admin SDK privileges, which
+    // these rules do not apply to. A client that could write here would rename
+    // anyone in everyone else's copy of the directory.
+    await assertFails(setDoc(doc(as(MEMBER), 'publicProfiles', MEMBER), { displayName: 'Impostor' }))
+    await assertFails(setDoc(doc(as(ADMIN), 'publicProfiles', MEMBER), { displayName: 'Impostor' }))
+    await assertFails(deleteDoc(doc(as(ADMIN), 'publicProfiles', MEMBER)))
+  })
 })
 
 describe('contentReports — the moderation queue', () => {

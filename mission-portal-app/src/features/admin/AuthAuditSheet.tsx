@@ -47,8 +47,35 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [backfilling, setBackfilling] = useState(false)
   const [result, setResult] = useState<AuditResult | null>(null)
   const [createResults, setCreateResults] = useState<CreateAuthResult[] | null>(null)
+
+  /**
+   * Write a directory entry for every existing user.
+   *
+   * mirrorPublicProfile only fires on writes, so accounts untouched since it
+   * was introduced have no entry and still render as raw uids to members.
+   * Safe to press repeatedly — it writes the same entries again.
+   */
+  const rebuildDirectory = async () => {
+    setBackfilling(true)
+    try {
+      const backfill = httpsCallable(functions, 'backfillPublicProfiles')
+      const res = await backfill({})
+      const { written, skipped } = res.data as { written: number; skipped: number }
+      toast(
+        skipped > 0
+          ? `Directory rebuilt: ${written} named, ${skipped} without a display name`
+          : `Directory rebuilt: ${written} named`,
+        'success'
+      )
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Rebuild failed', 'error')
+    } finally {
+      setBackfilling(false)
+    }
+  }
 
   const runAudit = async () => {
     setLoading(true)
@@ -227,6 +254,17 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
         <Button onPress={runAudit} disabled={loading || creating} theme="active" size="$3">
           {loading ? <Spinner size="small" /> : result ? 'Re-run Audit' : 'Run Audit'}
         </Button>
+
+        <YStack gap="$1">
+          <Text fontSize="$2" color="$gray10">
+            Rebuilds the name directory members read to turn uids into names. Kept current
+            automatically on every profile change — run this once after an import, or if a member
+            reports seeing uids instead of names.
+          </Text>
+          <Button onPress={rebuildDirectory} disabled={backfilling} size="$3">
+            {backfilling ? <Spinner size="small" /> : 'Rebuild Name Directory'}
+          </Button>
+        </YStack>
 
         {result && (
           <ScrollView style={{ maxHeight: 520 }}>

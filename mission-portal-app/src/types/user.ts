@@ -51,6 +51,25 @@ export interface NotificationPrefs {
   contentFeatured: { push: boolean; email: boolean }
 }
 
+/**
+ * The name and face behind a uid, readable by anyone signed in.
+ *
+ * A user document cannot be that. It carries push tokens, an email address, a
+ * home location, who the user has blocked and what they have reported — so
+ * `users` is readable only by its owner and by admins, and any member asking
+ * "who is this uid?" got nothing back and rendered the raw uid instead.
+ *
+ * This holds the two fields that answer that question and nothing else. It is
+ * written only by mirrorPublicProfile in the functions package; clients read
+ * it and never write it, so a member cannot rename themselves in someone
+ * else's copy of the directory.
+ */
+export interface PublicProfile {
+  uid: string
+  displayName: string
+  photoURL?: string
+}
+
 export interface UserProfile {
   /**
    * Hours before departure to send a flight reminder. Unset means
