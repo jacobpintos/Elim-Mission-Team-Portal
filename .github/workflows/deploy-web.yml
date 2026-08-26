@@ -1,6 +1,12 @@
 name: Deploy Web App
 
 on:
+  # Manual trigger. This workflow is push-only otherwise, so when GitHub drops
+  # a run — as it did on 0386b24, where the run was created and never given a
+  # job — there is no way to ask for another without pushing something. The
+  # EAS build already has this for the same reason.
+  workflow_dispatch:
+
   push:
     branches: [main]
     paths:
