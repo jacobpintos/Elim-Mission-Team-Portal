@@ -89,7 +89,20 @@ export function canUseMessages(u: UserProfile | null): boolean {
  * While that section is hidden, the slot "Public Facing" occupied is given to
  * Content — the one page in the set with real material behind it.
  */
-const PUBLIC_SLOT = (PUBLIC_SURFACE_ENABLED ? 'public' : PUBLIC_REPLACEMENT_TAB) as Tab
+/**
+ * What a member gets for the public-facing side, in menu order.
+ *
+ * Content keeps an entry of its own either way. It is the page in the set a
+ * member actually uses — set lists and recordings, not the visitor-facing
+ * pages — so burying it one level inside Public Facing would cost a tap on
+ * the only one of these they open regularly.
+ *
+ * Public Facing sits beside it and holds the rest. There is deliberately no
+ * second route in: the section is a tab, not a mode the app can be put into.
+ */
+const PUBLIC_SLOT: Tab[] = PUBLIC_SURFACE_ENABLED
+  ? [PUBLIC_REPLACEMENT_TAB as Tab, 'public']
+  : [PUBLIC_REPLACEMENT_TAB as Tab]
 
 /** Drops tabs belonging to a hidden part of the public-facing surface. */
 const onlyVisible = (tabs: Tab[]): Tab[] => tabs.filter((t) => isTabVisible(t))
@@ -107,14 +120,18 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
 
   // Users with no member role get public-facing tabs only.
   //
-  // With that section hidden there is nothing left for them to read, so they
-  // keep Settings and nothing else. Settings rather than an empty list on
-  // purpose: it holds account deletion, which Guideline 5.1.1(v) requires to
-  // stay reachable for anyone who has an account, and an empty list would
-  // drop them on the "Account Pending" screen with only a sign-out button.
+  // This is where a self-registered account lands: signUp writes roles as
+  // ['public'], so anyone who signs up on their own arrives here and reads the
+  // visitor-facing pages until an admin gives them a member role.
   //
-  // Self-registration is closed, so nothing new lands here — these are
-  // legacy public followers.
+  // These arrive flat rather than behind a Public Facing entry, because for
+  // this user they are not a section of the app — they are the app.
+  //
+  // Should the section ever be hidden again they keep Settings and nothing
+  // else, deliberately rather than an empty list: it holds account deletion,
+  // which Guideline 5.1.1(v) requires to stay reachable for anyone who has an
+  // account, and an empty list drops them on "Account Pending" with only a
+  // sign-out button.
   if (!isMember) {
     if (!PUBLIC_SURFACE_ENABLED) return ['settings']
     return [
@@ -140,12 +157,16 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
       'security',
       'worship',
       'rolehub',
-      PUBLIC_SLOT,
+      ...PUBLIC_SLOT,
       'settings',
     ]
   }
 
   // Intern: public base + assignments + operations + specialty tabs. No dashboard or messages.
+  //
+  // The public-facing pages arrive as the same Content + Public Facing pair
+  // every other member gets, rather than as five loose entries. An intern is a
+  // member, and a member's menu should not be a different shape.
   if (isIntern(u) && !hasRole(u, 'regular')) {
     const tabs: Tab[] = [
       'home',
@@ -153,11 +174,7 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
       'assignments',
       'announce',
       'issues',
-      'connect',
-      'music',
-      'giving',
-      'story',
-      'posts',
+      ...PUBLIC_SLOT,
       'settings',
     ]
     if (hasRole(u, 'worship')) tabs.splice(tabs.indexOf('issues') + 1, 0, 'worship')
@@ -173,7 +190,7 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
   // Inventory was gated on the merch role; with that gone it is admin-only,
   // and admins take the branch above, so nobody reaches it from here.
 
-  tabs.push(PUBLIC_SLOT, 'settings')
+  tabs.push(...PUBLIC_SLOT, 'settings')
   return tabs
 }
 
@@ -188,4 +205,25 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
 export function groupDisplayName(name: string): string {
   if (name === 'All') return 'All (team — excludes guests)'
   return name
+}
+
+/**
+ * Does this account belong to the team "All" addresses?
+ *
+ * A public follower and a guest both hold no member role, and neither is on
+ * the team — a public account reads the visitor-facing pages, a guest is along
+ * for one trip and has its own group. Anything sent to All is meant for
+ * members, so neither should swell the number an admin sees beside it.
+ *
+ * Creating an account already routes on this, but membership is stored as a
+ * list of uids and roles change afterwards: demote a member to public and
+ * their uid stays in All. So the count asks the roles rather than trusting the
+ * list, and an account nobody can resolve is not counted, since it is either
+ * deleted or an orphan and is a member of nothing.
+ */
+export function countsTowardAllGroup(u: UserProfile | null | undefined): boolean {
+  if (!u) return false
+  const roles = u.roles ?? []
+  if (roles.some((r) => MEMBER_ROLES.includes(r))) return true
+  return false
 }

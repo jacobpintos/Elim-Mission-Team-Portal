@@ -25,26 +25,25 @@ export const EMAIL_FEATURES_ENABLED = false
 /**
  * Which parts of the public-facing surface the app exposes.
  *
- * The Public Facing section (Posts, Connect, Giving, Our Story, Content,
- * Photos) is hidden for App Store review. Several of those pages are
- * PageBuilder pages with no blocks authored yet, so a reviewer signing in
- * lands on screens reading "there is nothing here right now" — which Apple
- * rejects under Guideline 2.1, App Completeness.
+ * The Public Facing section — Posts, Connect, Giving, Our Story, Content,
+ * Photos — along with the `public` profile type that exists to read it.
  *
- * Content survives and is promoted into the main menu, in the slot the
- * "Public Facing" entry used to occupy.
+ * This was off while those pages were still empty: several are PageBuilder
+ * pages, and a reviewer signing in to screens reading "there is nothing here
+ * right now" is what Guideline 2.1 rejects. It is on now that they have
+ * content behind them.
  *
- * Nothing is deleted. Every screen and route under `app/(app)/public/` is
- * still in the repo; they are unreachable rather than gone, so restoring the
- * section is a one-line change here rather than a revert.
+ * Turning it off again is still a one-line change, and remains the right move
+ * if the pages are ever emptied: every branch that reads this flag keeps its
+ * hidden behaviour, and nothing under `app/(app)/public/` is deleted.
  *
- * To bring the whole section back:      PUBLIC_SURFACE_ENABLED = true
- * To bring one tab back on its own:     add its key to VISIBLE_PUBLIC_TABS
+ * To hide the whole section again:   PUBLIC_SURFACE_ENABLED = false
+ * To hide one tab on its own:        drop its key from VISIBLE_PUBLIC_TABS
  *
  * Tab keys are plain strings rather than the `Tab` union so that `roles.ts`,
  * which owns that union, can import from here without a circular reference.
  */
-export const PUBLIC_SURFACE_ENABLED = false
+export const PUBLIC_SURFACE_ENABLED = true
 
 /** Every tab that belongs to the public-facing surface. */
 export const PUBLIC_FACING_TABS = ['posts', 'connect', 'giving', 'story', 'music'] as const
@@ -52,15 +51,20 @@ export const PUBLIC_FACING_TABS = ['posts', 'connect', 'giving', 'story', 'music
 /**
  * The public-facing tabs currently reachable.
  *
- * `music` is the Content tab. It is the one page in the set with real content
- * behind it, and it is also already part of what guests and interns see, so
- * it stays visible while the rest are hidden.
+ * `music` is the Content tab. It is the one page in the set that members reach
+ * directly rather than through Public Facing, and it is already part of what
+ * guests and interns see, so it stays visible even when the rest are hidden.
  */
 export const VISIBLE_PUBLIC_TABS: readonly string[] = PUBLIC_SURFACE_ENABLED
   ? PUBLIC_FACING_TABS
   : ['music']
 
-/** The menu entry that replaces "Public Facing" while the section is hidden. */
+/**
+ * Content's menu entry.
+ *
+ * Members get this whether the section is shown or hidden — as the one
+ * survivor when it is hidden, and alongside Public Facing when it is not.
+ */
 export const PUBLIC_REPLACEMENT_TAB = 'music'
 
 export function isPublicFacingTab(tab: string): boolean {

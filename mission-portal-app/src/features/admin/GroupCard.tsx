@@ -1,6 +1,6 @@
 import { XStack, YStack, Text, Button } from 'tamagui'
 import { useUsersStore } from '@/stores/usersStore'
-import { groupDisplayName } from '@/lib/roles'
+import { groupDisplayName, countsTowardAllGroup } from '@/lib/roles'
 
 interface GroupDoc {
   id: string
@@ -17,10 +17,22 @@ interface GroupCardProps {
 export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
   const loading = useUsersStore((s) => s.loading)
   const getDisplayName = useUsersStore((s) => s.displayName)
+  const getUser = useUsersStore((s) => s.getUser)
   // 'All' and 'Guest' are structural: user creation puts new accounts into one
   // or the other, so neither can be renamed or deleted out from under it.
   const isAllGroup = group.name === 'All' || group.name === 'Guest'
   const members = group.members ?? []
+
+  // All is the team, so its number counts members and not public followers,
+  // guests, or uids left behind by a deleted account. Every other group is
+  // hand-picked and its list is exactly what was chosen, so it counts itself.
+  //
+  // While the users are still loading nothing can be resolved, and filtering
+  // then would show every group as empty before snapping to a real number.
+  const memberCount =
+    group.name === 'All' && !loading
+      ? members.filter((uid) => countsTowardAllGroup(getUser(uid))).length
+      : members.length
 
   return (
     <YStack
@@ -43,7 +55,7 @@ export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
             paddingVertical="$0.5"
           >
             <Text fontSize="$2" color="$gray11">
-              {members.length} members
+              {memberCount} members
             </Text>
           </XStack>
         </XStack>

@@ -9,6 +9,7 @@ import {
   isReadOnly,
   visibleTabs,
   migrateRetiredRoles,
+  countsTowardAllGroup,
 } from './roles'
 import type { Tab } from './roles'
 import type { UserProfile, Role } from '@/types/user'
@@ -49,14 +50,19 @@ describe('visibleTabs', () => {
     expect(tabs).not.toContain('assignments')
   })
 
-  it('leaves a public user nothing but settings while the public surface is hidden', () => {
-    // Settings and not an empty list: it holds account deletion, which has to
-    // stay reachable for anyone who still has an account.
-    expect(visibleTabs(user('public'))).toEqual(['settings'])
+  it('gives a public user the visitor-facing pages', () => {
+    const tabs = visibleTabs(user('public'))
+
+    for (const t of ['home', 'posts', 'connect', 'giving', 'story', 'music'] as Tab[]) {
+      expect(tabs).toContain(t)
+    }
+    // Settings is never dropped: it holds account deletion, which has to stay
+    // reachable for anyone who has an account at all.
+    expect(tabs).toContain('settings')
   })
 
   it('treats a user with no roles at all as public', () => {
-    expect(visibleTabs(user())).toEqual(['settings'])
+    expect(visibleTabs(user())).toEqual(visibleTabs(user('public')))
   })
 
   it('gives admins the admin surfaces', () => {
@@ -155,10 +161,11 @@ describe('canUseMessages', () => {
     expect(canUseMessages(null)).toBe(false)
   })
 
-  it('keeps announcements for every role that still has a surface', () => {
-    // Public is excluded now, not because announcements were taken away from
-    // it, but because the whole public-facing surface is hidden.
-    for (const u of [user('intern'), user('guest'), user('regular')]) {
+  it('keeps announcements for every role, including the public one', () => {
+    // Reading announcements and being able to reply to them are separate: a
+    // public follower and an intern both get the tab and neither gets
+    // messages, which is the split canUseMessages exists to express.
+    for (const u of [user('intern'), user('guest'), user('regular'), user('public')]) {
       expect(visibleTabs(u)).toContain('announce')
     }
   })
@@ -222,51 +229,85 @@ describe('guests', () => {
   })
 })
 
-describe('the hidden public-facing surface', () => {
-  // Everything here should invert the day PUBLIC_SURFACE_ENABLED flips back
-  // to true. They exist to catch a public page becoming reachable by accident.
-  const HIDDEN: Tab[] = ['posts', 'connect', 'giving', 'story']
+describe('the public-facing surface, as a member sees it', () => {
+  const MEMBERS = [
+    user('admin'),
+    user('regular'),
+    user('intern'),
+    user('regular', 'worship'),
+    user('intern', 'worship'),
+  ]
 
-  it('keeps the Public Facing entry out of every menu', () => {
-    for (const u of [
-      user('admin'),
-      user('regular'),
-      user('intern'),
-      user('guest'),
-      user('public'),
-      user('regular', 'worship'),
-    ]) {
-      expect(visibleTabs(u)).not.toContain('public')
-    }
+  it('gives every member the Public Facing tab', () => {
+    for (const u of MEMBERS) expect(visibleTabs(u)).toContain('public')
   })
 
-  it('hides every public page except Content', () => {
-    for (const u of [user('admin'), user('regular'), user('intern'), user('guest')]) {
+  it('keeps Content as an entry of its own beside it', () => {
+    // The one page in the set a member opens regularly, so it does not get
+    // buried a level down inside Public Facing.
+    for (const u of MEMBERS) expect(visibleTabs(u)).toContain('music')
+  })
+
+  it('puts Content immediately before Public Facing', () => {
+    for (const u of MEMBERS) {
       const tabs = visibleTabs(u)
-      for (const hidden of HIDDEN) expect(tabs).not.toContain(hidden)
+      expect(tabs.indexOf('music')).toBe(tabs.indexOf('public') - 1)
     }
   })
 
-  it('gives Content the slot Public Facing used to hold', () => {
-    // Admins and regular members had no Content entry of their own before —
-    // they reached it through Public Facing, so it has to arrive here instead.
-    expect(visibleTabs(user('admin'))).toContain('music')
-    expect(visibleTabs(user('regular'))).toContain('music')
+  it('does not scatter the visitor pages through a member menu', () => {
+    // They live inside Public Facing. An intern used to get all five as loose
+    // top-level entries, which made one member's menu a different shape.
+    for (const u of MEMBERS) {
+      const tabs = visibleTabs(u)
+      for (const inside of ['posts', 'connect', 'giving', 'story'] as Tab[]) {
+        expect(tabs).not.toContain(inside)
+      }
+    }
   })
 
-  it('leaves Content where roles already had it', () => {
-    expect(visibleTabs(user('intern'))).toContain('music')
-    expect(visibleTabs(user('guest'))).toContain('music')
+  it('leaves guests out of it, since a guest is not a visitor either', () => {
+    const tabs = visibleTabs(user('guest'))
+    expect(tabs).not.toContain('public')
+    expect(tabs).toContain('music')
   })
 
-  it('still returns no duplicates once Content is spliced in', () => {
-    for (const u of [
-      user('admin', 'worship'),
-      user('regular', 'worship', 'security'),
-      user('intern', 'worship'),
-    ]) {
+  it('still returns no duplicates', () => {
+    for (const u of [...MEMBERS, user('regular', 'worship', 'security'), user('public')]) {
       const tabs = visibleTabs(u)
       expect(new Set(tabs).size).toBe(tabs.length)
     }
+  })
+})
+
+describe('countsTowardAllGroup', () => {
+  /**
+   * "All" addresses the team. A public follower and a guest are not on it, and
+   * neither is a uid left behind by an account that no longer exists.
+   */
+  it('counts every member role', () => {
+    for (const r of ['admin', 'security', 'regular', 'intern', 'worship']) {
+      expect(countsTowardAllGroup(user(r as never))).toBe(true)
+    }
+  })
+
+  it('does not count a public follower or a guest', () => {
+    expect(countsTowardAllGroup(user('public'))).toBe(false)
+    expect(countsTowardAllGroup(user('guest'))).toBe(false)
+  })
+
+  it('counts someone who is both a guest and a member', () => {
+    // A member brought along on a trip is still a member.
+    expect(countsTowardAllGroup(user('guest', 'regular'))).toBe(true)
+  })
+
+  it('does not count a uid nothing resolves to', () => {
+    // A deleted account whose uid was left in the group's member list.
+    expect(countsTowardAllGroup(null)).toBe(false)
+    expect(countsTowardAllGroup(undefined)).toBe(false)
+  })
+
+  it('does not count an account carrying no roles at all', () => {
+    expect(countsTowardAllGroup(user())).toBe(false)
   })
 })

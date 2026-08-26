@@ -12,8 +12,6 @@ interface UIStore {
   dismissToast: (id: string) => void
   saving: boolean
   setSaving: (v: boolean) => void
-  viewAsPublic: boolean
-  setViewAsPublic: (v: boolean) => void
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -29,6 +27,4 @@ export const useUIStore = create<UIStore>((set) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   saving: false,
   setSaving: (v) => set({ saving: v }),
-  viewAsPublic: false,
-  setViewAsPublic: (v) => set({ viewAsPublic: v }),
 }))
