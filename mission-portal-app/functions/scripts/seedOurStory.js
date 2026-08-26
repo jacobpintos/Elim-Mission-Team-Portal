@@ -108,10 +108,16 @@ const blocks = [
     type: 'gallery',
     data: {
       images: [IMG.devotions, IMG.reviveMe, IMG.tentmakers, IMG.inYourHand],
-      // Matched to the images by position. Daily Devotions is a standing
-      // series rather than a book, so its cover goes to where they are
-      // posted; the three covers open full screen like any other picture.
-      links: ['https://www.facebook.com/pastorajai'],
+      // Matched to the images by position, so this list has to stay in step
+      // with the one above. Daily Devotions is a standing series rather than
+      // a book and goes to where it is posted; each cover goes to its own
+      // page in the store.
+      links: [
+        'https://www.facebook.com/pastorajai',
+        'https://theelimstore.com/store/p/5x690q3j53y6iwsamiz4xtj7ds4w0m',
+        'https://theelimstore.com/store/p/underground-tentmakers',
+        'https://theelimstore.com/store/p/what-is-in-your-hand',
+      ],
       columns: 2,
     },
   },
