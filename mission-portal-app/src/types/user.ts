@@ -37,6 +37,9 @@ export interface NotificationPrefs {
    */
   securityReportUrgent?: boolean
   weatherAlertAdmin: { push: boolean; email: boolean }
+  /** Someone asked to be added to the event/meeting texting list. Only the
+   *  Connections Coordinator is ever sent one. */
+  textingListSignup: { push: boolean; email: boolean }
   /** A flight, hotel, carpool seat or food item was assigned to you. */
   eventLogistics: { push: boolean; email: boolean }
   /** Reminder before a flight you are booked on. */

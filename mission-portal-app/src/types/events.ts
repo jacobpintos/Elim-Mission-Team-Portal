@@ -258,7 +258,18 @@ export interface ConfigMain {
   // reproduced worship materials.
   ccliLicense?: string
   COMMON_TEAMS: (string | CommonTeam)[]
-  connectConfig: { socialLinks: unknown[]; leadershipTeam: unknown[] }
+  connectConfig: {
+    socialLinks: unknown[]
+    leadershipTeam: unknown[]
+    /**
+     * Who receives the daily texting-list requests.
+     *
+     * An identifier, not a title: it routes a job and is shown nowhere on the
+     * person's profile. Empty when nobody holds it, which holds the requests
+     * rather than dropping them.
+     */
+    connectionsCoordinator?: string
+  }
   publicPages: Record<string, unknown>
   postsConfig: PostsConfig
   lastSeenPosts: Record<string, number>

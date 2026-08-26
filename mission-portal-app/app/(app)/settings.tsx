@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ScrollView, Pressable, TextInput, StyleSheet, View, Platform } from 'react-native'
 import { YStack, XStack, Text, Label, Separator } from 'tamagui'
 import { useRouter } from 'expo-router'
@@ -14,6 +14,7 @@ import { db, functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { useUIStore } from '@/stores/uiStore'
+import { useConfigStore } from '@/stores/configStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch'
 import { Avatar } from '@/components/ui/Avatar'
@@ -44,6 +45,7 @@ type NotifKey = keyof Pick<
   | 'chatFlagged'
   | 'securityReport'
   | 'weatherAlertAdmin'
+  | 'textingListSignup'
   | 'eventLogistics'
   | 'flightReminder'
   | 'foodSignupOpen'
@@ -60,6 +62,7 @@ const ADMIN_ONLY_NOTIF_KEYS: NotifKey[] = [
   'chatFlagged',
   'securityReport',
   'weatherAlertAdmin',
+  'textingListSignup',
   'eventLogistics',
   'flightReminder',
   'foodSignupOpen',
@@ -83,6 +86,7 @@ const NOTIF_LABELS: Record<NotifKey, string> = {
   chatFlagged: 'Chat flagged',
   securityReport: 'Security report',
   weatherAlertAdmin: 'Weather alert',
+  textingListSignup: 'Texting list sign-ups',
   eventLogistics: 'Travel details assigned',
   flightReminder: 'Flight reminder',
   foodSignupOpen: 'Food sign-up opened',
@@ -137,6 +141,15 @@ export default function SettingsScreen() {
   const { fbUser, profile, signOutNow } = useAuthStore()
   const { mode, setMode } = useThemeStore()
   const { toast } = useUIStore()
+  // Who holds the Connections Coordinator identifier — it decides whether the
+  // texting-list row belongs in this user's list at all.
+  const connectionsCoordinator = useConfigStore((s) => s.connectionsCoordinator)
+  const subConfig = useConfigStore((s) => s.subscribe)
+  const unsubConfig = useConfigStore((s) => s.unsubscribe)
+  useEffect(() => {
+    subConfig()
+    return () => unsubConfig()
+  }, [subConfig, unsubConfig])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '')
@@ -186,6 +199,7 @@ export default function SettingsScreen() {
     securityReport: { push: true, email: false },
     securityReportUrgent: true,
     weatherAlertAdmin: { push: true, email: false },
+    textingListSignup: { push: true, email: false },
     eventLogistics: { push: true, email: false },
     flightReminder: { push: true, email: false },
     foodSignupOpen: { push: true, email: false },
@@ -323,9 +337,15 @@ export default function SettingsScreen() {
   // Every row this user actually has, before searching. The master switches
   // act on this whole set — narrowing them to the search results as well would
   // make "all" mean something different depending on what was typed.
-  const memberNotifKeys = (Object.keys(NOTIF_LABELS) as NotifKey[]).filter((k) =>
-    isAdmin(profile) ? true : k !== 'issueAssigned' && !ADMIN_ONLY_NOTIF_KEYS.includes(k)
-  )
+  // Texting-list sign-ups reach one person, and the identifier that decides
+  // who is not a role — a Connections Coordinator need not be an admin. So
+  // this row follows the identifier rather than the admin check, and the
+  // person who actually receives them is the person who can switch them off.
+  const isCoordinator = !!fbUser?.uid && connectionsCoordinator === fbUser.uid
+  const memberNotifKeys = (Object.keys(NOTIF_LABELS) as NotifKey[]).filter((k) => {
+    if (k === 'textingListSignup') return isCoordinator || isAdmin(profile)
+    return isAdmin(profile) ? true : k !== 'issueAssigned' && !ADMIN_ONLY_NOTIF_KEYS.includes(k)
+  })
   const shownNotifKeys = memberNotifKeys.filter((k) =>
     NOTIF_LABELS[k].toLowerCase().includes(notifQuery)
   )

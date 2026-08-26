@@ -54,6 +54,7 @@ export const createPortalUser = onCall(async (req) => {
       chatFlagged: { push: true, email: false },
       securityReport: { push: true, email: false },
       weatherAlertAdmin: { push: true, email: false },
+      textingListSignup: { push: true, email: false },
       publicAnnouncement: { push: true, email: false },
       publicEvent: { push: true, email: false },
       contentFeatured: { push: true, email: false },

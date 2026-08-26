@@ -21,6 +21,7 @@ export default function AdminLeadership() {
   const { theme } = useThemeStore()
 
   const [leadershipTeam, setLeadershipTeam] = useState<string[]>([])
+  const [coordinator, setCoordinator] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const titleDraft = useRef<Record<string, string>>({})
@@ -35,6 +36,7 @@ export default function AdminLeadership() {
       const data = snap.data()
       const team = data?.connectConfig?.leadershipTeam ?? []
       setLeadershipTeam(team.map((v: unknown) => String(v)))
+      setCoordinator(String(data?.connectConfig?.connectionsCoordinator ?? ''))
       setLoading(false)
     })
     return () => unsub()
@@ -68,6 +70,43 @@ export default function AdminLeadership() {
     }
   }
 
+  /**
+   * Hand the Connections Coordinator identifier to someone, or take it back.
+   *
+   * Config rather than a field on the user, and deliberately not the `title`
+   * beside it: a title is shown on the person's profile, and this is not
+   * something the church publishes about them — it is a job the app routes to.
+   * One holder at a time, so setting it replaces whoever held it.
+   *
+   * Everything addressed to the coordinator goes wherever this points, so
+   * removing someone from the leadership team gives it up too — leaving it
+   * pointing at a former leader would send them texting-list requests they are
+   * no longer meant to see.
+   */
+  const setConnectionsCoordinator = async (uid: string) => {
+    const next = coordinator === uid ? '' : uid
+    setCoordinator(next)
+    setSaving(true)
+    try {
+      await updateDoc(doc(db, 'config', 'main'), {
+        'connectConfig.connectionsCoordinator': next,
+      })
+      await audit(
+        'leadership.coordinator',
+        next
+          ? `Connections Coordinator set to ${users.find((u) => u.uid === next)?.displayName ?? next}`
+          : 'Connections Coordinator cleared',
+        profile?.displayName ?? ''
+      )
+    } catch (err: unknown) {
+      setCoordinator(coordinator)
+      const message = err instanceof Error ? err.message : 'Failed to save'
+      toast(message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const toggleMember = async (uid: string) => {
     let updated: string[]
     if (leadershipTeam.includes(uid)) {
@@ -77,6 +116,11 @@ export default function AdminLeadership() {
     }
     setLeadershipTeam(updated)
     await saveLeadershipTeam(updated)
+    // Taken off the team, so the identifier goes with them — otherwise the
+    // day's texting-list requests keep arriving for a former leader.
+    if (!updated.includes(uid) && coordinator === uid) {
+      await setConnectionsCoordinator(uid)
+    }
   }
 
   if (loading) {
@@ -102,6 +146,28 @@ export default function AdminLeadership() {
       <Text fontSize="$3" color="$gray10">
         Toggle members to add/remove from the leadership team. Edit titles inline.
       </Text>
+
+      {/* The identifier is a routing address, not a title — it decides who
+          receives the daily texting-list requests and appears nowhere on the
+          person's profile. Named here so an admin can see who holds it
+          without opening every row. */}
+      <YStack
+        backgroundColor="$surface"
+        borderRadius="$3"
+        padding="$3"
+        gap="$1"
+        borderWidth={1}
+        borderColor="$borderColor"
+      >
+        <Text fontSize="$3" fontWeight="700">
+          Connections Coordinator
+        </Text>
+        <Text fontSize="$2" color="$gray10">
+          {coordinator
+            ? `${users.find((u) => u.uid === coordinator)?.displayName ?? coordinator} receives the daily list of people asking to join the texting list.`
+            : 'Nobody holds this yet. Requests to join the texting list are held until someone does. Use “Make Coordinator” on a leadership member below.'}
+        </Text>
+      </YStack>
 
       <FlashList
         data={users}
@@ -142,16 +208,36 @@ export default function AdminLeadership() {
                 />
               </YStack>
 
-              <Button
-                size="$2"
-                onPress={() => toggleMember(item.uid)}
-                backgroundColor={isLeader ? theme.primary : undefined}
-                theme={isLeader ? undefined : 'gray'}
-              >
-                <Text color={isLeader ? 'white' : '$color'} fontSize="$2" fontWeight="600">
-                  {isLeader ? 'Remove' : 'Add'}
-                </Text>
-              </Button>
+              <YStack gap="$1" alignItems="flex-end">
+                <Button
+                  size="$2"
+                  onPress={() => toggleMember(item.uid)}
+                  backgroundColor={isLeader ? theme.primary : undefined}
+                  theme={isLeader ? undefined : 'gray'}
+                >
+                  <Text color={isLeader ? 'white' : '$color'} fontSize="$2" fontWeight="600">
+                    {isLeader ? 'Remove' : 'Add'}
+                  </Text>
+                </Button>
+                {/* Offered only to leadership: the identifier is a job within
+                    the team, so it cannot be given to someone outside it. */}
+                {isLeader ? (
+                  <Button
+                    size="$2"
+                    onPress={() => setConnectionsCoordinator(item.uid)}
+                    backgroundColor={coordinator === item.uid ? theme.primary : undefined}
+                    theme={coordinator === item.uid ? undefined : 'gray'}
+                  >
+                    <Text
+                      color={coordinator === item.uid ? 'white' : '$color'}
+                      fontSize="$1"
+                      fontWeight="600"
+                    >
+                      {coordinator === item.uid ? 'Coordinator ✓' : 'Make Coordinator'}
+                    </Text>
+                  </Button>
+                ) : null}
+              </YStack>
             </XStack>
           )
         }}

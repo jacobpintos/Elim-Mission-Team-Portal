@@ -10,6 +10,8 @@ interface ConfigStore {
   postsConfig: PostsConfig
   lastSeenPosts: Record<string, number>
   ccliLicense: string
+  /** Uid of the Connections Coordinator, or '' when nobody holds it. */
+  connectionsCoordinator: string
   loading: boolean
   _unsub: (() => void) | null
   _refCount: number
@@ -29,6 +31,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   postsConfig: { pages: [] },
   lastSeenPosts: {},
   ccliLicense: '',
+  connectionsCoordinator: '',
   loading: false,
   _unsub: null,
   _refCount: 0,
@@ -60,6 +63,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           postsConfig: data.postsConfig ?? { pages: [] },
           lastSeenPosts: data.lastSeenPosts ?? {},
           ccliLicense: data.ccliLicense ?? '',
+          connectionsCoordinator: data.connectConfig?.connectionsCoordinator ?? '',
           loading: false,
         })
       },

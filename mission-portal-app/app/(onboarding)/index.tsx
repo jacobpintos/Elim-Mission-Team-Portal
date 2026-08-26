@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
-import { Platform } from 'react-native'
+import { Platform, TextInput } from 'react-native'
 import { YStack, XStack, H1, H2, Paragraph, Button, Text, Label } from 'tamagui'
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { doc, setDoc } from 'firebase/firestore'
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -15,17 +15,59 @@ import {
   clearPushToken,
   platformKey,
 } from '@/lib/notifications'
-import type { NotificationPrefs } from '@/types/user'
+import type { NotificationPrefs, UserProfile } from '@/types/user'
 import { EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
+import { geocodeCity } from '@/lib/geocode'
+import { isValidPhone, normalizePhone } from '@/lib/textingList'
 import * as Sentry from '@sentry/react-native'
 
-const STEP_COUNT = 3
+/**
+ * The steps, in order, for the account being set up.
+ *
+ * Location and the texting list are asked only of someone signing themselves
+ * up. A member's location is not what the nearby-events geolocator is for —
+ * they are told where to be — and the texting list carries event and meeting
+ * reminders the team already gets through the app.
+ */
+type Step = 'welcome' | 'notifications' | 'location' | 'texting' | 'photo'
+
+export function stepsFor(roles: string[] | undefined): Step[] {
+  const isMember = roles?.some((r) => r !== 'public') ?? false
+  if (isMember) return ['welcome', 'notifications', 'photo']
+  return ['welcome', 'notifications', 'location', 'texting', 'photo']
+}
+
+/** Shared look for the plain text inputs the two public-only steps use. */
+const fieldStyle = {
+  borderWidth: 1,
+  borderColor: '#ddd',
+  borderRadius: 8,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  fontSize: 15,
+  color: '#888',
+} as const
 
 export default function OnboardingScreen() {
   const { fbUser, profile } = useAuthStore()
   const { toast } = useUIStore()
   const [step, setStep] = useState(0)
   const [completing, setCompleting] = useState(false)
+
+  const STEPS = stepsFor(profile?.roles)
+  const STEP_COUNT = STEPS.length
+  const current = STEPS[Math.min(step, STEP_COUNT - 1)]
+
+  // Public-only: roughly where they are, for the nearby-events geolocator.
+  const [city, setCity] = useState(profile?.locationPref?.city ?? '')
+  const [stateVal, setStateVal] = useState(profile?.locationPref?.state ?? '')
+  const [radius, setRadius] = useState(String(profile?.locationPref?.radius ?? 50))
+
+  // Public-only: a request to be added to the texting list, which is a person
+  // reading a name and a number — nothing here sends a text.
+  const [wantsTexts, setWantsTexts] = useState(false)
+  const [phone, setPhone] = useState('')
+  const phoneOk = phone.trim() === '' || isValidPhone(phone)
 
   const [notifPrefs, setNotifPrefs] = useState<
     Pick<NotificationPrefs, 'weeklyDigest' | 'monthlyDigest'>
@@ -111,11 +153,33 @@ export default function OnboardingScreen() {
     try {
       // Only assign 'public' if they have no team role; preserve existing non-public roles.
       const hasTeamRole = profile?.roles?.some((r) => r !== 'public') ?? false
+
+      // Geocoding reaches Mapbox and can fail or be slow. A city and state
+      // with no coordinates is still worth keeping — the geolocator falls back
+      // to them, and losing the whole answer over a network hiccup would mean
+      // asking again later.
+      let locationPref: UserProfile['locationPref'] | undefined
+      if (!hasTeamRole && city.trim() && stateVal.trim()) {
+        let coords: { lat: number; lng: number } | null = null
+        try {
+          coords = await geocodeCity(city, stateVal)
+        } catch {
+          coords = null
+        }
+        locationPref = {
+          city: city.trim(),
+          state: stateVal.trim(),
+          radius: Number(radius) || 50,
+          ...(coords ?? {}),
+        }
+      }
+
       await setDoc(
         doc(db, 'users', fbUser.uid),
         {
           onboardingComplete: true,
           ...(!hasTeamRole && { roles: ['public'] }),
+          ...(locationPref ? { locationPref } : {}),
           notificationPrefs: {
             ...(profile?.notificationPrefs ?? {}),
             weeklyDigest: notifPrefs.weeklyDigest,
@@ -124,6 +188,20 @@ export default function OnboardingScreen() {
         },
         { merge: true }
       )
+
+      // A request, not a subscription. It waits for the Connections
+      // Coordinator to pick it up, which is why it is stored pending and why
+      // an opt-in with no number written is simply nothing to pass on.
+      const normalized = wantsTexts ? normalizePhone(phone) : null
+      if (normalized) {
+        await setDoc(doc(db, 'textingListSignups', fbUser.uid), {
+          uid: fbUser.uid,
+          displayName: profile?.displayName ?? '',
+          phone: normalized,
+          status: 'pending',
+          createdAt: serverTimestamp(),
+        })
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to complete onboarding'
       toast(message, 'error')
@@ -149,7 +227,7 @@ export default function OnboardingScreen() {
         </XStack>
 
         {/* Step content */}
-        {step === 0 && (
+        {current === 'welcome' && (
           <YStack flex={1} gap="$4" justifyContent="center">
             <H1>Welcome to{'\n'}Mission Portal</H1>
             <Paragraph color="$colorMuted" fontSize="$5" lineHeight="$7">
@@ -162,7 +240,7 @@ export default function OnboardingScreen() {
           </YStack>
         )}
 
-        {step === 1 && (
+        {current === 'notifications' && (
           <YStack flex={1} gap="$4">
             <H2>Notification preferences</H2>
             <Paragraph color="$colorMuted">
@@ -235,7 +313,113 @@ export default function OnboardingScreen() {
           </YStack>
         )}
 
-        {step === 2 && (
+        {current === 'location' && (
+          <YStack flex={1} gap="$4">
+            <H2>Where are you?</H2>
+            <Paragraph color="$colorMuted">
+              We use your town to show you events near you and how far away they are. A town and
+              state is all we keep — never your device&apos;s live location, and it is never shared
+              with anyone else. You can change or remove it any time in Profile &amp; Settings.
+            </Paragraph>
+
+            <YStack gap="$3" backgroundColor="$surface" borderRadius="$4" padding="$4">
+              <YStack gap="$1">
+                <Label fontSize="$3">Town or city</Label>
+                <TextInput
+                  value={city}
+                  onChangeText={setCity}
+                  placeholder="Swisher"
+                  placeholderTextColor="#888"
+                  style={fieldStyle}
+                />
+              </YStack>
+              <YStack gap="$1">
+                <Label fontSize="$3">State</Label>
+                <TextInput
+                  value={stateVal}
+                  onChangeText={setStateVal}
+                  placeholder="IA"
+                  placeholderTextColor="#888"
+                  autoCapitalize="characters"
+                  style={fieldStyle}
+                />
+              </YStack>
+              <YStack gap="$1">
+                <Label fontSize="$3">Show events within (miles)</Label>
+                <TextInput
+                  value={radius}
+                  onChangeText={setRadius}
+                  keyboardType="number-pad"
+                  placeholder="50"
+                  placeholderTextColor="#888"
+                  style={fieldStyle}
+                />
+              </YStack>
+            </YStack>
+
+            <Paragraph color="$colorMuted" fontSize="$2">
+              Prefer not to say? Leave it blank — you will still see every event, just not sorted by
+              distance.
+            </Paragraph>
+          </YStack>
+        )}
+
+        {current === 'texting' && (
+          <YStack flex={1} gap="$4">
+            <H2>Text updates</H2>
+            <Paragraph color="$colorMuted">
+              We send occasional texts about upcoming events and church meetings. If you are already
+              on the list, you do not need to do anything here — giving your number again will not
+              sign you up twice or send you double.
+            </Paragraph>
+
+            <YStack gap="$4" backgroundColor="$surface" borderRadius="$4" padding="$4">
+              <XStack alignItems="center" justifyContent="space-between" gap="$3">
+                <YStack flex={1} gap="$1">
+                  <Label fontWeight="600">Add me to the texting list</Label>
+                  <Text color="$colorMuted" fontSize="$2">
+                    Events and church meetings only.
+                  </Text>
+                </YStack>
+                <ToggleSwitch
+                  checked={wantsTexts}
+                  onCheckedChange={setWantsTexts}
+                  accessibilityLabel="Add me to the texting list"
+                />
+              </XStack>
+
+              {wantsTexts ? (
+                <YStack gap="$1">
+                  <Label fontSize="$3">Mobile number</Label>
+                  <TextInput
+                    value={phone}
+                    onChangeText={setPhone}
+                    keyboardType="phone-pad"
+                    placeholder="(319) 555-1234"
+                    placeholderTextColor="#888"
+                    style={{
+                      ...fieldStyle,
+                      borderColor: phoneOk ? '#ddd' : '#ef4444',
+                    }}
+                  />
+                  {phoneOk ? null : (
+                    <Text color="#ef4444" fontSize="$2">
+                      That does not look like a US mobile number.
+                    </Text>
+                  )}
+                </YStack>
+              ) : null}
+            </YStack>
+
+            <Paragraph color="$colorMuted" fontSize="$2">
+              Message and data rates may apply. Reply STOP to any message to be taken off the list —
+              you can do that at any time, and it stops the texts without affecting your account
+              here.
+            </Paragraph>
+          </YStack>
+        )}
+
+        {current === 'photo' && (
           <YStack flex={1} gap="$4">
             <H2>Profile photo</H2>
             <Paragraph color="$colorMuted">
@@ -286,7 +470,16 @@ export default function OnboardingScreen() {
             </Button>
           )}
           {step < STEP_COUNT - 1 ? (
-            <Button flex={1} backgroundColor="$primary" onPress={() => setStep((s) => s + 1)}>
+            <Button
+              flex={1}
+              backgroundColor="$primary"
+              // A number that cannot be dialled is worse than none: it reaches
+              // the coordinator looking real, and whoever typed it never finds
+              // out they are not on the list. Leaving it blank still moves on.
+              disabled={current === 'texting' && !phoneOk}
+              opacity={current === 'texting' && !phoneOk ? 0.5 : 1}
+              onPress={() => setStep((s) => s + 1)}
+            >
               Continue
             </Button>
           ) : (

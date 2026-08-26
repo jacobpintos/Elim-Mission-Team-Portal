@@ -219,6 +219,7 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
         securityReport: { push: true, email: false },
         securityReportUrgent: true,
         weatherAlertAdmin: { push: true, email: false },
+        textingListSignup: { push: true, email: false },
       },
       pushTokens: {},
       createdAt: serverTimestamp(),

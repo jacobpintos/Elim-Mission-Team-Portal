@@ -24,6 +24,7 @@ export type NotificationType =
   | 'chatFlagged'
   | 'securityReport'
   | 'weatherAlertAdmin'
+  | 'textingListSignup'
   | 'eventLogistics'
   | 'flightReminder'
   | 'foodSignupOpen'
@@ -163,6 +164,10 @@ export function inAppMessage(type: NotificationType, data: Record<string, unknow
       return `${data.openCount ?? 'Some'} food items are still unclaimed for ${data.eventTitle ?? 'an event'}`
     case 'flightReminder':
       return `Your ${data.legLabel ?? 'flight'} for ${data.eventTitle ?? 'an event'} departs at ${data.departsAt ?? 'soon'}`
+    case 'textingListSignup':
+      // Built by signupDigestMessage — names and numbers in full, so the
+      // coordinator can act on it without opening anything.
+      return String(data.message ?? 'Someone wants to join the texting list')
     default:
       return 'New notification from Mission Portal'
   }
@@ -192,6 +197,7 @@ function subjectFor(type: NotificationType, _data: Record<string, unknown>): str
     foodSignupReminder: 'Food items still open — Mission Portal',
     securityReport: 'Security report — Mission Portal',
     weatherAlertAdmin: 'Weather alert — Mission Portal',
+    textingListSignup: 'Texting list sign-ups — Mission Portal',
   }
   return subjects[type] ?? 'Mission Portal notification'
 }

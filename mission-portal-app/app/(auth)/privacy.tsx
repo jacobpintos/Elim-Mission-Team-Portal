@@ -77,7 +77,7 @@ export default function PrivacyPolicyScreen() {
             Privacy Policy
           </Text>
           <Text color={c.textMuted} fontSize={13}>
-            Effective date: June 22, 2026
+            Effective date: August 26, 2026
           </Text>
           <Body>
             This Privacy Policy explains how The Well of Iowa (“we,” “us,” or “our”) collects, uses,
@@ -103,6 +103,12 @@ export default function PrivacyPolicyScreen() {
               approximate radius you provide so we can surface nearby events. Precise GPS
               coordinates are only stored if your device shares them to geocode an address you
               enter; we do not track your live location.
+            </Bullet>
+            <Bullet>
+              <Text fontWeight="700">Phone number</Text> — only if you choose to give one when
+              asking to join our texting list for event and church-meeting updates. It is optional,
+              it is never required to use the App, and nothing else in the App uses it. See section
+              6 for exactly what happens to it.
             </Bullet>
             <Bullet>
               <Text fontWeight="700">Device &amp; push-notification tokens</Text> — a push token
@@ -147,6 +153,11 @@ export default function PrivacyPolicyScreen() {
               Allow admins to manage team membership, roles, and assignments within the
               organization.
             </Bullet>
+            <Bullet>
+              Pass your name and phone number to our Connections Coordinator, once a day, if you
+              asked to join the texting list — so a person can add you to the church&apos;s
+              messaging service. The App itself never sends texts.
+            </Bullet>
             <Bullet>Diagnose and fix app crashes and bugs using anonymized error reports.</Bullet>
             <Bullet>
               Maintain an audit trail of administrative actions for organizational accountability.
@@ -164,6 +175,8 @@ export default function PrivacyPolicyScreen() {
               <Text fontWeight="700">Within the organization</Text> — admins and other team members
               with appropriate roles can see your display name, profile photo, availability,
               assignments, and messages in rooms you share. Security staff can see incident reports.
+              If you asked to join the texting list, the Connections Coordinator and admins can see
+              the phone number you gave; other members cannot.
             </Bullet>
             <Bullet>
               <Text fontWeight="700">Service providers</Text> — we use Google Firebase
@@ -200,13 +213,48 @@ export default function PrivacyPolicyScreen() {
           </Body>
         </Section>
 
-        <Section title="6. Notifications &amp; Email Digests">
+        <Section title="6. Notifications, Email Digests &amp; the Texting List">
           <Body>
             The App may send push notifications and email digests for events, assignments,
             announcements, and other team activity. You control which notifications you receive in
             Profile &amp; Settings → Notifications. You can unsubscribe from email digests at any
             time by toggling them off in settings or clicking “Unsubscribe” in any digest email.
           </Body>
+          <Body>
+            The texting list is separate from the App and works differently, so it is worth being
+            precise about it. If you ask to join it during sign-up, you may give a phone number. The
+            App never sends you a text. What it does is store your name and number and show them,
+            once a day, to a single member of our leadership team — the Connections Coordinator —
+            whose job is to add you to the messaging service the church actually sends texts from.
+          </Body>
+          <YStack gap="$1.5" marginTop="$1">
+            <Bullet>
+              Giving a number is optional. Skipping it changes nothing else about your account.
+            </Bullet>
+            <Bullet>
+              Your number is visible to the Connections Coordinator and to App administrators. It is
+              not shown to other members, and it is not published anywhere in the App.
+            </Bullet>
+            <Bullet>
+              We do not sell phone numbers, share them with advertisers, or use them for anything
+              other than the event and church-meeting texts you asked for.
+            </Bullet>
+            <Bullet>
+              You can leave the texting list at any time by replying{' '}
+              <Text fontWeight="700">STOP</Text> to any message we send. That stops the texts and
+              does not affect your App account.
+            </Bullet>
+            <Bullet>
+              If you are already on the list, asking again does not subscribe you twice or cause
+              duplicate messages.
+            </Bullet>
+            <Bullet>
+              To have your number removed from the App itself, ask an admin or delete your account —
+              see section 8. Note that leaving the App does not by itself remove you from the
+              church&apos;s messaging service; reply STOP to do that.
+            </Bullet>
+          </YStack>
+          <Body>Message and data rates may apply to texts, according to your mobile plan.</Body>
         </Section>
 
         <Section title="7. Children's Privacy">

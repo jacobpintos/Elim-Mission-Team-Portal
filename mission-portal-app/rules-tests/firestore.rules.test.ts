@@ -212,6 +212,51 @@ describe('publicProfiles — who is this uid?', () => {
   })
 })
 
+describe('textingListSignups — a request, not a subscription', () => {
+  const REQ = { uid: MEMBER, displayName: 'A Member', phone: '+13195551234', status: 'pending' }
+
+  it('lets someone ask to be added, for themselves only', async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER), 'textingListSignups', MEMBER), REQ))
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'textingListSignups', OUTSIDER), { ...REQ, uid: OUTSIDER })
+    )
+  })
+
+  it('refuses a request that is not pending', async () => {
+    // `status` is what the digest clears once the coordinator has the number.
+    // A client that could write 'sent' would drop itself off the list without
+    // anyone ever seeing it.
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'textingListSignups', MEMBER), { ...REQ, status: 'sent' })
+    )
+  })
+
+  it('does not let the subject read it back', async () => {
+    // Nothing in the app shows it to them, and a phone number does not need a
+    // second way out. The digest reads it with the Admin SDK, which these
+    // rules do not apply to.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'textingListSignups', MEMBER), REQ)
+    })
+    await assertFails(getDoc(doc(as(MEMBER), 'textingListSignups', MEMBER)))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'textingListSignups', MEMBER)))
+  })
+
+  it('keeps one number away from everybody else', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'textingListSignups', MEMBER), REQ)
+    })
+    await assertFails(getDoc(doc(as(OUTSIDER), 'textingListSignups', MEMBER)))
+    await assertFails(getDocs(collection(as(OUTSIDER), 'textingListSignups')))
+  })
+
+  it('refuses an unauthenticated write', async () => {
+    await assertFails(
+      setDoc(doc(env.unauthenticatedContext().firestore(), 'textingListSignups', MEMBER), REQ)
+    )
+  })
+})
+
 describe('contentReports — the moderation queue', () => {
   beforeEach(async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {

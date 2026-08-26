@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useBackTo } from '@/lib/useBackTo'
 import { ORG_NAME, SUPPORT_EMAIL, ORG_MAILING_ADDRESS, MODERATION_SLA_HOURS } from '@/lib/orgInfo'
 
-export const TERMS_VERSION = '2026-07-29'
+export const TERMS_VERSION = '2026-08-26'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const c = useThemeColors()
@@ -78,7 +78,7 @@ export default function TermsScreen() {
             Terms of Use
           </Text>
           <Text color={c.textMuted} fontSize={13}>
-            Effective date: July 29, 2026
+            Effective date: August 26, 2026
           </Text>
           <Body>
             These Terms of Use (“Terms”) are an agreement between you and {ORG_NAME} (“we,” “us,” or
@@ -146,13 +146,33 @@ export default function TermsScreen() {
           </Body>
         </Section>
 
-        <Section title="6. Privacy">
+        <Section title="6. Text messages">
+          <Body>
+            During sign-up you may ask to join our texting list for updates about events and church
+            meetings, and give a phone number if you do. This is entirely optional and is not needed
+            to use the App.
+          </Body>
+          <Body>
+            The App does not send text messages. Your name and number are passed to a member of our
+            leadership team, who adds you to the messaging service the church sends texts from. By
+            giving a number you confirm it is yours and that you agree to receive those messages.
+            Message and data rates may apply, according to your mobile plan.
+          </Body>
+          <Body>
+            Reply STOP to any message to be removed from the list. That works at any time and does
+            not affect your App account. If you are already on the list, asking again will not
+            subscribe you twice. Removing your number from the App does not by itself remove you
+            from the messaging service — reply STOP to do that.
+          </Body>
+        </Section>
+
+        <Section title="7. Privacy">
           <Body>
             Our Privacy Policy explains what we collect and why. It forms part of these Terms.
           </Body>
         </Section>
 
-        <Section title="7. Disclaimers and limitation of liability">
+        <Section title="8. Disclaimers and limitation of liability">
           <Body>
             The App is provided “as is,” without warranties of any kind. To the fullest extent
             permitted by law, {ORG_NAME} is not liable for indirect, incidental or consequential
@@ -161,7 +181,7 @@ export default function TermsScreen() {
           </Body>
         </Section>
 
-        <Section title="8. Changes to these Terms">
+        <Section title="9. Changes to these Terms">
           <Body>
             We may update these Terms. When we make material changes we will update the effective
             date above and notify active users in the App. Continuing to use the App after a change
@@ -169,7 +189,7 @@ export default function TermsScreen() {
           </Body>
         </Section>
 
-        <Section title="9. Contact">
+        <Section title="10. Contact">
           <Body>
             Questions about these Terms, or a report you want to escalate, can be sent to:
           </Body>
