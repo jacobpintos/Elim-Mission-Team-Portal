@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Platform } from 'react-native'
-import { YStack, XStack, H1, H2, Paragraph, Button, Switch, Text, Label } from 'tamagui'
+import { YStack, XStack, H1, H2, Paragraph, Button, Text, Label } from 'tamagui'
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { doc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -178,12 +179,10 @@ export default function OnboardingScreen() {
                       Summary of the week&apos;s activities
                     </Text>
                   </YStack>
-                  <Switch
+                  <ToggleSwitch
                     checked={notifPrefs.weeklyDigest}
                     onCheckedChange={(v) => setNotifPrefs((p) => ({ ...p, weeklyDigest: v }))}
-                  >
-                    <Switch.Thumb />
-                  </Switch>
+                  />
                 </XStack>
 
                 <XStack alignItems="center" justifyContent="space-between">
@@ -205,12 +204,10 @@ export default function OnboardingScreen() {
                       Monthly summary for public visitors
                     </Text>
                   </YStack>
-                  <Switch
+                  <ToggleSwitch
                     checked={notifPrefs.monthlyDigest}
                     onCheckedChange={(v) => setNotifPrefs((p) => ({ ...p, monthlyDigest: v }))}
-                  >
-                    <Switch.Thumb />
-                  </Switch>
+                  />
                 </XStack>
               </YStack>
             ) : null}
@@ -224,13 +221,11 @@ export default function OnboardingScreen() {
             >
               <XStack gap="$2" alignItems="center" justifyContent="space-between" marginBottom="$2">
                 <Text fontWeight="600">Push notifications</Text>
-                <Switch
+                <ToggleSwitch
                   checked={pushEnabled}
                   onCheckedChange={handleTogglePush}
                   disabled={pushBusy}
-                >
-                  <Switch.Thumb />
-                </Switch>
+                />
               </XStack>
               <Paragraph color="$colorMuted" fontSize="$2">
                 Real-time alerts for assignments, messages, and events. You can change this any time

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { ScrollView, Pressable, TextInput, StyleSheet, View, Platform } from 'react-native'
-import { YStack, XStack, Text, Switch, Label, Separator } from 'tamagui'
+import { YStack, XStack, Text, Label, Separator } from 'tamagui'
 import { useRouter } from 'expo-router'
 import {
   EmailAuthProvider,
@@ -15,6 +15,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch'
 import { Avatar } from '@/components/ui/Avatar'
 import { isAdmin, isPublic, isSecurity } from '@/lib/roles'
 import { EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
@@ -750,12 +751,10 @@ export default function SettingsScreen() {
         <Section title="Appearance">
           <XStack alignItems="center" justifyContent="space-between">
             <Label>Dark mode</Label>
-            <Switch
+            <ToggleSwitch
               checked={mode === 'dark'}
               onCheckedChange={(v) => setMode(v ? 'dark' : 'light')}
-            >
-              <Switch.Thumb />
-            </Switch>
+            />
           </XStack>
         </Section>
 
@@ -802,23 +801,21 @@ export default function SettingsScreen() {
               </Label>
               <XStack gap="$3" width={EMAIL_FEATURES_ENABLED ? 110 : 55} alignItems="center">
                 <YStack flex={1} alignItems="center">
-                  <Switch
+                  <ToggleSwitch
                     size="$2"
                     checked={allOn(publicNotifKeys, 'push')}
                     onCheckedChange={(v) => setAllPrefs(publicNotifKeys, 'push', v)}
-                  >
-                    <Switch.Thumb />
-                  </Switch>
+                    accessibilityLabel="All notifications, push"
+                  />
                 </YStack>
                 {EMAIL_FEATURES_ENABLED ? (
                   <YStack flex={1} alignItems="center">
-                    <Switch
+                    <ToggleSwitch
                       size="$2"
                       checked={allOn(publicNotifKeys, 'email')}
                       onCheckedChange={(v) => setAllPrefs(publicNotifKeys, 'email', v)}
-                    >
-                      <Switch.Thumb />
-                    </Switch>
+                      accessibilityLabel="All notifications, email"
+                    />
                   </YStack>
                 ) : null}
               </XStack>
@@ -836,23 +833,21 @@ export default function SettingsScreen() {
                 </Label>
                 <XStack gap="$3" width={EMAIL_FEATURES_ENABLED ? 110 : 55} alignItems="center">
                   <YStack flex={1} alignItems="center">
-                    <Switch
+                    <ToggleSwitch
                       size="$2"
                       checked={prefs[key]?.push ?? true}
                       onCheckedChange={(v) => togglePublicPushPref(key, v)}
-                    >
-                      <Switch.Thumb />
-                    </Switch>
+                      accessibilityLabel={`${PUBLIC_NOTIF_LABELS[key]}, push`}
+                    />
                   </YStack>
                   {EMAIL_FEATURES_ENABLED ? (
                     <YStack flex={1} alignItems="center">
-                      <Switch
+                      <ToggleSwitch
                         size="$2"
                         checked={prefs[key]?.email ?? false}
                         onCheckedChange={(v) => togglePublicEmailPref(key, v)}
-                      >
-                        <Switch.Thumb />
-                      </Switch>
+                        accessibilityLabel={`${PUBLIC_NOTIF_LABELS[key]}, email`}
+                      />
                     </YStack>
                   ) : null}
                 </XStack>
@@ -861,13 +856,11 @@ export default function SettingsScreen() {
             {EMAIL_FEATURES_ENABLED ? (
               <XStack alignItems="center" justifyContent="space-between">
                 <Label fontSize="$3">Monthly digest</Label>
-                <Switch
+                <ToggleSwitch
                   size="$2"
                   checked={prefs.monthlyDigest ?? false}
                   onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}
-                >
-                  <Switch.Thumb />
-                </Switch>
+                />
               </XStack>
             ) : null}
           </Section>
@@ -913,23 +906,21 @@ export default function SettingsScreen() {
               </Label>
               <XStack gap="$3" width={EMAIL_FEATURES_ENABLED ? 110 : 55} alignItems="center">
                 <YStack flex={1} alignItems="center">
-                  <Switch
+                  <ToggleSwitch
                     size="$2"
                     checked={allOn(memberNotifKeys, 'push')}
                     onCheckedChange={(v) => setAllPrefs(memberNotifKeys, 'push', v)}
-                  >
-                    <Switch.Thumb />
-                  </Switch>
+                    accessibilityLabel="All notifications, push"
+                  />
                 </YStack>
                 {EMAIL_FEATURES_ENABLED ? (
                   <YStack flex={1} alignItems="center">
-                    <Switch
+                    <ToggleSwitch
                       size="$2"
                       checked={allOn(memberNotifKeys, 'email')}
                       onCheckedChange={(v) => setAllPrefs(memberNotifKeys, 'email', v)}
-                    >
-                      <Switch.Thumb />
-                    </Switch>
+                      accessibilityLabel="All notifications, email"
+                    />
                   </YStack>
                 ) : null}
               </XStack>
@@ -947,23 +938,21 @@ export default function SettingsScreen() {
                 </Label>
                 <XStack gap="$3" width={EMAIL_FEATURES_ENABLED ? 110 : 55} alignItems="center">
                   <YStack flex={1} alignItems="center">
-                    <Switch
+                    <ToggleSwitch
                       size="$2"
                       checked={prefs[key]?.push ?? false}
                       onCheckedChange={(v) => togglePushPref(key, v)}
-                    >
-                      <Switch.Thumb />
-                    </Switch>
+                      accessibilityLabel={`${NOTIF_LABELS[key]}, push`}
+                    />
                   </YStack>
                   {EMAIL_FEATURES_ENABLED ? (
                     <YStack flex={1} alignItems="center">
-                      <Switch
+                      <ToggleSwitch
                         size="$2"
                         checked={prefs[key]?.email ?? false}
                         onCheckedChange={(v) => toggleEmailPref(key, v)}
-                      >
-                        <Switch.Thumb />
-                      </Switch>
+                        accessibilityLabel={`${NOTIF_LABELS[key]}, email`}
+                      />
                     </YStack>
                   ) : null}
                 </XStack>
@@ -1007,37 +996,31 @@ export default function SettingsScreen() {
                     silent switch.
                   </Text>
                 </YStack>
-                <Switch
+                <ToggleSwitch
                   size="$2"
                   checked={prefs.securityReportUrgent ?? true}
                   onCheckedChange={(v) => toggleDigest('securityReportUrgent', v)}
-                >
-                  <Switch.Thumb />
-                </Switch>
+                />
               </XStack>
             ) : null}
             {EMAIL_FEATURES_ENABLED ? (
               <XStack alignItems="center" justifyContent="space-between">
                 <Label fontSize="$3">Weekly digest</Label>
-                <Switch
+                <ToggleSwitch
                   size="$2"
                   checked={prefs.weeklyDigest ?? false}
                   onCheckedChange={(v) => toggleDigest('weeklyDigest', v)}
-                >
-                  <Switch.Thumb />
-                </Switch>
+                />
               </XStack>
             ) : null}
             {EMAIL_FEATURES_ENABLED ? (
               <XStack alignItems="center" justifyContent="space-between">
                 <Label fontSize="$3">Monthly digest</Label>
-                <Switch
+                <ToggleSwitch
                   size="$2"
                   checked={prefs.monthlyDigest ?? false}
                   onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}
-                >
-                  <Switch.Thumb />
-                </Switch>
+                />
               </XStack>
             ) : null}
           </Section>
