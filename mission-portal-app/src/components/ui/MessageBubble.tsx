@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { Pressable } from 'react-native'
 import { XStack, YStack, Text, Image } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { shortTime } from '@/lib/format'
 import { Avatar } from './Avatar'
+import { ImageLightbox } from './ImageLightbox'
 import type { Message } from '@/types/events'
 
 interface MessageBubbleProps {
@@ -25,6 +27,7 @@ export function MessageBubble({
   onShowActions,
 }: MessageBubbleProps) {
   const colors = useThemeColors()
+  const [viewing, setViewing] = useState<string | null>(null)
   const bubbleColor = isMine ? colors.primary : colors.surface
   const textColor = isMine ? 'white' : colors.text
 
@@ -82,12 +85,21 @@ export function MessageBubble({
             </Text>
           ) : null}
           {message.attachment?.type === 'image' ? (
-            // `src`, not `source`. Tamagui's Image does not destructure
-            // `source` at all — it builds one from `src` and sets it after
-            // spreading the rest of the props, so a `source` passed in is
-            // overwritten with { uri: undefined } and the image renders as an
-            // empty box at exactly the width and height requested.
-            <Image src={message.attachment.url} width={200} height={150} borderRadius="$2" />
+            // Tapping opens it full screen, where it can be zoomed, saved and
+            // copied. Long-press still reaches the report/block menu, which is
+            // why this is a tap rather than swallowing both.
+            <Pressable
+              onPress={() => setViewing(message.attachment?.url ?? null)}
+              onLongPress={onShowActions}
+              accessibilityLabel="Open image"
+            >
+              {/* `src`, not `source`. Tamagui's Image does not destructure
+                  `source` at all — it builds one from `src` and sets it after
+                  spreading the rest of the props, so a `source` passed in is
+                  overwritten with { uri: undefined } and the image renders as
+                  an empty box at exactly the width and height requested. */}
+              <Image src={message.attachment.url} width={200} height={150} borderRadius="$2" />
+            </Pressable>
           ) : message.attachment?.type === 'file' ? (
             <Text color={textColor} fontSize="$2" textDecorationLine="underline">
               📎 {message.attachment.name ?? 'File'}
@@ -98,6 +110,18 @@ export function MessageBubble({
           {shortTime(message.ts)}
         </Text>
       </YStack>
+
+      {/* key={viewing} on purpose: a new picture mounts a fresh viewer, so
+          its zoom and pan start at their defaults. Reopening an image still
+          zoomed from last time, with no visible reason why, reads as a bug —
+          and remounting is cheaper than an effect that writes shared values,
+          which is what the previous version did. */}
+      <ImageLightbox
+        key={viewing ?? 'none'}
+        uri={viewing}
+        name={message.attachment?.name}
+        onClose={() => setViewing(null)}
+      />
     </XStack>
   )
 }
