@@ -3,6 +3,8 @@ import { HeroEditor } from './BlockEditor/HeroEditor'
 import { TextEditor } from './BlockEditor/TextEditor'
 import { ImageEditor } from './BlockEditor/ImageEditor'
 import { EmbedEditor } from './BlockEditor/EmbedEditor'
+import { QuoteEditor } from './BlockEditor/QuoteEditor'
+import { GalleryEditor } from './BlockEditor/GalleryEditor'
 import { TwoColEditor } from './BlockEditor/TwoColEditor'
 import { TimelineEditor } from './BlockEditor/TimelineEditor'
 import { ButtonEditor } from './BlockEditor/ButtonEditor'
@@ -72,6 +74,20 @@ export function BlockCard({
       case 'embed':
         return (
           <EmbedEditor
+            data={block.data as never}
+            onChange={(d) => onChange({ ...block, data: d })}
+          />
+        )
+      case 'quote':
+        return (
+          <QuoteEditor
+            data={block.data as never}
+            onChange={(d) => onChange({ ...block, data: d })}
+          />
+        )
+      case 'gallery':
+        return (
+          <GalleryEditor
             data={block.data as never}
             onChange={(d) => onChange({ ...block, data: d })}
           />

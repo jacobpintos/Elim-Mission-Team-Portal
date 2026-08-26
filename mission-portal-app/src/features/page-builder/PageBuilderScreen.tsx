@@ -12,6 +12,8 @@ import { HeroBlock } from './BlockRenderer/HeroBlock'
 import { TextBlock } from './BlockRenderer/TextBlock'
 import { ImageBlock } from './BlockRenderer/ImageBlock'
 import { EmbedBlock } from './BlockRenderer/EmbedBlock'
+import { QuoteBlock } from './BlockRenderer/QuoteBlock'
+import { GalleryBlock } from './BlockRenderer/GalleryBlock'
 import { TwoColBlock } from './BlockRenderer/TwoColBlock'
 import { TimelineBlock } from './BlockRenderer/TimelineBlock'
 import { ButtonBlock } from './BlockRenderer/ButtonBlock'
@@ -38,6 +40,10 @@ function renderBlock(block: PageBlock) {
       return <ImageBlock key={block.id} data={block.data as never} />
     case 'embed':
       return <EmbedBlock key={block.id} data={block.data as never} />
+    case 'quote':
+      return <QuoteBlock key={block.id} data={block.data as never} />
+    case 'gallery':
+      return <GalleryBlock key={block.id} data={block.data as never} />
     case 'twocol':
       return <TwoColBlock key={block.id} data={block.data as never} />
     case 'timeline':

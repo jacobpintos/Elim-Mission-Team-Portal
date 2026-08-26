@@ -1,0 +1,64 @@
+import { useState } from 'react'
+import { Pressable, useWindowDimensions } from 'react-native'
+import { Image } from 'expo-image'
+import { YStack, XStack, Text } from 'tamagui'
+import { ImageLightbox } from '@/components/ui/ImageLightbox'
+import { clampColumns, toRows } from '@/lib/galleryGrid'
+import type { GalleryData } from '@/types/pages'
+
+interface GalleryBlockProps {
+  data: GalleryData
+}
+
+const GAP = 8
+const PAGE_PADDING = 32
+const MAX_WIDTH = 600
+
+/**
+ * Several pictures in a grid.
+ *
+ * Stacking them as separate Image blocks was the alternative, and it turns a
+ * set of four book covers into four full-width pictures and a lot of
+ * scrolling. Tapping one opens the same full-screen viewer the rest of the app
+ * uses — a cover is unreadable at a quarter of the screen width.
+ */
+export function GalleryBlock({ data }: GalleryBlockProps) {
+  const [viewing, setViewing] = useState<string | null>(null)
+  const { width } = useWindowDimensions()
+
+  const images = (data.images ?? []).filter((u) => typeof u === 'string' && u.trim() !== '')
+  const columns = clampColumns(data.columns)
+  if (images.length === 0) return null
+
+  const available = Math.min(width, MAX_WIDTH) - PAGE_PADDING
+  const cell = Math.floor((available - GAP * (columns - 1)) / columns)
+  const rows = toRows(images, columns)
+
+  return (
+    <YStack padding="$4" gap="$2">
+      {data.heading ? (
+        <Text fontSize="$5" fontWeight="700">
+          {data.heading}
+        </Text>
+      ) : null}
+
+      <YStack gap={GAP}>
+        {rows.map((row, ri) => (
+          <XStack key={ri} gap={GAP}>
+            {row.map((uri, ci) => (
+              <Pressable key={`${ri}-${ci}`} onPress={() => setViewing(uri)}>
+                <Image
+                  source={{ uri }}
+                  style={{ width: cell, height: cell, borderRadius: 6 }}
+                  contentFit="cover"
+                />
+              </Pressable>
+            ))}
+          </XStack>
+        ))}
+      </YStack>
+
+      <ImageLightbox key={viewing ?? 'none'} uri={viewing} onClose={() => setViewing(null)} />
+    </YStack>
+  )
+}

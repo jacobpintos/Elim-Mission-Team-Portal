@@ -9,6 +9,8 @@ export type PageBlockType =
   | 'meeting'
   | 'social'
   | 'embed'
+  | 'quote'
+  | 'gallery'
 
 export interface PageBlock {
   id: number // Date.now() at creation
@@ -48,6 +50,21 @@ export interface EmbedData extends Record<string, unknown> {
    * getting it roughly right matters more than for an image.
    */
   height?: number
+}
+
+export interface QuoteData extends Record<string, unknown> {
+  /** The line itself. Set larger and in the accent colour. */
+  text?: string
+  /** Who said it, if it is attributed. */
+  attribution?: string
+}
+
+export interface GalleryData extends Record<string, unknown> {
+  /** Image addresses, laid out in a grid in the order given. */
+  images?: string[]
+  /** Columns. Two suits book covers; three suits snapshots. */
+  columns?: number
+  heading?: string
 }
 
 export interface TwoColData extends Record<string, unknown> {

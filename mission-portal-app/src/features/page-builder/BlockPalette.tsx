@@ -13,6 +13,8 @@ const BLOCK_TYPES: { type: PageBlockType; label: string }[] = [
   { type: 'meeting', label: 'Meeting' },
   { type: 'social', label: 'Social' },
   { type: 'embed', label: 'Embed' },
+  { type: 'quote', label: 'Quote' },
+  { type: 'gallery', label: 'Gallery' },
 ]
 
 interface BlockPaletteProps {
