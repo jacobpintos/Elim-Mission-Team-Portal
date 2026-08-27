@@ -51,6 +51,26 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
+    // Pictures placed on a builder page — hero backgrounds, image blocks,
+    // galleries — written by the block editors.
+    //
+    // Read is any signed-in user, which is everyone who can reach these pages
+    // at all: the (app) group redirects to login without a profile, so even
+    // the public-facing tabs are behind sign-in.
+    //
+    // Write cannot be narrowed to admins here, because Storage rules cannot
+    // read Firestore to check a role — the same limit the rules above run
+    // into. What actually gates authorship is the Firestore rule on
+    // config/main, without which an uploaded file is a file nobody can put on
+    // a page.
+    match /pages/{pageKey}/{file} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+
     // Photos attached to security incident reports, written by
     // securityStore.createReport(). Same problem as above — previously denied.
     // dailyCleanup removes these with the Admin SDK when a report's retention

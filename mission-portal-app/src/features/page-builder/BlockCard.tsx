@@ -27,6 +27,8 @@ const BLOCK_COLORS: Record<string, string> = {
 
 interface BlockCardProps {
   block: PageBlock
+  /** Which page this block belongs to, so uploaded pictures land beside it. */
+  pageKey: string
   index: number
   total: number
   onChange: (block: PageBlock) => void
@@ -38,6 +40,7 @@ interface BlockCardProps {
 
 export function BlockCard({
   block,
+  pageKey,
   index,
   total,
   onChange,
@@ -54,6 +57,7 @@ export function BlockCard({
         return (
           <HeroEditor
             data={block.data as never}
+            pageKey={pageKey}
             onChange={(d) => onChange({ ...block, data: d })}
           />
         )
@@ -68,6 +72,7 @@ export function BlockCard({
         return (
           <ImageEditor
             data={block.data as never}
+            pageKey={pageKey}
             onChange={(d) => onChange({ ...block, data: d })}
           />
         )
@@ -89,6 +94,7 @@ export function BlockCard({
         return (
           <GalleryEditor
             data={block.data as never}
+            pageKey={pageKey}
             onChange={(d) => onChange({ ...block, data: d })}
           />
         )

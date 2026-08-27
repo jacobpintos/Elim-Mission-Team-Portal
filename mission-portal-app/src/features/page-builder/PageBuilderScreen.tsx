@@ -234,6 +234,7 @@ export function PageBuilderScreen({ pageKey, pageTitle }: PageBuilderScreenProps
             <BlockCard
               key={block.id}
               block={block}
+              pageKey={pageKey}
               index={index}
               total={localBlocks.length}
               onChange={(b) => handleBlockChange(index, b)}

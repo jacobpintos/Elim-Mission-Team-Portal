@@ -1,10 +1,11 @@
 import { Pressable } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
-import { checkImageAddress } from '@/lib/imageAddress'
+import { ImageField } from './ImageField'
 import type { ImageData } from '@/types/pages'
 
 interface ImageEditorProps {
   data: ImageData
+  pageKey: string
   onChange: (data: ImageData) => void
 }
 
@@ -14,29 +15,17 @@ const ALIGNMENTS: { value: 'left' | 'center' | 'right'; label: string }[] = [
   { value: 'right', label: 'Right' },
 ]
 
-export function ImageEditor({ data, onChange }: ImageEditorProps) {
+export function ImageEditor({ data, pageKey, onChange }: ImageEditorProps) {
   const update = (patch: Partial<ImageData>) => onChange({ ...data, ...patch })
-  const warning = checkImageAddress(data.src)
 
   return (
     <YStack gap="$3">
-      <YStack gap="$1">
-        <Text fontSize="$3" fontWeight="600">
-          Image URL
-        </Text>
-        <Input
-          placeholder="https://..."
-          value={data.src ?? ''}
-          onChangeText={(v) => update({ src: v })}
-          size="$3"
-          autoCapitalize="none"
-        />
-        {warning ? (
-          <Text fontSize="$1" color="$orange10">
-            {warning}
-          </Text>
-        ) : null}
-      </YStack>
+      <ImageField
+        label="Photo"
+        value={data.src}
+        pageKey={pageKey}
+        onChange={(v) => update({ src: v })}
+      />
 
       <YStack gap="$1">
         <Text fontSize="$3" fontWeight="600">

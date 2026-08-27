@@ -1,15 +1,15 @@
 import { YStack, XStack, Text, Input, Checkbox, Label } from 'tamagui'
-import { checkImageAddress } from '@/lib/imageAddress'
+import { ImageField } from './ImageField'
 import type { HeroData } from '@/types/pages'
 
 interface HeroEditorProps {
   data: HeroData
+  pageKey: string
   onChange: (data: HeroData) => void
 }
 
-export function HeroEditor({ data, onChange }: HeroEditorProps) {
+export function HeroEditor({ data, pageKey, onChange }: HeroEditorProps) {
   const update = (patch: Partial<HeroData>) => onChange({ ...data, ...patch })
-  const bgWarning = checkImageAddress(data.bgImage)
 
   return (
     <YStack gap="$3">
@@ -37,23 +37,12 @@ export function HeroEditor({ data, onChange }: HeroEditorProps) {
         />
       </YStack>
 
-      <YStack gap="$1">
-        <Text fontSize="$3" fontWeight="600">
-          Background Image URL
-        </Text>
-        <Input
-          placeholder="https://..."
-          value={data.bgImage ?? ''}
-          onChangeText={(v) => update({ bgImage: v })}
-          size="$3"
-          autoCapitalize="none"
-        />
-        {bgWarning ? (
-          <Text fontSize="$1" color="$orange10">
-            {bgWarning}
-          </Text>
-        ) : null}
-      </YStack>
+      <ImageField
+        label="Background photo"
+        value={data.bgImage}
+        pageKey={pageKey}
+        onChange={(v) => update({ bgImage: v })}
+      />
 
       <XStack alignItems="center" gap="$2">
         <Checkbox

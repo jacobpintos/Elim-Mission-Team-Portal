@@ -1,19 +1,47 @@
-import { YStack, XStack, Text, Input, TextArea } from 'tamagui'
+import { useState } from 'react'
+import { YStack, XStack, Text, Input, TextArea, Button } from 'tamagui'
 import { Pressable } from 'react-native'
 import { Image } from 'expo-image'
 import { MIN_COLUMNS, MAX_COLUMNS, clampColumns, remapLinks, setLinkAt } from '@/lib/galleryGrid'
+import { useUIStore } from '@/stores/uiStore'
+import { pickAndUploadPageImages } from '@/lib/pageImageUpload'
 import type { GalleryData } from '@/types/pages'
 
 interface GalleryEditorProps {
   data: GalleryData
+  pageKey: string
   onChange: (data: GalleryData) => void
 }
 
-export function GalleryEditor({ data, onChange }: GalleryEditorProps) {
+export function GalleryEditor({ data, pageKey, onChange }: GalleryEditorProps) {
+  const { toast } = useUIStore()
+  const [progress, setProgress] = useState<string | null>(null)
   const update = (patch: Partial<GalleryData>) => onChange({ ...data, ...patch })
   const columns = clampColumns(data.columns)
   const images = data.images ?? []
   const links = data.links ?? []
+
+  /**
+   * The whole point of this screen: several photos in one go.
+   *
+   * Uploads append rather than replace, so a gallery can be filled over more
+   * than one sitting, and the links already set stay with the pictures they
+   * were set on.
+   */
+  const addPhotos = async () => {
+    setProgress('Uploading…')
+    try {
+      const picked = await pickAndUploadPageImages(pageKey, {
+        multiple: true,
+        onProgress: (done, total) => setProgress(`Uploading ${done} of ${total}…`),
+      })
+      if (picked.length > 0) update({ images: [...images, ...picked.map((p) => p.url)] })
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Could not add those photos', 'error')
+    } finally {
+      setProgress(null)
+    }
+  }
 
   return (
     <YStack gap="$3">
@@ -29,9 +57,15 @@ export function GalleryEditor({ data, onChange }: GalleryEditorProps) {
         />
       </YStack>
 
-      <YStack gap="$1">
+      <YStack gap="$2">
         <Text fontSize="$3" fontWeight="600">
-          Image addresses
+          Photos
+        </Text>
+        <Button size="$3" theme="active" onPress={addPhotos} disabled={progress !== null}>
+          {progress ?? 'Add photos'}
+        </Button>
+        <Text fontSize="$1" color="$gray10">
+          Choose as many as you like at once — they are added to the end of the grid.
         </Text>
         <TextArea
           placeholder={'https://...\nhttps://...'}
@@ -48,7 +82,8 @@ export function GalleryEditor({ data, onChange }: GalleryEditorProps) {
           autoCapitalize="none"
         />
         <Text fontSize="$1" color="$gray10">
-          One per line. They fill the grid in this order.
+          One address per line, in the order they appear. Uploaded photos add themselves here; edit
+          this only to reorder them, remove one, or paste an address from elsewhere.
         </Text>
       </YStack>
 
