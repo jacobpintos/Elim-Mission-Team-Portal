@@ -1,5 +1,6 @@
 import { Pressable } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
+import { checkImageAddress } from '@/lib/imageAddress'
 import type { ImageData } from '@/types/pages'
 
 interface ImageEditorProps {
@@ -15,6 +16,7 @@ const ALIGNMENTS: { value: 'left' | 'center' | 'right'; label: string }[] = [
 
 export function ImageEditor({ data, onChange }: ImageEditorProps) {
   const update = (patch: Partial<ImageData>) => onChange({ ...data, ...patch })
+  const warning = checkImageAddress(data.src)
 
   return (
     <YStack gap="$3">
@@ -29,6 +31,11 @@ export function ImageEditor({ data, onChange }: ImageEditorProps) {
           size="$3"
           autoCapitalize="none"
         />
+        {warning ? (
+          <Text fontSize="$1" color="$orange10">
+            {warning}
+          </Text>
+        ) : null}
       </YStack>
 
       <YStack gap="$1">
