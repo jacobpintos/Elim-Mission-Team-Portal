@@ -22,6 +22,7 @@ interface PhotoAlbumsStore {
   updateAlbum: (id: string, patch: Partial<Omit<PhotoAlbum, 'id'>>) => Promise<void>
   deleteAlbum: (id: string) => Promise<void>
   addPhoto: (albumId: string, photo: PhotoItem) => Promise<void>
+  addPhotos: (albumId: string, photos: PhotoItem[]) => Promise<void>
   removePhoto: (albumId: string, photo: PhotoItem) => Promise<void>
 }
 
@@ -71,6 +72,21 @@ export const usePhotoAlbumsStore = create<PhotoAlbumsStore>((set, get) => ({
   addPhoto: async (albumId, photo) => {
     await updateDoc(doc(db, 'photoAlbums', albumId), {
       photos: arrayUnion(photo),
+    })
+  },
+
+  /**
+   * Add several photos in one write.
+   *
+   * Calling addPhoto in a loop is a document rewrite per photo, and Firestore
+   * sustains about one write a second to a single document — so fifty photos
+   * became a minute of watching a spinner, with the whole growing array sent
+   * back each time.
+   */
+  addPhotos: async (albumId, photos) => {
+    if (photos.length === 0) return
+    await updateDoc(doc(db, 'photoAlbums', albumId), {
+      photos: arrayUnion(...photos),
     })
   },
 

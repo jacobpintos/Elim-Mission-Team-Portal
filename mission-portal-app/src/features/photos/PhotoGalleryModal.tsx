@@ -7,6 +7,7 @@ import { usePhotoAlbumsStore } from '@/stores/photoAlbumsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { confirmAsync } from '@/lib/confirm'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
+import { pickAndUploadAlbumPhotos, deleteAlbumPhotoFiles } from '@/lib/albumPhotoUpload'
 import type { PhotoAlbum, PhotoItem } from '@/types/photos'
 
 interface PhotoGalleryModalProps {
@@ -20,7 +21,7 @@ const GAP = 3
 
 export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGalleryModalProps) {
   const colors = useThemeColors()
-  const { addPhoto, removePhoto } = usePhotoAlbumsStore()
+  const { addPhoto, addPhotos, removePhoto } = usePhotoAlbumsStore()
   const liveAlbums = usePhotoAlbumsStore((s) => s.albums)
 
   // The prop is whatever the album looked like when it was tapped, and it is
@@ -38,6 +39,7 @@ export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGall
   const [newCaption, setNewCaption] = useState('')
   const [adding, setAdding] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [uploading, setUploading] = useState<string | null>(null)
 
   const imgSize = Math.floor((Math.min(width, 600) - 32 - GAP * (NUM_COLS - 1)) / NUM_COLS)
 
@@ -59,6 +61,25 @@ export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGall
     }
   }, [album, newUrl, newCaption, addPhoto, toast])
 
+  const handleUploadPhotos = useCallback(async () => {
+    if (!album) return
+    setUploading('Uploading…')
+    try {
+      const photos = await pickAndUploadAlbumPhotos(album.id, {
+        onProgress: (done, total) => setUploading(`Uploading ${done} of ${total}…`),
+      })
+      if (photos.length > 0) {
+        await addPhotos(album.id, photos)
+        toast(`${photos.length} photo${photos.length === 1 ? '' : 's'} added`, 'success')
+        setShowAddForm(false)
+      }
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to upload photos', 'error')
+    } finally {
+      setUploading(null)
+    }
+  }, [album, addPhotos, toast])
+
   const handleRemovePhoto = useCallback(
     async (photo: PhotoItem) => {
       if (!album) return
@@ -73,6 +94,9 @@ export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGall
       if (!ok) return
       try {
         await removePhoto(album.id, photo)
+        // Only removes files this app stored; a pasted address is someone
+        // else's to keep.
+        void deleteAlbumPhotoFiles(photo)
         toast('Photo removed', 'success')
       } catch {
         toast('Failed to remove photo', 'error')
@@ -124,7 +148,7 @@ export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGall
                   paddingVertical="$1"
                 >
                   <Text color="white" fontSize="$2" fontWeight="600">
-                    + Photo
+                    + Photos
                   </Text>
                 </XStack>
               </Pressable>
@@ -158,7 +182,21 @@ export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGall
               marginBottom="$3"
             >
               <Text color={colors.text} fontWeight="600" fontSize="$3">
-                Add Photo
+                Add Photos
+              </Text>
+              <Button
+                size="$3"
+                theme="active"
+                onPress={handleUploadPhotos}
+                disabled={uploading !== null}
+              >
+                {uploading ?? 'Upload from this device'}
+              </Button>
+              <Text color={colors.textMuted} fontSize="$1">
+                Choose as many as you like at once.
+              </Text>
+              <Text color={colors.textMuted} fontSize="$1" marginTop="$1">
+                Or add one that is already online:
               </Text>
               <Input
                 placeholder="Image URL"
@@ -211,8 +249,13 @@ export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGall
                   {row.map((photo, ci) => (
                     <YStack key={`${ri}-${ci}`} position="relative">
                       <Pressable onPress={() => setViewing(photo.url)}>
+                        {/* The grid draws the small copy and the viewer the
+                            full one: an album of a few hundred photos is
+                            otherwise megabytes of downloading to show cells
+                            this size. Photos added before uploading existed
+                            have no thumbnail and fall back to the original. */}
                         <Image
-                          source={{ uri: photo.url }}
+                          source={{ uri: photo.thumbUrl ?? photo.url }}
                           style={{ width: imgSize, height: imgSize }}
                           contentFit="cover"
                         />

@@ -51,6 +51,22 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
+    // Photos in a public album, written by the gallery's Upload button. Each
+    // picture stores two files: the photo and a _thumb.jpg for the grid.
+    //
+    // Read is any signed-in user, matching the rules around it — the (app)
+    // group redirects to login, so even the public-facing tabs sit behind it.
+    // Write cannot be narrowed to admins, because Storage rules cannot read
+    // Firestore to check a role; the Firestore rule on photoAlbums is what
+    // decides who can actually put a photo in an album.
+    match /photoAlbums/{albumId}/{file} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+
     // Pictures placed on a builder page — hero backgrounds, image blocks,
     // galleries — written by the block editors.
     //

@@ -25,7 +25,18 @@ export const MAX_EDGE = 1600
  */
 export const SKIP_UNDER_BYTES = 400 * 1024
 
+/** Wide enough for a three-column grid on a dense screen, and no wider. */
+export const THUMB_EDGE = 400
+
 const JPEG_QUALITY = 0.75
+
+export interface ShrinkOptions {
+  /** Longest edge to fit within. */
+  maxEdge?: number
+  /** Files this small are returned untouched. Pass 0 to always redraw. */
+  skipUnderBytes?: number
+  quality?: number
+}
 
 /** Scale down to fit inside a square of `maxEdge`, never up. */
 export function fitWithin(
@@ -53,17 +64,25 @@ export interface ShrunkImage {
  * to gain. Never throws: a photo that cannot be redrawn is still a photo
  * worth uploading.
  */
-export async function shrinkImage(blob: Blob, contentType: string): Promise<ShrunkImage> {
+export async function shrinkImage(
+  blob: Blob,
+  contentType: string,
+  options: ShrinkOptions = {}
+): Promise<ShrunkImage> {
+  const maxEdge = options.maxEdge ?? MAX_EDGE
+  const skipUnder = options.skipUnderBytes ?? SKIP_UNDER_BYTES
+  const quality = options.quality ?? JPEG_QUALITY
+
   // Native has no canvas, and the picker has already re-encoded the file
   // there. Checked by looking for the DOM rather than through Platform so
   // that this module stays free of react-native and can be unit tested —
   // vitest runs these without a React Native preset, by design.
   if (typeof document === 'undefined') return { blob, contentType }
-  if (blob.size <= SKIP_UNDER_BYTES) return { blob, contentType }
+  if (blob.size <= skipUnder) return { blob, contentType }
 
   try {
     const bitmap = await createImageBitmap(blob)
-    const { width, height } = fitWithin(bitmap.width, bitmap.height, MAX_EDGE)
+    const { width, height } = fitWithin(bitmap.width, bitmap.height, maxEdge)
 
     const canvas = document.createElement('canvas')
     canvas.width = width
@@ -74,7 +93,7 @@ export async function shrinkImage(blob: Blob, contentType: string): Promise<Shru
     bitmap.close?.()
 
     const shrunk = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY)
+      canvas.toBlob(resolve, 'image/jpeg', quality)
     )
 
     // A picture that grew is one this made worse — some small images do.

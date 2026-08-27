@@ -1,5 +1,12 @@
 export interface PhotoItem {
   url: string
+  /**
+   * A small copy for the grid, when the app stored the photo itself.
+   *
+   * Absent on a photo added by pasting an address, and on anything added
+   * before uploading existed — the grid falls back to `url` in both cases.
+   */
+  thumbUrl?: string
   caption?: string
 }
 
