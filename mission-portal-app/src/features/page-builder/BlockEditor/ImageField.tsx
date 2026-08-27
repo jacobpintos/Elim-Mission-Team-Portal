@@ -3,7 +3,7 @@ import { Image } from 'expo-image'
 import { YStack, XStack, Text, Input, Button } from 'tamagui'
 import { useUIStore } from '@/stores/uiStore'
 import { checkImageAddress } from '@/lib/imageAddress'
-import { pickAndUploadPageImages } from '@/lib/pageImageUpload'
+import { pickAndUploadPageImages, deletePageImage } from '@/lib/pageImageUpload'
 
 interface ImageFieldProps {
   label: string
@@ -33,7 +33,13 @@ export function ImageField({ label, value, onChange, pageKey, placeholder }: Ima
     setBusy(true)
     try {
       const picked = await pickAndUploadPageImages(pageKey)
-      if (picked[0]) onChange(picked[0].url)
+      if (picked[0]) {
+        const replaced = value
+        onChange(picked[0].url)
+        // Only removes a file this app uploaded for a page, and only once its
+        // replacement is safely stored.
+        void deletePageImage(replaced)
+      }
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Could not add that picture', 'error')
     } finally {

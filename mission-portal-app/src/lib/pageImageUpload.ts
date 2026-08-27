@@ -1,6 +1,7 @@
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { storage } from '@/lib/firebase'
 import { uriToBlob } from '@/lib/uriToBlob'
+import { shrinkImage } from '@/lib/imageShrink'
 
 /** The Storage rule for pages/ rejects anything larger. */
 const MAX_BYTES = 10 * 1024 * 1024
@@ -47,7 +48,9 @@ export async function pickAndUploadPageImages(
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     allowsMultipleSelection: options.multiple ?? false,
-    quality: 0.8,
+    // Native re-encodes at this quality on the way out of the picker; on web
+    // it is ignored and shrinkImage does the work instead.
+    quality: 0.6,
   })
   if (result.canceled) return []
 
@@ -61,16 +64,21 @@ export async function pickAndUploadPageImages(
     if (!asset.uri) continue
     const name = asset.fileName ?? `photo-${uploaded.length + 1}.jpg`
 
-    const blob = await uriToBlob(asset.uri)
-    if (blob.size > MAX_BYTES) {
+    const picked = await uriToBlob(asset.uri)
+    if (picked.size > MAX_BYTES) {
       throw new Error(`${name} is larger than 10 MB. Please choose a smaller picture.`)
     }
+
+    // Downscale before it is stored, not after: a page photo renders 600pt
+    // wide, and the full-size original is bytes both the bucket and every
+    // reader on a phone connection would carry forever.
+    const { blob, contentType } = await shrinkImage(picked, asset.mimeType ?? 'image/jpeg')
 
     const path = `pages/${pageKey}/${Date.now()}_${sanitize(name)}`
     const sRef = storageRef(storage, path)
     // The rule requires an image/* content type, which a Blob read off a
     // file:// URI does not reliably carry.
-    await uploadBytes(sRef, blob, { contentType: asset.mimeType ?? 'image/jpeg' })
+    await uploadBytes(sRef, blob, { contentType })
 
     uploaded.push({ url: await getDownloadURL(sRef), name })
     options.onProgress?.(uploaded.length, assets.length)
@@ -82,4 +90,31 @@ export async function pickAndUploadPageImages(
 /** Storage object names take almost anything; keeping them dull avoids finding out. */
 function sanitize(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
+}
+
+/**
+ * Remove a picture this app uploaded, when nothing points at it any more.
+ *
+ * Only touches files under pages/: an address typed in by hand belongs to
+ * whoever hosts it, and a photo shared with an announcement or a chat is not
+ * this screen's to delete. Failure is ignored on purpose — an orphaned file
+ * costs a fraction of a cent, while an error thrown here would fail the edit
+ * that was actually being made.
+ */
+export async function deletePageImage(url: string | undefined): Promise<void> {
+  if (!url || !isUploadedPageImage(url)) return
+  try {
+    await deleteObject(storageRef(storage, url))
+  } catch {
+    // Already gone, or still referenced by a block that was copied from this
+    // one. Either way there is nothing useful to do about it here.
+  }
+}
+
+/** A download URL for something under pages/ in this project's bucket. */
+export function isUploadedPageImage(url: string): boolean {
+  return (
+    url.startsWith('https://firebasestorage.googleapis.com/') &&
+    (url.includes('/o/pages%2F') || url.includes('/o/pages/'))
+  )
 }
