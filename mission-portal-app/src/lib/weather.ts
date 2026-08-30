@@ -2,6 +2,10 @@ export interface WeatherData {
   high: number
   low: number
   precipPct: number
+  /** Strongest sustained wind of the day, mph. */
+  windMph: number
+  /** Strongest gust of the day, mph. Higher than windMph, often much higher. */
+  gustMph: number
   icon: string
   label: string
 }
@@ -11,6 +15,10 @@ export interface HourlyPoint {
   hour: number
   temp: number
   precipPct: number
+  /** Sustained wind for the hour, mph. */
+  windMph: number
+  /** Gust for the hour, mph. */
+  gustMph: number
   icon: string
   label: string
 }
@@ -87,7 +95,8 @@ export async function fetchWeather(
       `https://api.open-meteo.com/v1/forecast` +
       `?latitude=${lat}&longitude=${lng}` +
       `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode` +
-      `&temperature_unit=fahrenheit&timezone=auto&forecast_days=16`
+      `,wind_speed_10m_max,wind_gusts_10m_max` +
+      `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=16`
     const res = await fetch(url)
     if (!res.ok) {
       dailyCache.set(key, null)
@@ -100,6 +109,8 @@ export async function fetchWeather(
         temperature_2m_min?: number[]
         precipitation_probability_max?: number[]
         weathercode?: number[]
+        wind_speed_10m_max?: number[]
+        wind_gusts_10m_max?: number[]
       }
     }
     const dates: string[] = json.daily?.time ?? []
@@ -111,8 +122,10 @@ export async function fetchWeather(
     const high = Math.round((json.daily?.temperature_2m_max ?? [])[idx])
     const low = Math.round((json.daily?.temperature_2m_min ?? [])[idx])
     const precipPct = (json.daily?.precipitation_probability_max ?? [])[idx] ?? 0
+    const windMph = Math.round((json.daily?.wind_speed_10m_max ?? [])[idx] ?? 0)
+    const gustMph = Math.round((json.daily?.wind_gusts_10m_max ?? [])[idx] ?? 0)
     const { icon, label } = wmoIcon((json.daily?.weathercode ?? [])[idx] ?? 0)
-    const data: WeatherData = { high, low, precipPct, icon, label }
+    const data: WeatherData = { high, low, precipPct, windMph, gustMph, icon, label }
     dailyCache.set(key, data)
     return data
   } catch {
@@ -140,7 +153,8 @@ export async function fetchHourlyForecast(
       `https://api.open-meteo.com/v1/forecast` +
       `?latitude=${lat}&longitude=${lng}` +
       `&hourly=temperature_2m,precipitation_probability,weathercode` +
-      `&temperature_unit=fahrenheit&timezone=auto&forecast_days=16`
+      `,wind_speed_10m,wind_gusts_10m` +
+      `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=16`
     const res = await fetch(url)
     if (!res.ok) {
       hourlyCache.set(key, [])
@@ -152,12 +166,16 @@ export async function fetchHourlyForecast(
         temperature_2m?: number[]
         precipitation_probability?: number[]
         weathercode?: number[]
+        wind_speed_10m?: number[]
+        wind_gusts_10m?: number[]
       }
     }
     const times: string[] = json.hourly?.time ?? []
     const temps: number[] = json.hourly?.temperature_2m ?? []
     const precips: number[] = json.hourly?.precipitation_probability ?? []
     const codes: number[] = json.hourly?.weathercode ?? []
+    const winds: number[] = json.hourly?.wind_speed_10m ?? []
+    const gusts: number[] = json.hourly?.wind_gusts_10m ?? []
 
     const result: HourlyPoint[] = []
     for (let i = 0; i < times.length; i++) {
@@ -171,6 +189,8 @@ export async function fetchHourlyForecast(
         hour,
         temp: Math.round(temps[i]),
         precipPct: precips[i] ?? 0,
+        windMph: Math.round(winds[i] ?? 0),
+        gustMph: Math.round(gusts[i] ?? 0),
         icon,
         label,
       })

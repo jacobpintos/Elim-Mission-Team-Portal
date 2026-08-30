@@ -9,6 +9,7 @@ import {
   type HourlyPoint,
   type NWSAlert,
 } from '@/lib/weather'
+import { formatWind, isWindNotable } from '@/lib/windFormat'
 import type { EventInstance } from '@/types/events'
 
 interface WeatherDetailSheetProps {
@@ -235,6 +236,20 @@ export function WeatherDetailSheet({ open, onClose, event }: WeatherDetailSheetP
                           </Text>
                         </XStack>
                       ) : null}
+                      {/* Always shown, unlike rain: an outdoor set-up needs to
+                          know the wind is calm as much as that it is not. */}
+                      <XStack alignItems="center" gap={3}>
+                        <Text fontSize={12}>💨</Text>
+                        <Text
+                          color={
+                            isWindNotable(pt.windMph, pt.gustMph) ? colors.text : colors.textMuted
+                          }
+                          fontSize={12}
+                          fontWeight={isWindNotable(pt.windMph, pt.gustMph) ? '700' : '400'}
+                        >
+                          {formatWind(pt.windMph, pt.gustMph)}
+                        </Text>
+                      </XStack>
                     </XStack>
                   </XStack>
                 ))}
