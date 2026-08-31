@@ -1,3 +1,14 @@
+import { fetchNWSDaily, fetchNWSHourly, NWS_FORECAST_DAYS } from './nwsForecast'
+
+/**
+ * Who produced a forecast.
+ *
+ * Carried through rather than assumed, because the two sources disagree by a
+ * degree or two and the app now shows both — a reader comparing a card
+ * against the news deserves to know which one they are looking at.
+ */
+export type ForecastSource = 'nws' | 'open-meteo'
+
 export interface WeatherData {
   high: number
   low: number
@@ -8,6 +19,7 @@ export interface WeatherData {
   gustMph: number
   icon: string
   label: string
+  source: ForecastSource
 }
 
 export interface HourlyPoint {
@@ -21,6 +33,7 @@ export interface HourlyPoint {
   gustMph: number
   icon: string
   label: string
+  source: ForecastSource
 }
 
 export interface NWSAlert {
@@ -90,6 +103,19 @@ export async function fetchWeather(
     return null
   }
 
+  // The National Weather Service forecast has been through a meteorologist,
+  // so it wins wherever it reaches — about a week ahead, inside the US only.
+  // Open-Meteo covers everything past that, and stands in whenever NWS has
+  // nothing to say, so a failed lookup costs a moment rather than a forecast.
+  if (d <= NWS_FORECAST_DAYS) {
+    const nws = await fetchNWSDaily(lat, lng, date)
+    if (nws) {
+      const data: WeatherData = { ...nws, source: 'nws' }
+      dailyCache.set(key, data)
+      return data
+    }
+  }
+
   try {
     const url =
       `https://api.open-meteo.com/v1/forecast` +
@@ -125,7 +151,16 @@ export async function fetchWeather(
     const windMph = Math.round((json.daily?.wind_speed_10m_max ?? [])[idx] ?? 0)
     const gustMph = Math.round((json.daily?.wind_gusts_10m_max ?? [])[idx] ?? 0)
     const { icon, label } = wmoIcon((json.daily?.weathercode ?? [])[idx] ?? 0)
-    const data: WeatherData = { high, low, precipPct, windMph, gustMph, icon, label }
+    const data: WeatherData = {
+      high,
+      low,
+      precipPct,
+      windMph,
+      gustMph,
+      icon,
+      label,
+      source: 'open-meteo',
+    }
     dailyCache.set(key, data)
     return data
   } catch {
@@ -146,6 +181,15 @@ export async function fetchHourlyForecast(
   if (d < 0 || d > 15) {
     hourlyCache.set(key, [])
     return []
+  }
+
+  if (d <= NWS_FORECAST_DAYS) {
+    const nws = await fetchNWSHourly(lat, lng, date)
+    if (nws.length > 0) {
+      const points: HourlyPoint[] = nws.map((h) => ({ ...h, source: 'nws' }))
+      hourlyCache.set(key, points)
+      return points
+    }
   }
 
   try {
@@ -193,6 +237,7 @@ export async function fetchHourlyForecast(
         gustMph: Math.round(gusts[i] ?? 0),
         icon,
         label,
+        source: 'open-meteo',
       })
     }
 

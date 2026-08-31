@@ -93,6 +93,11 @@ export function WeatherDetailSheet({ open, onClose, event }: WeatherDetailSheetP
 
   const hasData = hourly.length > 0 || alerts.length > 0
 
+  // Whichever source actually answered for this event's date, rather than
+  // whichever one was expected to.
+  const forecastCredit =
+    hourly[0]?.source === 'nws' ? 'National Weather Service' : 'Open-Meteo (model data)'
+
   return (
     // disableDrag + a plain ScrollView, for the reason written up in
     // components/ui/Modal.tsx: Sheet.ScrollView's fallback path (taken because
@@ -253,6 +258,22 @@ export function WeatherDetailSheet({ open, onClose, event }: WeatherDetailSheetP
                     </XStack>
                   </XStack>
                 ))}
+              </YStack>
+            ) : null}
+
+            {/* Both feeds are credited, and named rather than merged: the
+                forecast can come from either source depending on how far off
+                the event is, and Open-Meteo's licence asks for the credit.
+                It also stops a model forecast being read as the official
+                one. */}
+            {hasData ? (
+              <YStack gap={2} paddingTop="$2">
+                <Text color={colors.textMuted} fontSize={11}>
+                  Forecast: {forecastCredit}
+                </Text>
+                <Text color={colors.textMuted} fontSize={11}>
+                  Alerts: National Weather Service
+                </Text>
               </YStack>
             ) : null}
 
