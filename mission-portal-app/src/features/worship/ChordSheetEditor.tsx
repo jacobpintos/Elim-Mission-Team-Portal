@@ -12,6 +12,8 @@ import {
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { getWordSlots } from '@/lib/nashvilleNumbers'
+import { ChordKeypad } from './ChordKeypad'
+import { appendChordKey, backspaceChordToken, pinExtension } from '@/lib/chordKeypad'
 import {
   SECTION_TYPES,
   SECTION_LABELS,
@@ -21,6 +23,85 @@ import {
 } from '@/types/chordSheet'
 
 const PROGRESSION_END = '||'
+
+/** Which chord box the keypad is editing. */
+interface SelectedSlot {
+  sectionId: string
+  rowIdx: number
+  wordIdx: number
+  /** The lyric the chord sits over, shown on the pad for orientation. */
+  context?: string
+}
+
+/**
+ * One chord box.
+ *
+ * Two shapes for one job, because the platforms differ in a way that cannot
+ * be papered over: React Native's showSoftInputOnFocus is Android-only, so on
+ * iOS a focused TextInput raises the system keyboard no matter what, and the
+ * chord pad would arrive underneath a keyboard nobody asked for. So on a
+ * device the box is not a text field at all — it is a button that selects
+ * itself, and the pad is the only way to type in it.
+ *
+ * On the web it stays a real input. A sheet is usually built at a desk with a
+ * physical keyboard, where typing "4maj7" is faster than tapping it, and
+ * there is no soft keyboard to get in the way. The pad works there too.
+ */
+function ChordSlot({
+  value,
+  width,
+  selected,
+  onSelect,
+  onChangeText,
+  colors,
+  placeholder,
+}: {
+  value: string
+  width?: number
+  selected: boolean
+  onSelect: () => void
+  onChangeText: (v: string) => void
+  colors: ReturnType<typeof useThemeColors>
+  placeholder?: string
+}) {
+  const boxStyle = [
+    styles.chordBox,
+    {
+      width,
+      color: colors.primary,
+      borderColor: selected ? colors.primary : colors.primary + '80',
+      borderWidth: selected ? 2 : 1,
+      backgroundColor: selected ? colors.primary + '18' : colors.surface,
+    },
+  ]
+
+  if (Platform.OS === 'web') {
+    return (
+      <TextInput
+        style={boxStyle}
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={onSelect}
+        placeholder={placeholder ?? ''}
+        placeholderTextColor={colors.textMuted}
+      />
+    )
+  }
+
+  return (
+    <Pressable onPress={onSelect} accessibilityRole="button">
+      <View style={[...boxStyle, styles.chordSlotButton]}>
+        <Text
+          style={{ fontFamily: 'Courier New', fontSize: 13 }}
+          color={value ? colors.primary : colors.textMuted}
+          numberOfLines={1}
+        >
+          {value || placeholder || ''}
+        </Text>
+      </View>
+    </Pressable>
+  )
+}
 
 function isBreakRow(row: string[]): boolean {
   return row.length === 1 && row[0] === PROGRESSION_END
@@ -107,6 +188,10 @@ export function ChordSheetEditor({
   const [sections, setSections] = useState<ChordSheetSection[]>([makeSection('verse')])
   const [saving, setSaving] = useState(false)
   const [showChordHelp, setShowChordHelp] = useState(false)
+  const [selected, setSelected] = useState<SelectedSlot | null>(null)
+  // Lives only as long as the editor: a pinned key is a convenience, not a
+  // setting anyone should have to manage.
+  const [pinnedExtensions, setPinnedExtensions] = useState<string[]>([])
 
   useEffect(() => {
     if (!visible) return
@@ -191,6 +276,37 @@ export function ChordSheetEditor({
         return { ...s, lyrics, chordTokens: syncSectionTokens(lyrics, s.chordTokens) }
       })
     )
+  }
+
+  const selectedToken = (() => {
+    if (!selected) return ''
+    const section = sections.find((s) => s.id === selected.sectionId)
+    return section?.chordTokens[selected.rowIdx]?.[selected.wordIdx] ?? ''
+  })()
+
+  const handleKey = (key: string) => {
+    if (!selected) return
+    updateChordToken(
+      selected.sectionId,
+      selected.rowIdx,
+      selected.wordIdx,
+      appendChordKey(selectedToken, key)
+    )
+  }
+
+  const handleBackspace = () => {
+    if (!selected) return
+    updateChordToken(
+      selected.sectionId,
+      selected.rowIdx,
+      selected.wordIdx,
+      backspaceChordToken(selectedToken)
+    )
+  }
+
+  const handleClearSlot = () => {
+    if (!selected) return
+    updateChordToken(selected.sectionId, selected.rowIdx, selected.wordIdx, '')
   }
 
   const updateChordToken = (sectionId: string, rowIdx: number, wordIdx: number, value: string) => {
@@ -596,19 +712,19 @@ export function ChordSheetEditor({
                                       ×
                                     </Text>
                                   </Pressable>
-                                  <TextInput
-                                    style={[
-                                      styles.chordBox,
-                                      {
-                                        color: colors.primary,
-                                        borderColor: colors.primary,
-                                        backgroundColor: colors.surface,
-                                      },
-                                    ]}
+                                  <ChordSlot
                                     value={token}
-                                    onChangeText={(v) => updateChordToken(section.id, 0, wi, v)}
+                                    colors={colors}
                                     placeholder="—"
-                                    placeholderTextColor={colors.textMuted}
+                                    selected={
+                                      selected?.sectionId === section.id &&
+                                      selected.rowIdx === 0 &&
+                                      selected.wordIdx === wi
+                                    }
+                                    onSelect={() =>
+                                      setSelected({ sectionId: section.id, rowIdx: 0, wordIdx: wi })
+                                    }
+                                    onChangeText={(v) => updateChordToken(section.id, 0, wi, v)}
                                   />
                                 </YStack>
                               )
@@ -709,22 +825,26 @@ export function ChordSheetEditor({
                                           return (
                                             <XStack key={wi} alignItems="flex-end">
                                               <YStack width={cw} alignItems="center" gap={2}>
-                                                <TextInput
-                                                  style={[
-                                                    styles.chordBox,
-                                                    {
-                                                      width: cw - 4,
-                                                      color: colors.primary,
-                                                      borderColor: colors.primary,
-                                                      backgroundColor: colors.surface,
-                                                    },
-                                                  ]}
+                                                <ChordSlot
                                                   value={token}
+                                                  width={cw - 4}
+                                                  colors={colors}
+                                                  selected={
+                                                    selected?.sectionId === section.id &&
+                                                    selected.rowIdx === rowIdx &&
+                                                    selected.wordIdx === wi
+                                                  }
+                                                  onSelect={() =>
+                                                    setSelected({
+                                                      sectionId: section.id,
+                                                      rowIdx,
+                                                      wordIdx: wi,
+                                                      context: slot.text,
+                                                    })
+                                                  }
                                                   onChangeText={(v) =>
                                                     updateChordToken(section.id, rowIdx, wi, v)
                                                   }
-                                                  placeholder=""
-                                                  placeholderTextColor={colors.textMuted}
                                                 />
                                                 <Text
                                                   style={[styles.wordLabel, { color: colors.text }]}
@@ -806,6 +926,19 @@ export function ChordSheetEditor({
               </YStack>
             </YStack>
           </ScrollView>
+
+          {selected ? (
+            <ChordKeypad
+              token={selectedToken}
+              context={selected.context}
+              onKey={handleKey}
+              onBackspace={handleBackspace}
+              onClear={handleClearSlot}
+              onDone={() => setSelected(null)}
+              pinned={pinnedExtensions}
+              onPin={(key) => setPinnedExtensions((prev) => pinExtension(prev, key))}
+            />
+          ) : null}
         </YStack>
       </KeyboardAvoidingView>
     </Modal>
@@ -837,6 +970,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  chordSlotButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chordBox: {
     borderWidth: 1,
