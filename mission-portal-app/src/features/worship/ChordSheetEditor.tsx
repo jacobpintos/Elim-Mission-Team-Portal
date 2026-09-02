@@ -84,6 +84,12 @@ function ChordSlot({
         onFocus={onSelect}
         placeholder={placeholder ?? ''}
         placeholderTextColor={colors.textMuted}
+        // The web app is used on phones as much as at a desk, and a focused
+        // input there raises the browser's own keyboard on top of this one's.
+        // inputMode="none" reaches the DOM attribute that tells a touch
+        // browser not to, while leaving a physical keyboard free to type —
+        // which is the whole reason this stays an input on web.
+        inputMode="none"
       />
     )
   }
