@@ -34,6 +34,17 @@ interface SelectedSlot {
 }
 
 /**
+ * Is the web app being touched rather than pointed at?
+ *
+ * Checked per render rather than once: a tablet with a keyboard attached can
+ * change its answer, and the check is a media query lookup.
+ */
+function isTouchWeb(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false
+  return window.matchMedia?.('(pointer: coarse)').matches ?? false
+}
+
+/**
  * One chord box.
  *
  * Two shapes for one job, because the platforms differ in a way that cannot
@@ -43,9 +54,14 @@ interface SelectedSlot {
  * device the box is not a text field at all — it is a button that selects
  * itself, and the pad is the only way to type in it.
  *
- * On the web it stays a real input. A sheet is usually built at a desk with a
- * physical keyboard, where typing "4maj7" is faster than tapping it, and
- * there is no soft keyboard to get in the way. The pad works there too.
+ * On the web it depends on what is pointing at it. With a mouse it stays a
+ * real input, because a sheet built at a desk is faster typed than tapped.
+ * Under a finger it becomes the same button as on a device: Safari zooms the
+ * page whenever an input smaller than 16px takes focus, and never zooms back,
+ * so every chord box tapped on a phone left the page magnified. The boxes are
+ * 13px so a token fits over a word, and growing them to 16 would cost the
+ * alignment that makes the grid readable — so the fix is to stop focusing an
+ * input at all where that is what happens.
  */
 function ChordSlot({
   value,
@@ -75,7 +91,7 @@ function ChordSlot({
     },
   ]
 
-  if (Platform.OS === 'web') {
+  if (Platform.OS === 'web' && !isTouchWeb()) {
     return (
       <TextInput
         style={boxStyle}
