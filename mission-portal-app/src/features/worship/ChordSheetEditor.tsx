@@ -630,6 +630,27 @@ export function ChordSheetEditor({
                   />
                 </YStack>
 
+                {/* Sits with the song's own details rather than with the section
+                    buttons: it acts on the whole song, and one place for it
+                    means it cannot be hit while reaching for a section. Shown
+                    only when there is something to clear. */}
+                {hasAnyChord(sections.map((s) => s.chordTokens)) ? (
+                  <Pressable onPress={clearAllChords}>
+                    <XStack
+                      alignSelf="flex-start"
+                      borderRadius="$2"
+                      borderWidth={1}
+                      borderColor={DESTRUCTIVE}
+                      paddingHorizontal="$3"
+                      paddingVertical="$2"
+                    >
+                      <Text color={DESTRUCTIVE} fontSize="$2" fontWeight="600">
+                        Clear all chords
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                ) : null}
+
                 {/* Sections */}
                 {sections.map((section) => {
                   const hasLyrics = section.lyrics.trim().length > 0
@@ -1062,25 +1083,6 @@ export function ChordSheetEditor({
                     </YStack>
                   )
                 })}
-
-                {/* Only offered when there is something to clear, so it is
-                    not a live destructive button on an empty sheet. */}
-                {hasAnyChord(sections.map((s) => s.chordTokens)) ? (
-                  <Pressable onPress={clearAllChords}>
-                    <XStack
-                      alignSelf="flex-start"
-                      borderRadius="$2"
-                      borderWidth={1}
-                      borderColor={DESTRUCTIVE}
-                      paddingHorizontal="$3"
-                      paddingVertical="$2"
-                    >
-                      <Text color={DESTRUCTIVE} fontSize="$2" fontWeight="600">
-                        Clear all chords
-                      </Text>
-                    </XStack>
-                  </Pressable>
-                ) : null}
 
                 {/* Add section */}
                 <YStack gap="$2">
