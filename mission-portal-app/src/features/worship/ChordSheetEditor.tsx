@@ -13,6 +13,8 @@ import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { getWordSlots } from '@/lib/nashvilleNumbers'
 import { ChordKeypad } from './ChordKeypad'
+import { confirmAsync } from '@/lib/confirm'
+import { clearChordTokens, hasAnyChord } from '@/lib/chordSheetEdit'
 import { appendChordKey, backspaceChordToken, pinExtension } from '@/lib/chordKeypad'
 import {
   SECTION_TYPES,
@@ -23,6 +25,9 @@ import {
 } from '@/types/chordSheet'
 
 const PROGRESSION_END = '||'
+
+/** The red the rest of the app uses for actions that cannot be undone. */
+const DESTRUCTIVE = '#c0392b'
 
 /** Gap left between a revealed chord box and the top of the pad. */
 const REVEAL_MARGIN = 24
@@ -412,6 +417,23 @@ export function ChordSheetEditor({
   const handleClearSlot = () => {
     if (!selected) return
     updateChordToken(selected.sectionId, selected.rowIdx, selected.wordIdx, '')
+  }
+
+  /**
+   * Empty every chord in the song, keeping the words and the arrangement.
+   *
+   * Confirmed first because there is no undo in this editor and a sheet is
+   * many minutes of work — and the button sits next to the ones that add a
+   * section, where a mis-tap is easy.
+   */
+  const clearAllChords = async () => {
+    const ok = await confirmAsync(
+      'Remove every chord from this song? The words, sections and progression breaks stay as they are.',
+      { title: 'Clear all chords', confirmLabel: 'Clear chords', destructive: true }
+    )
+    if (!ok) return
+    setSelected(null)
+    setSections((prev) => prev.map((s) => ({ ...s, chordTokens: clearChordTokens(s.chordTokens) })))
   }
 
   const updateChordToken = (sectionId: string, rowIdx: number, wordIdx: number, value: string) => {
@@ -1040,6 +1062,25 @@ export function ChordSheetEditor({
                     </YStack>
                   )
                 })}
+
+                {/* Only offered when there is something to clear, so it is
+                    not a live destructive button on an empty sheet. */}
+                {hasAnyChord(sections.map((s) => s.chordTokens)) ? (
+                  <Pressable onPress={clearAllChords}>
+                    <XStack
+                      alignSelf="flex-start"
+                      borderRadius="$2"
+                      borderWidth={1}
+                      borderColor={DESTRUCTIVE}
+                      paddingHorizontal="$3"
+                      paddingVertical="$2"
+                    >
+                      <Text color={DESTRUCTIVE} fontSize="$2" fontWeight="600">
+                        Clear all chords
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                ) : null}
 
                 {/* Add section */}
                 <YStack gap="$2">
