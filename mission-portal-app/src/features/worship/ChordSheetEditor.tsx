@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Modal,
   View,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -71,6 +72,7 @@ function ChordSlot({
   onChangeText,
   colors,
   placeholder,
+  onReveal,
 }: {
   value: string
   width?: number
@@ -79,7 +81,24 @@ function ChordSlot({
   onChangeText: (v: string) => void
   colors: ReturnType<typeof useThemeColors>
   placeholder?: string
+  /** Where this box ended up on screen, so the editor can lift it clear. */
+  onReveal?: (pageY: number, height: number) => void
 }) {
+  const ref = useRef<View>(null)
+
+  /**
+   * Report the box's position a moment after it is chosen.
+   *
+   * A moment, because the pad is what covers it and the pad is only laid out
+   * once the selection exists — measuring in the same tick reads the screen
+   * as it was before the pad arrived.
+   */
+  const select = () => {
+    onSelect()
+    setTimeout(() => {
+      ref.current?.measureInWindow((_x, y, _w, h) => onReveal?.(y, h))
+    }, 80)
+  }
   const boxStyle = [
     styles.chordBox,
     {
@@ -93,26 +112,28 @@ function ChordSlot({
 
   if (Platform.OS === 'web' && !isTouchWeb()) {
     return (
-      <TextInput
-        style={boxStyle}
-        value={value}
-        onChangeText={onChangeText}
-        onFocus={onSelect}
-        placeholder={placeholder ?? ''}
-        placeholderTextColor={colors.textMuted}
-        // The web app is used on phones as much as at a desk, and a focused
-        // input there raises the browser's own keyboard on top of this one's.
-        // inputMode="none" reaches the DOM attribute that tells a touch
-        // browser not to, while leaving a physical keyboard free to type —
-        // which is the whole reason this stays an input on web.
-        inputMode="none"
-      />
+      <View ref={ref}>
+        <TextInput
+          style={boxStyle}
+          value={value}
+          onChangeText={onChangeText}
+          onFocus={select}
+          placeholder={placeholder ?? ''}
+          placeholderTextColor={colors.textMuted}
+          // The web app is used on phones as much as at a desk, and a focused
+          // input there raises the browser's own keyboard on top of this one's.
+          // inputMode="none" reaches the DOM attribute that tells a touch
+          // browser not to, while leaving a physical keyboard free to type —
+          // which is the whole reason this stays an input on web.
+          inputMode="none"
+        />
+      </View>
     )
   }
 
   return (
-    <Pressable onPress={onSelect} accessibilityRole="button">
-      <View style={[...boxStyle, styles.chordSlotButton]}>
+    <Pressable onPress={select} accessibilityRole="button">
+      <View ref={ref} style={[...boxStyle, styles.chordSlotButton]}>
         <Text
           style={{ fontFamily: 'Courier New', fontSize: 13 }}
           color={value ? colors.primary : colors.textMuted}
@@ -214,6 +235,11 @@ export function ChordSheetEditor({
   // Lives only as long as the editor: a pinned key is a convenience, not a
   // setting anyone should have to manage.
   const [pinnedExtensions, setPinnedExtensions] = useState<string[]>([])
+  // How tall the pad is, measured rather than assumed: it changes height with
+  // the pinned row and between panes.
+  const [padHeight, setPadHeight] = useState(0)
+  const scrollRef = useRef<ScrollView>(null)
+  const scrollYRef = useRef(0)
 
   useEffect(() => {
     if (!visible) return
@@ -305,6 +331,24 @@ export function ChordSheetEditor({
     const section = sections.find((s) => s.id === selected.sectionId)
     return section?.chordTokens[selected.rowIdx]?.[selected.wordIdx] ?? ''
   })()
+
+  /**
+   * Lift a chosen chord box clear of the pad.
+   *
+   * The pad is docked at the bottom of the modal, so a box in the lower third
+   * of the screen ends up behind it — and it is the box being edited, which
+   * is the one thing that has to stay visible. Nothing scrolls on its own
+   * here: the boxes sit in a scroll view that has no idea a pad appeared.
+   */
+  const revealSlot = (pageY: number, height: number) => {
+    if (!scrollRef.current) return
+    const windowHeight = Dimensions.get('window').height
+    // A margin so the box clears the pad rather than touching it.
+    const visibleBottom = windowHeight - padHeight - 24
+    const overlap = pageY + height - visibleBottom
+    if (overlap <= 0) return
+    scrollRef.current.scrollTo({ y: scrollYRef.current + overlap, animated: true })
+  }
 
   const handleKey = (key: string) => {
     if (!selected) return
@@ -440,7 +484,15 @@ export function ChordSheetEditor({
             </XStack>
           </XStack>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
+          <ScrollView
+            ref={scrollRef}
+            showsVerticalScrollIndicator={false}
+            style={{ flexShrink: 1 }}
+            onScroll={(e) => {
+              scrollYRef.current = e.nativeEvent.contentOffset.y
+            }}
+            scrollEventThrottle={16}
+          >
             <YStack gap="$3" paddingBottom="$4">
               {/* Basic info */}
               <YStack gap="$1">
@@ -747,6 +799,7 @@ export function ChordSheetEditor({
                                       setSelected({ sectionId: section.id, rowIdx: 0, wordIdx: wi })
                                     }
                                     onChangeText={(v) => updateChordToken(section.id, 0, wi, v)}
+                                    onReveal={revealSlot}
                                   />
                                 </YStack>
                               )
@@ -867,6 +920,7 @@ export function ChordSheetEditor({
                                                   onChangeText={(v) =>
                                                     updateChordToken(section.id, rowIdx, wi, v)
                                                   }
+                                                  onReveal={revealSlot}
                                                 />
                                                 <Text
                                                   style={[styles.wordLabel, { color: colors.text }]}
@@ -951,6 +1005,7 @@ export function ChordSheetEditor({
 
           {selected ? (
             <ChordKeypad
+              onLayout={(h) => setPadHeight(h)}
               token={selectedToken}
               context={selected.context}
               onKey={handleKey}

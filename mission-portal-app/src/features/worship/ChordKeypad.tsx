@@ -16,6 +16,8 @@ interface ChordKeypadProps {
   /** Extensions used already this session, kept to hand on the main pane. */
   pinned: string[]
   onPin: (key: string) => void
+  /** How tall the pad turned out, so the editor can scroll a box clear of it. */
+  onLayout?: (height: number) => void
 }
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7']
@@ -91,6 +93,7 @@ export function ChordKeypad({
   onDone,
   pinned,
   onPin,
+  onLayout,
 }: ChordKeypadProps) {
   const colors = useThemeColors()
   const [pane, setPane] = useState<'main' | 'more'>('main')
@@ -99,6 +102,7 @@ export function ChordKeypad({
 
   return (
     <YStack
+      onLayout={(e) => onLayout?.(e.nativeEvent.layout.height)}
       backgroundColor={colors.surface}
       borderTopWidth={1}
       borderTopColor={colors.border}
