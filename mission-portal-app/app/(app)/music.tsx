@@ -18,7 +18,13 @@ import type { MusicItem } from '@/stores/musicStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
 import { useUIStore } from '@/stores/uiStore'
-import { searchMusic } from '@/lib/musicSearch'
+import {
+  searchMusic,
+  scopeLabel,
+  SEARCH_SCOPES,
+  DEFAULT_SCOPE,
+  type SearchScope,
+} from '@/lib/musicSearch'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { Img } from '@/components/ui/Img'
 
@@ -457,6 +463,8 @@ export default function MusicScreen() {
     null
   )
   const [query, setQuery] = useState('')
+  const [scope, setScope] = useState<SearchScope>(DEFAULT_SCOPE)
+  const [scopeOpen, setScopeOpen] = useState(false)
 
   useEffect(() => {
     load().catch(() => {})
@@ -466,8 +474,11 @@ export default function MusicScreen() {
   // Searching replaces the rows rather than filtering each one: a result
   // belongs to whichever row it came from, and repeating the same video under
   // three headings answers the question worse than one list does.
-  const searching = query.trim() !== ''
-  const results = searchMusic(items, query)
+  // A kind — Podcasts only, say — narrows the library on its own, so it counts
+  // as searching even with nothing typed.
+  const searching =
+    query.trim() !== '' || scope === 'music' || scope === 'podcast' || scope === 'sermon'
+  const results = searchMusic(items, query, scope)
 
   const newItems = items.filter(isItemNew)
   const featuredItems = items.filter((i) => i.featured && !isItemNew(i))
@@ -600,13 +611,42 @@ export default function MusicScreen() {
               ]}
               value={query}
               onChangeText={setQuery}
-              placeholder="Search titles, series, people…"
+              placeholder={`Search ${scopeLabel(scope).toLowerCase()}…`}
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="search"
               clearButtonMode="while-editing"
             />
+            {/* What the search looks at. Titles by default: searching every
+                field at once turns a year into every title containing those
+                digits, and a name into every episode of that person's series. */}
+            <Pressable onPress={() => setScopeOpen((v) => !v)} accessibilityLabel="Search in">
+              <XStack
+                alignItems="center"
+                gap="$1"
+                borderWidth={1}
+                borderColor={scope === DEFAULT_SCOPE ? colors.border : colors.primary}
+                borderRadius="$2"
+                paddingHorizontal="$2"
+                paddingVertical="$2"
+              >
+                <Text
+                  color={scope === DEFAULT_SCOPE ? colors.textMuted : colors.primary}
+                  fontSize="$2"
+                  fontWeight="600"
+                >
+                  {scopeLabel(scope)}
+                </Text>
+                <Text
+                  color={scope === DEFAULT_SCOPE ? colors.textMuted : colors.primary}
+                  fontSize="$1"
+                >
+                  ▾
+                </Text>
+              </XStack>
+            </Pressable>
+
             {query !== '' ? (
               <Pressable onPress={() => setQuery('')} accessibilityLabel="Clear search">
                 <Text color={colors.textMuted} fontSize="$3">
@@ -615,6 +655,54 @@ export default function MusicScreen() {
               </Pressable>
             ) : null}
           </XStack>
+
+          {scopeOpen ? (
+            <YStack
+              marginHorizontal="$4"
+              marginBottom="$2"
+              backgroundColor={colors.surface}
+              borderWidth={1}
+              borderColor={colors.border}
+              borderRadius="$3"
+              overflow="hidden"
+            >
+              {SEARCH_SCOPES.map((option) => {
+                const active = option.value === scope
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => {
+                      setScope(option.value)
+                      setScopeOpen(false)
+                    }}
+                  >
+                    <XStack
+                      paddingHorizontal="$3"
+                      paddingVertical="$3"
+                      backgroundColor={active ? colors.primary + '18' : 'transparent'}
+                      borderBottomWidth={1}
+                      borderBottomColor={colors.border}
+                      alignItems="center"
+                      justifyContent="space-between"
+                    >
+                      <Text
+                        color={active ? colors.primary : colors.text}
+                        fontSize="$3"
+                        fontWeight={active ? '700' : '400'}
+                      >
+                        {option.label}
+                      </Text>
+                      {active ? (
+                        <Text color={colors.primary} fontSize="$3">
+                          ✓
+                        </Text>
+                      ) : null}
+                    </XStack>
+                  </Pressable>
+                )
+              })}
+            </YStack>
+          ) : null}
 
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 16 }}>
             {searching ? (
