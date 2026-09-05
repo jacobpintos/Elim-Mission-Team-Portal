@@ -18,6 +18,7 @@ import type { MusicItem } from '@/stores/musicStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isAdmin } from '@/lib/roles'
 import { useUIStore } from '@/stores/uiStore'
+import { searchMusic } from '@/lib/musicSearch'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { Img } from '@/components/ui/Img'
 
@@ -455,11 +456,18 @@ export default function MusicScreen() {
   const [seeAllSection, setSeeAllSection] = useState<{ title: string; items: MusicItem[] } | null>(
     null
   )
+  const [query, setQuery] = useState('')
 
   useEffect(() => {
     load().catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Searching replaces the rows rather than filtering each one: a result
+  // belongs to whichever row it came from, and repeating the same video under
+  // three headings answers the question worse than one list does.
+  const searching = query.trim() !== ''
+  const results = searchMusic(items, query)
 
   const newItems = items.filter(isItemNew)
   const featuredItems = items.filter((i) => i.featured && !isItemNew(i))
@@ -569,98 +577,162 @@ export default function MusicScreen() {
           </Text>
         </YStack>
       ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 16 }}>
-          <Section
-            title="New"
-            items={newItems}
-            onPlay={setPlayingItem}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-            onSeeAll={() => setSeeAllSection({ title: 'New', items: newItems })}
-            buildMode={buildMode}
-          />
-          <Section
-            title="Featured"
-            items={featuredItems}
-            onPlay={setPlayingItem}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-            onSeeAll={() => setSeeAllSection({ title: 'Featured', items: featuredItems })}
-            buildMode={buildMode}
-          />
-          <Section
-            title="Music"
-            items={musicItems}
-            onPlay={setPlayingItem}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-            onSeeAll={() => setSeeAllSection({ title: 'Music', items: musicItems })}
-            buildMode={buildMode}
-          />
-          <Section
-            title="Podcasts"
-            items={podcastItems}
-            onPlay={setPlayingItem}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-            onSeeAll={() => setSeeAllSection({ title: 'Podcasts', items: podcastItems })}
-            buildMode={buildMode}
-          />
-          <Section
-            title="Sermons"
-            items={sermonItems}
-            onPlay={setPlayingItem}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-            onSeeAll={() => setSeeAllSection({ title: 'Sermons', items: sermonItems })}
-            buildMode={buildMode}
-          />
+        <>
+          {/* Fixed above the list rather than scrolling with it: the reason to
+            search is that the thing being looked for is somewhere further
+            down, and a bar that scrolls away is one more thing to go back
+            for. */}
+          <XStack
+            paddingHorizontal="$4"
+            paddingTop="$2"
+            paddingBottom="$1"
+            alignItems="center"
+            gap="$2"
+          >
+            <TextInput
+              style={[
+                styles.search,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                },
+              ]}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search titles, series, people…"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+            {query !== '' ? (
+              <Pressable onPress={() => setQuery('')} accessibilityLabel="Clear search">
+                <Text color={colors.textMuted} fontSize="$3">
+                  Clear
+                </Text>
+              </Pressable>
+            ) : null}
+          </XStack>
 
-          {/* Build mode: full list for editing */}
-          {buildMode && items.length > 0 ? (
-            <YStack paddingHorizontal="$4" gap="$2" marginTop="$2">
-              <Text color={colors.text} fontSize="$4" fontWeight="700" marginBottom="$2">
-                All Items
-              </Text>
-              {items.map((item) => (
-                <XStack
-                  key={item.id}
-                  backgroundColor={colors.surface}
-                  borderRadius="$3"
-                  borderWidth={1}
-                  borderColor={colors.border}
-                  padding="$3"
-                  gap="$3"
-                  alignItems="center"
-                >
-                  <Thumbnail url={item.youtubeUrl} size={72} />
-                  <YStack flex={1} gap="$1">
-                    <Text color={colors.text} fontSize="$3" fontWeight="600" numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    <Text color={colors.textMuted} fontSize="$2">
-                      {TYPE_LABELS[item.type]}
-                      {item.featured ? ' · Featured' : ''}
-                      {isItemNew(item) ? ' · New' : ''}
-                    </Text>
-                  </YStack>
-                  <XStack gap="$2">
-                    <Pressable onPress={() => openEdit(item)}>
-                      <Text color={colors.primary} fontSize="$3">
-                        Edit
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 16 }}>
+            {searching ? (
+              results.length > 0 ? (
+                <Section
+                  title={`Results (${results.length})`}
+                  items={results}
+                  onPlay={setPlayingItem}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  onSeeAll={() =>
+                    setSeeAllSection({ title: `Results for “${query.trim()}”`, items: results })
+                  }
+                  buildMode={buildMode}
+                />
+              ) : (
+                <YStack padding="$6" alignItems="center">
+                  <Text color={colors.textMuted} fontSize="$3" textAlign="center">
+                    Nothing matches “{query.trim()}”.
+                  </Text>
+                </YStack>
+              )
+            ) : (
+              <>
+                <Section
+                  title="New"
+                  items={newItems}
+                  onPlay={setPlayingItem}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  onSeeAll={() => setSeeAllSection({ title: 'New', items: newItems })}
+                  buildMode={buildMode}
+                />
+                <Section
+                  title="Featured"
+                  items={featuredItems}
+                  onPlay={setPlayingItem}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  onSeeAll={() => setSeeAllSection({ title: 'Featured', items: featuredItems })}
+                  buildMode={buildMode}
+                />
+                <Section
+                  title="Music"
+                  items={musicItems}
+                  onPlay={setPlayingItem}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  onSeeAll={() => setSeeAllSection({ title: 'Music', items: musicItems })}
+                  buildMode={buildMode}
+                />
+                <Section
+                  title="Podcasts"
+                  items={podcastItems}
+                  onPlay={setPlayingItem}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  onSeeAll={() => setSeeAllSection({ title: 'Podcasts', items: podcastItems })}
+                  buildMode={buildMode}
+                />
+                <Section
+                  title="Sermons"
+                  items={sermonItems}
+                  onPlay={setPlayingItem}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  onSeeAll={() => setSeeAllSection({ title: 'Sermons', items: sermonItems })}
+                  buildMode={buildMode}
+                />
+              </>
+            )}
+
+            {/* Build mode: full list for editing */}
+            {buildMode && items.length > 0 ? (
+              <YStack paddingHorizontal="$4" gap="$2" marginTop="$2">
+                <Text color={colors.text} fontSize="$4" fontWeight="700" marginBottom="$2">
+                  All Items
+                </Text>
+                {items.map((item) => (
+                  <XStack
+                    key={item.id}
+                    backgroundColor={colors.surface}
+                    borderRadius="$3"
+                    borderWidth={1}
+                    borderColor={colors.border}
+                    padding="$3"
+                    gap="$3"
+                    alignItems="center"
+                  >
+                    <Thumbnail url={item.youtubeUrl} size={72} />
+                    <YStack flex={1} gap="$1">
+                      <Text color={colors.text} fontSize="$3" fontWeight="600" numberOfLines={1}>
+                        {item.title}
                       </Text>
-                    </Pressable>
-                    <Pressable onPress={() => handleDelete(item.id)}>
-                      <Text color="#c0392b" fontSize="$3">
-                        Delete
+                      <Text color={colors.textMuted} fontSize="$2">
+                        {TYPE_LABELS[item.type]}
+                        {item.featured ? ' · Featured' : ''}
+                        {isItemNew(item) ? ' · New' : ''}
                       </Text>
-                    </Pressable>
+                    </YStack>
+                    <XStack gap="$2">
+                      <Pressable onPress={() => openEdit(item)}>
+                        <Text color={colors.primary} fontSize="$3">
+                          Edit
+                        </Text>
+                      </Pressable>
+                      <Pressable onPress={() => handleDelete(item.id)}>
+                        <Text color="#c0392b" fontSize="$3">
+                          Delete
+                        </Text>
+                      </Pressable>
+                    </XStack>
                   </XStack>
-                </XStack>
-              ))}
-            </YStack>
-          ) : null}
-        </ScrollView>
+                ))}
+              </YStack>
+            ) : null}
+          </ScrollView>
+        </>
       )}
 
       {/* Play modal */}
@@ -1045,6 +1117,14 @@ export default function MusicScreen() {
 }
 
 const styles = StyleSheet.create({
+  search: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+  },
   playModal: {
     flex: 1,
   },
