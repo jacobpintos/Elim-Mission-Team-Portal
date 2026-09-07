@@ -126,6 +126,45 @@ const EVENT_AUDIT_DETAIL: Record<EventAuditAction, string> = {
   occurrenceUpdated: 'Updated a single occurrence of',
 }
 
+/**
+ * What the form is currently pointed at.
+ *
+ * A recurring event edited for one date is a different thing to edit than the
+ * series, so the occurrence is part of the identity; a blank form is its own
+ * value rather than null, so switching from a draft back to creating reloads.
+ */
+function identify(event: EventTemplate | null | undefined, instanceKey?: string): string {
+  if (!event) return 'new'
+  return `${String(event.id)}::${instanceKey ?? ''}`
+}
+
+function blankForm(event: EventTemplate | null | undefined, date: string): FormData {
+  return {
+    title: event?.title ?? '',
+    date,
+    location: event?.location ?? '',
+    address: event?.address ?? '',
+    city: event?.city ?? '',
+    state: event?.state ?? '',
+    startTime: event?.startTime ?? '',
+    isRec: event?.isRec ?? false,
+    recur: event?.recur ?? 'weekly',
+    recDay: event?.recDay ?? 0,
+    isPublic: event?.isPublic ?? false,
+    food: event?.food ?? false,
+    foodItems: event?.foodItems ?? [],
+    carpool: event?.carpool ?? false,
+    carpoolCars: event?.carpoolCars ?? [],
+    lodging: event?.lodging ?? false,
+    flights: event?.flights ?? false,
+    isVirtual: event?.isVirtual ?? false,
+    virtualLink: event?.virtualLink ?? '',
+    taskTemplateId: event?.taskTemplateId ?? '',
+    users: event?.users ?? [],
+    groups: event?.groups ?? [],
+  }
+}
+
 export function EventFormModal({
   event,
   open,
@@ -178,36 +217,42 @@ export function EventFormModal({
       ? isoToDisplay(selectedDate)
       : ''
 
-  const [form, setForm] = useState<FormData>({
-    title: event?.title ?? '',
-    date: initDate,
-    location: event?.location ?? '',
-    address: event?.address ?? '',
-    city: event?.city ?? '',
-    state: event?.state ?? '',
-    startTime: event?.startTime ?? '',
-    isRec: event?.isRec ?? false,
-    recur: event?.recur ?? 'weekly',
-    recDay: event?.recDay ?? 0,
-    isPublic: event?.isPublic ?? false,
-    food: event?.food ?? false,
-    foodItems: event?.foodItems ?? [],
-    carpool: event?.carpool ?? false,
-    carpoolCars: event?.carpoolCars ?? [],
-    lodging: event?.lodging ?? false,
-    flights: event?.flights ?? false,
-    isVirtual: event?.isVirtual ?? false,
-    virtualLink: event?.virtualLink ?? '',
-    taskTemplateId: event?.taskTemplateId ?? '',
-    users: event?.users ?? [],
-    groups: event?.groups ?? [],
-  })
+  const [form, setForm] = useState<FormData>(() => blankForm(event, initDate))
   const [teams, setTeams] = useState<EventTeam[]>(event?.teams ?? [])
   const [dressCode, setDressCode] = useState<DressCodeEntry[]>(event?.dressCode ?? [])
   const [lodgingEntries, setLodgingEntries] = useState<LodgingEntry[]>(event?.lodgingEntries ?? [])
   const [flightEntries, setFlightEntries] = useState<FlightEntry[]>(event?.flightEntries ?? [])
   const [saving, setSaving] = useState(false)
   const [editScope, setEditScope] = useState<'instance' | 'all'>(instanceKey ? 'instance' : 'all')
+
+  /**
+   * Reload the form when it is pointed at a different event.
+   *
+   * The caller used to do this by changing this component's `key`, which
+   * throws the whole thing away and builds a new one. That works on the web,
+   * where the modal is a Dialog, and fails on a device, where it is a Sheet:
+   * a Sheet that is replaced in the same moment it is told to open never
+   * appears, so opening an unpublished draft did nothing at all.
+   *
+   * So the component now stays mounted and reloads itself instead. Setting
+   * state during render is React's own answer for state derived from props —
+   * it re-renders immediately, before anything is shown, rather than painting
+   * one frame of the previous event's details.
+   */
+  const [loadedFor, setLoadedFor] = useState<string | null>(identify(event, instanceKey))
+  const identity = identify(event, instanceKey)
+  // Only while open: the caller clears its selection as it closes, and
+  // reloading then would blank the fields in view during the closing
+  // animation. Anything changed while closed is picked up on the way back in.
+  if (open && identity !== loadedFor) {
+    setLoadedFor(identity)
+    setForm(blankForm(event, initDate))
+    setTeams(event?.teams ?? [])
+    setDressCode(event?.dressCode ?? [])
+    setLodgingEntries(event?.lodgingEntries ?? [])
+    setFlightEntries(event?.flightEntries ?? [])
+    setEditScope(instanceKey ? 'instance' : 'all')
+  }
 
   const [carpoolPicker, setCarpoolPicker] = useState<{
     carId: string

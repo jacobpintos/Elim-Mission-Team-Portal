@@ -72,19 +72,13 @@ export default function EventsScreen() {
   // Guests default to their own events; 'all' widens to public ones too.
   const [guestScope, setGuestScope] = useState<'mine' | 'all'>('mine')
 
-  // Opening a draft swaps the form's key and flips it open in the same render,
-  // which remounts it already-open instead of transitioning into view — and
-  // nothing appeared. Letting the open flag land a render later gives the
-  // sheet the closed-to-open change it needs. Creating a new event never hit
-  // this because its key does not change.
-  const formWanted = showCreateModal || !!editInstance || !!editDraft
-  const [formOpen, setFormOpen] = useState(false)
-  useEffect(() => {
-    // Deferred by a frame so the form mounts closed and then opens, rather
-    // than both happening in the render that also changes its key.
-    const frame = requestAnimationFrame(() => setFormOpen(formWanted))
-    return () => cancelAnimationFrame(frame)
-  }, [formWanted])
+  // The form is never remounted when it changes what it is editing — no key
+  // here, and it reloads itself from the event it is given. Keying it on the
+  // record was what made opening a draft do nothing on a device: on iOS the
+  // modal is a Sheet, and a Sheet replaced in the same moment it is told to
+  // open never appears. Deferring the open flag by a frame was an attempt at
+  // the same problem and did not hold either, so both are gone.
+  const formOpen = showCreateModal || !!editInstance || !!editDraft
 
   const openDetail = (ev: EventInstance) => {
     setSelectedEvent(ev)
@@ -560,7 +554,6 @@ export default function EventsScreen() {
 
       {admin ? (
         <EventFormModal
-          key={editInstance?.instanceKey ?? String(editDraft?.id ?? 'create')}
           event={editInstance ?? editDraft}
           instanceKey={editInstance?.isRec ? editInstance.instanceKey : undefined}
           open={formOpen}
