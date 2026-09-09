@@ -44,6 +44,18 @@ export interface NotificationPrefs {
   eventLogistics: { push: boolean; email: boolean }
   /** Reminder before a flight you are booked on. */
   flightReminder: { push: boolean; email: boolean }
+  /**
+   * A service or worship event has started streaming.
+   *
+   * Optional, and absent rather than false to begin with. Three states matter
+   * here where two do elsewhere: nobody is pushed about a stream until they
+   * have been asked outright, so "not yet asked" has to be distinguishable
+   * from "asked and said no". Absent is the first; false is the second.
+   *
+   * Deliberately left out of defaultNotificationPrefs for the same reason — a
+   * new account starts unasked, not opted in.
+   */
+  livestream?: { push: boolean; email: boolean }
   /** An event you are on opened a food sign-up. */
   foodSignupOpen: { push: boolean; email: boolean }
   /** Items are still unclaimed a few days before the event. */

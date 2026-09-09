@@ -19,6 +19,7 @@ import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { YouTubeEmbed } from '@/components/ui/YouTubeEmbed'
 import { StreamBox } from '@/components/ui/StreamBox'
 import { StreamCardModal } from '@/features/livestream/StreamCardModal'
+import { StreamNotifyPrompt } from '@/features/livestream/StreamNotifyPrompt'
 import { Img } from '@/components/ui/Img'
 
 function nanoid() {
@@ -642,6 +643,7 @@ export default function MusicScreen() {
 
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 16 }}>
             <StreamBox />
+            <StreamNotifyPrompt />
             {searching ? (
               results.length > 0 ? (
                 <Section

@@ -50,6 +50,7 @@ type NotifKey = keyof Pick<
   | 'flightReminder'
   | 'foodSignupOpen'
   | 'foodSignupReminder'
+  | 'livestream'
 >
 
 // Admin-only notification keys — hidden from the toggle list for non-admins,
@@ -67,6 +68,7 @@ const ADMIN_ONLY_NOTIF_KEYS: NotifKey[] = [
   'flightReminder',
   'foodSignupOpen',
   'foodSignupReminder',
+  'livestream',
 ]
 
 const NOTIF_LABELS: Record<NotifKey, string> = {
@@ -91,18 +93,31 @@ const NOTIF_LABELS: Record<NotifKey, string> = {
   flightReminder: 'Flight reminder',
   foodSignupOpen: 'Food sign-up opened',
   foodSignupReminder: 'Food items still open',
+  livestream: 'A service goes live',
 }
 
 type PublicNotifKey = keyof Pick<
   NotificationPrefs,
-  'publicAnnouncement' | 'publicEvent' | 'contentFeatured'
+  'publicAnnouncement' | 'publicEvent' | 'contentFeatured' | 'livestream'
 >
 
 const PUBLIC_NOTIF_LABELS: Record<PublicNotifKey, string> = {
   publicAnnouncement: 'Public announcements',
   publicEvent: 'Nearby & virtual events',
   contentFeatured: 'New & featured content',
+  livestream: 'A service goes live',
 }
+
+/**
+ * What a toggle shows for a preference never written.
+ *
+ * The public rows default on; the member rows below already default off. Stream
+ * alerts have to read as off in both, because there an unset value means the
+ * prompt has not been answered — and showing it on would promise a
+ * notification that nothing is going to send.
+ */
+const PUSH_DEFAULT_OFF = new Set<string>(['livestream'])
+const pushDefaultFor = (key: string) => !PUSH_DEFAULT_OFF.has(key)
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const colors = useThemeColors()
@@ -855,7 +870,7 @@ export default function SettingsScreen() {
                   <YStack flex={1} alignItems="center">
                     <ToggleSwitch
                       size="$2"
-                      checked={prefs[key]?.push ?? true}
+                      checked={prefs[key]?.push ?? pushDefaultFor(key)}
                       onCheckedChange={(v) => togglePublicPushPref(key, v)}
                       accessibilityLabel={`${PUBLIC_NOTIF_LABELS[key]}, push`}
                     />
