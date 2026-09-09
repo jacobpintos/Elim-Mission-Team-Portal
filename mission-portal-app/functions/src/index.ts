@@ -19,6 +19,7 @@ export { onAnnouncementPublished, onPublicEventCreated, onContentUpdated } from 
 export { onEventDeleted } from './onEventDeleted'
 export { textingListDigest } from './push/textingListDigest'
 export { expireAnnouncements } from './expireAnnouncements'
+export { sweepExpiredStreams } from './sweepExpiredStreams'
 export { mirrorPublicProfile, backfillPublicProfiles } from './publicProfiles'
 export { dailyCleanup } from './cleanup'
 export { weatherAlertCheck, weatherAlertNow, onEventWrittenWeather } from './weatherAlerts'

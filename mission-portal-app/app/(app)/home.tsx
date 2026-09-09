@@ -14,6 +14,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { EventCard } from '@/components/ui/EventCard'
 import { TaskCard } from '@/components/ui/TaskCard'
 import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
+import { StreamBox } from '@/components/ui/StreamBox'
 import { WeatherDetailSheet } from '@/features/events/WeatherDetailSheet'
 import { AvailModal } from '@/features/events/AvailModal'
 import { isAdmin, isSecurity, isWorship } from '@/lib/roles'
@@ -140,6 +141,7 @@ function PubHomeContent() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
+      <StreamBox />
       <YStack padding="$4" gap="$4">
         {/* Welcome */}
         <YStack
@@ -652,6 +654,7 @@ function TeamHomeContent() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
+      <StreamBox />
       <YStack padding="$4" gap="$4">
         <YStack gap="$1">
           <Text color={colors.text} fontSize="$6" fontWeight="700">

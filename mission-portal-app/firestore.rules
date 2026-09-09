@@ -217,6 +217,29 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // The service streaming right now.
+    //
+    // Read is not narrowed by the card's expiry, deliberately. Rules are not
+    // filters: a rule reading resource.data is evaluated against every document
+    // a query could return, so the moment one expired card existed, the app's
+    // listener on this collection would be refused outright rather than
+    // returning the live one. Constraining the query to match would then tie
+    // every caller to a where() clause that has to agree with this line
+    // exactly.
+    //
+    // Nothing is lost by leaving it out. What is posted here is material the
+    // church is publishing openly — anything not meant for a general audience
+    // is not posted at all — so an expired card is stale, not sensitive. The
+    // window is honoured in the app, and expired documents are deleted outright
+    // by the sweepExpiredStreams schedule.
+    //
+    // If a stream ever does need an audience narrower than "everyone", the test
+    // belongs here, and the client query has to be constrained to match it.
+    match /livestreams/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     // Food sign-ups. There was no rule here at all, so every write was
     // default-denied and signing up for a dish silently did nothing.
     // Guests are along for the trip and are not asked to bring food.

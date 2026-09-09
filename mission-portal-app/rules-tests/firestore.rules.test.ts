@@ -68,6 +68,20 @@ beforeEach(async () => {
       ts: 1,
       readBy: [],
     })
+    // One live card and one that has already run out, so the listing tests
+    // below cover a collection holding both.
+    await setDoc(doc(db, 'livestreams', 'live1'), {
+      title: 'Sunday Service',
+      youtubeUrl: 'https://www.youtube.com/live/4xzDTAGJ1bY',
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 6 * 60 * 60 * 1000,
+    })
+    await setDoc(doc(db, 'livestreams', 'expired1'), {
+      title: 'Last Sunday',
+      youtubeUrl: 'https://www.youtube.com/live/4xzDTAGJ1bY',
+      createdAt: Date.now() - 48 * 60 * 60 * 1000,
+      expiresAt: Date.now() - 42 * 60 * 60 * 1000,
+    })
   })
 })
 
@@ -199,14 +213,18 @@ describe('publicProfiles — who is this uid?', () => {
   })
 
   it('refuses an unauthenticated read', async () => {
-    await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'publicProfiles')))
+    await assertFails(
+      getDocs(collection(env.unauthenticatedContext().firestore(), 'publicProfiles'))
+    )
   })
 
   it('lets nobody write it, not even an admin or the named user', async () => {
     // Only mirrorPublicProfile writes this, with Admin SDK privileges, which
     // these rules do not apply to. A client that could write here would rename
     // anyone in everyone else's copy of the directory.
-    await assertFails(setDoc(doc(as(MEMBER), 'publicProfiles', MEMBER), { displayName: 'Impostor' }))
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'publicProfiles', MEMBER), { displayName: 'Impostor' })
+    )
     await assertFails(setDoc(doc(as(ADMIN), 'publicProfiles', MEMBER), { displayName: 'Impostor' }))
     await assertFails(deleteDoc(doc(as(ADMIN), 'publicProfiles', MEMBER)))
   })
@@ -618,5 +636,50 @@ describe('the owner account', () => {
   it("does not hand the owner's protection to ordinary users", async () => {
     await assertFails(updateDoc(doc(as(MEMBER), 'users', MEMBER), { roles: ['admin'] }))
     await assertFails(deleteDoc(doc(as(MEMBER), 'users', OUTSIDER)))
+  })
+})
+
+describe('livestreams', () => {
+  it('lets any signed-in user read the live card', async () => {
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'livestreams/live1')))
+    await assertSucceeds(getDoc(doc(as(GUEST), 'livestreams/live1')))
+  })
+
+  it('refuses the live card to signed-out users', async () => {
+    await assertFails(getDoc(doc(anon(), 'livestreams/live1')))
+  })
+
+  it('serves a bare collection read even with an expired card present', async () => {
+    // The regression this exists for: narrowing the read rule by expiresAt
+    // reads naturally and breaks the app outright. Rules are not filters, so a
+    // rule touching resource.data is checked against every document the query
+    // could return — one stale card and the whole listener is refused, which
+    // is how the box would have gone dark rather than skipping the old card.
+    const snap = await assertSucceeds(getDocs(collection(as(MEMBER), 'livestreams')))
+    expect(snap.docs.map((d) => d.id).sort()).toEqual(['expired1', 'live1'])
+  })
+
+  it('lets an admin post and take down a card', async () => {
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'livestreams/new1'), {
+        title: 'Worship Night',
+        youtubeUrl: 'https://youtu.be/4xzDTAGJ1bY',
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 60 * 60 * 1000,
+      })
+    )
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'livestreams/live1')))
+  })
+
+  it('refuses a card posted by anyone but an admin', async () => {
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'livestreams/nope'), {
+        title: 'Not mine to post',
+        youtubeUrl: 'https://youtu.be/4xzDTAGJ1bY',
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 60 * 60 * 1000,
+      })
+    )
+    await assertFails(deleteDoc(doc(as(MEMBER), 'livestreams/live1')))
   })
 })
