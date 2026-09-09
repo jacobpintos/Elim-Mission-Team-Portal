@@ -36,3 +36,53 @@ export function hasAnyChord(rows: string[][][]): boolean {
     )
   )
 }
+
+/**
+ * Move the item at `from` to sit at `to`, leaving the rest in order.
+ *
+ * A song is written in the order it is played, and the order is discovered
+ * while writing it — an intro remembered after the last chorus belongs at the
+ * front, and rebuilding six sections to put it there is not a reasonable
+ * price for remembering late.
+ *
+ * Out-of-range moves return the list unchanged rather than clamping, so a
+ * button pressed at the end of the list does nothing instead of something
+ * surprising.
+ */
+export function moveItem<T>(items: T[], from: number, to: number): T[] {
+  if (from === to) return items
+  if (from < 0 || from >= items.length) return items
+  if (to < 0 || to >= items.length) return items
+
+  const next = items.slice()
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next
+}
+
+/** Where a section should end up when nudged one place in `direction`. */
+export function neighbourIndex(index: number, direction: 'up' | 'down'): number {
+  return direction === 'up' ? index - 1 : index + 1
+}
+
+/** The parts of a section that ordering affects. */
+export interface OrderedSection {
+  type: string
+  sameAsPrevious?: boolean
+}
+
+/**
+ * Drop "same as previous" from any section that no longer has a previous.
+ *
+ * The flag means "this chorus is the one above", so it only makes sense with
+ * an earlier section of the same type. Moving the first chorus to the front
+ * of the song, or above the one it was copying, leaves it pointing at nothing
+ * — and the viewer would show a label with no chords under it.
+ */
+export function normalizeSameAsPrevious<T extends OrderedSection>(sections: T[]): T[] {
+  return sections.map((section, index) => {
+    if (!section.sameAsPrevious) return section
+    const hasEarlier = sections.slice(0, index).some((s) => s.type === section.type)
+    return hasEarlier ? section : { ...section, sameAsPrevious: false }
+  })
+}

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { clearChordTokens, hasAnyChord } from './chordSheetEdit'
+import {
+  clearChordTokens,
+  hasAnyChord,
+  moveItem,
+  neighbourIndex,
+  normalizeSameAsPrevious,
+} from './chordSheetEdit'
 
 describe('clearChordTokens', () => {
   it('empties the chords over a lyric line but keeps a box per word', () => {
@@ -45,5 +51,90 @@ describe('hasAnyChord', () => {
   it('is false for a sheet with empty boxes', () => {
     expect(hasAnyChord([[['', '', '']]])).toBe(false)
     expect(hasAnyChord([])).toBe(false)
+  })
+})
+
+describe('moveItem', () => {
+  const song = ['V', 'C', 'V', 'C', 'B', 'C']
+
+  it('brings a section added last up to the front', () => {
+    // The case this exists for: the intro remembered after the song is built.
+    const withIntro = [...song, 'I']
+    let ordered = withIntro
+    for (let i = withIntro.length - 1; i > 0; i--) {
+      ordered = moveItem(ordered, i, i - 1)
+    }
+    expect(ordered).toEqual(['I', 'V', 'C', 'V', 'C', 'B', 'C'])
+  })
+
+  it('moves one place either way', () => {
+    expect(moveItem(song, 4, 3)).toEqual(['V', 'C', 'V', 'B', 'C', 'C'])
+    expect(moveItem(song, 0, 1)).toEqual(['C', 'V', 'V', 'C', 'B', 'C'])
+  })
+
+  it('moves across the list in one go', () => {
+    expect(moveItem(song, 5, 0)).toEqual(['C', 'V', 'C', 'V', 'C', 'B'])
+  })
+
+  it('does nothing at the ends rather than wrapping around', () => {
+    expect(moveItem(song, 0, -1)).toBe(song)
+    expect(moveItem(song, 5, 6)).toBe(song)
+  })
+
+  it('does nothing when asked to move somewhere it already is', () => {
+    expect(moveItem(song, 2, 2)).toBe(song)
+  })
+
+  it('leaves the original list alone', () => {
+    const before = [...song]
+    moveItem(song, 0, 3)
+    expect(song).toEqual(before)
+  })
+
+  it('copes with an empty or single-item list', () => {
+    expect(moveItem([], 0, 0)).toEqual([])
+    expect(moveItem(['only'], 0, 1)).toEqual(['only'])
+  })
+})
+
+describe('neighbourIndex', () => {
+  it('is the place one step in that direction', () => {
+    expect(neighbourIndex(3, 'up')).toBe(2)
+    expect(neighbourIndex(3, 'down')).toBe(4)
+    // Out of range at the ends, which moveItem then refuses.
+    expect(neighbourIndex(0, 'up')).toBe(-1)
+  })
+})
+
+describe('normalizeSameAsPrevious', () => {
+  it('clears the flag on a section moved above the one it copied', () => {
+    // Chorus 2 said "same as the chorus above"; now it is the first chorus.
+    const moved = [{ type: 'chorus', sameAsPrevious: true }, { type: 'verse' }, { type: 'chorus' }]
+    expect(normalizeSameAsPrevious(moved)).toEqual([
+      { type: 'chorus', sameAsPrevious: false },
+      { type: 'verse' },
+      { type: 'chorus' },
+    ])
+  })
+
+  it('leaves the flag alone when an earlier section of that type remains', () => {
+    const fine = [{ type: 'chorus' }, { type: 'verse' }, { type: 'chorus', sameAsPrevious: true }]
+    expect(normalizeSameAsPrevious(fine)).toEqual(fine)
+  })
+
+  it('does not care about sections of other types in between', () => {
+    const spread = [
+      { type: 'verse' },
+      { type: 'chorus' },
+      { type: 'bridge' },
+      { type: 'verse', sameAsPrevious: true },
+    ]
+    expect(normalizeSameAsPrevious(spread)).toEqual(spread)
+  })
+
+  it('leaves a song with no flags untouched', () => {
+    const plain = [{ type: 'verse' }, { type: 'chorus' }]
+    expect(normalizeSameAsPrevious(plain)).toEqual(plain)
+    expect(normalizeSameAsPrevious([])).toEqual([])
   })
 })

@@ -14,7 +14,13 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { getWordSlots } from '@/lib/nashvilleNumbers'
 import { ChordKeypad } from './ChordKeypad'
 import { confirmAsync } from '@/lib/confirm'
-import { clearChordTokens, hasAnyChord } from '@/lib/chordSheetEdit'
+import {
+  clearChordTokens,
+  hasAnyChord,
+  moveItem,
+  neighbourIndex,
+  normalizeSameAsPrevious,
+} from '@/lib/chordSheetEdit'
 import { appendChordKey, backspaceChordToken, pinExtension } from '@/lib/chordKeypad'
 import {
   SECTION_TYPES,
@@ -310,6 +316,26 @@ export function ChordSheetEditor({
 
   const addSection = (type: SectionType) => {
     setSections((prev) => [...prev, makeSection(type)])
+  }
+
+  /**
+   * Move a section one place, or all the way to the front.
+   *
+   * The order of a song is discovered while writing it — an intro remembered
+   * after the last chorus belongs at the beginning, and before this the only
+   * way there was to delete the song and start again. "Top" exists because
+   * that is the case people actually hit, and nudging it past six sections
+   * one tap at a time is a poor answer to it.
+   */
+  const moveSection = (id: string, to: number | 'up' | 'down' | 'top') => {
+    setSections((prev) => {
+      const from = prev.findIndex((s) => s.id === id)
+      if (from === -1) return prev
+      const target = to === 'top' ? 0 : to === 'up' || to === 'down' ? neighbourIndex(from, to) : to
+      const moved = moveItem(prev, from, target)
+      // A chorus that said "same as the one above" may no longer have one.
+      return moved === prev ? prev : normalizeSameAsPrevious(moved)
+    })
   }
 
   const removeSection = (id: string) => {
@@ -673,10 +699,72 @@ export function ChordSheetEditor({
                       gap="$2"
                     >
                       {/* Section label row */}
-                      <XStack justifyContent="space-between" alignItems="center">
-                        <Text color={colors.primary} fontSize="$3" fontWeight="700">
+                      <XStack justifyContent="space-between" alignItems="center" gap="$2">
+                        <Text color={colors.primary} fontSize="$3" fontWeight="700" flex={1}>
                           {getSectionLabel(sections, section.id)}
                         </Text>
+
+                        {/* Reordering. Hidden on a one-section song, where
+                            there is nowhere to move to. */}
+                        {sections.length > 1 ? (
+                          <XStack gap="$1" alignItems="center">
+                            {sectionIdx > 1 ? (
+                              <Pressable
+                                onPress={() => moveSection(section.id, 'top')}
+                                accessibilityLabel="Move to start"
+                              >
+                                <XStack
+                                  borderWidth={1}
+                                  borderColor={colors.border}
+                                  borderRadius="$2"
+                                  paddingHorizontal="$2"
+                                  paddingVertical="$1"
+                                >
+                                  <Text color={colors.textMuted} fontSize="$1" fontWeight="600">
+                                    Top
+                                  </Text>
+                                </XStack>
+                              </Pressable>
+                            ) : null}
+                            <Pressable
+                              onPress={() => moveSection(section.id, 'up')}
+                              disabled={sectionIdx === 0}
+                              accessibilityLabel="Move up"
+                            >
+                              <XStack
+                                borderWidth={1}
+                                borderColor={colors.border}
+                                borderRadius="$2"
+                                paddingHorizontal="$2"
+                                paddingVertical="$1"
+                                opacity={sectionIdx === 0 ? 0.35 : 1}
+                              >
+                                <Text color={colors.text} fontSize="$2" fontWeight="700">
+                                  ↑
+                                </Text>
+                              </XStack>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => moveSection(section.id, 'down')}
+                              disabled={sectionIdx === sections.length - 1}
+                              accessibilityLabel="Move down"
+                            >
+                              <XStack
+                                borderWidth={1}
+                                borderColor={colors.border}
+                                borderRadius="$2"
+                                paddingHorizontal="$2"
+                                paddingVertical="$1"
+                                opacity={sectionIdx === sections.length - 1 ? 0.35 : 1}
+                              >
+                                <Text color={colors.text} fontSize="$2" fontWeight="700">
+                                  ↓
+                                </Text>
+                              </XStack>
+                            </Pressable>
+                          </XStack>
+                        ) : null}
+
                         <Pressable onPress={() => removeSection(section.id)}>
                           <Text color="#c0392b" fontSize="$2">
                             Remove
