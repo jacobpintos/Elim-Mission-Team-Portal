@@ -459,6 +459,15 @@ export default function MusicScreen() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [form, setForm] = useState<EditForm>(BLANK_FORM)
   const [saving, setSaving] = useState(false)
+  /**
+   * Why the form reports its own errors instead of leaning on the toast.
+   *
+   * ToastContainer is mounted in the root layout, and this form lives inside a
+   * React Native <Modal>. A Modal is a separate native window on iOS and a
+   * stacked overlay on web, so a toast raised while it is open renders behind
+   * it on both — invisible. Every rejected save looked like a dead Save button.
+   */
+  const [formError, setFormError] = useState<string | null>(null)
   const [seeAllSection, setSeeAllSection] = useState<{ title: string; items: MusicItem[] } | null>(
     null
   )
@@ -489,24 +498,29 @@ export default function MusicScreen() {
   const openAdd = () => {
     setEditingId(null)
     setForm(BLANK_FORM)
+    setFormError(null)
     setShowEditModal(true)
   }
 
   const openEdit = (item: MusicItem) => {
     setEditingId(item.id)
     setForm(itemToForm(item))
+    setFormError(null)
     setShowEditModal(true)
   }
 
   const handleSave = async () => {
     if (!form.title.trim() || !form.youtubeUrl.trim()) {
-      toast('Title and YouTube URL are required', 'error')
+      setFormError('Title and YouTube URL are required.')
       return
     }
     if (!extractYouTubeId(form.youtubeUrl)) {
-      toast('Invalid YouTube URL', 'error')
+      setFormError(
+        'That does not look like a YouTube link. Paste the address of the video or stream, such as https://youtu.be/VIDEO_ID.'
+      )
       return
     }
+    setFormError(null)
     setSaving(true)
     try {
       if (editingId) {
@@ -517,8 +531,12 @@ export default function MusicScreen() {
         toast('Added', 'success')
       }
       setShowEditModal(false)
-    } catch {
-      toast('Save failed', 'error')
+    } catch (err) {
+      // The reason matters here: a rejected Firestore rule and a dropped
+      // connection both landed on the same "Save failed" and left an admin
+      // guessing which.
+      const reason = err instanceof Error ? err.message : ''
+      setFormError(reason ? `Could not save: ${reason}` : 'Could not save. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -992,7 +1010,10 @@ export default function MusicScreen() {
                 { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
               ]}
               value={form.title}
-              onChangeText={(v) => setForm((f) => ({ ...f, title: v }))}
+              onChangeText={(v) => {
+                setFormError(null)
+                setForm((f) => ({ ...f, title: v }))
+              }}
               placeholder="Title"
               placeholderTextColor={colors.textMuted}
             />
@@ -1004,7 +1025,10 @@ export default function MusicScreen() {
                 { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
               ]}
               value={form.youtubeUrl}
-              onChangeText={(v) => setForm((f) => ({ ...f, youtubeUrl: v }))}
+              onChangeText={(v) => {
+                setFormError(null)
+                setForm((f) => ({ ...f, youtubeUrl: v }))
+              }}
               placeholder="https://youtu.be/..."
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
@@ -1164,40 +1188,49 @@ export default function MusicScreen() {
             ) : null}
           </ScrollView>
 
-          <XStack
-            padding="$4"
-            borderTopWidth={1}
-            borderTopColor={colors.border}
-            gap="$3"
-            justifyContent="flex-end"
-          >
-            <Pressable onPress={() => setShowEditModal(false)}>
+          <YStack borderTopWidth={1} borderTopColor={colors.border}>
+            {formError ? (
               <XStack
-                paddingHorizontal="$4"
-                paddingVertical="$2"
+                margin="$4"
+                marginBottom="$0"
+                padding="$3"
                 borderRadius="$2"
-                borderWidth={1}
-                borderColor={colors.border}
+                backgroundColor="#dc2626"
               >
-                <Text color={colors.text} fontSize="$3">
-                  Cancel
+                <Text color="white" fontSize="$3" flex={1}>
+                  {formError}
                 </Text>
               </XStack>
-            </Pressable>
-            <Pressable onPress={handleSave} disabled={saving}>
-              <XStack
-                paddingHorizontal="$4"
-                paddingVertical="$2"
-                borderRadius="$2"
-                backgroundColor={colors.primary}
-                opacity={saving ? 0.6 : 1}
-              >
-                <Text color="white" fontSize="$3" fontWeight="600">
-                  {saving ? 'Saving…' : 'Save'}
-                </Text>
-              </XStack>
-            </Pressable>
-          </XStack>
+            ) : null}
+            <XStack padding="$4" gap="$3" justifyContent="flex-end">
+              <Pressable onPress={() => setShowEditModal(false)}>
+                <XStack
+                  paddingHorizontal="$4"
+                  paddingVertical="$2"
+                  borderRadius="$2"
+                  borderWidth={1}
+                  borderColor={colors.border}
+                >
+                  <Text color={colors.text} fontSize="$3">
+                    Cancel
+                  </Text>
+                </XStack>
+              </Pressable>
+              <Pressable onPress={handleSave} disabled={saving}>
+                <XStack
+                  paddingHorizontal="$4"
+                  paddingVertical="$2"
+                  borderRadius="$2"
+                  backgroundColor={colors.primary}
+                  opacity={saving ? 0.6 : 1}
+                >
+                  <Text color="white" fontSize="$3" fontWeight="600">
+                    {saving ? 'Saving…' : 'Save'}
+                  </Text>
+                </XStack>
+              </Pressable>
+            </XStack>
+          </YStack>
         </View>
       </Modal>
     </YStack>
