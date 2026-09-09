@@ -68,15 +68,33 @@ export const useMusicStore = create<MusicStore>((set, get) => ({
   },
 }))
 
+/**
+ * The video id inside a YouTube URL, in any of the forms a link arrives in.
+ *
+ * `/live/` is what YouTube puts in the address bar during a broadcast and what
+ * Share offers for a stream, so it is the form an admin adding a service
+ * pastes. Without it the Content form rejected every live URL as invalid.
+ * `studio.youtube.com/video/...` is the other copy source, the Studio tab where
+ * the broadcast is set up.
+ *
+ * The URL is trimmed, and the patterns stop at whitespace and at a path
+ * separator. A pasted link often carries a trailing space or newline, which the
+ * looser patterns captured into the id itself: that passed validation and then
+ * built an embed and a thumbnail URL with a stray character on the end, so the
+ * item saved fine and simply would not play.
+ */
 export function extractYouTubeId(url: string): string | null {
+  const trimmed = url.trim()
   const patterns = [
-    /youtu\.be\/([^?&]+)/,
-    /youtube\.com\/watch\?v=([^&]+)/,
-    /youtube\.com\/embed\/([^?&]+)/,
-    /youtube\.com\/shorts\/([^?&]+)/,
+    /youtu\.be\/([^?&/\s]+)/,
+    /youtube\.com\/watch\?v=([^&\s]+)/,
+    /youtube\.com\/embed\/([^?&/\s]+)/,
+    /youtube\.com\/shorts\/([^?&/\s]+)/,
+    /youtube\.com\/live\/([^?&/\s]+)/,
+    /studio\.youtube\.com\/video\/([^?&/\s]+)/,
   ]
   for (const p of patterns) {
-    const m = url.match(p)
+    const m = trimmed.match(p)
     if (m) return m[1]
   }
   return null
