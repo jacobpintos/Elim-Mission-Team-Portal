@@ -10,8 +10,13 @@ export function TwoColBlock({ data }: TwoColBlockProps) {
   const { width } = useWindowDimensions()
   const isWide = width >= 640
 
+  // flex is applied by the wide branch alone. It is what makes the two halves
+  // share the row, and it has no business in the stacked layout: there the
+  // container's height comes from its content, so a flexed child is sized
+  // against a basis that does not exist, and the block grew a band of empty
+  // space between the text and the picture.
   const leftContent = (
-    <YStack flex={1} gap="$2" padding="$3">
+    <YStack gap="$2" padding="$3">
       {data.leftHead ? (
         <Text fontSize="$5" fontWeight="700">
           {data.leftHead}
@@ -29,7 +34,7 @@ export function TwoColBlock({ data }: TwoColBlockProps) {
   )
 
   const rightContent = (
-    <YStack flex={1} gap="$2" padding="$3">
+    <YStack gap="$2" padding="$3">
       {data.rightImage ? (
         <Image
           source={{ uri: data.rightImage }}
@@ -50,9 +55,9 @@ export function TwoColBlock({ data }: TwoColBlockProps) {
 
   if (isWide) {
     return (
-      <XStack>
-        {leftContent}
-        {rightContent}
+      <XStack alignItems="flex-start">
+        <YStack flex={1}>{leftContent}</YStack>
+        <YStack flex={1}>{rightContent}</YStack>
       </XStack>
     )
   }
