@@ -77,7 +77,7 @@ export default function PrivacyPolicyScreen() {
             Privacy Policy
           </Text>
           <Text color={c.textMuted} fontSize={13}>
-            Effective date: August 26, 2026
+            Effective date: September 10, 2026
           </Text>
           <Body>
             This Privacy Policy explains how The Well of Iowa (“we,” “us,” or “our”) collects, uses,
@@ -282,7 +282,18 @@ export default function PrivacyPolicyScreen() {
             <Bullet>Google Firebase — firebase.google.com/support/privacy</Bullet>
             <Bullet>Sentry — sentry.io/privacy</Bullet>
             <Bullet>Expo — expo.dev/privacy</Bullet>
+            <Bullet>YouTube (Google) — policies.google.com/privacy</Bullet>
           </YStack>
+          <Body>
+            The Content section and the live stream box show videos through YouTube&rsquo;s embedded
+            player. Video thumbnails are loaded from YouTube&rsquo;s servers, so simply viewing
+            those screens tells YouTube your device&rsquo;s IP address and browser or app details.
+            Opening a video shares more with YouTube, which it uses to play the video and for its
+            own purposes, described in Google&rsquo;s Privacy Policy. We do not send YouTube your
+            name, email address, or anything else from your portal account, and we receive nothing
+            back about what you watch. Your use of the embedded player is also subject to the
+            YouTube Terms of Service at youtube.com/t/terms.
+          </Body>
         </Section>
 
         <Section title="10. Changes to This Policy">
