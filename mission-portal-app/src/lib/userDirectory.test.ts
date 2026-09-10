@@ -72,4 +72,35 @@ describe('mergeUsers', () => {
     // which is the old broken behaviour — correct only when nothing is loaded.
     expect(mergeUsers([], [])).toEqual([])
   })
+
+  it('carries a leadership title through to a reader who cannot see users', () => {
+    // The bug this exists for: a title is set on users/{uid}, which visitors
+    // cannot read. They get the directory entry instead, and it dropped the
+    // title on the floor — so the Connect page introduced the leadership team
+    // by name alone to everyone except an admin.
+    const merged = mergeUsers(
+      [{ uid: 'a1', displayName: 'Ajai Prakash', title: 'Lead Pastor' }],
+      []
+    )
+
+    expect(merged[0].title).toBe('Lead Pastor')
+  })
+
+  it('leaves the title undefined when the directory has none', () => {
+    const merged = mergeUsers([profile('a1', 'Sunny Singh')], [])
+
+    expect(merged[0].title).toBeUndefined()
+  })
+
+  it('prefers the full record\u2019s title when a reader can see both', () => {
+    // An admin holds both. The full record is the same person with more
+    // detail, and it is the one the Leadership screen writes to.
+    const merged = mergeUsers(
+      [{ uid: 'a1', displayName: 'Ajai Prakash', title: 'stale' }],
+      [{ uid: 'a1', displayName: 'Ajai Prakash', title: 'Lead Pastor' } as UserProfile]
+    )
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0].title).toBe('Lead Pastor')
+  })
 })

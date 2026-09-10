@@ -138,7 +138,6 @@ export function MeetingBlock({ data }: MeetingBlockProps) {
           </Text>
           <XStack flexWrap="wrap" gap="$3">
             {leaders.map((leader) => {
-              const leaderWithTitle = leader as UserProfile & { title?: string }
               return (
                 <YStack
                   key={leader.uid}
@@ -150,9 +149,9 @@ export function MeetingBlock({ data }: MeetingBlockProps) {
                   <Text fontSize="$3" fontWeight="600" textAlign="center">
                     {leader.displayName}
                   </Text>
-                  {leaderWithTitle.title ? (
+                  {leader.title ? (
                     <Text fontSize="$2" color="$gray10" textAlign="center">
-                      {leaderWithTitle.title}
+                      {leader.title}
                     </Text>
                   ) : null}
                 </YStack>

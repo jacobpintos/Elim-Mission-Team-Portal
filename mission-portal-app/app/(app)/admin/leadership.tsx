@@ -174,7 +174,6 @@ export default function AdminLeadership() {
         keyExtractor={(u) => u.uid}
         renderItem={({ item }) => {
           const isLeader = leadershipTeam.includes(item.uid)
-          const userWithTitle = item as UserProfile & { title?: string }
           return (
             <XStack
               alignItems="center"
@@ -191,12 +190,12 @@ export default function AdminLeadership() {
                 </Text>
                 <RNTextInput
                   placeholder="Title (e.g. Worship Leader)"
-                  defaultValue={userWithTitle.title ?? ''}
+                  defaultValue={item.title ?? ''}
                   onChangeText={(v) => {
                     titleDraft.current[item.uid] = v
                   }}
                   onBlur={() =>
-                    saveTitle(item.uid, titleDraft.current[item.uid] ?? userWithTitle.title ?? '')
+                    saveTitle(item.uid, titleDraft.current[item.uid] ?? item.title ?? '')
                   }
                   style={{
                     fontSize: 13,

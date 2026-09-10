@@ -13,14 +13,20 @@ export const PUBLIC_PROFILES = 'publicProfiles'
 /**
  * The directory entry for a user document.
  *
- * Only the two fields that answer "who is this uid?". Everything else on a
- * user — push tokens, email, location, block list, report history — is why
- * `users` stays readable by its owner and admins only.
+ * The fields that answer "who is this uid?", and nothing else — push tokens,
+ * email, location, block list and report history are why `users` stays
+ * readable by its owner and admins only.
+ *
+ * `title` is here because the people who need it are precisely the ones shut
+ * out of `users`: a leadership title exists to be read by visitors on the
+ * Connect page, and before this it was mirrored nowhere they could reach, so
+ * only admins ever saw one.
  */
 export interface PublicProfile {
   uid: string
   displayName: string
   photoURL?: string
+  title?: string
 }
 
 /**
@@ -34,13 +40,28 @@ export function profileFrom(uid: string, data: FirebaseFirestore.DocumentData): 
   const displayName = typeof data.displayName === 'string' ? data.displayName.trim() : ''
   if (!displayName) return null
   const photoURL = typeof data.photoURL === 'string' ? data.photoURL : undefined
-  return photoURL ? { uid, displayName, photoURL } : { uid, displayName }
+  const title = typeof data.title === 'string' && data.title.trim() ? data.title.trim() : undefined
+  // Built by assignment rather than a literal with undefined values: Firestore
+  // rejects an undefined field, so an absent photo or title has to be an
+  // absent key.
+  const profile: PublicProfile = { uid, displayName }
+  if (photoURL) profile.photoURL = photoURL
+  if (title) profile.title = title
+  return profile
 }
 
 /** Do two directory entries say the same thing? */
 export function sameProfile(a: PublicProfile | null, b: PublicProfile | null): boolean {
   if (a === null || b === null) return a === b
-  return a.uid === b.uid && a.displayName === b.displayName && a.photoURL === b.photoURL
+  // Title is compared too. Without it, setting a leadership title changed
+  // nothing this function could see, the write was skipped as a no-op, and the
+  // directory kept serving an entry with no title in it.
+  return (
+    a.uid === b.uid &&
+    a.displayName === b.displayName &&
+    a.photoURL === b.photoURL &&
+    a.title === b.title
+  )
 }
 
 /**

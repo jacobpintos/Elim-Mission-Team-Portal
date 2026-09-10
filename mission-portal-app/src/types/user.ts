@@ -83,9 +83,22 @@ export interface PublicProfile {
   uid: string
   displayName: string
   photoURL?: string
+  /**
+   * The role this person is introduced by — "Lead Pastor", "Worship Director".
+   *
+   * Part of the directory rather than only the user document, because the
+   * people who read it are the ones who cannot read `users`: a title exists to
+   * be shown to visitors on the Connect page, and they are exactly who the
+   * rules on `users` shut out.
+   */
+  title?: string
 }
 
 export interface UserProfile {
+  /** Shown under the name wherever this person is introduced. Set by an admin
+   *  on the Leadership Team screen and mirrored into publicProfiles. */
+  title?: string
+
   /**
    * Hours before departure to send a flight reminder. Unset means
    * DEFAULT_FLIGHT_REMINDER_HOURS.

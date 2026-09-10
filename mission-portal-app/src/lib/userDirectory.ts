@@ -24,12 +24,14 @@ import type { PublicProfile, UserProfile } from '@/types/user'
 export function mergeUsers(directory: PublicProfile[], full: UserProfile[]): UserProfile[] {
   const byUid = new Map<string, UserProfile>()
   for (const p of directory) {
-    // Identity only. The remaining UserProfile fields are absent rather than
-    // guessed; nothing that renders a name reads them.
+    // Identity, and the title that goes under the name. The remaining
+    // UserProfile fields are absent rather than guessed; nothing that renders
+    // a name reads them.
     byUid.set(String(p.uid), {
       uid: p.uid,
       displayName: p.displayName,
       photoURL: p.photoURL,
+      title: p.title,
     } as UserProfile)
   }
   for (const u of full) byUid.set(String(u.uid), u)
