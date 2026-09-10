@@ -10,6 +10,7 @@ const TABS = [
   { key: 'story', label: 'Our Story', path: '/(app)/public/story' },
   { key: 'music', label: 'Content', path: '/(app)/public/music' },
   { key: 'photos', label: 'Photos', path: '/(app)/public/photos' },
+  { key: 'draft-connect', label: 'Draft Connect', path: '/(app)/public/draft-connect' },
 ]
 
 export default function PublicLayout() {

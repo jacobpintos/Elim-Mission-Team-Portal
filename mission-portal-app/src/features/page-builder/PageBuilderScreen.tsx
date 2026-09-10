@@ -23,7 +23,7 @@ import { SocialBlock } from './BlockRenderer/SocialBlock'
 import { useUIStore } from '@/stores/uiStore'
 import type { PageBlock, PageData } from '@/types/pages'
 
-type PageKey = 'ourstory' | 'connect' | 'giving'
+type PageKey = 'ourstory' | 'connect' | 'giving' | 'draftconnect'
 
 interface PageBuilderScreenProps {
   pageKey: PageKey
