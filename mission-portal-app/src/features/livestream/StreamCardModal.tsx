@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal, Pressable, TextInput, View, StyleSheet } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { useAuthStore } from '@/stores/authStore'
 import { useLivestreamStore } from '@/stores/livestreamStore'
@@ -36,6 +37,7 @@ function timeLeft(expiresAt: number, now: number = Date.now()): string {
  */
 export function StreamCardModal({ onClose }: { onClose: () => void }) {
   const colors = useThemeColors()
+  const insets = useSafeAreaInsets()
   const { profile } = useAuthStore()
   const toast = useUIStore((s) => s.toast)
   const { subscribe, unsubscribe, post, takeDown } = useLivestreamStore()
@@ -109,7 +111,11 @@ export function StreamCardModal({ onClose }: { onClose: () => void }) {
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <XStack
-          padding="$4"
+          paddingHorizontal="$4"
+          // Same reason as the Photos header: this sheet covers the status
+          // bar, so its own padding cannot start at the top of the window.
+          paddingTop={insets.top + 16}
+          paddingBottom="$4"
           borderBottomWidth={1}
           borderBottomColor={colors.border}
           alignItems="center"

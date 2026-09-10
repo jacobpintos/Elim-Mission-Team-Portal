@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { Modal, Pressable, ScrollView, useWindowDimensions } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -21,6 +22,7 @@ const GAP = 3
 
 export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGalleryModalProps) {
   const colors = useThemeColors()
+  const insets = useSafeAreaInsets()
   const { addPhoto, addPhotos, removePhoto } = usePhotoAlbumsStore()
   const liveAlbums = usePhotoAlbumsStore((s) => s.albums)
 
@@ -123,7 +125,12 @@ export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGall
           borderBottomWidth={1}
           borderBottomColor={colors.border}
           paddingHorizontal="$4"
-          paddingTop="$5"
+          // A full-screen Modal covers the status bar, so the padding has to
+          // start below it rather than at the top of the window. The fixed $5
+          // that was here is around twenty points — less than the inset on
+          // every notched phone — so the title and its buttons were drawn
+          // under the clock and the battery.
+          paddingTop={insets.top + 12}
           paddingBottom="$3"
           alignItems="center"
           justifyContent="space-between"
