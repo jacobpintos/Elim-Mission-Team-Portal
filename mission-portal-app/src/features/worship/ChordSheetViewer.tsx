@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal, View, ScrollView, Pressable, StyleSheet, Platform } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { YStack, XStack, Text } from 'tamagui'
 import { printAsync } from 'expo-print'
@@ -80,6 +81,7 @@ interface ChordSheetViewerProps {
 
 export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewerProps) {
   const colors = useThemeColors()
+  const insets = useSafeAreaInsets()
 
   // CCLI requires the license number on every sheet we reproduce, so this
   // screen loads it itself. It used to only read the value and rely on some
@@ -237,7 +239,16 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
 
   return (
     <Modal visible={!!sheet} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      {/* Inset the area the card is centred in, rather than the card itself.
+          Centring alone does not clear the status bar here: at 94% of the
+          screen height the margin above the card is around twenty-six points
+          on a tall phone, less than the inset, so a sheet long enough to
+          reach that cap put its title under the clock. A margin on the card
+          would not fix it either — card plus margin is then taller than the
+          screen, and centring takes most of the margin straight back. Padding
+          the overlay shrinks what the percentage is measured against, so the
+          card stays centred inside the safe area. */}
+      <View style={[styles.overlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <YStack
           backgroundColor={colors.surface}
           borderRadius="$4"

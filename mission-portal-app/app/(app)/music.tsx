@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, TextInput, Pressable, StyleSheet, Modal, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -351,6 +352,7 @@ function itemToForm(item: MusicItem): EditForm {
 
 export default function MusicScreen() {
   const colors = useThemeColors()
+  const insets = useSafeAreaInsets()
   const { profile } = useAuthStore()
   const admin = isAdmin(profile)
   const toast = useUIStore((s) => s.toast)
@@ -800,7 +802,9 @@ export default function MusicScreen() {
         animationType="slide"
         onRequestClose={() => setSeeAllSection(null)}
       >
-        <View style={[styles.editModal, { backgroundColor: colors.background }]}>
+        <View
+          style={[styles.editModal, { backgroundColor: colors.background, paddingTop: insets.top }]}
+        >
           <XStack
             padding="$4"
             borderBottomWidth={1}
@@ -880,7 +884,9 @@ export default function MusicScreen() {
         animationType="slide"
         onRequestClose={() => setShowEditModal(false)}
       >
-        <View style={[styles.editModal, { backgroundColor: colors.background }]}>
+        <View
+          style={[styles.editModal, { backgroundColor: colors.background, paddingTop: insets.top }]}
+        >
           <XStack
             padding="$4"
             borderBottomWidth={1}
@@ -1181,7 +1187,6 @@ const styles = StyleSheet.create({
   },
   editModal: {
     flex: 1,
-    paddingTop: 48,
   },
   label: {
     fontSize: 12,
