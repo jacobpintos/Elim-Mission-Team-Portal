@@ -189,8 +189,20 @@ export default function AdminLeadership() {
                   {item.displayName}
                 </Text>
                 <RNTextInput
+                  // Keyed by the person, which is what stops a title landing on
+                  // the wrong one. FlashList recycles a row's views for whoever
+                  // scrolls into that slot, and this input is uncontrolled —
+                  // defaultValue is read once, at mount, and ignored on every
+                  // render after. So a recycled row kept the text typed for the
+                  // previous person while its onBlur saved under the new
+                  // person's uid, and a title set for one of them arrived on
+                  // the other. Changing the key remounts the input, which makes
+                  // defaultValue apply again for whoever the row now shows.
+                  key={item.uid}
                   placeholder="Title (e.g. Worship Leader)"
-                  defaultValue={item.title ?? ''}
+                  // The draft first, so an edit in progress survives being
+                  // scrolled off screen and back.
+                  defaultValue={titleDraft.current[item.uid] ?? item.title ?? ''}
                   onChangeText={(v) => {
                     titleDraft.current[item.uid] = v
                   }}
