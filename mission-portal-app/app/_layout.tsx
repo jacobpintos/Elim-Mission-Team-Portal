@@ -60,12 +60,61 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+/**
+ * Where a tapped notification takes you.
+ *
+ * A component of its own, mounted only on native, because the work is a hook
+ * and a hook cannot be skipped on one platform the way a branch inside an
+ * effect can. useLastNotificationResponse calls getLastNotificationResponse,
+ * which the web build of expo-notifications does not implement — its emitter
+ * is a stub with addListener and nothing else — so calling it in the root
+ * layout threw on load and took the whole web app down with it. Rendering it
+ * nowhere on web is the only way to not call it there.
+ *
+ * The hook rather than addNotificationResponseReceivedListener, which is what
+ * this used and is what made tapping a notification do nothing. A listener
+ * only hears responses arriving after it is registered, and the tap on a
+ * notification while the app is closed is the thing that launches the app —
+ * the response lands before any of this has mounted, so the listener was
+ * always too late and the link went on the floor. The app came up on whatever
+ * screen it was last on, which looks from outside like the notification did
+ * nothing at all.
+ *
+ * Held until somebody is signed in. AuthGate redirects while auth is settling
+ * and would throw the route away; the hook keeps handing the response back
+ * until it is cleared, so waiting costs nothing.
+ */
+function NotificationRouter() {
+  const router = useRouter()
+  const fbUser = useAuthStore((s) => s.fbUser)
+  const profile = useAuthStore((s) => s.profile)
+  const lastResponse = Notifications.useLastNotificationResponse()
+
+  useEffect(() => {
+    if (!lastResponse) return
+    // A tap, not a dismissal or a button on the notification itself.
+    if (lastResponse.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return
+    if (!fbUser || !profile) return
+
+    const data = lastResponse.notification.request.content.data as { link?: string }
+    if (!data?.link) return
+
+    try {
+      // Cleared before routing, so a re-render cannot send us twice and coming
+      // back to the app later does not replay an old notification.
+      Notifications.clearLastNotificationResponse()
+    } catch (err) {
+      console.warn('Could not clear the last notification response', err)
+    }
+    router.push(data.link as Parameters<typeof router.push>[0])
+  }, [lastResponse, fbUser, profile, router])
+
+  return null
+}
+
 export default function RootLayout() {
   const init = useAuthStore((s) => s.init)
   const teardown = useAuthStore((s) => s.teardown)
-  const fbUser = useAuthStore((s) => s.fbUser)
-  const profile = useAuthStore((s) => s.profile)
-  const router = useRouter()
   const theme = useThemeStore((s) => s.theme)
   const mode = useThemeStore((s) => s.mode)
 
@@ -122,44 +171,6 @@ export default function RootLayout() {
     }
   }, [])
 
-  /**
-   * Where a tapped notification takes you.
-   *
-   * The hook rather than addNotificationResponseReceivedListener, which was
-   * what this used and is what made tapping one do nothing. A listener only
-   * hears responses that arrive after it is registered, and a tap on a
-   * notification while the app is closed *is* what launches the app — the
-   * response is delivered before any of this has mounted, so the listener was
-   * always too late and the link was dropped on the floor. The app came up on
-   * whatever screen it was last on, which from the outside looks like the
-   * notification did nothing at all. The hook reports that first response.
-   *
-   * Held until somebody is signed in. AuthGate redirects while auth is still
-   * settling, and a route pushed into that gets thrown away by the redirect —
-   * so this waits, and the hook keeps handing the response back until it does.
-   */
-  const lastResponse = Notifications.useLastNotificationResponse()
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return
-    if (!lastResponse) return
-    // A tap, not a dismissal or a button on the notification itself.
-    if (lastResponse.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return
-    if (!fbUser || !profile) return
-
-    const data = lastResponse.notification.request.content.data as { link?: string }
-    if (!data?.link) return
-
-    try {
-      // Cleared before routing, so a re-render cannot send us there twice and
-      // so returning to the app later does not replay an old notification.
-      Notifications.clearLastNotificationResponse()
-    } catch (err) {
-      console.warn('Could not clear the last notification response', err)
-    }
-    router.push(data.link as Parameters<typeof router.push>[0])
-  }, [lastResponse, fbUser, profile, router])
-
   const content = (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -169,6 +180,7 @@ export default function RootLayout() {
               <AuthGate>
                 <Slot />
               </AuthGate>
+              {Platform.OS !== 'web' ? <NotificationRouter /> : null}
               <ToastContainer />
             </ThemeProvider>
           </DynamicThemeProvider>
