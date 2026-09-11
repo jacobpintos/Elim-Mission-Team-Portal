@@ -725,6 +725,29 @@ describe('meetingRequests', () => {
     return assertSucceeds(updateDoc(doc(as(WORSHIP), 'meetingRequests/mr1'), { status: 'handled' }))
   })
 
+  it('lets a named leader say they are on it', () => {
+    // What the "I'm on it" button writes. Telling the others who has the
+    // request is the whole point of it, so a rule refusing this would leave
+    // the button silently doing nothing.
+    return assertSucceeds(
+      updateDoc(doc(as(WORSHIP), 'meetingRequests/mr1'), {
+        claimedBy: WORSHIP,
+        claimedByName: 'Worship',
+        claimedAt: Date.now(),
+      })
+    )
+  })
+
+  it('refuses a claim from someone the request was not sent to', () => {
+    return assertFails(
+      updateDoc(doc(as(MEMBER), 'meetingRequests/mr1'), {
+        claimedBy: MEMBER,
+        claimedByName: 'Member',
+        claimedAt: Date.now(),
+      })
+    )
+  })
+
   it('refuses a create from any client, admin included', () => {
     // Everything is made by sendMeetingRequest, which checks the daily limit,
     // takes the name and address off the account, and creates the task.

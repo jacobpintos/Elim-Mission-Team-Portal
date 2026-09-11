@@ -25,6 +25,17 @@ export interface MeetingRequest {
   availability: string
   message: string
   createdAt: number
+  /**
+   * Who said they would answer it, and when.
+   *
+   * Separate from handled, because claiming and finishing are different
+   * moments: somebody says they are on it, writes the email, and the
+   * conversation carries on from there. Collapsing the two would have a
+   * request read as answered the second anyone opened a draft.
+   */
+  claimedBy?: string
+  claimedByName?: string
+  claimedAt?: number
   /** The task created to answer it, so one can be found from the other. */
   taskId?: number
   status: 'open' | 'handled'

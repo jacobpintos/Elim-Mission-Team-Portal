@@ -128,7 +128,7 @@ export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames 
           and sending someone off to another screen to read them is how a
           request sits unanswered. Renders nothing for every other task. */}
       {task.taskType === 'meeting_request' && task.meetingRequestId ? (
-        <MeetingRequestPanel requestId={task.meetingRequestId} />
+        <MeetingRequestPanel task={task} />
       ) : null}
     </Pressable>
   )

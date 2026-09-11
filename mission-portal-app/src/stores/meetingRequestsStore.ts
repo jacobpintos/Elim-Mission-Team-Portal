@@ -11,6 +11,7 @@ interface MeetingRequestsStore {
   subscribe: () => void
   unsubscribe: () => void
   byId: (id?: string) => MeetingRequest | undefined
+  claim: (id: string, byUid: string, byName: string) => Promise<void>
   markHandled: (id: string, byUid: string, byName: string) => Promise<void>
 }
 
@@ -60,6 +61,14 @@ export const useMeetingRequestsStore = create<MeetingRequestsStore>((set, get) =
   },
 
   byId: (id) => (id ? get().requests.find((r) => r.id === id) : undefined),
+
+  claim: async (id, byUid, byName) => {
+    await updateDoc(doc(db, 'meetingRequests', id), {
+      claimedBy: byUid,
+      claimedByName: byName,
+      claimedAt: Date.now(),
+    })
+  },
 
   markHandled: async (id, byUid, byName) => {
     await updateDoc(doc(db, 'meetingRequests', id), {
