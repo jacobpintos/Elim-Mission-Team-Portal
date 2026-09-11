@@ -40,7 +40,14 @@ export function MeetingRequestPanel({ task }: { task: Task }) {
   const claimedByMe = !!profile && request.claimedBy === profile.uid
   const claimed = !!request.claimedBy
 
-  /** Open the draft. Never changes who has the request or what state it is in. */
+  /**
+   * Hand the draft to the mail app.
+   *
+   * Only ever reached through taking the request on. There is no button of its
+   * own for it: one that anybody asked could press invites a second person to
+   * write to somebody who has already been written to, and the visitor gets two
+   * replies from two people who each thought they had it.
+   */
   const openReply = async () => {
     const url = meetingReplyMailto(request, profile?.displayName)
     try {
@@ -111,44 +118,30 @@ export function MeetingRequestPanel({ task }: { task: Task }) {
         </Text>
       ) : null}
 
-      <XStack gap="$2" marginTop="$1" flexWrap="wrap">
-        {/* Once somebody has it, the claim is made and the button that makes it
-            would only muddy who holds the request. What is left is the draft,
-            which anyone asked may still want — to follow up, or because the
-            person on it asked them to. */}
-        {!claimed ? (
-          <Pressable onPress={onIt}>
-            <XStack
-              paddingHorizontal="$4"
-              paddingVertical="$2"
-              borderRadius="$2"
-              backgroundColor={colors.primary}
-            >
-              <Text color="white" fontSize="$2" fontWeight="700">
-                I&rsquo;m on it
-              </Text>
-            </XStack>
-          </Pressable>
-        ) : null}
-        <Pressable onPress={openReply}>
-          <XStack
-            paddingHorizontal="$3"
-            paddingVertical="$2"
-            borderRadius="$2"
-            borderWidth={1}
-            borderColor={colors.border}
-          >
-            <Text color={colors.text} fontSize="$2" fontWeight="600">
-              ✉ Reply by email
-            </Text>
+      {/* Nothing to press once it is taken. The address is above either way,
+          for whoever has it to write again from their own mail app. */}
+      {!claimed ? (
+        <>
+          <XStack marginTop="$1">
+            <Pressable onPress={onIt}>
+              <XStack
+                paddingHorizontal="$4"
+                paddingVertical="$2"
+                borderRadius="$2"
+                backgroundColor={colors.primary}
+              >
+                <Text color="white" fontSize="$2" fontWeight="700">
+                  I&rsquo;m on it
+                </Text>
+              </XStack>
+            </Pressable>
           </XStack>
-        </Pressable>
-      </XStack>
-      <Text color={colors.textMuted} fontSize="$1">
-        {claimed
-          ? 'Opens your mail app with a draft you can change. Everyone else who was asked is copied in.'
-          : 'Tells the others you have this, moves the task to in progress, and opens your mail app with a draft.'}
-      </Text>
+          <Text color={colors.textMuted} fontSize="$1">
+            Tells the others you have this, moves the task to in progress, and opens your mail app
+            with a draft.
+          </Text>
+        </>
+      ) : null}
     </YStack>
   )
 }
