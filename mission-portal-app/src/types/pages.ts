@@ -53,10 +53,21 @@ export interface EmbedData extends Record<string, unknown> {
 }
 
 export interface QuoteData extends Record<string, unknown> {
-  /** The line itself. Set larger and in the accent colour. */
+  /**
+   * The line itself. Set larger and in the accent colour.
+   *
+   * Carries its own emphasis: `*heavier*`, `_underlined_`, `^capitals^`, which
+   * nest and can be escaped with a backslash. See parseEmphasis in
+   * src/lib/textEmphasis.ts — the marks live in the text because the editor is
+   * a plain text box with no rich-text control to put in it.
+   */
   text?: string
   /** Who said it, if it is attributed. */
   attribution?: string
+  /** How loud the line is set. Defaults to 'large'. */
+  size?: 'large' | 'display'
+  /** Centre it instead of ranging left. */
+  align?: 'left' | 'center'
 }
 
 export interface GalleryData extends Record<string, unknown> {
