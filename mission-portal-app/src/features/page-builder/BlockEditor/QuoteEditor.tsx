@@ -8,9 +8,10 @@ interface QuoteEditorProps {
   onChange: (data: QuoteData) => void
 }
 
-const SIZES: { key: 'large' | 'display'; label: string }[] = [
+const SIZES: { key: 'large' | 'display' | 'huge'; label: string }[] = [
   { key: 'large', label: 'Large' },
   { key: 'display', label: 'Display' },
+  { key: 'huge', label: 'Huge' },
 ]
 
 const ALIGNS: { key: 'left' | 'center'; label: string }[] = [
@@ -86,7 +87,7 @@ export function QuoteEditor({ data, onChange }: QuoteEditorProps) {
         <Text fontSize="$3" fontWeight="600">
           Size
         </Text>
-        <XStack gap="$2">
+        <XStack gap="$2" flexWrap="wrap">
           {SIZES.map((s) => (
             <Choice
               key={s.key}
@@ -96,6 +97,10 @@ export function QuoteEditor({ data, onChange }: QuoteEditorProps) {
             />
           ))}
         </XStack>
+        <Text color={colors.textMuted} fontSize="$1" lineHeight={16}>
+          The bigger steps fit fewer words to a line on a phone. Break the line yourself with return
+          rather than leaving it to wrap where it lands.
+        </Text>
       </YStack>
 
       <YStack gap="$1">

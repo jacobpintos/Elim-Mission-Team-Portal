@@ -65,7 +65,7 @@ export interface QuoteData extends Record<string, unknown> {
   /** Who said it, if it is attributed. */
   attribution?: string
   /** How loud the line is set. Defaults to 'large'. */
-  size?: 'large' | 'display'
+  size?: 'large' | 'display' | 'huge'
   /** Centre it instead of ranging left. */
   align?: 'left' | 'center'
   /**

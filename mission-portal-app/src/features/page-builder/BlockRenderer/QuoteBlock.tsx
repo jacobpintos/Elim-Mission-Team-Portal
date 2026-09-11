@@ -8,6 +8,24 @@ interface QuoteBlockProps {
 }
 
 /**
+ * The steps a quote can be set at.
+ *
+ * Spelled out in points rather than font tokens. The token scale jumps from 30
+ * straight to 46, which is past the size a line of several words can hold on a
+ * phone — at 46 a short line like "Found in JESUS" is already wrapping. 40 is
+ * the last step that still sets that line whole.
+ *
+ * Leading is about 1.25 of the size at every step: tight enough that two lines
+ * read as one statement, loose enough that they do not collide. The first two
+ * values are what $8 and $9 resolved to, so no quote already on a page moves.
+ */
+const SIZES = {
+  large: { fontSize: 23, lineHeight: 34 },
+  display: { fontSize: 30, lineHeight: 42 },
+  huge: { fontSize: 40, lineHeight: 50 },
+} as const
+
+/**
  * A line set apart from the body around it.
  *
  * Its job on a page is to be the break between one section and the next — a
@@ -23,17 +41,15 @@ export function QuoteBlock({ data }: QuoteBlockProps) {
   const colors = useThemeColors()
   if (!data.text) return null
 
-  const display = data.size === 'display'
+  const step = SIZES[data.size ?? 'large'] ?? SIZES.large
   const centered = data.align === 'center'
   const plain = data.tone === 'plain'
   const segments = parseEmphasis(data.text)
 
   const line = (
     <Text
-      fontSize={display ? '$9' : '$8'}
-      // Roomier than the default for its size. A tagline broken over two or
-      // three lines needs air between them or it sets as a slab.
-      lineHeight={display ? 42 : 34}
+      fontSize={step.fontSize}
+      lineHeight={step.lineHeight}
       fontWeight="600"
       textAlign={centered ? 'center' : 'left'}
       color={plain ? colors.text : colors.primary}
