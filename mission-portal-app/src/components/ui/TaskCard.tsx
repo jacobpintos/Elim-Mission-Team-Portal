@@ -34,102 +34,105 @@ export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames 
 
   return (
     <Pressable onPress={onPress}>
-      <XStack
+      {/* The frame belongs to the card, not to the row inside it. A meeting
+          request hangs below the row and has to sit within the same border,
+          or the card and its request read as two tasks in a list of tasks. */}
+      <YStack
         backgroundColor={colors.surface}
         borderRadius="$3"
-        padding="$3"
-        gap="$2"
         borderWidth={1}
         borderColor={overdue ? '#c0392b' : colors.border}
-        alignItems="center"
+        overflow="hidden"
       >
-        <YStack flex={1} gap="$1">
-          <Text color={colors.text} fontWeight="600" fontSize="$3" numberOfLines={2}>
-            {task.title}
-          </Text>
-          <XStack gap="$2" alignItems="center" flexWrap="wrap">
-            {task.dueDate ? (
-              <Text color={overdue ? '#c0392b' : colors.textMuted} fontSize="$2">
-                Due {FD(task.dueDate)}
-              </Text>
-            ) : null}
-            {task.status === 'behind' && task.projectedDate ? (
-              <Text color="#e67e22" fontSize="$2">
-                · Projected {FD(task.projectedDate)}
-              </Text>
-            ) : null}
-            {eventTitle ? (
-              <Text color={colors.textMuted} fontSize="$2">
-                · {eventTitle}
-              </Text>
-            ) : null}
-            {overdue ? (
-              <XStack
-                backgroundColor="#c0392b"
-                borderRadius={99}
-                paddingHorizontal="$2"
-                paddingVertical={2}
-              >
-                <Text color="white" fontSize={10} fontWeight="600">
-                  Overdue
-                </Text>
-              </XStack>
-            ) : null}
-            {task.status !== 'done' ? (
-              <XStack
-                backgroundColor={STATUS_COLORS[task.status]}
-                borderRadius={99}
-                paddingHorizontal="$2"
-                paddingVertical={2}
-              >
-                <Text color="white" fontSize={10} fontWeight="600">
-                  {STATUS_LABELS[task.status] ?? task.status}
-                </Text>
-              </XStack>
-            ) : !overdue ? (
-              <XStack
-                backgroundColor={STATUS_COLORS.done}
-                borderRadius={99}
-                paddingHorizontal="$2"
-                paddingVertical={2}
-              >
-                <Text color="white" fontSize={10} fontWeight="600">
-                  Completed
-                </Text>
-              </XStack>
-            ) : null}
-          </XStack>
-          {assigneeNames && assigneeNames.length > 0 ? (
-            <Text color={colors.textMuted} fontSize="$2">
-              {assigneeNames.join(', ')}
+        <XStack padding="$3" gap="$2" alignItems="center">
+          <YStack flex={1} gap="$1">
+            <Text color={colors.text} fontWeight="600" fontSize="$3" numberOfLines={2}>
+              {task.title}
             </Text>
-          ) : null}
-        </YStack>
-        {onComplete && task.status !== 'done' ? (
-          <Pressable onPress={onComplete}>
-            <XStack
-              width={32}
-              height={32}
-              borderRadius={16}
-              borderWidth={2}
-              borderColor={colors.primary}
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Text color={colors.primary} fontSize="$3">
-                ✓
-              </Text>
+            <XStack gap="$2" alignItems="center" flexWrap="wrap">
+              {task.dueDate ? (
+                <Text color={overdue ? '#c0392b' : colors.textMuted} fontSize="$2">
+                  Due {FD(task.dueDate)}
+                </Text>
+              ) : null}
+              {task.status === 'behind' && task.projectedDate ? (
+                <Text color="#e67e22" fontSize="$2">
+                  · Projected {FD(task.projectedDate)}
+                </Text>
+              ) : null}
+              {eventTitle ? (
+                <Text color={colors.textMuted} fontSize="$2">
+                  · {eventTitle}
+                </Text>
+              ) : null}
+              {overdue ? (
+                <XStack
+                  backgroundColor="#c0392b"
+                  borderRadius={99}
+                  paddingHorizontal="$2"
+                  paddingVertical={2}
+                >
+                  <Text color="white" fontSize={10} fontWeight="600">
+                    Overdue
+                  </Text>
+                </XStack>
+              ) : null}
+              {task.status !== 'done' ? (
+                <XStack
+                  backgroundColor={STATUS_COLORS[task.status]}
+                  borderRadius={99}
+                  paddingHorizontal="$2"
+                  paddingVertical={2}
+                >
+                  <Text color="white" fontSize={10} fontWeight="600">
+                    {STATUS_LABELS[task.status] ?? task.status}
+                  </Text>
+                </XStack>
+              ) : !overdue ? (
+                <XStack
+                  backgroundColor={STATUS_COLORS.done}
+                  borderRadius={99}
+                  paddingHorizontal="$2"
+                  paddingVertical={2}
+                >
+                  <Text color="white" fontSize={10} fontWeight="600">
+                    Completed
+                  </Text>
+                </XStack>
+              ) : null}
             </XStack>
-          </Pressable>
-        ) : null}
-      </XStack>
-      {/* A meeting request is the one task whose detail is the point of it:
+            {assigneeNames && assigneeNames.length > 0 ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                {assigneeNames.join(', ')}
+              </Text>
+            ) : null}
+          </YStack>
+          {onComplete && task.status !== 'done' ? (
+            <Pressable onPress={onComplete}>
+              <XStack
+                width={32}
+                height={32}
+                borderRadius={16}
+                borderWidth={2}
+                borderColor={colors.primary}
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Text color={colors.primary} fontSize="$3">
+                  ✓
+                </Text>
+              </XStack>
+            </Pressable>
+          ) : null}
+        </XStack>
+        {/* A meeting request is the one task whose detail is the point of it:
           the availability and the message are what the reply has to answer,
           and sending someone off to another screen to read them is how a
           request sits unanswered. Renders nothing for every other task. */}
-      {task.taskType === 'meeting_request' && task.meetingRequestId ? (
-        <MeetingRequestPanel task={task} />
-      ) : null}
+        {task.taskType === 'meeting_request' && task.meetingRequestId ? (
+          <MeetingRequestPanel task={task} />
+        ) : null}
+      </YStack>
     </Pressable>
   )
 }

@@ -100,13 +100,13 @@ export function MeetingRequestPanel({ task }: { task: Task }) {
 
   return (
     <YStack
-      marginTop="$2"
       padding="$3"
       gap="$2"
-      borderRadius="$3"
-      borderWidth={1}
-      borderColor={colors.border}
-      backgroundColor={colors.surface}
+      // A rule rather than a frame. This sits inside the task's own card, so a
+      // border of its own would draw a second card and the pair would read as
+      // two separate tasks.
+      borderTopWidth={1}
+      borderTopColor={colors.border}
     >
       {row('From', `${request.fromName} · ${request.fromEmail}`)}
       {row('Available', request.availability)}
