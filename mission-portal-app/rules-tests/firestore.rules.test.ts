@@ -76,6 +76,17 @@ beforeEach(async () => {
       createdAt: Date.now(),
       expiresAt: Date.now() + 6 * 60 * 60 * 1000,
     })
+    await setDoc(doc(db, 'meetingRequests', 'mr1'), {
+      id: 'mr1',
+      fromUid: OUTSIDER,
+      fromName: 'Outsider',
+      fromEmail: 'outsider@example.com',
+      leaders: [WORSHIP],
+      availability: 'Sunday afternoons',
+      message: 'Would love to talk.',
+      createdAt: Date.now(),
+      status: 'open',
+    })
     await setDoc(doc(db, 'livestreams', 'expired1'), {
       title: 'Last Sunday',
       youtubeUrl: 'https://www.youtube.com/live/4xzDTAGJ1bY',
@@ -681,5 +692,54 @@ describe('livestreams', () => {
       })
     )
     await assertFails(deleteDoc(doc(as(MEMBER), 'livestreams/live1')))
+  })
+})
+
+describe('meetingRequests', () => {
+  it('lets a leader named on the request read it', () => {
+    // The reason the rule is not admin-only: a worship leader holds no admin
+    // role, and was being notified about a request and then refused the
+    // document describing it.
+    return assertSucceeds(getDoc(doc(as(WORSHIP), 'meetingRequests/mr1')))
+  })
+
+  it('lets an admin read any request', () => {
+    return assertSucceeds(getDoc(doc(as(ADMIN), 'meetingRequests/mr1')))
+  })
+
+  it('refuses a request to a member it was not addressed to', () => {
+    return assertFails(getDoc(doc(as(MEMBER), 'meetingRequests/mr1')))
+  })
+
+  it('refuses a request to the person who sent it', () => {
+    // They know what they asked; the answer comes to them by other means. The
+    // document carries the leaders' handling of it, which is not theirs.
+    return assertFails(getDoc(doc(as(OUTSIDER), 'meetingRequests/mr1')))
+  })
+
+  it('refuses a request to signed-out readers', () => {
+    return assertFails(getDoc(doc(anon(), 'meetingRequests/mr1')))
+  })
+
+  it('lets a named leader close the request off', () => {
+    return assertSucceeds(updateDoc(doc(as(WORSHIP), 'meetingRequests/mr1'), { status: 'handled' }))
+  })
+
+  it('refuses a create from any client, admin included', () => {
+    // Everything is made by sendMeetingRequest, which checks the daily limit,
+    // takes the name and address off the account, and creates the task.
+    return assertFails(
+      setDoc(doc(as(ADMIN), 'meetingRequests/forged'), {
+        leaders: [WORSHIP],
+        fromUid: ADMIN,
+        availability: 'any time',
+        status: 'open',
+      })
+    )
+  })
+
+  it('lets only an admin delete one', async () => {
+    await assertFails(deleteDoc(doc(as(WORSHIP), 'meetingRequests/mr1')))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'meetingRequests/mr1')))
   })
 })

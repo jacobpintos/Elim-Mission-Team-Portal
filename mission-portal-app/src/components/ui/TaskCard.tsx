@@ -3,6 +3,7 @@ import { XStack, YStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { FD } from '@/lib/format'
 import { isOverdue } from '@/lib/availability'
+import { MeetingRequestPanel } from '@/features/meetings/MeetingRequestPanel'
 import type { Task } from '@/types/events'
 
 interface TaskCardProps {
@@ -122,6 +123,13 @@ export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames 
           </Pressable>
         ) : null}
       </XStack>
+      {/* A meeting request is the one task whose detail is the point of it:
+          the availability and the message are what the reply has to answer,
+          and sending someone off to another screen to read them is how a
+          request sits unanswered. Renders nothing for every other task. */}
+      {task.taskType === 'meeting_request' && task.meetingRequestId ? (
+        <MeetingRequestPanel requestId={task.meetingRequestId} />
+      ) : null}
     </Pressable>
   )
 }

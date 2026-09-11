@@ -141,10 +141,17 @@ export interface Task {
   overdueNotified?: boolean
   notifiedDueWeekAt?: string | null // date str this task's 1-week-out reminder was sent, for dedup
   notifiedDueTodayAt?: string | null // date str this task's due-today reminder was sent, for dedup
-  taskType?: 'kaizen_verification' | 'kaizen_action' | 'issue_corrective' | 'worship_setlist_ack'
+  taskType?:
+    | 'kaizen_verification'
+    | 'kaizen_action'
+    | 'issue_corrective'
+    | 'worship_setlist_ack'
+    | 'meeting_request'
   kaizenId?: string | number
   issueId?: string | number
   setListId?: string | number
+  /** The meetingRequests document this task is asking someone to answer. */
+  meetingRequestId?: string
   isPostEvent?: boolean
   doneAt?: unknown
   _updatedAt?: unknown

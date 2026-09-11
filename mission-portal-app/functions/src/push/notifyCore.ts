@@ -102,7 +102,7 @@ function nanoid(): string {
  * as a flat string (the actual shape registerPushToken.ts writes) or as an
  * object (the shape UserProfile's TS type claims) — mirrors the defensive
  * handling already used in publicNotifications.ts. */
-function extractTokens(pushTokens: unknown): string[] {
+export function extractTokens(pushTokens: unknown): string[] {
   if (!pushTokens || typeof pushTokens !== 'object') return []
   const tokens: string[] = []
   for (const val of Object.values(pushTokens as Record<string, unknown>)) {

@@ -185,10 +185,23 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Somebody asking to meet one of the leadership team.
+    //
+    // Read by an admin, and by the people it was actually addressed to. Admin
+    // alone was too narrow the moment titles went on: a Worship Leader or a
+    // Childcare lead holds no admin role, so they were being notified about a
+    // request and then refused the document that described it.
+    //
+    // Nothing is created from a client. sendMeetingRequest checks the daily
+    // limit, takes the sender's name and address from their account rather
+    // than the form, and creates the task that goes with it — none of which a
+    // direct write would do.
     match /meetingRequests/{id} {
-      allow read: if isAdmin();
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin();
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid in resource.data.leaders);
+      allow create: if false;
+      // The people it was sent to may close it off; only an admin may remove it.
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid in resource.data.leaders);
+      allow delete: if isAdmin();
     }
 
     match /issues/{id} {
