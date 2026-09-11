@@ -51,14 +51,12 @@ export function MeetingRequestPanel({ task }: { task: Task }) {
   const openReply = async () => {
     const url = meetingReplyMailto(request, profile?.displayName)
     try {
-      // Checked first because a device with no mail account configured has
-      // nothing to hand this to, and openURL fails in a way that reads like the
-      // button is broken rather than like there is no mail app.
-      const supported = await Linking.canOpenURL(url)
-      if (!supported) {
-        toast(`No mail app is set up. Write to ${request.fromEmail}`, 'info')
-        return
-      }
+      // Straight to openURL, with no canOpenURL check in front of it. That
+      // check was here to tell somebody with no mail app why nothing happened,
+      // and it was the reason nothing happened: on iOS canOpenURL answers false
+      // for any scheme not listed in LSApplicationQueriesSchemes, this app
+      // lists none, so it answered false for mailto every time and the mail app
+      // was never asked for. openURL carries no such requirement.
       await Linking.openURL(url)
     } catch {
       toast(`Could not open a mail app. Write to ${request.fromEmail}`, 'error')
