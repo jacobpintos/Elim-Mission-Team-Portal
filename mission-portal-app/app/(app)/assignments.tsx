@@ -3,7 +3,7 @@ import { ScrollView, Pressable, Modal, View, TextInput, StyleSheet } from 'react
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { RecipientPicker } from '@/components/ui/RecipientPicker'
 import { YStack, XStack, Text, Input } from 'tamagui'
-import { Stack } from 'expo-router'
+import { Stack, useLocalSearchParams } from 'expo-router'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
@@ -1185,6 +1185,17 @@ export default function Assignments() {
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [groups, setGroups] = useState<GroupDoc[]>([])
 
+  /**
+   * The task a notification asked for, lifted out of the list.
+   *
+   * Tapping a push about a meeting request lands here, and landing on a list
+   * of forty tasks is barely better than landing nowhere. The task named in
+   * the link is shown on its own at the top, above and regardless of whatever
+   * filter the screen was last left on, so the request inside it is the first
+   * thing on the screen.
+   */
+  const { taskId: focusTaskId } = useLocalSearchParams<{ taskId?: string }>()
+
   const [filter, setFilter] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
   const [showDone, setShowDone] = useState(false)
@@ -1218,6 +1229,14 @@ export default function Assignments() {
   }, [admin])
 
   const baseTasks = adminView === 'all' ? tasksStore.tasks : tasksStore.myTasks(uid)
+
+  // Looked up in the whole store rather than in baseTasks, so a task reached
+  // from a notification still appears when the screen happens to be filtered
+  // to somebody else's work. Absent when the id matches nothing, which is what
+  // a link to a task since deleted should do — show the list, not an error.
+  const focusedTask = focusTaskId
+    ? tasksStore.tasks.find((t) => String(t.id) === String(focusTaskId))
+    : undefined
 
   const filtered = baseTasks.filter((t) => {
     if (search) {
@@ -1656,6 +1675,18 @@ export default function Assignments() {
         /* Task list view */
         <ScrollView style={{ flex: 1 }}>
           <YStack padding="$3" gap="$3">
+            {focusedTask ? (
+              <TaskGroup
+                title="Asked for"
+                tasks={[focusedTask]}
+                color={colors.primary}
+                colors={colors}
+                onComplete={handleComplete}
+                onTaskPress={handleTaskPress}
+                getEventTitle={getEventTitle}
+                resolveUser={displayName}
+              />
+            ) : null}
             {filter === 'all' || filter === 'overdue' ? (
               <TaskGroup
                 title={`⚠ Overdue (${overdue.length})`}

@@ -147,7 +147,16 @@ export const sendMeetingRequest = onCall(async (request) => {
       tokens,
       'Meeting request',
       `${fromName} asked to meet with you.`,
-      { type: 'meetingRequest', id: ref.id, link: '/(app)/meeting-requests' },
+      {
+        type: 'meetingRequest',
+        id: ref.id,
+        taskId: String(taskId),
+        // The task, not a screen of its own. The request is shown inside its
+        // task, and `taskId` is what the assignments screen uses to lift that
+        // one to the top — otherwise a tap lands on a list and leaves somebody
+        // hunting for the thing they were just told about.
+        link: `/(app)/assignments?taskId=${taskId}`,
+      },
       // Not batched and not held. A request to meet is a person waiting on an
       // answer, and the whole point of keeping it out of the notifications
       // list is that it should not queue behind anything.
