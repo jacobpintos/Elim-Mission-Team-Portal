@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { isAdmin } from '@/lib/roles'
+import { confirmAsync } from '@/lib/confirm'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { composeDraftConnect } from './draftConnect'
 import type { PageBlock } from '@/types/pages'
@@ -13,10 +14,10 @@ import type { PageBlock } from '@/types/pages'
 /**
  * Fills the draft with a rearrangement of the live Connect page.
  *
- * Offered only while the draft is empty, and only to an admin. Once there are
- * blocks it takes itself away, because everything past that point is the
- * builder's job — this exists to save an admin retyping four blocks and two
- * image addresses that the app can already read for itself.
+ * Offered to an admin, and it stays offered. A draft whose whole purpose is to
+ * try an arrangement has to be re-runnable: the composer changes, or Connect
+ * changes, and the draft needs to be able to catch up. Rebuilding discards
+ * what is here, so it asks first.
  *
  * It never touches the Connect page. The draft is a separate key in the same
  * config document, so this can be run, edited, thrown away and run again
@@ -42,19 +43,26 @@ export function DraftConnectSeed() {
   }, [])
 
   if (!isAdmin(profile)) return null
-  // Still loading, or the draft already has content and this has done its job.
-  if (draftCount === null || draftCount > 0) return null
+  if (draftCount === null) return null
 
   const canSeed = (source?.length ?? 0) > 0
+  const hasDraft = draftCount > 0
 
   const seed = async () => {
     if (!source?.length) return
+    if (hasDraft) {
+      const ok = await confirmAsync(
+        'This replaces every block in the draft with a fresh arrangement of the Connect page. Anything edited here is lost. The Connect page itself is not touched.',
+        { title: 'Rebuild the draft?', confirmLabel: 'Rebuild', destructive: true }
+      )
+      if (!ok) return
+    }
     setBusy(true)
     try {
       await updateDoc(doc(db, 'config', 'main'), {
         'publicPages.draftconnect': { blocks: composeDraftConnect(source), bgImage: '' },
       })
-      toast('Draft built from Connect', 'success')
+      toast(hasDraft ? 'Draft rebuilt from Connect' : 'Draft built from Connect', 'success')
     } catch (err) {
       const reason = err instanceof Error ? err.message : ''
       toast(reason ? `Could not build draft: ${reason}` : 'Could not build draft', 'error')
@@ -74,12 +82,14 @@ export function DraftConnectSeed() {
       backgroundColor={colors.surface}
     >
       <Text color={colors.text} fontSize="$4" fontWeight="700">
-        Start this draft from Connect
+        {hasDraft ? 'Rebuild this draft from Connect' : 'Start this draft from Connect'}
       </Text>
       <Text color={colors.textMuted} fontSize="$3">
-        {canSeed
-          ? 'Copies every block from the Connect page and lays them out in a different order — welcome, then who we are, then when and where, then who to talk to. The photographs and wording come across unchanged, the hero goes back to white text on a dark scrim, and the Connect page itself is untouched. Edit Page works on it afterwards like any other.'
-          : 'The Connect page has no blocks to copy yet. Add them there first, or build this draft from scratch with Edit Page.'}
+        {!canSeed
+          ? 'The Connect page has no blocks to copy yet. Add them there first, or build this draft from scratch with Edit Page.'
+          : hasDraft
+            ? 'Takes a fresh copy of the Connect page and arranges it again, replacing everything in this draft. Use it after editing Connect, or to start over. The Connect page itself is never touched.'
+            : 'Copies every block from the Connect page and lays them out in a different order — welcome, then who we are, then when and where, then who to talk to. The photographs and wording come across unchanged, the hero goes back to white text on a dark scrim, the tagline is centred, and the Connect page itself is untouched. Edit Page works on it afterwards like any other.'}
       </Text>
       {canSeed ? (
         <XStack marginTop="$1">
@@ -92,7 +102,11 @@ export function DraftConnectSeed() {
               opacity={busy ? 0.6 : 1}
             >
               <Text color="white" fontSize="$3" fontWeight="600">
-                {busy ? 'Building…' : 'Build draft from Connect'}
+                {busy
+                  ? 'Building…'
+                  : hasDraft
+                    ? 'Rebuild from Connect'
+                    : 'Build draft from Connect'}
               </Text>
             </XStack>
           </Pressable>

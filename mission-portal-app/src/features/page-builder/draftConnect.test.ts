@@ -92,4 +92,25 @@ describe('composeDraftConnect', () => {
     const out = composeDraftConnect([block(1, 'text', { content: 'Hello' })], 1000)
     expect(out.map((b) => b.type)).toEqual(['text'])
   })
+
+  it('centres the tagline so it reads as a statement, not a heading', () => {
+    const quote = composeDraftConnect(live, 1000).find((b) => b.type === 'quote')!
+    expect(quote.data.align).toBe('center')
+    expect(quote.data.text).toBe('Bringing a Generation to the Rest Found in Jesus')
+  })
+
+  it('leaves a size somebody already chose alone', () => {
+    const withDisplay = live.map((b) =>
+      b.type === 'quote' ? block(3, 'quote', { text: 'A line', size: 'display' }) : b
+    )
+    const quote = composeDraftConnect(withDisplay, 1000).find((b) => b.type === 'quote')!
+    expect(quote.data.size).toBe('display')
+  })
+
+  it('does not guess which words to emphasise', () => {
+    // The marks are the editor's to place: choosing them means knowing what
+    // the sentence is for, and this composer only knows it found a quote.
+    const quote = composeDraftConnect(live, 1000).find((b) => b.type === 'quote')!
+    expect(quote.data.text).not.toMatch(/[*_^]/)
+  })
 })

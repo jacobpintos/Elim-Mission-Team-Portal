@@ -21,6 +21,17 @@ import type { PageBlock } from '@/types/pages'
  * Leadership and the meeting form go last, where someone has read enough to
  * want them. A form is a closing move.
  *
+ * The tagline is centred. Ranged left at that size it reads as a heading —
+ * something that starts a section — and a mission statement is not starting
+ * anything, it is standing on its own. Centring is what tells the eye that.
+ * The size is left alone: the display step is thirty points, and a line this
+ * long set that big runs to five lines on a phone, which is a wall rather than
+ * a statement.
+ *
+ * Which words carry the weight is not decided here. The marks exist for it,
+ * but choosing them means knowing what the sentence is for, and this composer
+ * only knows it found a quote block.
+ *
  * The hero is forced back to white text over a dark scrim. Those are already
  * the defaults in HeroBlock; the live page overrides them to orange over an
  * unshaded photograph of a bright room, which is why its heading is hard to
@@ -61,7 +72,10 @@ export function composeDraftConnect(source: PageBlock[], now: number = Date.now(
     hero,
     hero ? { ...hero.data, textColor: '#ffffff', overlayColor: 'rgba(0,0,0,0.55)' } : undefined
   )
-  push(quote)
+  push(
+    quote,
+    quote ? { ...quote.data, align: 'center', size: quote.data.size ?? 'large' } : undefined
+  )
   push(twocol)
   if (meeting) {
     out.push({ id: now + n++, type: 'divider', data: {} })
