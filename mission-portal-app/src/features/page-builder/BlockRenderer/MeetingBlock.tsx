@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { Avatar } from '@/components/ui/Avatar'
+import { chunkIntoRows } from '@/lib/gridRows'
 import type { MeetingData } from '@/types/pages'
 import type { UserProfile } from '@/types/user'
 
@@ -136,9 +137,14 @@ export function MeetingBlock({ data }: MeetingBlockProps) {
           <Text fontWeight="700" fontSize="$4">
             Our Leadership
           </Text>
-          <XStack flexWrap="wrap" gap="$3">
-            {leaders.map((leader) => {
-              return (
+          {/* Rows dealt out evenly rather than one wrapping row, so five people
+              are three and two centred under each other instead of four and a
+              lone fifth against the left edge. Cells keep the width they would
+              have at the full column count, which is what keeps the short row
+              reading as part of the same grid. */}
+          {chunkIntoRows(leaders, numCols).map((row, rowIndex) => (
+            <XStack key={rowIndex} gap="$3" justifyContent="center">
+              {row.map((leader) => (
                 <YStack
                   key={leader.uid}
                   alignItems="center"
@@ -155,9 +161,9 @@ export function MeetingBlock({ data }: MeetingBlockProps) {
                     </Text>
                   ) : null}
                 </YStack>
-              )
-            })}
-          </XStack>
+              ))}
+            </XStack>
+          ))}
         </YStack>
       )}
 
