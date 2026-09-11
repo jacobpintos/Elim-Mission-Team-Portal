@@ -18,6 +18,11 @@ const ALIGNS: { key: 'left' | 'center'; label: string }[] = [
   { key: 'center', label: 'Centred' },
 ]
 
+const TONES: { key: 'accent' | 'plain'; label: string }[] = [
+  { key: 'accent', label: 'Whole line' },
+  { key: 'plain', label: 'Marked words only' },
+]
+
 function Choice({
   label,
   selected,
@@ -51,6 +56,8 @@ export function QuoteEditor({ data, onChange }: QuoteEditorProps) {
   const update = (patch: Partial<QuoteData>) => onChange({ ...data, ...patch })
   const size = data.size ?? 'large'
   const align = data.align ?? 'left'
+  const tone = data.tone ?? 'accent'
+  const boxed = data.boxed ?? false
 
   return (
     <YStack gap="$3">
@@ -104,6 +111,36 @@ export function QuoteEditor({ data, onChange }: QuoteEditorProps) {
               onPress={() => update({ align: a.key })}
             />
           ))}
+        </XStack>
+      </YStack>
+
+      <YStack gap="$1">
+        <Text fontSize="$3" fontWeight="600">
+          Colour
+        </Text>
+        <XStack gap="$2">
+          {TONES.map((t) => (
+            <Choice
+              key={t.key}
+              label={t.label}
+              selected={tone === t.key}
+              onPress={() => update({ tone: t.key })}
+            />
+          ))}
+        </XStack>
+        <Text color={colors.textMuted} fontSize="$1" lineHeight={16}>
+          A long line set entirely in the theme colour has nowhere for the eye to land. Choose
+          &ldquo;marked words only&rdquo; and pick the word out with ~ instead.
+        </Text>
+      </YStack>
+
+      <YStack gap="$1">
+        <Text fontSize="$3" fontWeight="600">
+          Panel
+        </Text>
+        <XStack gap="$2">
+          <Choice label="None" selected={!boxed} onPress={() => update({ boxed: false })} />
+          <Choice label="Boxed" selected={boxed} onPress={() => update({ boxed: true })} />
         </XStack>
       </YStack>
 

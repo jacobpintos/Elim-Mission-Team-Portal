@@ -16,10 +16,18 @@ describe('parseEmphasis', () => {
     ])
   })
 
-  it('reads each of the three marks', () => {
+  it('reads each of the four marks', () => {
     expect(parseEmphasis('*a*')).toEqual([{ text: 'a', bold: true }])
     expect(parseEmphasis('_b_')).toEqual([{ text: 'b', underline: true }])
     expect(parseEmphasis('^c^')).toEqual([{ text: 'c', caps: true }])
+    expect(parseEmphasis('~d~')).toEqual([{ text: 'd', accent: true }])
+  })
+
+  it('picks one word out in the accent colour', () => {
+    expect(parseEmphasis('Found in ~*JESUS*~')).toEqual([
+      { text: 'Found in ' },
+      { text: 'JESUS', bold: true, accent: true },
+    ])
   })
 
   it('nests marks in any order', () => {

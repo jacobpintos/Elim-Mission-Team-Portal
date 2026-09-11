@@ -68,6 +68,14 @@ export interface QuoteData extends Record<string, unknown> {
   size?: 'large' | 'display'
   /** Centre it instead of ranging left. */
   align?: 'left' | 'center'
+  /**
+   * Whether the whole line carries the accent colour, or only the words marked
+   * with `~`. Defaults to 'accent', which is how every quote read before the
+   * choice existed.
+   */
+  tone?: 'accent' | 'plain'
+  /** Set the line inside a ruled panel rather than letting it sit on the page. */
+  boxed?: boolean
 }
 
 export interface GalleryData extends Record<string, unknown> {

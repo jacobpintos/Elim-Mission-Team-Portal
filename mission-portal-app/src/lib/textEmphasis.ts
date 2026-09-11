@@ -8,6 +8,7 @@
  *   *word*   heavier
  *   _word_   underlined
  *   ^word^   set in capitals
+ *   ~word~   picked out in the theme's accent colour
  *
  * They nest, in any order: `*^rest^*` is bold capitals. A backslash before a
  * mark makes it an ordinary character — `\*` is an asterisk.
@@ -23,9 +24,10 @@ export interface EmphasisSegment {
   bold?: boolean
   underline?: boolean
   caps?: boolean
+  accent?: boolean
 }
 
-const MARKS = { '*': 'bold', _: 'underline', '^': 'caps' } as const
+const MARKS = { '*': 'bold', _: 'underline', '^': 'caps', '~': 'accent' } as const
 type MarkChar = keyof typeof MARKS
 
 /** Split a line into runs of text, each carrying the marks in force over it. */
@@ -71,5 +73,5 @@ export function parseEmphasis(input: string): EmphasisSegment[] {
 
 /** True when the text carries no marks at all, so callers can skip the work. */
 export function hasEmphasis(input: string): boolean {
-  return /(?<!\\)[*_^]/.test(input)
+  return /(?<!\\)[*_^~]/.test(input)
 }
