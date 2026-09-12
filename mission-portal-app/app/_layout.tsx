@@ -10,6 +10,7 @@ import * as Sentry from '@sentry/react-native'
 import * as Notifications from 'expo-notifications'
 import { DynamicThemeProvider } from '@/theme/DynamicThemeProvider'
 import { useAuthStore } from '@/stores/authStore'
+import { takePendingNotificationLink } from '@/lib/notificationLink'
 import { useThemeStore } from '@/stores/themeStore'
 import { ToastContainer } from '@/components/ui/Toast'
 
@@ -49,8 +50,14 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     } else if (fbUser && profile && inAuth && !isLegal) {
       // Navigate directly to avoid competing with index.tsx's <Redirect>
       if (profile) {
+        // Somebody who got here by tapping a notification goes where the
+        // notification pointed, not to their first tab. Routing to the tab and
+        // moving them afterwards is the same destination with a frame of the
+        // wrong screen in front of it, and on a cold start that frame is
+        // exactly when the app is slowest and the flash most visible.
+        const pending = takePendingNotificationLink()
         const firstTab = visibleTabs(profile)[0] ?? 'home'
-        router.replace(`/(app)/${firstTab}` as never)
+        router.replace((pending ?? `/(app)/${firstTab}`) as never)
       }
       // profile=null: no-op, stay at auth route until Firestore snapshot fires
     }
@@ -87,6 +94,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 function NotificationRouter() {
   const router = useRouter()
   const segments = useSegments()
+  // Which tap has already been acted on. AuthGate takes the one that launched
+  // the app, and clearing it should stop this hook seeing it — but the hook
+  // holds its own copy in state, and a clear it has not processed yet would
+  // otherwise send somebody to the same screen a second time.
+  const handled = useRef<string | null>(null)
   const fbUser = useAuthStore((s) => s.fbUser)
   const profile = useAuthStore((s) => s.profile)
   const lastResponse = Notifications.useLastNotificationResponse()
@@ -106,6 +118,10 @@ function NotificationRouter() {
 
     const data = lastResponse.notification.request.content.data as { link?: string }
     if (!data?.link) return
+
+    const id = lastResponse.notification.request.identifier
+    if (handled.current === id) return
+    handled.current = id
 
     try {
       // Cleared before routing, so a re-render cannot send us twice and coming
