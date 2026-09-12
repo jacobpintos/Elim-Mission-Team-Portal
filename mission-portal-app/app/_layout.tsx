@@ -86,15 +86,23 @@ function AuthGate({ children }: { children: React.ReactNode }) {
  */
 function NotificationRouter() {
   const router = useRouter()
+  const segments = useSegments()
   const fbUser = useAuthStore((s) => s.fbUser)
   const profile = useAuthStore((s) => s.profile)
   const lastResponse = Notifications.useLastNotificationResponse()
+
+  // Already inside the signed-in group, which is the condition that makes a
+  // push land. Two things are true only once it is: the navigator holding
+  // those routes has mounted, so a push is not swallowed by a tree that does
+  // not exist yet; and AuthGate has finished sending us to the first tab, so
+  // there is no replace still to come that would land on top of ours.
+  const inApp = (segments as string[])[0] === '(app)'
 
   useEffect(() => {
     if (!lastResponse) return
     // A tap, not a dismissal or a button on the notification itself.
     if (lastResponse.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return
-    if (!fbUser || !profile) return
+    if (!fbUser || !profile || !inApp) return
 
     const data = lastResponse.notification.request.content.data as { link?: string }
     if (!data?.link) return
@@ -106,8 +114,14 @@ function NotificationRouter() {
     } catch (err) {
       console.warn('Could not clear the last notification response', err)
     }
-    router.push(data.link as Parameters<typeof router.push>[0])
-  }, [lastResponse, fbUser, profile, router])
+    try {
+      router.push(data.link as Parameters<typeof router.push>[0])
+    } catch (err) {
+      // A link from an older notification may name a route that no longer
+      // exists. Staying where we are beats taking the app down over it.
+      console.warn('Could not open the notification link', data.link, err)
+    }
+  }, [lastResponse, fbUser, profile, inApp, router])
 
   return null
 }
