@@ -1,5 +1,5 @@
 import { Linking, Platform } from 'react-native'
-import type { EventTemplate } from '@/types/events'
+import type { EventTemplate, LodgingEntry } from '@/types/events'
 
 export function eventMapQuery(
   ev: Pick<EventTemplate, 'location' | 'address' | 'city' | 'state'>
@@ -16,4 +16,12 @@ export function openLocationInMaps(location: string) {
     // fallback to Google Maps web
     Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(location)}`)
   })
+}
+
+/**
+ * A hotel's address alone can be ambiguous ("100 Main St" exists everywhere),
+ * so lead with the hotel name — maps resolves the pair far more reliably.
+ */
+export function lodgingMapQuery(entry: Pick<LodgingEntry, 'name' | 'address'>): string {
+  return [entry.name, entry.address].filter(Boolean).join(', ')
 }

@@ -1,7 +1,9 @@
 export interface LodgingEntry {
   id: string
   name: string
+  address?: string
   room?: string
+  confirmation?: string
   assignees: string[]
 }
 

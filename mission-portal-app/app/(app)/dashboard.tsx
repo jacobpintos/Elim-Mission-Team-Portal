@@ -194,6 +194,13 @@ export default function Dashboard() {
                       .filter(Boolean)
                       .join(' · ')}
                   </Text>
+                  {entry.address || entry.confirmation ? (
+                    <Text color={colors.textMuted} fontSize="$2">
+                      {[entry.address, entry.confirmation ? `Conf #${entry.confirmation}` : null]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  ) : null}
                 </YStack>
               </Pressable>
             ))}

@@ -55,7 +55,17 @@ export function LodgingEditor({
   }
 
   const addEntry = () => {
-    onChange([...entries, { id: Date.now().toString(), name: '', room: '', assignees: [] }])
+    onChange([
+      ...entries,
+      {
+        id: Date.now().toString(),
+        name: '',
+        address: '',
+        room: '',
+        confirmation: '',
+        assignees: [],
+      },
+    ])
     setExpandedIdx(entries.length)
   }
 
@@ -143,6 +153,41 @@ export function LodgingEditor({
                   ✕
                 </Text>
               </Pressable>
+            </XStack>
+
+            {/* Address + confirmation number row */}
+            <XStack gap="$2" alignItems="center">
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    flex: 2,
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
+                value={entry.address ?? ''}
+                onChangeText={(v) => updateEntry(idx, { address: v })}
+                placeholder="Address"
+                placeholderTextColor={colors.textMuted}
+              />
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    flex: 1,
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
+                value={entry.confirmation ?? ''}
+                onChangeText={(v) => updateEntry(idx, { confirmation: v })}
+                placeholder="Confirmation #"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="characters"
+              />
             </XStack>
 
             {/* Assigned chips */}

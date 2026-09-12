@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase'
 import { Modal } from '@/components/ui/Modal'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { FD } from '@/lib/format'
-import { openLocationInMaps, eventMapQuery } from '@/lib/location'
+import { openLocationInMaps, eventMapQuery, lodgingMapQuery } from '@/lib/location'
 import { downloadICS } from '@/lib/icsExport'
 import { availKey, effectiveAvail, getSeriesAvail } from '@/lib/availability'
 import { AvailBadge } from '@/components/ui/AvailBadge'
@@ -148,9 +148,21 @@ export function LodgingDisplay({
           <Text color={colors.primary} fontWeight="700" fontSize="$3">
             {myEntry.name}
           </Text>
+          {myEntry.address ? (
+            <Pressable onPress={() => openLocationInMaps(lodgingMapQuery(myEntry))}>
+              <Text color={colors.primary} fontSize="$2" textDecorationLine="underline">
+                {myEntry.address}
+              </Text>
+            </Pressable>
+          ) : null}
           {myEntry.room ? (
             <Text color={colors.textMuted} fontSize="$2">
               Room / Location: {myEntry.room}
+            </Text>
+          ) : null}
+          {myEntry.confirmation ? (
+            <Text color={colors.textMuted} fontSize="$2">
+              Confirmation #: {myEntry.confirmation}
             </Text>
           ) : null}
           <Text color={colors.textMuted} fontSize="$2">
@@ -194,6 +206,13 @@ export function LodgingDisplay({
                   {entry.name}
                   {entry.room ? ` — ${entry.room}` : ''}
                 </Text>
+                {entry.address || entry.confirmation ? (
+                  <Text color={colors.textMuted} fontSize="$2">
+                    {[entry.address, entry.confirmation ? `Conf #${entry.confirmation}` : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                ) : null}
                 <Text color={colors.textMuted} fontSize="$2">
                   {entry.assignees.map(getName).join(', ') || 'No one assigned'}
                 </Text>
