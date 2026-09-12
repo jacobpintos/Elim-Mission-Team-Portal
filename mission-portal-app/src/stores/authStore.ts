@@ -17,6 +17,7 @@ import {
   platformKey,
 } from '@/lib/notifications'
 import { migrateRetiredRoles } from '@/lib/roles'
+import { defaultNotificationPrefs } from '@/types/user'
 import type { UserProfile } from '@/types/user'
 
 interface AuthStore {
@@ -163,32 +164,3 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       })
   },
 }))
-
-function defaultNotificationPrefs() {
-  return {
-    newAssignment: { push: true, email: false },
-    newMessage: { push: true, email: false },
-    eventReminder: { push: true, email: true },
-    announcement: { push: true, email: false },
-    issueAssigned: { push: true, email: false },
-    weeklyDigest: true,
-    monthlyDigest: false,
-    eventJoin: { push: true, email: false },
-    eventRemoved: { push: true, email: false },
-    worshipSetAssigned: { push: true, email: false },
-    taskDueSoon: { push: true, email: false },
-    rsvpNonAvailable: { push: true, email: false },
-    kaizenSubmission: { push: true, email: false },
-    issueSubmission: { push: true, email: false },
-    eventHealthBehind: { push: true, email: false },
-    chatFlagged: { push: true, email: false },
-    securityReport: { push: true, email: false },
-    securityReportUrgent: true,
-    weatherAlertAdmin: { push: true, email: false },
-    textingListSignup: { push: true, email: false },
-    eventLogistics: { push: true, email: false },
-    flightReminder: { push: true, email: false },
-    foodSignupOpen: { push: true, email: false },
-    foodSignupReminder: { push: true, email: false },
-  }
-}

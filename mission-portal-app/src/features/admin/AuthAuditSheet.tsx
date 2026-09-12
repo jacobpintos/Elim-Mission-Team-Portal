@@ -9,6 +9,7 @@ import { functions, db } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
 import { doc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { confirmAsync } from '@/lib/confirm'
+import { defaultNotificationPrefs } from '@/types/user'
 
 type OrphanFirestoreDoc = {
   uid: string
@@ -199,28 +200,9 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
       displayName: user.displayName || user.email,
       roles: ['public'],
       onboardingComplete: true,
-      notificationPrefs: {
-        newAssignment: { push: true, email: false },
-        newMessage: { push: true, email: false },
-        eventReminder: { push: true, email: true },
-        announcement: { push: true, email: false },
-        issueAssigned: { push: true, email: false },
-        weeklyDigest: false,
-        monthlyDigest: false,
-        eventJoin: { push: true, email: false },
-        eventRemoved: { push: true, email: false },
-        worshipSetAssigned: { push: true, email: false },
-        taskDueSoon: { push: true, email: false },
-        rsvpNonAvailable: { push: true, email: false },
-        kaizenSubmission: { push: true, email: false },
-        issueSubmission: { push: true, email: false },
-        eventHealthBehind: { push: true, email: false },
-        chatFlagged: { push: true, email: false },
-        securityReport: { push: true, email: false },
-        securityReportUrgent: true,
-        weatherAlertAdmin: { push: true, email: false },
-        textingListSignup: { push: true, email: false },
-      },
+      // A repaired profile is a new profile: same defaults as a sign-up,
+      // minus the weekly digest an orphaned account never asked for.
+      notificationPrefs: { ...defaultNotificationPrefs(), weeklyDigest: false },
       pushTokens: {},
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),

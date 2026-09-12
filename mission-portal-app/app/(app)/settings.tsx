@@ -23,7 +23,11 @@ import { EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
 import { geocodeCity } from '@/lib/geocode'
 import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
 import { confirmAsync } from '@/lib/confirm'
-import { DEFAULT_FLIGHT_REMINDER_HOURS, type NotificationPrefs } from '@/types/user'
+import {
+  DEFAULT_FLIGHT_REMINDER_HOURS,
+  defaultNotificationPrefs,
+  type NotificationPrefs,
+} from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import * as Sentry from '@sentry/react-native'
 
@@ -64,10 +68,10 @@ const ADMIN_ONLY_NOTIF_KEYS: NotifKey[] = [
   'securityReport',
   'weatherAlertAdmin',
   'textingListSignup',
-  'eventLogistics',
-  'flightReminder',
-  'foodSignupOpen',
-  'foodSignupReminder',
+  // Travel, flight and food notifications are NOT admin-only: they go to
+  // whoever was handed the hotel room, booked on the flight or asked to bring
+  // a dish. Hidden here, the person actually receiving them could neither see
+  // that they were off nor turn them back on.
   'livestream',
 ]
 
@@ -194,35 +198,8 @@ export default function SettingsScreen() {
   if (!profile || !fbUser) return null
 
   const pub = isPublic(profile)
-  const prefs: NonNullable<typeof profile.notificationPrefs> = profile.notificationPrefs ?? {
-    newAssignment: { push: true, email: false },
-    newMessage: { push: true, email: false },
-    eventReminder: { push: true, email: true },
-    announcement: { push: true, email: false },
-    issueAssigned: { push: true, email: false },
-    weeklyDigest: true,
-    monthlyDigest: false,
-    eventJoin: { push: true, email: false },
-    eventRemoved: { push: true, email: false },
-    worshipSetAssigned: { push: true, email: false },
-    taskDueSoon: { push: true, email: false },
-    rsvpNonAvailable: { push: true, email: false },
-    kaizenSubmission: { push: true, email: false },
-    issueSubmission: { push: true, email: false },
-    eventHealthBehind: { push: true, email: false },
-    chatFlagged: { push: true, email: false },
-    securityReport: { push: true, email: false },
-    securityReportUrgent: true,
-    weatherAlertAdmin: { push: true, email: false },
-    textingListSignup: { push: true, email: false },
-    eventLogistics: { push: true, email: false },
-    flightReminder: { push: true, email: false },
-    foodSignupOpen: { push: true, email: false },
-    foodSignupReminder: { push: true, email: false },
-    publicAnnouncement: { push: true, email: false },
-    publicEvent: { push: true, email: false },
-    contentFeatured: { push: true, email: false },
-  }
+  const prefs: NonNullable<typeof profile.notificationPrefs> =
+    profile.notificationPrefs ?? defaultNotificationPrefs()
 
   // ── Photo upload ────────────────────────────────────────────────────────────
   // Web picks through a hidden <input type="file">; native goes straight to the

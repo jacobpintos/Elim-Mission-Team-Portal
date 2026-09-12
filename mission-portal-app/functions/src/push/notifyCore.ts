@@ -112,6 +112,29 @@ export function extractTokens(pushTokens: unknown): string[] {
   return tokens
 }
 
+/**
+ * Is push on for this notification type?
+ *
+ * A key that is absent means the account was created before the type existed,
+ * not that the user declined it: every place that creates a user writes a
+ * literal map of the types it knew about at the time, and this package cannot
+ * import the app's defaults to stay in step. Read as opt-out, an absent key
+ * silently swallowed the push while the in-app entry still appeared — and the
+ * Settings toggle showed it as ON the whole time, because the app defaults the
+ * same way (pushDefaultFor in app/(app)/settings.tsx). That is exactly how a
+ * guest assigned a hotel room got the in-app row and no notification.
+ *
+ * Email deliberately does NOT default on: nobody should start receiving mail
+ * because a new notification type shipped.
+ *
+ * `livestream` never reaches here — onLivestreamPosted queries for the pref
+ * being explicitly true, which is what keeps "not yet asked" from becoming a
+ * push nobody agreed to.
+ */
+export function pushEnabled(prefs: { push?: boolean } | undefined): boolean {
+  return prefs?.push !== false
+}
+
 export function inAppMessage(type: NotificationType, data: Record<string, unknown>): string {
   switch (type) {
     case 'newAssignment':
@@ -237,7 +260,9 @@ export async function deliverNotification(
   const profile = userSnap.data()
   if (!profile) return
 
-  const prefs = profile.notificationPrefs?.[type]
+  const prefs = profile.notificationPrefs?.[type] as
+    | { push?: boolean; email?: boolean }
+    | undefined
   const notifMsg = inAppMessage(type, data)
 
   await db.doc(`notifs/${uid}`).set(
@@ -269,7 +294,7 @@ export async function deliverNotification(
     }
   }
 
-  if (prefs?.push) {
+  if (pushEnabled(prefs)) {
     const tokens = extractTokens(profile.pushTokens)
     if (tokens.length > 0) {
       try {

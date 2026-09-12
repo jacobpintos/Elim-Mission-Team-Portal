@@ -53,8 +53,19 @@ export const createPortalUser = onCall(async (req) => {
       eventHealthBehind: { push: true, email: false },
       chatFlagged: { push: true, email: false },
       securityReport: { push: true, email: false },
+      securityReportUrgent: true,
       weatherAlertAdmin: { push: true, email: false },
       textingListSignup: { push: true, email: false },
+      // Keep in step with defaultNotificationPrefs() in
+      // mission-portal-app/src/types/user.ts — this package is a separate
+      // TypeScript project and cannot import it. An account made without one
+      // of these keys still gets the push (see pushEnabled in
+      // push/notifyCore.ts), but its Settings toggle would read on with
+      // nothing stored behind it.
+      eventLogistics: { push: true, email: false },
+      flightReminder: { push: true, email: false },
+      foodSignupOpen: { push: true, email: false },
+      foodSignupReminder: { push: true, email: false },
       publicAnnouncement: { push: true, email: false },
       publicEvent: { push: true, email: false },
       contentFeatured: { push: true, email: false },

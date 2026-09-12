@@ -125,3 +125,29 @@ describe('interruptionLevelFor', () => {
     expect(interruptionLevelFor('securityReport', security)).toBe('time-sensitive')
   })
 })
+
+/** Mirror of pushEnabled() in functions/src/push/notifyCore.ts. */
+function pushEnabled(prefs: { push?: boolean } | undefined): boolean {
+  return prefs?.push !== false
+}
+
+describe('pushEnabled', () => {
+  it('sends when the user has opted in', () => {
+    expect(pushEnabled({ push: true })).toBe(true)
+  })
+
+  it('stays silent when the user has opted out', () => {
+    expect(pushEnabled({ push: false })).toBe(false)
+  })
+
+  it('sends when the account has no key for the type at all', () => {
+    // The bug this exists for: an account created before eventLogistics
+    // existed has no eventLogistics key, so a guest handed a hotel room got
+    // the in-app row and no push — while Settings showed the toggle as on.
+    expect(pushEnabled(undefined)).toBe(true)
+  })
+
+  it('sends when the key exists but carries no push field', () => {
+    expect(pushEnabled({})).toBe(true)
+  })
+})

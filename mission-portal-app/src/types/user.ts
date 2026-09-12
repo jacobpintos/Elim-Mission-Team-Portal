@@ -67,6 +67,53 @@ export interface NotificationPrefs {
 }
 
 /**
+ * What a brand-new account's notification preferences are.
+ *
+ * There used to be a hand-written copy of this map in every place that
+ * creates a user — the sign-up flow, the admin's Create Portal User function,
+ * the orphan-profile repair in the auth audit — and they drifted. An account
+ * made by a copy that predated a notification type simply had no key for it,
+ * and a missing key read as "the user said no": the in-app entry appeared and
+ * the push never went out, with Settings showing the toggle as on the whole
+ * time. One map, imported everywhere, is what stops that recurring.
+ *
+ * `livestream` is deliberately absent: there, absent means "has not been
+ * asked yet", which StreamNotifyPrompt needs to tell apart from "asked and
+ * declined".
+ */
+export function defaultNotificationPrefs(): NotificationPrefs {
+  return {
+    newAssignment: { push: true, email: false },
+    newMessage: { push: true, email: false },
+    eventReminder: { push: true, email: true },
+    announcement: { push: true, email: false },
+    issueAssigned: { push: true, email: false },
+    weeklyDigest: true,
+    monthlyDigest: false,
+    eventJoin: { push: true, email: false },
+    eventRemoved: { push: true, email: false },
+    worshipSetAssigned: { push: true, email: false },
+    taskDueSoon: { push: true, email: false },
+    rsvpNonAvailable: { push: true, email: false },
+    kaizenSubmission: { push: true, email: false },
+    issueSubmission: { push: true, email: false },
+    eventHealthBehind: { push: true, email: false },
+    chatFlagged: { push: true, email: false },
+    securityReport: { push: true, email: false },
+    securityReportUrgent: true,
+    weatherAlertAdmin: { push: true, email: false },
+    textingListSignup: { push: true, email: false },
+    eventLogistics: { push: true, email: false },
+    flightReminder: { push: true, email: false },
+    foodSignupOpen: { push: true, email: false },
+    foodSignupReminder: { push: true, email: false },
+    publicAnnouncement: { push: true, email: false },
+    publicEvent: { push: true, email: false },
+    contentFeatured: { push: true, email: false },
+  }
+}
+
+/**
  * The name and face behind a uid, readable by anyone signed in.
  *
  * A user document cannot be that. It carries push tokens, an email address, a
