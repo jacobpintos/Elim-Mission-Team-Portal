@@ -49,7 +49,13 @@ export const onAnnouncementPublished = onDocumentCreated('announcements/{id}', a
 
   const title = data.title ?? 'New Announcement'
   const body = data.body ?? ''
-  await sendExpoPush(tokens, title, body, { type: 'publicAnnouncement', id: event.params.id })
+  await sendExpoPush(tokens, title, body, {
+    type: 'publicAnnouncement',
+    id: event.params.id,
+    // Announcements is in the tab set a public account gets, so this is a
+    // screen they can actually reach.
+    link: '/(app)/announce',
+  })
   logger.info(`Public announcement "${title}" sent to ${tokens.length} token(s)`)
 })
 
@@ -94,7 +100,16 @@ export const onPublicEventCreated = onDocumentCreated('events/{id}', async (even
 
   const title = data.title ?? 'New Event'
   const body = isVirtual ? 'New virtual event available' : `Event near you: ${data.title ?? ''}`
-  await sendExpoPush(tokens, title, body, { type: 'publicEvent', id: event.params.id })
+  await sendExpoPush(tokens, title, body, {
+    type: 'publicEvent',
+    id: event.params.id,
+    // The card is addressed by instance key — templateId_date — and an event
+    // with no date of its own has no instance to open, so that falls to the
+    // list rather than to a card that would render empty.
+    link: data.date
+      ? `/(app)/events/${event.params.id}_${String(data.date)}`
+      : '/(app)/events',
+  })
   logger.info(`Public event "${title}" sent to ${tokens.length} token(s)`)
 })
 
@@ -114,6 +129,9 @@ export const onContentUpdated = onDocumentUpdated('music/db', async (event) => {
   const count = newItems.length
   const title = 'New Content Available'
   const body = count === 1 ? 'A new item has been added to Content.' : `${count} new items have been added to Content.`
-  await sendExpoPush(tokens, title, body, { type: 'contentFeatured' })
+  await sendExpoPush(tokens, title, body, {
+    type: 'contentFeatured',
+    link: '/(app)/music',
+  })
   logger.info(`Content update sent to ${tokens.length} token(s) for ${count} new item(s)`)
 })

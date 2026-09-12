@@ -70,6 +70,8 @@ export const taskDueReminders = onSchedule(
             taskTitle: task.title ?? 'A task',
             taskId: String(task.id ?? doc.id),
             dueToday: true,
+            // The assignments screen reads taskId and shows that one first.
+            link: `/(app)/assignments?taskId=${String(task.id ?? doc.id)}`,
           })
         }
         await doc.ref.update({ notifiedDueTodayAt: effectiveDate })
@@ -80,6 +82,7 @@ export const taskDueReminders = onSchedule(
             taskTitle: task.title ?? 'A task',
             taskId: String(task.id ?? doc.id),
             dueToday: false,
+            link: `/(app)/assignments?taskId=${String(task.id ?? doc.id)}`,
           })
         }
         await doc.ref.update({ notifiedDueWeekAt: effectiveDate })

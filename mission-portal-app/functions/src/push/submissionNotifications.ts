@@ -27,6 +27,7 @@ export const onKaizenCreated = onDocumentCreated(
       await notifyUser(uid, 'kaizenSubmission', {
         title: data.title ?? 'Untitled',
         kaizenId: event.params.id,
+        link: '/(app)/issues/kaizen',
       })
     }
     logger.info(`onKaizenCreated: notified ${adminUids.length} admin(s)`)
@@ -45,6 +46,7 @@ export const onIssueCreated = onDocumentCreated(
       await notifyUser(uid, 'issueSubmission', {
         title: data.title ?? 'Untitled',
         issueId: event.params.id,
+        link: `/(app)/issues/${event.params.id}`,
       })
     }
     logger.info(`onIssueCreated: notified ${adminUids.length} admin(s)`)

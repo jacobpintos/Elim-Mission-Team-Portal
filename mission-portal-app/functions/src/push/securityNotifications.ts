@@ -54,6 +54,7 @@ export const onSecurityReportUpdated = onDocumentUpdated(
       await notifyUser(uid, 'securityReport', {
         message,
         reportId: event.params.id,
+        link: '/(app)/security',
       })
     }
     logger.info(`onSecurityReportUpdated: ${event.params.id} -> ${after.status}`)

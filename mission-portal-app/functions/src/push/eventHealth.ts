@@ -80,6 +80,10 @@ export const eventHealthCheck = onSchedule(
           await notifyUser(uid, 'eventHealthBehind', {
             eventTitle: ev.title ?? 'An event',
             eventId: evDoc.id,
+            // The list, not the card. Opening a card needs an instance key —
+            // templateId_date — and the health check reads the template only,
+            // so it has no date to build one from.
+            link: '/(app)/events',
           })
         }
         logger.info(`eventHealthCheck: ${evDoc.id} transitioned to behind`)

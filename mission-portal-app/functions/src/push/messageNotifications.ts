@@ -51,6 +51,7 @@ export const onMessageCreated = onDocumentCreated(
         roomName: room.name ?? 'a room',
         roomId,
         senderName,
+        link: `/(app)/messages/${roomId}`,
       })
     }
     logger.info(`onMessageCreated: notified ${recipients.length} member(s) of room ${roomId}`)

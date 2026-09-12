@@ -495,6 +495,7 @@ async function runWeatherCheck(
             eventDate: pending[0].covered,
             eventId: pending[0].entry.id,
             alertId: alert.id,
+            link: `/(app)/events/${pending[0].entry.id}_${pending[0].covered}`,
           },
           { immediate }
         )

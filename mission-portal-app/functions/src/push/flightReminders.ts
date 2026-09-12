@@ -243,8 +243,12 @@ export const flightReminderTask = onTaskDispatched<ReminderPayload>(
       ]
         .filter(Boolean)
         .join(' from '),
-      // Opens the event card, where the flight details live.
-      link: `/(app)/events/${eventId}`,
+      // Opens the event card, where the flight details live. The screen looks
+      // the event up by instance key — templateId_date — and finds nothing at
+      // all without the date, so this pointed at a card that rendered empty.
+      // An event with no date of its own has no instance to open; the list is
+      // the honest destination for it.
+      link: event.date ? `/(app)/events/${eventId}_${event.date}` : '/(app)/events',
     })
 
     logger.info(`flightReminderTask: notified ${uid} about ${entryId}_${leg}`)
