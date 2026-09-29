@@ -86,6 +86,11 @@ export async function pickAndUploadSetListAudio(
     // under that name is an upload the Storage rule rejects outright, since
     // it requires audio/*.
     contentType: audioContentType(name, asset.mimeType),
+    // A year, and immutable, because it is: the path carries a timestamp, so
+    // this URL will never point at different audio. It lets the browser keep
+    // the file between visits without being asked, which is most of what
+    // offline playback means on the web — the app's own cache is the rest.
+    cacheControl: 'public, max-age=31536000, immutable',
   })
 
   onProgress?.(0)

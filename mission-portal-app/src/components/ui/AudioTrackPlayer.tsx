@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pressable, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useMediaPlaybackStore } from '@/stores/mediaPlaybackStore'
+import { cachedAudioUri, cacheAudio } from '@/lib/audioCache'
 
 /**
  * A reference track playing inside the app, in one line.
@@ -20,7 +21,43 @@ import { useMediaPlaybackStore } from '@/stores/mediaPlaybackStore'
  */
 export function AudioTrackPlayer({ url, name }: { url: string; name?: string }) {
   const colors = useThemeColors()
-  const player = useAudioPlayer({ uri: url })
+
+  /**
+   * Play the copy on the device if there is one, and make one if there is not.
+   *
+   * The remote URL is what plays until a local copy is found, so the first
+   * listen is never held up by the copy being made — and the swap is dropped
+   * once playback has started, because changing the source under a running
+   * player restarts the track.
+   */
+  const [source, setSource] = useState(url)
+  const started = useRef(false)
+
+  // Back to the remote URL the moment this is pointed at a different track —
+  // during render, where state derived from props belongs, rather than in the
+  // effect below, which would paint one frame of the previous song's audio.
+  const [loadedFor, setLoadedFor] = useState(url)
+  if (loadedFor !== url) {
+    setLoadedFor(url)
+    setSource(url)
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    started.current = false
+
+    cachedAudioUri(url).then((local) => {
+      if (cancelled || started.current) return
+      if (local) setSource(local)
+      else cacheAudio(url)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [url])
+
+  const player = useAudioPlayer({ uri: source })
   const status = useAudioPlayerStatus(player)
   const activeUrl = useMediaPlaybackStore((s) => s.activeUrl)
   const claim = useMediaPlaybackStore((s) => s.claim)
@@ -57,6 +94,7 @@ export function AudioTrackPlayer({ url, name }: { url: string; name?: string }) 
     // Replay rather than resume once it has run out, so the button does
     // something the second time it is pressed at the end of a track.
     if (duration > 0 && position >= duration - 0.25) player.seekTo(0).catch(() => {})
+    started.current = true
     claim(url)
     player.play()
   }
