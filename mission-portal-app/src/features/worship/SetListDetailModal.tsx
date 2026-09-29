@@ -11,6 +11,8 @@ import type { Task } from '@/types/events'
 import type { ChordSheet } from '@/types/chordSheet'
 import { openExternalUrl } from '@/lib/externalUrl'
 import { AudioTrackPlayer } from '@/components/ui/AudioTrackPlayer'
+import { VideoPlayerModal } from '@/components/ui/VideoPlayerModal'
+import { extractYouTubeId } from '@/stores/musicStore'
 
 interface SetListDetailModalProps {
   setList: SetList | null
@@ -26,6 +28,7 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
   const [acknowledging, setAcknowledging] = useState(false)
   const [viewSheet, setViewSheet] = useState<ChordSheet | null>(null)
   const [viewSheetKey, setViewSheetKey] = useState<string>('')
+  const [playingVideo, setPlayingVideo] = useState<{ url: string; title: string } | null>(null)
 
   if (!setList) return null
 
@@ -45,6 +48,11 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
 
   return (
     <>
+      <VideoPlayerModal
+        url={playingVideo?.url ?? null}
+        title={playingVideo?.title}
+        onClose={() => setPlayingVideo(null)}
+      />
       <ChordSheetViewer
         key={viewSheet ? `${String(viewSheet.id)}-${viewSheetKey}` : 'closed'}
         sheet={viewSheet}
@@ -154,7 +162,7 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                                 }}
                               >
                                 <Text color={colors.primary} fontSize="$2">
-                                  🎸 {cs.title}
+                                  {cs.title}
                                   {cs.artist ? ` — ${cs.artist}` : ''}
                                 </Text>
                               </Pressable>
@@ -163,11 +171,28 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                         : null}
 
                       {song.link ? (
-                        <Pressable onPress={() => openExternalUrl(song.link)}>
-                          <Text color={colors.primary} fontSize="$2" numberOfLines={1}>
-                            🔗 {song.link}
-                          </Text>
-                        </Pressable>
+                        // A YouTube link plays here, the way Content plays a
+                        // video: the recording is the arrangement being
+                        // learned, and watching it should not mean leaving the
+                        // set list. Anything else is still somebody else's
+                        // site and opens there.
+                        extractYouTubeId(song.link) ? (
+                          <Pressable
+                            onPress={() =>
+                              setPlayingVideo({ url: song.link, title: song.name || 'Video' })
+                            }
+                          >
+                            <Text color={colors.primary} fontSize="$2" numberOfLines={1}>
+                              ▶ Play video
+                            </Text>
+                          </Pressable>
+                        ) : (
+                          <Pressable onPress={() => openExternalUrl(song.link)}>
+                            <Text color={colors.primary} fontSize="$2" numberOfLines={1}>
+                              🔗 {song.link}
+                            </Text>
+                          </Pressable>
+                        )
                       ) : null}
 
                       {song.audioUrl ? (

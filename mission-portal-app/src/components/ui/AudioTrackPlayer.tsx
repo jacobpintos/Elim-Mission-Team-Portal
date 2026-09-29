@@ -3,14 +3,16 @@ import { Pressable, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { useAudioPlaybackStore } from '@/stores/audioPlaybackStore'
 
 /**
- * A reference track playing inside the app.
+ * A reference track playing inside the app, in one line.
  *
- * Deliberately not a full player: play/pause, where you are, and a bar you can
- * tap to move. A worship team wants to hear the arrangement, not to scrub
- * frame by frame, and every control added here is one more thing to get wrong
- * on a phone held in one hand at rehearsal.
+ * Kept to a single row on purpose: this sits under a song that already carries
+ * a key, a chord sheet, a link and notes, and a player with its own box and a
+ * second line of text pushes the next song off a phone screen. Play/pause,
+ * where you are, and a bar you can tap to move — a worship team wants to hear
+ * the arrangement, not to scrub frame by frame.
  *
  * expo-audio drives both platforms — it ships a web implementation, so the
  * same component works in the browser where set lists are built and on the
@@ -20,6 +22,9 @@ export function AudioTrackPlayer({ url, name }: { url: string; name?: string }) 
   const colors = useThemeColors()
   const player = useAudioPlayer({ uri: url })
   const status = useAudioPlayerStatus(player)
+  const activeUrl = useAudioPlaybackStore((s) => s.activeUrl)
+  const claim = useAudioPlaybackStore((s) => s.claim)
+  const release = useAudioPlaybackStore((s) => s.release)
 
   useEffect(() => {
     // Without this, a phone with the ringer switch off plays nothing at all:
@@ -28,6 +33,16 @@ export function AudioTrackPlayer({ url, name }: { url: string; name?: string }) 
     setAudioModeAsync({ playsInSilentMode: true }).catch(() => {})
   }, [])
 
+  // Another track took the slot — stop, so two never play over each other.
+  useEffect(() => {
+    if (activeUrl !== url && status.playing) player.pause()
+  }, [activeUrl, url, status.playing, player])
+
+  // Closing the set list mid-song should not leave the slot held.
+  useEffect(() => {
+    return () => release(url)
+  }, [release, url])
+
   const duration = status.duration ?? 0
   const position = status.currentTime ?? 0
   const progress = duration > 0 ? Math.min(1, position / duration) : 0
@@ -35,49 +50,38 @@ export function AudioTrackPlayer({ url, name }: { url: string; name?: string }) 
   const toggle = () => {
     if (status.playing) {
       player.pause()
+      release(url)
       return
     }
     // Replay rather than resume once it has run out, so the button does
     // something the second time it is pressed at the end of a track.
     if (duration > 0 && position >= duration - 0.25) player.seekTo(0).catch(() => {})
+    claim(url)
     player.play()
   }
 
   return (
-    <YStack
-      backgroundColor={colors.background}
-      borderRadius="$2"
-      borderWidth={1}
-      borderColor={colors.border}
-      padding="$2"
-      gap="$2"
-    >
+    <YStack gap={4}>
       <XStack alignItems="center" gap="$2">
         <Pressable onPress={toggle} accessibilityLabel={status.playing ? 'Pause' : 'Play'}>
           <XStack
-            width={32}
-            height={32}
+            width={26}
+            height={26}
             borderRadius={99}
             backgroundColor={colors.primary}
             alignItems="center"
             justifyContent="center"
           >
-            <Text color="white" fontSize="$3">
+            <Text color="white" fontSize={11}>
               {status.playing ? '❚❚' : '▶'}
             </Text>
           </XStack>
         </Pressable>
 
-        <YStack flex={1} gap="$1">
-          {name ? (
-            <Text color={colors.text} fontSize="$2" numberOfLines={1}>
-              {name}
-            </Text>
-          ) : null}
-          <Text color={colors.textMuted} fontSize={11}>
-            {status.isLoaded ? `${clock(position)} / ${clock(duration)}` : 'Loading…'}
-          </Text>
-        </YStack>
+        <Text color={colors.textMuted} fontSize={11} flex={1} numberOfLines={1}>
+          {name ? `${name} · ` : ''}
+          {status.isLoaded ? `${clock(position)} / ${clock(duration)}` : 'Loading…'}
+        </Text>
       </XStack>
 
       <SeekBar
@@ -95,7 +99,7 @@ export function AudioTrackPlayer({ url, name }: { url: string; name?: string }) 
  *
  * The width comes from onLayout rather than the DOM, because there is no
  * <input type="range"> on native and locationX means nothing without knowing
- * what it is a fraction of.
+ * what it is a fraction of. hitSlop is what keeps a 3pt line touchable.
  */
 function SeekBar({ progress, onSeek }: { progress: number; onSeek: (fraction: number) => void }) {
   const colors = useThemeColors()
@@ -107,10 +111,11 @@ function SeekBar({ progress, onSeek }: { progress: number; onSeek: (fraction: nu
         if (width <= 0) return
         onSeek(Math.max(0, Math.min(1, e.nativeEvent.locationX / width)))
       }}
+      hitSlop={8}
       accessibilityLabel="Seek"
     >
       <View
-        style={{ height: 4, borderRadius: 2, backgroundColor: colors.border, overflow: 'hidden' }}
+        style={{ height: 3, borderRadius: 2, backgroundColor: colors.border, overflow: 'hidden' }}
       >
         <View
           style={{

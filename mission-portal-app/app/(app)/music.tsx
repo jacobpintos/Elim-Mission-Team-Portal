@@ -17,7 +17,7 @@ import {
   type SearchScope,
 } from '@/lib/musicSearch'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
-import { YouTubeEmbed } from '@/components/ui/YouTubeEmbed'
+import { VideoPlayerModal } from '@/components/ui/VideoPlayerModal'
 import { StreamBox } from '@/components/ui/StreamBox'
 import { StreamCardModal } from '@/features/livestream/StreamCardModal'
 import { StreamNotifyPrompt } from '@/features/livestream/StreamNotifyPrompt'
@@ -765,36 +765,12 @@ export default function MusicScreen() {
       )}
 
       {/* Play modal */}
-      <Modal
-        visible={!!playingItem}
-        animationType="slide"
-        onRequestClose={() => setPlayingItem(null)}
-      >
-        <View style={[styles.playModal, { backgroundColor: '#000' }]}>
-          <Pressable onPress={() => setPlayingItem(null)} style={styles.closeBtn}>
-            <Text color="white" fontSize="$5" fontWeight="700">
-              ✕
-            </Text>
-          </Pressable>
-          {playingItem ? (
-            <YStack flex={1} gap="$2">
-              <View style={{ flex: 1 }}>
-                <YouTubeEmbed url={playingItem.youtubeUrl} />
-              </View>
-              <YStack padding="$4">
-                <Text color="white" fontSize="$4" fontWeight="700">
-                  {playingItem.title}
-                </Text>
-                {playingItem.album ? (
-                  <Text color="rgba(255,255,255,0.6)" fontSize="$3">
-                    {playingItem.album}
-                  </Text>
-                ) : null}
-              </YStack>
-            </YStack>
-          ) : null}
-        </View>
-      </Modal>
+      <VideoPlayerModal
+        url={playingItem?.youtubeUrl ?? null}
+        title={playingItem?.title}
+        subtitle={playingItem?.album}
+        onClose={() => setPlayingItem(null)}
+      />
 
       {/* See All modal */}
       <Modal
@@ -1174,16 +1150,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 14,
-  },
-  playModal: {
-    flex: 1,
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: 48,
-    right: 20,
-    zIndex: 10,
-    padding: 8,
   },
   editModal: {
     flex: 1,

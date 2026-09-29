@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Modal,
   View,
@@ -14,6 +14,10 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { EventPickerModal } from './EventPickerModal'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useUIStore } from '@/stores/uiStore'
+import { useMusicStore, type MusicItem } from '@/stores/musicStore'
+import { NNS_KEYS } from '@/lib/nashvilleNumbers'
+import { matchContentByTitle, contentItemForUrl, uniqueTitleMatch } from '@/lib/contentMatch'
+import { ContentPickerModal } from './ContentPickerModal'
 import { pickAndUploadSetListAudio, deleteSetListAudio } from '@/lib/setListAudioUpload'
 import type { SetList, SetListSong } from '@/types/worship'
 import type { ChordSheet } from '@/types/chordSheet'
@@ -222,6 +226,155 @@ function SongNameComboBox({
 }
 
 /**
+ * Pick the key a song is being played in.
+ *
+ * A text box took anything — "Bb", "bb", "B flat", "G maj", a stray space —
+ * and the key is not decoration: ChordSheetViewer transposes the sheet into
+ * it, and it only recognises the twelve names in NNS_KEYS. Everything else was
+ * accepted here, shown on the card, and then silently ignored when the sheet
+ * opened. A list of the twelve is the whole fix.
+ */
+function KeyPicker({
+  value,
+  onChange,
+  colors,
+}: {
+  value: string
+  onChange: (key: string) => void
+  colors: ReturnType<typeof useThemeColors>
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <YStack gap="$1">
+      <Text color={colors.textMuted} fontSize={11} fontWeight="600">
+        KEY
+      </Text>
+      <Pressable onPress={() => setOpen((v) => !v)}>
+        <XStack
+          backgroundColor={colors.surface}
+          borderRadius="$2"
+          borderWidth={1}
+          borderColor={colors.border}
+          paddingHorizontal="$3"
+          paddingVertical="$2"
+          alignItems="center"
+          justifyContent="space-between"
+        >
+          <Text color={value ? colors.primary : colors.textMuted} fontSize={13}>
+            {value || 'No key'}
+          </Text>
+          <Text color={colors.textMuted} fontSize={11}>
+            {open ? '▲' : '▼'}
+          </Text>
+        </XStack>
+      </Pressable>
+      {open ? (
+        <XStack flexWrap="wrap" gap="$1" paddingTop="$1">
+          {['', ...NNS_KEYS].map((key) => {
+            const selected = key === value
+            return (
+              <Pressable
+                key={key || 'none'}
+                onPress={() => {
+                  onChange(key)
+                  setOpen(false)
+                }}
+              >
+                <XStack
+                  backgroundColor={selected ? colors.primary : colors.surface}
+                  borderWidth={1}
+                  borderColor={selected ? colors.primary : colors.border}
+                  borderRadius={99}
+                  paddingHorizontal="$3"
+                  paddingVertical="$1"
+                  minWidth={44}
+                  justifyContent="center"
+                >
+                  <Text color={selected ? 'white' : colors.text} fontSize={13}>
+                    {key || 'None'}
+                  </Text>
+                </XStack>
+              </Pressable>
+            )
+          })}
+        </XStack>
+      ) : null}
+    </YStack>
+  )
+}
+
+/**
+ * The video a song points at, chosen from Content or typed in.
+ *
+ * Content is where the recordings already live, so picking from it is the
+ * short path and the one that guarantees the link is the arrangement the team
+ * has been given. The text box stays for everything Content does not hold —
+ * a Spotify link, somebody's Drive file.
+ */
+function SongLinkField({
+  song,
+  onChange,
+  onPickContent,
+  colors,
+  inputStyle,
+}: {
+  song: SetListSong
+  onChange: (patch: Partial<SetListSong>) => void
+  onPickContent: (item: MusicItem) => void
+  colors: ReturnType<typeof useThemeColors>
+  inputStyle: object
+}) {
+  const [picking, setPicking] = useState(false)
+  const items = useMusicStore((s) => s.items)
+  const fromContent = contentItemForUrl(song.link, items)
+
+  return (
+    <>
+      <YStack gap="$1">
+        <XStack gap="$2" alignItems="center">
+          <TextInput
+            style={[inputStyle, { flex: 1 }]}
+            value={song.link}
+            onChangeText={(v) => onChange({ link: v })}
+            placeholder="Link (YouTube, Spotify, etc.)"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+          />
+          <Pressable onPress={() => setPicking(true)}>
+            <XStack
+              borderRadius="$2"
+              borderWidth={1}
+              borderColor={colors.primary}
+              paddingHorizontal="$3"
+              paddingVertical="$2"
+            >
+              <Text color={colors.primary} fontSize={13}>
+                Content
+              </Text>
+            </XStack>
+          </Pressable>
+        </XStack>
+        {fromContent ? (
+          <Text color={colors.textMuted} fontSize={11} numberOfLines={1}>
+            ♪ {fromContent.title}
+            {fromContent.album ? ` — ${fromContent.album}` : ''}
+          </Text>
+        ) : null}
+      </YStack>
+
+      <ContentPickerModal
+        visible={picking}
+        onClose={() => setPicking(false)}
+        onSelect={(item) => {
+          onPickContent(item)
+          setPicking(false)
+        }}
+      />
+    </>
+  )
+}
+
+/**
  * Attach a reference track to one song.
  *
  * The file goes to Storage as soon as it is picked rather than waiting for the
@@ -323,6 +476,15 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
   const [selectedEvent, setSelectedEvent] = useState<EventInstance | null>(null)
   const [showEventPicker, setShowEventPicker] = useState(false)
   const [saving, setSaving] = useState(false)
+  const musicItems = useMusicStore((s) => s.items)
+  const loadMusic = useMusicStore((s) => s.load)
+
+  // Content is a single document loaded on demand rather than subscribed to,
+  // so opening the builder is the moment to make sure it is here — the video
+  // match below has nothing to match against otherwise.
+  useEffect(() => {
+    if (visible && musicItems.length === 0) loadMusic().catch(() => {})
+  }, [visible, musicItems.length, loadMusic])
 
   const reset = () => {
     setTitle('')
@@ -347,6 +509,48 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
   /** Several fields at once — attaching audio sets three of them together. */
   const patchSong = (id: string, patch: Partial<SetListSong>) => {
     setSongs((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+  }
+
+  /**
+   * Choose a chord sheet, and take the Content video with it.
+   *
+   * A chord sheet and a video of the same song are usually both on file under
+   * the same name, and typing the name into the builder is already how the
+   * sheet gets attached — so the video that shares that name is one nobody
+   * should have to go and find. Only fills an empty link: a video chosen by
+   * hand is a deliberate choice about which recording, and a name match is
+   * not a good enough reason to overrule it.
+   */
+  /**
+   * Take a video from Content, and the chord sheet that goes with it.
+   *
+   * The mirror of selectChordSheet below: a sheet and a video of the same song
+   * are filed under the same name, so choosing either should find the other.
+   * Both only fill what is empty — whichever the person chose first is the
+   * deliberate one.
+   */
+  const selectContentVideo = (songId: string, item: MusicItem) => {
+    const song = songs.find((s) => s.id === songId)
+    const patch: Partial<SetListSong> = { link: item.youtubeUrl }
+
+    if (song && !song.name.trim()) patch.name = item.title
+    if (song && song.chordSheetId == null) {
+      const sheet = uniqueTitleMatch(item.title, chordSheets)
+      if (sheet) patch.chordSheetId = sheet.id
+    }
+    patchSong(songId, patch)
+  }
+
+  const selectChordSheet = (songId: string, sheetId: string | number | null) => {
+    const sheet = chordSheets.find((c) => String(c.id) === String(sheetId))
+    const song = songs.find((s) => s.id === songId)
+    const patch: Partial<SetListSong> = { chordSheetId: sheetId }
+
+    if (sheet && song && !song.link.trim()) {
+      const video = matchContentByTitle(sheet.title, musicItems)
+      if (video) patch.link = video.youtubeUrl
+    }
+    patchSong(songId, patch)
   }
 
   const addSong = () => {
@@ -505,7 +709,7 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
                         value={song.name}
                         chordSheets={chordSheets}
                         onChangeName={(v) => updateSong(song.id, 'name', v)}
-                        onSelectSheet={(id) => updateSong(song.id, 'chordSheetId', id)}
+                        onSelectSheet={(id) => selectChordSheet(song.id, id)}
                         colors={colors}
                         inputStyle={[
                           styles.input,
@@ -517,35 +721,23 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
                         ]}
                       />
 
-                      <TextInput
-                        style={[
-                          styles.input,
-                          {
-                            color: colors.text,
-                            borderColor: colors.border,
-                            backgroundColor: colors.surface,
-                          },
-                        ]}
+                      <KeyPicker
                         value={song.key}
-                        onChangeText={(v) => updateSong(song.id, 'key', v)}
-                        placeholder="Key (e.g. G, Bb, C#)"
-                        placeholderTextColor={colors.textMuted}
+                        onChange={(v) => updateSong(song.id, 'key', v)}
+                        colors={colors}
                       />
 
-                      <TextInput
-                        style={[
-                          styles.input,
-                          {
-                            color: colors.text,
-                            borderColor: colors.border,
-                            backgroundColor: colors.surface,
-                          },
-                        ]}
-                        value={song.link}
-                        onChangeText={(v) => updateSong(song.id, 'link', v)}
-                        placeholder="Link (YouTube, Spotify, etc.)"
-                        placeholderTextColor={colors.textMuted}
-                        autoCapitalize="none"
+                      <SongLinkField
+                        song={song}
+                        colors={colors}
+                        onChange={(patch) => patchSong(song.id, patch)}
+                        onPickContent={(item) => selectContentVideo(song.id, item)}
+                        inputStyle={{
+                          ...StyleSheet.flatten(styles.input),
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surface,
+                        }}
                       />
 
                       <SongAudioField
