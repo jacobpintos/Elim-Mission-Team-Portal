@@ -136,6 +136,18 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     [
+      // Playback only. The plugin asks for the microphone and Android's
+      // RECORD_AUDIO by default, which the App Store then wants justified for
+      // an app that never records; both are turned off here. Background
+      // playback stays on (the plugin's default): a rehearsal track has to
+      // keep playing when the phone locks.
+      'expo-audio',
+      {
+        microphonePermission: false,
+        recordAudioAndroid: false,
+      },
+    ],
+    [
       'expo-notifications',
       {
         icon: './assets/notification-icon.png',

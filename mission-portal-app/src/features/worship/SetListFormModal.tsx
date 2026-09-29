@@ -13,6 +13,8 @@ import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { EventPickerModal } from './EventPickerModal'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
+import { useUIStore } from '@/stores/uiStore'
+import { pickAndUploadSetListAudio, deleteSetListAudio } from '@/lib/setListAudioUpload'
 import type { SetList, SetListSong } from '@/types/worship'
 import type { ChordSheet } from '@/types/chordSheet'
 import type { EventInstance } from '@/types/events'
@@ -219,6 +221,100 @@ function SongNameComboBox({
   )
 }
 
+/**
+ * Attach a reference track to one song.
+ *
+ * The file goes to Storage as soon as it is picked rather than waiting for the
+ * set list to be saved: a picked file lives in a cache directory the OS is
+ * free to empty, so holding on to the path and uploading later is a race the
+ * app loses silently. The cost is that abandoning the form leaves an object
+ * behind, which is why closing without saving deletes what this uploaded.
+ */
+function SongAudioField({
+  song,
+  onChange,
+  colors,
+}: {
+  song: SetListSong
+  onChange: (patch: Partial<SetListSong>) => void
+  colors: ReturnType<typeof useThemeColors>
+}) {
+  const [busy, setBusy] = useState(false)
+  const toast = useUIStore((s) => s.toast)
+
+  const pick = async () => {
+    setBusy(true)
+    try {
+      const picked = await pickAndUploadSetListAudio(song.id)
+      if (!picked) return
+      // Replacing a track: the old file is nobody's once this returns.
+      await deleteSetListAudio(song.audioPath)
+      onChange({ audioUrl: picked.url, audioName: picked.name, audioPath: picked.path })
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not add that audio file', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async () => {
+    const path = song.audioPath
+    onChange({ audioUrl: undefined, audioName: undefined, audioPath: undefined })
+    await deleteSetListAudio(path)
+  }
+
+  return (
+    <YStack gap="$1">
+      <Text color={colors.textMuted} fontSize={11} fontWeight="600">
+        AUDIO (optional)
+      </Text>
+      {song.audioUrl ? (
+        <XStack
+          backgroundColor={colors.surface}
+          borderRadius="$2"
+          borderWidth={1}
+          borderColor={colors.border}
+          paddingHorizontal="$3"
+          paddingVertical="$2"
+          alignItems="center"
+          gap="$2"
+        >
+          <Text color={colors.text} fontSize={13} flex={1} numberOfLines={1}>
+            ♪ {song.audioName ?? 'Audio file'}
+          </Text>
+          <Pressable onPress={pick} disabled={busy}>
+            <Text color={colors.primary} fontSize={12}>
+              {busy ? 'Uploading…' : 'Replace'}
+            </Text>
+          </Pressable>
+          <Pressable onPress={remove} disabled={busy}>
+            <Text color="$red10" fontSize={12}>
+              Remove
+            </Text>
+          </Pressable>
+        </XStack>
+      ) : (
+        <Pressable onPress={pick} disabled={busy}>
+          <XStack
+            borderRadius="$2"
+            borderWidth={1}
+            borderColor={colors.primary}
+            paddingHorizontal="$3"
+            paddingVertical="$2"
+            alignItems="center"
+            justifyContent="center"
+            opacity={busy ? 0.6 : 1}
+          >
+            <Text color={colors.primary} fontSize={13}>
+              {busy ? 'Uploading…' : '+ Add audio file'}
+            </Text>
+          </XStack>
+        </Pressable>
+      )}
+    </YStack>
+  )
+}
+
 export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetListFormModalProps) {
   const colors = useThemeColors()
   const chordSheets = useChordSheetsStore((s) => s.chordSheets)
@@ -235,6 +331,11 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
   }
 
   const handleClose = () => {
+    // Closing without saving throws the set list away, and nothing will ever
+    // reference the tracks uploaded while it was open. Deliberately not part
+    // of reset(), which also runs after a successful save — where the files
+    // are the saved set list's.
+    songs.forEach((s) => deleteSetListAudio(s.audioPath))
     reset()
     onClose()
   }
@@ -243,12 +344,23 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
     setSongs((prev) => prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)))
   }
 
+  /** Several fields at once — attaching audio sets three of them together. */
+  const patchSong = (id: string, patch: Partial<SetListSong>) => {
+    setSongs((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+  }
+
   const addSong = () => {
     setSongs((prev) => [...prev, makeSong()])
   }
 
   const removeSong = (id: string) => {
-    setSongs((prev) => (prev.length > 1 ? prev.filter((s) => s.id !== id) : prev))
+    setSongs((prev) => {
+      if (prev.length <= 1) return prev
+      // The track was uploaded the moment it was picked, so dropping the song
+      // it belonged to has to take the file with it.
+      deleteSetListAudio(prev.find((s) => s.id === id)?.audioPath)
+      return prev.filter((s) => s.id !== id)
+    })
   }
 
   const handleSave = async () => {
@@ -434,6 +546,12 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
                         placeholder="Link (YouTube, Spotify, etc.)"
                         placeholderTextColor={colors.textMuted}
                         autoCapitalize="none"
+                      />
+
+                      <SongAudioField
+                        song={song}
+                        colors={colors}
+                        onChange={(patch) => patchSong(song.id, patch)}
                       />
 
                       <TextInput

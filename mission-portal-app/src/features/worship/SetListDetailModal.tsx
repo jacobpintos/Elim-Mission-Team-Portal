@@ -10,6 +10,7 @@ import type { SetList } from '@/types/worship'
 import type { Task } from '@/types/events'
 import type { ChordSheet } from '@/types/chordSheet'
 import { openExternalUrl } from '@/lib/externalUrl'
+import { AudioTrackPlayer } from '@/components/ui/AudioTrackPlayer'
 
 interface SetListDetailModalProps {
   setList: SetList | null
@@ -167,6 +168,10 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                             🔗 {song.link}
                           </Text>
                         </Pressable>
+                      ) : null}
+
+                      {song.audioUrl ? (
+                        <AudioTrackPlayer url={song.audioUrl} name={song.audioName} />
                       ) : null}
 
                       {song.notes ? (
