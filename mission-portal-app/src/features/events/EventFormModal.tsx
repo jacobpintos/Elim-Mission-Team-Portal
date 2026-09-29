@@ -633,8 +633,18 @@ export function EventFormModal({
           toast('Occurrence removed', 'success')
         } else {
           await deleteEvent(event.id)
+          // Removing an occurrence said so and deleting the whole event said
+          // nothing, which left the louder of the two actions looking like it
+          // had not happened.
+          toast('Event deleted', 'success')
         }
-        onDelete ? onDelete() : onClose()
+        // Always close, then let the caller move on. onDelete used to replace
+        // onClose rather than follow it, so a screen that navigated away on
+        // delete never marked the form closed — and a Tamagui dialog renders
+        // in a portal at the app root, so it stayed on screen over whatever
+        // came next, showing the event that had just been deleted.
+        onClose()
+        onDelete?.()
       } catch {
         toast(isInstanceOnly ? 'Failed to remove occurrence' : 'Failed to delete event', 'error')
       }

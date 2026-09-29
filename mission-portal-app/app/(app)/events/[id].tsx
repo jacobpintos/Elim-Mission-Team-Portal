@@ -535,7 +535,10 @@ export default function EventDetailScreen() {
           instanceKey={event.isRec ? event.instanceKey : undefined}
           open={editModalOpen}
           onClose={() => setEditModalOpen(false)}
-          onDelete={() => router.push('/(app)/events' as never)}
+          // replace, not push: this screen is now showing an event that does
+          // not exist, and pushing leaves it in the history for Back to
+          // return to — where it renders "Event not found."
+          onDelete={() => router.replace('/(app)/events' as never)}
         />
       ) : null}
 
