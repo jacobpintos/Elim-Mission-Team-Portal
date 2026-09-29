@@ -1,6 +1,8 @@
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { storage } from '@/lib/firebase'
+import { Platform } from 'react-native'
 import { uriToBlob } from '@/lib/uriToBlob'
+import { looksLikeAudio, audioContentType } from '@/lib/audioFileType'
 
 /**
  * The Storage rule for setListAudio/ rejects anything larger.
@@ -34,7 +36,15 @@ export async function pickAndUploadSetListAudio(songId: string): Promise<Uploade
   const DocumentPicker = await import('expo-document-picker')
 
   const result = await DocumentPicker.getDocumentAsync({
-    type: 'audio/*',
+    // No filter on the web, and it is not laziness. The web picker becomes
+    // <input accept="…">, and iOS applies that by mapping it to document
+    // types: a file it cannot map is greyed out and cannot be chosen at all.
+    // An mp3 that reached the phone through another app is routinely typed as
+    // plain data rather than audio, so accept="audio/*" greys out the very
+    // file somebody is trying to add, with nothing on screen to say why.
+    // Everything is offered instead and the choice is checked below, where a
+    // wrong file can be explained rather than silently refused.
+    type: Platform.OS === 'web' ? '*/*' : 'audio/*',
     // Straight to Storage — leaving it in the cache would mean reading a file
     // the OS may have already cleaned up by the time upload starts.
     copyToCacheDirectory: true,
@@ -46,6 +56,10 @@ export async function pickAndUploadSetListAudio(songId: string): Promise<Uploade
   if (!asset?.uri) return null
 
   const name = asset.name ?? 'track.mp3'
+  if (!looksLikeAudio(name, asset.mimeType)) {
+    throw new Error(`${name} does not look like an audio file. Try an MP3 or M4A.`)
+  }
+
   const blob = await uriToBlob(asset.uri)
   if (blob.size > MAX_AUDIO_BYTES) {
     throw new Error(`${name} is larger than 20 MB. Please choose a smaller file.`)
@@ -54,10 +68,11 @@ export async function pickAndUploadSetListAudio(songId: string): Promise<Uploade
   const path = `setListAudio/${songId}/${Date.now()}_${sanitize(name)}`
   const fileRef = storageRef(storage, path)
   await uploadBytes(fileRef, blob, {
-    // asset.mimeType comes back undefined often enough on Android that the
-    // fallback matters: without a type Storage stores it as
-    // application/octet-stream and the player refuses to touch it.
-    contentType: asset.mimeType || guessAudioType(name),
+    // Deliberately not `asset.mimeType || …`: a browser that reports
+    // application/octet-stream is reporting something, and storing an mp3
+    // under that name is an upload the Storage rule rejects outright, since
+    // it requires audio/*.
+    contentType: audioContentType(name, asset.mimeType),
   })
 
   return { url: await getDownloadURL(fileRef), name, path }
@@ -83,26 +98,4 @@ export async function deleteSetListAudio(path: string | undefined | null): Promi
 /** Storage object names take almost anything; keeping them dull avoids finding out. */
 function sanitize(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
-}
-
-/** Last resort when the picker reports no MIME type. */
-function guessAudioType(name: string): string {
-  const ext = name.toLowerCase().split('.').pop() ?? ''
-  switch (ext) {
-    case 'mp3':
-      return 'audio/mpeg'
-    case 'm4a':
-    case 'mp4':
-      return 'audio/mp4'
-    case 'aac':
-      return 'audio/aac'
-    case 'wav':
-      return 'audio/wav'
-    case 'ogg':
-      return 'audio/ogg'
-    case 'flac':
-      return 'audio/flac'
-    default:
-      return 'audio/mpeg'
-  }
 }
