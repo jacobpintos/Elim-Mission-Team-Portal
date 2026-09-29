@@ -1,8 +1,13 @@
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import {
+  ref as storageRef,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+} from 'firebase/storage'
 import { storage } from '@/lib/firebase'
 import { Platform } from 'react-native'
 import { uriToBlob } from '@/lib/uriToBlob'
-import { looksLikeAudio, audioContentType } from '@/lib/audioFileType'
+import { looksLikeAudio, audioContentType, uploadPercent } from '@/lib/audioFileType'
 
 /**
  * The Storage rule for setListAudio/ rejects anything larger.
@@ -32,7 +37,11 @@ export interface UploadedAudio {
  * is the one that offers Files, and on web it is a plain file input, so the
  * same call works in the browser where these set lists are actually built.
  */
-export async function pickAndUploadSetListAudio(songId: string): Promise<UploadedAudio | null> {
+export async function pickAndUploadSetListAudio(
+  songId: string,
+  /** Called with 0-100 as the bytes go up, so a long upload can show itself. */
+  onProgress?: (percent: number) => void
+): Promise<UploadedAudio | null> {
   const DocumentPicker = await import('expo-document-picker')
 
   const result = await DocumentPicker.getDocumentAsync({
@@ -67,12 +76,26 @@ export async function pickAndUploadSetListAudio(songId: string): Promise<Uploade
 
   const path = `setListAudio/${songId}/${Date.now()}_${sanitize(name)}`
   const fileRef = storageRef(storage, path)
-  await uploadBytes(fileRef, blob, {
+
+  // Resumable rather than uploadBytes, only for the progress it reports: a
+  // full-length track on church wifi takes long enough that a button reading
+  // "Uploading…" and nothing else is indistinguishable from one that has hung.
+  const task = uploadBytesResumable(fileRef, blob, {
     // Deliberately not `asset.mimeType || …`: a browser that reports
     // application/octet-stream is reporting something, and storing an mp3
     // under that name is an upload the Storage rule rejects outright, since
     // it requires audio/*.
     contentType: audioContentType(name, asset.mimeType),
+  })
+
+  onProgress?.(0)
+  await new Promise<void>((resolve, reject) => {
+    task.on(
+      'state_changed',
+      (snapshot) => onProgress?.(uploadPercent(snapshot.bytesTransferred, snapshot.totalBytes)),
+      reject,
+      resolve
+    )
   })
 
   return { url: await getDownloadURL(fileRef), name, path }

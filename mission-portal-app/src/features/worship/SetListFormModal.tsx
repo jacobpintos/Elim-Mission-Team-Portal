@@ -403,12 +403,14 @@ function SongAudioField({
   colors: ReturnType<typeof useThemeColors>
 }) {
   const [busy, setBusy] = useState(false)
+  const [percent, setPercent] = useState(0)
   const toast = useUIStore((s) => s.toast)
 
   const pick = async () => {
     setBusy(true)
+    setPercent(0)
     try {
-      const picked = await pickAndUploadSetListAudio(song.id)
+      const picked = await pickAndUploadSetListAudio(song.id, setPercent)
       if (!picked) return
       onUploaded(picked.path)
       // The track being replaced is not deleted here: on an edit it is still
@@ -448,7 +450,7 @@ function SongAudioField({
           </Text>
           <Pressable onPress={pick} disabled={busy}>
             <Text color={colors.primary} fontSize={12}>
-              {busy ? 'Uploading…' : 'Replace'}
+              {busy ? `${percent}%` : 'Replace'}
             </Text>
           </Pressable>
           <Pressable onPress={remove} disabled={busy}>
@@ -470,11 +472,32 @@ function SongAudioField({
             opacity={busy ? 0.6 : 1}
           >
             <Text color={colors.primary} fontSize={13}>
-              {busy ? 'Uploading…' : '+ Add audio file'}
+              {busy ? `Uploading… ${percent}%` : '+ Add audio file'}
             </Text>
           </XStack>
         </Pressable>
       )}
+
+      {/* The number says it is moving; the bar says how much is left. A
+          full-length track on church wifi is a minute of neither, otherwise. */}
+      {busy ? (
+        <View
+          style={{
+            height: 3,
+            borderRadius: 2,
+            backgroundColor: colors.border,
+            overflow: 'hidden',
+          }}
+        >
+          <View
+            style={{
+              width: `${percent}%`,
+              height: '100%',
+              backgroundColor: colors.primary,
+            }}
+          />
+        </View>
+      ) : null}
     </YStack>
   )
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { looksLikeAudio, audioContentType } from './audioFileType'
+import { looksLikeAudio, audioContentType, uploadPercent } from './audioFileType'
 
 describe('looksLikeAudio', () => {
   it('accepts a file the browser knows is audio', () => {
@@ -57,5 +57,37 @@ describe('audioContentType', () => {
     // reaches here must still be stored as something the rule allows.
     expect(audioContentType('mystery', '')).toMatch(/^audio\//)
     expect(audioContentType('mystery', 'application/octet-stream')).toMatch(/^audio\//)
+  })
+})
+
+describe('uploadPercent', () => {
+  it('reports how far along the bytes are', () => {
+    expect(uploadPercent(0, 200)).toBe(0)
+    expect(uploadPercent(100, 200)).toBe(50)
+    expect(uploadPercent(200, 200)).toBe(100)
+  })
+
+  it('rounds to something a person can read', () => {
+    expect(uploadPercent(1, 3)).toBe(33)
+  })
+
+  it('never shows NaN% before the size is known', () => {
+    // Storage reports a zero total for a moment at the start of a task.
+    expect(uploadPercent(0, 0)).toBe(0)
+    expect(uploadPercent(10, 0)).toBe(0)
+  })
+
+  it('never shows more than 100%', () => {
+    // Storage does briefly report more transferred than total.
+    expect(uploadPercent(210, 200)).toBe(100)
+  })
+
+  it('never shows less than 0%', () => {
+    expect(uploadPercent(-5, 200)).toBe(0)
+  })
+
+  it('copes with numbers that are not numbers', () => {
+    expect(uploadPercent(NaN, 200)).toBe(0)
+    expect(uploadPercent(10, Infinity)).toBe(0)
   })
 })

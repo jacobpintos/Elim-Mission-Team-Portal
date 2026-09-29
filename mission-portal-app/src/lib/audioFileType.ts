@@ -58,3 +58,16 @@ export function audioContentType(name: string, reportedType?: string | null): st
   if (reported.startsWith('audio/')) return reported
   return AUDIO_EXTENSIONS[extensionOf(name)] ?? 'audio/mpeg'
 }
+
+/**
+ * How far an upload has got, as a whole percentage.
+ *
+ * Its own function because the two ways it goes wrong are both silent: a
+ * total of zero divides to NaN and renders as "NaN%", and a transferred count
+ * that momentarily exceeds the total — which Storage does report — renders as
+ * "101%" and reads like a bug to whoever is watching the number.
+ */
+export function uploadPercent(transferred: number, total: number): number {
+  if (!Number.isFinite(transferred) || !Number.isFinite(total) || total <= 0) return 0
+  return Math.max(0, Math.min(100, Math.round((transferred / total) * 100)))
+}
