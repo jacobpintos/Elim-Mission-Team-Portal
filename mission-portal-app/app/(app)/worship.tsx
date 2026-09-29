@@ -21,6 +21,7 @@ import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
 import { ChordSheetsTab } from '@/features/worship/ChordSheetsTab'
 import { InputListTab } from '@/features/worship/InputListTab'
 import type { SetList } from '@/types/worship'
+import type { EventInstance } from '@/types/events'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function WorshipScreen() {
@@ -29,7 +30,7 @@ export default function WorshipScreen() {
   const { profile } = useAuthStore()
   const uid = profile?.uid ?? ''
 
-  const { setLists, loading, subscribe, unsubscribe, createSetList, deleteSetList } =
+  const { setLists, loading, subscribe, unsubscribe, createSetList, updateSetList, deleteSetList } =
     useWorshipStore()
   const { subscribe: subChords, unsubscribe: unsubChords } = useChordSheetsStore()
   const { templates, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
@@ -44,6 +45,7 @@ export default function WorshipScreen() {
   const readOnly = isReadOnly(profile)
   const [activeTab, setActiveTab] = useState<'setlists' | 'chords' | 'inputs'>('setlists')
   const [showForm, setShowForm] = useState(false)
+  const [editSetList, setEditSetList] = useState<SetList | null>(null)
   const [detailSetList, setDetailSetList] = useState<SetList | null>(null)
 
   // Wait for Firebase Auth to confirm the user's identity before subscribing.
@@ -70,7 +72,42 @@ export default function WorshipScreen() {
 
   const worshipUsers = users.filter((u) => isWorship(u) && !u.roles?.includes('admin'))
 
+  /**
+   * The event a set list is linked to, as the form's picker understands it.
+   *
+   * Built from the template rather than looked up among expanded instances:
+   * an instance only exists inside a date range somebody asked for, and a set
+   * list for last month's service would resolve to nothing — which the form
+   * would read as "no event linked" and the save would then make true.
+   */
+  const eventInstanceFor = (sl: SetList): EventInstance | null => {
+    if (!sl.eventTemplateId || !sl.eventDate) return null
+    const template = templates.find((t) => sameId(t.id, sl.eventTemplateId!))
+    if (!template) return null
+    return {
+      ...template,
+      date: sl.eventDate,
+      templateId: template.id,
+      instanceKey: `${template.id}_${sl.eventDate}`,
+    }
+  }
+
   const handleSave = async (data: Omit<SetList, 'id' | 'createdAt' | 'updatedAt'>) => {
+    // Editing an existing one: change it and stop there. The announcement and
+    // the acknowledge tasks belong to a set list arriving, and firing them
+    // again on a typo fix would teach the team to ignore both.
+    if (editSetList) {
+      try {
+        await updateSetList(editSetList.id, data)
+        toast('Set list updated!', 'success')
+        setShowForm(false)
+        setEditSetList(null)
+      } catch {
+        toast('Failed to update set list', 'error')
+      }
+      return
+    }
+
     try {
       const setListId = await createSetList(data)
 
@@ -282,18 +319,52 @@ export default function WorshipScreen() {
                               {sl.songs.length} song{sl.songs.length !== 1 ? 's' : ''}
                             </Text>
                           </YStack>
-                          <Pressable onPress={() => handleDelete(sl)}>
-                            <XStack
-                              backgroundColor="#c0392b18"
-                              borderRadius="$2"
-                              paddingHorizontal="$2"
-                              paddingVertical="$1"
-                            >
-                              <Text color="#c0392b" fontSize="$2">
-                                Delete
-                              </Text>
+                          {/* Both gated the same way the New button is: a
+                              guest pressing either only gets a refusal from
+                              Firestore. */}
+                          {readOnly ? null : (
+                            <XStack gap="$2" alignItems="center">
+                              <Pressable
+                                onPress={(e) => {
+                                  // The whole card opens the detail modal, and
+                                  // these sit inside it. Without this the
+                                  // detail modal opens over the form, or over
+                                  // a set list that was just deleted.
+                                  e.stopPropagation()
+                                  setEditSetList(sl)
+                                  setShowForm(true)
+                                }}
+                              >
+                                <XStack
+                                  backgroundColor={colors.primary + '18'}
+                                  borderRadius="$2"
+                                  paddingHorizontal="$2"
+                                  paddingVertical="$1"
+                                >
+                                  <Text color={colors.primary} fontSize="$2">
+                                    Edit
+                                  </Text>
+                                </XStack>
+                              </Pressable>
+                              <Pressable
+                                onPress={(e) => {
+                                  e.stopPropagation()
+                                  handleDelete(sl)
+                                }}
+                              >
+                                <XStack
+                                  backgroundColor="#c0392b18"
+                                  borderRadius="$2"
+                                  paddingHorizontal="$2"
+                                  paddingVertical="$1"
+                                >
+                                  <Text color="#c0392b" fontSize="$2">
+                                    Delete
+                                  </Text>
+                                </XStack>
+                              </Pressable>
                             </XStack>
-                          </Pressable>
+                          )}
                         </XStack>
 
                         {sl.songs.length > 0 ? (
@@ -347,9 +418,14 @@ export default function WorshipScreen() {
 
           <SetListFormModal
             visible={showForm}
-            onClose={() => setShowForm(false)}
+            onClose={() => {
+              setShowForm(false)
+              setEditSetList(null)
+            }}
             onSave={handleSave}
             createdBy={uid}
+            editSetList={editSetList}
+            eventFor={eventInstanceFor}
           />
 
           <SetListDetailModal setList={detailSetList} onClose={() => setDetailSetList(null)} />

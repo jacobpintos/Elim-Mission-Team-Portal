@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Modal,
   View,
@@ -39,6 +39,10 @@ interface SetListFormModalProps {
   onClose: () => void
   onSave: (data: Omit<SetList, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   createdBy: string | number
+  /** The set list being changed, or null to build a new one. */
+  editSetList?: SetList | null
+  /** Events the set list may be linked to, for showing the one it already has. */
+  eventFor?: (setList: SetList) => EventInstance | null
 }
 
 interface ChordSheetPickerProps {
@@ -386,10 +390,16 @@ function SongLinkField({
 function SongAudioField({
   song,
   onChange,
+  onUploaded,
+  onDropped,
   colors,
 }: {
   song: SetListSong
   onChange: (patch: Partial<SetListSong>) => void
+  /** A file now exists in Storage that only this form knows about. */
+  onUploaded: (path: string) => void
+  /** A file the set list used to point at, to delete once the save lands. */
+  onDropped: (path: string | undefined) => void
   colors: ReturnType<typeof useThemeColors>
 }) {
   const [busy, setBusy] = useState(false)
@@ -400,8 +410,10 @@ function SongAudioField({
     try {
       const picked = await pickAndUploadSetListAudio(song.id)
       if (!picked) return
-      // Replacing a track: the old file is nobody's once this returns.
-      await deleteSetListAudio(song.audioPath)
+      onUploaded(picked.path)
+      // The track being replaced is not deleted here: on an edit it is still
+      // the saved set list's until this form is saved.
+      onDropped(song.audioPath)
       onChange({ audioUrl: picked.url, audioName: picked.name, audioPath: picked.path })
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not add that audio file', 'error')
@@ -410,10 +422,9 @@ function SongAudioField({
     }
   }
 
-  const remove = async () => {
-    const path = song.audioPath
+  const remove = () => {
+    onDropped(song.audioPath)
     onChange({ audioUrl: undefined, audioName: undefined, audioPath: undefined })
-    await deleteSetListAudio(path)
   }
 
   return (
@@ -468,7 +479,14 @@ function SongAudioField({
   )
 }
 
-export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetListFormModalProps) {
+export function SetListFormModal({
+  visible,
+  onClose,
+  onSave,
+  createdBy,
+  editSetList = null,
+  eventFor,
+}: SetListFormModalProps) {
   const colors = useThemeColors()
   const chordSheets = useChordSheetsStore((s) => s.chordSheets)
   const [title, setTitle] = useState('')
@@ -476,6 +494,21 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
   const [selectedEvent, setSelectedEvent] = useState<EventInstance | null>(null)
   const [showEventPicker, setShowEventPicker] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  /**
+   * Audio uploaded while this form has been open, and audio the save will
+   * orphan.
+   *
+   * Editing is what forces the distinction. A track is uploaded the moment it
+   * is picked, so abandoning the form has to take those files with it — but
+   * the files already on the set list being edited belong to it, and deleting
+   * one because somebody opened the form and changed their mind would be
+   * losing data nobody asked to lose. So nothing existing is deleted until a
+   * save actually succeeds, and only what this session created is swept on the
+   * way out.
+   */
+  const uploadedHere = useRef<string[]>([])
+  const orphanedBySave = useRef<string[]>([])
   const musicItems = useMusicStore((s) => s.items)
   const loadMusic = useMusicStore((s) => s.load)
 
@@ -490,14 +523,42 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
     setTitle('')
     setSongs([makeSong()])
     setSelectedEvent(null)
+    uploadedHere.current = []
+    orphanedBySave.current = []
   }
 
+  /**
+   * Load whatever the form was opened on.
+   *
+   * Set during render rather than in an effect, which is React's own answer
+   * for state derived from props: an effect would paint one frame of the
+   * previous set list's songs before correcting itself, and the frame in
+   * question is the one the modal animates in on.
+   */
+  const identity = visible ? String(editSetList?.id ?? 'new') : 'closed'
+  const [loadedFor, setLoadedFor] = useState(identity)
+  if (identity !== loadedFor) {
+    setLoadedFor(identity)
+    if (visible) {
+      setTitle(editSetList?.title ?? '')
+      setSongs(editSetList?.songs?.length ? editSetList.songs : [makeSong()])
+      setSelectedEvent(editSetList && eventFor ? eventFor(editSetList) : null)
+    }
+  }
+
+  // The two lists belong to whatever the form was last opened on. Cleared in
+  // an effect rather than beside the state above, because a ref written during
+  // render is a ref that can be written twice for one render.
+  useEffect(() => {
+    uploadedHere.current = []
+    orphanedBySave.current = []
+  }, [loadedFor])
+
   const handleClose = () => {
-    // Closing without saving throws the set list away, and nothing will ever
-    // reference the tracks uploaded while it was open. Deliberately not part
-    // of reset(), which also runs after a successful save — where the files
-    // are the saved set list's.
-    songs.forEach((s) => deleteSetListAudio(s.audioPath))
+    // Only what this session uploaded. Those files are referenced by nothing
+    // once the form closes unsaved — but the ones already on the set list
+    // being edited are still its own.
+    uploadedHere.current.forEach((path) => deleteSetListAudio(path))
     reset()
     onClose()
   }
@@ -560,11 +621,16 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
   const removeSong = (id: string) => {
     setSongs((prev) => {
       if (prev.length <= 1) return prev
-      // The track was uploaded the moment it was picked, so dropping the song
-      // it belonged to has to take the file with it.
-      deleteSetListAudio(prev.find((s) => s.id === id)?.audioPath)
+      // The song's track goes when the save does, not now: until then the set
+      // list on file still points at it.
+      dropAudio(prev.find((s) => s.id === id)?.audioPath)
       return prev.filter((s) => s.id !== id)
     })
+  }
+
+  /** Remember a file to delete once the save succeeds. */
+  const dropAudio = (path: string | undefined) => {
+    if (path) orphanedBySave.current.push(path)
   }
 
   const handleSave = async () => {
@@ -578,6 +644,10 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
         eventTemplateId: selectedEvent?.templateId ?? null,
         eventDate: selectedEvent?.date ?? null,
       })
+      // Saved, so the tracks this form replaced or dropped are referenced by
+      // nothing. Deliberately after onSave: had it failed, they are still the
+      // set list's.
+      orphanedBySave.current.forEach((path) => deleteSetListAudio(path))
       reset()
     } finally {
       setSaving(false)
@@ -602,7 +672,7 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
           >
             <XStack justifyContent="space-between" alignItems="center">
               <Text color={colors.text} fontSize="$5" fontWeight="700">
-                New Set List
+                {editSetList ? 'Edit Set List' : 'New Set List'}
               </Text>
               <Pressable onPress={handleClose}>
                 <Text color={colors.textMuted} fontSize="$4">
@@ -744,6 +814,8 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
                         song={song}
                         colors={colors}
                         onChange={(patch) => patchSong(song.id, patch)}
+                        onUploaded={(path) => uploadedHere.current.push(path)}
+                        onDropped={dropAudio}
                       />
 
                       <TextInput
@@ -800,7 +872,7 @@ export function SetListFormModal({ visible, onClose, onSave, createdBy }: SetLis
                 opacity={saving || !title.trim() ? 0.5 : 1}
               >
                 <Text color="white" fontWeight="700" fontSize="$3">
-                  {saving ? 'Saving…' : 'Save Set List'}
+                  {saving ? 'Saving…' : editSetList ? 'Save Changes' : 'Save Set List'}
                 </Text>
               </XStack>
             </Pressable>
