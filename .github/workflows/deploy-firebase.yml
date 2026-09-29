@@ -20,6 +20,7 @@ on:
     paths:
       - 'mission-portal-app/functions/**'
       - 'mission-portal-app/firestore.rules'
+      - '.github/workflows/deploy-firebase.yml'
 
 jobs:
   deploy:
@@ -30,14 +31,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          # Full history. The diff below spans every commit in the push, and a
+          # shallow clone does not contain the commit the push started from.
+          fetch-depth: 0
 
       # Determine which files changed so we can deploy selectively on push.
+      #
+      # Across the WHOLE push, not just its last commit. `git diff HEAD~1 HEAD`
+      # asked whether the final commit touched functions/ — so a push of six
+      # commits whose last one happened to touch only the app skipped the
+      # functions deploy, reported success in twelve seconds, and left the
+      # functions live on old code with nothing to say so.
       - name: Detect changed paths
         id: changed
         if: github.event_name == 'push'
         run: |
-          git diff --name-only HEAD~1 HEAD > /tmp/changed.txt
+          BEFORE='${{ github.event.before }}'
+          # A new branch, a force push, or a commit that has since been
+          # garbage-collected leaves nothing to compare against. Deploy in that
+          # case rather than skip: a needless deploy costs a few minutes, a
+          # silent skip costs however long it takes somebody to notice.
+          if [ -z "$BEFORE" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "Cannot resolve ${BEFORE:-<empty>} — deploying everything."
+            echo "functions=1" >> "$GITHUB_OUTPUT"
+            echo "rules=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --name-only "$BEFORE" '${{ github.sha }}' > /tmp/changed.txt
           echo "functions=$(grep -c 'mission-portal-app/functions/' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
           echo "rules=$(grep -c 'mission-portal-app/firestore.rules' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
 
