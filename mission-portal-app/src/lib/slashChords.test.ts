@@ -91,3 +91,29 @@ describe('convertChordLine', () => {
     expect(convertChordLine('1   1/7  4', C, false)).toBe('C   C/B  F')
   })
 })
+
+describe('chords packed with spaces and arrows together', () => {
+  it('transposes every chord on both sides of an arrow', () => {
+    // Straight off the Interlude in the screenshot: this rendered as
+    // "F 5 1 → C/B → Am", with only the first chord of the group transposed
+    // and the rest printed as the numbers they were typed as.
+    expect(formatToken('4 5 1>1/7>6', C, false)).toBe('F  G  C → C/B → Am')
+    expect(formatToken('6>5>4 1', C, false)).toBe('Am → G → F  C')
+  })
+
+  it('still handles a group with no arrow in it', () => {
+    expect(formatToken('4 5 1', C, false)).toBe('F  G  C')
+  })
+
+  it('still handles an arrow with no group in it', () => {
+    expect(formatToken('4>5', C, false)).toBe('F → G')
+  })
+
+  it('copes with spaces around the arrow itself', () => {
+    expect(formatToken('4 > 5', C, false)).toBe('F → G')
+  })
+
+  it('leaves Nashville mode reading as it was typed', () => {
+    expect(formatToken('4 5 1>1/7>6', -1, false)).toBe('4 5 1 → 1/7 → 6')
+  })
+})

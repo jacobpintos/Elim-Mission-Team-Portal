@@ -28,17 +28,27 @@ export function formatToken(raw: string, keyIdx: number, isMinor: boolean): stri
   if (!raw || raw === PROGRESSION_END) return raw
   const tok = stripBoundary(raw)
   if (!tok) return ''
-  // Slash chords are nashvilleToChord's business now, not this function's.
-  // Splitting them here is what let "1>1/7" through as "C → C/7": the arrow
-  // branch handed whole parts over and the others did not.
   const conv = (t: string) => (keyIdx < 0 ? t.trim() : nashvilleToChord(t.trim(), keyIdx, isMinor))
-  if (tok.includes('>')) return tok.split('>').map(conv).join(' → ')
+
+  /**
+   * One step of a progression, which may itself be several chords.
+   *
+   * Chords packed into one box with spaces and passing chords joined by
+   * arrows turn up in the same token — "4 5 1>1/7>6" is a real thing somebody
+   * wrote. So each side of an arrow has to be split on whitespace as well,
+   * which is what was missing: the arrow branch handed "4 5 1" over whole and
+   * nashvilleToChord read it as degree 4 carrying the quality " 5 1", so it
+   * came out "F 5 1" — the first chord transposed and the rest left as the
+   * numbers they were typed as.
+   *
+   * Slash chords need no attention here: nashvilleToChord owns those.
+   */
+  const convGroup = (part: string) =>
+    keyIdx < 0 ? part.trim() : part.trim().split(/\s+/).filter(Boolean).map(conv).join('  ')
+
+  if (tok.includes('>')) return tok.split('>').map(convGroup).join(' → ')
   if (keyIdx < 0) return tok
-  // Space-separated: user packed multiple chords into one box — convert each independently
-  if (tok.includes(' ')) {
-    return tok.trim().split(/\s+/).map(conv).join('  ')
-  }
-  return conv(tok)
+  return convGroup(tok)
 }
 
 // Split a flat chord token array into progression groups. A group ends at a
