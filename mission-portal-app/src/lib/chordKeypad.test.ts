@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
+import { formatToken } from '@/features/worship/chordSheetFormat'
 import {
   appendChordKey,
   backspaceChordToken,
   pinExtension,
+  SPACE_KEY,
   MAX_TOKEN_LENGTH,
   MAX_PINNED,
 } from './chordKeypad'
@@ -87,5 +89,45 @@ describe('pinExtension', () => {
     const many = ['a', 'b', 'c', 'd', 'e'].reduce((acc, k) => pinExtension(acc, k), [] as string[])
     expect(many).toHaveLength(MAX_PINNED)
     expect(many[0]).toBe('e')
+  })
+})
+
+describe('appendChordKey — the space bar', () => {
+  it('separates two chords packed into one box', () => {
+    // The viewer splits a token on whitespace and renders each part as its own
+    // chord, so "1 4" is how two chords sit over one word.
+    expect(appendChordKey('1', SPACE_KEY)).toBe('1 ')
+    expect(appendChordKey('1 ', '4')).toBe('1 4')
+  })
+
+  it('refuses a leading space, which separates nothing', () => {
+    expect(appendChordKey('', SPACE_KEY)).toBe('')
+  })
+
+  it('refuses a second space in a row', () => {
+    // Invisible in the viewer either way, and it eats room from a token that
+    // only has twelve characters.
+    expect(appendChordKey('1 ', SPACE_KEY)).toBe('1 ')
+  })
+
+  it('refuses a space after the progression dot, like every other key', () => {
+    expect(appendChordKey('4.', SPACE_KEY)).toBe('4.')
+  })
+
+  it('still respects the length limit', () => {
+    const full = '1'.repeat(MAX_TOKEN_LENGTH)
+    expect(appendChordKey(full, SPACE_KEY)).toBe(full)
+  })
+
+  it('backspaces a space one character at a time', () => {
+    expect(backspaceChordToken('1 4')).toBe('1 ')
+    expect(backspaceChordToken('1 ')).toBe('1')
+  })
+
+  it('produces something the viewer renders as two chords', () => {
+    // The whole point of the key, and the half of it that lives in another
+    // module: without this the pad could type a space the sheet ignored.
+    // Key of C, so 1 is C and 4 is F.
+    expect(formatToken(appendChordKey(appendChordKey('1', SPACE_KEY), '4'), 0, false)).toBe('C  F')
   })
 })

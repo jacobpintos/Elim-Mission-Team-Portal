@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { EXTENSION_KEYS } from '@/lib/chordKeypad'
+import { EXTENSION_KEYS, SPACE_KEY } from '@/lib/chordKeypad'
 
 interface ChordKeypadProps {
   /** The token being edited, shown back so the pad is not typing blind. */
@@ -153,6 +153,15 @@ export function ChordKeypad({
               ))}
             </XStack>
           ) : null}
+
+          {/* Space — two chords over one word, "1 4" over "love", which the
+              viewer already knows how to render as two. On its own row and
+              full width because that is what a space bar is for: it is hit
+              without looking, and squeezing it into the row above would take
+              every other key below a thumb's width. */}
+          <XStack gap="$1">
+            <Key label="space" colors={colors} onPress={() => press(SPACE_KEY)} muted />
+          </XStack>
 
           <XStack gap="$1">
             <Key label="sus, add…" colors={colors} onPress={() => setPane('more')} wide muted />

@@ -45,18 +45,30 @@ const UNITS = [...EXTENSION_KEYS].sort((a, b) => b.length - a.length)
 /** How many recently used extensions stay pinned to the main pane. */
 export const MAX_PINNED = 4
 
+/** What the space bar sends. A constant because three places test for it. */
+export const SPACE_KEY = ' '
+
 /**
  * Add a key press to a token.
  *
  * Deliberately permissive: NNS is written by people who know it, and the
  * combinations are open-ended enough that guarding against every odd one
  * would block legitimate chords. It refuses only what could never be
- * meaningful — a token that has run past any sensible length, and a second
- * progression dot, which marks an end and cannot mark two.
+ * meaningful — a token that has run past any sensible length, a second
+ * progression dot, which marks an end and cannot mark two, and a space with
+ * no chord on both sides of it.
  */
 export function appendChordKey(token: string, key: string): string {
   const current = token ?? ''
   if (current.length + key.length > MAX_TOKEN_LENGTH) return current
+
+  // A space separates two chords sharing one word — "1 4" over "love". It
+  // needs something before it to separate, and two in a row separate nothing:
+  // the viewer splits on whitespace, so a stray one is invisible there and
+  // only ever eats room from the twelve characters a token has.
+  if (key === SPACE_KEY) {
+    if (current === '' || current.endsWith(SPACE_KEY)) return current
+  }
 
   // The dot ends a progression, so it belongs last and only once.
   if (key === '.') {
