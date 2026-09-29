@@ -1,6 +1,9 @@
+import { useEffect } from 'react'
 import { Modal, View, Pressable, StyleSheet } from 'react-native'
-import { YStack, Text } from 'tamagui'
+import { YStack, XStack, Text } from 'tamagui'
 import { YouTubeEmbed } from '@/components/ui/YouTubeEmbed'
+import { openExternalUrl } from '@/lib/externalUrl'
+import { useMediaPlaybackStore } from '@/stores/mediaPlaybackStore'
 
 /**
  * A video playing full-screen on black, the way Content plays one.
@@ -25,6 +28,18 @@ export function VideoPlayerModal({
   subtitle?: string
   onClose: () => void
 }) {
+  const claim = useMediaPlaybackStore((s) => s.claim)
+  const release = useMediaPlaybackStore((s) => s.release)
+
+  // Opening a video takes the playback slot, which stops any reference track
+  // still running underneath it — the modal covers the screen, so a track left
+  // playing has no visible player to pause and no obvious cause.
+  useEffect(() => {
+    if (!url) return
+    claim(url)
+    return () => release(url)
+  }, [url, claim, release])
+
   return (
     <Modal visible={!!url} animationType="slide" onRequestClose={onClose}>
       <View style={[styles.modal, { backgroundColor: '#000' }]}>
@@ -38,8 +53,8 @@ export function VideoPlayerModal({
             <View style={{ flex: 1 }}>
               <YouTubeEmbed url={url} />
             </View>
-            {title || subtitle ? (
-              <YStack padding="$4">
+            <XStack padding="$4" alignItems="center" gap="$3">
+              <YStack flex={1}>
                 {title ? (
                   <Text color="white" fontSize="$4" fontWeight="700">
                     {title}
@@ -51,7 +66,24 @@ export function VideoPlayerModal({
                   </Text>
                 ) : null}
               </YStack>
-            ) : null}
+              {/* The way out to YouTube itself — for chromecasting it, saving
+                  it, or the videos whose owner has disabled embedding. The
+                  embed carries its own version of this on native, but not on
+                  web, where a blocked video is just a black rectangle. */}
+              <Pressable onPress={() => openExternalUrl(url)}>
+                <XStack
+                  borderWidth={1}
+                  borderColor="rgba(255,255,255,0.4)"
+                  borderRadius={99}
+                  paddingHorizontal="$3"
+                  paddingVertical="$2"
+                >
+                  <Text color="white" fontSize="$2" fontWeight="600">
+                    Open in YouTube ↗
+                  </Text>
+                </XStack>
+              </Pressable>
+            </XStack>
           </YStack>
         ) : null}
       </View>

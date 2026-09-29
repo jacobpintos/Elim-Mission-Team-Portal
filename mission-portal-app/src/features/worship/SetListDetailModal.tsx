@@ -177,15 +177,26 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                         // set list. Anything else is still somebody else's
                         // site and opens there.
                         extractYouTubeId(song.link) ? (
-                          <Pressable
-                            onPress={() =>
-                              setPlayingVideo({ url: song.link, title: song.name || 'Video' })
-                            }
-                          >
-                            <Text color={colors.primary} fontSize="$2" numberOfLines={1}>
-                              ▶ Play video
-                            </Text>
-                          </Pressable>
+                          <XStack gap="$3" alignItems="center">
+                            <Pressable
+                              onPress={() =>
+                                setPlayingVideo({ url: song.link, title: song.name || 'Video' })
+                              }
+                            >
+                              <Text color={colors.primary} fontSize="$2">
+                                ▶ Play video
+                              </Text>
+                            </Pressable>
+                            {/* Some people want it in YouTube: to cast it to a
+                                TV, to keep it playing while the phone is used
+                                for something else, or because that is where
+                                their playlist is. */}
+                            <Pressable onPress={() => openExternalUrl(song.link)}>
+                              <Text color={colors.textMuted} fontSize="$2">
+                                YouTube ↗
+                              </Text>
+                            </Pressable>
+                          </XStack>
                         ) : (
                           <Pressable onPress={() => openExternalUrl(song.link)}>
                             <Text color={colors.primary} fontSize="$2" numberOfLines={1}>

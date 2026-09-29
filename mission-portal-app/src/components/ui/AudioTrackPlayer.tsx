@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { useAudioPlaybackStore } from '@/stores/audioPlaybackStore'
+import { useMediaPlaybackStore } from '@/stores/mediaPlaybackStore'
 
 /**
  * A reference track playing inside the app, in one line.
@@ -22,9 +22,9 @@ export function AudioTrackPlayer({ url, name }: { url: string; name?: string }) 
   const colors = useThemeColors()
   const player = useAudioPlayer({ uri: url })
   const status = useAudioPlayerStatus(player)
-  const activeUrl = useAudioPlaybackStore((s) => s.activeUrl)
-  const claim = useAudioPlaybackStore((s) => s.claim)
-  const release = useAudioPlaybackStore((s) => s.release)
+  const activeUrl = useMediaPlaybackStore((s) => s.activeUrl)
+  const claim = useMediaPlaybackStore((s) => s.claim)
+  const release = useMediaPlaybackStore((s) => s.release)
 
   useEffect(() => {
     // Without this, a phone with the ringer switch off plays nothing at all:
@@ -33,7 +33,8 @@ export function AudioTrackPlayer({ url, name }: { url: string; name?: string }) 
     setAudioModeAsync({ playsInSilentMode: true }).catch(() => {})
   }, [])
 
-  // Another track took the slot — stop, so two never play over each other.
+  // Something else took the slot — another track, or a video opened over
+  // this one — so stop. Nothing should ever be heard over anything else.
   useEffect(() => {
     if (activeUrl !== url && status.playing) player.pause()
   }, [activeUrl, url, status.playing, player])
