@@ -344,7 +344,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
           <XStack gap="$2" alignItems="flex-start" flexWrap="wrap">
             {/* Key selector */}
             <YStack>
-              <Pressable onPress={() => setShowKeyDropdown((v) => !v)}>
+              <Pressable onPress={() => setShowKeyDropdown((v) => !v)} style={styles.touch}>
                 <XStack
                   backgroundColor={colors.primary + '18'}
                   borderRadius={99}
@@ -395,7 +395,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
 
             {/* Major/Minor toggle — only when a key is selected */}
             {selectedKey !== '' ? (
-              <Pressable onPress={handleToggleMinor}>
+              <Pressable onPress={handleToggleMinor} style={styles.touch}>
                 <XStack
                   backgroundColor={isMinor ? colors.primary : colors.primary + '18'}
                   borderRadius={99}
@@ -412,7 +412,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
             ) : null}
 
             {/* Chords Only toggle */}
-            <Pressable onPress={() => setChordsOnly((v) => !v)}>
+            <Pressable onPress={() => setChordsOnly((v) => !v)} style={styles.touch}>
               <XStack
                 backgroundColor={chordsOnly ? colors.primary : colors.primary + '18'}
                 borderRadius={99}
@@ -441,12 +441,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
               <Pressable
                 onPress={() => changeScale(-1)}
                 disabled={scaleIdx === 0}
-                hitSlop={6}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 4,
-                  opacity: scaleIdx === 0 ? 0.4 : 1,
-                }}
+                style={[styles.touch, { paddingHorizontal: 12, opacity: scaleIdx === 0 ? 0.4 : 1 }]}
               >
                 <Text color={colors.primary} fontSize={16} fontWeight="700">
                   −
@@ -458,12 +453,13 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
               <Pressable
                 onPress={() => changeScale(1)}
                 disabled={scaleIdx === FONT_SCALES.length - 1}
-                hitSlop={6}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 4,
-                  opacity: scaleIdx === FONT_SCALES.length - 1 ? 0.4 : 1,
-                }}
+                style={[
+                  styles.touch,
+                  {
+                    paddingHorizontal: 12,
+                    opacity: scaleIdx === FONT_SCALES.length - 1 ? 0.4 : 1,
+                  },
+                ]}
               >
                 <Text color={colors.primary} fontSize={16} fontWeight="700">
                   +
@@ -472,7 +468,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
             </XStack>
 
             {/* Export PDF — available on all platforms via expo-print */}
-            <Pressable onPress={handleExportPdf}>
+            <Pressable onPress={handleExportPdf} style={styles.touch}>
               <XStack
                 backgroundColor={colors.primary + '18'}
                 borderRadius={99}
@@ -504,7 +500,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
             >
               <XStack gap="$1" paddingVertical={2}>
                 {jumpTargets.map(({ id, label }) => (
-                  <Pressable key={id} onPress={() => jumpTo(id)} hitSlop={6}>
+                  <Pressable key={id} onPress={() => jumpTo(id)} style={styles.touchSmall}>
                     <XStack
                       backgroundColor={colors.primary + '18'}
                       borderRadius={99}
@@ -771,6 +767,24 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
 }
 
 const styles = StyleSheet.create({
+  /**
+   * A touch target Apple would call one.
+   *
+   * These controls were 24 to 26 points tall, and the hitSlop meant to pad
+   * them is ignored by react-native-web — it exists only on the old Touchable
+   * — so on the PWA there was nothing around them at all. Padding the
+   * pressable rather than the pill keeps the buttons looking the same size
+   * while making the area that answers a thumb the 44 points Apple asks for.
+   */
+  touch: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  /** The jump chips, which are a row of their own and stay compact. */
+  touchSmall: {
+    minHeight: 34,
+    justifyContent: 'center',
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
