@@ -28,18 +28,17 @@ export function formatToken(raw: string, keyIdx: number, isMinor: boolean): stri
   if (!raw || raw === PROGRESSION_END) return raw
   const tok = stripBoundary(raw)
   if (!tok) return ''
+  // Slash chords are nashvilleToChord's business now, not this function's.
+  // Splitting them here is what let "1>1/7" through as "C → C/7": the arrow
+  // branch handed whole parts over and the others did not.
   const conv = (t: string) => (keyIdx < 0 ? t.trim() : nashvilleToChord(t.trim(), keyIdx, isMinor))
   if (tok.includes('>')) return tok.split('>').map(conv).join(' → ')
   if (keyIdx < 0) return tok
   // Space-separated: user packed multiple chords into one box — convert each independently
   if (tok.includes(' ')) {
-    return tok
-      .trim()
-      .split(/\s+/)
-      .map((p) => p.split('/').map(conv).join('/'))
-      .join('  ')
+    return tok.trim().split(/\s+/).map(conv).join('  ')
   }
-  return tok.split('/').map(conv).join('/')
+  return conv(tok)
 }
 
 // Split a flat chord token array into progression groups. A group ends at a

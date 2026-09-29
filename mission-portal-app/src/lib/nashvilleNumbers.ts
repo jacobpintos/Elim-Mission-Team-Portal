@@ -31,13 +31,18 @@ const FLAT_ROOT_INDICES = new Set([1, 3, 5, 8, 10])
  * @param keyIdx   Index into NNS_KEYS (0 = C, 1 = Db, …)
  * @param isMinor  Use natural-minor scale intervals (default: false = major)
  */
-export function nashvilleToChord(token: string, keyIdx: number, isMinor = false): string {
-  const match = token.match(/^([b#]?)([1-7])(.*)$/)
-  if (!match) return token
-
-  const [, accidental, degreeStr, quality] = match
-  const degree = parseInt(degreeStr, 10)
-
+/**
+ * The note a scale degree lands on, with no chord quality attached.
+ *
+ * Shared by the chord root and the bass note after a slash, which need the
+ * same arithmetic and emphatically not the same naming: a bass note is a note.
+ */
+function degreeToNoteName(
+  accidental: string,
+  degree: number,
+  keyIdx: number,
+  isMinor: boolean
+): string {
   const intervals = isMinor ? MINOR_INTERVALS : MAJOR_INTERVALS
   let semitones = intervals[degree - 1]
 
@@ -52,8 +57,35 @@ export function nashvilleToChord(token: string, keyIdx: number, isMinor = false)
       : CHROMATIC_FLATS.indexOf(rootName)
 
   const noteIdx = (((rootIdx + semitones) % 12) + 12) % 12
-  const useFlatNames = FLAT_ROOT_INDICES.has(keyIdx)
-  const noteName = useFlatNames ? CHROMATIC_FLATS[noteIdx] : CHROMATIC_SHARPS[noteIdx]
+  return FLAT_ROOT_INDICES.has(keyIdx) ? CHROMATIC_FLATS[noteIdx] : CHROMATIC_SHARPS[noteIdx]
+}
+
+/** The bass half of a slash chord: "[b|#]<degree>", or nothing it understands. */
+const BASS_DEGREE = /^([b#]?)([1-7])$/
+
+export function nashvilleToChord(token: string, keyIdx: number, isMinor = false): string {
+  // A slash chord is a chord over a bass note — "1/7" is C/B in the key of C.
+  // It is split here rather than by each caller, which is how the bass came to
+  // be transposed in some places and printed as a bare number in others: the
+  // viewer split the token itself, so "1/7" worked but "1>1/7" did not, and
+  // the callers that split also handed each half to this function as a chord,
+  // so "1/6" came out "C/Am" — a bass note wearing a chord's quality.
+  const slashAt = token.indexOf('/')
+  if (slashAt > 0) {
+    const root = nashvilleToChord(token.slice(0, slashAt), keyIdx, isMinor)
+    const bass = token.slice(slashAt + 1)
+    const bassMatch = bass.match(BASS_DEGREE)
+    // A bass this does not recognise is left as written rather than guessed at.
+    if (!bassMatch) return `${root}/${bass}`
+    return `${root}/${degreeToNoteName(bassMatch[1], parseInt(bassMatch[2], 10), keyIdx, isMinor)}`
+  }
+
+  const match = token.match(/^([b#]?)([1-7])(.*)$/)
+  if (!match) return token
+
+  const [, accidental, degreeStr, quality] = match
+  const degree = parseInt(degreeStr, 10)
+  const noteName = degreeToNoteName(accidental, degree, keyIdx, isMinor)
 
   // "M" on its own is an explicit-major marker — it overrides the diatonic
   // minor default below and never appears in the rendered name.
