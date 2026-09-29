@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Modal, View, ScrollView, Pressable, StyleSheet, Platform } from 'react-native'
+import {
+  Modal,
+  View,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  Platform,
+  useWindowDimensions,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { YStack, XStack, Text } from 'tamagui'
@@ -82,6 +90,26 @@ interface ChordSheetViewerProps {
 export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewerProps) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
+  const { height: windowHeight } = useWindowDimensions()
+
+  /**
+   * How tall the card may be, in points rather than as a percentage.
+   *
+   * It was maxHeight="94%", which is 94% of whatever the browser believes the
+   * fixed-position overlay to be — and on a phone turned sideways that belief
+   * can be wrong or stale. When the cap fails to apply, the card grows to fit
+   * the whole sheet, and a card centred in a viewport shorter than itself
+   * overflows at BOTH ends: the header and the toolbar end up above the top of
+   * the screen, out of reach, while the sheet fills what you can see. Every
+   * button in that row stops answering and nothing looks obviously broken.
+   *
+   * Measuring the window directly cannot go stale — useWindowDimensions
+   * re-renders on rotation, which a percentage never did.
+   */
+  const cardMaxHeight = Math.max(
+    240,
+    Math.round((windowHeight - insets.top - insets.bottom) * 0.94)
+  )
 
   // CCLI requires the license number on every sheet we reproduce, so this
   // screen loads it itself. It used to only read the value and rely on some
@@ -256,7 +284,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
           gap="$2"
           width="96%"
           maxWidth={640}
-          maxHeight="94%"
+          maxHeight={cardMaxHeight}
         >
           {/* Header */}
           <XStack justifyContent="space-between" alignItems="flex-start">
