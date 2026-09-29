@@ -298,24 +298,28 @@ export default function RegisterScreen() {
                 <Text color="$primary">Sign in</Text>
               </Link>
             </XStack>
-
-            <XStack justifyContent="center" gap="$2">
-              <Link href="/(auth)/terms">
-                <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
-                  Terms of Use
-                </Text>
-              </Link>
-              <Paragraph color="$colorMuted" fontSize="$2">
-                ·
-              </Paragraph>
-              <Link href="/(auth)/privacy">
-                <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
-                  Privacy Policy
-                </Text>
-              </Link>
-            </XStack>
           </YStack>
         </ScrollView>
+
+        {/* Pinned, like the login screen's: at the end of a form this long it
+            was well below the fold on every phone, and the scroll indicator is
+            off. The in-form links beside the accept checkbox stay where they
+            are — those are part of what is being agreed to. */}
+        <XStack justifyContent="center" gap="$2" paddingBottom="$3" paddingTop="$2">
+          <Link href="/(auth)/terms">
+            <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
+              Terms of Use
+            </Text>
+          </Link>
+          <Paragraph color="$colorMuted" fontSize="$2">
+            ·
+          </Paragraph>
+          <Link href="/(auth)/privacy">
+            <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
+              Privacy Policy
+            </Text>
+          </Link>
+        </XStack>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )

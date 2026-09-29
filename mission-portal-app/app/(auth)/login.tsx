@@ -169,24 +169,32 @@ export default function LoginScreen() {
                 </Text>
               </Link>
             </XStack>
-
-            <XStack justifyContent="center" gap="$2">
-              <Link href="/(auth)/privacy">
-                <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
-                  Privacy Policy
-                </Text>
-              </Link>
-              <Text color="$colorMuted" fontSize="$2">
-                ·
-              </Text>
-              <Link href="/(auth)/terms">
-                <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
-                  Terms of Use
-                </Text>
-              </Link>
-            </XStack>
           </YStack>
         </ScrollView>
+
+        {/* Outside the scroll view on purpose. These sat at the end of the
+            form, which put them below the bottom of the screen on anything
+            short of a full-height portrait phone — sideways, or with the
+            keyboard up, they were about a hundred and ninety points under the
+            fold, and the scroll indicator is off, so nothing said they were
+            there. Apple wants them reachable before signing in, so the form
+            scrolls and these stay put. SafeAreaView already clears the home
+            indicator below them. */}
+        <XStack justifyContent="center" gap="$2" paddingBottom="$3" paddingTop="$2">
+          <Link href="/(auth)/privacy">
+            <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
+              Privacy Policy
+            </Text>
+          </Link>
+          <Text color="$colorMuted" fontSize="$2">
+            ·
+          </Text>
+          <Link href="/(auth)/terms">
+            <Text color="$colorMuted" fontSize="$2" textDecorationLine="underline">
+              Terms of Use
+            </Text>
+          </Link>
+        </XStack>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
