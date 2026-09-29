@@ -1,4 +1,12 @@
-export type SectionType = 'intro' | 'verse' | 'pre-chorus' | 'chorus' | 'bridge' | 'tag' | 'outro'
+export type SectionType =
+  | 'intro'
+  | 'verse'
+  | 'pre-chorus'
+  | 'chorus'
+  | 'bridge'
+  | 'interlude'
+  | 'tag'
+  | 'outro'
 
 export const SECTION_TYPES: SectionType[] = [
   'intro',
@@ -6,6 +14,9 @@ export const SECTION_TYPES: SectionType[] = [
   'pre-chorus',
   'chorus',
   'bridge',
+  // An instrumental passage between sections. An intro is the one at the
+  // front; the same figure played again in the middle is an interlude.
+  'interlude',
   'tag',
   'outro',
 ]
@@ -16,6 +27,7 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   'pre-chorus': 'Pre-Chorus',
   chorus: 'Chorus',
   bridge: 'Bridge',
+  interlude: 'Interlude',
   tag: 'Tag',
   outro: 'Outro',
 }

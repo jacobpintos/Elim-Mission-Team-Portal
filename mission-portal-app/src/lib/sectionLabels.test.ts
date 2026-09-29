@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { getSectionLabel, getSectionShortLabel } from '@/features/worship/chordSheetFormat'
-import type { ChordSheetSection, SectionType } from '@/types/chordSheet'
+import { SECTION_TYPES, type ChordSheetSection, type SectionType } from '@/types/chordSheet'
 
 const section = (id: string, type: SectionType): ChordSheetSection => ({
   id,
@@ -41,13 +41,27 @@ describe('getSectionShortLabel', () => {
     expect(one('pre-chorus')).toBe('PC')
     expect(one('chorus')).toBe('C')
     expect(one('bridge')).toBe('B')
+    expect(one('interlude')).toBe('IL')
     expect(one('tag')).toBe('T')
     expect(one('outro')).toBe('O')
-    // Nothing longer than three characters, or the bar stops being a bar.
-    const longest = (['intro', 'verse', 'pre-chorus', 'chorus', 'bridge', 'tag', 'outro'] as const)
-      .map((t) => one(t).length)
-      .reduce((a, b) => Math.max(a, b), 0)
+    // Nothing longer than two characters, or the bar stops being a bar.
+    const longest = SECTION_TYPES.map((t) => one(t).length).reduce((a, b) => Math.max(a, b), 0)
     expect(longest).toBeLessThanOrEqual(2)
+  })
+
+  it('keeps intro and interlude apart', () => {
+    // A sheet can carry both — the opening figure and the same figure in the
+    // middle — and a bar that called them the same thing would be useless.
+    const sheet = [section('a', 'intro'), section('b', 'verse'), section('c', 'interlude')]
+    expect(getSectionShortLabel(sheet, 'a')).toBe('In')
+    expect(getSectionShortLabel(sheet, 'c')).toBe('IL')
+  })
+
+  it('gives every section type a short label', () => {
+    // The map is exhaustive by type, so this only fails if one is left blank.
+    for (const type of SECTION_TYPES) {
+      expect(getSectionShortLabel([section('x', type)], 'x')).not.toBe('')
+    }
   })
 
   it('returns nothing for a section that is not on the sheet', () => {

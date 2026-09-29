@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   clearChordTokens,
+  convertLaterIntrosToInterludes,
   hasAnyChord,
   moveItem,
   neighbourIndex,
@@ -136,5 +137,63 @@ describe('normalizeSameAsPrevious', () => {
     const plain = [{ type: 'verse' }, { type: 'chorus' }]
     expect(normalizeSameAsPrevious(plain)).toEqual(plain)
     expect(normalizeSameAsPrevious([])).toEqual([])
+  })
+})
+
+describe('convertLaterIntrosToInterludes', () => {
+  const s = (type: string, extra: Record<string, unknown> = {}) => ({ type, ...extra })
+
+  it('leaves the intro a song opens with alone', () => {
+    const sections = [s('intro'), s('verse'), s('chorus')]
+    const out = convertLaterIntrosToInterludes(sections)
+    expect(out.converted).toBe(0)
+    expect(out.sections[0].type).toBe('intro')
+  })
+
+  it('retypes an intro that turns up later in the song', () => {
+    const out = convertLaterIntrosToInterludes([s('intro'), s('verse'), s('intro'), s('chorus')])
+    expect(out.converted).toBe(1)
+    expect(out.sections.map((x) => x.type)).toEqual(['intro', 'verse', 'interlude', 'chorus'])
+  })
+
+  it('retypes an intro that is not first even when there is no earlier intro', () => {
+    // A song that opens on a verse and plays the figure later still has an
+    // interlude, not an intro.
+    const out = convertLaterIntrosToInterludes([s('verse'), s('intro'), s('chorus')])
+    expect(out.converted).toBe(1)
+    expect(out.sections.map((x) => x.type)).toEqual(['verse', 'interlude', 'chorus'])
+  })
+
+  it('retypes every later intro, not just the first of them', () => {
+    const out = convertLaterIntrosToInterludes([s('intro'), s('intro'), s('verse'), s('intro')])
+    expect(out.converted).toBe(2)
+    expect(out.sections.map((x) => x.type)).toEqual(['intro', 'interlude', 'verse', 'interlude'])
+  })
+
+  it('carries the chords and everything else through untouched', () => {
+    // The whole promise of the migration: only the label moves.
+    const section = s('intro', {
+      id: 'x',
+      lyrics: 'ooh',
+      chordTokens: [['1', '5m', '4']],
+      sameAsPrevious: true,
+    })
+    const out = convertLaterIntrosToInterludes([s('verse'), section])
+    expect(out.sections[1]).toEqual({ ...section, type: 'interlude' })
+  })
+
+  it('hands back the same array when there is nothing to change', () => {
+    // So a caller can skip the write rather than touch every sheet it reads.
+    const sections = [s('intro'), s('verse')]
+    expect(convertLaterIntrosToInterludes(sections).sections).toBe(sections)
+  })
+
+  it('does nothing the second time, having done it the first', () => {
+    const once = convertLaterIntrosToInterludes([s('verse'), s('intro')])
+    expect(convertLaterIntrosToInterludes(once.sections).converted).toBe(0)
+  })
+
+  it('copes with a song that has no sections', () => {
+    expect(convertLaterIntrosToInterludes([])).toEqual({ sections: [], converted: 0 })
   })
 })

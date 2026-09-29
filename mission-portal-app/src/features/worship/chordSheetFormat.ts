@@ -107,6 +107,9 @@ const SECTION_SHORT_LABELS: Record<SectionType, string> = {
   'pre-chorus': 'PC',
   chorus: 'C',
   bridge: 'B',
+  // Not 'In', which is the intro's — the pair are exactly what a jump bar has
+  // to keep apart on a sheet carrying both.
+  interlude: 'IL',
   tag: 'T',
   outro: 'O',
 }
