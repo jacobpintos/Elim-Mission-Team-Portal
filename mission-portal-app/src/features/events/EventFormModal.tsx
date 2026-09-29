@@ -23,6 +23,13 @@ import { FlightEditor } from './FlightEditor'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import { taskDueDate } from '@/lib/events'
 import {
+  isoToDisplay,
+  displayToIso,
+  toExtraDayRows,
+  fromExtraDayRows,
+  type ExtraDayRow,
+} from '@/lib/eventDates'
+import {
   notifyAssignees,
   notifyLogisticsAssigned,
   notifyFoodSignupOpen,
@@ -75,26 +82,6 @@ type FormData = {
   taskTemplateId: string
   users: (string | number)[]
   groups: string[]
-}
-
-function isoToDisplay(iso: string): string {
-  if (!iso) return ''
-  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (!match) return iso
-  const [, y, m, d] = match
-  return `${m}/${d}/${y.slice(2)}`
-}
-
-function displayToIso(display: string): string {
-  if (!display) return ''
-  const match = display.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
-  if (!match) return ''
-  const [, m, d, y] = match
-  const mn = Number(m),
-    dn = Number(d)
-  if (mn < 1 || mn > 12 || dn < 1 || dn > 31) return ''
-  const fullYear = y.length <= 2 ? `20${y.padStart(2, '0')}` : y
-  return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
 }
 
 /**
@@ -222,6 +209,7 @@ export function EventFormModal({
   const [dressCode, setDressCode] = useState<DressCodeEntry[]>(event?.dressCode ?? [])
   const [lodgingEntries, setLodgingEntries] = useState<LodgingEntry[]>(event?.lodgingEntries ?? [])
   const [flightEntries, setFlightEntries] = useState<FlightEntry[]>(event?.flightEntries ?? [])
+  const [extraDays, setExtraDays] = useState<ExtraDayRow[]>(toExtraDayRows(event?.extraDays))
   const [saving, setSaving] = useState(false)
   const [editScope, setEditScope] = useState<'instance' | 'all'>(instanceKey ? 'instance' : 'all')
 
@@ -251,6 +239,7 @@ export function EventFormModal({
     setDressCode(event?.dressCode ?? [])
     setLodgingEntries(event?.lodgingEntries ?? [])
     setFlightEntries(event?.flightEntries ?? [])
+    setExtraDays(toExtraDayRows(event?.extraDays))
     setEditScope(instanceKey ? 'instance' : 'all')
   }
 
@@ -387,6 +376,9 @@ export function EventFormModal({
         state: form.state,
         startTime: form.startTime,
         isRec: form.isRec,
+        // A recurring event repeats by rule, so extra dates would fight with
+        // it — the editor is hidden in that case and the stored ones go too.
+        extraDays: form.isRec ? [] : fromExtraDayRows(extraDays),
         recur: form.recur,
         recDay: form.recDay,
         isPublic: form.isPublic,
@@ -536,6 +528,12 @@ export function EventFormModal({
         toast('Start time is required', 'error')
         return
       }
+      // Rows with an unreadable date are dropped on save, so a mistyped one
+      // would otherwise disappear without a word.
+      if (!form.isRec && extraDays.some((d) => d.date.trim() && !displayToIso(d.date))) {
+        toast('An extra day has an invalid date — use MM/DD/YY format', 'error')
+        return
+      }
       if (form.isVirtual && !form.virtualLink.trim()) {
         toast('Meeting link is required for virtual events', 'error')
         return
@@ -619,6 +617,17 @@ export function EventFormModal({
 
     await doSave(form.users, saveAsDraft)
   }
+
+  const addExtraDay = () =>
+    setExtraDays((prev) => [
+      ...prev,
+      { id: `new_${Date.now()}_${prev.length}`, date: '', startTime: '', location: '' },
+    ])
+
+  const updateExtraDay = (id: string, patch: Partial<ExtraDayRow>) =>
+    setExtraDays((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)))
+
+  const removeExtraDay = (id: string) => setExtraDays((prev) => prev.filter((d) => d.id !== id))
 
   const handleDelete = async () => {
     if (!event) return
@@ -797,6 +806,80 @@ export function EventFormModal({
               color={colors.text}
               borderColor={colors.border}
             />
+
+            {/* Extra days — a trip or a conference is one event across several
+                dates, not several events. Hidden for a recurring event, which
+                already repeats by rule, and for an instance edit, which is
+                about one date that is already fixed. */}
+            {!form.isRec && (
+              <YStack gap="$2" paddingTop="$2">
+                <Text color={colors.textMuted} fontSize="$2">
+                  Multi-day event? Add the other dates below.
+                </Text>
+
+                {extraDays.map((day, idx) => (
+                  <YStack
+                    key={day.id}
+                    gap="$2"
+                    backgroundColor={colors.surface}
+                    borderRadius="$2"
+                    borderWidth={1}
+                    borderColor={colors.border}
+                    padding="$3"
+                  >
+                    <XStack alignItems="center" justifyContent="space-between">
+                      <Text color={colors.primary} fontSize="$2" fontWeight="700">
+                        Day {idx + 2}
+                      </Text>
+                      <Pressable onPress={() => removeExtraDay(day.id)}>
+                        <Text color="$red10" fontSize="$3">
+                          ✕
+                        </Text>
+                      </Pressable>
+                    </XStack>
+                    <Input
+                      value={day.date}
+                      onChangeText={(v) => updateExtraDay(day.id, { date: v })}
+                      placeholder="Date (MM/DD/YY)"
+                      backgroundColor={colors.background}
+                      color={colors.text}
+                      borderColor={colors.border}
+                    />
+                    <Input
+                      value={day.startTime}
+                      onChangeText={(v) => updateExtraDay(day.id, { startTime: v })}
+                      placeholder="Start time (blank = same as Day 1)"
+                      backgroundColor={colors.background}
+                      color={colors.text}
+                      borderColor={colors.border}
+                    />
+                    <Input
+                      value={day.location}
+                      onChangeText={(v) => updateExtraDay(day.id, { location: v })}
+                      placeholder="Venue (blank = same as Day 1)"
+                      backgroundColor={colors.background}
+                      color={colors.text}
+                      borderColor={colors.border}
+                    />
+                  </YStack>
+                ))}
+
+                <Pressable onPress={addExtraDay}>
+                  <XStack
+                    borderWidth={1}
+                    borderColor={colors.primary}
+                    borderRadius="$2"
+                    paddingHorizontal="$3"
+                    paddingVertical="$2"
+                    alignSelf="flex-start"
+                  >
+                    <Text color={colors.primary} fontSize="$3">
+                      + Add another day
+                    </Text>
+                  </XStack>
+                </Pressable>
+              </YStack>
+            )}
           </YStack>
         )}
 
