@@ -1,5 +1,5 @@
 import { SECTION_LABELS } from '@/types/chordSheet'
-import type { ChordSheet, ChordSheetSection } from '@/types/chordSheet'
+import type { ChordSheet, ChordSheetSection, SectionType } from '@/types/chordSheet'
 import { nashvilleToChord, getWordSlots } from '@/lib/nashvilleNumbers'
 
 // Token used to mark the end of one chord progression cycle within a section.
@@ -91,6 +91,33 @@ export function getSectionLabel(sections: ChordSheet['sections'], id: string): s
   const base = SECTION_LABELS[section.type]
   if (ofType.length <= 1) return base
   return `${base} ${ofType.findIndex((s) => s.id === id) + 1}`
+}
+
+/**
+ * A section's label at two or three characters: V1, PC, C2, B.
+ *
+ * For the jump bar, where a dozen sections have to sit on one line of a phone
+ * held in one hand. Numbered by the same rule as getSectionLabel — the two are
+ * the same label at different lengths, so a bar reading V1 V2 C matches the
+ * headings V1 scrolls to.
+ */
+const SECTION_SHORT_LABELS: Record<SectionType, string> = {
+  intro: 'In',
+  verse: 'V',
+  'pre-chorus': 'PC',
+  chorus: 'C',
+  bridge: 'B',
+  tag: 'T',
+  outro: 'O',
+}
+
+export function getSectionShortLabel(sections: ChordSheet['sections'], id: string): string {
+  const section = sections.find((s) => s.id === id)
+  if (!section) return ''
+  const ofType = sections.filter((s) => s.type === section.type)
+  const base = SECTION_SHORT_LABELS[section.type]
+  if (ofType.length <= 1) return base
+  return `${base}${ofType.findIndex((s) => s.id === id) + 1}`
 }
 
 export function getPrevMatchingLabel(sections: ChordSheet['sections'], id: string): string {

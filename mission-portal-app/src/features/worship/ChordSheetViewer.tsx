@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Modal,
   View,
@@ -24,6 +24,7 @@ import {
   compressGroups,
   buildChordSheetHtml,
   getSectionLabel,
+  getSectionShortLabel,
   getPrevMatchingLabel,
   getPrevMatchingSection,
 } from './chordSheetFormat'
@@ -157,6 +158,29 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
     AsyncStorage.setItem(FONT_SCALE_KEY, String(next)).catch(() => {})
   }
 
+  /**
+   * Jump straight to a section.
+   *
+   * A sheet with four verses and a bridge is several screens long, and the
+   * thing a musician needs mid-rehearsal — "from the bridge" — was a scroll
+   * and a hunt. Each section reports where it starts as it lays out, so the
+   * bar above only has to scroll there.
+   *
+   * Offsets are a ref rather than state: they are written during layout, and
+   * re-rendering the whole sheet every time one arrives would lay it out
+   * again, which writes them again.
+   */
+  const scrollRef = useRef<ScrollView>(null)
+  const sectionOffsets = useRef<Record<string, number>>({})
+
+  const jumpTo = (sectionId: string) => {
+    const y = sectionOffsets.current[sectionId]
+    if (y == null) return
+    // A few points above the heading, so it does not sit flush against the
+    // toolbar and read as cut off.
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 6), animated: true })
+  }
+
   const [selectedKey, setSelectedKey] = useState(() => {
     if (initialKey && (NNS_KEYS as readonly string[]).includes(initialKey)) return initialKey
     return getKeyPrefs().key
@@ -264,6 +288,12 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
       }
     }
   }
+
+  // Whichever set of sections is on screen: Chords Only collapses repeats into
+  // one entry, so its bar has to match what is actually there to scroll to.
+  const jumpTargets = (chordsOnly ? sectionGroups.map((g) => g.section) : sheet.sections).map(
+    (section) => ({ id: section.id, label: getSectionShortLabel(sheet.sections, section.id) })
+  )
 
   return (
     <Modal visible={!!sheet} animationType="slide" transparent onRequestClose={onClose}>
@@ -460,8 +490,47 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
             </Pressable>
           </XStack>
 
+          {/* Jump bar — one tap to a section.
+              Pinned outside the scroll view so it never scrolls away, and one
+              line tall with short labels so it costs almost nothing and never
+              covers the sheet. It scrolls sideways rather than wrapping: a
+              song with eight sections must not take two lines off a phone held
+              sideways. Hidden for a sheet with nothing to jump between. */}
+          {jumpTargets.length > 1 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ flexGrow: 0, flexShrink: 0 }}
+            >
+              <XStack gap="$1" paddingVertical={2}>
+                {jumpTargets.map(({ id, label }) => (
+                  <Pressable key={id} onPress={() => jumpTo(id)} hitSlop={6}>
+                    <XStack
+                      backgroundColor={colors.primary + '18'}
+                      borderRadius={99}
+                      borderWidth={1}
+                      borderColor={colors.primary}
+                      paddingHorizontal="$2"
+                      paddingVertical={2}
+                      minWidth={30}
+                      justifyContent="center"
+                    >
+                      <Text color={colors.primary} fontSize={12} fontWeight="700">
+                        {label}
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                ))}
+              </XStack>
+            </ScrollView>
+          ) : null}
+
           {/* Content */}
-          <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            ref={scrollRef}
+            style={{ flexShrink: 1 }}
+            showsVerticalScrollIndicator={false}
+          >
             <YStack gap="$3" paddingBottom="$4">
               {chordsOnly
                 ? sectionGroups.map(({ section, count }) => {
@@ -474,7 +543,13 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                     const progGroups = splitByProgressionEnd(allTokens)
                     const compressed = compressGroups(progGroups)
                     return (
-                      <YStack key={section.id} gap="$0.5">
+                      <YStack
+                        key={section.id}
+                        gap="$0.5"
+                        onLayout={(e) => {
+                          sectionOffsets.current[section.id] = e.nativeEvent.layout.y
+                        }}
+                      >
                         <XStack gap="$2" alignItems="center">
                           <Text color={colors.primary} fontWeight="700" fontSize="$3">
                             {label}
@@ -530,7 +605,13 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                     if (!hasLyrics) {
                       const tokens = (content.chordTokens ?? []).flat().filter(Boolean)
                       return (
-                        <YStack key={section.id} gap="$1">
+                        <YStack
+                          key={section.id}
+                          gap="$1"
+                          onLayout={(e) => {
+                            sectionOffsets.current[section.id] = e.nativeEvent.layout.y
+                          }}
+                        >
                           <Text color={colors.primary} fontWeight="700" fontSize="$3">
                             {label}
                           </Text>
@@ -573,7 +654,13 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                       (row) => !(row.length === 1 && row[0] === PROGRESSION_END)
                     )
                     return (
-                      <YStack key={section.id} gap="$2">
+                      <YStack
+                        key={section.id}
+                        gap="$2"
+                        onLayout={(e) => {
+                          sectionOffsets.current[section.id] = e.nativeEvent.layout.y
+                        }}
+                      >
                         <Text
                           color={colors.primary}
                           fontWeight="700"
