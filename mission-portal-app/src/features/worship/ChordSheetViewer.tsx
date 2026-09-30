@@ -173,8 +173,39 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
   const scrollRef = useRef<ScrollView>(null)
   const sectionOffsets = useRef<Record<string, number>>({})
 
+  /**
+   * Where a section starts, asked for now rather than remembered.
+   *
+   * The remembered answer goes stale on the web and does so invisibly.
+   * Tamagui measures layout through observers that only watch elements in
+   * view, so a section scrolled off screen never reports its new position —
+   * and every reflow moves them: a press of Size, a change of key, Chords
+   * Only. Driven in Chromium, tapping Bridge after one press of Size landed
+   * on Interlude. In landscape almost every section is off screen, which is
+   * why it was worst there.
+   *
+   * The DOM can simply be asked, so on the web it is — which is what the `id`
+   * on each section is for. Native keeps the remembered offsets, where
+   * onLayout fires for every pass whether the view is on screen or not.
+   *
+   * Measured in Chromium at 844×390 over seven ways of reaching the bar: the
+   * remembered offsets put the bridge 438 points below the top after three
+   * presses of Size, and 156 above it — off screen entirely — after three the
+   * other way. All seven land on it now.
+   */
+  const measuredOffset = (sectionId: string): number | null => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const el = document.getElementById(sectionDomId(sectionId))
+      const content = document.getElementById(SHEET_CONTENT_ID)
+      if (el && content) {
+        return el.getBoundingClientRect().top - content.getBoundingClientRect().top
+      }
+    }
+    return sectionOffsets.current[sectionId] ?? null
+  }
+
   const jumpTo = (sectionId: string) => {
-    const y = sectionOffsets.current[sectionId]
+    const y = measuredOffset(sectionId)
     if (y == null) return
     // A few points above the heading, so it does not sit flush against the
     // toolbar and read as cut off.
@@ -527,7 +558,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
             style={{ flexShrink: 1 }}
             showsVerticalScrollIndicator={false}
           >
-            <YStack gap="$3" paddingBottom="$4">
+            <YStack gap="$3" paddingBottom="$4" id={SHEET_CONTENT_ID}>
               {chordsOnly
                 ? sectionGroups.map(({ section, count }) => {
                     const fullLabel = getSectionLabel(sheet.sections, section.id)
@@ -541,6 +572,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                     return (
                       <YStack
                         key={section.id}
+                        id={sectionDomId(section.id)}
                         gap="$0.5"
                         onLayout={(e) => {
                           sectionOffsets.current[section.id] = e.nativeEvent.layout.y
@@ -603,6 +635,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                       return (
                         <YStack
                           key={section.id}
+                          id={sectionDomId(section.id)}
                           gap="$1"
                           onLayout={(e) => {
                             sectionOffsets.current[section.id] = e.nativeEvent.layout.y
@@ -652,6 +685,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                     return (
                       <YStack
                         key={section.id}
+                        id={sectionDomId(section.id)}
                         gap="$2"
                         onLayout={(e) => {
                           sectionOffsets.current[section.id] = e.nativeEvent.layout.y
@@ -764,6 +798,14 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
       </View>
     </Modal>
   )
+}
+
+/** The scroll view's content wrapper, which section offsets are measured from. */
+const SHEET_CONTENT_ID = 'chord-sheet-content'
+
+/** A section's element, so the web can measure it without remembering it. */
+function sectionDomId(sectionId: string): string {
+  return `chord-sheet-section-${sectionId}`
 }
 
 const styles = StyleSheet.create({
