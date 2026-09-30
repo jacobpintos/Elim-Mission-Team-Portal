@@ -30,7 +30,7 @@ interface TripLine {
   muted?: boolean
 }
 
-/** A flight, hotel room or set list as it appears in the guest's trip card. */
+/** A flight or a hotel room as it appears in the guest's trip card. */
 interface TripItem {
   key: string
   label: string
@@ -137,9 +137,9 @@ export default function Dashboard() {
         sameId(t.evId ?? t.evTemplateId, ev.templateId) || sameId(t.evTemplateId, ev.taskTemplateId)
     )
 
-  // A guest is here for the practical details: where they sleep, when they
-  // fly, and the set list if they are singing. Those sit above everything else
-  // rather than buried inside each event card.
+  // A guest is here for the practical details: where they sleep and when they
+  // fly. Those sit above everything else rather than buried inside each event
+  // card. The set lists are gathered here too, but they belong on the event.
   const myLodging = guest ? guestLodging(upcoming60, uid) : []
   const myFlights = guest ? guestFlights(upcoming60, uid) : []
   const myWorshipEvents = guest ? worshipEventsFor(upcoming60, uid) : []
@@ -149,9 +149,26 @@ export default function Dashboard() {
       .map((sl) => ({ event: ev, setList: sl }))
   )
 
-  // Flattened so the flight, the hotel and the set list share one card and one
-  // set of chrome. They were three outlined cards of their own, which read as
-  // three unrelated announcements rather than one trip.
+  // Set lists, by the event they are sung at. "Your trip" is travel — where
+  // you sleep and how you get there — and a set list sat in it only because
+  // that card was the one place a guest was certain to look. It reads as
+  // travel there, and it is the one thing on the dashboard that has an obvious
+  // home: the event card for the night it is sung.
+  const setListsByEvent = new Map<string, { id: string; title: string; onPress: () => void }[]>()
+  for (const { event, setList } of myWorshipSetLists) {
+    const key = String(event.instanceKey ?? event.id)
+    const rows = setListsByEvent.get(key) ?? []
+    rows.push({
+      id: String(setList.id),
+      title: setList.title,
+      onPress: () => router.push('/(app)/worship' as never),
+    })
+    setListsByEvent.set(key, rows)
+  }
+
+  // Flattened so the flight and the hotel share one card and one set of
+  // chrome. They were two outlined cards of their own, which read as unrelated
+  // announcements rather than one trip.
   const tripItems: TripItem[] = [
     ...myFlights.map(({ event, entry }) => ({
       key: `f-${entry.id}`,
@@ -193,12 +210,6 @@ export default function Dashboard() {
           : null,
       ].filter((l): l is TripLine => l !== null),
       onPress: () => openDetail(event),
-    })),
-    ...myWorshipSetLists.map(({ event, setList }) => ({
-      key: `s-${setList.id}`,
-      label: `\u266b SET LIST \u00b7 ${event.title}`,
-      lines: [{ text: setList.title }],
-      onPress: () => router.push('/(app)/worship' as never),
     })),
   ]
 
@@ -302,6 +313,7 @@ export default function Dashboard() {
                   healthStatus={ev.taskTemplateId ? getEventHealthStatus(ev) : undefined}
                   onShowTasks={ev.taskTemplateId ? () => setKanbanEvent(ev) : undefined}
                   onWeatherPress={() => setWeatherEvent(ev)}
+                  setLists={setListsByEvent.get(String(ev.instanceKey ?? ev.id))}
                 />
               ))
             )}

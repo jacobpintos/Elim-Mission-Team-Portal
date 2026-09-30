@@ -19,6 +19,15 @@ interface EventCardProps {
   healthStatus?: 'on-track' | 'behind' | 'no-tasks'
   onShowTasks?: () => void
   onWeatherPress?: () => void
+  /**
+   * Set lists the viewer is singing at this event.
+   *
+   * These used to sit in the guest's trip card next to the flight and the
+   * hotel. A set list is not travel — what it belongs to is the event it is
+   * sung at, which is also where you look for it when you are standing up to
+   * play.
+   */
+  setLists?: { id: string; title: string; onPress: () => void }[]
   mini?: boolean
   isPublic?: boolean
 }
@@ -31,6 +40,7 @@ export function EventCard({
   healthStatus,
   onShowTasks,
   onWeatherPress,
+  setLists,
   mini,
   isPublic,
 }: EventCardProps) {
@@ -126,6 +136,18 @@ export function EventCard({
                 ) : null}
               </YStack>
             ) : null}
+            {(setLists ?? []).map((sl) => (
+              <Pressable key={sl.id} onPress={sl.onPress}>
+                <Text
+                  color={colors.primary}
+                  fontSize="$2"
+                  textDecorationLine="underline"
+                  numberOfLines={1}
+                >
+                  ♫ {sl.title}
+                </Text>
+              </Pressable>
+            ))}
           </YStack>
           <YStack alignItems="flex-end" gap="$1">
             {myAvail ? <AvailBadge status={myAvail.status} size="sm" /> : null}
