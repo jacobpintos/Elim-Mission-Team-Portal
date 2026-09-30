@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Modal,
   View,
   ScrollView,
   Pressable,
@@ -29,6 +28,7 @@ import {
   getPrevMatchingSection,
 } from './chordSheetFormat'
 import { buildChordSheetPdfBlob } from './chordSheetPdf'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 
 interface KeyPrefs {
   key: string
@@ -327,17 +327,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
   )
 
   return (
-    // "fade" rather than "slide" on purpose. react-native-web implements a
-    // sliding modal by leaving transform: translateY(0%) on the full-screen
-    // position: fixed overlay for as long as it is open, and a fixed element
-    // with a transform is composited on its own layer in Safari. When the
-    // visual viewport then changes under it — which is precisely what turning
-    // an iPhone sideways does, since Safari re-lays out its own toolbars — the
-    // layer is repainted in its new place while the region that answers a
-    // touch can lag behind it, so the buttons are where you see them but the
-    // taps land somewhere else. The fade keeps a transition and animates
-    // opacity, leaving no transform behind.
-    <Modal visible={!!sheet} animationType="fade" transparent onRequestClose={onClose}>
+    <FullScreenOverlay onRequestClose={onClose}>
       {/* Inset the area the card is centred in, rather than the card itself.
           Centring alone does not clear the status bar here: at 94% of the
           screen height the margin above the card is around twenty-six points
@@ -834,7 +824,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
           </ScrollView>
         </YStack>
       </View>
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 
