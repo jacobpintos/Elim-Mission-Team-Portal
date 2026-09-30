@@ -91,7 +91,7 @@ interface ChordSheetViewerProps {
 export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewerProps) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
-  const { height: windowHeight } = useWindowDimensions()
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions()
 
   /**
    * How tall the card may be, in points rather than as a percentage.
@@ -347,7 +347,25 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
           screen, and centring takes most of the margin straight back. Padding
           the overlay shrinks what the percentage is measured against, so the
           card stays centred inside the safe area. */}
-      <View style={[styles.overlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      {/* Sized from the measured window rather than left to fill the fixed box
+          react-native-web gives the modal. Two reasons. The fixed box is the
+          layout viewport, which on a phone is not always what you can see —
+          useWindowDimensions reads the visual viewport, which is. And an
+          element whose width and height are written out in points has to be
+          laid out again every time those numbers change, so a rotation
+          rebuilds this overlay's geometry instead of leaving Safari to decide
+          whether the old one still holds. */}
+      <View
+        style={[
+          styles.overlay,
+          {
+            width: windowWidth,
+            height: windowHeight,
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+          },
+        ]}
+      >
         <YStack
           backgroundColor={colors.surface}
           borderRadius="$4"
@@ -851,8 +869,8 @@ const styles = StyleSheet.create({
     minHeight: 34,
     justifyContent: 'center',
   },
+  /** Width and height are supplied per render; flex would override both. */
   overlay: {
-    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
