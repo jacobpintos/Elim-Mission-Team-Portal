@@ -327,7 +327,17 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
   )
 
   return (
-    <Modal visible={!!sheet} animationType="slide" transparent onRequestClose={onClose}>
+    // "fade" rather than "slide" on purpose. react-native-web implements a
+    // sliding modal by leaving transform: translateY(0%) on the full-screen
+    // position: fixed overlay for as long as it is open, and a fixed element
+    // with a transform is composited on its own layer in Safari. When the
+    // visual viewport then changes under it — which is precisely what turning
+    // an iPhone sideways does, since Safari re-lays out its own toolbars — the
+    // layer is repainted in its new place while the region that answers a
+    // touch can lag behind it, so the buttons are where you see them but the
+    // taps land somewhere else. The fade keeps a transition and animates
+    // opacity, leaving no transform behind.
+    <Modal visible={!!sheet} animationType="fade" transparent onRequestClose={onClose}>
       {/* Inset the area the card is centred in, rather than the card itself.
           Centring alone does not clear the status bar here: at 94% of the
           screen height the margin above the card is around twenty-six points
@@ -382,8 +392,8 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                   borderWidth={1}
                   borderColor={colors.primary}
                   paddingHorizontal="$3"
-                  paddingVertical="$1"
                   alignItems="center"
+                  flexGrow={1}
                   gap="$1"
                 >
                   <Text color={colors.primary} fontSize="$2" fontWeight="600">
@@ -433,7 +443,8 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                   borderWidth={1}
                   borderColor={colors.primary}
                   paddingHorizontal="$3"
-                  paddingVertical="$1"
+                  alignItems="center"
+                  flexGrow={1}
                 >
                   <Text color={isMinor ? 'white' : colors.primary} fontSize="$2" fontWeight="600">
                     {isMinor ? 'Minor' : 'Major'}
@@ -450,7 +461,8 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                 borderWidth={1}
                 borderColor={colors.primary}
                 paddingHorizontal="$3"
-                paddingVertical="$1"
+                alignItems="center"
+                flexGrow={1}
               >
                 <Text color={chordsOnly ? 'white' : colors.primary} fontSize="$2" fontWeight="600">
                   Chords Only
@@ -466,7 +478,8 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
               borderWidth={1}
               borderColor={colors.primary}
               backgroundColor={colors.primary + '18'}
-              alignItems="center"
+              alignItems="stretch"
+              minHeight={44}
               overflow="hidden"
             >
               <Pressable
@@ -478,7 +491,13 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                   −
                 </Text>
               </Pressable>
-              <Text color={colors.primary} fontSize="$2" fontWeight="600" paddingHorizontal="$1">
+              <Text
+                color={colors.primary}
+                fontSize="$2"
+                fontWeight="600"
+                paddingHorizontal="$1"
+                alignSelf="center"
+              >
                 Size
               </Text>
               <Pressable
@@ -506,8 +525,8 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                 borderWidth={1}
                 borderColor={colors.primary}
                 paddingHorizontal="$3"
-                paddingVertical="$1"
                 alignItems="center"
+                flexGrow={1}
                 gap="$1"
               >
                 <Text color={colors.primary} fontSize="$2" fontWeight="600">
@@ -538,9 +557,10 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                       borderWidth={1}
                       borderColor={colors.primary}
                       paddingHorizontal="$2"
-                      paddingVertical={2}
                       minWidth={30}
+                      alignItems="center"
                       justifyContent="center"
+                      flexGrow={1}
                     >
                       <Text color={colors.primary} fontSize={12} fontWeight="700">
                         {label}
@@ -810,13 +830,17 @@ function sectionDomId(sectionId: string): string {
 
 const styles = StyleSheet.create({
   /**
-   * A touch target Apple would call one.
+   * A touch target Apple would call one, and one you can see.
    *
    * These controls were 24 to 26 points tall, and the hitSlop meant to pad
    * them is ignored by react-native-web — it exists only on the old Touchable
-   * — so on the PWA there was nothing around them at all. Padding the
-   * pressable rather than the pill keeps the buttons looking the same size
-   * while making the area that answers a thumb the 44 points Apple asks for.
+   * — so on the PWA there was nothing around them at all. This sets the floor
+   * at the 44 points Apple asks for; each pill then grows to fill it, so the
+   * button you can see and the area that answers a thumb are the same box.
+   * They used to be concentric, a 24pt pill inside a 44pt target, which left
+   * ten points of live space above and below every button that looked like
+   * dead space — and made a misplaced tap impossible to tell apart from a
+   * misplaced button.
    */
   touch: {
     minHeight: 44,
