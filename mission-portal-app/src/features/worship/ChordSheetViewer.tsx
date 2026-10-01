@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
+  type ViewStyle,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -29,6 +30,7 @@ import {
 } from './chordSheetFormat'
 import { buildChordSheetPdfBlob } from './chordSheetPdf'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
+import { useCoverViewport } from '@/lib/useCoverViewport'
 
 interface KeyPrefs {
   key: string
@@ -138,9 +140,27 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
    */
   const fullBleed = availableHeight < 500
 
-  const cardMaxHeight = fullBleed
-    ? availableHeight
-    : Math.max(240, Math.round(availableHeight * 0.94))
+  /**
+   * And on the web, the whole screen — not just the page.
+   *
+   * A home-screen web app on an iPhone held sideways is drawn inside a box
+   * that stops 59pt short of the top and both sides, so "edge to edge" was
+   * still a sheet framed by dark bands. While the sheet is open the page asks
+   * for the whole screen (useCoverViewport) and the sheet pads itself clear of
+   * the notch and the home bar by env(safe-area-inset-*), which the browser
+   * keeps current through a rotation. The insets from safe-area-context are
+   * left out here: they would count the same notch twice.
+   */
+  const coverScreen = fullBleed && Platform.OS === 'web'
+  // Off with no sheet: the viewer stays mounted between sheets, rendering
+  // nothing, and the page must not keep the whole screen while it does.
+  useCoverViewport(coverScreen && !!sheet)
+
+  const cardMaxHeight = coverScreen
+    ? windowHeight
+    : fullBleed
+      ? availableHeight
+      : Math.max(240, Math.round(availableHeight * 0.94))
 
   // CCLI requires the license number on every sheet we reproduce, so this
   // screen loads it itself. It used to only read the value and rely on some
@@ -449,16 +469,17 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
           {
             width: windowWidth,
             height: windowHeight,
-            paddingTop: insets.top,
-            paddingBottom: insets.bottom,
+            paddingTop: coverScreen ? 0 : insets.top,
+            paddingBottom: coverScreen ? 0 : insets.bottom,
           },
         ]}
       >
         <YStack
           backgroundColor={colors.surface}
           borderRadius={fullBleed ? 0 : '$4'}
-          paddingHorizontal={fullBleed ? '$3' : '$4'}
-          paddingVertical={fullBleed ? '$2' : '$4'}
+          paddingHorizontal={coverScreen ? undefined : fullBleed ? '$3' : '$4'}
+          paddingVertical={coverScreen ? undefined : fullBleed ? '$2' : '$4'}
+          style={coverScreen ? CLEAR_OF_THE_NOTCH : undefined}
           gap="$2"
           width={fullBleed ? '100%' : '96%'}
           maxWidth={fullBleed ? undefined : 640}
@@ -943,6 +964,18 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
     </FullScreenOverlay>
   )
 }
+
+/**
+ * The sheet's padding while it covers the whole screen: what it would have had
+ * anyway, or the notch and home bar, whichever is more. env() reads 0 until the
+ * page is allowed under them, so this is the ordinary padding until then.
+ */
+const CLEAR_OF_THE_NOTCH = {
+  paddingTop: 'max(8px, env(safe-area-inset-top))',
+  paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
+  paddingLeft: 'max(12px, env(safe-area-inset-left))',
+  paddingRight: 'max(12px, env(safe-area-inset-right))',
+} as unknown as ViewStyle
 
 /** The scroll view's content wrapper, which section offsets are measured from. */
 const SHEET_CONTENT_ID = 'chord-sheet-content'
