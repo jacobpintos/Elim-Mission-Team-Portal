@@ -54,6 +54,9 @@ export function ChordImportModal({
   const [writtenIn, setWrittenIn] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reading, setReading] = useState(false)
+  // A PDF is read from positions, not columns of text: right nearly always,
+  // but worth a look, and fixable in the box before reading it again.
+  const [fromPdf, setFromPdf] = useState(false)
   // The preview in letters checks the chart was read right; in numbers it
   // checks the key — letters come back the same in any key, numbers do not.
   const [showNumbers, setShowNumbers] = useState(false)
@@ -84,6 +87,7 @@ export function ChordImportModal({
       const file = await pickTextFile()
       if (!file) return
       setText(file.text)
+      setFromPdf(file.fromPdf)
       read(file.text)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not read that file.')
@@ -96,6 +100,7 @@ export function ChordImportModal({
     setText('')
     setSong(null)
     setError(null)
+    setFromPdf(false)
     onClose()
   }
 
@@ -116,6 +121,7 @@ export function ChordImportModal({
     setText('')
     setSong(null)
     setError(null)
+    setFromPdf(false)
   }
 
   return (
@@ -145,7 +151,7 @@ export function ChordImportModal({
             <YStack gap="$3">
               <Text color={colors.textMuted} fontSize="$2">
                 Paste a chart — ChordPro, or chords written over the lyrics the way SongSelect shows
-                them — or choose a ChordPro or text file.
+                them — or choose a ChordPro, text or PDF file.
               </Text>
 
               <XStack gap="$2" flexWrap="wrap">
@@ -163,7 +169,11 @@ export function ChordImportModal({
 
               <TextInput
                 value={text}
-                onChangeText={setText}
+                onChangeText={(t) => {
+                  setText(t)
+                  // Cleared for a chart of its own: no longer the PDF's.
+                  if (!t.trim()) setFromPdf(false)
+                }}
                 multiline
                 placeholder={
                   '{title: Amazing Grace}\n{key: G}\n[G]Amazing [C]grace\n\n…or chords over lyrics'
@@ -198,9 +208,13 @@ export function ChordImportModal({
                       {[
                         song.artist,
                         song.bpm ? `${song.bpm} BPM` : null,
-                        song.format === 'chordpro'
-                          ? 'Read as ChordPro'
-                          : 'Read as chords over lyrics',
+                        // A PDF is read into ChordPro to keep chords a
+                        // syllable apart, but it was not a ChordPro file.
+                        fromPdf
+                          ? 'Read from a PDF'
+                          : song.format === 'chordpro'
+                            ? 'Read as ChordPro'
+                            : 'Read as chords over lyrics',
                         `${converted.sections.length} section${converted.sections.length === 1 ? '' : 's'}`,
                         `${converted.chordCount} chord${converted.chordCount === 1 ? '' : 's'}`,
                       ]
@@ -254,6 +268,14 @@ export function ChordImportModal({
                         : 'Guessed from the chords. Check it with the preview in Numbers: in the right key a song is mostly 1, 4, 5 and 6m.'}
                     </Text>
                   </YStack>
+
+                  {fromPdf ? (
+                    <Text color={colors.textMuted} fontSize="$2">
+                      Read from a PDF. Check each chord sits on the right syllable in the preview —
+                      the text in the box above is what was read, and can be fixed there and read
+                      again if one is off.
+                    </Text>
+                  ) : null}
 
                   {notRead.length > 0 ? (
                     <Text color="#c0392b" fontSize="$2">

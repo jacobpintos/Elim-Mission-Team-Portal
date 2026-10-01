@@ -240,8 +240,24 @@ export function parseChordPro(text: string): ImportedSong {
   const song: ImportedSong = { format: 'chordpro', sections: [], skipped: [] }
   let current: ImportedSection | null = null
   let skipping = false // inside a {start_of_tab} block
+  // Plain lines before anything musical, as parseChordText has them: the
+  // title and artist of a file with no {title}, as a PDF read into ChordPro
+  // has none; the first lines of the song if not.
+  const preamble: string[] = []
+  let started = false
 
+  const begin = () => {
+    if (started) return
+    started = true
+    if (!song.title && preamble.length > 0 && preamble.length <= 3) {
+      song.title = preamble[0]
+      if (preamble[1]) song.artist ??= preamble[1]
+    } else {
+      for (const p of preamble) section().lines.push({ lyrics: p, chords: [] })
+    }
+  }
   const start = (type: SectionType, label: string) => {
+    begin()
     current = { type, label, lines: [] }
     song.sections.push(current)
   }
@@ -283,11 +299,31 @@ export function parseChordPro(text: string): ImportedSong {
     if (skipping) continue
     if (FOOTER.test(line) && !line.includes('[')) continue
 
-    const plainHeading = !line.includes('[') ? sectionHeading(line) : null
-    if (plainHeading) {
-      start(plainHeading.type, plainHeading.label)
-      continue
+    if (!line.includes('[')) {
+      const meta = metadata(line.trim())
+      if (meta) {
+        if (meta.key) song.key = meta.key
+        if (meta.bpm) song.bpm = meta.bpm
+        continue
+      }
+      const plainHeading = sectionHeading(line)
+      if (plainHeading) {
+        start(plainHeading.type, plainHeading.label)
+        continue
+      }
+      // Chords with no brackets — an intro or a turnaround written out plain.
+      const plainChords = chordLine(line)
+      if (plainChords) {
+        begin()
+        section().lines.push({ lyrics: '', chords: plainChords })
+        continue
+      }
+      if (!started) {
+        preamble.push(line.trim())
+        continue
+      }
     }
+    begin()
 
     // Lift the bracketed chords out, noting the column each sat at.
     let lyrics = ''
@@ -309,6 +345,12 @@ export function parseChordPro(text: string): ImportedSong {
       continue
     }
     section().lines.push({ lyrics, chords })
+  }
+
+  // No music at all: what looked like a title was the first lines of the song.
+  if (!started) {
+    started = true
+    for (const p of preamble) section().lines.push({ lyrics: p, chords: [] })
   }
 
   song.sections = song.sections.filter((s) => s.lines.length > 0)
