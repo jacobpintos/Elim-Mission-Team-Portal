@@ -39,9 +39,18 @@ export function AudioScrubber({
   onSeek,
   onDrag,
   onStep,
+  loopStart,
+  loopEnd,
 }: {
   /** Where the track is, 0 to 1. */
   progress: number
+  /**
+   * The loop, as fractions of the track. With only a start, the stretch from
+   * it to wherever the bar is being dragged — or, not dragging, to where the
+   * track is — is shaded, lighter: the loop that pressing End would make.
+   */
+  loopStart?: number | null
+  loopEnd?: number | null
   enabled: boolean
   /** Released at this fraction of the track. */
   onSeek: (fraction: number) => void
@@ -60,6 +69,11 @@ export function AudioScrubber({
 
   const shown = dragging ?? Math.min(1, Math.max(0, progress))
   const thumb = dragging === null ? THUMB : THUMB_DRAGGING
+
+  const hasLoop = loopStart != null
+  const bandFrom = hasLoop ? Math.min(loopStart, loopEnd ?? shown) : 0
+  const bandTo = hasLoop ? Math.max(loopStart, loopEnd ?? shown) : 0
+  const pending = hasLoop && loopEnd == null
 
   const follow = (pageX: number) => {
     const f = fractionAt(pageX, barLeft.current, width)
@@ -114,6 +128,23 @@ export function AudioScrubber({
           style={{ width: `${shown * 100}%`, height: '100%', backgroundColor: colors.primary }}
         />
       </View>
+      {hasLoop ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: (HEIGHT - 12) / 2,
+            height: 12,
+            left: bandFrom * width,
+            width: Math.max(2, (bandTo - bandFrom) * width),
+            borderRadius: 3,
+            backgroundColor: colors.primary + (pending ? '22' : '40'),
+            borderLeftWidth: 2,
+            borderRightWidth: pending ? 0 : 2,
+            borderColor: colors.primary,
+          }}
+        />
+      ) : null}
       <View
         pointerEvents="none"
         style={{

@@ -255,7 +255,16 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                       ) : null}
 
                       {song.audioUrl ? (
-                        <AudioTrackPlayer url={song.audioUrl} name={song.audioName} />
+                        <AudioTrackPlayer
+                          url={song.audioUrl}
+                          name={song.audioName}
+                          title={song.name}
+                          artist={
+                            chordSheets.find((c) => String(c.id) === String(song.chordSheetId))
+                              ?.artist
+                          }
+                          album={setList.title}
+                        />
                       ) : null}
 
                       {song.notes ? (

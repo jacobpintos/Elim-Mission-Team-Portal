@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { AudioPlayer } from 'expo-audio'
+import type { LoopRange } from '@/lib/audioSeek'
 
 /**
  * The player each reference track is playing through, by its URL.
@@ -18,6 +19,21 @@ interface AudioPlayersStore {
   players: Record<string, AudioPlayer>
   register: (url: string, player: AudioPlayer) => void
   unregister: (url: string, player: AudioPlayer) => void
+
+  /**
+   * Speed and loop, by track.
+   *
+   * Kept here rather than on the player for the same reason the player is:
+   * the card and the chord sheet both show them and either may change them,
+   * and the player itself is replaced when the offline copy takes over. The
+   * card that owns the player applies them to whichever player it has.
+   */
+  rates: Record<string, number>
+  loops: Record<string, LoopRange | null>
+  setRate: (url: string, rate: number) => void
+  setLoop: (url: string, loop: LoopRange | null) => void
+  /** Forget a track's speed and loop — when its set list is closed. */
+  clearSettings: (url: string) => void
 }
 
 export const useAudioPlayersStore = create<AudioPlayersStore>((set, get) => ({
@@ -33,5 +49,17 @@ export const useAudioPlayersStore = create<AudioPlayersStore>((set, get) => ({
     const players = { ...get().players }
     delete players[url]
     set({ players })
+  },
+
+  rates: {},
+  loops: {},
+  setRate: (url, rate) => set({ rates: { ...get().rates, [url]: rate } }),
+  setLoop: (url, loop) => set({ loops: { ...get().loops, [url]: loop } }),
+  clearSettings: (url) => {
+    const rates = { ...get().rates }
+    const loops = { ...get().loops }
+    delete rates[url]
+    delete loops[url]
+    set({ rates, loops })
   },
 }))

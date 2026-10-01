@@ -37,3 +37,50 @@ export function fractionAt(pageX: number, barLeft: number, barWidth: number): nu
   if (!(barWidth > 0)) return 0
   return Math.min(1, Math.max(0, (pageX - barLeft) / barWidth))
 }
+
+/** The speeds a part is learned at: full, three quarters, half. */
+export const RATES = [1, 0.75, 0.5] as const
+
+/** The next speed along, round to full again after the slowest. */
+export function nextRate(rate: number): number {
+  const at = RATES.indexOf(rate as (typeof RATES)[number])
+  return RATES[(at + 1) % RATES.length]
+}
+
+/** "1×", "0.75×", "0.5×". */
+export function rateLabel(rate: number): string {
+  return `${rate}×`
+}
+
+/**
+ * A stretch of a track played over and over: from `start` to `end`, in
+ * seconds. `end` is null between the two presses that mark it, when the
+ * start is known and the end is not yet.
+ */
+export interface LoopRange {
+  start: number
+  end: number | null
+}
+
+/**
+ * What one press of the loop button does, given where the track is.
+ *
+ * The first press marks the start. The second marks the end and the loop
+ * begins — in whichever order the two points came, since somebody who
+ * marked the start and then scrubbed backwards meant the stretch between
+ * them. A second press within half a second of the first is taken as
+ * changing their mind and clears it; a loop that short is not a loop. A
+ * press with a loop running clears it.
+ */
+export function loopStep(loop: LoopRange | null, position: number): LoopRange | null {
+  if (!loop) return { start: Math.max(0, position), end: null }
+  if (loop.end !== null) return null
+  if (Math.abs(position - loop.start) < 0.5) return null
+  return { start: Math.min(loop.start, position), end: Math.max(loop.start, position) }
+}
+
+/** Where to go back to, if the track has reached the end of its loop. */
+export function loopTarget(loop: LoopRange | null, position: number): number | null {
+  if (!loop || loop.end === null) return null
+  return position >= loop.end ? loop.start : null
+}
