@@ -1,6 +1,11 @@
 import { initializeApp, getApps } from 'firebase/app'
 import { getAuth, initializeAuth } from 'firebase/auth'
-import { getFirestore, initializeFirestore } from 'firebase/firestore'
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { getFunctions } from 'firebase/functions'
 import { Platform } from 'react-native'
@@ -60,7 +65,20 @@ export const db = (() => {
       // Forcing long polling on native skips that detection entirely and makes
       // the first snapshot arrive immediately. Web keeps WebChannel, where it
       // works correctly and is faster.
-      ...(Platform.OS === 'web' ? {} : { experimentalForceLongPolling: true }),
+      ...(Platform.OS === 'web'
+        ? {
+            // Keep what has been read on the device, so the app opens with the
+            // chord sheets, set lists and the rest of it where there is no
+            // signal — a church basement, a bus, a trip abroad — and shows the
+            // last copy while the live one loads everywhere else. Several tabs
+            // can share it. Where the browser will not give it storage (a
+            // private window), Firestore falls back to memory on its own.
+            //
+            // Native has no IndexedDB for this; offlineCache.ts covers the
+            // screens that matter there.
+            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+          }
+        : { experimentalForceLongPolling: true }),
     })
   } catch {
     // Already initialized (e.g. Fast Refresh) — reuse the existing instance.

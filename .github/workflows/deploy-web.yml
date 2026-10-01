@@ -16,6 +16,7 @@ on:
       - 'mission-portal-app/app.config.ts'
       - 'mission-portal-app/tamagui.config.ts'
       - 'mission-portal-app/package.json'
+      - 'mission-portal-app/scripts/**'
       - 'firebase.json'
       - '.firebaserc'
       - 'mission-portal-app/storage.rules'
@@ -60,6 +61,12 @@ jobs:
           # native builds.
           EXPO_PUBLIC_SUPPORT_EMAIL: sunny.singh@thewellia.com
           EXPO_PUBLIC_ORG_ADDRESS: 'PO Box 552 North Liberty, IA 52317'
+
+      # The service worker that lets the home-screen app open with no signal.
+      # It lists this build's files, so it is written after the export.
+      - name: Build service worker
+        run: node scripts/build-service-worker.mjs dist
+        working-directory: mission-portal-app
 
 
       - name: Authenticate to Google Cloud

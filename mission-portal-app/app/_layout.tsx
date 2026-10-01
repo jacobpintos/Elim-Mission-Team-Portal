@@ -11,6 +11,7 @@ import * as Notifications from 'expo-notifications'
 import { DynamicThemeProvider } from '@/theme/DynamicThemeProvider'
 import { useAuthStore } from '@/stores/authStore'
 import { takePendingNotificationLink } from '@/lib/notificationLink'
+import { registerServiceWorker } from '@/lib/serviceWorker'
 import { useThemeStore } from '@/stores/themeStore'
 import { ToastContainer } from '@/components/ui/Toast'
 
@@ -181,6 +182,10 @@ export default function RootLayout() {
     init()
     return () => teardown()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    registerServiceWorker()
   }, [])
 
   useEffect(() => {

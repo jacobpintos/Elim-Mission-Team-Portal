@@ -59,6 +59,9 @@ jobs:
           EXPO_PUBLIC_SENTRY_DSN: placeholder
         run: npx expo export -p web --output-dir dist
 
+      - name: Build service worker
+        run: node scripts/build-service-worker.mjs dist
+
       - name: Bundle size budget check
         run: |
           echo "Checking bundle sizes..."
