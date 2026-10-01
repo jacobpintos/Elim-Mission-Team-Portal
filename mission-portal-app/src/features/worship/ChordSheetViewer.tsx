@@ -121,10 +121,26 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
    * Measuring the window directly cannot go stale — useWindowDimensions
    * re-renders on rotation, which a percentage never did.
    */
-  const cardMaxHeight = Math.max(
-    240,
-    Math.round((windowHeight - insets.top - insets.bottom) * 0.94)
-  )
+  const availableHeight = windowHeight - insets.top - insets.bottom
+
+  /**
+   * On a short screen — a phone on its side — the sheet is the whole window.
+   *
+   * As a card it kept a 640pt width cap, a margin above and below and 16pt of
+   * padding, and on an iPhone held sideways that was 94pt of dimmed gutter
+   * and the better part of 50pt of height spent on framing around a song
+   * that already had too little room. Nothing behind the sheet needs to show
+   * while it is open, so there it fills the page edge to edge.
+   *
+   * Decided by height rather than orientation: an iPad on its side has room
+   * to spare, and there the card and its width cap — which keeps lines
+   * readable on a wide screen — stay as they were.
+   */
+  const fullBleed = availableHeight < 500
+
+  const cardMaxHeight = fullBleed
+    ? availableHeight
+    : Math.max(240, Math.round(availableHeight * 0.94))
 
   // CCLI requires the license number on every sheet we reproduce, so this
   // screen loads it itself. It used to only read the value and rely on some
@@ -440,11 +456,13 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
       >
         <YStack
           backgroundColor={colors.surface}
-          borderRadius="$4"
-          padding="$4"
+          borderRadius={fullBleed ? 0 : '$4'}
+          paddingHorizontal={fullBleed ? '$3' : '$4'}
+          paddingVertical={fullBleed ? '$2' : '$4'}
           gap="$2"
-          width="96%"
-          maxWidth={640}
+          width={fullBleed ? '100%' : '96%'}
+          maxWidth={fullBleed ? undefined : 640}
+          height={fullBleed ? cardMaxHeight : undefined}
           maxHeight={cardMaxHeight}
         >
           {/* Header — one line when the controls are folded away. */}
