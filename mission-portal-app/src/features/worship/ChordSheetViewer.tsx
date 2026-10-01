@@ -69,6 +69,20 @@ const FONT_SCALE_KEY = 'chordsheet_font_scale_idx'
 // later sheet opens at the right size immediately.
 let cachedScaleIdx: number | null = null
 
+/**
+ * Whether the reader has folded the controls away, remembered the same way as
+ * the text size. Sideways, the title, the key/size/export row and the section
+ * chips took half the card and left a few lines of song — and the controls are
+ * set once per song, while the sheet is read for all of it.
+ */
+const CONTROLS_HIDDEN_KEY = 'chordsheet_controls_hidden'
+let cachedControlsHidden: boolean | null = null
+
+function rememberControlsHidden(hidden: boolean) {
+  cachedControlsHidden = hidden
+  AsyncStorage.setItem(CONTROLS_HIDDEN_KEY, hidden ? '1' : '0').catch(() => {})
+}
+
 // Estimate column width in logical px from word length, at the current scale.
 function colWidth(word: string, chordLen = 0, scale = 1): number {
   const charW = BASE_CHAR_W * scale
@@ -146,6 +160,29 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
       cancelled = true
     }
   }, [])
+
+  const [controlsHidden, setControlsHidden] = useState(cachedControlsHidden ?? false)
+  useEffect(() => {
+    if (cachedControlsHidden !== null) return
+    let cancelled = false
+    AsyncStorage.getItem(CONTROLS_HIDDEN_KEY)
+      .then((raw) => {
+        cachedControlsHidden = raw === '1'
+        if (!cancelled) setControlsHidden(cachedControlsHidden)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const toggleControls = () => {
+    const next = !controlsHidden
+    rememberControlsHidden(next)
+    setControlsHidden(next)
+    // A key list left open would be stranded under a row that is not there.
+    if (next) setShowKeyDropdown(false)
+  }
 
   const fontScale = FONT_SCALES[scaleIdx]
   const monoSize = Math.round(BASE_FONT * fontScale)
@@ -326,6 +363,51 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
     (section) => ({ id: section.id, label: getSectionShortLabel(sheet.sections, section.id) })
   )
 
+  /**
+   * Jump bar — one tap to a section.
+   *
+   * Pinned outside the scroll view so it never scrolls away, and one line tall
+   * with short labels so it costs almost nothing and never covers the sheet.
+   * It scrolls sideways rather than wrapping: a song with eight sections must
+   * not take two lines off a phone held sideways. Hidden for a sheet with
+   * nothing to jump between.
+   *
+   * Drawn on its own line, or — with the controls folded away and the phone on
+   * its side — on the title's line, which has the width to spare and was
+   * otherwise a row of mostly nothing above a row of chips.
+   */
+  const chipsInHeader = controlsHidden && windowWidth > windowHeight
+  const jumpBar =
+    jumpTargets.length > 1 ? (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={chipsInHeader ? styles.jumpInline : styles.jumpRow}
+      >
+        <XStack gap="$1" paddingVertical={2}>
+          {jumpTargets.map(({ id, label }) => (
+            <Pressable key={id} onPress={() => jumpTo(id)} style={styles.touchSmall}>
+              <XStack
+                backgroundColor={colors.primary + '18'}
+                borderRadius={99}
+                borderWidth={1}
+                borderColor={colors.primary}
+                paddingHorizontal="$2"
+                minWidth={30}
+                alignItems="center"
+                justifyContent="center"
+                flexGrow={1}
+              >
+                <Text color={colors.primary} fontSize={12} fontWeight="700">
+                  {label}
+                </Text>
+              </XStack>
+            </Pressable>
+          ))}
+        </XStack>
+      </ScrollView>
+    ) : null
+
   return (
     <FullScreenOverlay visible animationType="fade" transparent onRequestClose={onClose}>
       {/* Inset the area the card is centred in, rather than the card itself.
@@ -365,24 +447,63 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
           maxWidth={640}
           maxHeight={cardMaxHeight}
         >
-          {/* Header */}
-          <XStack justifyContent="space-between" alignItems="flex-start">
-            <YStack flex={1} gap="$0.5">
-              <Text color={colors.text} fontSize="$5" fontWeight="700" numberOfLines={2}>
-                {sheet.title}
+          {/* Header — one line when the controls are folded away. */}
+          <XStack
+            justifyContent="space-between"
+            alignItems={controlsHidden ? 'center' : 'flex-start'}
+          >
+            {controlsHidden ? (
+              <>
+                <Text
+                  color={colors.text}
+                  fontSize="$5"
+                  fontWeight="700"
+                  numberOfLines={1}
+                  // Beside the chips it gives way to them; alone it has the row.
+                  {...(chipsInHeader ? { flexShrink: 1, maxWidth: '40%' } : { flex: 1 })}
+                >
+                  {sheet.title}
+                  {sheet.artist ? (
+                    <Text color={colors.textMuted} fontSize="$3" fontWeight="400">
+                      {`  ·  ${sheet.artist}`}
+                    </Text>
+                  ) : null}
+                </Text>
+                {chipsInHeader ? jumpBar : null}
+              </>
+            ) : (
+              <YStack flex={1} gap="$0.5">
+                <Text color={colors.text} fontSize="$5" fontWeight="700" numberOfLines={2}>
+                  {sheet.title}
+                </Text>
+                {sheet.artist ? (
+                  <Text color={colors.textMuted} fontSize="$3">
+                    {sheet.artist}
+                  </Text>
+                ) : null}
+                {sheet.bpm != null ? (
+                  <Text color={colors.textMuted} fontSize="$2">
+                    ♩ = {sheet.bpm} BPM
+                  </Text>
+                ) : null}
+              </YStack>
+            )}
+            <Pressable
+              onPress={toggleControls}
+              style={styles.headerBtn}
+              accessibilityRole="button"
+              accessibilityLabel={controlsHidden ? 'Show controls' : 'Hide controls'}
+            >
+              <Text color={colors.textMuted} fontSize="$3">
+                {controlsHidden ? '▼' : '▲'}
               </Text>
-              {sheet.artist ? (
-                <Text color={colors.textMuted} fontSize="$3">
-                  {sheet.artist}
-                </Text>
-              ) : null}
-              {sheet.bpm != null ? (
-                <Text color={colors.textMuted} fontSize="$2">
-                  ♩ = {sheet.bpm} BPM
-                </Text>
-              ) : null}
-            </YStack>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
+            </Pressable>
+            <Pressable
+              onPress={onClose}
+              style={styles.headerBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
               <Text color={colors.textMuted} fontSize="$4">
                 ✕
               </Text>
@@ -390,10 +511,153 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
           </XStack>
 
           {/* Controls */}
-          <XStack gap="$2" alignItems="flex-start" flexWrap="wrap">
-            {/* Key selector */}
-            <YStack>
-              <Pressable onPress={() => setShowKeyDropdown((v) => !v)} style={styles.touch}>
+          {controlsHidden ? null : (
+            <XStack gap="$2" alignItems="flex-start" flexWrap="wrap">
+              {/* Key selector */}
+              <YStack>
+                <Pressable onPress={() => setShowKeyDropdown((v) => !v)} style={styles.touch}>
+                  <XStack
+                    backgroundColor={colors.primary + '18'}
+                    borderRadius={99}
+                    borderWidth={1}
+                    borderColor={colors.primary}
+                    paddingHorizontal="$3"
+                    alignItems="center"
+                    flexGrow={1}
+                    gap="$1"
+                  >
+                    <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                      {selectedKey === '' ? 'Nashville #s' : `Key: ${selectedKey}`}
+                    </Text>
+                    <Text color={colors.primary} fontSize="$1">
+                      {showKeyDropdown ? '▲' : '▼'}
+                    </Text>
+                  </XStack>
+                </Pressable>
+                {showKeyDropdown ? (
+                  <YStack
+                    backgroundColor={colors.surface}
+                    borderRadius="$3"
+                    borderWidth={1}
+                    borderColor={colors.border}
+                    marginTop="$1"
+                    overflow="hidden"
+                  >
+                    {keyOptions.map((k) => (
+                      <Pressable key={k === '' ? '__none__' : k} onPress={() => handleSelectKey(k)}>
+                        <XStack
+                          paddingHorizontal="$3"
+                          paddingVertical="$2"
+                          backgroundColor={
+                            selectedKey === k ? colors.primary + '22' : 'transparent'
+                          }
+                        >
+                          <Text
+                            color={selectedKey === k ? colors.primary : colors.text}
+                            fontSize="$2"
+                            fontWeight={selectedKey === k ? '700' : '400'}
+                          >
+                            {k === '' ? 'Nashville #s' : k}
+                          </Text>
+                        </XStack>
+                      </Pressable>
+                    ))}
+                  </YStack>
+                ) : null}
+              </YStack>
+
+              {/* Major/Minor toggle — only when a key is selected */}
+              {selectedKey !== '' ? (
+                <Pressable onPress={handleToggleMinor} style={styles.touch}>
+                  <XStack
+                    backgroundColor={isMinor ? colors.primary : colors.primary + '18'}
+                    borderRadius={99}
+                    borderWidth={1}
+                    borderColor={colors.primary}
+                    paddingHorizontal="$3"
+                    alignItems="center"
+                    flexGrow={1}
+                  >
+                    <Text color={isMinor ? 'white' : colors.primary} fontSize="$2" fontWeight="600">
+                      {isMinor ? 'Minor' : 'Major'}
+                    </Text>
+                  </XStack>
+                </Pressable>
+              ) : null}
+
+              {/* Chords Only toggle */}
+              <Pressable onPress={() => setChordsOnly((v) => !v)} style={styles.touch}>
+                <XStack
+                  backgroundColor={chordsOnly ? colors.primary : colors.primary + '18'}
+                  borderRadius={99}
+                  borderWidth={1}
+                  borderColor={colors.primary}
+                  paddingHorizontal="$3"
+                  alignItems="center"
+                  flexGrow={1}
+                >
+                  <Text
+                    color={chordsOnly ? 'white' : colors.primary}
+                    fontSize="$2"
+                    fontWeight="600"
+                  >
+                    Chords Only
+                  </Text>
+                </XStack>
+              </Pressable>
+
+              {/* Text size — persists across sessions so a reader sets it once.
+                Labelled "Size" rather than A−/A+ because A–G read as key names
+                in a chord sheet. */}
+              <XStack
+                borderRadius={99}
+                borderWidth={1}
+                borderColor={colors.primary}
+                backgroundColor={colors.primary + '18'}
+                alignItems="stretch"
+                minHeight={44}
+                overflow="hidden"
+              >
+                <Pressable
+                  onPress={() => changeScale(-1)}
+                  disabled={scaleIdx === 0}
+                  style={[
+                    styles.touch,
+                    { paddingHorizontal: 12, opacity: scaleIdx === 0 ? 0.4 : 1 },
+                  ]}
+                >
+                  <Text color={colors.primary} fontSize={16} fontWeight="700">
+                    −
+                  </Text>
+                </Pressable>
+                <Text
+                  color={colors.primary}
+                  fontSize="$2"
+                  fontWeight="600"
+                  paddingHorizontal="$1"
+                  alignSelf="center"
+                >
+                  Size
+                </Text>
+                <Pressable
+                  onPress={() => changeScale(1)}
+                  disabled={scaleIdx === FONT_SCALES.length - 1}
+                  style={[
+                    styles.touch,
+                    {
+                      paddingHorizontal: 12,
+                      opacity: scaleIdx === FONT_SCALES.length - 1 ? 0.4 : 1,
+                    },
+                  ]}
+                >
+                  <Text color={colors.primary} fontSize={16} fontWeight="700">
+                    +
+                  </Text>
+                </Pressable>
+              </XStack>
+
+              {/* Export PDF — available on all platforms via expo-print */}
+              <Pressable onPress={handleExportPdf} style={styles.touch}>
                 <XStack
                   backgroundColor={colors.primary + '18'}
                   borderRadius={99}
@@ -405,180 +669,14 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
                   gap="$1"
                 >
                   <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                    {selectedKey === '' ? 'Nashville #s' : `Key: ${selectedKey}`}
-                  </Text>
-                  <Text color={colors.primary} fontSize="$1">
-                    {showKeyDropdown ? '▲' : '▼'}
+                    Export PDF
                   </Text>
                 </XStack>
-              </Pressable>
-              {showKeyDropdown ? (
-                <YStack
-                  backgroundColor={colors.surface}
-                  borderRadius="$3"
-                  borderWidth={1}
-                  borderColor={colors.border}
-                  marginTop="$1"
-                  overflow="hidden"
-                >
-                  {keyOptions.map((k) => (
-                    <Pressable key={k === '' ? '__none__' : k} onPress={() => handleSelectKey(k)}>
-                      <XStack
-                        paddingHorizontal="$3"
-                        paddingVertical="$2"
-                        backgroundColor={selectedKey === k ? colors.primary + '22' : 'transparent'}
-                      >
-                        <Text
-                          color={selectedKey === k ? colors.primary : colors.text}
-                          fontSize="$2"
-                          fontWeight={selectedKey === k ? '700' : '400'}
-                        >
-                          {k === '' ? 'Nashville #s' : k}
-                        </Text>
-                      </XStack>
-                    </Pressable>
-                  ))}
-                </YStack>
-              ) : null}
-            </YStack>
-
-            {/* Major/Minor toggle — only when a key is selected */}
-            {selectedKey !== '' ? (
-              <Pressable onPress={handleToggleMinor} style={styles.touch}>
-                <XStack
-                  backgroundColor={isMinor ? colors.primary : colors.primary + '18'}
-                  borderRadius={99}
-                  borderWidth={1}
-                  borderColor={colors.primary}
-                  paddingHorizontal="$3"
-                  alignItems="center"
-                  flexGrow={1}
-                >
-                  <Text color={isMinor ? 'white' : colors.primary} fontSize="$2" fontWeight="600">
-                    {isMinor ? 'Minor' : 'Major'}
-                  </Text>
-                </XStack>
-              </Pressable>
-            ) : null}
-
-            {/* Chords Only toggle */}
-            <Pressable onPress={() => setChordsOnly((v) => !v)} style={styles.touch}>
-              <XStack
-                backgroundColor={chordsOnly ? colors.primary : colors.primary + '18'}
-                borderRadius={99}
-                borderWidth={1}
-                borderColor={colors.primary}
-                paddingHorizontal="$3"
-                alignItems="center"
-                flexGrow={1}
-              >
-                <Text color={chordsOnly ? 'white' : colors.primary} fontSize="$2" fontWeight="600">
-                  Chords Only
-                </Text>
-              </XStack>
-            </Pressable>
-
-            {/* Text size — persists across sessions so a reader sets it once.
-                Labelled "Size" rather than A−/A+ because A–G read as key names
-                in a chord sheet. */}
-            <XStack
-              borderRadius={99}
-              borderWidth={1}
-              borderColor={colors.primary}
-              backgroundColor={colors.primary + '18'}
-              alignItems="stretch"
-              minHeight={44}
-              overflow="hidden"
-            >
-              <Pressable
-                onPress={() => changeScale(-1)}
-                disabled={scaleIdx === 0}
-                style={[styles.touch, { paddingHorizontal: 12, opacity: scaleIdx === 0 ? 0.4 : 1 }]}
-              >
-                <Text color={colors.primary} fontSize={16} fontWeight="700">
-                  −
-                </Text>
-              </Pressable>
-              <Text
-                color={colors.primary}
-                fontSize="$2"
-                fontWeight="600"
-                paddingHorizontal="$1"
-                alignSelf="center"
-              >
-                Size
-              </Text>
-              <Pressable
-                onPress={() => changeScale(1)}
-                disabled={scaleIdx === FONT_SCALES.length - 1}
-                style={[
-                  styles.touch,
-                  {
-                    paddingHorizontal: 12,
-                    opacity: scaleIdx === FONT_SCALES.length - 1 ? 0.4 : 1,
-                  },
-                ]}
-              >
-                <Text color={colors.primary} fontSize={16} fontWeight="700">
-                  +
-                </Text>
               </Pressable>
             </XStack>
+          )}
 
-            {/* Export PDF — available on all platforms via expo-print */}
-            <Pressable onPress={handleExportPdf} style={styles.touch}>
-              <XStack
-                backgroundColor={colors.primary + '18'}
-                borderRadius={99}
-                borderWidth={1}
-                borderColor={colors.primary}
-                paddingHorizontal="$3"
-                alignItems="center"
-                flexGrow={1}
-                gap="$1"
-              >
-                <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                  Export PDF
-                </Text>
-              </XStack>
-            </Pressable>
-          </XStack>
-
-          {/* Jump bar — one tap to a section.
-              Pinned outside the scroll view so it never scrolls away, and one
-              line tall with short labels so it costs almost nothing and never
-              covers the sheet. It scrolls sideways rather than wrapping: a
-              song with eight sections must not take two lines off a phone held
-              sideways. Hidden for a sheet with nothing to jump between. */}
-          {jumpTargets.length > 1 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ flexGrow: 0, flexShrink: 0 }}
-            >
-              <XStack gap="$1" paddingVertical={2}>
-                {jumpTargets.map(({ id, label }) => (
-                  <Pressable key={id} onPress={() => jumpTo(id)} style={styles.touchSmall}>
-                    <XStack
-                      backgroundColor={colors.primary + '18'}
-                      borderRadius={99}
-                      borderWidth={1}
-                      borderColor={colors.primary}
-                      paddingHorizontal="$2"
-                      minWidth={30}
-                      alignItems="center"
-                      justifyContent="center"
-                      flexGrow={1}
-                    >
-                      <Text color={colors.primary} fontSize={12} fontWeight="700">
-                        {label}
-                      </Text>
-                    </XStack>
-                  </Pressable>
-                ))}
-              </XStack>
-            </ScrollView>
-          ) : null}
+          {chipsInHeader ? null : jumpBar}
 
           {/* Content */}
           <ScrollView
@@ -854,6 +952,16 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
+  /** The chip strip on its own line: only as tall as the chips. */
+  jumpRow: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  /** The chip strip on the title's line: whatever width the title leaves. */
+  jumpInline: {
+    flex: 1,
+    marginLeft: 12,
+  },
   /** The jump chips, which are a row of their own and stay compact. */
   touchSmall: {
     minHeight: 34,
@@ -865,9 +973,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeBtn: {
-    marginLeft: 8,
-    padding: 4,
+  /**
+   * The caret and the close. 44 tall, which also sets the folded header's
+   * height, and narrow enough that two of them leave the title its room.
+   */
+  headerBtn: {
+    minWidth: 36,
+    minHeight: 44,
+    marginLeft: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mono: {
     fontFamily: 'Courier New',
