@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Modal, Image, Pressable, Platform, useWindowDimensions, View } from 'react-native'
+import { Image, Pressable, Platform, useWindowDimensions, View } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   useSharedValue,
@@ -189,7 +190,7 @@ export function ImageLightbox({ uri, onClose, name }: ImageLightboxProps) {
   }
 
   return (
-    <Modal visible={!!uri} transparent animationType="fade" onRequestClose={onClose}>
+    <FullScreenOverlay visible={!!uri} transparent animationType="fade" onRequestClose={onClose}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.96)' }}>
           <GestureDetector gesture={gesture}>
@@ -243,6 +244,6 @@ export function ImageLightbox({ uri, onClose, name }: ImageLightboxProps) {
           </XStack>
         </View>
       </GestureHandlerRootView>
-    </Modal>
+    </FullScreenOverlay>
   )
 }

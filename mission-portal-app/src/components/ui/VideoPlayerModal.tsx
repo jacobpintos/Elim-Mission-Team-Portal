@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { Modal, View, Pressable, StyleSheet } from 'react-native'
+import { View, Pressable, StyleSheet } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { YouTubeEmbed } from '@/components/ui/YouTubeEmbed'
 import { openExternalUrl } from '@/lib/externalUrl'
@@ -51,7 +52,7 @@ export function VideoPlayerModal({
   if (!url) return null
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
+    <FullScreenOverlay visible animationType="slide" onRequestClose={onClose}>
       <View style={[styles.modal, { backgroundColor: '#000' }]}>
         <Pressable onPress={onClose} style={styles.closeBtn}>
           <Text color="white" fontSize="$5" fontWeight="700">
@@ -95,7 +96,7 @@ export function VideoPlayerModal({
           </XStack>
         </YStack>
       </View>
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 

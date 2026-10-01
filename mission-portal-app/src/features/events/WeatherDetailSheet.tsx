@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Pressable, ScrollView as RNScrollView } from 'react-native'
 import { Sheet, YStack, XStack, Text } from 'tamagui'
+import { ABSOLUTE_PORTAL } from '@/components/ui/Modal'
 import { useThemeColors } from '@/theme/useThemeColors'
 import {
   fetchHourlyForecast,
@@ -114,6 +115,7 @@ export function WeatherDetailSheet({ open, onClose, event }: WeatherDetailSheetP
       disableDrag
       modal
       zIndex={200000}
+      portalProps={ABSOLUTE_PORTAL}
     >
       <Sheet.Overlay backgroundColor="rgba(0,0,0,0.45)" />
       <Sheet.Frame backgroundColor={colors.background}>

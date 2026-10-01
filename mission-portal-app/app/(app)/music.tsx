@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, TextInput, Pressable, StyleSheet, Modal, View } from 'react-native'
+import { ScrollView, TextInput, Pressable, StyleSheet, View } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
@@ -368,7 +369,7 @@ export default function MusicScreen() {
    * Why the form reports its own errors instead of leaning on the toast.
    *
    * ToastContainer is mounted in the root layout, and this form lives inside a
-   * React Native <Modal>. A Modal is a separate native window on iOS and a
+   * React Native <FullScreenOverlay>. A Modal is a separate native window on iOS and a
    * stacked overlay on web, so a toast raised while it is open renders behind
    * it on both — invisible. Every rejected save looked like a dead Save button.
    */
@@ -773,7 +774,7 @@ export default function MusicScreen() {
       />
 
       {/* See All modal */}
-      <Modal
+      <FullScreenOverlay
         visible={!!seeAllSection}
         animationType="slide"
         onRequestClose={() => setSeeAllSection(null)}
@@ -852,10 +853,10 @@ export default function MusicScreen() {
             </YStack>
           </ScrollView>
         </View>
-      </Modal>
+      </FullScreenOverlay>
 
       {/* Add/Edit modal */}
-      <Modal
+      <FullScreenOverlay
         visible={showEditModal}
         animationType="slide"
         onRequestClose={() => setShowEditModal(false)}
@@ -1135,7 +1136,7 @@ export default function MusicScreen() {
             </XStack>
           </YStack>
         </View>
-      </Modal>
+      </FullScreenOverlay>
 
       {showStreamModal ? <StreamCardModal onClose={() => setShowStreamModal(false)} /> : null}
     </YStack>

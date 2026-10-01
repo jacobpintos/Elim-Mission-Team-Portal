@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
+import { ScrollView, Pressable, TextInput, View, StyleSheet } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { useRouter } from 'expo-router'
@@ -240,7 +241,7 @@ export default function IssuesIndex() {
       ) : null}
 
       {/* Report Modal */}
-      <Modal
+      <FullScreenOverlay
         visible={reportOpen}
         animationType="slide"
         transparent
@@ -384,7 +385,7 @@ export default function IssuesIndex() {
             </ScrollView>
           </YStack>
         </View>
-      </Modal>
+      </FullScreenOverlay>
     </YStack>
   )
 }

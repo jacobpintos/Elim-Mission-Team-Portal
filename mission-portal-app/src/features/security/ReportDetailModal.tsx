@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import {
-  Modal,
   View,
   ScrollView,
   Pressable,
@@ -10,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import type { SecurityReport } from '@/types/security'
@@ -86,7 +86,12 @@ export function ReportDetailModal({
     report.status === 'open' ? 'OPEN' : report.status === 'responding' ? 'RESPONDING' : 'RESOLVED'
 
   return (
-    <Modal visible={!!report} animationType="slide" transparent onRequestClose={handleClose}>
+    <FullScreenOverlay
+      visible={!!report}
+      animationType="slide"
+      transparent
+      onRequestClose={handleClose}
+    >
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -327,7 +332,7 @@ export function ReportDetailModal({
           </ScrollView>
         </YStack>
       </KeyboardAvoidingView>
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 

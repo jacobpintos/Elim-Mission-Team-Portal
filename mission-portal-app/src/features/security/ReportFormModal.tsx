@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react'
 import {
-  Modal,
   View,
   ScrollView,
   Pressable,
@@ -10,6 +9,7 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { uriToBlob } from '@/lib/uriToBlob'
@@ -119,7 +119,12 @@ export function ReportFormModal({ visible, onClose, onSubmit }: ReportFormModalP
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+    <FullScreenOverlay
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={handleClose}
+    >
       {/* The card is vertically centered in the overlay, so on iOS the
           keyboard covered the lower fields and the Submit button with no way
           to scroll to them. Lifting the overlay keeps them reachable. */}
@@ -295,7 +300,7 @@ export function ReportFormModal({ visible, onClose, onSubmit }: ReportFormModalP
           style={{ display: 'none' }}
         />
       ) : null}
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 

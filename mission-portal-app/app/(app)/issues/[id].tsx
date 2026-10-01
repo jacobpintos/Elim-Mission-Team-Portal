@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
+import { ScrollView, Pressable, TextInput, View, StyleSheet } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useLocalSearchParams } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -522,7 +523,7 @@ export default function IssueDetail() {
       </ScrollView>
 
       {/* Assignee picker modal */}
-      <Modal
+      <FullScreenOverlay
         visible={pickerOpen}
         transparent
         animationType="fade"
@@ -574,7 +575,7 @@ export default function IssueDetail() {
             </ScrollView>
           </YStack>
         </View>
-      </Modal>
+      </FullScreenOverlay>
     </YStack>
   )
 }

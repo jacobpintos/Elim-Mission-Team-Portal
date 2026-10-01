@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import {
-  Modal,
   View,
   TextInput,
   Pressable,
@@ -8,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import type { InventoryItem, InventoryCategory } from '@/types/inventory'
@@ -70,7 +70,7 @@ export function ItemFormModal({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <FullScreenOverlay visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -262,7 +262,7 @@ export function ItemFormModal({
           </XStack>
         </YStack>
       </KeyboardAvoidingView>
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 

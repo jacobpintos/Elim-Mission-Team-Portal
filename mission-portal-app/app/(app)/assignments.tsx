@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, Pressable, Modal, View, TextInput, StyleSheet } from 'react-native'
+import { ScrollView, Pressable, View, TextInput, StyleSheet } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { RecipientPicker } from '@/components/ui/RecipientPicker'
 import { YStack, XStack, Text, Input } from 'tamagui'
@@ -76,7 +77,7 @@ function CAVerificationModal({
   }
 
   return (
-    <Modal visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
+    <FullScreenOverlay visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
       <View style={caStyles.overlay}>
         <YStack
           backgroundColor={colors.surface}
@@ -188,7 +189,7 @@ function CAVerificationModal({
           </Pressable>
         </YStack>
       </View>
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 
@@ -275,7 +276,7 @@ function CreateTaskModal({
   const nonPublicUsers = users.filter((u) => !u.roles?.includes('public'))
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <FullScreenOverlay visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={ctStyles.overlay}>
         <YStack
           backgroundColor={colors.surface}
@@ -517,7 +518,7 @@ function CreateTaskModal({
           </ScrollView>
         </YStack>
       </View>
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 
@@ -934,7 +935,7 @@ function AdminTaskEditWrapper({
   users: UserProfile[]
 }) {
   return (
-    <Modal visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
+    <FullScreenOverlay visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
       {task ? (
         <AdminTaskEditModal
           key={String(task.id)}
@@ -947,7 +948,7 @@ function AdminTaskEditWrapper({
       ) : (
         <View />
       )}
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 
@@ -1120,7 +1121,7 @@ function TaskUpdateModal({
   onEdit?: () => void
 }) {
   return (
-    <Modal visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
+    <FullScreenOverlay visible={!!task} animationType="slide" transparent onRequestClose={onClose}>
       {task ? (
         <TaskUpdateModalInner
           key={String(task.id)}
@@ -1132,7 +1133,7 @@ function TaskUpdateModal({
       ) : (
         <View />
       )}
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ScrollView, Pressable, TextInput, StyleSheet, View, Modal } from 'react-native'
+import { ScrollView, Pressable, TextInput, StyleSheet, View } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useInventoryStore } from '@/stores/inventoryStore'
@@ -57,7 +58,7 @@ function ReorderFormModal({ visible, onClose, onSave, editItem }: ReorderFormMod
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <FullScreenOverlay visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <YStack
           backgroundColor={colors.surface}
@@ -166,7 +167,7 @@ function ReorderFormModal({ visible, onClose, onSave, editItem }: ReorderFormMod
           </XStack>
         </YStack>
       </View>
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 

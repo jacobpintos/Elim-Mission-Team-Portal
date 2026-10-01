@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
-import { Modal, Pressable, ScrollView, useWindowDimensions } from 'react-native'
+import { Pressable, ScrollView, useWindowDimensions } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
@@ -117,7 +118,7 @@ export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGall
   }
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
+    <FullScreenOverlay visible animationType="slide" onRequestClose={onClose}>
       <YStack flex={1} backgroundColor={colors.background}>
         {/* Header */}
         <XStack
@@ -307,6 +308,6 @@ export function PhotoGalleryModal({ album: opened, isAdmin, onClose }: PhotoGall
             zoom, rather than inheriting where the last one was left. */}
         <ImageLightbox key={viewing ?? 'none'} uri={viewing} onClose={() => setViewing(null)} />
       </YStack>
-    </Modal>
+    </FullScreenOverlay>
   )
 }

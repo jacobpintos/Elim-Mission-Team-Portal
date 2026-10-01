@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native'
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useTasksStore } from '@/stores/tasksStore'
@@ -62,7 +63,12 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
         }}
         initialKey={viewSheetKey}
       />
-      <Modal visible={!!setList} animationType="slide" transparent onRequestClose={onClose}>
+      <FullScreenOverlay
+        visible={!!setList}
+        animationType="slide"
+        transparent
+        onRequestClose={onClose}
+      >
         <View style={styles.overlay}>
           <YStack
             backgroundColor={colors.surface}
@@ -238,7 +244,7 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
             ) : null}
           </YStack>
         </View>
-      </Modal>
+      </FullScreenOverlay>
     </>
   )
 }

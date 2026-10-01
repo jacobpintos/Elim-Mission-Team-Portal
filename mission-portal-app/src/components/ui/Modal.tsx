@@ -1,7 +1,27 @@
 import { useEffect, useState } from 'react'
-import { Dialog, Sheet, ScrollView, Text, type DialogProps, useWindowDimensions } from 'tamagui'
-import { ScrollView as RNScrollView } from 'react-native'
+import {
+  Dialog,
+  Sheet,
+  ScrollView,
+  Text,
+  H2,
+  YStack,
+  type DialogProps,
+  useWindowDimensions,
+} from 'tamagui'
+import { ScrollView as RNScrollView, Platform, Pressable, StyleSheet } from 'react-native'
 import { useKeyboardHeight } from '@/lib/useKeyboardHeight'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
+
+/**
+ * Tamagui's portal is position: fixed on the web — the same box that put every
+ * tap fifty points below its button on an iPhone held sideways (see
+ * FullScreenOverlay.web.tsx). It spreads a style of ours after its own, so the
+ * sheet can have absolute instead; the app's body is the viewport and does not
+ * scroll, so it covers the screen just the same.
+ */
+export const ABSOLUTE_PORTAL =
+  Platform.OS === 'web' ? ({ style: { position: 'absolute' } } as const) : undefined
 
 interface ModalProps extends Omit<DialogProps, 'children'> {
   title?: string
@@ -38,6 +58,47 @@ export function Modal({ title, children, open, onOpenChange, scrollable, ...prop
   const isOpen = open && painted
 
   if (isLarge) {
+    // The dialog cannot take the same fix: its portal is built without a style
+    // of ours, and the frame inside it is fixed as well. And this is the branch
+    // a phone takes in landscape — sideways it is wider than 768 — so on the
+    // web the dialog is drawn here instead, over the absolute overlay.
+    if (Platform.OS === 'web') {
+      return (
+        <FullScreenOverlay
+          visible={isOpen}
+          animationType="fade"
+          transparent
+          onRequestClose={() => onOpenChange(false)}
+        >
+          <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
+            {/* Tapping outside closes it, as the dialog did. */}
+            <Pressable
+              style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+              onPress={() => onOpenChange(false)}
+              accessibilityLabel="Close"
+            />
+            <YStack
+              backgroundColor="$background"
+              borderWidth={1}
+              borderColor="$borderColor"
+              borderRadius="$4"
+              padding="$4"
+              gap="$4"
+              minWidth={400}
+              maxWidth={600}
+              elevation="$4"
+            >
+              {title && <H2>{title}</H2>}
+              {scrollable ? (
+                <ScrollView style={{ maxHeight: 500 }}>{children}</ScrollView>
+              ) : (
+                children
+              )}
+            </YStack>
+          </YStack>
+        </FullScreenOverlay>
+      )
+    }
     return (
       <Dialog open={isOpen} onOpenChange={onOpenChange} {...props}>
         <Dialog.Portal>
@@ -67,6 +128,7 @@ export function Modal({ title, children, open, onOpenChange, scrollable, ...prop
       dismissOnSnapToBottom
       disableDrag
       modal
+      portalProps={ABSOLUTE_PORTAL}
     >
       <Sheet.Overlay backgroundColor="rgba(0,0,0,0.5)" />
       <Sheet.Frame padding="$4" gap="$2">

@@ -1,7 +1,6 @@
 'use no memo'
 import { useState, useRef, useEffect } from 'react'
 import {
-  Modal,
   View,
   Pressable,
   TextInput,
@@ -11,6 +10,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
 } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, {
@@ -1338,7 +1338,12 @@ export function PlanningBoardCanvas({
   const nonSvgItems = items.filter((i) => i.type !== 'draw' && i.type !== 'connector')
 
   return (
-    <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>
+    <FullScreenOverlay
+      visible={visible}
+      animationType="fade"
+      transparent={false}
+      onRequestClose={onClose}
+    >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={{ flex: 1, backgroundColor: colors.background }}>
           {/* Toolbar */}
@@ -1753,7 +1758,7 @@ export function PlanningBoardCanvas({
       </GestureHandlerRootView>
 
       {/* Create / Edit modal */}
-      <Modal
+      <FullScreenOverlay
         visible={createModal.visible}
         animationType="slide"
         transparent
@@ -2052,8 +2057,8 @@ export function PlanningBoardCanvas({
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
-      </Modal>
-    </Modal>
+      </FullScreenOverlay>
+    </FullScreenOverlay>
   )
 }
 

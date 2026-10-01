@@ -327,7 +327,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
   )
 
   return (
-    <FullScreenOverlay onRequestClose={onClose}>
+    <FullScreenOverlay visible animationType="fade" transparent onRequestClose={onClose}>
       {/* Inset the area the card is centred in, rather than the card itself.
           Centring alone does not clear the status bar here: at 94% of the
           screen height the margin above the card is around twenty-six points

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ScrollView, Pressable, TextInput, View, Modal, StyleSheet } from 'react-native'
+import { ScrollView, Pressable, TextInput, View, StyleSheet } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useRouter } from 'expo-router'
 import { usePostsStore } from '@/stores/postsStore'
@@ -261,7 +262,7 @@ export default function PostsIndex() {
       </ScrollView>
 
       {/* Edit / Add Page Modal */}
-      <Modal
+      <FullScreenOverlay
         visible={!!editState}
         animationType="slide"
         transparent
@@ -422,7 +423,7 @@ export default function PostsIndex() {
             </ScrollView>
           </YStack>
         </View>
-      </Modal>
+      </FullScreenOverlay>
     </YStack>
   )
 }

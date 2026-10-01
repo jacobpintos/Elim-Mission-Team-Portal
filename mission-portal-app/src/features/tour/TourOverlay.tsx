@@ -1,4 +1,5 @@
-import { Modal, Pressable, ScrollView, View } from 'react-native'
+import { Pressable, ScrollView, View } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -19,7 +20,7 @@ export function TourOverlay() {
   const progress = (index + 1) / steps.length
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={end}>
+    <FullScreenOverlay visible transparent animationType="fade" onRequestClose={end}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         {/* Dim backdrop over the real screen (blocks interaction during the tour). */}
         <Pressable
@@ -152,7 +153,7 @@ export function TourOverlay() {
           </XStack>
         </YStack>
       </View>
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 

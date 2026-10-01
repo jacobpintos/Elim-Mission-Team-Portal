@@ -1,12 +1,6 @@
 import { useState, useCallback } from 'react'
-import {
-  View,
-  TextInput as RNTextInput,
-  Modal,
-  Pressable,
-  Platform,
-  ScrollView,
-} from 'react-native'
+import { View, TextInput as RNTextInput, Pressable, Platform, ScrollView } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { ColorWheel } from './ColorWheel'
@@ -211,7 +205,12 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
       </XStack>
 
       {/* Color wheel modal */}
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+      <FullScreenOverlay
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+      >
         {/* Backdrop */}
         <Pressable
           style={{
@@ -324,7 +323,7 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
             </View>
           </Pressable>
         </Pressable>
-      </Modal>
+      </FullScreenOverlay>
     </YStack>
   )
 }

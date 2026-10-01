@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ScrollView, Pressable, TextInput, Modal, View, StyleSheet } from 'react-native'
+import { ScrollView, Pressable, TextInput, View, StyleSheet } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
@@ -50,7 +51,7 @@ function UserPickerModal({
   colors: ReturnType<typeof useThemeColors>
 }) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <FullScreenOverlay visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <YStack
           backgroundColor={colors.surface}
@@ -97,7 +98,7 @@ function UserPickerModal({
           </ScrollView>
         </YStack>
       </View>
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 
@@ -602,7 +603,7 @@ export default function Kaizen() {
       </Pressable>
 
       {/* Add Idea Modal */}
-      <Modal
+      <FullScreenOverlay
         visible={ideaOpen}
         animationType="slide"
         transparent
@@ -688,10 +689,10 @@ export default function Kaizen() {
             </Pressable>
           </YStack>
         </View>
-      </Modal>
+      </FullScreenOverlay>
 
       {/* Action Plan Modal */}
-      <Modal
+      <FullScreenOverlay
         visible={!!planCard}
         animationType="slide"
         transparent
@@ -883,7 +884,7 @@ export default function Kaizen() {
             </ScrollView>
           </YStack>
         </View>
-      </Modal>
+      </FullScreenOverlay>
 
       {/* Verifier picker (inside action plan modal) */}
       <UserPickerModal
@@ -896,7 +897,7 @@ export default function Kaizen() {
       />
 
       {/* Delete Modal */}
-      <Modal
+      <FullScreenOverlay
         visible={!!deleteTarget}
         animationType="slide"
         transparent
@@ -984,7 +985,7 @@ export default function Kaizen() {
             </XStack>
           </YStack>
         </View>
-      </Modal>
+      </FullScreenOverlay>
     </YStack>
   )
 }

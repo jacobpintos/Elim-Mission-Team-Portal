@@ -3,11 +3,11 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Modal,
   View,
   StyleSheet,
   useWindowDimensions,
 } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text, Image } from 'tamagui'
 import { Stack } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -403,7 +403,7 @@ export default function AnnounceScreen() {
       <ImageLightbox key={viewing ?? 'none'} uri={viewing} onClose={() => setViewing(null)} />
 
       {/* Create Modal */}
-      <Modal
+      <FullScreenOverlay
         visible={showCreate}
         animationType="slide"
         transparent
@@ -731,7 +731,7 @@ export default function AnnounceScreen() {
             </ScrollView>
           </YStack>
         </View>
-      </Modal>
+      </FullScreenOverlay>
     </YStack>
   )
 }

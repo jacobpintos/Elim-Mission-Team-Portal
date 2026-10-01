@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { View, type ModalProps } from 'react-native'
 
 /**
  * A full-screen layer over the app — absolutely positioned, not fixed.
@@ -17,50 +18,142 @@ import { createPortal } from 'react-dom'
  * while their boxes, which is what a touch is resolved against, are not. Paint
  * and hit testing end up in two different coordinate spaces, and everything
  * inside is off by the same amount. It never reproduced in Chromium at any
- * viewport, which fits: this is not something the layout does.
+ * viewport, which fits: this is not something the layout does. Moving the
+ * chord sheet onto this fixed it on the phone that reported it.
  *
  * Absolute positioning has none of that. The app's body is exactly the
  * viewport and cannot scroll, so top/left/right/bottom of zero covers the
  * screen the same way — as an ordinary element the browser has no reason to
  * treat specially.
  *
- * Appended to <body> rather than inside the app root on purpose: it keeps the
- * paint order react-native-web's own modals have, so an overlay opened over
- * another one still lands on top.
+ * Takes the Modal props this app uses — visible, animationType, transparent,
+ * onRequestClose — so it drops in where a Modal was. The rest are native-only
+ * and have no meaning here.
  */
+
+/** Open overlays, oldest first, so Escape closes only the one on top. */
+const openStack: number[] = []
+let nextId = 0
+
+const DURATION = 300
+
+/** The Web Animations API, which every browser this app supports has. */
+const CAN_ANIMATE =
+  typeof document !== 'undefined' && typeof document.createElement('div').animate === 'function'
+
 export function FullScreenOverlay({
-  children,
+  visible = true,
+  animationType = 'none',
+  transparent = false,
   onRequestClose,
-}: {
-  children: ReactNode
-  onRequestClose: () => void
-}) {
-  // Built once, on the first render, and kept for the life of the overlay.
+  children,
+}: ModalProps) {
+  // Still on screen while the exit animation runs, then gone. With nothing to
+  // animate it simply follows visible, decided here rather than in an effect.
+  const [rendered, setRendered] = useState(visible)
+  if (visible && !rendered) setRendered(true)
+  if (!visible && rendered && !(CAN_ANIMATE && keyframes(animationType))) setRendered(false)
+
+  // Built once and kept, so the portal target is stable for the component's
+  // life — but only put in the document while there is something to show.
   const [host] = useState(() => {
     if (typeof document === 'undefined') return null
     const el = document.createElement('div')
-    el.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;z-index:9999'
+    el.style.cssText =
+      'position:absolute;top:0;left:0;right:0;bottom:0;z-index:9999;display:flex;flex-direction:column'
     el.setAttribute('role', 'dialog')
     el.setAttribute('aria-modal', 'true')
     return el
   })
+  const [id] = useState(() => nextId++)
 
+  // Appended when it opens rather than when it mounts. react-native-web's
+  // Modal appends its container on first render whether or not it is visible,
+  // so two modals stacked in the order their components mounted, not the
+  // order they opened — which is how a video once opened behind the set list
+  // it was started from. Appending on open puts the newest on top every time.
+  const wasVisible = useRef(false)
   useEffect(() => {
-    if (!host || typeof document === 'undefined') return
+    if (!host || !rendered) return
+    setStyle(host, 'background', transparent ? 'transparent' : 'white')
     document.body.appendChild(host)
+    openStack.push(id)
     return () => {
+      const at = openStack.indexOf(id)
+      if (at !== -1) openStack.splice(at, 1)
       host.remove()
+      // So the next open plays its entrance again.
+      wasVisible.current = false
     }
-  }, [host])
+  }, [host, rendered, id, transparent])
+
+  // Enter and exit. Played with the Web Animations API and no fill, so the
+  // transform a slide uses is gone the moment it finishes rather than left on
+  // the layer for as long as it is open.
+  useEffect(() => {
+    if (!host || !rendered) return
+    const frames = keyframes(animationType)
+    if (visible && !wasVisible.current) {
+      wasVisible.current = true
+      play(host, frames, 'ease-in')
+      return
+    }
+    if (!visible && wasVisible.current) {
+      wasVisible.current = false
+      // Only reached with something to animate; the render above handles the
+      // rest. Nothing under the finger while it leaves, as react-native-web
+      // does.
+      const out = play(host, frames ? [...frames].reverse() : null, 'ease-out')
+      if (!out) return
+      setStyle(host, 'pointerEvents', 'none')
+      let cancelled = false
+      out.finished
+        .catch(() => {})
+        .then(() => {
+          if (cancelled) return
+          setStyle(host, 'pointerEvents', '')
+          setRendered(false)
+        })
+      return () => {
+        // Reopened before it finished leaving: stop, and take touches again.
+        cancelled = true
+        out.cancel()
+        setStyle(host, 'pointerEvents', '')
+      }
+    }
+  }, [host, rendered, visible, animationType])
 
   useEffect(() => {
-    if (typeof document === 'undefined') return
+    if (!rendered || typeof document === 'undefined') return
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onRequestClose()
+      if (e.key !== 'Escape' || openStack[openStack.length - 1] !== id) return
+      e.stopPropagation()
+      // Typed to receive a native event on the platforms that have one; every
+      // caller here ignores it.
+      ;(onRequestClose as (() => void) | undefined)?.()
     }
     document.addEventListener('keyup', onKeyUp)
     return () => document.removeEventListener('keyup', onKeyUp)
-  }, [onRequestClose])
+  }, [rendered, id, onRequestClose])
 
-  return host ? createPortal(children, host) : null
+  if (!host || !rendered) return null
+  // A View between the host and the content, as react-native-web's Modal has,
+  // so a child that says flex: 1 fills the screen the way it did before.
+  return createPortal(<View style={{ flex: 1 }}>{children}</View>, host)
+}
+
+/** DOM writes kept out of the component, where the host is just a value. */
+function setStyle(el: HTMLElement, prop: 'background' | 'pointerEvents', value: string) {
+  el.style[prop] = value
+}
+
+function play(el: HTMLElement, frames: Keyframe[] | null, easing: string): Animation | null {
+  if (!frames || typeof el.animate !== 'function') return null
+  return el.animate(frames, { duration: DURATION, easing })
+}
+
+function keyframes(type: ModalProps['animationType']): Keyframe[] | null {
+  if (type === 'slide') return [{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }]
+  if (type === 'fade') return [{ opacity: 0 }, { opacity: 1 }]
+  return null
 }

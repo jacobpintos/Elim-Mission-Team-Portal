@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Modal, Pressable, View, StyleSheet } from 'react-native'
+import { Pressable, View, StyleSheet } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useLivestreamStore } from '@/stores/livestreamStore'
 import { activeStream, msUntilExpiry } from '@/lib/livestream'
@@ -108,7 +109,7 @@ export function StreamBox() {
         </Pressable>
       </YStack>
 
-      <Modal
+      <FullScreenOverlay
         visible={playingId === stream.id}
         animationType="slide"
         onRequestClose={() => setPlayingId(null)}
@@ -133,7 +134,7 @@ export function StreamBox() {
             </YStack>
           </YStack>
         </View>
-      </Modal>
+      </FullScreenOverlay>
     </>
   )
 }

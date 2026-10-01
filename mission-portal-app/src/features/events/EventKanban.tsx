@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Modal, ScrollView, Pressable, View, useWindowDimensions } from 'react-native'
+import { ScrollView, Pressable, View, useWindowDimensions } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { isOverdue } from '@/lib/availability'
@@ -208,7 +209,7 @@ export function EventKanban({
       : done
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <FullScreenOverlay visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View
         style={{
           flex: 1,
@@ -400,6 +401,6 @@ export function EventKanban({
           </ScrollView>
         </YStack>
       </View>
-    </Modal>
+    </FullScreenOverlay>
   )
 }

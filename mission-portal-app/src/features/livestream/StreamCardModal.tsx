@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Modal, Pressable, TextInput, View, StyleSheet } from 'react-native'
+import { Pressable, TextInput, View, StyleSheet } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { useAuthStore } from '@/stores/authStore'
@@ -108,7 +109,7 @@ export function StreamCardModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
+    <FullScreenOverlay visible animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <XStack
           paddingHorizontal="$4"
@@ -261,7 +262,7 @@ export function StreamCardModal({ onClose }: { onClose: () => void }) {
           </XStack>
         </YStack>
       </View>
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 

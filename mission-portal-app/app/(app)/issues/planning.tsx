@@ -3,12 +3,12 @@ import { Stack } from 'expo-router'
 import {
   ScrollView,
   Pressable,
-  Modal,
   TextInput,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useAuthStore } from '@/stores/authStore'
@@ -224,7 +224,7 @@ export default function Planning() {
       </ScrollView>
 
       {/* New Board Modal */}
-      <Modal
+      <FullScreenOverlay
         visible={newBoardModal}
         transparent
         animationType="slide"
@@ -284,10 +284,10 @@ export default function Planning() {
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
-      </Modal>
+      </FullScreenOverlay>
 
       {/* Rename Modal */}
-      <Modal
+      <FullScreenOverlay
         visible={renameModal !== null}
         transparent
         animationType="slide"
@@ -347,10 +347,10 @@ export default function Planning() {
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
-      </Modal>
+      </FullScreenOverlay>
 
       {/* Link Event Modal */}
-      <Modal
+      <FullScreenOverlay
         visible={linkModal !== null}
         transparent
         animationType="slide"
@@ -426,10 +426,10 @@ export default function Planning() {
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
-      </Modal>
+      </FullScreenOverlay>
 
       {/* Delete Confirm Modal */}
-      <Modal
+      <FullScreenOverlay
         visible={deleteConfirm !== null}
         transparent
         animationType="fade"
@@ -477,7 +477,7 @@ export default function Planning() {
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
-      </Modal>
+      </FullScreenOverlay>
 
       {/* Planning Board Canvas */}
       <PlanningBoardCanvas

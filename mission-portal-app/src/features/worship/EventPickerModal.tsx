@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { Modal, View, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { View, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -75,7 +76,7 @@ export function EventPickerModal({ visible, onClose, onSelect }: EventPickerModa
   const selectedEvents = selectedDay ? (byDate[selectedDay] ?? []) : []
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <FullScreenOverlay visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <YStack
           backgroundColor={colors.surface}
@@ -236,7 +237,7 @@ export function EventPickerModal({ visible, onClose, onSelect }: EventPickerModa
           )}
         </YStack>
       </View>
-    </Modal>
+    </FullScreenOverlay>
   )
 }
 
