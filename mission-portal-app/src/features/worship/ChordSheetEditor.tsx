@@ -22,6 +22,7 @@ import {
   normalizeSameAsPrevious,
 } from '@/lib/chordSheetEdit'
 import { appendChordKey, backspaceChordToken, pinExtension } from '@/lib/chordKeypad'
+import { ChordImportModal, type ImportedChart } from './ChordImportModal'
 import {
   SECTION_TYPES,
   SECTION_LABELS,
@@ -244,6 +245,7 @@ export function ChordSheetEditor({
   const [sections, setSections] = useState<ChordSheetSection[]>([makeSection('verse')])
   const [saving, setSaving] = useState(false)
   const [showChordHelp, setShowChordHelp] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [selected, setSelected] = useState<SelectedSlot | null>(null)
   // Lives only as long as the editor: a pinned key is a convenience, not a
   // setting anyone should have to manage.
@@ -446,6 +448,34 @@ export function ChordSheetEditor({
   }
 
   /**
+   * Fill the builder from an imported chart — after asking, if there is
+   * already something here, because it replaces the lot. It lands in the
+   * builder rather than being saved straight away so it is checked, and
+   * fixed where a chart was spaced oddly, before anyone plays from it.
+   */
+  const applyImport = async (chart: ImportedChart): Promise<boolean> => {
+    const hasContent =
+      !!title.trim() ||
+      !!artist.trim() ||
+      sections.some((s) => s.lyrics.trim()) ||
+      hasAnyChord(sections.map((s) => s.chordTokens))
+    if (hasContent) {
+      const ok = await confirmAsync('Replace what is in the builder with the imported chart?', {
+        title: 'Import chart',
+        confirmLabel: 'Replace',
+      })
+      if (!ok) return false
+    }
+    setTitle(chart.title)
+    setArtist(chart.artist)
+    setBpm(chart.bpm)
+    setSections(chart.sections.length > 0 ? chart.sections : [makeSection('verse')])
+    setSelected(null)
+    setShowImport(false)
+    return true
+  }
+
+  /**
    * Empty every chord in the song, keeping the words and the arrangement.
    *
    * Confirmed first because there is no undo in this editor and a sheet is
@@ -599,6 +629,33 @@ export function ChordSheetEditor({
               scrollEventThrottle={16}
             >
               <YStack gap="$3" paddingBottom="$4">
+                {/* Bring a chart in from SongSelect, OnSong or anywhere else
+                    rather than typing it — the import fills in everything
+                    below, to be checked and saved as usual. */}
+                <Pressable
+                  onPress={() => setShowImport(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Import a chart"
+                >
+                  <XStack
+                    alignSelf="flex-start"
+                    minHeight={40}
+                    alignItems="center"
+                    borderRadius="$2"
+                    borderWidth={1}
+                    borderColor={colors.primary}
+                    paddingHorizontal="$3"
+                    gap="$2"
+                  >
+                    <Text color={colors.primary} fontSize="$2" fontWeight="700">
+                      Import a chart
+                    </Text>
+                    <Text color={colors.textMuted} fontSize="$1">
+                      ChordPro or text
+                    </Text>
+                  </XStack>
+                </Pressable>
+
                 {/* Basic info */}
                 <YStack gap="$1">
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
@@ -1223,6 +1280,12 @@ export function ChordSheetEditor({
           ) : null}
         </YStack>
       </KeyboardAvoidingView>
+
+      <ChordImportModal
+        visible={showImport}
+        onClose={() => setShowImport(false)}
+        onImport={applyImport}
+      />
     </FullScreenOverlay>
   )
 }
