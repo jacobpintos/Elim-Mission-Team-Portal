@@ -86,32 +86,3 @@ export function normalizeSameAsPrevious<T extends OrderedSection>(sections: T[])
     return hasEarlier ? section : { ...section, sameAsPrevious: false }
   })
 }
-
-/**
- * Retype every intro that is not the first thing in the song.
- *
- * An intro is the passage a song opens with. The same figure played again in
- * the middle — between a chorus and the next verse, or before the bridge — is
- * an interlude, and calling it "Intro 2" is both wrong and confusing on a
- * stage: nobody wants "from the second intro" as an instruction.
- *
- * Only the label changes. Chords, lyrics and order are returned exactly as
- * they came in, because this runs over sheets people have already played
- * from, and a migration that touched a chord would be a migration that had to
- * be checked song by song.
- *
- * Idempotent: once converted there are no trailing intros left to find, so
- * running it again does nothing.
- */
-export function convertLaterIntrosToInterludes<T extends { type: string }>(
-  sections: T[]
-): { sections: T[]; converted: number } {
-  let converted = 0
-  const next = sections.map((section, index) => {
-    if (index === 0 || section.type !== 'intro') return section
-    converted++
-    return { ...section, type: 'interlude' }
-  })
-  // The same array back when nothing matched, so a caller can skip the write.
-  return converted === 0 ? { sections, converted: 0 } : { sections: next, converted }
-}

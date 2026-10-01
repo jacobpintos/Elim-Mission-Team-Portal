@@ -7,8 +7,6 @@ import { useUIStore } from '@/stores/uiStore'
 import { ChordSheetEditor } from './ChordSheetEditor'
 import { ChordSheetViewer } from './ChordSheetViewer'
 import type { ChordSheet } from '@/types/chordSheet'
-import { convertLaterIntrosToInterludes } from '@/lib/chordSheetEdit'
-import { confirmAsync } from '@/lib/confirm'
 
 interface ChordSheetsTabProps {
   createdBy: string | number
@@ -27,7 +25,6 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
   const [editSheet, setEditSheet] = useState<ChordSheet | null>(null)
   const [viewSheet, setViewSheet] = useState<ChordSheet | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null)
-  const [retyping, setRetyping] = useState(false)
 
   const filtered = [...chordSheets]
     .filter((s) => {
@@ -62,60 +59,6 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
       toast('Failed to delete', 'error')
     } finally {
       setConfirmDeleteId(null)
-    }
-  }
-
-  /**
-   * Retype the intros that are not at the front of their song.
-   *
-   * An intro is what a song opens with; the same figure in the middle is an
-   * interlude, and existing sheets were written before there was a name for
-   * it. Only the label changes — chords and lyrics are carried through
-   * untouched, which is the reason this is a sweep rather than an afternoon
-   * of opening songs one at a time.
-   *
-   * Left in place rather than run once and deleted: it is idempotent, and
-   * sheets keep arriving from people who learned to call the middle one an
-   * intro too.
-   */
-  const retypeIntros = async () => {
-    const pending = chordSheets
-      .map((sheet) => ({ sheet, result: convertLaterIntrosToInterludes(sheet.sections) }))
-      .filter(({ result }) => result.converted > 0)
-
-    if (pending.length === 0) {
-      toast('No intros to retype — every one is already where a song starts', 'success')
-      return
-    }
-
-    const sections = pending.reduce((n, { result }) => n + result.converted, 0)
-    const ok = await confirmAsync(
-      `Retype ${sections} section${sections === 1 ? '' : 's'} across ${pending.length} song${
-        pending.length === 1 ? '' : 's'
-      } from Intro to Interlude? Chords and lyrics are not touched.`,
-      { title: 'Retype later intros', confirmLabel: 'Retype' }
-    )
-    if (!ok) return
-
-    setRetyping(true)
-    try {
-      for (const { sheet, result } of pending) {
-        // Every field written back as it was read, the sections apart. The
-        // store JSON-encodes chord rows on the way out and decodes them on the
-        // way in, so what goes back is what was there.
-        await updateChordSheet(sheet.id, {
-          title: sheet.title,
-          artist: sheet.artist,
-          bpm: sheet.bpm,
-          createdBy: sheet.createdBy,
-          sections: result.sections,
-        })
-      }
-      toast(`Retyped ${sections} section${sections === 1 ? '' : 's'}`, 'success')
-    } catch {
-      toast('Could not retype every song — try again', 'error')
-    } finally {
-      setRetyping(false)
     }
   }
 
@@ -267,20 +210,6 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
                 </XStack>
               </View>
             ))}
-
-            {readOnly ? null : (
-              <Pressable onPress={retypeIntros} disabled={retyping}>
-                <Text
-                  color={colors.textMuted}
-                  fontSize={12}
-                  textAlign="center"
-                  marginTop="$3"
-                  textDecorationLine="underline"
-                >
-                  {retyping ? 'Retyping…' : 'Retype later intros as interludes'}
-                </Text>
-              </Pressable>
-            )}
           </YStack>
         </ScrollView>
       )}
