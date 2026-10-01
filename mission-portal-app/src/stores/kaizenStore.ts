@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import {
   collection,
-  onSnapshot,
   doc,
   setDoc,
   updateDoc,
@@ -9,6 +8,7 @@ import {
   arrayUnion,
   serverTimestamp,
 } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'

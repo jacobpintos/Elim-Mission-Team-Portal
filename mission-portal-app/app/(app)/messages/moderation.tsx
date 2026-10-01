@@ -2,15 +2,8 @@ import { useEffect, useState } from 'react'
 import { ScrollView, Pressable } from 'react-native'
 import { useRouter } from 'expo-router'
 import { YStack, XStack, Text, Spinner, Image } from 'tamagui'
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  doc,
-  updateDoc,
-  deleteDoc,
-} from 'firebase/firestore'
+import { collection, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'

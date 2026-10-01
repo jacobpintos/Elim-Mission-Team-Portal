@@ -1,4 +1,5 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, setDoc } from 'firebase/firestore'
+import { getDoc } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? ''

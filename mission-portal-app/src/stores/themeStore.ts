@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
 import { defaults } from '@/theme/defaults'

@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import {
   collection,
-  onSnapshot,
   doc,
   addDoc,
   updateDoc,
@@ -9,6 +8,7 @@ import {
   arrayUnion,
   arrayRemove,
 } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import type { PhotoAlbum, PhotoItem } from '@/types/photos'
 

@@ -1,11 +1,9 @@
 import { create } from 'zustand'
 import {
   collection,
-  onSnapshot,
   query,
   orderBy,
   limit,
-  getDocs,
   doc,
   addDoc,
   updateDoc,
@@ -14,6 +12,7 @@ import {
   startAfter,
   where,
 } from 'firebase/firestore'
+import { onSnapshot, getDocs } from '@/lib/liveFirestore'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { db } from '@/lib/firebase'
 import { MESSAGES_PAGE_SIZE } from '@/lib/messages'

@@ -15,6 +15,8 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, 'src'),
       '@app': path.resolve(__dirname, 'app'),
+      // The native app's offline copy writes files; here they are kept in a Map.
+      'expo-file-system': path.resolve(__dirname, 'src/testing/expoFileSystemStub.ts'),
     },
   },
   test: {

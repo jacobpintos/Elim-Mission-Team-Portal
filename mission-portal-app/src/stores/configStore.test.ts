@@ -18,6 +18,13 @@ const listeners: { onNext: SnapshotHandler; onError: ErrorHandler; unsub: () => 
 
 vi.mock('@/lib/firebase', () => ({ db: {} }))
 
+// The stores read through liveFirestore, the native app's offline copy; these
+// tests are about the stores, so it hands straight through to the mock below.
+vi.mock('@/lib/liveFirestore', async () => {
+  const firestore = await import('firebase/firestore')
+  return { onSnapshot: firestore.onSnapshot }
+})
+
 vi.mock('firebase/firestore', () => ({
   doc: () => ({}),
   onSnapshot: (_ref: unknown, onNext: SnapshotHandler, onError: ErrorHandler) => {

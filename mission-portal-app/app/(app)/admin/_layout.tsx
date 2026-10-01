@@ -5,7 +5,8 @@ import { useAuthStore } from '@/stores/authStore'
 import { isAdmin } from '@/lib/roles'
 import { ADMIN_SECTIONS } from '@/lib/adminSections'
 import { useEffect, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { doc } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 
 const BASE_TABS = ADMIN_SECTIONS.map((s) => ({

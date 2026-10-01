@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import type { ConfigMain, PostsConfig, CommonTeam } from '@/types/events'
 

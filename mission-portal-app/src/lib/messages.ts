@@ -1,13 +1,5 @@
-import {
-  collection,
-  query,
-  orderBy,
-  limit,
-  startAfter,
-  getDocs,
-  updateDoc,
-  doc,
-} from 'firebase/firestore'
+import { collection, query, orderBy, limit, startAfter, updateDoc, doc } from 'firebase/firestore'
+import { getDocs } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import type { Message } from '@/types/events'
 

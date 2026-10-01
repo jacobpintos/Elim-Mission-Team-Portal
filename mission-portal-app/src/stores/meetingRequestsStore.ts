@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore'
+import { collection, doc, query, updateDoc, where } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { db, auth } from '@/lib/firebase'
 import type { MeetingRequest } from '@/types/meeting'
 

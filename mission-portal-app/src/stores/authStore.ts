@@ -8,7 +8,8 @@ import {
   sendEmailVerification,
   type User as FBUser,
 } from 'firebase/auth'
-import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { auth, db } from '@/lib/firebase'
 import {
   registerForPushNotifications,
@@ -17,7 +18,7 @@ import {
   platformKey,
 } from '@/lib/notifications'
 import { migrateRetiredRoles } from '@/lib/roles'
-import { forgetOfflineData, loadOffline, saveOffline } from '@/lib/offlineCache'
+import { forgetOfflineData } from '@/lib/offlineCache'
 import { defaultNotificationPrefs } from '@/types/user'
 import type { UserProfile } from '@/types/user'
 
@@ -60,25 +61,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       }
       set({ fbUser, loading: true })
       let loginAtWritten = false
-      let heard = false
-      const offlineKey = `profile:${fbUser.uid}`
-      // Native: start from the profile kept on the phone, so the app opens
-      // with no signal rather than waiting on a server it cannot reach and
-      // then sending its user to sign in again. (Web has Firestore's own copy.)
-      loadOffline<UserProfile>(offlineKey).then((kept) => {
-        if (kept && !heard && get().fbUser?.uid === fbUser.uid)
-          set({ profile: kept, loading: false })
-      })
       const unsubProfile = onSnapshot(
         doc(db, 'users', fbUser.uid),
         (snap) => {
-          heard = true
-          // Offline with nothing in Firestore's cache says "no such profile",
-          // which is not news to act on when the phone kept one.
-          if (snap.metadata.fromCache && !snap.exists() && get().profile?.uid === fbUser.uid) {
-            set({ loading: false })
-            return
-          }
           const userProfile = snap.exists()
             ? ({ ...(snap.data() as UserProfile), uid: fbUser.uid } as UserProfile)
             : null
@@ -113,7 +98,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
             }
           }
           set({ profile: userProfile, loading: false })
-          if (userProfile && !snap.metadata.fromCache) saveOffline(offlineKey, userProfile)
         },
         () => {
           // Firestore read failed (e.g. permission denied) — unblock routing so the app
@@ -168,6 +152,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       await clearPushToken(fbUser.uid, key).catch(() => {})
     }
     await signOut(auth)
+    // The next person to sign in on this device sees none of what was kept.
     await forgetOfflineData()
   },
 

@@ -1,16 +1,8 @@
 import { create } from 'zustand'
-import {
-  collection,
-  onSnapshot,
-  doc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-} from 'firebase/firestore'
+import { collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
-import { loadOffline, saveOffline } from '@/lib/offlineCache'
 import type { ChordSheet, ChordSheetSection } from '@/types/chordSheet'
 
 // Firestore does not support nested arrays.
@@ -72,23 +64,9 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
     set({ _refCount: count })
     if (count > 1) return
     set({ loading: true })
-    let heard = false
-    // Native: the sheets kept on the phone until the live ones arrive — or
-    // instead of them, with no signal. (Web has Firestore's own copy.)
-    loadOffline<ChordSheet[]>('chordSheets').then((kept) => {
-      // Only for this subscription: one since closed has nothing to fill.
-      if (kept && !heard && get()._unsub === unsub) set({ chordSheets: kept, loading: false })
-    })
     const unsub = onSnapshot(
       collection(db, 'chordSheets'),
       (snap) => {
-        heard = true
-        // Offline with an empty cache is "nothing here yet", not "every
-        // sheet was deleted" — keep the copy the phone had.
-        if (snap.metadata.fromCache && snap.empty && get().chordSheets.length > 0) {
-          set({ loading: false })
-          return
-        }
         const chordSheets = snap.docs.map((d) => {
           const raw = d.data() as Record<string, unknown>
           return {
@@ -100,7 +78,6 @@ export const useChordSheetsStore = create<ChordSheetsStore>((set, get) => ({
           } as ChordSheet
         })
         set({ chordSheets, loading: false })
-        if (!snap.metadata.fromCache) saveOffline('chordSheets', chordSheets)
       },
       (err) => {
         console.error('[ChordSheetsStore] onSnapshot error:', err.code, err.message)

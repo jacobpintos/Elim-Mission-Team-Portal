@@ -1,16 +1,8 @@
 import { create } from 'zustand'
-import {
-  collection,
-  onSnapshot,
-  doc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-} from 'firebase/firestore'
+import { collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
-import { loadOffline, saveOffline } from '@/lib/offlineCache'
 import type { SetList } from '@/types/worship'
 
 interface WorshipStore {
@@ -36,20 +28,9 @@ export const useWorshipStore = create<WorshipStore>((set, get) => ({
     set({ _refCount: count })
     if (count > 1) return
     set({ loading: true })
-    let heard = false
-    // Native: the set lists kept on the phone, as chordSheetsStore does.
-    loadOffline<SetList[]>('setLists').then((kept) => {
-      if (kept && !heard && get()._unsub === unsub) set({ setLists: kept, loading: false })
-    })
     const unsub = onSnapshot(collection(db, 'setLists'), (snap) => {
-      heard = true
-      if (snap.metadata.fromCache && snap.empty && get().setLists.length > 0) {
-        set({ loading: false })
-        return
-      }
       const setLists = snap.docs.map((d) => ({ ...(d.data() as SetList), id: d.id }))
       set({ setLists, loading: false })
-      if (!snap.metadata.fromCache) saveOffline('setLists', setLists)
     })
     set({ _unsub: unsub })
   },

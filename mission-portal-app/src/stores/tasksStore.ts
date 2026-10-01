@@ -1,13 +1,6 @@
 import { create } from 'zustand'
-import {
-  collection,
-  onSnapshot,
-  doc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-} from 'firebase/firestore'
+import { collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'

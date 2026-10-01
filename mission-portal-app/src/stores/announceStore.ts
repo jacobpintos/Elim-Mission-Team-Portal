@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore'
+import { collection, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import { sameId } from '@/lib/ids'
 import type { Announcement } from '@/types/events'

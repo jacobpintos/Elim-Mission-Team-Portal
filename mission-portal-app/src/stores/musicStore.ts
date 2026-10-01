@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, setDoc } from 'firebase/firestore'
+import { getDoc } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 
 export interface MusicItem {

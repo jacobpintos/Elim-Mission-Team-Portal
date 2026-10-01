@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { collection, doc, deleteDoc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import { activeStream, type Livestream } from '@/lib/livestream'
 

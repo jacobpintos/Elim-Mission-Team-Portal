@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pressable } from 'react-native'
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore'
+import { doc, updateDoc } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { YStack, XStack, Text } from 'tamagui'
 import { db } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'

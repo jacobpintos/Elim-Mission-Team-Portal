@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, updateDoc } from 'firebase/firestore'
+import { getDoc } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import type { PostsConfig, Post, PostPage, PostComment } from '@/types/events'
 

@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import {
   collection,
-  onSnapshot,
   doc,
   setDoc,
   updateDoc,
@@ -11,6 +10,7 @@ import {
   where,
   arrayUnion,
 } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 
 /**

@@ -7,7 +7,8 @@ import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
 import { getFunctions, httpsCallable } from 'firebase/functions'
-import { collection, addDoc, getDocs, query, where, updateDoc, doc } from 'firebase/firestore'
+import { collection, addDoc, query, where, updateDoc, doc } from 'firebase/firestore'
+import { getDocs } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 
 interface CreateUserSheetProps {

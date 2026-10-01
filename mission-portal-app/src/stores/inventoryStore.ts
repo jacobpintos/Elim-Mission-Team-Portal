@@ -1,13 +1,6 @@
 import { create } from 'zustand'
-import {
-  collection,
-  onSnapshot,
-  doc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-} from 'firebase/firestore'
+import { collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
 import type { InventoryCategory, InventoryItem, ReorderItem } from '@/types/inventory'

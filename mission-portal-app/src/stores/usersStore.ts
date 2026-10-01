@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { collection, onSnapshot } from 'firebase/firestore'
+import { collection } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '@/lib/firebase'
 import { sameId } from '@/lib/ids'
