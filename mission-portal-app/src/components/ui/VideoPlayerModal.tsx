@@ -3,7 +3,8 @@ import { View, Pressable, StyleSheet } from 'react-native'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { YouTubeEmbed } from '@/components/ui/YouTubeEmbed'
-import { openExternalUrl } from '@/lib/externalUrl'
+import { openInYouTube } from '@/lib/openInYouTube'
+import { extractYouTubeId } from '@/stores/musicStore'
 import { useMediaPlaybackStore } from '@/stores/mediaPlaybackStore'
 
 /**
@@ -80,7 +81,7 @@ export function VideoPlayerModal({
                   it, or the videos whose owner has disabled embedding. The
                   embed carries its own version of this on native, but not on
                   web, where a blocked video is just a black rectangle. */}
-            <Pressable onPress={() => openExternalUrl(url)}>
+            <Pressable onPress={() => openInYouTube(url, extractYouTubeId(url))}>
               <XStack
                 borderWidth={1}
                 borderColor="rgba(255,255,255,0.4)"

@@ -11,6 +11,7 @@ import type { SetList } from '@/types/worship'
 import type { Task } from '@/types/events'
 import type { ChordSheet } from '@/types/chordSheet'
 import { openExternalUrl } from '@/lib/externalUrl'
+import { openInYouTube } from '@/lib/openInYouTube'
 import { AudioTrackPlayer } from '@/components/ui/AudioTrackPlayer'
 import { VideoPlayerModal } from '@/components/ui/VideoPlayerModal'
 import { extractYouTubeId } from '@/stores/musicStore'
@@ -160,17 +161,46 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                             const cs = chordSheets.find(
                               (c) => String(c.id) === String(song.chordSheetId)
                             )
+                            // A button the size of a thumb. It was the title
+                            // alone, a 12pt line of text about 16pt tall in a
+                            // scrolling list: easy to miss, and a finger that
+                            // drifted a few points off it while pressing
+                            // cancelled the tap — so opening the chord sheet,
+                            // the thing a set list is opened for, took two or
+                            // three goes.
                             return cs ? (
                               <Pressable
                                 onPress={() => {
                                   setViewSheet(cs)
                                   setViewSheetKey(song.key ?? '')
                                 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Open chord sheet: ${cs.title}`}
                               >
-                                <Text color={colors.primary} fontSize="$2">
-                                  {cs.title}
-                                  {cs.artist ? ` — ${cs.artist}` : ''}
-                                </Text>
+                                <XStack
+                                  minHeight={44}
+                                  alignItems="center"
+                                  gap="$2"
+                                  paddingHorizontal="$3"
+                                  borderRadius="$2"
+                                  borderWidth={1}
+                                  borderColor={colors.primary + '55'}
+                                  backgroundColor={colors.primary + '12'}
+                                >
+                                  <Text
+                                    color={colors.primary}
+                                    fontSize="$3"
+                                    fontWeight="600"
+                                    flex={1}
+                                    numberOfLines={1}
+                                  >
+                                    {cs.title}
+                                    {cs.artist ? ` — ${cs.artist}` : ''}
+                                  </Text>
+                                  <Text color={colors.primary} fontSize="$5">
+                                    ›
+                                  </Text>
+                                </XStack>
                               </Pressable>
                             ) : null
                           })()
@@ -197,7 +227,9 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                                 TV, to keep it playing while the phone is used
                                 for something else, or because that is where
                                 their playlist is. */}
-                            <Pressable onPress={() => openExternalUrl(song.link)}>
+                            <Pressable
+                              onPress={() => openInYouTube(song.link, extractYouTubeId(song.link))}
+                            >
                               <Text color={colors.textMuted} fontSize="$2">
                                 YouTube ↗
                               </Text>
