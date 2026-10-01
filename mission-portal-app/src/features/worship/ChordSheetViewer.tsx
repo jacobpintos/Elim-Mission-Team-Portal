@@ -31,6 +31,8 @@ import {
 import { buildChordSheetPdfBlob } from './chordSheetPdf'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useCoverViewport } from '@/lib/useCoverViewport'
+import { useAudioPlayersStore } from '@/stores/audioPlayersStore'
+import { AudioControls } from '@/components/ui/AudioControls'
 
 interface KeyPrefs {
   key: string
@@ -102,9 +104,15 @@ interface ChordSheetViewerProps {
   sheet: ChordSheet | null
   onClose: () => void
   initialKey?: string
+  /**
+   * The reference track of the song this sheet was opened from, if it has one.
+   * Its controls sit under the sheet and drive the same player as the song's
+   * card on the set list — see TrackBar.
+   */
+  audio?: { url: string; name?: string } | null
 }
 
-export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewerProps) {
+export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordSheetViewerProps) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
@@ -959,9 +967,35 @@ export function ChordSheetViewer({ sheet, onClose, initialKey }: ChordSheetViewe
               </Text>
             ) : null}
           </ScrollView>
+
+          {audio ? <TrackBar url={audio.url} name={audio.name} /> : null}
         </YStack>
       </View>
     </FullScreenOverlay>
+  )
+}
+
+/**
+ * The song's reference track, under the sheet.
+ *
+ * Opening a chord sheet from a set list used to leave the track playing in its
+ * card underneath, out of reach: to stop it, go back ten seconds or find the
+ * bridge you had to close the sheet. This draws controls for that same player
+ * — found by its URL, since the card owns it — so the track carries on exactly
+ * where it was and everything done here happens to the one track playing.
+ *
+ * One row, pinned below the sheet rather than scrolling with it, so it stays
+ * in reach wherever you are in the song. Nothing is drawn until the card's
+ * player is found, which it always is when the sheet was opened from a card.
+ */
+function TrackBar({ url, name }: { url: string; name?: string }) {
+  const colors = useThemeColors()
+  const player = useAudioPlayersStore((s) => s.players[url])
+  if (!player) return null
+  return (
+    <YStack borderTopWidth={1} borderColor={colors.border} paddingTop="$1">
+      <AudioControls player={player} url={url} name={name} layout="bar" />
+    </YStack>
   )
 }
 

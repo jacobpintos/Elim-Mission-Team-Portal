@@ -30,6 +30,9 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
   const [acknowledging, setAcknowledging] = useState(false)
   const [viewSheet, setViewSheet] = useState<ChordSheet | null>(null)
   const [viewSheetKey, setViewSheetKey] = useState<string>('')
+  // The track of the song the sheet was opened from, so the sheet can carry
+  // its controls.
+  const [viewSheetAudio, setViewSheetAudio] = useState<{ url: string; name?: string } | null>(null)
   const [playingVideo, setPlayingVideo] = useState<{ url: string; title: string } | null>(null)
 
   if (!setList) return null
@@ -61,8 +64,10 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
         onClose={() => {
           setViewSheet(null)
           setViewSheetKey('')
+          setViewSheetAudio(null)
         }}
         initialKey={viewSheetKey}
+        audio={viewSheetAudio}
       />
       <FullScreenOverlay
         visible={!!setList}
@@ -173,6 +178,11 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                                 onPress={() => {
                                   setViewSheet(cs)
                                   setViewSheetKey(song.key ?? '')
+                                  setViewSheetAudio(
+                                    song.audioUrl
+                                      ? { url: song.audioUrl, name: song.audioName }
+                                      : null
+                                  )
                                 }}
                                 accessibilityRole="button"
                                 accessibilityLabel={`Open chord sheet: ${cs.title}`}
