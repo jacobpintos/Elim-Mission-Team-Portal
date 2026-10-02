@@ -100,10 +100,18 @@ function rememberControlsHidden(hidden: boolean) {
 const CHAR_EM = 0.6
 
 /**
+ * The column a word and its chord share, which each is centred in: as wide as
+ * the word (with its hyphen) or the chord, whichever is wider.
+ */
+function columnWidth(text: string, trailing: string, chord: string, charW: number): number {
+  return Math.max(text.length + (trailing === '-' ? 1 : 0), chord.length) * charW
+}
+
+/**
  * The room one word of a lyric line takes: the word and the space or hyphen
- * after it, or its chord and a space, whichever is wider. A chord longer than
- * its word pushes the rest of the line along — as on a printed chart — and
- * nothing else does.
+ * after it, or its chord and a space, whichever is wider — never less than
+ * its column. A chord longer than its word pushes the rest of the line along,
+ * and nothing else does: a syllable's hyphen stays against the next syllable.
  */
 function slotWidth(text: string, trailing: string, chord: string, charW: number): number {
   const word = (text.length + (trailing ? 1 : 0)) * charW
@@ -987,37 +995,49 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
                                             key={wi}
                                             minWidth={widths[wi]}
                                             alignItems="flex-start"
-                                            gap={0}
                                           >
-                                            {hasChords ? (
-                                              <Text
-                                                style={[
-                                                  styles.mono,
-                                                  styles.chordText,
-                                                  { fontSize: monoSize },
-                                                ]}
-                                                color={chord ? colors.primary : 'transparent'}
-                                                numberOfLines={1}
-                                              >
-                                                {/* A non-breaking space: a plain
+                                            {/* The chord centred over its word,
+                                                or the word under a wider chord. */}
+                                            <YStack
+                                              minWidth={columnWidth(
+                                                slot.text,
+                                                slot.trailing,
+                                                chord,
+                                                charW
+                                              )}
+                                              alignItems="center"
+                                              gap={0}
+                                            >
+                                              {hasChords ? (
+                                                <Text
+                                                  style={[
+                                                    styles.mono,
+                                                    styles.chordText,
+                                                    { fontSize: monoSize },
+                                                  ]}
+                                                  color={chord ? colors.primary : 'transparent'}
+                                                  numberOfLines={1}
+                                                >
+                                                  {/* A non-breaking space: a plain
                                                     one collapses to nothing on
                                                     the web, and the word drops
                                                     onto the chord row. */}
-                                                {chord || '\u00a0'}
+                                                  {chord || '\u00a0'}
+                                                </Text>
+                                              ) : null}
+                                              <Text
+                                                style={[
+                                                  styles.mono,
+                                                  styles.lyricText,
+                                                  { fontSize: monoSize },
+                                                ]}
+                                                color={colors.text}
+                                                numberOfLines={1}
+                                              >
+                                                {slot.text}
+                                                {slot.trailing === '-' ? '-' : ''}
                                               </Text>
-                                            ) : null}
-                                            <Text
-                                              style={[
-                                                styles.mono,
-                                                styles.lyricText,
-                                                { fontSize: monoSize },
-                                              ]}
-                                              color={colors.text}
-                                              numberOfLines={1}
-                                            >
-                                              {slot.text}
-                                              {slot.trailing === '-' ? '-' : ''}
-                                            </Text>
+                                            </YStack>
                                           </YStack>
                                         )
                                       })}
