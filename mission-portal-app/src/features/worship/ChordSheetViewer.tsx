@@ -16,7 +16,7 @@ import { YStack, XStack, Text } from 'tamagui'
 import { printAsync } from 'expo-print'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useConfigStore } from '@/stores/configStore'
-import { NNS_KEYS, getWordSlots } from '@/lib/nashvilleNumbers'
+import { NNS_KEYS, getWordSlots, keyLabel } from '@/lib/nashvilleNumbers'
 import type { ChordSheet, ChordSheetSection } from '@/types/chordSheet'
 import {
   PROGRESSION_END,
@@ -700,7 +700,7 @@ export function ChordSheetViewer({
                     gap="$1"
                   >
                     <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                      {selectedKey === '' ? 'Nashville #s' : `Key: ${selectedKey}`}
+                      {selectedKey === '' ? 'Nashville #s' : `Key: ${keyLabel(selectedKey)}`}
                     </Text>
                     <Text color={colors.primary} fontSize="$1">
                       {showKeyDropdown ? '▲' : '▼'}
@@ -730,7 +730,7 @@ export function ChordSheetViewer({
                             fontSize="$2"
                             fontWeight={selectedKey === k ? '700' : '400'}
                           >
-                            {k === '' ? 'Nashville #s' : k}
+                            {k === '' ? 'Nashville #s' : keyLabel(k)}
                           </Text>
                         </XStack>
                       </Pressable>
@@ -859,8 +859,7 @@ export function ChordSheetViewer({
               paddingLeft="$3"
             >
               <Text color={colors.text} fontSize="$3" flex={1}>
-                🎤 Sounds like {heardKeyName}
-                {isMinor ? 'm' : ''}
+                🎤 Sounds like {keyLabel(heardKeyName, isMinor)}
               </Text>
               <Pressable
                 onPress={() => {
@@ -878,7 +877,7 @@ export function ChordSheetViewer({
                   flexGrow={1}
                 >
                   <Text color="white" fontSize="$2" fontWeight="700">
-                    Switch to {heardKeyName}
+                    Switch to {keyLabel(heardKeyName)}
                   </Text>
                 </XStack>
               </Pressable>

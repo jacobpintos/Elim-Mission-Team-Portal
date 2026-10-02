@@ -7,6 +7,7 @@ import { useTasksStore } from '@/stores/tasksStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { ChordSheetViewer } from './ChordSheetViewer'
+import { keyLabel } from '@/lib/nashvilleNumbers'
 import type { SetList } from '@/types/worship'
 import type { Task } from '@/types/events'
 import type { ChordSheet } from '@/types/chordSheet'
@@ -155,7 +156,7 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                             paddingVertical={2}
                           >
                             <Text color="white" fontSize="$1" fontWeight="700">
-                              {song.key}
+                              {keyLabel(song.key)}
                             </Text>
                           </XStack>
                         ) : null}

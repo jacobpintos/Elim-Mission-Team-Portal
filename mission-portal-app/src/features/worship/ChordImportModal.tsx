@@ -3,7 +3,7 @@ import { View, ScrollView, Pressable, TextInput, StyleSheet } from 'react-native
 import { YStack, XStack, Text } from 'tamagui'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { NNS_KEYS, getWordSlots } from '@/lib/nashvilleNumbers'
+import { NNS_KEYS, getWordSlots, keyLabel } from '@/lib/nashvilleNumbers'
 import { formatToken, getSectionLabel, PROGRESSION_END } from './chordSheetFormat'
 import type { ChordSheetSection } from '@/types/chordSheet'
 import {
@@ -233,7 +233,7 @@ export function ChordImportModal({
                           key={k}
                           onPress={() => setKeyIdx(i)}
                           accessibilityRole="button"
-                          accessibilityLabel={`Key of ${k}`}
+                          accessibilityLabel={`Key of ${keyLabel(k).replace(' / ', ' or ')}`}
                           // aria-selected rather than accessibilityState: the
                           // web build drops the latter, so the chosen key was
                           // never announced.
@@ -242,6 +242,7 @@ export function ChordImportModal({
                           <XStack
                             minWidth={40}
                             height={36}
+                            paddingHorizontal={10}
                             alignItems="center"
                             justifyContent="center"
                             borderRadius={99}
@@ -254,7 +255,7 @@ export function ChordImportModal({
                               fontSize="$2"
                               fontWeight="700"
                             >
-                              {k}
+                              {keyLabel(k)}
                             </Text>
                           </XStack>
                         </Pressable>

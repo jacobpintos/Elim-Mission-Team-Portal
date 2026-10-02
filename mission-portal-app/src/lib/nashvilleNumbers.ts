@@ -2,6 +2,26 @@ export const NNS_KEYS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', '
 
 export type NNSKey = (typeof NNS_KEYS)[number]
 
+/**
+ * The keys on the black notes go by two names, and charts are written under
+ * either — a band that knows a song in Gb looks for Gb, not F#. Each is still
+ * one key (one button, spelled as NNS_KEYS spells it); it is only labelled
+ * with both names, so it is found under either.
+ */
+const BOTH_NAMES: Record<string, string> = {
+  Db: 'Db / C#',
+  Eb: 'Eb / D#',
+  'F#': 'Gb / F#',
+  Ab: 'Ab / G#',
+  Bb: 'Bb / A#',
+}
+
+/** A key as it is shown: "Gb / F#", "G". Minor adds "m" to each name. */
+export function keyLabel(key: string, minor = false): string {
+  const label = BOTH_NAMES[key] ?? key
+  return minor ? label.replace(/([A-G][b#]?)/g, '$1m') : label
+}
+
 // Semitones from root for each scale degree (1–7)
 const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11]
 const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10] // natural minor

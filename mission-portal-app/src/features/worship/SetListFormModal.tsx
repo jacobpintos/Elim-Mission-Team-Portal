@@ -15,7 +15,7 @@ import { EventPickerModal } from './EventPickerModal'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useMusicStore, type MusicItem } from '@/stores/musicStore'
-import { NNS_KEYS } from '@/lib/nashvilleNumbers'
+import { NNS_KEYS, keyLabel } from '@/lib/nashvilleNumbers'
 import { matchContentByTitle, contentItemForUrl, uniqueTitleMatch } from '@/lib/contentMatch'
 import { ContentPickerModal } from './ContentPickerModal'
 import { pickAndUploadSetListAudio, deleteSetListAudio } from '@/lib/setListAudioUpload'
@@ -265,7 +265,7 @@ function KeyPicker({
           justifyContent="space-between"
         >
           <Text color={value ? colors.primary : colors.textMuted} fontSize={13}>
-            {value || 'No key'}
+            {value ? keyLabel(value) : 'No key'}
           </Text>
           <Text color={colors.textMuted} fontSize={11}>
             {open ? '▲' : '▼'}
@@ -295,7 +295,7 @@ function KeyPicker({
                   justifyContent="center"
                 >
                   <Text color={selected ? 'white' : colors.text} fontSize={13}>
-                    {key || 'None'}
+                    {key ? keyLabel(key) : 'None'}
                   </Text>
                 </XStack>
               </Pressable>
