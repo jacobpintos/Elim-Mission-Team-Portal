@@ -65,7 +65,6 @@ const saveKeyPrefs = (prefs: KeyPrefs) => {
 // the font size and the per-character width must scale together — changing one
 // without the other breaks chord positioning.
 const BASE_FONT = 13
-const BASE_CHAR_W = 9 // Courier New at BASE_FONT ≈ 9px/char
 const FONT_SCALES = [0.85, 1, 1.15, 1.3, 1.5] as const
 const DEFAULT_SCALE_IDX = 1
 const FONT_SCALE_KEY = 'chordsheet_font_scale_idx'
@@ -91,10 +90,49 @@ function rememberControlsHidden(hidden: boolean) {
 }
 
 // Estimate column width in logical px from word length, at the current scale.
-function colWidth(word: string, chordLen = 0, scale = 1): number {
-  const charW = BASE_CHAR_W * scale
-  const pad = 8 * scale
-  return Math.max(word.length * charW + pad, chordLen * charW + pad, 36 * scale)
+/**
+ * Courier New sets every character 0.6em wide, so a run of text is its length
+ * times that — measured, not guessed: the old allowance of nine points a
+ * character at thirteen-point text (0.69em), plus eight points of padding and
+ * a 36-point floor for every word, spread a line half as wide again as its
+ * text and wrapped most lines of a verse in two on a phone.
+ */
+const CHAR_EM = 0.6
+
+/**
+ * The room one word of a lyric line takes: the word and the space or hyphen
+ * after it, or its chord and a space, whichever is wider. A chord longer than
+ * its word pushes the rest of the line along — as on a printed chart — and
+ * nothing else does.
+ */
+function slotWidth(text: string, trailing: string, chord: string, charW: number): number {
+  const word = (text.length + (trailing ? 1 : 0)) * charW
+  return chord ? Math.max(word, (chord.length + 1) * charW) : word
+}
+
+/**
+ * A lyric line's words in rows that fit the sheet — broken between words,
+ * as the browser would, but here so that each row knows whether it has a
+ * chord over it. Left to the browser, the word that wrapped kept an empty
+ * chord row above it, a blank line in the middle of the verse. A word wider
+ * than the sheet has a row of its own.
+ */
+export function wrapSlots(widths: number[], max: number): number[][] {
+  if (!(max > 0)) return [widths.map((_, i) => i)]
+  const rows: number[][] = []
+  let row: number[] = []
+  let used = 0
+  widths.forEach((w, i) => {
+    if (row.length > 0 && used + w > max + 0.5) {
+      rows.push(row)
+      row = []
+      used = 0
+    }
+    row.push(i)
+    used += w
+  })
+  if (row.length > 0) rows.push(row)
+  return rows
 }
 
 interface SectionGroup {
@@ -223,6 +261,8 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
     }
   }, [])
 
+  // The sheet's width, for breaking lyric lines into rows (wrapSlots).
+  const [sheetWidth, setSheetWidth] = useState(0)
   const [controlsHidden, setControlsHidden] = useState(cachedControlsHidden ?? false)
   useEffect(() => {
     if (cachedControlsHidden !== null) return
@@ -758,6 +798,10 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
               style={{ flexShrink: 1 }}
               showsVerticalScrollIndicator={false}
               {...autoScroll.scrollProps}
+              onLayout={(e) => {
+                autoScroll.scrollProps.onLayout(e)
+                setSheetWidth(e.nativeEvent.layout.width)
+              }}
             >
               <YStack gap="$3" paddingBottom="$4" id={SHEET_CONTENT_ID}>
                 {chordsOnly
@@ -891,7 +935,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
                         <YStack
                           key={section.id}
                           id={sectionDomId(section.id)}
-                          gap="$2"
+                          gap="$1"
                           onLayout={(e) => {
                             sectionOffsets.current[section.id] = e.nativeEvent.layout.y
                           }}
@@ -918,65 +962,68 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
                             const slots = getWordSlots(lyricLine)
                             if (!slots.length) return <View key={lineIdx} style={{ height: 8 }} />
                             const lineTokens = lyricChordRows[lineIdx] ?? []
+                            const chords = slots.map((_, wi) => displayToken(lineTokens[wi] ?? ''))
+                            const charW = monoSize * CHAR_EM
+                            const widths = slots.map((slot, wi) =>
+                              slotWidth(slot.text, slot.trailing, chords[wi], charW)
+                            )
                             return (
-                              <YStack key={lineIdx} gap={0} paddingBottom="$1">
-                                <XStack alignItems="flex-end" gap={0} flexWrap="wrap">
-                                  {slots.map((slot, wi) => {
-                                    const raw = lineTokens[wi] ?? ''
-                                    const chord = displayToken(raw)
-                                    const cw = colWidth(slot.text, chord.length, fontScale)
-                                    return (
-                                      <XStack key={wi} alignItems="flex-end">
-                                        <YStack width={cw} alignItems="center" gap={0}>
-                                          <Text
-                                            style={[
-                                              styles.mono,
-                                              styles.chordText,
-                                              { fontSize: monoSize },
-                                            ]}
-                                            color={chord ? colors.primary : 'transparent'}
-                                            numberOfLines={1}
+                              <YStack key={lineIdx} paddingBottom={4}>
+                                {wrapSlots(widths, sheetWidth).map((row, ri) => {
+                                  // A row with no chords has no chord row to
+                                  // keep in step with: just the words.
+                                  const hasChords = row.some((wi) => chords[wi])
+                                  return (
+                                    <XStack key={ri} alignItems="flex-end" flexWrap="wrap">
+                                      {row.map((wi) => {
+                                        const slot = slots[wi]
+                                        const chord = chords[wi]
+                                        return (
+                                          // minWidth, not width: should the
+                                          // font in use run wider than Courier
+                                          // New, the word pushes its neighbour
+                                          // along rather than running into it.
+                                          <YStack
+                                            key={wi}
+                                            minWidth={widths[wi]}
+                                            alignItems="flex-start"
+                                            gap={0}
                                           >
-                                            {chord || ' '}
-                                          </Text>
-                                          <Text
-                                            style={[
-                                              styles.mono,
-                                              styles.lyricText,
-                                              { fontSize: monoSize },
-                                            ]}
-                                            color={colors.text}
-                                            numberOfLines={1}
-                                          >
-                                            {slot.text}
-                                          </Text>
-                                        </YStack>
-                                        {slot.trailing === '-' ? (
-                                          <Text
-                                            style={[
-                                              styles.mono,
-                                              styles.lyricText,
-                                              { alignSelf: 'flex-end', fontSize: monoSize },
-                                            ]}
-                                            color={colors.text}
-                                          >
-                                            -
-                                          </Text>
-                                        ) : slot.trailing === ' ' ? (
-                                          <View style={{ width: 8 }} />
-                                        ) : null}
-                                      </XStack>
-                                    )
-                                  })}
-                                </XStack>
-                                <View
-                                  style={{
-                                    height: 1,
-                                    backgroundColor: colors.border,
-                                    opacity: 0.35,
-                                    marginTop: 3,
-                                  }}
-                                />
+                                            {hasChords ? (
+                                              <Text
+                                                style={[
+                                                  styles.mono,
+                                                  styles.chordText,
+                                                  { fontSize: monoSize },
+                                                ]}
+                                                color={chord ? colors.primary : 'transparent'}
+                                                numberOfLines={1}
+                                              >
+                                                {/* A non-breaking space: a plain
+                                                    one collapses to nothing on
+                                                    the web, and the word drops
+                                                    onto the chord row. */}
+                                                {chord || '\u00a0'}
+                                              </Text>
+                                            ) : null}
+                                            <Text
+                                              style={[
+                                                styles.mono,
+                                                styles.lyricText,
+                                                { fontSize: monoSize },
+                                              ]}
+                                              color={colors.text}
+                                              numberOfLines={1}
+                                            >
+                                              {slot.text}
+                                              {slot.trailing === '-' ? '-' : ''}
+                                            </Text>
+                                          </YStack>
+                                        )
+                                      })}
+                                    </XStack>
+                                  )
+                                })}
                               </YStack>
                             )
                           })}
