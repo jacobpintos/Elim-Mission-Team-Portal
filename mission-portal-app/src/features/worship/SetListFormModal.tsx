@@ -641,6 +641,18 @@ export function SetListFormModal({
     setSongs((prev) => [...prev, makeSong()])
   }
 
+  /** One place earlier (-1) or later (+1) in the set. */
+  const moveSong = (id: string, by: -1 | 1) => {
+    setSongs((prev) => {
+      const from = prev.findIndex((s) => s.id === id)
+      const to = from + by
+      if (from < 0 || to < 0 || to >= prev.length) return prev
+      const next = [...prev]
+      ;[next[from], next[to]] = [next[to], next[from]]
+      return next
+    })
+  }
+
   const removeSong = (id: string) => {
     setSongs((prev) => {
       if (prev.length <= 1) return prev
@@ -795,11 +807,33 @@ export function SetListFormModal({
                           SONG {i + 1}
                         </Text>
                         {songs.length > 1 ? (
-                          <Pressable onPress={() => removeSong(song.id)}>
-                            <Text color="#c0392b" fontSize="$2">
-                              Remove
-                            </Text>
-                          </Pressable>
+                          <XStack alignItems="center" gap="$1">
+                            {/* Its place in the set: one step at a time. */}
+                            {(
+                              [
+                                [-1, '▲', 'Move song up', i === 0],
+                                [1, '▼', 'Move song down', i === songs.length - 1],
+                              ] as const
+                            ).map(([by, arrow, label, atEnd]) => (
+                              <Pressable
+                                key={label}
+                                onPress={() => moveSong(song.id, by)}
+                                disabled={atEnd}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${label}: ${song.name || `song ${i + 1}`}`}
+                                style={styles.moveBtn}
+                              >
+                                <Text color={atEnd ? colors.border : colors.primary} fontSize="$3">
+                                  {arrow}
+                                </Text>
+                              </Pressable>
+                            ))}
+                            <Pressable onPress={() => removeSong(song.id)} style={styles.moveBtn}>
+                              <Text color="#c0392b" fontSize="$2">
+                                Remove
+                              </Text>
+                            </Pressable>
+                          </XStack>
                         ) : null}
                       </XStack>
 
@@ -921,6 +955,13 @@ export function SetListFormModal({
 }
 
 const styles = StyleSheet.create({
+  /** The song's ▲ ▼ and Remove: small to look at, a thumb's width to press. */
+  moveBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
