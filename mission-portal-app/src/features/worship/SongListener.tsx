@@ -1,0 +1,288 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text, XStack, YStack } from 'tamagui'
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
+import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
+import { useThemeColors } from '@/theme/useThemeColors'
+import {
+  buildLyricIndex,
+  confidentMatch,
+  hintPhrases,
+  rankSongs,
+  type LyricMatch,
+} from '@/lib/lyricMatch'
+import type { ChordSheet } from '@/types/chordSheet'
+
+/** How long to listen before giving up. */
+const LISTEN_MS = 45_000
+/** Only the most recent words are matched: the song being sung now. */
+const RECENT_WORDS = 40
+
+/**
+ * Find a song by listening to it.
+ *
+ * The microphone button beside the chord sheet search. Tapped, the phone's
+ * own speech recognition listens to whatever is being sung or played — the
+ * band, a recording, someone humming the words — and the words it makes out
+ * are matched against every chord sheet's lyrics (lib/lyricMatch: split
+ * syllables and "_" placeholders ignored, misheard words forgiven, phrases
+ * every song has counted for little). Once one song is clearly it, the
+ * listening stops and its sheet opens at the section that was being sung.
+ *
+ * Until then, the songs it might be are shown to be picked by hand. It stops
+ * on its own after 45 seconds, and nothing it hears is kept.
+ */
+export function SongListener({
+  sheets,
+  onFound,
+}: {
+  sheets: ChordSheet[]
+  onFound: (sheet: ChordSheet, sectionId: string | null) => void
+}) {
+  const colors = useThemeColors()
+  const [open, setOpen] = useState(false)
+  const [listening, setListening] = useState(false)
+  const [heard, setHeard] = useState('')
+  const [problem, setProblem] = useState<string | null>(null)
+  const [guesses, setGuesses] = useState<LyricMatch[]>([])
+  // What has been heard and settled, and what is still being made out.
+  const settled = useRef('')
+  const done = useRef(false)
+
+  const index = useMemo(
+    () =>
+      buildLyricIndex(
+        sheets.map((s) => ({
+          id: String(s.id),
+          title: s.title,
+          sections: s.sections.map((sec) => ({ id: sec.id, lyrics: sec.lyrics })),
+        }))
+      ),
+    [sheets]
+  )
+
+  const finish = (match: LyricMatch) => {
+    if (done.current) return
+    done.current = true
+    ExpoSpeechRecognitionModule.abort()
+    setListening(false)
+    setOpen(false)
+    const sheet = sheets.find((s) => String(s.id) === match.id)
+    if (sheet) onFound(sheet, match.sectionId)
+  }
+
+  const hear = (text: string) => {
+    const recent = text.trim().split(/\s+/).slice(-RECENT_WORDS).join(' ')
+    setHeard(recent)
+    const ranked = rankSongs(index, recent)
+    setGuesses(ranked.slice(0, 3))
+    const match = confidentMatch(ranked)
+    if (match) finish(match)
+  }
+
+  useSpeechRecognitionEvent('start', () => setListening(true))
+  useSpeechRecognitionEvent('end', () => setListening(false))
+  useSpeechRecognitionEvent('result', (e) => {
+    if (done.current) return
+    const text = e.results[0]?.transcript ?? ''
+    if (e.isFinal) {
+      settled.current = `${settled.current} ${text}`
+      hear(settled.current)
+    } else {
+      hear(`${settled.current} ${text}`)
+    }
+  })
+  useSpeechRecognitionEvent('error', (e) => {
+    setListening(false)
+    if (e.error === 'aborted') return
+    setProblem(
+      e.error === 'not-allowed'
+        ? 'Mission Portal isn’t allowed to use the microphone or speech recognition. You can turn them on in Settings.'
+        : e.error === 'no-speech' || e.error === 'speech-timeout'
+          ? 'Didn’t hear any words. Try again closer to the music, during a verse or chorus.'
+          : e.error === 'network'
+            ? 'Couldn’t reach speech recognition — check your connection and try again.'
+            : 'Listening stopped. Try again.'
+    )
+  })
+
+  const start = async () => {
+    setProblem(null)
+    setHeard('')
+    setGuesses([])
+    settled.current = ''
+    done.current = false
+    const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
+    if (!permission.granted) {
+      setProblem(
+        'Mission Portal needs the microphone and speech recognition to listen. You can turn them on in Settings.'
+      )
+      return
+    }
+    ExpoSpeechRecognitionModule.start({
+      lang: 'en-US',
+      interimResults: true,
+      continuous: true,
+      addsPunctuation: false,
+      // Steer the recogniser towards this library's words: a sung "wretch"
+      // is otherwise as likely heard as "rich".
+      contextualStrings: hintPhrases(index),
+      iosTaskHint: 'dictation',
+      // Keep whatever else is playing — a reference track in the app, or a
+      // song in another — playing, so it can be heard.
+      iosCategory: {
+        category: 'playAndRecord',
+        categoryOptions: ['defaultToSpeaker', 'allowBluetooth', 'mixWithOthers'],
+        mode: 'default',
+      },
+    })
+  }
+
+  const close = () => {
+    done.current = true
+    ExpoSpeechRecognitionModule.abort()
+    setListening(false)
+    setOpen(false)
+  }
+
+  const openAndListen = () => {
+    setOpen(true)
+    start()
+  }
+
+  // Given up after a while.
+  useEffect(() => {
+    if (!listening) return
+    const timer = setTimeout(() => {
+      ExpoSpeechRecognitionModule.stop()
+      setProblem(
+        (p) => p ?? 'Couldn’t place the song. Try again during a chorus, or pick one below.'
+      )
+    }, LISTEN_MS)
+    return () => clearTimeout(timer)
+  }, [listening])
+  // Never left listening behind a closed screen.
+  useEffect(() => () => ExpoSpeechRecognitionModule.abort(), [])
+
+  return (
+    <>
+      <Pressable
+        onPress={openAndListen}
+        accessibilityRole="button"
+        accessibilityLabel="Find a song by listening"
+        style={[styles.micBtn, { borderColor: colors.primary }]}
+      >
+        <Text fontSize={18}>🎤</Text>
+      </Pressable>
+
+      <FullScreenOverlay visible={open} animationType="fade" transparent onRequestClose={close}>
+        <View style={styles.backdrop}>
+          <YStack
+            backgroundColor={colors.surface}
+            borderRadius="$4"
+            padding="$4"
+            gap="$3"
+            width="92%"
+            maxWidth={480}
+          >
+            <XStack alignItems="center" justifyContent="space-between">
+              <Text color={colors.text} fontSize="$5" fontWeight="700">
+                {listening ? 'Listening…' : 'Find a song'}
+              </Text>
+              <Pressable
+                onPress={close}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                style={styles.closeBtn}
+              >
+                <Text color={colors.textMuted} fontSize="$4">
+                  ✕
+                </Text>
+              </Pressable>
+            </XStack>
+
+            <Text color={colors.textMuted} fontSize="$3">
+              {problem ??
+                (listening
+                  ? 'Hold the phone near the music. The chord sheet opens as soon as the words give the song away.'
+                  : 'Starting…')}
+            </Text>
+
+            {heard ? (
+              <Text color={colors.text} fontSize="$3" fontStyle="italic" numberOfLines={3}>
+                “…{heard}”
+              </Text>
+            ) : null}
+
+            {guesses.length > 0 ? (
+              <YStack gap="$2">
+                <Text color={colors.textMuted} fontSize="$2">
+                  Sounds like:
+                </Text>
+                {guesses.map((g) => (
+                  <Pressable
+                    key={g.id}
+                    onPress={() => finish(g)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${g.title}`}
+                    style={[styles.guess, { borderColor: colors.border }]}
+                  >
+                    <Text color={colors.primary} fontWeight="700">
+                      {g.title}
+                    </Text>
+                  </Pressable>
+                ))}
+              </YStack>
+            ) : null}
+
+            {!listening ? (
+              <Pressable
+                onPress={start}
+                accessibilityRole="button"
+                style={[styles.again, { backgroundColor: colors.primary }]}
+              >
+                <Text color="white" fontWeight="700">
+                  🎤 Listen again
+                </Text>
+              </Pressable>
+            ) : null}
+          </YStack>
+        </View>
+      </FullScreenOverlay>
+    </>
+  )
+}
+
+const styles = StyleSheet.create({
+  micBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guess: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  again: {
+    borderRadius: 99,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+})

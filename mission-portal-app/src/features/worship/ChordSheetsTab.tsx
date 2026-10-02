@@ -5,6 +5,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { ChordSheetEditor } from './ChordSheetEditor'
+import { SongListener } from './SongListener'
 import { ChordSheetViewer } from './ChordSheetViewer'
 import type { ChordSheet } from '@/types/chordSheet'
 
@@ -24,6 +25,8 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
   const [showEditor, setShowEditor] = useState(false)
   const [editSheet, setEditSheet] = useState<ChordSheet | null>(null)
   const [viewSheet, setViewSheet] = useState<ChordSheet | null>(null)
+  // The section a song found by listening was being sung from.
+  const [startSection, setStartSection] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null)
 
   const filtered = [...chordSheets]
@@ -96,6 +99,14 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
           onChangeText={setSearch}
           placeholder="Search chord sheets…"
           placeholderTextColor={colors.textMuted}
+        />
+        {/* The phone app only: find a song by listening to it. */}
+        <SongListener
+          sheets={chordSheets}
+          onFound={(sheet, sectionId) => {
+            setStartSection(sectionId)
+            setViewSheet(sheet)
+          }}
         />
         {readOnly ? null : (
           <Pressable onPress={openNew} style={[styles.newBtn, { backgroundColor: colors.primary }]}>
@@ -228,7 +239,14 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
         createdBy={createdBy}
       />
 
-      <ChordSheetViewer sheet={viewSheet} onClose={() => setViewSheet(null)} />
+      <ChordSheetViewer
+        sheet={viewSheet}
+        startAtSectionId={startSection}
+        onClose={() => {
+          setViewSheet(null)
+          setStartSection(null)
+        }}
+      />
     </YStack>
   )
 }

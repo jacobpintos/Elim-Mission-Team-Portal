@@ -154,6 +154,11 @@ interface ChordSheetViewerProps {
   onClose: () => void
   initialKey?: string
   /**
+   * A section to open at rather than the top — the one a song recognised by
+   * listening was being sung from (SongListener).
+   */
+  startAtSectionId?: string | null
+  /**
    * The reference track of the song this sheet was opened from, if it has one.
    * Its controls sit under the sheet and drive the same player as the song's
    * card on the set list — see TrackBar.
@@ -161,7 +166,13 @@ interface ChordSheetViewerProps {
   audio?: { url: string; name?: string } | null
 }
 
-export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordSheetViewerProps) {
+export function ChordSheetViewer({
+  sheet,
+  onClose,
+  initialKey,
+  audio,
+  startAtSectionId,
+}: ChordSheetViewerProps) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
@@ -365,6 +376,14 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
     // toolbar and read as cut off.
     autoScroll.scrollTo(Math.max(0, y - 6))
   }
+
+  // Opened at a section: once the sheet has been laid out, there.
+  useEffect(() => {
+    if (!sheetKey || !startAtSectionId) return
+    const timer = setTimeout(() => jumpTo(startAtSectionId), 400)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetKey, startAtSectionId])
 
   const [selectedKey, setSelectedKey] = useState(() => {
     if (initialKey && (NNS_KEYS as readonly string[]).includes(initialKey)) return initialKey

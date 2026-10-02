@@ -1,5 +1,9 @@
 import type { ExpoConfig, ConfigContext } from 'expo/config'
 
+/** Why the app uses the microphone: shown when the phone asks. */
+const MICROPHONE_REASON =
+  'Mission Portal listens to a song being sung or played to find its chord sheet. Nothing is recorded or kept.'
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Mission Portal',
@@ -136,14 +140,29 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     [
-      // Playback only. The plugin asks for the microphone and Android's
-      // RECORD_AUDIO by default, which the App Store then wants justified for
-      // an app that never records; both are turned off here. Background
-      // playback stays on (the plugin's default): a rehearsal track has to
-      // keep playing when the phone locks.
+      // "Find a song by listening" on the chord sheets: the phone's own speech
+      // recognition turns what is being sung into words, which are matched
+      // against the sheets' lyrics. Nothing is recorded or kept. The Google
+      // app is named so Android 11+ can see the recogniser it provides.
+      'expo-speech-recognition',
+      {
+        microphonePermission: MICROPHONE_REASON,
+        speechRecognitionPermission:
+          'Mission Portal turns the words of a song it hears into text to find the chord sheet with those lyrics.',
+        androidSpeechServicePackages: ['com.google.android.googlequicksearchbox'],
+      },
+    ],
+    [
+      // Playback; expo-audio never records. Its microphone reason is the one
+      // for listening for a song (expo-speech-recognition, above) rather than
+      // off: switched off, expo-audio clears that reason from the iOS
+      // settings after it has been set, and iOS refuses the microphone to an
+      // app that gives none. Android's RECORD_AUDIO comes from the speech
+      // plugin. Background playback stays on (the plugin's default): a
+      // rehearsal track has to keep playing when the phone locks.
       'expo-audio',
       {
-        microphonePermission: false,
+        microphonePermission: MICROPHONE_REASON,
         recordAudioAndroid: false,
       },
     ],
