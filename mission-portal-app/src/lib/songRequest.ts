@@ -4,6 +4,11 @@ import { NNS_KEYS } from '@/lib/nashvilleNumbers'
  * A song asked for out loud: "Firm Foundation, key of E", "pull up Holy
  * Forever in B flat", "key of G, Build My Life", or just a title.
  *
+ * Titles are matched by sound as well as spelling, since speech recognition
+ * writes what it thinks it heard in English: "Agnus Dei" comes back as
+ * "Agnes Day". And a title's bracketed other name counts on its own —
+ * "Ten Thousand Reasons" finds "10,000 Reasons (Ten Thousand Reasons)".
+ *
  * Only a whole utterance that is a title — give or take a key and a few
  * words of asking ("open", "pull up", "please") — counts. Words sung along
  * to a song are not a request even when they include a title, so the band
@@ -23,6 +28,7 @@ function spokenWords(text: string): string[] {
     .replace(/♭/g, ' flat ')
     .replace(/[♯#]/g, ' sharp ')
     .replace(/['’]/g, '')
+    .replace(/(\d),(?=\d{3})/g, '$1')
     .replace(/&/g, ' and ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
@@ -30,11 +36,70 @@ function spokenWords(text: string): string[] {
     .filter(Boolean)
 }
 
-/** A title as words: in full, and without what is in brackets. */
+/**
+ * A title as words: in full, without what is in brackets, and what is in
+ * brackets on its own — "Abba (Arms of a Father)" is asked for either way.
+ */
 function titleForms(title: string): string[][] {
-  const full = spokenWords(title)
-  const bare = spokenWords(title.replace(/\s*[([].*?[)\]]/g, ' '))
-  return bare.join(' ') === full.join(' ') ? [full] : [full, bare]
+  const forms = [
+    spokenWords(title),
+    spokenWords(title.replace(/\s*[([].*?[)\]]/g, ' ')),
+    ...[...title.matchAll(/[([](.*?)[)\]]/g)].map((m) => spokenWords(m[1])),
+  ].filter((f) => f.length > 0)
+  const seen = new Set<string>()
+  return forms.filter((f) => {
+    const k = f.join(' ')
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+}
+
+/**
+ * How a word sounds, roughly: spellings of one sound made one ("ph" and
+ * "f", "c" and "k"), and the vowels after the first letter dropped, as
+ * they are what speech recognition most often gets wrong. "agnus" and
+ * "agnes" are both "agns"; "dei" and "day" are both "d".
+ */
+export function soundOf(word: string): string {
+  const s = word
+    .replace(/ph/g, 'f')
+    .replace(/ck/g, 'k')
+    .replace(/q/g, 'k')
+    .replace(/x/g, 'ks')
+    .replace(/c(?=[eiy])/g, 's')
+    .replace(/c/g, 'k')
+    .replace(/z/g, 's')
+    .replace(/wh/g, 'w')
+    .replace(/^kn/, 'n')
+    .replace(/gh/g, '')
+    .replace(/dg/g, 'j')
+  if (!s) return ''
+  const first = /[aeiou]/.test(s[0]) ? 'a' : s[0]
+  return (first + s.slice(1).replace(/[aeiouyhw]/g, '')).replace(/(.)\1+/g, '$1')
+}
+
+/** Letters to change to turn one word into the other, up to 2. */
+function closeness(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 1) return 2
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i]
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+    }
+    prev = row
+  }
+  return Math.min(prev[b.length], 2)
+}
+
+/** 2 for the same word, 1 for one that sounds or is spelled nearly the same, 0 for neither. */
+function wordMatch(heard: string, wanted: string): number {
+  if (heard === wanted) return 2
+  if (/\d/.test(heard) || /\d/.test(wanted)) return 0
+  if (Math.min(heard.length, wanted.length) >= 2 && soundOf(heard) === soundOf(wanted)) return 1
+  if (Math.min(heard.length, wanted.length) >= 5 && closeness(heard, wanted) <= 1) return 1
+  return 0
 }
 
 const FILLER = new Set([
@@ -129,12 +194,16 @@ export function parseSongRequest<T extends { title: string }>(
 ): SongRequest<T> | null {
   const words = spokenWords(text)
   if (words.length === 0) return null
-  let best: { request: SongRequest<T>; length: number } | null = null
+  // The title that fits best: most words the same, then the longest.
+  let best: { request: SongRequest<T>; score: number; length: number } | null = null
   for (const sheet of sheets) {
     for (const form of titleForms(sheet.title)) {
-      if (form.length === 0 || (best && form.length <= best.length)) continue
       for (let at = 0; at + form.length <= words.length; at++) {
-        if (!form.every((w, i) => words[at + i] === w)) continue
+        const scores = form.map((w, i) => wordMatch(words[at + i], w))
+        if (scores.includes(0)) continue
+        const score = scores.reduce((a, b) => a + b, 0)
+        if (best && (score < best.score || (score === best.score && form.length <= best.length)))
+          continue
         const before = words.slice(0, at)
         const after = words.slice(at + form.length)
         // Asking words either side; a key before or after, not both.
@@ -146,6 +215,7 @@ export function parseSongRequest<T extends { title: string }>(
         const key = keyAfter ?? keyBefore
         best = {
           request: { sheet, key: key?.key ?? null, minor: key?.minor ?? false },
+          score,
           length: form.length,
         }
         break

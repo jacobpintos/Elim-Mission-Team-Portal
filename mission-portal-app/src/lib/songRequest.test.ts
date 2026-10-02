@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSongRequest, spokenKey } from './songRequest'
+import { parseSongRequest, soundOf, spokenKey } from './songRequest'
 
 const sheets = [
   { id: 1, title: 'Firm Foundation (He Won’t)' },
@@ -7,11 +7,23 @@ const sheets = [
   { id: 3, title: 'Holy Forever' },
   { id: 4, title: 'Build My Life' },
   { id: 5, title: 'King of Kings' },
+  { id: 6, title: 'Agnus Dei' },
+  { id: 7, title: '10,000 Reasons (Ten Thousand Reasons)' },
+  { id: 8, title: 'Abba (Arms of a Father)' },
 ]
 const ask = (text: string) => {
   const r = parseSongRequest(sheets, text)
   return r ? { id: r.sheet.id, key: r.key, minor: r.minor } : null
 }
+
+describe('soundOf', () => {
+  it('hears alike what sounds alike', () => {
+    expect(soundOf('agnus')).toBe(soundOf('agnes'))
+    expect(soundOf('dei')).toBe(soundOf('day'))
+    expect(soundOf('phone')).toBe(soundOf('fone'))
+    expect(soundOf('grace')).not.toBe(soundOf('great'))
+  })
+})
 
 describe('spokenKey', () => {
   it('reads a key however it is said or written down', () => {
@@ -58,6 +70,25 @@ describe('parseSongRequest', () => {
     expect(ask('holy forever')).toEqual({ id: 3, key: null, minor: false })
     expect(ask('holy')).toEqual({ id: 2, key: null, minor: false })
     expect(ask('holy in d')).toEqual({ id: 2, key: 'D', minor: false })
+  })
+
+  it('hears a title the way speech recognition spells it', () => {
+    expect(ask('Agnes Day')).toEqual({ id: 6, key: null, minor: false })
+    expect(ask('agnes day in a')).toEqual({ id: 6, key: 'A', minor: false })
+    expect(ask('Firm Foundations key of E')).toEqual({ id: 1, key: 'E', minor: false })
+  })
+
+  it('finds a title by the other name in its brackets', () => {
+    expect(ask('ten thousand reasons in G')).toEqual({ id: 7, key: 'G', minor: false })
+    expect(ask('10,000 reasons')).toEqual({ id: 7, key: null, minor: false })
+    expect(ask('10000 reasons')).toEqual({ id: 7, key: null, minor: false })
+    expect(ask('arms of a father')).toEqual({ id: 8, key: null, minor: false })
+    expect(ask('abba')).toEqual({ id: 8, key: null, minor: false })
+  })
+
+  it('prefers the title said exactly to one that only sounds like it', () => {
+    expect(ask('holy')).toEqual({ id: 2, key: null, minor: false })
+    expect(ask('holly')).toEqual({ id: 2, key: null, minor: false })
   })
 
   it('is not a title sung inside a line', () => {
