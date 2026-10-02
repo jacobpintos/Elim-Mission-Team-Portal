@@ -123,6 +123,29 @@ export function FullScreenOverlay({
     }
   }, [host, rendered, visible, animationType])
 
+  // Over what is on screen, keyboard or no keyboard. Typing into a field here
+  // brings up the iPhone's keyboard, and Safari scrolls the page up to keep
+  // the field in sight — taking a layer pinned to the top of the page with it,
+  // while everything inside is sized (by react-native-web) to the space left
+  // above the keyboard. The chord sheet's notes went most of the way off the
+  // top, and what showed beneath was the page behind the sheet. So, open, the
+  // layer follows the visible area: where it is on the page and how tall.
+  // Not while pinched into, where the visible area is the part zoomed in on
+  // and the layer must stay the page's size to be zoomed at all.
+  useEffect(() => {
+    if (!host || !rendered || typeof window === 'undefined' || !window.visualViewport) return
+    const vv = window.visualViewport
+    const fit = () => fitToVisible(host, vv)
+    fit()
+    vv.addEventListener('resize', fit)
+    vv.addEventListener('scroll', fit)
+    return () => {
+      vv.removeEventListener('resize', fit)
+      vv.removeEventListener('scroll', fit)
+      fitToVisible(host, null)
+    }
+  }, [host, rendered])
+
   useEffect(() => {
     if (!rendered || typeof document === 'undefined') return
     const onKeyUp = (e: KeyboardEvent) => {
@@ -145,6 +168,27 @@ export function FullScreenOverlay({
 /** DOM writes kept out of the component, where the host is just a value. */
 function setStyle(el: HTMLElement, prop: 'background' | 'pointerEvents', value: string) {
   el.style[prop] = value
+}
+
+/**
+ * Put the layer over the visible area — pageTop/pageLeft are where it is on
+ * the page, which the layer is positioned against — or, given nothing or
+ * while zoomed, back to covering the page.
+ */
+function fitToVisible(el: HTMLElement, vv: VisualViewport | null) {
+  const zoomed = vv !== null && Math.abs(vv.scale - 1) > 0.01
+  if (!vv || zoomed) {
+    Object.assign(el.style, { top: '0', left: '0', right: '0', bottom: '0', width: '', height: '' })
+    return
+  }
+  Object.assign(el.style, {
+    top: `${vv.pageTop}px`,
+    left: `${vv.pageLeft}px`,
+    right: 'auto',
+    bottom: 'auto',
+    width: `${vv.width}px`,
+    height: `${vv.height}px`,
+  })
 }
 
 function play(el: HTMLElement, frames: Keyframe[] | null, easing: string): Animation | null {
