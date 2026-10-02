@@ -25,8 +25,11 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
   const [showEditor, setShowEditor] = useState(false)
   const [editSheet, setEditSheet] = useState<ChordSheet | null>(null)
   const [viewSheet, setViewSheet] = useState<ChordSheet | null>(null)
-  // The section a song found by listening was being sung from.
-  const [startSection, setStartSection] = useState<string | null>(null)
+  // Where a song found by listening was being sung: section, and line in it.
+  const [startAt, setStartAt] = useState<{ sectionId: string | null; line: number | null }>({
+    sectionId: null,
+    line: null,
+  })
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null)
 
   const filtered = [...chordSheets]
@@ -103,8 +106,8 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
         {/* The phone app only: find a song by listening to it. */}
         <SongListener
           sheets={chordSheets}
-          onFound={(sheet, sectionId) => {
-            setStartSection(sectionId)
+          onFound={(sheet, sectionId, line) => {
+            setStartAt({ sectionId, line })
             setViewSheet(sheet)
           }}
         />
@@ -241,10 +244,11 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
 
       <ChordSheetViewer
         sheet={viewSheet}
-        startAtSectionId={startSection}
+        startAtSectionId={startAt.sectionId}
+        startAtLine={startAt.line}
         onClose={() => {
           setViewSheet(null)
-          setStartSection(null)
+          setStartAt({ sectionId: null, line: null })
         }}
       />
     </YStack>

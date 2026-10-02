@@ -118,6 +118,27 @@ describe('rankSongs', () => {
     expect(best.sectionId).toBe('well-1')
   })
 
+  it('says which line the singing had got to, by the latest words heard', () => {
+    const [best] = rankSongs(
+      LIBRARY,
+      'amazing grace how sweet the sound that saved a wretch like me i once was lost but now am found'
+    )
+    expect(best.sectionId).toBe('grace-0')
+    expect(best.line).toBe(2)
+    const [later] = rankSongs(
+      LIBRARY,
+      'twas grace that taught my heart to fear and grace my fears relieved'
+    )
+    expect([later.sectionId, later.line]).toEqual(['grace-1', 1])
+  })
+
+  it('places by a phrase sung once in the song, not one sung on several lines', () => {
+    // "holy holy" is on the first line of both verses; "merciful and" only
+    // on the second verse's.
+    const [best] = rankSongs(LIBRARY, 'holy holy holy merciful and mighty')
+    expect([best.sectionId, best.line]).toEqual(['holy-1', 0])
+  })
+
   it('does not open a song on words every song has', () => {
     expect(opens('my heart')).toBeNull()
     expect(opens('and the lord is my')).toBeNull()

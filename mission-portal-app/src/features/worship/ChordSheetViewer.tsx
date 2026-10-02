@@ -158,6 +158,8 @@ interface ChordSheetViewerProps {
    * listening was being sung from (SongListener).
    */
   startAtSectionId?: string | null
+  /** And the line within it to bring into view, counting from 0. */
+  startAtLine?: number | null
   /**
    * The reference track of the song this sheet was opened from, if it has one.
    * Its controls sit under the sheet and drive the same player as the song's
@@ -172,6 +174,7 @@ export function ChordSheetViewer({
   initialKey,
   audio,
   startAtSectionId,
+  startAtLine,
 }: ChordSheetViewerProps) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
@@ -330,6 +333,9 @@ export function ChordSheetViewer({
    */
   const scrollRef = useRef<ScrollView>(null)
   const sectionOffsets = useRef<Record<string, number>>({})
+  // Each lyric line's top within its section, keyed "section:line" — for
+  // opening at the line a song found by listening had got to.
+  const lineOffsets = useRef<Record<string, number>>({})
 
   /**
    * Autoscroll — hands-free, at a speed kept per song, paused with a tap on
@@ -369,21 +375,25 @@ export function ChordSheetViewer({
     return sectionOffsets.current[sectionId] ?? null
   }
 
-  const jumpTo = (sectionId: string) => {
+  const jumpTo = (sectionId: string, line: number | null = null) => {
     const y = measuredOffset(sectionId)
     if (y == null) return
-    // A few points above the heading, so it does not sit flush against the
-    // toolbar and read as cut off.
-    autoScroll.scrollTo(Math.max(0, y - 6))
+    // A line: the one before it at the top, so where it comes from is in
+    // view too; the first line, the section's heading. Otherwise a few points
+    // above the heading, so it does not sit flush against the toolbar and
+    // read as cut off.
+    const within = line && line > 0 ? lineOffsets.current[`${sectionId}:${line - 1}`] : undefined
+    autoScroll.scrollTo(Math.max(0, y + (within ?? 0) - 6))
   }
 
-  // Opened at a section: once the sheet has been laid out, there.
+  // Opened at a section, or a line in one: once the sheet has been laid
+  // out, there.
   useEffect(() => {
     if (!sheetKey || !startAtSectionId) return
-    const timer = setTimeout(() => jumpTo(startAtSectionId), 400)
+    const timer = setTimeout(() => jumpTo(startAtSectionId, startAtLine ?? null), 400)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetKey, startAtSectionId])
+  }, [sheetKey, startAtSectionId, startAtLine])
 
   const [selectedKey, setSelectedKey] = useState(() => {
     if (initialKey && (NNS_KEYS as readonly string[]).includes(initialKey)) return initialKey
@@ -995,7 +1005,17 @@ export function ChordSheetViewer({
                               slotWidth(slot.text, slot.trailing, chords[wi], charW)
                             )
                             return (
-                              <YStack key={lineIdx} paddingBottom={4}>
+                              // A plain View: Tamagui's stacks can miss reporting
+                              // layout for what is drawn before its layer is on
+                              // the page, which is how a sheet opens.
+                              <View
+                                key={lineIdx}
+                                style={{ paddingBottom: 4 }}
+                                onLayout={(e) => {
+                                  lineOffsets.current[`${section.id}:${lineIdx}`] =
+                                    e.nativeEvent.layout.y
+                                }}
+                              >
                                 {wrapSlots(widths, sheetWidth).map((row, ri) => {
                                   // A row with no chords has no chord row to
                                   // keep in step with: just the words.
@@ -1063,7 +1083,7 @@ export function ChordSheetViewer({
                                     </XStack>
                                   )
                                 })}
-                              </YStack>
+                              </View>
                             )
                           })}
                         </YStack>

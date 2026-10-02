@@ -35,8 +35,16 @@ interface IndexedSong {
   title: string
   words: Set<string>
   pairs: Set<string>
-  /** Which section each pair first appears in. */
-  pairSection: Map<string, string>
+  /** Where each pair first appears: section, and line within it. */
+  pairPlace: Map<string, Place>
+  /** How many times each pair appears in the song. */
+  pairCount: Map<string, number>
+}
+
+interface Place {
+  sectionId: string
+  /** The line of the section's lyrics, counting from 0, blank lines included. */
+  line: number
 }
 
 export interface LyricMatch {
@@ -45,8 +53,12 @@ export interface LyricMatch {
   score: number
   /** How many of the heard word pairs the song has. */
   pairs: number
-  /** The section the heard words were found in most. */
+  /**
+   * Where the singing had got to: the section, and the line within it, of
+   * the latest words heard that can be placed.
+   */
   sectionId: string | null
+  line: number | null
 }
 
 /** Words, as compared: no hyphens or placeholders, punctuation or case. */
@@ -68,20 +80,26 @@ export function buildLyricIndex(sources: LyricSource[]): LyricIndex {
   const songs = sources.map((src) => {
     const words = new Set<string>()
     const pairs = new Set<string>()
-    const pairSection = new Map<string, string>()
+    const pairPlace = new Map<string, Place>()
+    const pairCount = new Map<string, number>()
     for (const section of src.sections) {
       // Pairs run across a section's lines — a line sung is often the end of
       // one and the start of the next — but not from one section into another.
-      const w = lyricWords(section.lyrics)
-      w.forEach((word) => words.add(word))
+      // Each pair is placed at the line its second word is on.
+      const w: { word: string; line: number }[] = []
+      section.lyrics.split('\n').forEach((text, line) => {
+        for (const word of lyricWords(text)) w.push({ word, line })
+      })
+      w.forEach(({ word }) => words.add(word))
       for (let i = 0; i + 1 < w.length; i++) {
-        const p = pair(w[i], w[i + 1])
+        const p = pair(w[i].word, w[i + 1].word)
         pairs.add(p)
-        if (!pairSection.has(p)) pairSection.set(p, section.id)
+        pairCount.set(p, (pairCount.get(p) ?? 0) + 1)
+        if (!pairPlace.has(p)) pairPlace.set(p, { sectionId: section.id, line: w[i + 1].line })
       }
     }
     for (const p of pairs) pairSongs.set(p, (pairSongs.get(p) ?? 0) + 1)
-    return { id: src.id, title: src.title, words, pairs, pairSection }
+    return { id: src.id, title: src.title, words, pairs, pairPlace, pairCount }
   })
   return { songs, pairSongs }
 }
@@ -122,27 +140,30 @@ export function rankSongs(index: LyricIndex, transcript: string): LyricMatch[] {
   for (const song of index.songs) {
     const words = heard.map((w) => asSongWord(w, song))
     const counted = new Set<string>()
-    const bySection = new Map<string, number>()
+    const matched: string[] = [] // in the order heard
     let score = 0
     for (let i = 0; i + 1 < words.length; i++) {
       const p = pair(words[i], words[i + 1])
-      if (counted.has(p) || !song.pairs.has(p)) continue
+      if (!song.pairs.has(p)) continue
+      matched.push(p)
+      if (counted.has(p)) continue
       counted.add(p)
-      const weight = Math.log((n + 1) / (index.pairSongs.get(p) ?? 1))
-      score += weight
-      const section = song.pairSection.get(p)
-      if (section) bySection.set(section, (bySection.get(section) ?? 0) + weight)
+      score += Math.log((n + 1) / (index.pairSongs.get(p) ?? 1))
     }
     if (score <= 0) continue
-    let sectionId: string | null = null
-    let sectionScore = 0
-    for (const [id, s] of bySection) {
-      if (s > sectionScore) {
-        sectionId = id
-        sectionScore = s
-      }
-    }
-    results.push({ id: song.id, title: song.title, score, pairs: counted.size, sectionId })
+    // Where the singing is now: the latest pair heard that appears once in
+    // the song, so it can only be one place; failing that, the latest.
+    const recent = matched.slice(-6).reverse()
+    const latest = recent.find((p) => song.pairCount.get(p) === 1) ?? recent[0]
+    const place = latest ? song.pairPlace.get(latest) : undefined
+    results.push({
+      id: song.id,
+      title: song.title,
+      score,
+      pairs: counted.size,
+      sectionId: place?.sectionId ?? null,
+      line: place?.line ?? null,
+    })
   }
   return results.sort((a, b) => b.score - a.score)
 }

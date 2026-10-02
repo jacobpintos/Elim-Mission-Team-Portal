@@ -6,7 +6,7 @@ import type { ChordSheet } from '@/types/chordSheet'
  */
 export function SongListener(_props: {
   sheets: ChordSheet[]
-  onFound: (sheet: ChordSheet, sectionId: string | null) => void
+  onFound: (sheet: ChordSheet, sectionId: string | null, line: number | null) => void
 }) {
   return null
 }

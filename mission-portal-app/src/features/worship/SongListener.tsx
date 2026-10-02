@@ -27,7 +27,7 @@ const RECENT_WORDS = 40
  * are matched against every chord sheet's lyrics (lib/lyricMatch: split
  * syllables and "_" placeholders ignored, misheard words forgiven, phrases
  * every song has counted for little). Once one song is clearly it, the
- * listening stops and its sheet opens at the section that was being sung.
+ * listening stops and its sheet opens at the line that was being sung.
  *
  * Until then, the songs it might be are shown to be picked by hand. It stops
  * on its own after 45 seconds, and nothing it hears is kept.
@@ -37,7 +37,7 @@ export function SongListener({
   onFound,
 }: {
   sheets: ChordSheet[]
-  onFound: (sheet: ChordSheet, sectionId: string | null) => void
+  onFound: (sheet: ChordSheet, sectionId: string | null, line: number | null) => void
 }) {
   const colors = useThemeColors()
   const [open, setOpen] = useState(false)
@@ -68,7 +68,7 @@ export function SongListener({
     setListening(false)
     setOpen(false)
     const sheet = sheets.find((s) => String(s.id) === match.id)
-    if (sheet) onFound(sheet, match.sectionId)
+    if (sheet) onFound(sheet, match.sectionId, match.line)
   }
 
   const hear = (text: string) => {
