@@ -174,6 +174,12 @@ interface ChordSheetViewerProps {
    */
   heardChroma?: Chroma | null
   /**
+   * A key asked for out loud with the song ("Firm Foundation, key of E"):
+   * the sheet is shown in it, and it becomes the key the next song opens in,
+   * as choosing it here would. A song asked for without a key keeps the last.
+   */
+  openInKey?: { key: string; minor: boolean } | null
+  /**
    * The reference track of the song this sheet was opened from, if it has one.
    * Its controls sit under the sheet and drive the same player as the song's
    * card on the set list — see TrackBar.
@@ -190,6 +196,7 @@ export function ChordSheetViewer({
   startAtLine,
   autoScrollAtStart,
   heardChroma,
+  openInKey,
 }: ChordSheetViewerProps) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
@@ -429,6 +436,19 @@ export function ChordSheetViewer({
   })
   const [chordsOnly, setChordsOnly] = useState(false)
   const [showKeyDropdown, setShowKeyDropdown] = useState(false)
+  // A key asked for: taken up when it arrives. Set while rendering, as React
+  // has it for state that follows a prop.
+  const [keyAsked, setKeyAsked] = useState<typeof openInKey>(null)
+  if (openInKey !== keyAsked) {
+    setKeyAsked(openInKey)
+    if (openInKey) {
+      setSelectedKey(openInKey.key)
+      setIsMinor(openInKey.minor)
+    }
+  }
+  useEffect(() => {
+    if (keyAsked) saveKeyPrefs({ key: keyAsked.key, isMinor: keyAsked.minor })
+  }, [keyAsked])
   // The heard sound whose key suggestion was waved away or taken.
   const [keyHintDoneFor, setKeyHintDoneFor] = useState<Chroma | null>(null)
 

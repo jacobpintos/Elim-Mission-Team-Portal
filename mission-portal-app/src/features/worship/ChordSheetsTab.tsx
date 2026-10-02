@@ -5,7 +5,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { ChordSheetEditor } from './ChordSheetEditor'
-import { SongListener } from './SongListener'
+import { SongListener, type AskedKey } from './SongListener'
 import { ChordSheetViewer } from './ChordSheetViewer'
 import type { Chroma } from '@/lib/keyDetect'
 import type { ChordSheet } from '@/types/chordSheet'
@@ -31,6 +31,8 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
     sectionId: null,
     line: null,
   })
+  // A key asked for with the song's name ("Firm Foundation in E").
+  const [askedKey, setAskedKey] = useState<AskedKey | null>(null)
   // The notes heard while finding that song, for suggesting its key.
   const [heard, setHeard] = useState<{ sheetId: string; chroma: Chroma } | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null)
@@ -109,9 +111,10 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
         {/* The phone app only: find a song by listening to it. */}
         <SongListener
           sheets={chordSheets}
-          onFound={(sheet, sectionId, line) => {
+          onFound={(sheet, sectionId, line, key) => {
             setStartAt({ sectionId, line })
             setHeard(null)
+            setAskedKey(key ?? null)
             setViewSheet(sheet)
           }}
           onHeard={(sheetId, chroma) => setHeard({ sheetId, chroma })}
@@ -260,6 +263,7 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
         // Found by listening (startAt is only set then): the song is already
         // being played, so it scrolls along at its saved speed, if it has one.
         autoScrollAtStart
+        openInKey={askedKey}
         heardChroma={
           heard && viewSheet && String(viewSheet.id) === heard.sheetId ? heard.chroma : null
         }
@@ -267,6 +271,7 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
           setViewSheet(null)
           setStartAt({ sectionId: null, line: null })
           setHeard(null)
+          setAskedKey(null)
         }}
       />
     </YStack>

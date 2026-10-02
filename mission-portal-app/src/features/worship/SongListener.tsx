@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, View } from 'react-native'
 import { Text, XStack, YStack } from 'tamagui'
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
-import { File } from 'expo-file-system'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useThemeColors } from '@/theme/useThemeColors'
 import {
@@ -12,7 +11,9 @@ import {
   rankSongs,
   type LyricMatch,
 } from '@/lib/lyricMatch'
-import { chromagram, parseWav, type Chroma } from '@/lib/keyDetect'
+import type { Chroma } from '@/lib/keyDetect'
+import { parseSongRequest, type SongRequest } from '@/lib/songRequest'
+import { readHeardAudio } from './heardAudio'
 import { shazam, type ShazamHit } from '@/lib/shazam'
 import { findByTitle } from '@/lib/titleMatch'
 import type { ChordSheet } from '@/types/chordSheet'
@@ -21,13 +22,29 @@ import type { ChordSheet } from '@/types/chordSheet'
 const LISTEN_MS = 45_000
 /** Only the most recent words are matched: the song being sung now. */
 const RECENT_WORDS = 40
-/** How long Shazam gets to name a recording before listening for the words. */
+/**
+ * How long the words get first — enough to say a song's name — before
+ * Shazam is given its turn at naming a recording, and how long it gets.
+ */
+const WORDS_FIRST_MS = 6000
 const SHAZAM_SECONDS = 12
-/** Less sound than this says too little about the key to guess it. */
-const MIN_KEY_SECONDS = 4
+/** How long a song asked for by name waits for the rest of what is said. */
+const REQUEST_PAUSE_MS = 1200
+
+/** A key asked for with a song's name. */
+export interface AskedKey {
+  key: string
+  minor: boolean
+}
 
 /**
- * Find a song by listening to it.
+ * Find a song by listening to it — or by asking for it.
+ *
+ * Said rather than played — "Firm Foundation, key of E", or just a title —
+ * the song opens straight away, in the key asked for, or else the key the
+ * last song was in (lib/songRequest). That needs nothing from the music, so
+ * it works wherever speech recognition does: the phone app, and the web app
+ * in Chrome and Safari. The rest below is for a song playing.
  *
  * The microphone button beside the chord sheet search. On an iPhone, Shazam
  * gets the first few seconds: a recording — a reference track, a song on
@@ -57,7 +74,12 @@ export function SongListener({
   onHeard,
 }: {
   sheets: ChordSheet[]
-  onFound: (sheet: ChordSheet, sectionId: string | null, line: number | null) => void
+  onFound: (
+    sheet: ChordSheet,
+    sectionId: string | null,
+    line: number | null,
+    key?: AskedKey | null
+  ) => void
   /** The notes heard while finding `sheetId`, once the recording is read. */
   onHeard?: (sheetId: string, heard: Chroma) => void
 }) {
@@ -76,6 +98,26 @@ export function SongListener({
   const done = useRef(false)
   // The song found, whose key the recording is then read for.
   const found = useRef<string | null>(null)
+  // When Shazam is to have its turn, and whether it has had it.
+  const shazamTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearShazamTurn = () => {
+    if (shazamTimer.current) clearTimeout(shazamTimer.current)
+    shazamTimer.current = null
+  }
+  // A song asked for by name, opened once nothing more is said.
+  const requestTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearRequest = () => {
+    if (requestTimer.current) clearTimeout(requestTimer.current)
+    requestTimer.current = null
+  }
+  // Not every browser has speech recognition (Firefox has none).
+  const [available] = useState(() => {
+    try {
+      return ExpoSpeechRecognitionModule.isRecognitionAvailable()
+    } catch {
+      return false
+    }
+  })
 
   const index = useMemo(
     () =>
@@ -101,11 +143,34 @@ export function SongListener({
     if (sheet) onFound(sheet, match.sectionId, match.line)
   }
 
+  const openAsked = (request: SongRequest<ChordSheet>) => {
+    if (done.current) return
+    done.current = true
+    clearRequest()
+    ExpoSpeechRecognitionModule.abort()
+    setListening(false)
+    setOpen(false)
+    onFound(
+      request.sheet,
+      null,
+      null,
+      request.key ? { key: request.key, minor: request.minor } : null
+    )
+  }
+
   const hear = (text: string) => {
     const recent = text.trim().split(/\s+/).slice(-RECENT_WORDS).join(' ')
     setHeard(recent)
     const ranked = rankSongs(index, recent)
     setGuesses(ranked.slice(0, 3))
+    // A song asked for by name, once the asking stops: "Holy" is not yet
+    // "Holy Forever", nor "Firm Foundation" yet "Firm Foundation in E".
+    clearRequest()
+    const request = parseSongRequest(sheets, text)
+    if (request) {
+      requestTimer.current = setTimeout(() => openAsked(request), REQUEST_PAUSE_MS)
+      return
+    }
     const match = confidentMatch(ranked)
     if (match) finish(match)
   }
@@ -126,29 +191,18 @@ export function SongListener({
     if (!e.uri) return
     const sheetId = found.current
     found.current = null
-    const file = new File(e.uri)
-    const read = async () => {
-      if (!sheetId || !onHeard) return
-      const wav = parseWav(await file.bytes())
-      if (!wav || wav.samples.length < wav.sampleRate * MIN_KEY_SECONDS) return
-      onHeard(sheetId, chromagram(wav.samples, wav.sampleRate))
-    }
-    read()
-      .catch(() => {})
-      .finally(() => {
-        try {
-          if (file.exists) file.delete()
-        } catch {
-          // Left in the cache, which the system clears.
-        }
-      })
+    readHeardAudio(e.uri, Boolean(sheetId && onHeard)).then((chroma) => {
+      if (chroma && sheetId) onHeard?.(sheetId, chroma)
+    })
   })
   useSpeechRecognitionEvent('error', (e) => {
     setListening(false)
     if (e.error === 'aborted') return
     setProblem(
       e.error === 'not-allowed'
-        ? 'Mission Portal isn’t allowed to use the microphone or speech recognition. You can turn them on in Settings.'
+        ? Platform.OS === 'web'
+          ? 'This browser isn’t allowed to use the microphone here. Allow it in the site settings (the icon by the address), then try again.'
+          : 'Mission Portal isn’t allowed to use the microphone or speech recognition. You can turn them on in Settings.'
         : e.error === 'no-speech' || e.error === 'speech-timeout'
           ? 'Didn’t hear any words. Try again closer to the music, during a verse or chorus.'
           : e.error === 'network'
@@ -165,37 +219,55 @@ export function SongListener({
     settled.current = ''
     done.current = false
     found.current = null
-    const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
-    if (!permission.granted) {
-      setProblem(
-        'Mission Portal needs the microphone and speech recognition to listen. You can turn them on in Settings.'
-      )
-      return
-    }
-
-    if (shazam) {
-      setIdentifying(true)
-      let hit: ShazamHit | null = null
-      try {
-        hit = await shazam.match(SHAZAM_SECONDS)
-      } catch {
-        // Unreachable, or not set up for this app: the words will have to do.
-      }
-      setIdentifying(false)
-      if (done.current) return
-      if (hit?.title) {
-        const sheet = findByTitle(sheets, hit.title)
-        if (sheet) {
-          done.current = true
-          setOpen(false)
-          onFound(sheet, null, null)
-          return
-        }
-        // Perhaps under another title: the words may still find it.
-        setNotInLibrary(hit)
+    clearRequest()
+    clearShazamTurn()
+    // The browser asks for the microphone itself, when listening starts.
+    if (Platform.OS !== 'web') {
+      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
+      if (!permission.granted) {
+        setProblem(
+          'Mission Portal needs the microphone and speech recognition to listen. You can turn them on in Settings.'
+        )
+        return
       }
     }
+    listenForWords()
+    if (shazam) shazamTimer.current = setTimeout(shazamTurn, WORDS_FIRST_MS)
+  }
 
+  /**
+   * Shazam's turn, once the words have had theirs: the words stop — the two
+   * do not share the microphone — while it tries to name a recording, and
+   * go on if it cannot. Skipped while a song asked for by name is waiting.
+   */
+  const shazamTurn = async () => {
+    shazamTimer.current = null
+    if (!shazam || done.current || requestTimer.current) return
+    ExpoSpeechRecognitionModule.abort()
+    setIdentifying(true)
+    let hit: ShazamHit | null = null
+    try {
+      hit = await shazam.match(SHAZAM_SECONDS)
+    } catch {
+      // Unreachable, or not set up for this app: the words will have to do.
+    }
+    setIdentifying(false)
+    if (done.current) return
+    if (hit?.title) {
+      const sheet = findByTitle(sheets, hit.title)
+      if (sheet) {
+        done.current = true
+        setOpen(false)
+        onFound(sheet, null, null)
+        return
+      }
+      // Perhaps under another title: the words may still find it.
+      setNotInLibrary(hit)
+    }
+    listenForWords()
+  }
+
+  const listenForWords = () => {
     ExpoSpeechRecognitionModule.start({
       lang: 'en-US',
       interimResults: true,
@@ -226,6 +298,8 @@ export function SongListener({
 
   const close = () => {
     done.current = true
+    clearRequest()
+    clearShazamTurn()
     shazam?.cancel()
     setIdentifying(false)
     ExpoSpeechRecognitionModule.abort()
@@ -253,17 +327,21 @@ export function SongListener({
   useEffect(
     () => () => {
       shazam?.cancel()
+      clearRequest()
+      clearShazamTurn()
       ExpoSpeechRecognitionModule.abort()
     },
     []
   )
+
+  if (!available) return null
 
   return (
     <>
       <Pressable
         onPress={openAndListen}
         accessibilityRole="button"
-        accessibilityLabel="Find a song by listening"
+        accessibilityLabel="Find a song by name or by listening"
         style={[styles.micBtn, { borderColor: colors.primary }]}
       >
         <Text fontSize={18}>🎤</Text>
@@ -298,9 +376,9 @@ export function SongListener({
             <Text color={colors.textMuted} fontSize="$3">
               {problem ??
                 (identifying
-                  ? 'Hold the phone near the music. A recording is usually named within a few seconds.'
+                  ? 'Checking whether it’s a recording Shazam knows…'
                   : listening
-                    ? 'Hold the phone near the music. The chord sheet opens as soon as the words give the song away.'
+                    ? 'Say a song’s name — “Firm Foundation in E” — or hold the phone near the music. The chord sheet opens as soon as the song is clear.'
                     : 'Starting…')}
             </Text>
 
