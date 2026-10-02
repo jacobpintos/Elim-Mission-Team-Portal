@@ -13,19 +13,29 @@ import {
   type LyricMatch,
 } from '@/lib/lyricMatch'
 import { chromagram, parseWav, type Chroma } from '@/lib/keyDetect'
+import { shazam, type ShazamHit } from '@/lib/shazam'
+import { findByTitle } from '@/lib/titleMatch'
 import type { ChordSheet } from '@/types/chordSheet'
 
 /** How long to listen before giving up. */
 const LISTEN_MS = 45_000
 /** Only the most recent words are matched: the song being sung now. */
 const RECENT_WORDS = 40
+/** How long Shazam gets to name a recording before listening for the words. */
+const SHAZAM_SECONDS = 12
 /** Less sound than this says too little about the key to guess it. */
 const MIN_KEY_SECONDS = 4
 
 /**
  * Find a song by listening to it.
  *
- * The microphone button beside the chord sheet search. Tapped, the phone's
+ * The microphone button beside the chord sheet search. On an iPhone, Shazam
+ * gets the first few seconds: a recording — a reference track, a song on
+ * someone's phone — it names at once, and the sheet with that title opens.
+ * Speech recognition is made for talking, and hears little or nothing of a
+ * record's vocals over its band; Shazam is made for exactly that. It knows
+ * only released recordings, though, not a band playing the song live, so
+ * after that, or straight away where there is no Shazam, the phone's
  * own speech recognition listens to whatever is being sung or played — the
  * band, a recording, someone humming the words — and the words it makes out
  * are matched against every chord sheet's lyrics (lib/lyricMatch: split
@@ -57,6 +67,10 @@ export function SongListener({
   const [heard, setHeard] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
   const [guesses, setGuesses] = useState<LyricMatch[]>([])
+  // Shazam at work, before the words are listened for.
+  const [identifying, setIdentifying] = useState(false)
+  // A recording Shazam named that has no sheet under that title.
+  const [notInLibrary, setNotInLibrary] = useState<ShazamHit | null>(null)
   // What has been heard and settled, and what is still being made out.
   const settled = useRef('')
   const done = useRef(false)
@@ -147,6 +161,7 @@ export function SongListener({
     setProblem(null)
     setHeard('')
     setGuesses([])
+    setNotInLibrary(null)
     settled.current = ''
     done.current = false
     found.current = null
@@ -157,6 +172,30 @@ export function SongListener({
       )
       return
     }
+
+    if (shazam) {
+      setIdentifying(true)
+      let hit: ShazamHit | null = null
+      try {
+        hit = await shazam.match(SHAZAM_SECONDS)
+      } catch {
+        // Unreachable, or not set up for this app: the words will have to do.
+      }
+      setIdentifying(false)
+      if (done.current) return
+      if (hit?.title) {
+        const sheet = findByTitle(sheets, hit.title)
+        if (sheet) {
+          done.current = true
+          setOpen(false)
+          onFound(sheet, null, null)
+          return
+        }
+        // Perhaps under another title: the words may still find it.
+        setNotInLibrary(hit)
+      }
+    }
+
     ExpoSpeechRecognitionModule.start({
       lang: 'en-US',
       interimResults: true,
@@ -174,17 +213,21 @@ export function SongListener({
         outputEncoding: 'pcmFormatInt16',
       },
       // Keep whatever else is playing — a reference track in the app, or a
-      // song in another — playing, so it can be heard.
+      // song in another — playing, so it can be heard. Measurement mode: the
+      // microphone as it is, without the processing iOS does for a voice
+      // call, which treats a band as noise to be taken out.
       iosCategory: {
         category: 'playAndRecord',
         categoryOptions: ['defaultToSpeaker', 'allowBluetooth', 'mixWithOthers'],
-        mode: 'default',
+        mode: 'measurement',
       },
     })
   }
 
   const close = () => {
     done.current = true
+    shazam?.cancel()
+    setIdentifying(false)
     ExpoSpeechRecognitionModule.abort()
     setListening(false)
     setOpen(false)
@@ -207,7 +250,13 @@ export function SongListener({
     return () => clearTimeout(timer)
   }, [listening])
   // Never left listening behind a closed screen.
-  useEffect(() => () => ExpoSpeechRecognitionModule.abort(), [])
+  useEffect(
+    () => () => {
+      shazam?.cancel()
+      ExpoSpeechRecognitionModule.abort()
+    },
+    []
+  )
 
   return (
     <>
@@ -232,7 +281,7 @@ export function SongListener({
           >
             <XStack alignItems="center" justifyContent="space-between">
               <Text color={colors.text} fontSize="$5" fontWeight="700">
-                {listening ? 'Listening…' : 'Find a song'}
+                {listening || identifying ? 'Listening…' : 'Find a song'}
               </Text>
               <Pressable
                 onPress={close}
@@ -248,10 +297,20 @@ export function SongListener({
 
             <Text color={colors.textMuted} fontSize="$3">
               {problem ??
-                (listening
-                  ? 'Hold the phone near the music. The chord sheet opens as soon as the words give the song away.'
-                  : 'Starting…')}
+                (identifying
+                  ? 'Hold the phone near the music. A recording is usually named within a few seconds.'
+                  : listening
+                    ? 'Hold the phone near the music. The chord sheet opens as soon as the words give the song away.'
+                    : 'Starting…')}
             </Text>
+
+            {notInLibrary ? (
+              <Text color={colors.text} fontSize="$3">
+                Shazam heard “{notInLibrary.title}”
+                {notInLibrary.artist ? ` by ${notInLibrary.artist}` : ''}, but there’s no chord
+                sheet with that title. Listening for the words in case it’s under another name…
+              </Text>
+            ) : null}
 
             {heard ? (
               <Text color={colors.text} fontSize="$3" fontStyle="italic" numberOfLines={3}>
@@ -280,7 +339,7 @@ export function SongListener({
               </YStack>
             ) : null}
 
-            {!listening ? (
+            {!listening && !identifying ? (
               <Pressable
                 onPress={start}
                 accessibilityRole="button"
