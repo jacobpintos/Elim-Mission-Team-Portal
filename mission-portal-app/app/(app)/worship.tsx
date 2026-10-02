@@ -14,7 +14,7 @@ import { useConfigStore } from '@/stores/configStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { isWorship, isReadOnly } from '@/lib/roles'
+import { isWorship } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { SetListFormModal } from '@/features/worship/SetListFormModal'
 import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
@@ -42,7 +42,10 @@ export default function WorshipScreen() {
   const tasksStore = useTasksStore()
   const toast = useUIStore((s) => s.toast)
 
-  const readOnly = isReadOnly(profile)
+  // Changing set lists, chord sheets and the input list is for the worship
+  // team and admins — the same rule Firestore enforces (isWorshipOrAdmin).
+  // Anyone else here (a guest) reads only.
+  const readOnly = !isWorship(profile)
   const [activeTab, setActiveTab] = useState<'setlists' | 'chords' | 'inputs'>('setlists')
   const [showForm, setShowForm] = useState(false)
   const [editSetList, setEditSetList] = useState<SetList | null>(null)

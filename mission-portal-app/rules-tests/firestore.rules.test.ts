@@ -503,6 +503,9 @@ describe('guests', () => {
     await assertFails(updateDoc(doc(as(GUEST), 'setLists/sl1'), { title: 'Hijacked' }))
     await assertFails(updateDoc(doc(as(GUEST), 'chordSheets/cs1'), { title: 'Hijacked' }))
     await assertFails(setDoc(doc(as(GUEST), 'setLists/sl2'), { title: 'New' }))
+    await assertFails(setDoc(doc(as(GUEST), 'chordSheets/cs2'), { title: 'New' }))
+    await assertFails(deleteDoc(doc(as(GUEST), 'chordSheets/cs1')))
+    await assertFails(deleteDoc(doc(as(GUEST), 'setLists/sl1')))
   })
 
   it('cannot reach the input list', async () => {

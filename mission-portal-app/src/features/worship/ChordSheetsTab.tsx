@@ -151,63 +151,66 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
                   </XStack>
                 </Pressable>
 
-                {/* Action buttons — siblings of the content Pressable */}
-                <XStack gap={4} alignItems="center" paddingRight={8}>
-                  {confirmDeleteId === sheet.id ? (
-                    <>
-                      <Pressable onPress={() => setConfirmDeleteId(null)}>
-                        <View
-                          style={[
-                            styles.actionBtn,
-                            { backgroundColor: colors.surface, borderColor: colors.border },
-                          ]}
-                        >
-                          <Text style={[styles.actionBtnText, { color: colors.textMuted }]}>
-                            Cancel
-                          </Text>
-                        </View>
-                      </Pressable>
-                      <Pressable onPress={() => handleDeleteConfirmed(sheet)}>
-                        <View
-                          style={[
-                            styles.actionBtn,
-                            { backgroundColor: '#c0392b', borderColor: '#c0392b' },
-                          ]}
-                        >
-                          <Text style={[styles.actionBtnText, { color: 'white' }]}>Confirm</Text>
-                        </View>
-                      </Pressable>
-                    </>
-                  ) : (
-                    <>
-                      <Pressable onPress={() => openEdit(sheet)}>
-                        <View
-                          style={[
-                            styles.actionBtn,
-                            {
-                              backgroundColor: colors.primary + '18',
-                              borderColor: colors.primary + '44',
-                            },
-                          ]}
-                        >
-                          <Text style={[styles.actionBtnText, { color: colors.primary }]}>
-                            Edit
-                          </Text>
-                        </View>
-                      </Pressable>
-                      <Pressable onPress={() => setConfirmDeleteId(sheet.id)}>
-                        <View
-                          style={[
-                            styles.actionBtn,
-                            { backgroundColor: '#c0392b18', borderColor: '#c0392b44' },
-                          ]}
-                        >
-                          <Text style={[styles.actionBtnText, { color: '#c0392b' }]}>Delete</Text>
-                        </View>
-                      </Pressable>
-                    </>
-                  )}
-                </XStack>
+                {/* Action buttons — siblings of the content Pressable. Only for
+                    those who may change sheets; a guest opens them to read. */}
+                {readOnly ? null : (
+                  <XStack gap={4} alignItems="center" paddingRight={8}>
+                    {confirmDeleteId === sheet.id ? (
+                      <>
+                        <Pressable onPress={() => setConfirmDeleteId(null)}>
+                          <View
+                            style={[
+                              styles.actionBtn,
+                              { backgroundColor: colors.surface, borderColor: colors.border },
+                            ]}
+                          >
+                            <Text style={[styles.actionBtnText, { color: colors.textMuted }]}>
+                              Cancel
+                            </Text>
+                          </View>
+                        </Pressable>
+                        <Pressable onPress={() => handleDeleteConfirmed(sheet)}>
+                          <View
+                            style={[
+                              styles.actionBtn,
+                              { backgroundColor: '#c0392b', borderColor: '#c0392b' },
+                            ]}
+                          >
+                            <Text style={[styles.actionBtnText, { color: 'white' }]}>Confirm</Text>
+                          </View>
+                        </Pressable>
+                      </>
+                    ) : (
+                      <>
+                        <Pressable onPress={() => openEdit(sheet)}>
+                          <View
+                            style={[
+                              styles.actionBtn,
+                              {
+                                backgroundColor: colors.primary + '18',
+                                borderColor: colors.primary + '44',
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.actionBtnText, { color: colors.primary }]}>
+                              Edit
+                            </Text>
+                          </View>
+                        </Pressable>
+                        <Pressable onPress={() => setConfirmDeleteId(sheet.id)}>
+                          <View
+                            style={[
+                              styles.actionBtn,
+                              { backgroundColor: '#c0392b18', borderColor: '#c0392b44' },
+                            ]}
+                          >
+                            <Text style={[styles.actionBtnText, { color: '#c0392b' }]}>Delete</Text>
+                          </View>
+                        </Pressable>
+                      </>
+                    )}
+                  </XStack>
+                )}
               </View>
             ))}
           </YStack>
@@ -215,7 +218,7 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
       )}
 
       <ChordSheetEditor
-        visible={showEditor}
+        visible={showEditor && !readOnly}
         onClose={() => {
           setShowEditor(false)
           setEditSheet(null)
