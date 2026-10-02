@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
+  TextInput,
   type ViewStyle,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -35,6 +36,9 @@ import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useCoverViewport } from '@/lib/useCoverViewport'
 import { resetPageZoom } from '@/lib/resetPageZoom'
 import { useAudioPlayersStore } from '@/stores/audioPlayersStore'
+import { useAuthStore } from '@/stores/authStore'
+import { useSheetNotesStore, NOTE_MAX } from '@/stores/sheetNotesStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { AudioControls } from '@/components/ui/AudioControls'
 
 interface KeyPrefs {
@@ -88,6 +92,15 @@ let cachedControlsHidden: boolean | null = null
 function rememberControlsHidden(hidden: boolean) {
   cachedControlsHidden = hidden
   AsyncStorage.setItem(CONTROLS_HIDDEN_KEY, hidden ? '1' : '0').catch(() => {})
+}
+
+/** Whether the reader has hidden their notes from the sheet, remembered likewise. */
+const NOTES_HIDDEN_KEY = 'chordsheet_notes_hidden'
+let cachedNotesHidden: boolean | null = null
+
+function rememberNotesHidden(hidden: boolean) {
+  cachedNotesHidden = hidden
+  AsyncStorage.setItem(NOTES_HIDDEN_KEY, hidden ? '1' : '0').catch(() => {})
 }
 
 // Estimate column width in logical px from word length, at the current scale.
@@ -278,6 +291,57 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
    * so it is there with the controls folded away too.
    */
   const autoScroll = useAutoScroll(scrollRef, sheet ? String(sheet.id) : null, fontScale)
+
+  /**
+   * The reader's own notes: one for the song, one per section. Private, kept
+   * on their account (sheetNotesStore), and drawn in amber with a ✎ so they
+   * never read as part of the chart. "✎ Notes" in the controls, or a tap on
+   * a note, opens them for editing; there they can be hidden from the sheet.
+   */
+  const uid = useAuthStore((s) => s.fbUser?.uid ?? null)
+  const subscribeNotes = useSheetNotesStore((s) => s.subscribe)
+  const unsubscribeNotes = useSheetNotesStore((s) => s.unsubscribe)
+  useEffect(() => {
+    if (!uid) return
+    subscribeNotes(uid)
+    return () => unsubscribeNotes()
+  }, [uid, subscribeNotes, unsubscribeNotes])
+  const myNotes = useSheetNotesStore((s) => (sheetKey ? s.notes[sheetKey] : undefined))
+  const setSongNote = useSheetNotesStore((s) => s.setSongNote)
+  const setSectionNote = useSheetNotesStore((s) => s.setSectionNote)
+  const noteColors = useNoteColors()
+
+  const [editingNotes, setEditingNotes] = useState(false)
+  // A new sheet opens to read, not mid-edit.
+  const [notesSheet, setNotesSheet] = useState(sheetKey)
+  if (notesSheet !== sheetKey) {
+    setNotesSheet(sheetKey)
+    setEditingNotes(false)
+  }
+  const [notesHidden, setNotesHidden] = useState(cachedNotesHidden ?? false)
+  useEffect(() => {
+    if (cachedNotesHidden !== null) return
+    let cancelled = false
+    AsyncStorage.getItem(NOTES_HIDDEN_KEY)
+      .then((raw) => {
+        cachedNotesHidden = raw === '1'
+        if (!cancelled) setNotesHidden(cachedNotesHidden)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const toggleNotesHidden = () => {
+    rememberNotesHidden(!notesHidden)
+    setNotesHidden(!notesHidden)
+  }
+  const startEditingNotes = () => {
+    // Typing into a sheet that moves under you is no way to write a note.
+    if (autoScroll.state === 'running') autoScroll.pause()
+    setEditingNotes(true)
+  }
+  const showNotes = editingNotes || !notesHidden
 
   /**
    * Where a section starts, asked for now rather than remembered.
@@ -476,6 +540,30 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
         </XStack>
       </ScrollView>
     ) : null
+
+  /**
+   * A section's note under its heading: the note, while reading; a field for
+   * it, while editing. `label` names the section when one heading stands for
+   * several — Chords Only's "Verse 1-2" — so each verse's note says whose.
+   */
+  const sectionNote = (sectionId: string, label: string | null = null) => {
+    const text = myNotes?.sections?.[sectionId] ?? ''
+    if (editingNotes) {
+      return (
+        <NoteField
+          key={`note-${sheetKey}-${sectionId}`}
+          initial={text}
+          label={label}
+          placeholder={`Note for ${label ?? getSectionLabel(sheet.sections, sectionId)}`}
+          onSave={(t) => sheetKey && setSectionNote(sheetKey, sectionId, t)}
+        />
+      )
+    }
+    if (!showNotes || !text) return null
+    return (
+      <NoteLine key={`note-${sectionId}`} text={text} label={label} onPress={startEditingNotes} />
+    )
+  }
 
   return (
     <FullScreenOverlay visible animationType="fade" transparent onRequestClose={onClose}>
@@ -746,6 +834,32 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
                   </Text>
                 </XStack>
               </Pressable>
+
+              {/* My notes — private, amber like the notes themselves. */}
+              <Pressable
+                onPress={() => (editingNotes ? setEditingNotes(false) : startEditingNotes())}
+                style={styles.touch}
+                accessibilityRole="button"
+                accessibilityLabel={editingNotes ? 'Done editing notes' : 'My notes'}
+              >
+                <XStack
+                  backgroundColor={editingNotes ? noteColors.text : noteColors.bg}
+                  borderRadius={99}
+                  borderWidth={1}
+                  borderColor={noteColors.text}
+                  paddingHorizontal="$3"
+                  alignItems="center"
+                  flexGrow={1}
+                >
+                  <Text
+                    color={editingNotes ? noteColors.onText : noteColors.text}
+                    fontSize="$2"
+                    fontWeight="600"
+                  >
+                    {editingNotes ? '✓ Done' : notesHidden ? '✎ Notes (hidden)' : '✎ Notes'}
+                  </Text>
+                </XStack>
+              </Pressable>
             </XStack>
           )}
 
@@ -760,6 +874,35 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
               {...autoScroll.scrollProps}
             >
               <YStack gap="$3" paddingBottom="$4" id={SHEET_CONTENT_ID}>
+                {editingNotes ? (
+                  <YStack gap="$2">
+                    <XStack alignItems="center" justifyContent="space-between" gap="$2">
+                      <Text color={colors.textMuted} fontSize="$2" flexShrink={1}>
+                        Only you see your notes.
+                      </Text>
+                      <Pressable
+                        onPress={toggleNotesHidden}
+                        style={styles.touchSmall}
+                        accessibilityRole="switch"
+                        aria-checked={!notesHidden}
+                        accessibilityLabel="Show notes on the sheet"
+                      >
+                        <Text color={noteColors.text} fontSize="$2" fontWeight="600">
+                          Show on the sheet: {notesHidden ? 'Off' : 'On'}
+                        </Text>
+                      </Pressable>
+                    </XStack>
+                    <NoteField
+                      key={`song-${sheetKey}`}
+                      initial={myNotes?.song ?? ''}
+                      label="Song note"
+                      placeholder="Capo, count-in, who starts…"
+                      onSave={(text) => sheetKey && setSongNote(sheetKey, text)}
+                    />
+                  </YStack>
+                ) : showNotes && myNotes?.song ? (
+                  <NoteLine text={myNotes.song} banner onPress={startEditingNotes} />
+                ) : null}
                 {chordsOnly
                   ? sectionGroups.map(({ section, count }) => {
                       const fullLabel = getSectionLabel(sheet.sections, section.id)
@@ -784,6 +927,19 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
                               {label}
                             </Text>
                           </XStack>
+                          {(() => {
+                            // One heading for a run of sections: each one's note,
+                            // named when there is more than one.
+                            const start = sheet.sections.findIndex((x) => x.id === section.id)
+                            return sheet.sections
+                              .slice(start, start + count)
+                              .map((s) =>
+                                sectionNote(
+                                  s.id,
+                                  count > 1 ? getSectionShortLabel(sheet.sections, s.id) : null
+                                )
+                              )
+                          })()}
                           {compressed.map(({ chords, count: pc }, gi) => (
                             <YStack key={gi}>
                               {gi > 0 && compressed.length > 1 ? (
@@ -850,6 +1006,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
                                 (same as {repeatNote})
                               </Text>
                             ) : null}
+                            {sectionNote(section.id)}
                             {tokens.length > 0 ? (
                               <XStack flexWrap="wrap" gap="$2" alignItems="center">
                                 {tokens.map((t, i) =>
@@ -914,6 +1071,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
                               (same as {repeatNote})
                             </Text>
                           ) : null}
+                          {sectionNote(section.id)}
                           {lyricsLines.map((lyricLine, lineIdx) => {
                             const slots = getWordSlots(lyricLine)
                             if (!slots.length) return <View key={lineIdx} style={{ height: 8 }} />
@@ -1014,6 +1172,121 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
         </YStack>
       </View>
     </FullScreenOverlay>
+  )
+}
+
+/**
+ * Amber for notes, in a shade readable on the theme's surface: light on dark,
+ * dark on light. Not the theme's own colours, which the chart already uses —
+ * a note must never be mistaken for a chord or a heading.
+ */
+function useNoteColors() {
+  const mode = useThemeStore((s) => s.mode)
+  return mode === 'dark'
+    ? { text: '#f5c04a', bg: 'rgba(245,192,74,0.12)', onText: '#1a1a1a' }
+    : { text: '#8a5a00', bg: 'rgba(196,140,20,0.12)', onText: '#ffffff' }
+}
+
+/** A note on the sheet. Tapping it opens the notes for editing. */
+function NoteLine({
+  text,
+  label = null,
+  banner = false,
+  onPress,
+}: {
+  text: string
+  label?: string | null
+  banner?: boolean
+  onPress: () => void
+}) {
+  const c = useNoteColors()
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Your note${label ? ` for ${label}` : ''}: ${text}. Edit notes`}
+      style={
+        banner
+          ? { backgroundColor: c.bg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 }
+          : { paddingVertical: 1 }
+      }
+    >
+      <Text color={c.text} fontSize={banner ? '$3' : '$2'} fontWeight={banner ? '600' : '500'}>
+        ✎ {label ? `${label}: ` : ''}
+        {text}
+      </Text>
+    </Pressable>
+  )
+}
+
+/**
+ * A note being written. Saved a moment after typing stops, and whatever is
+ * unsaved when the field closes — "Done", or the sheet shut — is saved then.
+ * Empty, the note is removed.
+ */
+function NoteField({
+  initial,
+  label,
+  placeholder,
+  onSave,
+}: {
+  initial: string
+  label: string | null
+  placeholder: string
+  onSave: (text: string) => void
+}) {
+  const c = useNoteColors()
+  const colors = useThemeColors()
+  const [text, setText] = useState(initial)
+  const saved = useRef(initial)
+  const latest = useRef(initial)
+  const save = useRef(onSave)
+  useEffect(() => {
+    save.current = onSave
+  }, [onSave])
+  useEffect(() => {
+    latest.current = text
+    if (text === saved.current) return
+    const timer = setTimeout(() => {
+      saved.current = text
+      save.current(text)
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [text])
+  useEffect(
+    () => () => {
+      if (latest.current !== saved.current) save.current(latest.current)
+    },
+    []
+  )
+  return (
+    <YStack gap={2}>
+      {label ? (
+        <Text color={c.text} fontSize="$1" fontWeight="600">
+          ✎ {label}
+        </Text>
+      ) : null}
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        maxLength={NOTE_MAX}
+        multiline
+        accessibilityLabel={placeholder}
+        style={{
+          color: colors.text,
+          backgroundColor: c.bg,
+          borderColor: c.text,
+          borderWidth: 1,
+          borderRadius: 8,
+          paddingHorizontal: 10,
+          paddingVertical: 8,
+          fontSize: 15,
+          minHeight: 40,
+        }}
+      />
+    </YStack>
   )
 }
 
