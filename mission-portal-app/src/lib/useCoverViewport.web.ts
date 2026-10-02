@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { withViewportFitCover } from '@/lib/viewportMeta'
+import { withViewportFitCover, withoutZoomReset } from '@/lib/viewportMeta'
 
 /**
  * Let the page reach the edges of the screen while `active`, and put it back
@@ -23,7 +23,9 @@ export function useCoverViewport(active: boolean): void {
     if (!active || typeof document === 'undefined') return
     const meta = document.querySelector('meta[name="viewport"]')
     if (!meta) return
-    const original = meta.getAttribute('content') ?? ''
+    // Never the zoom cap resetPageZoom holds for a moment: put back on close,
+    // it would leave the page unable to be zoomed at all.
+    const original = withoutZoomReset(meta.getAttribute('content') ?? '')
     const covered = withViewportFitCover(original)
     if (covered === original) return
     meta.setAttribute('content', covered)

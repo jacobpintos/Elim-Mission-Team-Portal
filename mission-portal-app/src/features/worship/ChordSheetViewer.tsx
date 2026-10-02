@@ -33,6 +33,7 @@ import {
 import { buildChordSheetPdfBlob } from './chordSheetPdf'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useCoverViewport } from '@/lib/useCoverViewport'
+import { resetPageZoom } from '@/lib/resetPageZoom'
 import { useAudioPlayersStore } from '@/stores/audioPlayersStore'
 import { AudioControls } from '@/components/ui/AudioControls'
 
@@ -165,6 +166,21 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
   // Off with no sheet: the viewer stays mounted between sheets, rendering
   // nothing, and the page must not keep the whole screen while it does.
   useCoverViewport(coverScreen && !!sheet)
+
+  // The phone's own zoom back to 100% when a sheet opens and when it turns:
+  // a sheet pinched into on one song, or left zoomed by a rotation, otherwise
+  // opens the next one half off the screen. After useCoverViewport, so that
+  // takes its copy of the viewport tag before the zoom cap goes in. Again a
+  // moment later for a rotation, which the phone is still finishing when
+  // the new size is first reported.
+  const sheetKey = sheet ? String(sheet.id) : null
+  const landscape = windowWidth > windowHeight
+  useEffect(() => {
+    if (!sheetKey) return
+    resetPageZoom()
+    const again = setTimeout(resetPageZoom, 400)
+    return () => clearTimeout(again)
+  }, [sheetKey, landscape])
 
   const cardMaxHeight = coverScreen
     ? windowHeight
