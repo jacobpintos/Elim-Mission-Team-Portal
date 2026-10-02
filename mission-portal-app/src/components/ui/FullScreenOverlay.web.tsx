@@ -36,6 +36,8 @@ const openStack: number[] = []
 let nextId = 0
 
 const DURATION = 300
+/** How long after a field gains or loses focus the layer keeps refitting. */
+const SETTLE_MS = 900
 
 /** The Web Animations API, which every browser this app supports has. */
 const CAN_ANIMATE =
@@ -124,25 +126,62 @@ export function FullScreenOverlay({
   }, [host, rendered, visible, animationType])
 
   // Over what is on screen, keyboard or no keyboard. Typing into a field here
-  // brings up the iPhone's keyboard, and Safari scrolls the page up to keep
-  // the field in sight — taking a layer pinned to the top of the page with it,
+  // brings up the iPhone's keyboard, and Safari moves the page to keep the
+  // field in sight — taking a layer pinned to the top of the page with it,
   // while everything inside is sized (by react-native-web) to the space left
-  // above the keyboard. The chord sheet's notes went most of the way off the
-  // top, and what showed beneath was the page behind the sheet. So, open, the
-  // layer follows the visible area: where it is on the page and how tall.
-  // Not while pinched into, where the visible area is the part zoomed in on
-  // and the layer must stay the page's size to be zoomed at all.
+  // above the keyboard. The chord sheet's notes and the set list's fields went
+  // most of the way off the top, and what showed beneath was the page behind.
+  // So, open, the layer follows the visible area: where it is on the page and
+  // how tall. Not while pinched into, where the visible area is the part
+  // zoomed in on and the layer must stay the page's size to be zoomed at all.
+  //
+  // Safari moves the page in more than one way — the visible area within the
+  // page, which the visual viewport reports, or the page itself, which only
+  // the window's scroll does — and does not always say when it has finished.
+  // So the layer is fitted on every one of those, and for most of a second
+  // after a field gains or loses focus it is fitted every frame until the
+  // keyboard has settled.
   useEffect(() => {
     if (!host || !rendered || typeof window === 'undefined' || !window.visualViewport) return
     const vv = window.visualViewport
-    const fit = () => fitToVisible(host, vv)
+    // Shrunk to fit above the keyboard after Safari had already brought the
+    // field into view, the layer can leave the field below its fold: bring it
+    // back, within the layer's own scrolling, whenever the layer's size moves.
+    let fitted = ''
+    const fit = () => {
+      fitToVisible(host, vv)
+      const size = `${host.style.width}x${host.style.height}`
+      if (size === fitted) return
+      fitted = size
+      const el = document.activeElement
+      if (typing() && el instanceof HTMLElement && host.contains(el)) revealInside(host, el)
+    }
+    let until = 0
+    let frame = 0
+    const loop = () => {
+      frame = 0
+      fit()
+      if (performance.now() < until) frame = requestAnimationFrame(loop)
+    }
+    const settle = () => {
+      until = performance.now() + SETTLE_MS
+      if (!frame) frame = requestAnimationFrame(loop)
+    }
     fit()
-    vv.addEventListener('resize', fit)
+    vv.addEventListener('resize', settle)
     vv.addEventListener('scroll', fit)
+    window.addEventListener('scroll', fit, true)
+    host.addEventListener('focusin', settle)
+    host.addEventListener('focusout', settle)
     return () => {
-      vv.removeEventListener('resize', fit)
+      if (frame) cancelAnimationFrame(frame)
+      vv.removeEventListener('resize', settle)
       vv.removeEventListener('scroll', fit)
+      window.removeEventListener('scroll', fit, true)
+      host.removeEventListener('focusin', settle)
+      host.removeEventListener('focusout', settle)
       fitToVisible(host, null)
+      unscrollPage()
     }
   }, [host, rendered])
 
@@ -177,6 +216,13 @@ function setStyle(el: HTMLElement, prop: 'background' | 'pointerEvents', value: 
  */
 function fitToVisible(el: HTMLElement, vv: VisualViewport | null) {
   const zoomed = vv !== null && Math.abs(vv.scale - 1) > 0.01
+  // Keyboard gone, and the page left scrolled — which Safari does — though
+  // nothing in this app ever scrolls the page: put it back, or the screen
+  // behind stays shifted up after the layer has closed.
+  // Never while a field has focus: opening, the keyboard may move the page
+  // before the visible area has shrunk, and that is not to be undone.
+  const keyboardUp = vv !== null && vv.height < document.documentElement.clientHeight - 1
+  if (vv && !zoomed && !keyboardUp && !typing()) unscrollPage()
   if (!vv || zoomed) {
     Object.assign(el.style, { top: '0', left: '0', right: '0', bottom: '0', width: '', height: '' })
     return
@@ -189,6 +235,40 @@ function fitToVisible(el: HTMLElement, vv: VisualViewport | null) {
     width: `${vv.width}px`,
     height: `${vv.height}px`,
   })
+}
+
+/** Whether a field has focus — so the keyboard is up, or on its way. */
+function typing(): boolean {
+  const el = document.activeElement as HTMLElement | null
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+}
+
+/**
+ * Scroll the field into the part of the layer that can be seen — by the
+ * scrolling box it sits in, and only that. scrollIntoView would scroll the
+ * page as well, which is the very thing being kept still.
+ */
+function revealInside(host: HTMLElement, el: HTMLElement) {
+  let box = el.parentElement
+  while (box && box !== host) {
+    const { overflowY } = getComputedStyle(box)
+    if (/(auto|scroll)/.test(overflowY) && box.scrollHeight > box.clientHeight) break
+    box = box.parentElement
+  }
+  if (!box || box === host) return
+  const margin = 12
+  const field = el.getBoundingClientRect()
+  const seen = box.getBoundingClientRect()
+  const layer = host.getBoundingClientRect()
+  const top = Math.max(seen.top, layer.top) + margin
+  const bottom = Math.min(seen.bottom, layer.bottom) - margin
+  if (field.bottom > bottom) box.scrollTop += field.bottom - bottom
+  else if (field.top < top) box.scrollTop -= top - field.top
+}
+
+/** This app's page never scrolls — its screens scroll inside themselves. */
+function unscrollPage() {
+  if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0)
 }
 
 function play(el: HTMLElement, frames: Keyframe[] | null, easing: string): Animation | null {
