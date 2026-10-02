@@ -481,6 +481,7 @@ export function ChordSheetViewer({ sheet, onClose, initialKey, audio }: ChordShe
           rebuilds this overlay's geometry instead of leaving Safari to decide
           whether the old one still holds. */}
       <View
+        {...autoScroll.viewerTouchProps}
         style={[
           styles.overlay,
           {

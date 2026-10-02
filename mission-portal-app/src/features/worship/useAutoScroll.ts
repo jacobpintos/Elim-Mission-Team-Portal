@@ -45,6 +45,16 @@ const SPEEDS_KEY = 'chordsheet_scroll_speeds'
 const AWAKE_TAG = 'chord-sheet-autoscroll'
 /** How long the sheet is left to a hand, or a jump, after it last moved it. */
 const SETTLE_MS = 180
+/**
+ * How long it stays still after a finger lifts from anywhere on the viewer.
+ *
+ * iPhone Safari makes a tap into a click — which is what presses a button on
+ * the web — only if nothing scrolled while the finger was down and for a
+ * moment after. Moving every frame, autoscroll spoiled every tap: the jump
+ * bar, Size, the key, all dead until it was paused. Desktop browsers have no
+ * such rule, so it never showed there.
+ */
+const AFTER_TOUCH_MS = 400
 
 let cachedSpeeds: SavedSpeeds | null = null
 function rememberSpeeds(saved: SavedSpeeds) {
@@ -72,6 +82,8 @@ export function useAutoScroll(
     lastFrame: 0,
     movedByOther: 0, // when something else last moved it
     touching: false,
+    fingerDown: false, // anywhere on the viewer
+    stillUntil: 0, // and still until this long after it lifts
     touchStart: { x: 0, y: 0, t: 0, moved: 0 },
     viewHeight: 0,
     contentHeight: 0,
@@ -133,7 +145,8 @@ export function useAutoScroll(
     const seconds = l.lastFrame ? (now - l.lastFrame) / 1000 : 0
     l.lastFrame = now
     // Left to a hand, or a jump, until it settles.
-    if (!l.touching && now - l.movedByOther > SETTLE_MS) {
+    const fingerOn = l.fingerDown || now < l.stillUntil
+    if (!l.touching && !fingerOn && now - l.movedByOther > SETTLE_MS) {
       const step = advance(l.y, l.level, l.textScale, seconds, end())
       write(step.y)
       if (step.done) {
@@ -212,6 +225,25 @@ export function useAutoScroll(
     }
   }, [awake])
 
+  /**
+   * For the whole viewer, in the capture phase, so every touch is seen —
+   * buttons included — before anything handles it.
+   */
+  const viewerTouchProps = {
+    onTouchStartCapture: () => {
+      live.current.fingerDown = true
+    },
+    onTouchEndCapture: (e: GestureResponderEvent) => {
+      if ((e.nativeEvent.touches?.length ?? 0) > 0) return
+      live.current.fingerDown = false
+      live.current.stillUntil = performance.now() + AFTER_TOUCH_MS
+    },
+    onTouchCancelCapture: () => {
+      live.current.fingerDown = false
+      live.current.stillUntil = performance.now() + AFTER_TOUCH_MS
+    },
+  }
+
   /** Everything the scroll view needs to hand over. */
   const scrollProps = {
     scrollEventThrottle: 16,
@@ -268,5 +300,6 @@ export function useAutoScroll(
     changeSpeed,
     scrollTo,
     scrollProps,
+    viewerTouchProps,
   }
 }

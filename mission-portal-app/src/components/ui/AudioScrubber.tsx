@@ -75,8 +75,12 @@ export function AudioScrubber({
   const bandTo = hasLoop ? Math.max(loopStart, loopEnd ?? shown) : 0
   const pending = hasLoop && loopEnd == null
 
+  // Where the finger last was, for a drag the phone cuts short.
+  const lastAt = useRef<number | null>(null)
+
   const follow = (pageX: number) => {
     const f = fractionAt(pageX, barLeft.current, width)
+    lastAt.current = f
     setDragging(f)
     onDrag?.(f)
     return f
@@ -103,14 +107,22 @@ export function AudioScrubber({
         follow(e.nativeEvent.pageX)
       }}
       onResponderRelease={(e) => {
+        lastAt.current = null
         const f = fractionAt(e.nativeEvent.pageX, barLeft.current, width)
         setDragging(null)
         onDrag?.(null)
         onSeek(f)
       }}
       onResponderTerminate={() => {
+        // The phone took the touch back mid-drag — iOS will, for a system
+        // gesture or for its own reasons. Go where the finger had got to: it
+        // was dragged there to be heard from there, and dropping it looked
+        // like a bar that would not move while the track played.
+        const f = lastAt.current
+        lastAt.current = null
         setDragging(null)
         onDrag?.(null)
+        if (f !== null) onSeek(f)
       }}
       accessibilityRole="adjustable"
       accessibilityLabel="Position in track"
