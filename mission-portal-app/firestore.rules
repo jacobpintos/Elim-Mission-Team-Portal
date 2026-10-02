@@ -273,14 +273,6 @@ service cloud.firestore {
       allow write: if isWorshipOrAdmin();
     }
 
-    // Each person's own notes on chord sheets — song and section notes, keyed
-    // by sheet. Private: only the person who wrote them reads them; nobody
-    // else, admins included, has any business in them. Deleted with the
-    // account (deleteOwnAccount).
-    match /sheetNotes/{uid} {
-      allow read, write: if isSelf(uid);
-    }
-
     match /chordSheets/{id} {
       allow read: if isWorshipOrAdmin() || isGuest();
       allow write: if isWorshipOrAdmin();

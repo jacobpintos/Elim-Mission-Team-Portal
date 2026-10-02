@@ -490,28 +490,6 @@ describe('events', () => {
   })
 })
 
-describe('chord sheet notes', () => {
-  // Private to whoever wrote them — admins included — and guests may keep
-  // their own like anyone who can open a sheet.
-  it('are read and written by their writer', async () => {
-    await assertSucceeds(
-      setDoc(doc(as(WORSHIP), 'sheetNotes', WORSHIP), { cs1: { song: 'Capo 2' } }, { merge: true })
-    )
-    await assertSucceeds(getDoc(doc(as(WORSHIP), 'sheetNotes', WORSHIP)))
-    await assertSucceeds(
-      setDoc(doc(as(GUEST), 'sheetNotes', GUEST), { cs1: { sections: { s1: 'soft' } } })
-    )
-    await assertSucceeds(deleteDoc(doc(as(WORSHIP), 'sheetNotes', WORSHIP)))
-  })
-
-  it('are read and written by no one else, admins included', async () => {
-    await assertFails(getDoc(doc(as(ADMIN), 'sheetNotes', WORSHIP)))
-    await assertFails(getDoc(doc(as(MEMBER), 'sheetNotes', WORSHIP)))
-    await assertFails(setDoc(doc(as(ADMIN), 'sheetNotes', WORSHIP), { cs1: { song: 'x' } }))
-    await assertFails(setDoc(doc(as(GUEST), 'sheetNotes', WORSHIP), { cs1: { song: 'x' } }))
-  })
-})
-
 describe('guests', () => {
   it('reads set lists and chord sheets', () => {
     // The worship tab they were given would render nothing without this.
