@@ -162,6 +162,12 @@ interface ChordSheetViewerProps {
   /** And the line within it to bring into view, counting from 0. */
   startAtLine?: number | null
   /**
+   * Once there, start autoscroll — if the song has a speed of its own saved
+   * from scrolling it before. For a song found by listening: the band is
+   * already playing it.
+   */
+  autoScrollAtStart?: boolean
+  /**
    * The notes the microphone heard while finding this song (SongListener):
    * compared with the sheet's chords to suggest the key it is being played
    * in, if that is clear and not the key already showing.
@@ -182,6 +188,7 @@ export function ChordSheetViewer({
   audio,
   startAtSectionId,
   startAtLine,
+  autoScrollAtStart,
   heardChroma,
 }: ChordSheetViewerProps) {
   const colors = useThemeColors()
@@ -395,11 +402,20 @@ export function ChordSheetViewer({
   }
 
   // Opened at a section, or a line in one: once the sheet has been laid
-  // out, there.
+  // out, there — and scrolling on from there, if asked and the song has a
+  // speed saved. Started first, so the jump is made at once rather than as a
+  // glide the first frame would cut short (autoScroll.scrollTo).
   useEffect(() => {
     if (!sheetKey || !startAtSectionId) return
-    const timer = setTimeout(() => jumpTo(startAtSectionId, startAtLine ?? null), 400)
-    return () => clearTimeout(timer)
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      if (autoScrollAtStart) await autoScroll.startIfSaved()
+      if (!cancelled) jumpTo(startAtSectionId, startAtLine ?? null)
+    }, 400)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetKey, startAtSectionId, startAtLine])
 

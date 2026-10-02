@@ -257,6 +257,9 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
         sheet={viewSheet}
         startAtSectionId={startAt.sectionId}
         startAtLine={startAt.line}
+        // Found by listening (startAt is only set then): the song is already
+        // being played, so it scrolls along at its saved speed, if it has one.
+        autoScrollAtStart
         heardChroma={
           heard && viewSheet && String(viewSheet.id) === heard.sheetId ? heard.chroma : null
         }

@@ -198,6 +198,29 @@ export function useAutoScroll(
     write(y)
   }
 
+  /**
+   * Start, but only for a song that has a speed of its own — one it has been
+   * scrolled at before on this device, rather than the last speed used for
+   * some other song. Says whether it started.
+   */
+  const startIfSaved = async (): Promise<boolean> => {
+    if (!sheetId) return false
+    if (!cachedSpeeds) {
+      try {
+        cachedSpeeds = parseSpeeds(await AsyncStorage.getItem(SPEEDS_KEY))
+      } catch {
+        return false
+      }
+    }
+    const own = cachedSpeeds.bySheet[sheetId]
+    if (own === undefined) return false
+    // At its speed from the first frame, not once the next render catches up.
+    live.current.level = own
+    setLevel(own)
+    run()
+    return true
+  }
+
   const changeSpeed = (delta: number) => {
     const next = clampLevel(level + delta)
     if (next === level) return
@@ -295,6 +318,7 @@ export function useAutoScroll(
     start,
     pause,
     resume: run,
+    startIfSaved,
     stop,
     toggle,
     changeSpeed,
