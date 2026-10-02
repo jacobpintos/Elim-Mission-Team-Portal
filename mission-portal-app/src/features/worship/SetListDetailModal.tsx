@@ -8,7 +8,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { ChordSheetViewer } from './ChordSheetViewer'
 import { keyLabel } from '@/lib/nashvilleNumbers'
-import type { SetList } from '@/types/worship'
+import type { SetList, SetListSong } from '@/types/worship'
 import type { Task } from '@/types/events'
 import type { ChordSheet } from '@/types/chordSheet'
 import { openExternalUrl } from '@/lib/externalUrl'
@@ -34,9 +34,43 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
   // The track of the song the sheet was opened from, so the sheet can carry
   // its controls.
   const [viewSheetAudio, setViewSheetAudio] = useState<{ url: string; name?: string } | null>(null)
+  // Which song of the set the open sheet is, for going on to the next.
+  const [viewSongId, setViewSongId] = useState<string | null>(null)
+  // Reached from the song before or after, rather than from the list.
+  const [stepped, setStepped] = useState(false)
   const [playingVideo, setPlayingVideo] = useState<{ url: string; title: string } | null>(null)
 
   if (!setList) return null
+
+  const sheetFor = (song: SetListSong) =>
+    song.chordSheetId == null
+      ? undefined
+      : chordSheets.find((c) => String(c.id) === String(song.chordSheetId))
+
+  // The songs that have a sheet to show, in the set's order: what a swipe
+  // goes through. A song with none (a reading, a moment of prayer) is passed.
+  const withSheets = setList.songs.filter((song) => sheetFor(song))
+
+  const openSong = (song: SetListSong, fromNeighbour = false) => {
+    const cs = sheetFor(song)
+    if (!cs) return
+    setStepped(fromNeighbour)
+    setViewSheet(cs)
+    setViewSheetKey(song.key ?? '')
+    setViewSheetAudio(song.audioUrl ? { url: song.audioUrl, name: song.audioName } : null)
+    setViewSongId(song.id)
+  }
+
+  const at = withSheets.findIndex((song) => song.id === viewSongId)
+  const setNav =
+    at >= 0 && withSheets.length > 1
+      ? {
+          position: `${at + 1} / ${withSheets.length}`,
+          onPrev: at > 0 ? () => openSong(withSheets[at - 1], true) : undefined,
+          onNext: at < withSheets.length - 1 ? () => openSong(withSheets[at + 1], true) : undefined,
+          stepped,
+        }
+      : undefined
 
   const handleAcknowledge = async () => {
     if (!ackTask) return
@@ -66,9 +100,11 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
           setViewSheet(null)
           setViewSheetKey('')
           setViewSheetAudio(null)
+          setViewSongId(null)
         }}
         initialKey={viewSheetKey}
         audio={viewSheetAudio}
+        setNav={setNav}
       />
       <FullScreenOverlay
         visible={!!setList}
@@ -164,9 +200,7 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
 
                       {song.chordSheetId != null
                         ? (() => {
-                            const cs = chordSheets.find(
-                              (c) => String(c.id) === String(song.chordSheetId)
-                            )
+                            const cs = sheetFor(song)
                             // A button the size of a thumb. It was the title
                             // alone, a 12pt line of text about 16pt tall in a
                             // scrolling list: easy to miss, and a finger that
@@ -176,15 +210,7 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
                             // three goes.
                             return cs ? (
                               <Pressable
-                                onPress={() => {
-                                  setViewSheet(cs)
-                                  setViewSheetKey(song.key ?? '')
-                                  setViewSheetAudio(
-                                    song.audioUrl
-                                      ? { url: song.audioUrl, name: song.audioName }
-                                      : null
-                                  )
-                                }}
+                                onPress={() => openSong(song)}
                                 accessibilityRole="button"
                                 accessibilityLabel={`Open chord sheet: ${cs.title}`}
                               >

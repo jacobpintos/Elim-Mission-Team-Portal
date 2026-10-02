@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
+  type GestureResponderEvent,
   type ViewStyle,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -98,6 +99,26 @@ function rememberControlsHidden(hidden: boolean) {
  * a 36-point floor for every word, spread a line half as wide again as its
  * text and wrapped most lines of a verse in two on a phone.
  */
+/** A swipe to the next song: this far sideways, this quickly. */
+const SWIPE_MIN = 70
+const SWIPE_MAX_MS = 800
+
+/**
+ * Where a finger is. On the web the event is the browser's own, which keeps
+ * the position on each touch rather than on the event itself.
+ */
+function touchPoint(e: GestureResponderEvent): { x: number; y: number } {
+  const n = e.nativeEvent
+  const t = n.touches?.[0] ?? n.changedTouches?.[0]
+  return { x: t?.pageX ?? n.pageX, y: t?.pageY ?? n.pageY }
+}
+
+/** Whether the page is pinched in: a sideways drag then moves around it. */
+function isZoomedIn(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false
+  return (window.visualViewport?.scale ?? 1) > 1.05
+}
+
 const CHAR_EM = 0.6
 
 /**
@@ -180,6 +201,21 @@ interface ChordSheetViewerProps {
    */
   openInKey?: { key: string; minor: boolean } | null
   /**
+   * Opened from a set list: the songs either side, reached by swiping the
+   * sheet sideways or with ‹ › in the header, and where this one is in the
+   * set ("2 / 5"). Left out, the sheet stands alone.
+   */
+  setNav?: {
+    position: string
+    onPrev?: () => void
+    onNext?: () => void
+    /**
+     * Arrived at from the song before or after: shown at once rather than
+     * faded in, so the set list behind never shows through between songs.
+     */
+    stepped?: boolean
+  }
+  /**
    * The reference track of the song this sheet was opened from, if it has one.
    * Its controls sit under the sheet and drive the same player as the song's
    * card on the set list — see TrackBar.
@@ -197,6 +233,7 @@ export function ChordSheetViewer({
   autoScrollAtStart,
   heardChroma,
   openInKey,
+  setNav,
 }: ChordSheetViewerProps) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
@@ -452,6 +489,75 @@ export function ChordSheetViewer({
   // The heard sound whose key suggestion was waved away or taken.
   const [keyHintDoneFor, setKeyHintDoneFor] = useState<Chroma | null>(null)
 
+  /**
+   * A sideways swipe across the sheet: the next song in the set, or the one
+   * before. Only a clear one — one finger, mostly sideways, far enough and
+   * quick enough — so a scroll that drifts, a pinch, or a tap that pauses
+   * autoscroll is never taken for one. Not while the page is zoomed in,
+   * when a sideways drag is the way around it.
+   */
+  const swipe = useRef<{ x: number; y: number; t: number; endX: number; endY: number } | null>(null)
+  const swipeProps = setNav
+    ? {
+        onTouchStart: (e: GestureResponderEvent) => {
+          const n = e.nativeEvent
+          const { x, y } = touchPoint(e)
+          swipe.current =
+            (n.touches?.length ?? 1) === 1 ? { x, y, t: Date.now(), endX: x, endY: y } : null
+        },
+        onTouchMove: (e: GestureResponderEvent) => {
+          if (!swipe.current) return
+          if ((e.nativeEvent.touches?.length ?? 1) > 1) {
+            swipe.current = null
+            return
+          }
+          const { x, y } = touchPoint(e)
+          swipe.current.endX = x
+          swipe.current.endY = y
+        },
+        onTouchEnd: () => {
+          const s = swipe.current
+          swipe.current = null
+          if (!s || isZoomedIn()) return
+          const dx = s.endX - s.x
+          const dy = s.endY - s.y
+          if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < 2 * Math.abs(dy)) return
+          if (Date.now() - s.t > SWIPE_MAX_MS) return
+          if (dx < 0) setNav.onNext?.()
+          else setNav.onPrev?.()
+        },
+        onTouchCancel: () => {
+          swipe.current = null
+        },
+      }
+    : null
+
+  // And the arrow keys, on a keyboard or a page-turner pedal that sends them.
+  // A browser that goes back a page on a sideways swipe (Chrome) is told not
+  // to while the swipe means the next song.
+  const inSet = Boolean(setNav)
+  const navRef = useRef(setNav)
+  useEffect(() => {
+    navRef.current = setNav
+  })
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !sheetKey || !inSet) return
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return
+      if (e.key === 'ArrowRight') navRef.current?.onNext?.()
+      else if (e.key === 'ArrowLeft') navRef.current?.onPrev?.()
+    }
+    window.addEventListener('keydown', onKey)
+    const root = document.documentElement.style
+    const before = root.overscrollBehaviorX
+    root.overscrollBehaviorX = 'none'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      root.overscrollBehaviorX = before
+    }
+  }, [sheetKey, inSet])
+
   if (!sheet) return null
 
   const heardKey =
@@ -614,7 +720,12 @@ export function ChordSheetViewer({
     ) : null
 
   return (
-    <FullScreenOverlay visible animationType="fade" transparent onRequestClose={onClose}>
+    <FullScreenOverlay
+      visible
+      animationType={setNav?.stepped ? 'none' : 'fade'}
+      transparent
+      onRequestClose={onClose}
+    >
       {/* Inset the area the card is centred in, rather than the card itself.
           Centring alone does not clear the status bar here: at 94% of the
           screen height the margin above the card is around twenty-six points
@@ -697,6 +808,43 @@ export function ChordSheetViewer({
                 ) : null}
               </YStack>
             )}
+            {setNav ? (
+              <XStack alignItems="center">
+                <Pressable
+                  onPress={setNav.onPrev}
+                  disabled={!setNav.onPrev}
+                  style={styles.headerBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous song"
+                >
+                  <Text
+                    color={setNav.onPrev ? colors.primary : colors.border}
+                    fontSize="$6"
+                    fontWeight="700"
+                  >
+                    ‹
+                  </Text>
+                </Pressable>
+                <Text color={colors.textMuted} fontSize="$2">
+                  {setNav.position}
+                </Text>
+                <Pressable
+                  onPress={setNav.onNext}
+                  disabled={!setNav.onNext}
+                  style={styles.headerBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Next song"
+                >
+                  <Text
+                    color={setNav.onNext ? colors.primary : colors.border}
+                    fontSize="$6"
+                    fontWeight="700"
+                  >
+                    ›
+                  </Text>
+                </Pressable>
+              </XStack>
+            ) : null}
             <Pressable
               onPress={toggleControls}
               style={styles.headerBtn}
@@ -933,7 +1081,7 @@ export function ChordSheetViewer({
           {chipsInHeader ? null : jumpBar}
 
           {/* Content, with the autoscroll control over its corner. */}
-          <View style={styles.sheetArea}>
+          <View style={styles.sheetArea} {...swipeProps}>
             <ScrollView
               ref={scrollRef}
               style={{ flexShrink: 1 }}
