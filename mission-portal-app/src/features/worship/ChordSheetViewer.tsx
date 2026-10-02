@@ -31,6 +31,7 @@ import {
   getPrevMatchingSection,
 } from './chordSheetFormat'
 import { buildChordSheetPdfBlob } from './chordSheetPdf'
+import { songProfile, suggestKey, type Chroma } from '@/lib/keyDetect'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useCoverViewport } from '@/lib/useCoverViewport'
 import { resetPageZoom } from '@/lib/resetPageZoom'
@@ -161,6 +162,12 @@ interface ChordSheetViewerProps {
   /** And the line within it to bring into view, counting from 0. */
   startAtLine?: number | null
   /**
+   * The notes the microphone heard while finding this song (SongListener):
+   * compared with the sheet's chords to suggest the key it is being played
+   * in, if that is clear and not the key already showing.
+   */
+  heardChroma?: Chroma | null
+  /**
    * The reference track of the song this sheet was opened from, if it has one.
    * Its controls sit under the sheet and drive the same player as the song's
    * card on the set list — see TrackBar.
@@ -175,6 +182,7 @@ export function ChordSheetViewer({
   audio,
   startAtSectionId,
   startAtLine,
+  heardChroma,
 }: ChordSheetViewerProps) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
@@ -405,8 +413,23 @@ export function ChordSheetViewer({
   })
   const [chordsOnly, setChordsOnly] = useState(false)
   const [showKeyDropdown, setShowKeyDropdown] = useState(false)
+  // The heard sound whose key suggestion was waved away or taken.
+  const [keyHintDoneFor, setKeyHintDoneFor] = useState<Chroma | null>(null)
 
   if (!sheet) return null
+
+  const heardKey =
+    heardChroma && heardChroma !== keyHintDoneFor
+      ? suggestKey(
+          heardChroma,
+          songProfile(
+            sheet.sections.flatMap((s) => (s.chordTokens ?? []).flat()),
+            isMinor
+          )
+        )
+      : null
+  const heardKeyName = heardKey ? NNS_KEYS[heardKey.keyIdx] : null
+  const showKeyHint = heardKeyName !== null && heardKeyName !== selectedKey
 
   const keyOptions: string[] = ['', ...NNS_KEYS]
   const keyIdx =
@@ -825,6 +848,52 @@ export function ChordSheetViewer({
               </Pressable>
             </XStack>
           )}
+
+          {/* The key the song sounds like, from listening — offered, not applied. */}
+          {showKeyHint ? (
+            <XStack
+              alignItems="center"
+              gap="$2"
+              backgroundColor={colors.primary + '18'}
+              borderRadius="$3"
+              paddingLeft="$3"
+            >
+              <Text color={colors.text} fontSize="$3" flex={1}>
+                🎤 Sounds like {heardKeyName}
+                {isMinor ? 'm' : ''}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  setKeyHintDoneFor(heardChroma ?? null)
+                  handleSelectKey(heardKeyName)
+                }}
+                accessibilityRole="button"
+                style={styles.touch}
+              >
+                <XStack
+                  backgroundColor={colors.primary}
+                  borderRadius={99}
+                  paddingHorizontal="$3"
+                  alignItems="center"
+                  flexGrow={1}
+                >
+                  <Text color="white" fontSize="$2" fontWeight="700">
+                    Switch to {heardKeyName}
+                  </Text>
+                </XStack>
+              </Pressable>
+              <Pressable
+                onPress={() => setKeyHintDoneFor(heardChroma ?? null)}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss key suggestion"
+                style={[styles.touch, styles.hintClose]}
+              >
+                <Text color={colors.textMuted} fontSize="$3">
+                  ✕
+                </Text>
+              </Pressable>
+            </XStack>
+          ) : null}
 
           {chipsInHeader ? null : jumpBar}
 
@@ -1283,6 +1352,10 @@ const styles = StyleSheet.create({
   touch: {
     minHeight: 44,
     justifyContent: 'center',
+  },
+  hintClose: {
+    minWidth: 44,
+    alignItems: 'center',
   },
   /** The chip strip on its own line: only as tall as the chips. */
   jumpRow: {

@@ -7,6 +7,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { ChordSheetEditor } from './ChordSheetEditor'
 import { SongListener } from './SongListener'
 import { ChordSheetViewer } from './ChordSheetViewer'
+import type { Chroma } from '@/lib/keyDetect'
 import type { ChordSheet } from '@/types/chordSheet'
 
 interface ChordSheetsTabProps {
@@ -30,6 +31,8 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
     sectionId: null,
     line: null,
   })
+  // The notes heard while finding that song, for suggesting its key.
+  const [heard, setHeard] = useState<{ sheetId: string; chroma: Chroma } | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null)
 
   const filtered = [...chordSheets]
@@ -108,8 +111,10 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
           sheets={chordSheets}
           onFound={(sheet, sectionId, line) => {
             setStartAt({ sectionId, line })
+            setHeard(null)
             setViewSheet(sheet)
           }}
+          onHeard={(sheetId, chroma) => setHeard({ sheetId, chroma })}
         />
         {readOnly ? null : (
           <Pressable onPress={openNew} style={[styles.newBtn, { backgroundColor: colors.primary }]}>
@@ -144,7 +149,13 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
                 ]}
               >
                 {/* Content area — tappable to view */}
-                <Pressable style={styles.cardContent} onPress={() => setViewSheet(sheet)}>
+                <Pressable
+                  style={styles.cardContent}
+                  onPress={() => {
+                    setHeard(null)
+                    setViewSheet(sheet)
+                  }}
+                >
                   <Text color={colors.text} fontWeight="700" fontSize={16} numberOfLines={1}>
                     {sheet.title}
                   </Text>
@@ -246,9 +257,13 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
         sheet={viewSheet}
         startAtSectionId={startAt.sectionId}
         startAtLine={startAt.line}
+        heardChroma={
+          heard && viewSheet && String(viewSheet.id) === heard.sheetId ? heard.chroma : null
+        }
         onClose={() => {
           setViewSheet(null)
           setStartAt({ sectionId: null, line: null })
+          setHeard(null)
         }}
       />
     </YStack>

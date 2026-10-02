@@ -2,7 +2,7 @@ import type { ExpoConfig, ConfigContext } from 'expo/config'
 
 /** Why the app uses the microphone: shown when the phone asks. */
 const MICROPHONE_REASON =
-  'Mission Portal listens to a song being sung or played to find its chord sheet. Nothing is recorded or kept.'
+  'Mission Portal listens to a song being sung or played to find its chord sheet and the key it is in. The sound stays on your phone and is deleted as soon as the song is found.'
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,

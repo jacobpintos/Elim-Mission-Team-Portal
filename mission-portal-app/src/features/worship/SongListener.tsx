@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text, XStack, YStack } from 'tamagui'
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
+import { File } from 'expo-file-system'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useThemeColors } from '@/theme/useThemeColors'
 import {
@@ -11,12 +12,15 @@ import {
   rankSongs,
   type LyricMatch,
 } from '@/lib/lyricMatch'
+import { chromagram, parseWav, type Chroma } from '@/lib/keyDetect'
 import type { ChordSheet } from '@/types/chordSheet'
 
 /** How long to listen before giving up. */
 const LISTEN_MS = 45_000
 /** Only the most recent words are matched: the song being sung now. */
 const RECENT_WORDS = 40
+/** Less sound than this says too little about the key to guess it. */
+const MIN_KEY_SECONDS = 4
 
 /**
  * Find a song by listening to it.
@@ -30,14 +34,22 @@ const RECENT_WORDS = 40
  * listening stops and its sheet opens at the line that was being sung.
  *
  * Until then, the songs it might be are shown to be picked by hand. It stops
- * on its own after 45 seconds, and nothing it hears is kept.
+ * on its own after 45 seconds.
+ *
+ * The sound itself is kept in a file while listening, only so that once the
+ * song is known, the notes heard can be compared with its chords to suggest
+ * the key it is being played in (lib/keyDetect, via `onHeard`). The file is
+ * deleted as soon as it has been read, song found or not.
  */
 export function SongListener({
   sheets,
   onFound,
+  onHeard,
 }: {
   sheets: ChordSheet[]
   onFound: (sheet: ChordSheet, sectionId: string | null, line: number | null) => void
+  /** The notes heard while finding `sheetId`, once the recording is read. */
+  onHeard?: (sheetId: string, heard: Chroma) => void
 }) {
   const colors = useThemeColors()
   const [open, setOpen] = useState(false)
@@ -48,6 +60,8 @@ export function SongListener({
   // What has been heard and settled, and what is still being made out.
   const settled = useRef('')
   const done = useRef(false)
+  // The song found, whose key the recording is then read for.
+  const found = useRef<string | null>(null)
 
   const index = useMemo(
     () =>
@@ -64,7 +78,9 @@ export function SongListener({
   const finish = (match: LyricMatch) => {
     if (done.current) return
     done.current = true
-    ExpoSpeechRecognitionModule.abort()
+    found.current = match.id
+    // Stopped, not aborted, so the recording is finished and handed over.
+    ExpoSpeechRecognitionModule.stop()
     setListening(false)
     setOpen(false)
     const sheet = sheets.find((s) => String(s.id) === match.id)
@@ -92,6 +108,27 @@ export function SongListener({
       hear(`${settled.current} ${text}`)
     }
   })
+  useSpeechRecognitionEvent('audioend', (e) => {
+    if (!e.uri) return
+    const sheetId = found.current
+    found.current = null
+    const file = new File(e.uri)
+    const read = async () => {
+      if (!sheetId || !onHeard) return
+      const wav = parseWav(await file.bytes())
+      if (!wav || wav.samples.length < wav.sampleRate * MIN_KEY_SECONDS) return
+      onHeard(sheetId, chromagram(wav.samples, wav.sampleRate))
+    }
+    read()
+      .catch(() => {})
+      .finally(() => {
+        try {
+          if (file.exists) file.delete()
+        } catch {
+          // Left in the cache, which the system clears.
+        }
+      })
+  })
   useSpeechRecognitionEvent('error', (e) => {
     setListening(false)
     if (e.error === 'aborted') return
@@ -112,6 +149,7 @@ export function SongListener({
     setGuesses([])
     settled.current = ''
     done.current = false
+    found.current = null
     const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
     if (!permission.granted) {
       setProblem(
@@ -128,6 +166,13 @@ export function SongListener({
       // is otherwise as likely heard as "rich".
       contextualStrings: hintPhrases(index),
       iosTaskHint: 'dictation',
+      // The sound, for the key once the song is found; 16 kHz is plenty for
+      // notes up to the top of a voice.
+      recordingOptions: {
+        persist: true,
+        outputSampleRate: 16000,
+        outputEncoding: 'pcmFormatInt16',
+      },
       // Keep whatever else is playing — a reference track in the app, or a
       // song in another — playing, so it can be heard.
       iosCategory: {
