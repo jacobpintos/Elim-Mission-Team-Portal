@@ -197,14 +197,28 @@ function unblur(words: string[]): string {
     if (t.length === 2 && t[1] === 'off') return 'f'
     r = t.slice(t[1] === 'of' ? 2 : 1).join(' ')
     if (r === 'the') return 'd'
-  } else if (/^k(?:ey|ay|ee|i)?(?:off|of|o|f|v)$/.test(t[0]) && t.length > 1) {
-    r = t.slice(1).join(' ')
+  } else if (t.length > 1 && soundsLikeKeyOf(t[0])) {
+    // Whatever "key of" came out as, by its sound: "kf", "Kyiv", "Kiev",
+    // "Q of" (with its "of" after it), "keyoff".
+    r = t.slice(t[1] === 'of' || t[1] === 'off' ? 2 : 1).join(' ')
     if (r === 'the') return 'd'
   } else {
     const glued = t[0].match(/^k(?:ey|ay|ee|i)?(?:off|of|o|f|v)?([a-g].*)$/)
     if (glued) r = [glued[1], ...t.slice(1)].join(' ')
   }
   return r
+}
+
+/**
+ * Whether a word is "key" or "key of" by its sound: k, with an f or v
+ * after it and nothing else heard (soundOf drops the vowels). "Kyiv",
+ * "Kiev", "kf", "keyof", "q" all are; so is "cave" — harmless, as it only
+ * counts beside a title and before a key.
+ */
+function soundsLikeKeyOf(word: string): boolean {
+  // A note's own name is never it: "C sharp" is a key, not "key sharp".
+  if (word in LETTERS) return false
+  return ['k', 'kf', 'kv'].includes(soundOf(word))
 }
 
 /**
