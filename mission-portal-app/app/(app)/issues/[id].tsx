@@ -13,6 +13,7 @@ import { isAdmin } from '@/lib/roles'
 import { FD } from '@/lib/format'
 import type { IssueCategory, IssueStatus } from '@/types/operations'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { WithDictation } from '@/components/ui/Dictation'
 
 const CATEGORY_COLORS: Record<IssueCategory, string> = {
   equipment: '#e67e22',
@@ -252,22 +253,29 @@ export default function IssueDetail() {
                     {i === 0 ? '' : ` — ${label}`}
                     {i === 0 ? ` — ${label}` : ''}
                   </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        color: colors.text,
-                        borderColor: colors.border,
-                        backgroundColor: colors.background,
-                      },
-                    ]}
+                  <WithDictation
                     value={whys[i]}
                     onChangeText={(v) =>
                       setLocalWhys((w) => (w ?? issueWhys).map((x, j) => (j === i ? v : x)))
                     }
-                    placeholder={`Why ${i + 1}…`}
-                    placeholderTextColor={colors.textMuted}
-                  />
+                  >
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.background,
+                        },
+                      ]}
+                      value={whys[i]}
+                      onChangeText={(v) =>
+                        setLocalWhys((w) => (w ?? issueWhys).map((x, j) => (j === i ? v : x)))
+                      }
+                      placeholder={`Why ${i + 1}…`}
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </WithDictation>
                 </YStack>
               ))}
 
@@ -275,22 +283,24 @@ export default function IssueDetail() {
                 <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                   ROOT CAUSE SUMMARY
                 </Text>
-                <TextInput
-                  style={[
-                    styles.textarea,
-                    {
-                      color: colors.text,
-                      borderColor: colors.border,
-                      backgroundColor: colors.background,
-                    },
-                  ]}
-                  value={rootCause}
-                  onChangeText={setLocalRootCause}
-                  placeholder="State the root cause identified through the 5 Whys analysis"
-                  placeholderTextColor={colors.textMuted}
-                  multiline
-                  numberOfLines={3}
-                />
+                <WithDictation value={rootCause} onChangeText={setLocalRootCause} multiline>
+                  <TextInput
+                    style={[
+                      styles.textarea,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
+                    value={rootCause}
+                    onChangeText={setLocalRootCause}
+                    placeholder="State the root cause identified through the 5 Whys analysis"
+                    placeholderTextColor={colors.textMuted}
+                    multiline
+                    numberOfLines={3}
+                  />
+                </WithDictation>
               </YStack>
 
               <Pressable onPress={handleSaveRootCause} disabled={savingWhys || !rootCause.trim()}>
@@ -397,22 +407,24 @@ export default function IssueDetail() {
                   Add Corrective Action
                 </Text>
 
-                <TextInput
-                  style={[
-                    styles.textarea,
-                    {
-                      color: colors.text,
-                      borderColor: colors.border,
-                      backgroundColor: colors.background,
-                    },
-                  ]}
-                  value={caDesc}
-                  onChangeText={setCaDesc}
-                  placeholder="Describe the corrective action"
-                  placeholderTextColor={colors.textMuted}
-                  multiline
-                  numberOfLines={2}
-                />
+                <WithDictation value={caDesc} onChangeText={setCaDesc} multiline>
+                  <TextInput
+                    style={[
+                      styles.textarea,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
+                    value={caDesc}
+                    onChangeText={setCaDesc}
+                    placeholder="Describe the corrective action"
+                    placeholderTextColor={colors.textMuted}
+                    multiline
+                    numberOfLines={2}
+                  />
+                </WithDictation>
 
                 <Pressable onPress={() => setPickerOpen(true)}>
                   <XStack

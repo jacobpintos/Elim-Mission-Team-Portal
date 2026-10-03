@@ -28,6 +28,7 @@ import type { PlanningItem, PlanningItemType, DrawPoint } from '@/types/operatio
 import { openExternalUrl } from '@/lib/externalUrl'
 import { MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, clampZoom, zoomAbout, windowToBoard } from './canvasZoom'
 import { connectorExists, idsToDeleteWith, connectorSegment, segmentMidpoint } from './connectors'
+import { WithDictation } from '@/components/ui/Dictation'
 
 const CANVAS_W = 4000
 const CANVAS_H = 4000
@@ -1789,24 +1790,30 @@ export function PlanningBoardCanvas({
                     : `Add ${createModal.type}`}
               </Text>
 
-              <TextInput
-                placeholder="Content"
-                placeholderTextColor={colors.textMuted}
+              <WithDictation
                 value={createContent}
                 onChangeText={setCreateContent}
-                style={[
-                  styles.input,
-                  {
-                    borderColor: colors.border,
-                    color: colors.text,
-                    backgroundColor: colors.background,
-                  },
-                ]}
                 multiline={createModal.type === 'note' || createModal.type === 'textbox'}
-                numberOfLines={
-                  createModal.type === 'note' || createModal.type === 'textbox' ? 4 : 1
-                }
-              />
+              >
+                <TextInput
+                  placeholder="Content"
+                  placeholderTextColor={colors.textMuted}
+                  value={createContent}
+                  onChangeText={setCreateContent}
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: colors.border,
+                      color: colors.text,
+                      backgroundColor: colors.background,
+                    },
+                  ]}
+                  multiline={createModal.type === 'note' || createModal.type === 'textbox'}
+                  numberOfLines={
+                    createModal.type === 'note' || createModal.type === 'textbox' ? 4 : 1
+                  }
+                />
+              </WithDictation>
 
               {createModal.type === 'link' && (
                 <TextInput

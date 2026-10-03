@@ -13,6 +13,7 @@ import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import type { SecurityReport } from '@/types/security'
+import { WithDictation } from '@/components/ui/Dictation'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 function formatTs(ts: unknown): string {
@@ -255,23 +256,30 @@ export function ReportDetailModal({
                       <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                         RESOLUTION NOTES *
                       </Text>
-                      <TextInput
-                        style={[
-                          styles.textarea,
-                          {
-                            color: colors.text,
-                            borderColor: colors.border,
-                            backgroundColor: colors.background,
-                          },
-                        ]}
+                      <WithDictation
                         value={resolution}
                         onChangeText={setResolution}
-                        placeholder="Describe what was done to address the concern…"
-                        placeholderTextColor={colors.textMuted}
                         multiline
-                        numberOfLines={4}
-                        autoFocus
-                      />
+                        onDevice
+                      >
+                        <TextInput
+                          style={[
+                            styles.textarea,
+                            {
+                              color: colors.text,
+                              borderColor: colors.border,
+                              backgroundColor: colors.background,
+                            },
+                          ]}
+                          value={resolution}
+                          onChangeText={setResolution}
+                          placeholder="Describe what was done to address the concern…"
+                          placeholderTextColor={colors.textMuted}
+                          multiline
+                          numberOfLines={4}
+                          autoFocus
+                        />
+                      </WithDictation>
                       <XStack gap="$2">
                         <Pressable
                           onPress={() => {

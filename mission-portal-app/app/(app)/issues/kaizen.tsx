@@ -15,6 +15,7 @@ import { sameId } from '@/lib/ids'
 import type { KaizenCard, KaizenStatus, KaizenActionTask } from '@/types/operations'
 import type { UserProfile } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { WithDictation } from '@/components/ui/Dictation'
 
 const COLUMNS: { key: KaizenStatus; label: string; color: string }[] = [
   { key: 'idea', label: 'Idea', color: '#2980b9' },
@@ -656,22 +657,24 @@ export default function Kaizen() {
                   (optional)
                 </Text>
               </Text>
-              <TextInput
-                style={[
-                  styles.textarea,
-                  {
-                    color: colors.text,
-                    borderColor: colors.border,
-                    backgroundColor: colors.background,
-                  },
-                ]}
-                value={ideaDesc}
-                onChangeText={setIdeaDesc}
-                placeholder="Describe the idea and its benefits"
-                placeholderTextColor={colors.textMuted}
-                multiline
-                numberOfLines={4}
-              />
+              <WithDictation value={ideaDesc} onChangeText={setIdeaDesc} multiline>
+                <TextInput
+                  style={[
+                    styles.textarea,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.background,
+                    },
+                  ]}
+                  value={ideaDesc}
+                  onChangeText={setIdeaDesc}
+                  placeholder="Describe the idea and its benefits"
+                  placeholderTextColor={colors.textMuted}
+                  multiline
+                  numberOfLines={4}
+                />
+              </WithDictation>
             </YStack>
 
             <Pressable onPress={handleAddIdea} disabled={submitting || !ideaTitle.trim()}>
@@ -730,22 +733,24 @@ export default function Kaizen() {
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     WHAT WILL BE DONE
                   </Text>
-                  <TextInput
-                    style={[
-                      styles.textarea,
-                      {
-                        color: colors.text,
-                        borderColor: colors.border,
-                        backgroundColor: colors.background,
-                      },
-                    ]}
-                    value={planDesc}
-                    onChangeText={setPlanDesc}
-                    placeholder="Describe the improvement action"
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                    numberOfLines={3}
-                  />
+                  <WithDictation value={planDesc} onChangeText={setPlanDesc} multiline>
+                    <TextInput
+                      style={[
+                        styles.textarea,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.background,
+                        },
+                      ]}
+                      value={planDesc}
+                      onChangeText={setPlanDesc}
+                      placeholder="Describe the improvement action"
+                      placeholderTextColor={colors.textMuted}
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </WithDictation>
                 </YStack>
 
                 <YStack gap="$2">
@@ -782,22 +787,28 @@ export default function Kaizen() {
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     VERIFICATION METHOD
                   </Text>
-                  <TextInput
-                    style={[
-                      styles.textarea,
-                      {
-                        color: colors.text,
-                        borderColor: colors.border,
-                        backgroundColor: colors.background,
-                      },
-                    ]}
+                  <WithDictation
                     value={planVerifMethod}
                     onChangeText={setPlanVerifMethod}
-                    placeholder="How will the improvement be verified?"
-                    placeholderTextColor={colors.textMuted}
                     multiline
-                    numberOfLines={2}
-                  />
+                  >
+                    <TextInput
+                      style={[
+                        styles.textarea,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.background,
+                        },
+                      ]}
+                      value={planVerifMethod}
+                      onChangeText={setPlanVerifMethod}
+                      placeholder="How will the improvement be verified?"
+                      placeholderTextColor={colors.textMuted}
+                      multiline
+                      numberOfLines={2}
+                    />
+                  </WithDictation>
                 </YStack>
 
                 <YStack gap="$1">

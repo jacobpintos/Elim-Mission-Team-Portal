@@ -14,9 +14,13 @@ import {
 import type { Chroma } from '@/lib/keyDetect'
 import { parseSongRequest, type SongRequest } from '@/lib/songRequest'
 import { readHeardAudio } from './heardAudio'
+import { claimSpeech, ownsSpeech, releaseSpeech } from '@/lib/speechOwner'
 import { shazam, type ShazamHit } from '@/lib/shazam'
 import { findByTitle } from '@/lib/titleMatch'
 import type { ChordSheet } from '@/types/chordSheet'
+
+/** This listener's claim on the phone's speech recognition (lib/speechOwner). */
+const SPEECH_ID = 'song-listener'
 
 /** How long to listen before giving up. */
 const LISTEN_MS = 45_000
@@ -175,10 +179,19 @@ export function SongListener({
     if (match) finish(match)
   }
 
-  useSpeechRecognitionEvent('start', () => setListening(true))
-  useSpeechRecognitionEvent('end', () => setListening(false))
+  // Only while listening for a song: the recogniser's events also carry
+  // dictation into text fields (components/ui/Dictation), which is not a
+  // song to find.
+  useSpeechRecognitionEvent('start', () => {
+    if (ownsSpeech(SPEECH_ID)) setListening(true)
+  })
+  useSpeechRecognitionEvent('end', () => {
+    if (!ownsSpeech(SPEECH_ID)) return
+    releaseSpeech(SPEECH_ID)
+    setListening(false)
+  })
   useSpeechRecognitionEvent('result', (e) => {
-    if (done.current) return
+    if (done.current || !ownsSpeech(SPEECH_ID)) return
     const text = e.results[0]?.transcript ?? ''
     if (e.isFinal) {
       settled.current = `${settled.current} ${text}`
@@ -196,6 +209,8 @@ export function SongListener({
     })
   })
   useSpeechRecognitionEvent('error', (e) => {
+    if (!ownsSpeech(SPEECH_ID)) return
+    releaseSpeech(SPEECH_ID)
     setListening(false)
     if (e.error === 'aborted') return
     setProblem(
@@ -268,6 +283,7 @@ export function SongListener({
   }
 
   const listenForWords = () => {
+    claimSpeech(SPEECH_ID)
     ExpoSpeechRecognitionModule.start({
       lang: 'en-US',
       interimResults: true,
@@ -329,7 +345,10 @@ export function SongListener({
       shazam?.cancel()
       clearRequest()
       clearShazamTurn()
-      ExpoSpeechRecognitionModule.abort()
+      if (ownsSpeech(SPEECH_ID)) {
+        releaseSpeech(SPEECH_ID)
+        ExpoSpeechRecognitionModule.abort()
+      }
     },
     []
   )

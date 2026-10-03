@@ -12,6 +12,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { isPublic } from '@/lib/roles'
 import type { IssueCategory, IssueStatus } from '@/types/operations'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { WithDictation } from '@/components/ui/Dictation'
 
 const CATEGORY_COLORS: Record<IssueCategory, string> = {
   equipment: '#e67e22',
@@ -322,22 +323,24 @@ export default function IssuesIndex() {
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     DESCRIPTION
                   </Text>
-                  <TextInput
-                    style={[
-                      styles.textarea,
-                      {
-                        color: colors.text,
-                        borderColor: colors.border,
-                        backgroundColor: colors.background,
-                      },
-                    ]}
-                    value={rDescription}
-                    onChangeText={setRDescription}
-                    placeholder="Describe the issue in detail"
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                    numberOfLines={4}
-                  />
+                  <WithDictation value={rDescription} onChangeText={setRDescription} multiline>
+                    <TextInput
+                      style={[
+                        styles.textarea,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.background,
+                        },
+                      ]}
+                      value={rDescription}
+                      onChangeText={setRDescription}
+                      placeholder="Describe the issue in detail"
+                      placeholderTextColor={colors.textMuted}
+                      multiline
+                      numberOfLines={4}
+                    />
+                  </WithDictation>
                 </YStack>
 
                 <YStack gap="$1">
@@ -347,22 +350,24 @@ export default function IssuesIndex() {
                       (optional)
                     </Text>
                   </Text>
-                  <TextInput
-                    style={[
-                      styles.textarea,
-                      {
-                        color: colors.text,
-                        borderColor: colors.border,
-                        backgroundColor: colors.background,
-                      },
-                    ]}
-                    value={rSuggested}
-                    onChangeText={setRSuggested}
-                    placeholder="What do you think should be done?"
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                    numberOfLines={3}
-                  />
+                  <WithDictation value={rSuggested} onChangeText={setRSuggested} multiline>
+                    <TextInput
+                      style={[
+                        styles.textarea,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.background,
+                        },
+                      ]}
+                      value={rSuggested}
+                      onChangeText={setRSuggested}
+                      placeholder="What do you think should be done?"
+                      placeholderTextColor={colors.textMuted}
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </WithDictation>
                 </YStack>
 
                 <Pressable

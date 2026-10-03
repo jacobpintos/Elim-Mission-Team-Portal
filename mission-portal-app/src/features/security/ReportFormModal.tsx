@@ -13,6 +13,7 @@ import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { uriToBlob } from '@/lib/uriToBlob'
+import { WithDictation } from '@/components/ui/Dictation'
 
 export interface ReportPhoto {
   /** A web `File` or, on native, a Blob read back off the picked file's URI. */
@@ -159,64 +160,75 @@ export function ReportFormModal({ visible, onClose, onSubmit }: ReportFormModalP
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     DESCRIPTION *
                   </Text>
-                  <TextInput
-                    style={[
-                      styles.textarea,
-                      {
-                        color: colors.text,
-                        borderColor: colors.border,
-                        backgroundColor: colors.background,
-                      },
-                    ]}
+                  <WithDictation
                     value={description}
                     onChangeText={setDescription}
-                    placeholder="Describe the security concern in detail…"
-                    placeholderTextColor={colors.textMuted}
                     multiline
-                    numberOfLines={4}
-                  />
+                    onDevice
+                  >
+                    <TextInput
+                      style={[
+                        styles.textarea,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.background,
+                        },
+                      ]}
+                      value={description}
+                      onChangeText={setDescription}
+                      placeholder="Describe the security concern in detail…"
+                      placeholderTextColor={colors.textMuted}
+                      multiline
+                      numberOfLines={4}
+                    />
+                  </WithDictation>
                 </YStack>
 
                 <YStack gap="$1">
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     LOCATION *
                   </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        color: colors.text,
-                        borderColor: colors.border,
-                        backgroundColor: colors.background,
-                      },
-                    ]}
-                    value={location}
-                    onChangeText={setLocation}
-                    placeholder="Where did this occur?"
-                    placeholderTextColor={colors.textMuted}
-                  />
+                  <WithDictation value={location} onChangeText={setLocation} onDevice>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.background,
+                        },
+                      ]}
+                      value={location}
+                      onChangeText={setLocation}
+                      placeholder="Where did this occur?"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </WithDictation>
                 </YStack>
 
                 <YStack gap="$1">
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     WITNESSES (optional)
                   </Text>
-                  <TextInput
-                    style={[
-                      styles.textarea,
-                      {
-                        color: colors.text,
-                        borderColor: colors.border,
-                        backgroundColor: colors.background,
-                      },
-                    ]}
-                    value={witnesses}
-                    onChangeText={setWitnesses}
-                    placeholder="Names of any witnesses…"
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                    numberOfLines={2}
-                  />
+                  <WithDictation value={witnesses} onChangeText={setWitnesses} multiline onDevice>
+                    <TextInput
+                      style={[
+                        styles.textarea,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.background,
+                        },
+                      ]}
+                      value={witnesses}
+                      onChangeText={setWitnesses}
+                      placeholder="Names of any witnesses…"
+                      placeholderTextColor={colors.textMuted}
+                      multiline
+                      numberOfLines={2}
+                    />
+                  </WithDictation>
                 </YStack>
 
                 <YStack gap="$1">

@@ -16,6 +16,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import { NOTE_MAX, type SheetNotes } from '@/stores/sheetNotesStore'
 import type { ChordSheet } from '@/types/chordSheet'
 import { getSectionLabel, getSectionShortLabel } from './chordSheetFormat'
+import { WithDictation } from '@/components/ui/Dictation'
 
 /** What a note is on: the song as a whole, or one of its sections by id. */
 export const SONG = 'song'
@@ -306,29 +307,31 @@ function NoteField({
     []
   )
   return (
-    <TextInput
-      value={text}
-      onChangeText={setText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.textMuted}
-      maxLength={NOTE_MAX}
-      multiline
-      scrollEnabled
-      textAlignVertical="top"
-      accessibilityLabel={placeholder}
-      style={{
-        color: colors.text,
-        backgroundColor: c.bg,
-        borderColor: c.text,
-        borderWidth: 1,
-        borderRadius: 8,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        fontSize: 16,
-        lineHeight: 21,
-        height: lines * 21 + 16 + 2,
-      }}
-    />
+    <WithDictation value={text} onChangeText={setText} multiline>
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        maxLength={NOTE_MAX}
+        multiline
+        scrollEnabled
+        textAlignVertical="top"
+        accessibilityLabel={placeholder}
+        style={{
+          color: colors.text,
+          backgroundColor: c.bg,
+          borderColor: c.text,
+          borderWidth: 1,
+          borderRadius: 8,
+          paddingHorizontal: 10,
+          paddingVertical: 8,
+          fontSize: 16,
+          lineHeight: 21,
+          height: lines * 21 + 16 + 2,
+        }}
+      />
+    </WithDictation>
   )
 }
 

@@ -2,7 +2,7 @@ import type { ExpoConfig, ConfigContext } from 'expo/config'
 
 /** Why the app uses the microphone: shown when the phone asks. */
 const MICROPHONE_REASON =
-  'Mission Portal listens to a song being sung or played to find its chord sheet and the key it is in. The sound stays on your phone and is deleted as soon as the song is found.'
+  'Mission Portal uses the microphone when you tap 🎤: to type what you say into a text box, and to listen to a song being sung or played to find its chord sheet and the key it is in. Sound kept to find the key stays on your phone and is deleted as soon as the song is found.'
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -148,7 +148,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         microphonePermission: MICROPHONE_REASON,
         speechRecognitionPermission:
-          'Mission Portal turns the words of a song it hears into text to find the chord sheet with those lyrics.',
+          'Mission Portal turns speech into text: what you say into a text box, and the words of a song it hears, to find the chord sheet with those lyrics.',
         androidSpeechServicePackages: ['com.google.android.googlequicksearchbox'],
       },
     ],

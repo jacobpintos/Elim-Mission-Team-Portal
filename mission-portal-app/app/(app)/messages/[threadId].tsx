@@ -28,6 +28,7 @@ import { updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import type { Message, MessageAttachment } from '@/types/events'
+import { DictateButton } from '@/components/ui/Dictation'
 
 export default function ThreadScreen() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>()
@@ -351,6 +352,9 @@ export default function ThreadScreen() {
               <Text fontSize="$3">📎</Text>
             </XStack>
           </Pressable>
+
+          {/* Dictation, beside the attachment: a reply said rather than typed. */}
+          <DictateButton value={text} onChangeText={setText} multiline />
 
           <TextInput
             style={[

@@ -31,6 +31,7 @@ import type { Task } from '@/types/events'
 import type { KaizenCard, KaizenVerificationResult } from '@/types/operations'
 import type { UserProfile } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { WithDictation } from '@/components/ui/Dictation'
 
 interface GroupDoc {
   id: string
@@ -157,22 +158,24 @@ function CAVerificationModal({
             <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
               NOTES
             </Text>
-            <TextInput
-              style={[
-                caStyles.textarea,
-                {
-                  color: colors.text,
-                  borderColor: colors.border,
-                  backgroundColor: colors.background,
-                },
-              ]}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Observations, evidence, or additional notes…"
-              placeholderTextColor={colors.textMuted}
-              multiline
-              numberOfLines={4}
-            />
+            <WithDictation value={notes} onChangeText={setNotes} multiline>
+              <TextInput
+                style={[
+                  caStyles.textarea,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Observations, evidence, or additional notes…"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={4}
+              />
+            </WithDictation>
           </YStack>
 
           <Pressable onPress={handleSubmit} disabled={submitting}>

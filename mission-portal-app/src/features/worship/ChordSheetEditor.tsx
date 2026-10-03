@@ -30,6 +30,7 @@ import {
   type ChordSheetSection,
   type ChordSheet,
 } from '@/types/chordSheet'
+import { WithDictation } from '@/components/ui/Dictation'
 
 const PROGRESSION_END = '||'
 
@@ -891,22 +892,28 @@ export function ChordSheetEditor({
                       {!section.sameAsPrevious ? (
                         <>
                           {/* Lyrics */}
-                          <TextInput
-                            style={[
-                              styles.textarea,
-                              {
-                                color: colors.text,
-                                borderColor: colors.border,
-                                backgroundColor: colors.surface,
-                              },
-                            ]}
+                          <WithDictation
                             value={section.lyrics}
                             onChangeText={(v) => updateSectionLyrics(section.id, v)}
-                            placeholder="Enter lyrics… leave blank for instrumental"
-                            placeholderTextColor={colors.textMuted}
                             multiline
-                            numberOfLines={4}
-                          />
+                          >
+                            <TextInput
+                              style={[
+                                styles.textarea,
+                                {
+                                  color: colors.text,
+                                  borderColor: colors.border,
+                                  backgroundColor: colors.surface,
+                                },
+                              ]}
+                              value={section.lyrics}
+                              onChangeText={(v) => updateSectionLyrics(section.id, v)}
+                              placeholder="Enter lyrics… leave blank for instrumental"
+                              placeholderTextColor={colors.textMuted}
+                              multiline
+                              numberOfLines={4}
+                            />
+                          </WithDictation>
 
                           {/* Chord inputs */}
                           <XStack alignItems="center" gap="$1" marginTop="$1">

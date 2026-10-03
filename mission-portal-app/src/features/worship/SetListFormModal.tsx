@@ -22,6 +22,7 @@ import { pickAndUploadSetListAudio, deleteSetListAudio } from '@/lib/setListAudi
 import type { SetList, SetListSong } from '@/types/worship'
 import type { ChordSheet } from '@/types/chordSheet'
 import type { EventInstance } from '@/types/events'
+import { WithDictation } from '@/components/ui/Dictation'
 
 function makeSong(): SetListSong {
   return {
@@ -880,22 +881,28 @@ export function SetListFormModal({
                         onDropped={dropAudio}
                       />
 
-                      <TextInput
-                        style={[
-                          styles.textarea,
-                          {
-                            color: colors.text,
-                            borderColor: colors.border,
-                            backgroundColor: colors.surface,
-                          },
-                        ]}
+                      <WithDictation
                         value={song.notes}
                         onChangeText={(v) => updateSong(song.id, 'notes', v)}
-                        placeholder="Notes (optional)"
-                        placeholderTextColor={colors.textMuted}
                         multiline
-                        numberOfLines={2}
-                      />
+                      >
+                        <TextInput
+                          style={[
+                            styles.textarea,
+                            {
+                              color: colors.text,
+                              borderColor: colors.border,
+                              backgroundColor: colors.surface,
+                            },
+                          ]}
+                          value={song.notes}
+                          onChangeText={(v) => updateSong(song.id, 'notes', v)}
+                          placeholder="Notes (optional)"
+                          placeholderTextColor={colors.textMuted}
+                          multiline
+                          numberOfLines={2}
+                        />
+                      </WithDictation>
 
                       <ChordSheetPicker
                         chordSheets={chordSheets}

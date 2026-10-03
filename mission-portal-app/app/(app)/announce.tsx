@@ -35,6 +35,7 @@ import { todayStr } from '@/lib/events'
 import { confirmAsync } from '@/lib/confirm'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import type { Announcement, AnnouncementAttachment } from '@/types/events'
+import { WithDictation } from '@/components/ui/Dictation'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -461,22 +462,24 @@ export default function AnnounceScreen() {
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     BODY
                   </Text>
-                  <TextInput
-                    style={[
-                      styles.textarea,
-                      {
-                        color: colors.text,
-                        borderColor: colors.border,
-                        backgroundColor: colors.background,
-                      },
-                    ]}
-                    value={aBody}
-                    onChangeText={setABody}
-                    placeholder="Write your announcement…"
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                    numberOfLines={5}
-                  />
+                  <WithDictation value={aBody} onChangeText={setABody} multiline>
+                    <TextInput
+                      style={[
+                        styles.textarea,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.background,
+                        },
+                      ]}
+                      value={aBody}
+                      onChangeText={setABody}
+                      placeholder="Write your announcement…"
+                      placeholderTextColor={colors.textMuted}
+                      multiline
+                      numberOfLines={5}
+                    />
+                  </WithDictation>
                 </YStack>
 
                 <XStack justifyContent="space-between" alignItems="center">
