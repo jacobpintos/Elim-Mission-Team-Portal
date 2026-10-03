@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSongRequest, soundOf, spokenKey } from './songRequest'
+import { closestTitles, parseSongRequest, soundOf, spokenKey, trailingKey } from './songRequest'
 
 const sheets = [
   { id: 1, title: 'Firm Foundation (He Won’t)' },
@@ -10,6 +10,9 @@ const sheets = [
   { id: 6, title: 'Agnus Dei' },
   { id: 7, title: '10,000 Reasons (Ten Thousand Reasons)' },
   { id: 8, title: 'Abba (Arms of a Father)' },
+  { id: 9, title: 'All Hail King Jesus' },
+  { id: 10, title: 'Mighty to Save' },
+  { id: 11, title: 'Son of Suffering' },
 ]
 const ask = (text: string) => {
   const r = parseSongRequest(sheets, text)
@@ -116,10 +119,39 @@ describe('parseSongRequest', () => {
     expect(ask('holly')).toEqual({ id: 2, key: null, minor: false })
   })
 
+  it('lets one word of a longer title be misheard', () => {
+    expect(ask('Oh Hill King Jesus and C-sharp')).toEqual({ id: 9, key: 'Db', minor: false })
+    expect(ask('all hail king jesus')).toEqual({ id: 9, key: null, minor: false })
+    // Not in a title of two words, where one is half of it.
+    expect(ask('holy whatever')).toBeNull()
+  })
+
   it('is not a title sung inside a line', () => {
     expect(ask('holy holy holy is the lord god almighty')).toBeNull()
     expect(ask('christ is my firm foundation the rock on which i stand')).toBeNull()
     expect(ask('firm foundation key of e and g')).toBeNull()
     expect(ask('')).toBeNull()
+  })
+})
+
+describe('closestTitles', () => {
+  it('offers the titles most of whose words were heard', () => {
+    expect(closestTitles(sheets, 'Oh Hill King Jesus and C-sharp').map((s) => s.id)).toEqual([9])
+    expect(closestTitles(sheets, 'holy for ever').map((s) => s.id)[0]).toBe(3)
+  })
+
+  it('not ones that only share a small word', () => {
+    expect(closestTitles(sheets, 'the son of the morning')).not.toContainEqual(
+      expect.objectContaining({ id: 10 })
+    )
+    expect(closestTitles(sheets, 'of the')).toEqual([])
+  })
+})
+
+describe('trailingKey', () => {
+  it('finds a key said at the end', () => {
+    expect(trailingKey('oh hill king jesus and c-sharp')).toEqual({ key: 'Db', minor: false })
+    expect(trailingKey('something something in b flat minor')).toEqual({ key: 'Bb', minor: true })
+    expect(trailingKey('something something')).toBeNull()
   })
 })

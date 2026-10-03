@@ -275,7 +275,11 @@ export function parseSongRequest<T extends { title: string }>(
     for (const form of titleForms(sheet.title)) {
       for (let at = 0; at + form.length <= words.length; at++) {
         const scores = form.map((w, i) => wordMatch(words[at + i], w))
-        if (scores.includes(0)) continue
+        // One word of a longer title may be misheard outright: "All Hail
+        // King Jesus" came back "Oh Hill King Jesus". Two titles' worth of
+        // words have to line up either way, so a line of lyrics is not one.
+        const misses = scores.filter((x) => x === 0).length
+        if (misses > (form.length >= 3 ? 1 : 0)) continue
         const score = scores.reduce((a, b) => a + b, 0)
         if (best && (score < best.score || (score === best.score && form.length <= best.length)))
           continue
@@ -309,4 +313,73 @@ function stripFiller(words: string[]): string[] {
   // Nor off the end: "in the" is how "in D" is often heard.
   while (end > start && FILLER.has(words[end - 1]) && words[end - 1] !== 'the') end--
   return words.slice(start, end)
+}
+
+/** Words too common to say anything about which title was meant. */
+const SMALL = new Set(['a', 'an', 'the', 'of', 'to', 'in', 'on', 'and', 'my', 'is', 'for', 'be'])
+
+/**
+ * The titles closest to what was said, for the guesses offered when nothing
+ * is clear. Each of a title's words is looked for, in order, among the
+ * words heard — the same word counting double one that only sounds like
+ * it, and two heard words run together ("for ever") counting as one — and
+ * the title scores the share of all it could have. Half at least, with one
+ * word heard exactly that is not a small one: "of" and "the" are in every
+ * other title, and "hill" sounding like "holy" is no reason to offer Holy.
+ * Best first.
+ */
+export function closestTitles<T extends { title: string }>(
+  sheets: T[],
+  text: string,
+  count = 3
+): T[] {
+  const words = spokenWords(text)
+  if (words.length === 0) return []
+  const scored: { sheet: T; share: number; points: number }[] = []
+  for (const sheet of sheets) {
+    let best = { share: 0, points: 0 }
+    for (const form of titleForms(sheet.title)) {
+      let at = 0
+      let points = 0
+      let exact = false
+      for (const w of form) {
+        let found = -1
+        let got = 0
+        for (let i = at; i < words.length && found < 0; i++) {
+          const one = wordMatch(words[i], w)
+          const two = i + 1 < words.length ? wordMatch(words[i] + words[i + 1], w) : 0
+          if (one || two) {
+            found = one >= two ? i : i + 1
+            got = Math.max(one, two)
+          }
+        }
+        if (found < 0) continue
+        points += got
+        if (got === 2 && !SMALL.has(w)) exact = true
+        at = found + 1
+      }
+      const share = points / (2 * form.length)
+      if (exact && (share > best.share || (share === best.share && points > best.points))) {
+        best = { share, points }
+      }
+    }
+    if (best.share >= 0.5) scored.push({ sheet, ...best })
+  }
+  return scored
+    .sort((a, b) => b.share - a.share || b.points - a.points)
+    .slice(0, count)
+    .map((s) => s.sheet)
+}
+
+/**
+ * A key said at the end of whatever was heard — "… in C sharp" — for a
+ * song picked from the guesses: it opens in the key that was asked for.
+ */
+export function trailingKey(text: string): { key: string; minor: boolean } | null {
+  const words = spokenWords(text)
+  for (let n = Math.min(6, words.length); n >= 1; n--) {
+    const key = spokenKey(stripFiller(words.slice(words.length - n)))
+    if (key) return key
+  }
+  return null
 }

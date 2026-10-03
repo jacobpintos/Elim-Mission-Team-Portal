@@ -12,7 +12,13 @@ import {
   type LyricMatch,
 } from '@/lib/lyricMatch'
 import type { Chroma } from '@/lib/keyDetect'
-import { KEY_HINTS, parseSongRequest, type SongRequest } from '@/lib/songRequest'
+import {
+  KEY_HINTS,
+  closestTitles,
+  parseSongRequest,
+  trailingKey,
+  type SongRequest,
+} from '@/lib/songRequest'
 import { readHeardAudio } from './heardAudio'
 import { claimSpeech, ownsSpeech, releaseSpeech } from '@/lib/speechOwner'
 import { shazam, type ShazamHit } from '@/lib/shazam'
@@ -21,6 +27,12 @@ import type { ChordSheet } from '@/types/chordSheet'
 
 /** This listener's claim on the phone's speech recognition (lib/speechOwner). */
 const SPEECH_ID = 'song-listener'
+
+/**
+ * A song offered to pick by hand: by its lyrics, or — `byTitle` — because
+ * what was said is close to its name.
+ */
+type Guess = LyricMatch & { byTitle?: boolean }
 
 /** How long to listen before giving up. */
 const LISTEN_MS = 45_000
@@ -92,7 +104,7 @@ export function SongListener({
   const [listening, setListening] = useState(false)
   const [heard, setHeard] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
-  const [guesses, setGuesses] = useState<LyricMatch[]>([])
+  const [guesses, setGuesses] = useState<Guess[]>([])
   // Shazam at work, before the words are listened for.
   const [identifying, setIdentifying] = useState(false)
   // A recording Shazam named that has no sheet under that title.
@@ -166,7 +178,20 @@ export function SongListener({
     const recent = text.trim().split(/\s+/).slice(-RECENT_WORDS).join(' ')
     setHeard(recent)
     const ranked = rankSongs(index, recent)
-    setGuesses(ranked.slice(0, 3))
+    // Titles close to what was said first — a name half heard is the
+    // likelier meaning — then songs whose lyrics share two word pairs or
+    // more with it. One pair ("king Jesus") is in half the library.
+    const titled: Guess[] = closestTitles(sheets, recent).map((sheet) => ({
+      id: String(sheet.id),
+      title: sheet.title,
+      score: 0,
+      pairs: 0,
+      sectionId: null,
+      line: null,
+      byTitle: true,
+    }))
+    const sung = ranked.filter((r) => r.pairs >= 2 && !titled.some((t) => t.id === r.id))
+    setGuesses([...titled, ...sung].slice(0, 3))
     // A song asked for by name, once the asking stops: "Holy" is not yet
     // "Holy Forever", nor "Firm Foundation" yet "Firm Foundation in E".
     clearRequest()
@@ -424,7 +449,15 @@ export function SongListener({
                 {guesses.map((g) => (
                   <Pressable
                     key={g.id}
-                    onPress={() => finish(g)}
+                    onPress={() => {
+                      if (!g.byTitle) return finish(g)
+                      // Picked by name: in whatever key was said with it.
+                      const sheet = sheets.find((s) => String(s.id) === g.id)
+                      const key = trailingKey(heard)
+                      if (sheet) {
+                        openAsked({ sheet, key: key?.key ?? null, minor: key?.minor ?? false })
+                      }
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel={`Open ${g.title}`}
                     style={[styles.guess, { borderColor: colors.border }]}
