@@ -38,6 +38,14 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
   const [viewSongId, setViewSongId] = useState<string | null>(null)
   // Reached from the song before or after, rather than from the list.
   const [stepped, setStepped] = useState(false)
+  // Chords Only, for every song in this set until it is switched off; a
+  // different set list starts with it off.
+  const [chordsOnly, setChordsOnly] = useState(false)
+  const [chordsOnlyFor, setChordsOnlyFor] = useState(setList?.id)
+  if (setList?.id !== chordsOnlyFor) {
+    setChordsOnlyFor(setList?.id)
+    setChordsOnly(false)
+  }
   const [playingVideo, setPlayingVideo] = useState<{ url: string; title: string } | null>(null)
 
   if (!setList) return null
@@ -63,12 +71,14 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
 
   const at = withSheets.findIndex((song) => song.id === viewSongId)
   const setNav =
-    at >= 0 && withSheets.length > 1
+    at >= 0
       ? {
           position: `${at + 1} / ${withSheets.length}`,
           onPrev: at > 0 ? () => openSong(withSheets[at - 1], true) : undefined,
           onNext: at < withSheets.length - 1 ? () => openSong(withSheets[at + 1], true) : undefined,
           stepped,
+          chordsOnly,
+          onChordsOnly: setChordsOnly,
         }
       : undefined
 

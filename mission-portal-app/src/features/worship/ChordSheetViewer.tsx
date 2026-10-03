@@ -214,6 +214,12 @@ interface ChordSheetViewerProps {
      * faded in, so the set list behind never shows through between songs.
      */
     stepped?: boolean
+    /**
+     * Chords Only, kept by the set list rather than the sheet: switched on
+     * for one song, it stays on for the rest of the set until switched off.
+     */
+    chordsOnly: boolean
+    onChordsOnly: (on: boolean) => void
   }
   /**
    * The reference track of the song this sheet was opened from, if it has one.
@@ -471,7 +477,10 @@ export function ChordSheetViewer({
     if (initialKey && (NNS_KEYS as readonly string[]).includes(initialKey)) return false
     return getKeyPrefs().isMinor
   })
-  const [chordsOnly, setChordsOnly] = useState(false)
+  const [ownChordsOnly, setOwnChordsOnly] = useState(false)
+  const chordsOnly = setNav ? setNav.chordsOnly : ownChordsOnly
+  const toggleChordsOnly = () =>
+    setNav ? setNav.onChordsOnly(!setNav.chordsOnly) : setOwnChordsOnly((v) => !v)
   const [showKeyDropdown, setShowKeyDropdown] = useState(false)
   // A key asked for: taken up when it arrives. Set while rendering, as React
   // has it for state that follows a prop.
@@ -808,7 +817,7 @@ export function ChordSheetViewer({
                 ) : null}
               </YStack>
             )}
-            {setNav ? (
+            {setNav && (setNav.onPrev || setNav.onNext) ? (
               <XStack alignItems="center">
                 <Pressable
                   onPress={setNav.onPrev}
@@ -943,7 +952,7 @@ export function ChordSheetViewer({
               ) : null}
 
               {/* Chords Only toggle */}
-              <Pressable onPress={() => setChordsOnly((v) => !v)} style={styles.touch}>
+              <Pressable onPress={toggleChordsOnly} style={styles.touch}>
                 <XStack
                   backgroundColor={chordsOnly ? colors.primary : colors.primary + '18'}
                   borderRadius={99}
