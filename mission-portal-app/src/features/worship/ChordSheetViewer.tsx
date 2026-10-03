@@ -38,6 +38,9 @@ import { useCoverViewport } from '@/lib/useCoverViewport'
 import { resetPageZoom } from '@/lib/resetPageZoom'
 import { useAudioPlayersStore } from '@/stores/audioPlayersStore'
 import { AudioControls } from '@/components/ui/AudioControls'
+import { useAuthStore } from '@/stores/authStore'
+import { useSheetNotesStore } from '@/stores/sheetNotesStore'
+import { NoteLine, SheetNotesEditor, SONG, useNoteColors } from './SheetNotes'
 
 interface KeyPrefs {
   key: string
@@ -85,6 +88,15 @@ let cachedScaleIdx: number | null = null
  */
 const CONTROLS_HIDDEN_KEY = 'chordsheet_controls_hidden'
 let cachedControlsHidden: boolean | null = null
+
+/** Whether the reader has hidden their notes from the sheet, remembered likewise. */
+const NOTES_HIDDEN_KEY = 'chordsheet_notes_hidden'
+let cachedNotesHidden: boolean | null = null
+
+function rememberNotesHidden(hidden: boolean) {
+  cachedNotesHidden = hidden
+  AsyncStorage.setItem(NOTES_HIDDEN_KEY, hidden ? '1' : '0').catch(() => {})
+}
 
 function rememberControlsHidden(hidden: boolean) {
   cachedControlsHidden = hidden
@@ -410,6 +422,57 @@ export function ChordSheetViewer({
   const autoScroll = useAutoScroll(scrollRef, sheet ? String(sheet.id) : null, fontScale)
 
   /**
+   * The reader's own notes: one for the song, one per section. Private, kept
+   * on their account (sheetNotesStore), and drawn in amber with a ✎ so they
+   * never read as part of the chart. Written on a screen of their own
+   * (SheetNotesEditor), opened from "✎ Notes" or by tapping a note.
+   */
+  const uid = useAuthStore((s) => s.fbUser?.uid ?? null)
+  const subscribeNotes = useSheetNotesStore((s) => s.subscribe)
+  const unsubscribeNotes = useSheetNotesStore((s) => s.unsubscribe)
+  useEffect(() => {
+    if (!uid) return
+    subscribeNotes(uid)
+    return () => unsubscribeNotes()
+  }, [uid, subscribeNotes, unsubscribeNotes])
+  const notesKey = sheet ? String(sheet.id) : null
+  const myNotes = useSheetNotesStore((s) => (notesKey ? s.notes[notesKey] : undefined))
+  const setSongNote = useSheetNotesStore((s) => s.setSongNote)
+  const setSectionNote = useSheetNotesStore((s) => s.setSectionNote)
+  const noteColors = useNoteColors()
+  // Open on: SONG, or a section's id; null while reading.
+  const [notesOpenAt, setNotesOpenAt] = useState<string | null>(null)
+  // A new sheet opens to read, not mid-edit.
+  const [notesSheet, setNotesSheet] = useState(notesKey)
+  if (notesSheet !== notesKey) {
+    setNotesSheet(notesKey)
+    setNotesOpenAt(null)
+  }
+  const [notesHidden, setNotesHidden] = useState(cachedNotesHidden ?? false)
+  useEffect(() => {
+    if (cachedNotesHidden !== null) return
+    let cancelled = false
+    AsyncStorage.getItem(NOTES_HIDDEN_KEY)
+      .then((raw) => {
+        cachedNotesHidden = raw === '1'
+        if (!cancelled) setNotesHidden(cachedNotesHidden)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const toggleNotesHidden = () => {
+    rememberNotesHidden(!notesHidden)
+    setNotesHidden(!notesHidden)
+  }
+  const openNotes = (at: string = SONG) => {
+    // Writing while the sheet moves on underneath is no way to write a note.
+    if (autoScroll.state === 'running') autoScroll.pause()
+    setNotesOpenAt(at)
+  }
+
+  /**
    * Where a section starts, asked for now rather than remembered.
    *
    * The remembered answer goes stale on the web and does so invisibly.
@@ -728,14 +791,33 @@ export function ChordSheetViewer({
       </ScrollView>
     ) : null
 
+  /**
+   * A section's note under its heading. `label` names the section when one
+   * heading stands for several — Chords Only's "Verse 1-2" — so each verse's
+   * note says whose.
+   */
+  const sectionNote = (sectionId: string, label: string | null = null) => {
+    const text = myNotes?.sections?.[sectionId]
+    if (notesHidden || !text) return null
+    return (
+      <NoteLine
+        key={`note-${sectionId}`}
+        text={text}
+        label={label}
+        onPress={() => openNotes(sectionId)}
+      />
+    )
+  }
+
   return (
-    <FullScreenOverlay
-      visible
-      animationType={setNav?.stepped ? 'none' : 'fade'}
-      transparent
-      onRequestClose={onClose}
-    >
-      {/* Inset the area the card is centred in, rather than the card itself.
+    <>
+      <FullScreenOverlay
+        visible
+        animationType={setNav?.stepped ? 'none' : 'fade'}
+        transparent
+        onRequestClose={onClose}
+      >
+        {/* Inset the area the card is centred in, rather than the card itself.
           Centring alone does not clear the status bar here: at 94% of the
           screen height the margin above the card is around twenty-six points
           on a tall phone, less than the inset, so a sheet long enough to
@@ -744,7 +826,7 @@ export function ChordSheetViewer({
           screen, and centring takes most of the margin straight back. Padding
           the overlay shrinks what the percentage is measured against, so the
           card stays centred inside the safe area. */}
-      {/* Sized from the measured window rather than left to fill the fixed box
+        {/* Sized from the measured window rather than left to fill the fixed box
           react-native-web gives the modal. Two reasons. The fixed box is the
           layout viewport, which on a phone is not always what you can see —
           useWindowDimensions reads the visual viewport, which is. And an
@@ -752,136 +834,285 @@ export function ChordSheetViewer({
           laid out again every time those numbers change, so a rotation
           rebuilds this overlay's geometry instead of leaving Safari to decide
           whether the old one still holds. */}
-      <View
-        {...autoScroll.viewerTouchProps}
-        style={[
-          styles.overlay,
-          {
-            width: windowWidth,
-            height: windowHeight,
-            paddingTop: coverScreen ? 0 : insets.top,
-            paddingBottom: coverScreen ? 0 : insets.bottom,
-          },
-        ]}
-      >
-        <YStack
-          backgroundColor={colors.surface}
-          borderRadius={fullBleed ? 0 : '$4'}
-          paddingHorizontal={coverScreen ? undefined : fullBleed ? '$3' : '$4'}
-          paddingVertical={coverScreen ? undefined : fullBleed ? '$2' : '$4'}
-          style={coverScreen ? CLEAR_OF_THE_NOTCH : undefined}
-          gap="$2"
-          width={fullBleed ? '100%' : '96%'}
-          maxWidth={fullBleed ? undefined : 640}
-          height={fullBleed ? cardMaxHeight : undefined}
-          maxHeight={cardMaxHeight}
+        <View
+          {...autoScroll.viewerTouchProps}
+          style={[
+            styles.overlay,
+            {
+              width: windowWidth,
+              height: windowHeight,
+              paddingTop: coverScreen ? 0 : insets.top,
+              paddingBottom: coverScreen ? 0 : insets.bottom,
+            },
+          ]}
         >
-          {/* Header — one line when the controls are folded away. */}
-          <XStack
-            justifyContent="space-between"
-            alignItems={controlsHidden ? 'center' : 'flex-start'}
+          <YStack
+            backgroundColor={colors.surface}
+            borderRadius={fullBleed ? 0 : '$4'}
+            paddingHorizontal={coverScreen ? undefined : fullBleed ? '$3' : '$4'}
+            paddingVertical={coverScreen ? undefined : fullBleed ? '$2' : '$4'}
+            style={coverScreen ? CLEAR_OF_THE_NOTCH : undefined}
+            gap="$2"
+            width={fullBleed ? '100%' : '96%'}
+            maxWidth={fullBleed ? undefined : 640}
+            height={fullBleed ? cardMaxHeight : undefined}
+            maxHeight={cardMaxHeight}
           >
-            {controlsHidden ? (
-              <>
-                <Text
-                  color={colors.text}
-                  fontSize="$5"
-                  fontWeight="700"
-                  numberOfLines={1}
-                  // Beside the chips it gives way to them; alone it has the row.
-                  {...(chipsInHeader ? { flexShrink: 1, maxWidth: '40%' } : { flex: 1 })}
-                >
-                  {sheet.title}
+            {/* Header — one line when the controls are folded away. */}
+            <XStack
+              justifyContent="space-between"
+              alignItems={controlsHidden ? 'center' : 'flex-start'}
+            >
+              {controlsHidden ? (
+                <>
+                  <Text
+                    color={colors.text}
+                    fontSize="$5"
+                    fontWeight="700"
+                    numberOfLines={1}
+                    // Beside the chips it gives way to them; alone it has the row.
+                    {...(chipsInHeader ? { flexShrink: 1, maxWidth: '40%' } : { flex: 1 })}
+                  >
+                    {sheet.title}
+                    {sheet.artist ? (
+                      <Text color={colors.textMuted} fontSize="$3" fontWeight="400">
+                        {`  ·  ${sheet.artist}`}
+                      </Text>
+                    ) : null}
+                  </Text>
+                  {chipsInHeader ? jumpBar : null}
+                </>
+              ) : (
+                <YStack flex={1} gap="$0.5">
+                  <Text color={colors.text} fontSize="$5" fontWeight="700" numberOfLines={2}>
+                    {sheet.title}
+                  </Text>
                   {sheet.artist ? (
-                    <Text color={colors.textMuted} fontSize="$3" fontWeight="400">
-                      {`  ·  ${sheet.artist}`}
+                    <Text color={colors.textMuted} fontSize="$3">
+                      {sheet.artist}
                     </Text>
                   ) : null}
-                </Text>
-                {chipsInHeader ? jumpBar : null}
-              </>
-            ) : (
-              <YStack flex={1} gap="$0.5">
-                <Text color={colors.text} fontSize="$5" fontWeight="700" numberOfLines={2}>
-                  {sheet.title}
-                </Text>
-                {sheet.artist ? (
-                  <Text color={colors.textMuted} fontSize="$3">
-                    {sheet.artist}
-                  </Text>
-                ) : null}
-                {sheet.bpm != null ? (
+                  {sheet.bpm != null ? (
+                    <Text color={colors.textMuted} fontSize="$2">
+                      ♩ = {sheet.bpm} BPM
+                    </Text>
+                  ) : null}
+                </YStack>
+              )}
+              {setNav && (setNav.onPrev || setNav.onNext) ? (
+                <XStack alignItems="center">
+                  <Pressable
+                    onPress={setNav.onPrev}
+                    disabled={!setNav.onPrev}
+                    style={styles.headerBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Previous song"
+                  >
+                    <Text
+                      color={setNav.onPrev ? colors.primary : colors.border}
+                      fontSize="$6"
+                      fontWeight="700"
+                    >
+                      ‹
+                    </Text>
+                  </Pressable>
                   <Text color={colors.textMuted} fontSize="$2">
-                    ♩ = {sheet.bpm} BPM
+                    {setNav.position}
                   </Text>
-                ) : null}
-              </YStack>
-            )}
-            {setNav && (setNav.onPrev || setNav.onNext) ? (
-              <XStack alignItems="center">
-                <Pressable
-                  onPress={setNav.onPrev}
-                  disabled={!setNav.onPrev}
-                  style={styles.headerBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Previous song"
-                >
-                  <Text
-                    color={setNav.onPrev ? colors.primary : colors.border}
-                    fontSize="$6"
-                    fontWeight="700"
+                  <Pressable
+                    onPress={setNav.onNext}
+                    disabled={!setNav.onNext}
+                    style={styles.headerBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Next song"
                   >
-                    ‹
-                  </Text>
-                </Pressable>
-                <Text color={colors.textMuted} fontSize="$2">
-                  {setNav.position}
+                    <Text
+                      color={setNav.onNext ? colors.primary : colors.border}
+                      fontSize="$6"
+                      fontWeight="700"
+                    >
+                      ›
+                    </Text>
+                  </Pressable>
+                </XStack>
+              ) : null}
+              <Pressable
+                onPress={toggleControls}
+                style={styles.headerBtn}
+                accessibilityRole="button"
+                accessibilityLabel={controlsHidden ? 'Show controls' : 'Hide controls'}
+              >
+                <Text color={colors.textMuted} fontSize="$3">
+                  {controlsHidden ? '▼' : '▲'}
                 </Text>
-                <Pressable
-                  onPress={setNav.onNext}
-                  disabled={!setNav.onNext}
-                  style={styles.headerBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Next song"
-                >
-                  <Text
-                    color={setNav.onNext ? colors.primary : colors.border}
-                    fontSize="$6"
-                    fontWeight="700"
-                  >
-                    ›
-                  </Text>
-                </Pressable>
-              </XStack>
-            ) : null}
-            <Pressable
-              onPress={toggleControls}
-              style={styles.headerBtn}
-              accessibilityRole="button"
-              accessibilityLabel={controlsHidden ? 'Show controls' : 'Hide controls'}
-            >
-              <Text color={colors.textMuted} fontSize="$3">
-                {controlsHidden ? '▼' : '▲'}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={onClose}
-              style={styles.headerBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-            >
-              <Text color={colors.textMuted} fontSize="$4">
-                ✕
-              </Text>
-            </Pressable>
-          </XStack>
+              </Pressable>
+              <Pressable
+                onPress={onClose}
+                style={styles.headerBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <Text color={colors.textMuted} fontSize="$4">
+                  ✕
+                </Text>
+              </Pressable>
+            </XStack>
 
-          {/* Controls */}
-          {controlsHidden ? null : (
-            <XStack gap="$2" alignItems="flex-start" flexWrap="wrap">
-              {/* Key selector */}
-              <YStack>
-                <Pressable onPress={() => setShowKeyDropdown((v) => !v)} style={styles.touch}>
+            {/* Controls */}
+            {controlsHidden ? null : (
+              <XStack gap="$2" alignItems="flex-start" flexWrap="wrap">
+                {/* Key selector */}
+                <YStack>
+                  <Pressable onPress={() => setShowKeyDropdown((v) => !v)} style={styles.touch}>
+                    <XStack
+                      backgroundColor={colors.primary + '18'}
+                      borderRadius={99}
+                      borderWidth={1}
+                      borderColor={colors.primary}
+                      paddingHorizontal="$3"
+                      alignItems="center"
+                      flexGrow={1}
+                      gap="$1"
+                    >
+                      <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                        {selectedKey === '' ? 'Nashville #s' : `Key: ${keyLabel(selectedKey)}`}
+                      </Text>
+                      <Text color={colors.primary} fontSize="$1">
+                        {showKeyDropdown ? '▲' : '▼'}
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                  {showKeyDropdown ? (
+                    <YStack
+                      backgroundColor={colors.surface}
+                      borderRadius="$3"
+                      borderWidth={1}
+                      borderColor={colors.border}
+                      marginTop="$1"
+                      overflow="hidden"
+                    >
+                      {keyOptions.map((k) => (
+                        <Pressable
+                          key={k === '' ? '__none__' : k}
+                          onPress={() => handleSelectKey(k)}
+                        >
+                          <XStack
+                            paddingHorizontal="$3"
+                            paddingVertical="$2"
+                            backgroundColor={
+                              selectedKey === k ? colors.primary + '22' : 'transparent'
+                            }
+                          >
+                            <Text
+                              color={selectedKey === k ? colors.primary : colors.text}
+                              fontSize="$2"
+                              fontWeight={selectedKey === k ? '700' : '400'}
+                            >
+                              {k === '' ? 'Nashville #s' : keyLabel(k)}
+                            </Text>
+                          </XStack>
+                        </Pressable>
+                      ))}
+                    </YStack>
+                  ) : null}
+                </YStack>
+
+                {/* Major/Minor toggle — only when a key is selected */}
+                {selectedKey !== '' ? (
+                  <Pressable onPress={handleToggleMinor} style={styles.touch}>
+                    <XStack
+                      backgroundColor={isMinor ? colors.primary : colors.primary + '18'}
+                      borderRadius={99}
+                      borderWidth={1}
+                      borderColor={colors.primary}
+                      paddingHorizontal="$3"
+                      alignItems="center"
+                      flexGrow={1}
+                    >
+                      <Text
+                        color={isMinor ? 'white' : colors.primary}
+                        fontSize="$2"
+                        fontWeight="600"
+                      >
+                        {isMinor ? 'Minor' : 'Major'}
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                ) : null}
+
+                {/* Chords Only toggle */}
+                <Pressable onPress={toggleChordsOnly} style={styles.touch}>
+                  <XStack
+                    backgroundColor={chordsOnly ? colors.primary : colors.primary + '18'}
+                    borderRadius={99}
+                    borderWidth={1}
+                    borderColor={colors.primary}
+                    paddingHorizontal="$3"
+                    alignItems="center"
+                    flexGrow={1}
+                  >
+                    <Text
+                      color={chordsOnly ? 'white' : colors.primary}
+                      fontSize="$2"
+                      fontWeight="600"
+                    >
+                      Chords Only
+                    </Text>
+                  </XStack>
+                </Pressable>
+
+                {/* Text size — persists across sessions so a reader sets it once.
+                Labelled "Size" rather than A−/A+ because A–G read as key names
+                in a chord sheet. */}
+                <XStack
+                  borderRadius={99}
+                  borderWidth={1}
+                  borderColor={colors.primary}
+                  backgroundColor={colors.primary + '18'}
+                  alignItems="stretch"
+                  minHeight={44}
+                  overflow="hidden"
+                >
+                  <Pressable
+                    onPress={() => changeScale(-1)}
+                    disabled={scaleIdx === 0}
+                    style={[
+                      styles.touch,
+                      { paddingHorizontal: 12, opacity: scaleIdx === 0 ? 0.4 : 1 },
+                    ]}
+                  >
+                    <Text color={colors.primary} fontSize={16} fontWeight="700">
+                      −
+                    </Text>
+                  </Pressable>
+                  <Text
+                    color={colors.primary}
+                    fontSize="$2"
+                    fontWeight="600"
+                    paddingHorizontal="$1"
+                    alignSelf="center"
+                  >
+                    Size
+                  </Text>
+                  <Pressable
+                    onPress={() => changeScale(1)}
+                    disabled={scaleIdx === FONT_SCALES.length - 1}
+                    style={[
+                      styles.touch,
+                      {
+                        paddingHorizontal: 12,
+                        opacity: scaleIdx === FONT_SCALES.length - 1 ? 0.4 : 1,
+                      },
+                    ]}
+                  >
+                    <Text color={colors.primary} fontSize={16} fontWeight="700">
+                      +
+                    </Text>
+                  </Pressable>
+                </XStack>
+
+                {/* Export PDF — available on all platforms via expo-print */}
+                <Pressable onPress={handleExportPdf} style={styles.touch}>
                   <XStack
                     backgroundColor={colors.primary + '18'}
                     borderRadius={99}
@@ -893,288 +1124,239 @@ export function ChordSheetViewer({
                     gap="$1"
                   >
                     <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                      {selectedKey === '' ? 'Nashville #s' : `Key: ${keyLabel(selectedKey)}`}
-                    </Text>
-                    <Text color={colors.primary} fontSize="$1">
-                      {showKeyDropdown ? '▲' : '▼'}
+                      Export PDF
                     </Text>
                   </XStack>
                 </Pressable>
-                {showKeyDropdown ? (
-                  <YStack
-                    backgroundColor={colors.surface}
-                    borderRadius="$3"
-                    borderWidth={1}
-                    borderColor={colors.border}
-                    marginTop="$1"
-                    overflow="hidden"
-                  >
-                    {keyOptions.map((k) => (
-                      <Pressable key={k === '' ? '__none__' : k} onPress={() => handleSelectKey(k)}>
-                        <XStack
-                          paddingHorizontal="$3"
-                          paddingVertical="$2"
-                          backgroundColor={
-                            selectedKey === k ? colors.primary + '22' : 'transparent'
-                          }
-                        >
-                          <Text
-                            color={selectedKey === k ? colors.primary : colors.text}
-                            fontSize="$2"
-                            fontWeight={selectedKey === k ? '700' : '400'}
-                          >
-                            {k === '' ? 'Nashville #s' : keyLabel(k)}
-                          </Text>
-                        </XStack>
-                      </Pressable>
-                    ))}
-                  </YStack>
-                ) : null}
-              </YStack>
 
-              {/* Major/Minor toggle — only when a key is selected */}
-              {selectedKey !== '' ? (
-                <Pressable onPress={handleToggleMinor} style={styles.touch}>
+                {/* My notes — private, amber like the notes themselves. */}
+                <Pressable
+                  onPress={() => openNotes()}
+                  style={styles.touch}
+                  accessibilityRole="button"
+                  accessibilityLabel="My notes"
+                >
                   <XStack
-                    backgroundColor={isMinor ? colors.primary : colors.primary + '18'}
+                    backgroundColor={noteColors.bg}
                     borderRadius={99}
                     borderWidth={1}
-                    borderColor={colors.primary}
+                    borderColor={noteColors.text}
                     paddingHorizontal="$3"
                     alignItems="center"
                     flexGrow={1}
                   >
-                    <Text color={isMinor ? 'white' : colors.primary} fontSize="$2" fontWeight="600">
-                      {isMinor ? 'Minor' : 'Major'}
+                    <Text color={noteColors.text} fontSize="$2" fontWeight="600">
+                      {notesHidden ? '✎ Notes (hidden)' : '✎ Notes'}
                     </Text>
                   </XStack>
                 </Pressable>
-              ) : null}
+              </XStack>
+            )}
 
-              {/* Chords Only toggle */}
-              <Pressable onPress={toggleChordsOnly} style={styles.touch}>
-                <XStack
-                  backgroundColor={chordsOnly ? colors.primary : colors.primary + '18'}
-                  borderRadius={99}
-                  borderWidth={1}
-                  borderColor={colors.primary}
-                  paddingHorizontal="$3"
-                  alignItems="center"
-                  flexGrow={1}
-                >
-                  <Text
-                    color={chordsOnly ? 'white' : colors.primary}
-                    fontSize="$2"
-                    fontWeight="600"
-                  >
-                    Chords Only
-                  </Text>
-                </XStack>
-              </Pressable>
-
-              {/* Text size — persists across sessions so a reader sets it once.
-                Labelled "Size" rather than A−/A+ because A–G read as key names
-                in a chord sheet. */}
+            {/* The key the song sounds like, from listening — offered, not applied. */}
+            {showKeyHint ? (
               <XStack
-                borderRadius={99}
-                borderWidth={1}
-                borderColor={colors.primary}
+                alignItems="center"
+                gap="$2"
                 backgroundColor={colors.primary + '18'}
-                alignItems="stretch"
-                minHeight={44}
-                overflow="hidden"
+                borderRadius="$3"
+                paddingLeft="$3"
               >
-                <Pressable
-                  onPress={() => changeScale(-1)}
-                  disabled={scaleIdx === 0}
-                  style={[
-                    styles.touch,
-                    { paddingHorizontal: 12, opacity: scaleIdx === 0 ? 0.4 : 1 },
-                  ]}
-                >
-                  <Text color={colors.primary} fontSize={16} fontWeight="700">
-                    −
-                  </Text>
-                </Pressable>
-                <Text
-                  color={colors.primary}
-                  fontSize="$2"
-                  fontWeight="600"
-                  paddingHorizontal="$1"
-                  alignSelf="center"
-                >
-                  Size
+                <Text color={colors.text} fontSize="$3" flex={1}>
+                  🎤 Sounds like {keyLabel(heardKeyName, isMinor)}
                 </Text>
                 <Pressable
-                  onPress={() => changeScale(1)}
-                  disabled={scaleIdx === FONT_SCALES.length - 1}
-                  style={[
-                    styles.touch,
-                    {
-                      paddingHorizontal: 12,
-                      opacity: scaleIdx === FONT_SCALES.length - 1 ? 0.4 : 1,
-                    },
-                  ]}
+                  onPress={() => {
+                    setKeyHintDoneFor(heardChroma ?? null)
+                    handleSelectKey(heardKeyName)
+                  }}
+                  accessibilityRole="button"
+                  style={styles.touch}
                 >
-                  <Text color={colors.primary} fontSize={16} fontWeight="700">
-                    +
+                  <XStack
+                    backgroundColor={colors.primary}
+                    borderRadius={99}
+                    paddingHorizontal="$3"
+                    alignItems="center"
+                    flexGrow={1}
+                  >
+                    <Text color="white" fontSize="$2" fontWeight="700">
+                      Switch to {keyLabel(heardKeyName)}
+                    </Text>
+                  </XStack>
+                </Pressable>
+                <Pressable
+                  onPress={() => setKeyHintDoneFor(heardChroma ?? null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss key suggestion"
+                  style={[styles.touch, styles.hintClose]}
+                >
+                  <Text color={colors.textMuted} fontSize="$3">
+                    ✕
                   </Text>
                 </Pressable>
               </XStack>
+            ) : null}
 
-              {/* Export PDF — available on all platforms via expo-print */}
-              <Pressable onPress={handleExportPdf} style={styles.touch}>
-                <XStack
-                  backgroundColor={colors.primary + '18'}
-                  borderRadius={99}
-                  borderWidth={1}
-                  borderColor={colors.primary}
-                  paddingHorizontal="$3"
-                  alignItems="center"
-                  flexGrow={1}
-                  gap="$1"
-                >
-                  <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                    Export PDF
-                  </Text>
-                </XStack>
-              </Pressable>
-            </XStack>
-          )}
+            {chipsInHeader ? null : jumpBar}
 
-          {/* The key the song sounds like, from listening — offered, not applied. */}
-          {showKeyHint ? (
-            <XStack
-              alignItems="center"
-              gap="$2"
-              backgroundColor={colors.primary + '18'}
-              borderRadius="$3"
-              paddingLeft="$3"
-            >
-              <Text color={colors.text} fontSize="$3" flex={1}>
-                🎤 Sounds like {keyLabel(heardKeyName, isMinor)}
-              </Text>
-              <Pressable
-                onPress={() => {
-                  setKeyHintDoneFor(heardChroma ?? null)
-                  handleSelectKey(heardKeyName)
+            {/* Content, with the autoscroll control over its corner. */}
+            <View style={styles.sheetArea} {...swipeProps}>
+              <ScrollView
+                ref={scrollRef}
+                style={{ flexShrink: 1 }}
+                showsVerticalScrollIndicator={false}
+                {...autoScroll.scrollProps}
+                onLayout={(e) => {
+                  autoScroll.scrollProps.onLayout(e)
+                  setSheetWidth(e.nativeEvent.layout.width)
                 }}
-                accessibilityRole="button"
-                style={styles.touch}
               >
-                <XStack
-                  backgroundColor={colors.primary}
-                  borderRadius={99}
-                  paddingHorizontal="$3"
-                  alignItems="center"
-                  flexGrow={1}
-                >
-                  <Text color="white" fontSize="$2" fontWeight="700">
-                    Switch to {keyLabel(heardKeyName)}
-                  </Text>
-                </XStack>
-              </Pressable>
-              <Pressable
-                onPress={() => setKeyHintDoneFor(heardChroma ?? null)}
-                accessibilityRole="button"
-                accessibilityLabel="Dismiss key suggestion"
-                style={[styles.touch, styles.hintClose]}
-              >
-                <Text color={colors.textMuted} fontSize="$3">
-                  ✕
-                </Text>
-              </Pressable>
-            </XStack>
-          ) : null}
-
-          {chipsInHeader ? null : jumpBar}
-
-          {/* Content, with the autoscroll control over its corner. */}
-          <View style={styles.sheetArea} {...swipeProps}>
-            <ScrollView
-              ref={scrollRef}
-              style={{ flexShrink: 1 }}
-              showsVerticalScrollIndicator={false}
-              {...autoScroll.scrollProps}
-              onLayout={(e) => {
-                autoScroll.scrollProps.onLayout(e)
-                setSheetWidth(e.nativeEvent.layout.width)
-              }}
-            >
-              <YStack gap="$3" paddingBottom="$4" id={SHEET_CONTENT_ID}>
-                {chordsOnly
-                  ? sectionGroups.map(({ section, count }) => {
-                      const fullLabel = getSectionLabel(sheet.sections, section.id)
-                      const rangeMatch = count > 1 ? fullLabel.match(/^(.+?)\s+(\d+)$/) : null
-                      const label = rangeMatch
-                        ? `${rangeMatch[1]} ${parseInt(rangeMatch[2], 10)}-${parseInt(rangeMatch[2], 10) + count - 1}`
-                        : fullLabel
-                      const allTokens = (section.chordTokens ?? []).flat()
-                      const progGroups = splitByProgressionEnd(allTokens)
-                      const compressed = compressGroups(progGroups)
-                      return (
-                        <YStack
-                          key={section.id}
-                          id={sectionDomId(section.id)}
-                          gap="$0.5"
-                          onLayout={(e) => {
-                            sectionOffsets.current[section.id] = e.nativeEvent.layout.y
-                          }}
-                        >
-                          <XStack gap="$2" alignItems="center">
-                            <Text color={colors.primary} fontWeight="700" fontSize="$3">
-                              {label}
-                            </Text>
-                          </XStack>
-                          {compressed.map(({ chords, count: pc }, gi) => (
-                            <YStack key={gi}>
-                              {gi > 0 && compressed.length > 1 ? (
-                                <View
-                                  style={{
-                                    height: 1,
-                                    backgroundColor: colors.border,
-                                    marginVertical: 4,
-                                  }}
-                                />
-                              ) : null}
-                              <XStack gap="$2" alignItems="center">
-                                <Text
-                                  style={[styles.mono, { fontSize: monoSize }]}
-                                  color={colors.text}
-                                >
-                                  {chords.map(displayToken).join('  ')}
-                                </Text>
-                                {pc > 1 ? (
-                                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                                    ×{pc}
-                                  </Text>
+                <YStack gap="$3" paddingBottom="$4" id={SHEET_CONTENT_ID}>
+                  {!notesHidden && myNotes?.song ? (
+                    <NoteLine text={myNotes.song} banner onPress={() => openNotes(SONG)} />
+                  ) : null}
+                  {chordsOnly
+                    ? sectionGroups.map(({ section, count }) => {
+                        const fullLabel = getSectionLabel(sheet.sections, section.id)
+                        const rangeMatch = count > 1 ? fullLabel.match(/^(.+?)\s+(\d+)$/) : null
+                        const label = rangeMatch
+                          ? `${rangeMatch[1]} ${parseInt(rangeMatch[2], 10)}-${parseInt(rangeMatch[2], 10) + count - 1}`
+                          : fullLabel
+                        const allTokens = (section.chordTokens ?? []).flat()
+                        const progGroups = splitByProgressionEnd(allTokens)
+                        const compressed = compressGroups(progGroups)
+                        return (
+                          <YStack
+                            key={section.id}
+                            id={sectionDomId(section.id)}
+                            gap="$0.5"
+                            onLayout={(e) => {
+                              sectionOffsets.current[section.id] = e.nativeEvent.layout.y
+                            }}
+                          >
+                            <XStack gap="$2" alignItems="center">
+                              <Text color={colors.primary} fontWeight="700" fontSize="$3">
+                                {label}
+                              </Text>
+                            </XStack>
+                            {(() => {
+                              // One heading for a run of sections: each one's note,
+                              // named when there is more than one.
+                              const start = sheet.sections.findIndex((x) => x.id === section.id)
+                              return sheet.sections
+                                .slice(start, start + count)
+                                .map((s) =>
+                                  sectionNote(
+                                    s.id,
+                                    count > 1 ? getSectionShortLabel(sheet.sections, s.id) : null
+                                  )
+                                )
+                            })()}
+                            {compressed.map(({ chords, count: pc }, gi) => (
+                              <YStack key={gi}>
+                                {gi > 0 && compressed.length > 1 ? (
+                                  <View
+                                    style={{
+                                      height: 1,
+                                      backgroundColor: colors.border,
+                                      marginVertical: 4,
+                                    }}
+                                  />
                                 ) : null}
-                              </XStack>
+                                <XStack gap="$2" alignItems="center">
+                                  <Text
+                                    style={[styles.mono, { fontSize: monoSize }]}
+                                    color={colors.text}
+                                  >
+                                    {chords.map(displayToken).join('  ')}
+                                  </Text>
+                                  {pc > 1 ? (
+                                    <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                                      ×{pc}
+                                    </Text>
+                                  ) : null}
+                                </XStack>
+                              </YStack>
+                            ))}
+                          </YStack>
+                        )
+                      })
+                    : sheet.sections.map((section) => {
+                        const label = getSectionLabel(sheet.sections, section.id)
+
+                        // A "same as previous" section renders the FULL content it
+                        // repeats (lyrics + aligned chords), not just a label and a
+                        // chord list — a repeated chorus should be singable in place
+                        // without scrolling back to find the words. The italic
+                        // "(same as X)" note is kept so the relationship stays clear.
+                        const repeatSource = section.sameAsPrevious
+                          ? getPrevMatchingSection(sheet.sections, section.id)
+                          : null
+                        const content = repeatSource ?? section
+                        const repeatNote = section.sameAsPrevious
+                          ? getPrevMatchingLabel(sheet.sections, section.id)
+                          : null
+                        const hasLyrics = content.lyrics.trim().length > 0
+
+                        // Full mode — instrumental
+                        if (!hasLyrics) {
+                          const tokens = (content.chordTokens ?? []).flat().filter(Boolean)
+                          return (
+                            <YStack
+                              key={section.id}
+                              id={sectionDomId(section.id)}
+                              gap="$1"
+                              onLayout={(e) => {
+                                sectionOffsets.current[section.id] = e.nativeEvent.layout.y
+                              }}
+                            >
+                              <Text color={colors.primary} fontWeight="700" fontSize="$3">
+                                {label}
+                              </Text>
+                              {repeatNote ? (
+                                <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
+                                  (same as {repeatNote})
+                                </Text>
+                              ) : null}
+                              {sectionNote(section.id)}
+                              {tokens.length > 0 ? (
+                                <XStack flexWrap="wrap" gap="$2" alignItems="center">
+                                  {tokens.map((t, i) =>
+                                    t === PROGRESSION_END ? (
+                                      <Text
+                                        key={i}
+                                        style={[styles.mono, { fontSize: monoSize }]}
+                                        color={colors.border}
+                                      >
+                                        {'|'}
+                                      </Text>
+                                    ) : (
+                                      <Text
+                                        key={i}
+                                        style={[
+                                          styles.mono,
+                                          styles.chordText,
+                                          { fontSize: monoSize },
+                                        ]}
+                                        color={colors.primary}
+                                      >
+                                        {displayToken(t)}
+                                      </Text>
+                                    )
+                                  )}
+                                </XStack>
+                              ) : null}
                             </YStack>
-                          ))}
-                        </YStack>
-                      )
-                    })
-                  : sheet.sections.map((section) => {
-                      const label = getSectionLabel(sheet.sections, section.id)
+                          )
+                        }
 
-                      // A "same as previous" section renders the FULL content it
-                      // repeats (lyrics + aligned chords), not just a label and a
-                      // chord list — a repeated chorus should be singable in place
-                      // without scrolling back to find the words. The italic
-                      // "(same as X)" note is kept so the relationship stays clear.
-                      const repeatSource = section.sameAsPrevious
-                        ? getPrevMatchingSection(sheet.sections, section.id)
-                        : null
-                      const content = repeatSource ?? section
-                      const repeatNote = section.sameAsPrevious
-                        ? getPrevMatchingLabel(sheet.sections, section.id)
-                        : null
-                      const hasLyrics = content.lyrics.trim().length > 0
-
-                      // Full mode — instrumental
-                      if (!hasLyrics) {
-                        const tokens = (content.chordTokens ?? []).flat().filter(Boolean)
+                        // Full mode — lyrics section with per-word chord alignment
+                        const lyricsLines = content.lyrics.split('\n')
+                        // Filter break rows so lineIdx maps correctly to lyricsLines
+                        const lyricChordRows = (content.chordTokens ?? []).filter(
+                          (row) => !(row.length === 1 && row[0] === PROGRESSION_END)
+                        )
                         return (
                           <YStack
                             key={section.id}
@@ -1184,203 +1366,163 @@ export function ChordSheetViewer({
                               sectionOffsets.current[section.id] = e.nativeEvent.layout.y
                             }}
                           >
-                            <Text color={colors.primary} fontWeight="700" fontSize="$3">
+                            <Text
+                              color={colors.primary}
+                              fontWeight="700"
+                              fontSize="$3"
+                              marginBottom={repeatNote ? 0 : '$0.5'}
+                            >
                               {label}
                             </Text>
                             {repeatNote ? (
-                              <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
+                              <Text
+                                color={colors.textMuted}
+                                fontSize="$2"
+                                fontStyle="italic"
+                                marginBottom="$0.5"
+                              >
                                 (same as {repeatNote})
                               </Text>
                             ) : null}
-                            {tokens.length > 0 ? (
-                              <XStack flexWrap="wrap" gap="$2" alignItems="center">
-                                {tokens.map((t, i) =>
-                                  t === PROGRESSION_END ? (
-                                    <Text
-                                      key={i}
-                                      style={[styles.mono, { fontSize: monoSize }]}
-                                      color={colors.border}
-                                    >
-                                      {'|'}
-                                    </Text>
-                                  ) : (
-                                    <Text
-                                      key={i}
-                                      style={[
-                                        styles.mono,
-                                        styles.chordText,
-                                        { fontSize: monoSize },
-                                      ]}
-                                      color={colors.primary}
-                                    >
-                                      {displayToken(t)}
-                                    </Text>
-                                  )
-                                )}
-                              </XStack>
-                            ) : null}
-                          </YStack>
-                        )
-                      }
-
-                      // Full mode — lyrics section with per-word chord alignment
-                      const lyricsLines = content.lyrics.split('\n')
-                      // Filter break rows so lineIdx maps correctly to lyricsLines
-                      const lyricChordRows = (content.chordTokens ?? []).filter(
-                        (row) => !(row.length === 1 && row[0] === PROGRESSION_END)
-                      )
-                      return (
-                        <YStack
-                          key={section.id}
-                          id={sectionDomId(section.id)}
-                          gap="$1"
-                          onLayout={(e) => {
-                            sectionOffsets.current[section.id] = e.nativeEvent.layout.y
-                          }}
-                        >
-                          <Text
-                            color={colors.primary}
-                            fontWeight="700"
-                            fontSize="$3"
-                            marginBottom={repeatNote ? 0 : '$0.5'}
-                          >
-                            {label}
-                          </Text>
-                          {repeatNote ? (
-                            <Text
-                              color={colors.textMuted}
-                              fontSize="$2"
-                              fontStyle="italic"
-                              marginBottom="$0.5"
-                            >
-                              (same as {repeatNote})
-                            </Text>
-                          ) : null}
-                          {lyricsLines.map((lyricLine, lineIdx) => {
-                            const slots = getWordSlots(lyricLine)
-                            if (!slots.length) return <View key={lineIdx} style={{ height: 8 }} />
-                            const lineTokens = lyricChordRows[lineIdx] ?? []
-                            const chords = slots.map((_, wi) => displayToken(lineTokens[wi] ?? ''))
-                            const charW = monoSize * CHAR_EM
-                            const widths = slots.map((slot, wi) =>
-                              slotWidth(slot.text, slot.trailing, chords[wi], charW)
-                            )
-                            return (
-                              // A plain View: Tamagui's stacks can miss reporting
-                              // layout for what is drawn before its layer is on
-                              // the page, which is how a sheet opens.
-                              <View
-                                key={lineIdx}
-                                style={{ paddingBottom: 4 }}
-                                onLayout={(e) => {
-                                  lineOffsets.current[`${section.id}:${lineIdx}`] =
-                                    e.nativeEvent.layout.y
-                                }}
-                              >
-                                {wrapSlots(widths, sheetWidth).map((row, ri) => {
-                                  // A row with no chords has no chord row to
-                                  // keep in step with: just the words.
-                                  const hasChords = row.some((wi) => chords[wi])
-                                  return (
-                                    <XStack key={ri} alignItems="flex-end" flexWrap="wrap">
-                                      {row.map((wi) => {
-                                        const slot = slots[wi]
-                                        const chord = chords[wi]
-                                        return (
-                                          // minWidth, not width: should the
-                                          // font in use run wider than Courier
-                                          // New, the word pushes its neighbour
-                                          // along rather than running into it.
-                                          <YStack
-                                            key={wi}
-                                            minWidth={widths[wi]}
-                                            alignItems="flex-start"
-                                          >
-                                            {/* The chord centred over its word,
-                                                or the word under a wider chord. */}
+                            {sectionNote(section.id)}
+                            {lyricsLines.map((lyricLine, lineIdx) => {
+                              const slots = getWordSlots(lyricLine)
+                              if (!slots.length) return <View key={lineIdx} style={{ height: 8 }} />
+                              const lineTokens = lyricChordRows[lineIdx] ?? []
+                              const chords = slots.map((_, wi) =>
+                                displayToken(lineTokens[wi] ?? '')
+                              )
+                              const charW = monoSize * CHAR_EM
+                              const widths = slots.map((slot, wi) =>
+                                slotWidth(slot.text, slot.trailing, chords[wi], charW)
+                              )
+                              return (
+                                // A plain View: Tamagui's stacks can miss reporting
+                                // layout for what is drawn before its layer is on
+                                // the page, which is how a sheet opens.
+                                <View
+                                  key={lineIdx}
+                                  style={{ paddingBottom: 4 }}
+                                  onLayout={(e) => {
+                                    lineOffsets.current[`${section.id}:${lineIdx}`] =
+                                      e.nativeEvent.layout.y
+                                  }}
+                                >
+                                  {wrapSlots(widths, sheetWidth).map((row, ri) => {
+                                    // A row with no chords has no chord row to
+                                    // keep in step with: just the words.
+                                    const hasChords = row.some((wi) => chords[wi])
+                                    return (
+                                      <XStack key={ri} alignItems="flex-end" flexWrap="wrap">
+                                        {row.map((wi) => {
+                                          const slot = slots[wi]
+                                          const chord = chords[wi]
+                                          return (
+                                            // minWidth, not width: should the
+                                            // font in use run wider than Courier
+                                            // New, the word pushes its neighbour
+                                            // along rather than running into it.
                                             <YStack
-                                              minWidth={columnWidth(
-                                                slot.text,
-                                                slot.trailing,
-                                                chord,
-                                                charW
-                                              )}
-                                              alignItems="center"
-                                              gap={0}
+                                              key={wi}
+                                              minWidth={widths[wi]}
+                                              alignItems="flex-start"
                                             >
-                                              {hasChords ? (
-                                                <Text
-                                                  style={[
-                                                    styles.mono,
-                                                    styles.chordText,
-                                                    { fontSize: monoSize },
-                                                  ]}
-                                                  color={chord ? colors.primary : 'transparent'}
-                                                  numberOfLines={1}
-                                                >
-                                                  {/* A non-breaking space: a plain
+                                              {/* The chord centred over its word,
+                                                or the word under a wider chord. */}
+                                              <YStack
+                                                minWidth={columnWidth(
+                                                  slot.text,
+                                                  slot.trailing,
+                                                  chord,
+                                                  charW
+                                                )}
+                                                alignItems="center"
+                                                gap={0}
+                                              >
+                                                {hasChords ? (
+                                                  <Text
+                                                    style={[
+                                                      styles.mono,
+                                                      styles.chordText,
+                                                      { fontSize: monoSize },
+                                                    ]}
+                                                    color={chord ? colors.primary : 'transparent'}
+                                                    numberOfLines={1}
+                                                  >
+                                                    {/* A non-breaking space: a plain
                                                     one collapses to nothing on
                                                     the web, and the word drops
                                                     onto the chord row. */}
-                                                  {chord || '\u00a0'}
+                                                    {chord || '\u00a0'}
+                                                  </Text>
+                                                ) : null}
+                                                <Text
+                                                  style={[
+                                                    styles.mono,
+                                                    styles.lyricText,
+                                                    { fontSize: monoSize },
+                                                  ]}
+                                                  color={colors.text}
+                                                  numberOfLines={1}
+                                                >
+                                                  {slot.text}
+                                                  {slot.trailing === '-' ? '-' : ''}
                                                 </Text>
-                                              ) : null}
-                                              <Text
-                                                style={[
-                                                  styles.mono,
-                                                  styles.lyricText,
-                                                  { fontSize: monoSize },
-                                                ]}
-                                                color={colors.text}
-                                                numberOfLines={1}
-                                              >
-                                                {slot.text}
-                                                {slot.trailing === '-' ? '-' : ''}
-                                              </Text>
+                                              </YStack>
                                             </YStack>
-                                          </YStack>
-                                        )
-                                      })}
-                                    </XStack>
-                                  )
-                                })}
-                              </View>
-                            )
-                          })}
-                        </YStack>
-                      )
-                    })}
-              </YStack>
+                                          )
+                                        })}
+                                      </XStack>
+                                    )
+                                  })}
+                                </View>
+                              )
+                            })}
+                          </YStack>
+                        )
+                      })}
+                </YStack>
 
-              {/* CCLI attribution — required on reproduced worship material. */}
-              {ccliLicense ? (
-                <Text
-                  color={colors.textMuted}
-                  fontSize={11}
-                  marginTop="$4"
-                  paddingTop="$2"
-                  borderTopWidth={1}
-                  borderTopColor={colors.border}
-                >
-                  Reproduced under CCLI License No. {ccliLicense}
-                </Text>
-              ) : null}
-              {/* Room for the last lines to scroll up past the autoscroll control. */}
-              <View style={styles.underControl} />
-            </ScrollView>
-            <AutoScrollControl
-              state={autoScroll.state}
-              level={autoScroll.level}
-              onToggle={autoScroll.toggle}
-              onStop={autoScroll.stop}
-              onSpeed={autoScroll.changeSpeed}
-            />
-          </View>
+                {/* CCLI attribution — required on reproduced worship material. */}
+                {ccliLicense ? (
+                  <Text
+                    color={colors.textMuted}
+                    fontSize={11}
+                    marginTop="$4"
+                    paddingTop="$2"
+                    borderTopWidth={1}
+                    borderTopColor={colors.border}
+                  >
+                    Reproduced under CCLI License No. {ccliLicense}
+                  </Text>
+                ) : null}
+                {/* Room for the last lines to scroll up past the autoscroll control. */}
+                <View style={styles.underControl} />
+              </ScrollView>
+              <AutoScrollControl
+                state={autoScroll.state}
+                level={autoScroll.level}
+                onToggle={autoScroll.toggle}
+                onStop={autoScroll.stop}
+                onSpeed={autoScroll.changeSpeed}
+              />
+            </View>
 
-          {audio ? <TrackBar url={audio.url} name={audio.name} /> : null}
-        </YStack>
-      </View>
-    </FullScreenOverlay>
+            {audio ? <TrackBar url={audio.url} name={audio.name} /> : null}
+          </YStack>
+        </View>
+      </FullScreenOverlay>
+      <SheetNotesEditor
+        sheet={notesOpenAt === null ? null : sheet}
+        notes={myNotes}
+        startAt={notesOpenAt ?? SONG}
+        hidden={notesHidden}
+        onToggleHidden={toggleNotesHidden}
+        onSaveSong={(text) => notesKey && setSongNote(notesKey, text)}
+        onSaveSection={(id, text) => notesKey && setSectionNote(notesKey, id, text)}
+        onClose={() => setNotesOpenAt(null)}
+      />
+    </>
   )
 }
 

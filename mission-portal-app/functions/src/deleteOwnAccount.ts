@@ -52,7 +52,7 @@ export const deleteOwnAccount = onCall(async (req) => {
   }
 
   // 2. Per-user documents keyed by uid.
-  for (const path of [`notifs/${uid}`, `onboarding/${uid}`, `users/${uid}`]) {
+  for (const path of [`notifs/${uid}`, `onboarding/${uid}`, `sheetNotes/${uid}`, `users/${uid}`]) {
     try {
       await db.doc(path).delete()
     } catch (err) {
