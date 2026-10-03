@@ -98,8 +98,13 @@ jobs:
         run: npx firebase-tools deploy --only functions --project ${{ secrets.FIREBASE_PROJECT_ID }}
 
       # Deploy Firestore security rules only when the rules file changed (or manually requested).
+      # Even when the functions step failed: the two are independent, and a
+      # transient Cloud Run error on one function once left a new rule
+      # undeployed — and the feature it was for unable to save anything.
       - name: Deploy Firestore Rules
         if: |
-          (github.event_name == 'workflow_dispatch' && inputs.deploy_rules == true) ||
-          (github.event_name == 'push' && steps.changed.outputs.rules != '0')
+          !cancelled() && (
+            (github.event_name == 'workflow_dispatch' && inputs.deploy_rules == true) ||
+            (github.event_name == 'push' && steps.changed.outputs.rules != '0')
+          )
         run: npx firebase-tools deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }}
