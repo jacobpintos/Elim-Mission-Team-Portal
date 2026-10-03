@@ -12,7 +12,7 @@ import {
   type LyricMatch,
 } from '@/lib/lyricMatch'
 import type { Chroma } from '@/lib/keyDetect'
-import { parseSongRequest, type SongRequest } from '@/lib/songRequest'
+import { KEY_HINTS, parseSongRequest, type SongRequest } from '@/lib/songRequest'
 import { readHeardAudio } from './heardAudio'
 import { claimSpeech, ownsSpeech, releaseSpeech } from '@/lib/speechOwner'
 import { shazam, type ShazamHit } from '@/lib/shazam'
@@ -291,7 +291,8 @@ export function SongListener({
       addsPunctuation: false,
       // Steer the recogniser towards this library's words: a sung "wretch"
       // is otherwise as likely heard as "rich".
-      contextualStrings: hintPhrases(index),
+      // And towards a key said with a title: "key of D", not "KFD".
+      contextualStrings: [...KEY_HINTS, ...hintPhrases(index, 100 - KEY_HINTS.length)],
       iosTaskHint: 'dictation',
       // The sound, for the key once the song is found; 16 kHz is plenty for
       // notes up to the top of a voice.

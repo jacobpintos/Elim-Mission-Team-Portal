@@ -142,29 +142,78 @@ const LETTERS: Record<string, number> = {
   c: 0,
   see: 0,
   sea: 0,
+  si: 0,
   d: 2,
   dee: 2,
+  di: 2,
+  die: 2,
+  dy: 2,
+  deed: 2,
   e: 4,
+  ee: 4,
   f: 5,
   ef: 5,
   eff: 5,
   g: 7,
   gee: 7,
+  ge: 7,
+  gi: 7,
+  jee: 7,
   a: 9,
   ay: 9,
+  eh: 9,
   b: 11,
   be: 11,
   bee: 11,
 }
 
 /**
+ * What a key phrase came out as, by how speech recognition runs its words
+ * together: "key of D" as "KFD" or "kod", "in D" as "indie" or "indeed",
+ * "in E" as "any", "in the key of" as one blur. Each is put back into words
+ * the parser below reads. Only ever tried on what follows (or comes before)
+ * a song's title, so a word like "indeed" is a key only there.
+ */
+function unblur(words: string[]): string {
+  let r = words
+    .join(' ')
+    // "eflat", "dminor": a letter run into what follows it.
+    .replace(/\b([a-g])(flat|sharp|minor|major)\b/g, '$1 $2')
+    .trim()
+  if (r === 'any') return 'e'
+  r = r.replace(/^the\s+/, '')
+  // "in …" and "on …", spaced or not: "in d", "indie", "insee", "inf".
+  const inForm = r.match(/^(?:in|on)\s*(.*)$/)
+  if (inForm) {
+    r = inForm[1]
+    // "in D" heard as "in the".
+    if (r === 'the') return 'd'
+    r = r.replace(/^the\s+/, '')
+  }
+  // "key of …": spaced ("key of d", "key d", "key off" for F), or run
+  // together into one word ("kfd", "kod", "keyofd") or two ("kf d").
+  const t = r.split(' ')
+  if (/^k(?:ey|ay|ee)$/.test(t[0])) {
+    if (t.length === 2 && t[1] === 'off') return 'f'
+    r = t.slice(t[1] === 'of' ? 2 : 1).join(' ')
+    if (r === 'the') return 'd'
+  } else if (/^k(?:ey|ay|ee|i)?(?:off|of|o|f|v)$/.test(t[0]) && t.length > 1) {
+    r = t.slice(1).join(' ')
+    if (r === 'the') return 'd'
+  } else {
+    const glued = t[0].match(/^k(?:ey|ay|ee|i)?(?:off|of|o|f|v)?([a-g].*)$/)
+    if (glued) r = [glued[1], ...t.slice(1)].join(' ')
+  }
+  return r
+}
+
+/**
  * A key, said: "key of E", "in B flat", "F sharp minor", "the key of Eb",
- * or a bare "G". Null if the words are anything else.
+ * or a bare "G" — and the run-together forms speech recognition makes of
+ * them (unblur). Null if the words are anything else.
  */
 export function spokenKey(words: string[]): { key: string; minor: boolean } | null {
-  let w = [...words]
-  while (w[0] === 'in' || w[0] === 'on' || w[0] === 'the') w = w.slice(1)
-  if (w[0] === 'key') w = w.slice(w[1] === 'of' ? 2 : 1)
+  const w = unblur(words).split(/\s+/).filter(Boolean)
   if (w.length === 0) return null
   let semitone: number
   let at = 1
@@ -184,6 +233,18 @@ export function spokenKey(words: string[]): { key: string; minor: boolean } | nu
   if (at !== w.length) return null
   return { key: NNS_KEYS[(semitone + 12) % 12], minor }
 }
+
+/**
+ * Phrases to steer speech recognition towards when a key may be said, so
+ * "key of D" is written down as that and not "KFD" to begin with.
+ */
+export const KEY_HINTS = [
+  ...'ABCDEFG'.split('').map((l) => `key of ${l}`),
+  ...'ABCDEFG'.split('').map((l) => `in ${l}`),
+  'flat',
+  'sharp',
+  'minor',
+]
 
 const onlyFiller = (words: string[]) => words.every((w) => FILLER.has(w))
 
@@ -231,6 +292,7 @@ function stripFiller(words: string[]): string[] {
   let end = words.length
   // "the key of" keeps its "the"; spokenKey takes it off.
   while (start < end && FILLER.has(words[start]) && words[start] !== 'the') start++
-  while (end > start && FILLER.has(words[end - 1])) end--
+  // Nor off the end: "in the" is how "in D" is often heard.
+  while (end > start && FILLER.has(words[end - 1]) && words[end - 1] !== 'the') end--
   return words.slice(start, end)
 }

@@ -72,6 +72,24 @@ describe('parseSongRequest', () => {
     expect(ask('holy in d')).toEqual({ id: 2, key: 'D', minor: false })
   })
 
+  it('reads a key the way speech recognition runs it together', () => {
+    const d = { id: 2, key: 'D', minor: false }
+    expect(ask('Holy KFD')).toEqual(d)
+    expect(ask('holy kod')).toEqual(d)
+    expect(ask('holy keyofd')).toEqual(d)
+    expect(ask('holy indie')).toEqual(d)
+    expect(ask('Holy indeed')).toEqual(d)
+    expect(ask('holy in the')).toEqual(d)
+    expect(ask('holy key of the')).toEqual(d)
+    expect(ask('holy key off')).toEqual({ id: 2, key: 'F', minor: false })
+    expect(ask('holy inf')).toEqual({ id: 2, key: 'F', minor: false })
+    expect(ask('holy insee')).toEqual({ id: 2, key: 'C', minor: false })
+    expect(ask('holy ingee')).toEqual({ id: 2, key: 'G', minor: false })
+    expect(ask('holy any')).toEqual({ id: 2, key: 'E', minor: false })
+    expect(ask('holy in eflat')).toEqual({ id: 2, key: 'Eb', minor: false })
+    expect(ask('holy in the key of b flat minor')).toEqual({ id: 2, key: 'Bb', minor: true })
+  })
+
   it('hears a title the way speech recognition spells it', () => {
     expect(ask('Agnes Day')).toEqual({ id: 6, key: null, minor: false })
     expect(ask('agnes day in a')).toEqual({ id: 6, key: 'A', minor: false })
