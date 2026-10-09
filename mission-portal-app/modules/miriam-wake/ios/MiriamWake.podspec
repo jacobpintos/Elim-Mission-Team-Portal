@@ -43,9 +43,15 @@ Pod::Spec.new do |s|
   # Apache 2.0) and the phrase it listens for.
   s.resource_bundles = { 'MiriamWake' => ['model/miriam-wake/*.onnx', 'model/miriam-wake/*.txt'] }
 
+  # Where this pod's own Swift finds SherpaOnnxC: the slice for the device or
+  # the simulator, straight from the xcframework, rather than relying on the
+  # copy CocoaPods makes of it running first.
+  xcf = '"$(PODS_TARGET_SRCROOT)/Frameworks/SherpaOnnxC.xcframework'
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
-    'SWIFT_COMPILATION_MODE' => 'wholemodule'
+    'SWIFT_COMPILATION_MODE' => 'wholemodule',
+    'FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]' => "$(inherited) #{xcf}/ios-arm64\"",
+    'FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]' => "$(inherited) #{xcf}/ios-arm64_x86_64-simulator\""
   }
 
   s.source_files = "**/*.{h,m,swift}"

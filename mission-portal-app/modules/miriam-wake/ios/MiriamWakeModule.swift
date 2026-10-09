@@ -1,6 +1,10 @@
 import AVFoundation
 import ExpoModulesCore
-import SherpaOnnxC
+// Kept out of this module's interface: the app imports MiriamWake (Expo's
+// module list does), and built as a static library, a plain import would
+// make it find SherpaOnnxC too — which it cannot, failing the build with
+// "no such module 'SherpaOnnxC'". Only this file uses it.
+@_implementationOnly import SherpaOnnxC
 
 /// Listens on the phone for "Hey Miriam", and nothing else.
 ///
