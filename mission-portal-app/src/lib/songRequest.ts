@@ -421,3 +421,32 @@ export function requestFromAliases<T extends { id: string | number; title: strin
   if (!sheet) return null
   return { sheet, key: key?.key ?? null, minor: key?.minor ?? false }
 }
+
+/**
+ * Songs found by typing, for when the right one is not among the guesses:
+ * every word typed starts a word of the title or the artist ("hail king",
+ * "agn", "hillsong breathe"). Failing that, titles every word typed sounds
+ * like a word of ("agnes day"), then the titles closest to what was typed,
+ * the way they are found from speech. Alphabetical.
+ */
+export function searchSongs<T extends { title: string; artist?: string }>(
+  sheets: T[],
+  query: string,
+  count = 8
+): T[] {
+  const typed = spokenWords(query)
+  if (typed.length === 0) return []
+  const hits = sheets.filter((s) => {
+    const words = spokenWords(`${s.title} ${s.artist ?? ''}`)
+    return typed.every((t) => words.some((w) => w.startsWith(t)))
+  })
+  // Typed as it sounds ("agnes day"): every word like one of the title's.
+  const alike = hits.length
+    ? hits
+    : sheets.filter((s) => {
+        const words = spokenWords(s.title)
+        return typed.every((t) => words.some((w) => wordMatch(t, w) > 0))
+      })
+  const found = alike.length ? alike : closestTitles(sheets, query, count)
+  return [...found].sort((a, b) => a.title.localeCompare(b.title)).slice(0, count)
+}

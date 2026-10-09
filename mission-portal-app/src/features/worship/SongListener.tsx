@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Platform, Pressable, StyleSheet, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text, XStack, YStack } from 'tamagui'
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
@@ -17,6 +18,7 @@ import {
   closestTitles,
   parseSongRequest,
   requestFromAliases,
+  searchSongs,
   trailingKey,
   type SongRequest,
 } from '@/lib/songRequest'
@@ -140,9 +142,20 @@ export function SongListener({
   const declined = useRef(new Set<string>())
   // What this device has learned to hear as which song (lib/songAliases).
   const aliases = useRef<ReadonlyMap<string, string>>(new Map())
+  // The songs those phrases were corrected to: told to the recogniser
+  // early on, as titles proven hard to hear (lib/hintOrder).
+  const [taught, setTaught] = useState<Set<string>>(new Set())
+  const learned = (m: ReadonlyMap<string, string>) => {
+    aliases.current = m
+    setTaught(new Set(m.values()))
+  }
   useEffect(() => {
-    loadAliases().then((m) => (aliases.current = m))
+    loadAliases().then(learned)
   }, [])
+  // Searching by hand, for when the guesses are wrong or missing.
+  const [searching, setSearching] = useState(false)
+  const [query, setQuery] = useState('')
+  const insets = useSafeAreaInsets()
   // No signal: listening on the phone itself, where it can.
   const onDevice = useRef(false)
   const [offline, setOffline] = useState(false)
@@ -163,13 +176,13 @@ export function SongListener({
   const index = useMemo(
     () =>
       buildLyricIndex(
-        orderForHints(sheets, upcomingSheetIds(setLists, localToday())).map((s) => ({
+        orderForHints(sheets, upcomingSheetIds(setLists, localToday()), taught).map((s) => ({
           id: String(s.id),
           title: s.title,
           sections: s.sections.map((sec) => ({ id: sec.id, lyrics: sec.lyrics })),
         }))
       ),
-    [sheets, setLists]
+    [sheets, setLists, taught]
   )
 
   const listenForWords = () => {
@@ -326,18 +339,43 @@ export function SongListener({
   }
 
   /** A guess picked by hand: opened at once, and learned from. */
+  /** Teach this device that what was heard means this song (lib/songAliases). */
+  const learnFrom = (sheetId: string) => {
+    if (!heard) return
+    rememberAlias(heard, sheetId)
+    loadAliases().then(learned)
+  }
+
   const pick = (g: Guess) => {
     clearPending()
-    if (heard) {
-      rememberAlias(heard, g.id)
-      loadAliases().then((m) => (aliases.current = m))
-    }
+    learnFrom(g.id)
     if (!g.byTitle) return finish(g)
     // Picked by name: in whatever key was said with it.
     const sheet = sheets.find((s) => String(s.id) === g.id)
     const key = trailingKey(heard)
     if (sheet) openAsked({ sheet, key: key?.key ?? null, minor: key?.minor ?? false })
   }
+
+  /**
+   * Search instead: for when the guesses are wrong, or there are none.
+   * Listening stops — nothing should open while a name is being typed —
+   * and what was heard is kept, to be learned as the song picked.
+   */
+  const openSearch = () => {
+    clearPending()
+    clearRequest()
+    if (ownsSpeech(SPEECH_ID)) ExpoSpeechRecognitionModule.abort()
+    setQuery('')
+    setSearching(true)
+  }
+  const pickSearched = (sheet: ChordSheet) => {
+    learnFrom(String(sheet.id))
+    setSearching(false)
+    // In whatever key was said with it.
+    const key = trailingKey(heard)
+    openAsked({ sheet, key: key?.key ?? null, minor: key?.minor ?? false })
+  }
+  const results = searching ? searchSongs(sheets, query, 6) : []
 
   // Only while listening for a song: the recogniser's events also carry
   // dictation into text fields (components/ui/Dictation), which is not a
@@ -404,6 +442,7 @@ export function SongListener({
     done.current = false
     found.current = null
     declined.current.clear()
+    setSearching(false)
     clearPending()
     clearRequest()
     onDevice.current = false
@@ -434,6 +473,7 @@ export function SongListener({
 
   const close = () => {
     done.current = true
+    setSearching(false)
     clearPending()
     clearRequest()
     ExpoSpeechRecognitionModule.abort()
@@ -484,115 +524,203 @@ export function SongListener({
       </Pressable>
 
       <FullScreenOverlay visible={open} animationType="fade" transparent onRequestClose={close}>
-        <View style={styles.backdrop}>
-          <YStack
-            backgroundColor={colors.surface}
-            borderRadius="$4"
-            padding="$4"
-            gap="$3"
-            width="92%"
-            maxWidth={480}
-          >
-            <XStack alignItems="center" justifyContent="space-between">
-              <Text color={colors.text} fontSize="$5" fontWeight="700">
-                {listening ? 'Listening…' : 'Find a song'}
-              </Text>
-              <Pressable
-                onPress={close}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                style={styles.closeBtn}
-              >
-                <Text color={colors.textMuted} fontSize="$4">
-                  ✕
-                </Text>
-              </Pressable>
-            </XStack>
-
-            <Text color={colors.textMuted} fontSize="$3">
-              {problem ??
-                (listening
-                  ? 'Say a song’s name — “Firm Foundation in E” — or hold the phone near the music. The chord sheet opens as soon as the song is clear.'
-                  : 'Starting…')}
-            </Text>
-
-            {offline ? (
-              <Text color={colors.textMuted} fontSize="$2">
-                No signal — listening on this phone instead.
-              </Text>
-            ) : null}
-
-            {pending ? (
-              <YStack gap="$2">
-                <Text color={colors.text} fontSize="$4" fontWeight="700">
-                  Opening {pending}…
-                </Text>
-                <XStack gap="$2">
-                  <Pressable
-                    onPress={cancelPending}
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancel, that's the wrong song"
-                    style={[styles.choice, { borderColor: colors.border }]}
-                  >
-                    <Text color={colors.text} fontWeight="700">
-                      Cancel
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={openNow}
-                    accessibilityRole="button"
-                    style={[
-                      styles.choice,
-                      { backgroundColor: colors.primary, borderColor: colors.primary },
-                    ]}
-                  >
-                    <Text color="white" fontWeight="700">
-                      Open now
-                    </Text>
-                  </Pressable>
-                </XStack>
-              </YStack>
-            ) : null}
-
-            {heard ? (
-              <Text color={colors.text} fontSize="$3" fontStyle="italic" numberOfLines={3}>
-                “…{heard}”
-              </Text>
-            ) : null}
-
-            {guesses.length > 0 ? (
-              <YStack gap="$2">
+        <View
+          style={[
+            styles.backdrop,
+            // Typing: at the top of the screen, where the keyboard never
+            // reaches and the page has no reason to shift (see SheetNotes).
+            searching ? { justifyContent: 'flex-start', paddingTop: insets.top + 12 } : null,
+          ]}
+        >
+          {searching ? (
+            <YStack
+              backgroundColor={colors.surface}
+              borderRadius="$4"
+              padding="$3"
+              gap="$2"
+              width="92%"
+              maxWidth={480}
+            >
+              <XStack alignItems="center" gap="$2">
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Song title or artist…"
+                  placeholderTextColor={colors.textMuted}
+                  autoFocus
+                  autoCorrect={false}
+                  accessibilityLabel="Search for the song"
+                  style={[
+                    styles.search,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.background,
+                    },
+                  ]}
+                />
+                <Pressable
+                  onPress={() => setSearching(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to listening"
+                  style={styles.closeBtn}
+                >
+                  <Text color={colors.textMuted} fontSize="$3">
+                    Back
+                  </Text>
+                </Pressable>
+              </XStack>
+              {heard ? (
                 <Text color={colors.textMuted} fontSize="$2">
-                  Sounds like:
+                  Heard “…{heard}”. The song you pick is remembered for those words.
                 </Text>
-                {guesses.map((g) => (
-                  <Pressable
-                    key={g.id}
-                    onPress={() => pick(g)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open ${g.title}`}
-                    style={[styles.guess, { borderColor: colors.border }]}
-                  >
-                    <Text color={colors.primary} fontWeight="700">
-                      {g.title}
+              ) : null}
+              {results.map((sheet) => (
+                <Pressable
+                  key={String(sheet.id)}
+                  onPress={() => pickSearched(sheet)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${sheet.title}`}
+                  style={[styles.guess, { borderColor: colors.border }]}
+                >
+                  <Text color={colors.primary} fontWeight="700">
+                    {sheet.title}
+                  </Text>
+                  {sheet.artist ? (
+                    <Text color={colors.textMuted} fontSize="$2">
+                      {sheet.artist}
                     </Text>
-                  </Pressable>
-                ))}
-              </YStack>
-            ) : null}
-
-            {!listening && !pending ? (
-              <Pressable
-                onPress={start}
-                accessibilityRole="button"
-                style={[styles.again, { backgroundColor: colors.primary }]}
-              >
-                <Text color="white" fontWeight="700">
-                  🎤 Listen again
+                  ) : null}
+                </Pressable>
+              ))}
+              {query.trim() && results.length === 0 ? (
+                <Text color={colors.textMuted} fontSize="$3">
+                  No song by that name.
                 </Text>
-              </Pressable>
-            ) : null}
-          </YStack>
+              ) : null}
+            </YStack>
+          ) : (
+            <YStack
+              backgroundColor={colors.surface}
+              borderRadius="$4"
+              padding="$4"
+              gap="$3"
+              width="92%"
+              maxWidth={480}
+            >
+              <XStack alignItems="center" justifyContent="space-between">
+                <Text color={colors.text} fontSize="$5" fontWeight="700">
+                  {listening ? 'Listening…' : 'Find a song'}
+                </Text>
+                <Pressable
+                  onPress={close}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                  style={styles.closeBtn}
+                >
+                  <Text color={colors.textMuted} fontSize="$4">
+                    ✕
+                  </Text>
+                </Pressable>
+              </XStack>
+
+              <Text color={colors.textMuted} fontSize="$3">
+                {problem ??
+                  (listening
+                    ? 'Say a song’s name — “Firm Foundation in E” — or hold the phone near the music. The chord sheet opens as soon as the song is clear.'
+                    : 'Starting…')}
+              </Text>
+
+              {offline ? (
+                <Text color={colors.textMuted} fontSize="$2">
+                  No signal — listening on this phone instead.
+                </Text>
+              ) : null}
+
+              {pending ? (
+                <YStack gap="$2">
+                  <Text color={colors.text} fontSize="$4" fontWeight="700">
+                    Opening {pending}…
+                  </Text>
+                  <XStack gap="$2">
+                    <Pressable
+                      onPress={cancelPending}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel, that's the wrong song"
+                      style={[styles.choice, { borderColor: colors.border }]}
+                    >
+                      <Text color={colors.text} fontWeight="700">
+                        Cancel
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={openNow}
+                      accessibilityRole="button"
+                      style={[
+                        styles.choice,
+                        { backgroundColor: colors.primary, borderColor: colors.primary },
+                      ]}
+                    >
+                      <Text color="white" fontWeight="700">
+                        Open now
+                      </Text>
+                    </Pressable>
+                  </XStack>
+                </YStack>
+              ) : null}
+
+              {heard ? (
+                <Text color={colors.text} fontSize="$3" fontStyle="italic" numberOfLines={3}>
+                  “…{heard}”
+                </Text>
+              ) : null}
+
+              {guesses.length > 0 ? (
+                <YStack gap="$2">
+                  <Text color={colors.textMuted} fontSize="$2">
+                    Sounds like:
+                  </Text>
+                  {guesses.map((g) => (
+                    <Pressable
+                      key={g.id}
+                      onPress={() => pick(g)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${g.title}`}
+                      style={[styles.guess, { borderColor: colors.border }]}
+                    >
+                      <Text color={colors.primary} fontWeight="700">
+                        {g.title}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </YStack>
+              ) : null}
+
+              {!pending ? (
+                <Pressable
+                  onPress={openSearch}
+                  accessibilityRole="button"
+                  style={styles.searchLink}
+                >
+                  <Text color={colors.primary} fontSize="$3" fontWeight="600">
+                    🔍 {guesses.length ? 'Not right? Search for the song' : 'Search for the song'}
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {!listening && !pending ? (
+                <Pressable
+                  onPress={start}
+                  accessibilityRole="button"
+                  style={[styles.again, { backgroundColor: colors.primary }]}
+                >
+                  <Text color="white" fontWeight="700">
+                    🎤 Listen again
+                  </Text>
+                </Pressable>
+              ) : null}
+            </YStack>
+          )}
         </View>
       </FullScreenOverlay>
     </>
@@ -612,6 +740,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  search: {
+    flex: 1,
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    // 16pt: smaller, and an iPhone zooms the page in on the field.
+    fontSize: 16,
+  },
+  searchLink: {
+    minHeight: 44,
     justifyContent: 'center',
   },
   closeBtn: {

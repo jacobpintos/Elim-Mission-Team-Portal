@@ -7,9 +7,11 @@
  * 1. Titles with words that are not English — Agnus Dei, Hosanna, Abba,
  *    Kyrie. Recognition writes what it thinks it heard in English ("Agnes
  *    Day"), so these are the ones it cannot get right without being told.
- * 2. Songs in a set list for the next two weeks: what is about to be asked
+ * 2. Songs this device has had to be corrected to — picked from the
+ *    guesses or searched for after being misheard: proven hard to hear.
+ * 3. Songs in a set list for the next two weeks: what is about to be asked
  *    for.
- * 3. The rest, alphabetically, so the order is the same every time.
+ * 4. The rest, alphabetically, so the order is the same every time.
  *
  * The finding itself is not limited by this: whatever is heard is compared
  * with every title (songRequest).
@@ -152,8 +154,10 @@ export function upcomingSheetIds(
 /** `sheets` in the order their titles should be hinted (see above). */
 export function orderForHints<T extends { id: string | number; title: string }>(
   sheets: T[],
-  upcoming: Set<string>
+  upcoming: Set<string>,
+  taught: Set<string> = new Set()
 ): T[] {
-  const rank = (s: T) => (hasForeignWord(s.title) ? 0 : upcoming.has(String(s.id)) ? 1 : 2)
+  const rank = (s: T) =>
+    hasForeignWord(s.title) ? 0 : taught.has(String(s.id)) ? 1 : upcoming.has(String(s.id)) ? 2 : 3
   return [...sheets].sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title))
 }

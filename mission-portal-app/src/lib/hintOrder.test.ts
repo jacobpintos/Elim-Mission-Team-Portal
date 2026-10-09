@@ -27,6 +27,14 @@ describe('upcomingSheetIds', () => {
 })
 
 describe('orderForHints', () => {
+  it('puts songs it has been corrected to before upcoming ones', () => {
+    const sheets = [
+      { id: 1, title: 'Way Maker' },
+      { id: 2, title: 'Build My Life' },
+    ]
+    expect(orderForHints(sheets, new Set(['2']), new Set(['1'])).map((s) => s.id)).toEqual([1, 2])
+  })
+
   it('puts foreign titles first, then upcoming songs, then the rest alphabetically', () => {
     const sheets = [
       { id: 1, title: 'Way Maker' },

@@ -3,6 +3,7 @@ import {
   closestTitles,
   parseSongRequest,
   requestFromAliases,
+  searchSongs,
   soundOf,
   splitSpokenKey,
   spokenKey,
@@ -188,5 +189,30 @@ describe('requestFromAliases', () => {
   it('knows nothing it has not been taught', () => {
     expect(requestFromAliases(aliases, sheets, 'oh hill king')).toBeNull()
     expect(requestFromAliases(new Map([['x', 'gone']]), sheets, 'x')).toBeNull()
+  })
+})
+
+describe('searchSongs', () => {
+  const library = [
+    { id: 1, title: 'All Hail King Jesus', artist: 'Bethel' },
+    { id: 2, title: 'Agnus Dei', artist: 'Michael W. Smith' },
+    { id: 3, title: 'Breathe', artist: 'Hillsong' },
+    { id: 4, title: 'King of Kings', artist: 'Hillsong' },
+  ]
+  const ids = (q: string) => searchSongs(library, q).map((s) => s.id)
+
+  it('finds by the start of any word of the title or artist', () => {
+    expect(ids('hail king')).toEqual([1])
+    expect(ids('agn')).toEqual([2])
+    expect(ids('hillsong')).toEqual([3, 4])
+    expect(ids('King')).toEqual([1, 4])
+  })
+
+  it('falls back on titles that sound like what was typed', () => {
+    expect(ids('agnes day')).toEqual([2])
+  })
+
+  it('finds nothing for nothing typed', () => {
+    expect(ids('  ')).toEqual([])
   })
 })
