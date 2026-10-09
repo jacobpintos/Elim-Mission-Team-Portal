@@ -94,6 +94,14 @@ describe('what Miriam looks up, for whoever is asking', () => {
     expect((await as('sarah', ['regular']).findEvents('leaders zoom', '')).found).toEqual([])
   })
 
+  it('brings the first match’s details with it, so they need not be asked for again', async () => {
+    const sarah = as('sarah', ['regular'])
+    const found = await sarah.findEvents('revival heartland', '')
+    expect(found).toMatchObject({ details: await sarah.getEvent('ev1_2026-10-25') })
+    // Not for a bare list of what's coming up.
+    expect(await sarah.findEvents('', '')).not.toHaveProperty('details')
+  })
+
   it('gives an event’s details as the asker is shown them', async () => {
     const ev = await as('sarah', ['regular']).getEvent('ev1_2026-10-25')
     expect(ev).toMatchObject({

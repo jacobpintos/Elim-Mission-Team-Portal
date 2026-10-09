@@ -178,7 +178,10 @@ export class Lookups {
           }
         : { found: [], note: 'No event this person can see is anything like that.' }
     }
-    return { found: found.map(brief) }
+    // The one asked about is nearly always the first: its details come with
+    // it, saving a round of asking for them. Not for a bare list of what's next.
+    if (!query.trim() && !date) return { found: found.map(brief) }
+    return { found: found.map(brief), details: await this.getEvent(found[0].instanceKey) }
   }
 
   async getEvent(key: string) {

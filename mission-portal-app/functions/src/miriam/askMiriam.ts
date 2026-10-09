@@ -19,8 +19,21 @@ if (!admin.apps.length) admin.initializeApp()
 /** Set with `firebase functions:secrets:set ANTHROPIC_API_KEY`. */
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY')
 
-/** The model that reads requests. One line to change. */
-const MODEL = 'claude-opus-5-5'
+/**
+ * The model that reads requests: quick and inexpensive, for what most
+ * requests are — a lookup and a short answer.
+ */
+const MODEL = 'claude-haiku-5-5'
+/**
+ * Asked for advice when it is needed — a request with several parts, or
+ * people to match — and only then, so its price is paid only then.
+ */
+const ADVISOR: Anthropic.Beta.BetaAdvisorTool20260301 = {
+  type: 'advisor_20260301',
+  name: 'advisor',
+  model: 'claude-opus-5-5',
+  max_uses: 2,
+}
 
 /** A minute of talking, with room to spare; past it, it isn't a request. Mirrored in the app (lib/miriam: MAX_REQUEST). */
 const MAX_TEXT = 1500
@@ -45,6 +58,8 @@ Someone has spoken to you, usually out loud. Their words were turned into text b
 A question: look it up with the tools — never answer from memory or guess — then finish with \`answer\`: a short reply to be heard, and where in the app to show it. The tools return only what this person is allowed to see. If something isn't there, say you couldn't find it, without suggesting that it exists. When several events match, take the nearest upcoming one unless they said otherwise, and say its date. When nothing fits well, find_events gives the nearest names instead: if one is plainly what they meant — it sounds the same, or it is a name they have used before — use it, and say which you took ("I took that as Revival in the Heartland"); if you can't tell, say you couldn't find that name, and offer the nearest as \`choices\`. Always set \`heard_name\` to the words they used for the event. When they ask who is unavailable, include everyone not plainly available — not available, partly available, not sure yet (TBD), and not answered — with what they wrote. When they ask what is pending, that is every task not done.
 
 Something to do: use the tool for it. It only fills in a form for them to check and save, so fill in what they said and leave the rest empty.
+
+When you are not sure — a request with several parts, people or groups to match, a name you can't place, or anything you might get wrong — ask the advisor before you act. A plain question you can look up needs no advice.
 
 If no tool fits, call \`answer\` saying in one sentence that you can't do that yet. Never ask a question back; they can't answer one.`
 
@@ -117,10 +132,10 @@ export const askMiriam = onCall(
     const lookups = new Lookups(db, viewer, today)
 
     // The people and groups a new event's form can name: only for those who
-    // may make one (admins, who can see them all).
+    // may make one (admins, who can see them all), and only once asked for.
     let roster: Roster | null = null
-    let lists = ''
-    if (commands.includes('open_event_form')) {
+    const loadRoster = async (): Promise<Roster> => {
+      if (roster) return roster
       const [names, groups] = await Promise.all([lookups.names(), lookups.groups()])
       const userSnap = await db.collection('users').get()
       roster = {
@@ -133,15 +148,40 @@ export const askMiriam = onCall(
           .sort((a, b) => a.name.localeCompare(b.name)),
         groups: groups.filter((g) => g.name).sort((a, b) => a.name.localeCompare(b.name)),
       }
-      lists =
-        `For a new event's form — groups (id: name):\n${roster.groups.map((g) => `${g.id}: ${g.name}`).join('\n')}\n\n` +
-        `People (id: name):\n${roster.people.map((p) => `${p.id}: ${p.name}`).join('\n')}`
+      return roster
     }
 
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() })
-    const tools = commands.map((name) => COMMANDS[name].tool as Anthropic.Beta.BetaTool)
-    const system: Anthropic.Beta.BetaTextBlockParam[] = [{ type: 'text', text: SYSTEM }]
-    if (lists) system.push({ type: 'text', text: lists, cache_control: { type: 'ephemeral' } })
+    const commandTools = commands.map((name) => COMMANDS[name].tool as Anthropic.Beta.BetaTool)
+    // Haiku, with Opus to advise; or — if that is ever turned down before
+    // anything has been said — Opus alone, as before, so the question is
+    // still answered.
+    let alone = false
+    const ask = () =>
+      alone
+        ? client.beta.messages.create({
+            model: ADVISOR.model,
+            max_tokens: 8000,
+            // Declined on safety grounds: tried again on the model Anthropic
+            // recommends for that, inside the same call.
+            betas: ['server-side-fallback-2026-07-01'],
+            fallbacks: 'default',
+            output_config: { effort: 'low' },
+            system: SYSTEM,
+            tools: commandTools,
+            messages,
+          })
+        : client.beta.messages.create({
+            model: MODEL,
+            max_tokens: 8000,
+            betas: ['advisor-tool-2026-03-01'],
+            output_config: { effort: 'medium' },
+            // Each round re-reads the one before from the cache.
+            cache_control: { type: 'ephemeral' },
+            system: SYSTEM,
+            tools: [...commandTools, ADVISOR],
+            messages,
+          })
     const messages: Anthropic.Beta.BetaMessageParam[] = [
       {
         role: 'user',
@@ -155,17 +195,11 @@ export const askMiriam = onCall(
     for (let round = 0; round < MAX_ROUNDS; round++) {
       let response: Anthropic.Beta.BetaMessage
       try {
-        response = await client.beta.messages.create({
-          model: MODEL,
-          max_tokens: 8000,
-          // Declined on safety grounds: tried again on the model Anthropic
-          // recommends for that, inside the same call.
-          betas: ['server-side-fallback-2026-07-01'],
-          fallbacks: 'default',
-          output_config: { effort: 'low' },
-          system,
-          tools,
-          messages,
+        response = await ask().catch((err: unknown) => {
+          if (!(err instanceof Anthropic.BadRequestError) || alone || messages.length > 1) throw err
+          logger.error('askMiriam: Haiku with an advisor was refused; asking Opus alone', err)
+          alone = true
+          return ask()
         })
       } catch (err) {
         if (err instanceof Anthropic.AuthenticationError) {
@@ -181,6 +215,11 @@ export const askMiriam = onCall(
 
       if (response.stop_reason === 'refusal') {
         return { kind: 'reply', text: 'Sorry, I can’t help with that.' }
+      }
+      // Paused while asking the advisor: carried on from where it stopped.
+      if (response.stop_reason === 'pause_turn') {
+        messages.push({ role: 'assistant', content: response.content })
+        continue
       }
       const calls = response.content.filter(
         (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use'
@@ -198,8 +237,11 @@ export const askMiriam = onCall(
       if (refusedCall) return { kind: 'reply', text: 'You don’t have permission to do that.' }
 
       const form = calls.find((c) => c.name === 'open_event_form')
-      if (form && roster) {
-        const { draft, notes } = draftFromInput(form.input as Partial<EventFormInput>, roster)
+      if (form) {
+        const { draft, notes } = draftFromInput(
+          form.input as Partial<EventFormInput>,
+          await loadRoster()
+        )
         return { kind: 'eventForm', draft, notes }
       }
       const final = calls.find((c) => c.name === 'answer')
@@ -212,15 +254,20 @@ export const askMiriam = onCall(
         let result: unknown
         try {
           result =
-            call.name === 'find_events'
-              ? await lookups.findEvents(String(input.query ?? ''), String(input.date ?? ''))
-              : call.name === 'get_event'
-                ? await lookups.getEvent(String(input.key ?? ''))
-                : call.name === 'event_availability'
-                  ? await lookups.availability(String(input.key ?? ''))
-                  : call.name === 'find_tasks'
-                    ? await lookups.findTasks(String(input.query ?? ''))
-                    : { error: 'Not a lookup.' }
+            call.name === 'people_and_groups'
+              ? await loadRoster().then((r) => ({
+                  groups: r.groups.map((g) => `${g.id}: ${g.name}`),
+                  people: r.people.map((p) => `${p.id}: ${p.name}`),
+                }))
+              : call.name === 'find_events'
+                ? await lookups.findEvents(String(input.query ?? ''), String(input.date ?? ''))
+                : call.name === 'get_event'
+                  ? await lookups.getEvent(String(input.key ?? ''))
+                  : call.name === 'event_availability'
+                    ? await lookups.availability(String(input.key ?? ''))
+                    : call.name === 'find_tasks'
+                      ? await lookups.findTasks(String(input.query ?? ''))
+                      : { error: 'Not a lookup.' }
         } catch (err) {
           logger.error(`askMiriam: ${call.name} failed`, err)
           result = { error: 'That could not be looked up just now.' }

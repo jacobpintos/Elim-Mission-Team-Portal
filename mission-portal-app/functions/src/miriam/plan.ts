@@ -17,6 +17,7 @@
 /** A command Miriam can carry out. Mirrored in the app (src/lib/miriam.ts). */
 export type CommandName =
   | 'open_event_form'
+  | 'people_and_groups'
   | 'find_events'
   | 'get_event'
   | 'event_availability'
@@ -81,11 +82,11 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
           },
           groups: {
             ...stringList,
-            description: 'Ids of the groups to assign, from the list of groups.',
+            description: 'Ids of the groups to assign, from people_and_groups.',
           },
           people: {
             ...stringList,
-            description: 'Ids of individual people to assign, from the list of people.',
+            description: 'Ids of individual people to assign, from people_and_groups.',
           },
           except_people: {
             ...stringList,
@@ -95,7 +96,7 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
           unmatched_names: {
             ...stringList,
             description:
-              'Names that were said but match nobody on the lists, or more than one person, as said.',
+              'Names that were said but match nobody from people_and_groups, or more than one person, as said.',
           },
         },
         required: [
@@ -116,13 +117,28 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
     },
   },
 
+  people_and_groups: {
+    // Who a new event's form can name: asked for only when one is being made,
+    // so the lists are not sent with every question.
+    roles: ['admin'],
+    tool: {
+      name: 'people_and_groups',
+      description:
+        'The groups and people a new event can be assigned to, with their ids. ' +
+        'Call it before open_event_form when the request names any people or groups.',
+      strict: true,
+      input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    },
+  },
+
   // Questions: read only, and only what the person may see (./data.ts).
   find_events: {
     roles: ANYONE_SIGNED_IN,
     tool: {
       name: 'find_events',
       description:
-        'Find events this person can see by name, city or venue, or on a date: returns each match’s key, title, date, time and city, nearest upcoming first. ' +
+        'Find events this person can see by name, city or venue, or on a date: returns each match’s key, title, date, time and city, nearest upcoming first, ' +
+        'and everything get_event gives for the first of them as `details`. ' +
         'Use it first for any question about an event. With neither, it lists the next few events.',
       strict: true,
       input_schema: {
@@ -149,7 +165,7 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
     tool: {
       name: 'get_event',
       description:
-        'Everything about one event this person is shown: date, time, report times, venue and address, the meeting and sign-up links, dress code, ' +
+        'For an event other than the one find_events gave `details` for: everything about one event this person is shown: date, time, report times, venue and address, the meeting and sign-up links, dress code, ' +
         'their food sign-up and the sheet, their car (every car for an admin), their flight and lodging (everyone’s for an admin), their own availability, and its tasks with status, due date and who has them (theirs, or all of them for an admin).',
       strict: true,
       input_schema: keyOnly('The event’s key, from find_events.'),
