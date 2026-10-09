@@ -41,7 +41,14 @@ const input = (over: Partial<EventFormInput>): Partial<EventFormInput> => ({
 
 describe('who may use what', () => {
   it('gives event creation to admins only, and questions to every member and guest', () => {
-    const questions = ['find_events', 'get_event', 'event_availability', 'find_tasks', 'answer']
+    const questions = [
+      'find_events',
+      'get_event',
+      'event_availability',
+      'event_weather',
+      'find_tasks',
+      'answer',
+    ]
     expect(commandsFor(['admin'])).toEqual(['open_event_form', 'people_and_groups', ...questions])
     expect(commandsFor(['regular', 'worship', 'security'])).toEqual(questions)
     expect(commandsFor(['guest'])).toEqual(questions)

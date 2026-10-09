@@ -68,7 +68,11 @@ const MAX_ROUNDS = 6
 
 /** Where the app should take them to see an answer. */
 type Open =
-  | { kind: 'event'; key: string; section: 'dress_code' | 'availability' | 'details' | null }
+  | {
+      kind: 'event'
+      key: string
+      section: 'dress_code' | 'availability' | 'weather' | 'details' | null
+    }
   | { kind: 'task'; id: string }
   | { kind: 'availability' }
 
@@ -265,9 +269,11 @@ export const askMiriam = onCall(
                   ? await lookups.getEvent(String(input.key ?? ''))
                   : call.name === 'event_availability'
                     ? await lookups.availability(String(input.key ?? ''))
-                    : call.name === 'find_tasks'
-                      ? await lookups.findTasks(String(input.query ?? ''))
-                      : { error: 'Not a lookup.' }
+                    : call.name === 'event_weather'
+                      ? await lookups.weather(String(input.key ?? ''))
+                      : call.name === 'find_tasks'
+                        ? await lookups.findTasks(String(input.query ?? ''))
+                        : { error: 'Not a lookup.' }
         } catch (err) {
           logger.error(`askMiriam: ${call.name} failed`, err)
           result = { error: 'That could not be looked up just now.' }
@@ -285,7 +291,7 @@ interface AnswerInput {
   spoken: string
   open: 'event' | 'task' | 'availability' | 'none'
   target: string
-  section: 'dress_code' | 'availability' | 'details' | 'none'
+  section: 'dress_code' | 'availability' | 'weather' | 'details' | 'none'
   choices?: string[]
   heard_name?: string
 }
@@ -295,8 +301,8 @@ async function finish(input: AnswerInput, lookups: Lookups, viewer: Viewer) {
   const text = String(input.spoken ?? '').trim() || 'Sorry, I couldn’t find that.'
   let open: Open | null = null
   if (input.open === 'event' && (await lookups.event(String(input.target)))) {
-    const section = ['dress_code', 'availability', 'details'].includes(input.section)
-      ? (input.section as 'dress_code' | 'availability' | 'details')
+    const section = ['dress_code', 'availability', 'weather', 'details'].includes(input.section)
+      ? (input.section as 'dress_code' | 'availability' | 'weather' | 'details')
       : null
     open = { kind: 'event', key: String(input.target), section }
   } else if (input.open === 'task' && (await lookups.task(String(input.target)))) {

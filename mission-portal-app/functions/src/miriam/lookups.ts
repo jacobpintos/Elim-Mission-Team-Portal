@@ -23,6 +23,7 @@ import {
   type Task,
   type Viewer,
 } from './data'
+import { FORECAST_DAYS, forecastFor } from './weather'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Fields = Record<string, any>
@@ -244,6 +245,32 @@ export class Lookups {
         ),
       })),
     }
+  }
+
+  async weather(key: string) {
+    const ev = await this.event(key)
+    if (!ev) return { error: 'No event this person can see has that key.' }
+    if (ev.isVirtual) return { note: 'It is a virtual event: there is no weather to give.' }
+    const { _geocodeLat: lat, _geocodeLng: lng } = ev
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
+      return { note: 'Its page has no forecast: no city is set for it.' }
+    }
+    const daysAhead = Math.round(
+      (Date.parse(`${ev.date}T00:00:00Z`) - Date.parse(`${this.today}T00:00:00Z`)) / 86400000
+    )
+    if (daysAhead < 0) return { note: 'It has already happened.' }
+    if (daysAhead > FORECAST_DAYS) {
+      return { note: `There is no forecast yet: forecasts reach ${FORECAST_DAYS} days ahead.` }
+    }
+    const forecast = await forecastFor(lat, lng, ev.date, daysAhead)
+    return forecast
+      ? {
+          event: ev.title,
+          date: withWeekday(ev.date),
+          place: [ev.city, ev.state].filter(Boolean).join(', '),
+          forecast,
+        }
+      : { note: 'The forecast could not be reached just now.' }
   }
 
   async availability(key: string) {

@@ -84,6 +84,9 @@ export interface EventTemplate {
   lodgingEntries?: Lodging[]
   flights?: boolean
   flightEntries?: Flight[]
+  /** Where the city is, found when the event was saved: for its forecast. */
+  _geocodeLat?: number
+  _geocodeLng?: number
 }
 export interface Car {
   id: string

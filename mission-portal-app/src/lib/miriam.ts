@@ -37,7 +37,11 @@ export interface EventDraft {
 
 /** Where an answer can be shown (functions/src/miriam/askMiriam.ts: Open). */
 export type MiriamOpen =
-  | { kind: 'event'; key: string; section: 'dress_code' | 'availability' | 'details' | null }
+  | {
+      kind: 'event'
+      key: string
+      section: 'dress_code' | 'availability' | 'weather' | 'details' | null
+    }
   | { kind: 'task'; id: string }
   | { kind: 'availability' }
 

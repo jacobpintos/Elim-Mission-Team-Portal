@@ -37,6 +37,11 @@ import { askMiriam, miriamError } from './askMiriam'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
+import { useChordSheetsStore } from '@/stores/chordSheetsStore'
+import { ChordSheetViewer, type QueuedSong } from '@/features/worship/ChordSheetViewer'
+import { songAsked } from '@/lib/miriamSongs'
+import { loadAliases, rememberAlias } from '@/lib/songAliases'
+import type { ChordSheet } from '@/types/chordSheet'
 
 /** Claims on the microphone (lib/speechOwner): the request, and the wake word. */
 const SPEECH_ID = 'miriam'
@@ -125,6 +130,19 @@ export function MiriamButton() {
   const [choices, setChoices] = useState<{ key: string; title: string; date: string }[]>([])
   const heardName = useRef('')
   const asked = useRef('')
+  // A chord sheet asked for: open, in the key asked for. Or, when none was
+  // plain, the nearest titles offered — and the words and key it was asked
+  // with, the words learned from the one picked (lib/songAliases).
+  const [song, setSong] = useState<{
+    sheet: ChordSheet
+    key: { key: string; minor: boolean } | null
+  } | null>(null)
+  const [queued, setQueued] = useState<QueuedSong | null>(null)
+  const [songGuesses, setSongGuesses] = useState<ChordSheet[]>([])
+  const songAsk = useRef<{ name: string; key: { key: string; minor: boolean } | null }>({
+    name: '',
+    key: null,
+  })
   // "Hey Miriam": wanted on this device, and listening for it right now.
   const [wakeOn, setWakeOn] = useState(false)
   const [waiting, setWaiting] = useState(false)
@@ -192,8 +210,27 @@ export function MiriamButton() {
     sent.current = true
     if (!again) asked.current = said
     setChoices([])
+    setSongGuesses([])
     stopListening()
     setHeard(said)
+    // A song, opened here from the sheets on this device: no need to ask.
+    const sheets = useChordSheetsStore.getState().chordSheets
+    if (!again && sheets.length) {
+      const asking = songAsked(sheets, await loadAliases(), said)
+      if (asking?.kind === 'open') {
+        openSong(asking.sheet, asking.key)
+        return
+      }
+      if (asking?.kind === 'guess') {
+        songAsk.current = { name: asking.name, key: asking.key }
+        setSongGuesses(asking.sheets)
+        const text = 'I couldn’t find that song. Did you mean one of these?'
+        setAnswer(text)
+        speak(text)
+        setStage('answered')
+        return
+      }
+    }
     setStage('thinking')
     try {
       const result = await askMiriam(said)
@@ -221,6 +258,19 @@ export function MiriamButton() {
     setStage('answered')
   }
 
+  /** A chord sheet, opened over the page; the bar goes, to leave it in view. */
+  const openSong = (sheet: ChordSheet, key: { key: string; minor: boolean } | null) => {
+    setSongGuesses([])
+    setQueued(null)
+    setSong({ sheet, key })
+    setOpen(false)
+  }
+  /** One of the songs she offered: opened, and learned as what was meant. */
+  const pickSong = (sheet: ChordSheet) => {
+    if (songAsk.current.name) rememberAlias(songAsk.current.name, String(sheet.id))
+    openSong(sheet, songAsk.current.key)
+  }
+
   /** Listen for a request — tapped, or woken by her name. */
   const listen = async (byName = false) => {
     // Tapped, this lets a browser say the answer; called by name, the tap
@@ -229,6 +279,7 @@ export function MiriamButton() {
     stopWake()
     stopSpeaking()
     setChoices([])
+    setSongGuesses([])
     setWoken(byName)
     setRanOut(false)
     if (byName) AccessibilityInfo.announceForAccessibility('Miriam: Hineni, I am here')
@@ -443,11 +494,11 @@ export function MiriamButton() {
     closeRef.current = close
   })
   useEffect(() => {
-    // Not while there are events to choose from: that waits for a choice.
-    if (stage !== 'answered' || !open || choices.length) return
+    // Not while there are events or songs to choose from: that waits for a choice.
+    if (stage !== 'answered' || !open || choices.length || songGuesses.length) return
     const t = setTimeout(() => closeRef.current(), ANSWER_MS)
     return () => clearTimeout(t)
-  }, [stage, open, answer, choices.length])
+  }, [stage, open, answer, choices.length, songGuesses.length])
   /** One of the events she offered: learned as what was meant, and asked about. */
   const pick = async (choice: { key: string; title: string; date: string }) => {
     unlockSpeech()
@@ -570,6 +621,33 @@ export function MiriamButton() {
                         <Text color={colors.textMuted} fontSize="$2">
                           {FD(c.date, { weekday: true })}
                         </Text>
+                      </Pressable>
+                    ))}
+                  </YStack>
+                ) : null}
+                {stage === 'answered' && songGuesses.length ? (
+                  <YStack gap="$1.5" paddingTop="$1.5">
+                    {songGuesses.map((sheet) => (
+                      <Pressable
+                        key={String(sheet.id)}
+                        onPress={() => pickSong(sheet)}
+                        accessibilityRole="button"
+                        accessibilityLabel={sheet.title}
+                        style={[styles.choice, { borderColor: colors.primary }]}
+                      >
+                        <Text
+                          color={colors.primary}
+                          fontWeight="700"
+                          fontSize="$3"
+                          numberOfLines={1}
+                        >
+                          {sheet.title}
+                        </Text>
+                        {sheet.artist ? (
+                          <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                            {sheet.artist}
+                          </Text>
+                        ) : null}
                       </Pressable>
                     ))}
                   </YStack>
@@ -704,6 +782,19 @@ export function MiriamButton() {
           </YStack>
         </View>
       </FloatingLayer>
+      {song ? (
+        <ChordSheetViewer
+          sheet={song.sheet}
+          openInKey={song.key}
+          queued={queued}
+          onQueue={setQueued}
+          onOpenSheet={(sheet, key) => setSong({ sheet, key })}
+          onClose={() => {
+            setSong(null)
+            setQueued(null)
+          }}
+        />
+      ) : null}
     </>
   )
 }

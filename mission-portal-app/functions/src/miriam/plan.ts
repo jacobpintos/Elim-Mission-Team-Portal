@@ -21,6 +21,7 @@ export type CommandName =
   | 'find_events'
   | 'get_event'
   | 'event_availability'
+  | 'event_weather'
   | 'find_tasks'
   | 'answer'
 
@@ -182,6 +183,17 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
       input_schema: keyOnly('The event’s key, from find_events.'),
     },
   },
+  event_weather: {
+    roles: ANYONE_SIGNED_IN,
+    tool: {
+      name: 'event_weather',
+      description:
+        'The forecast for an event’s day where it is held, as its page shows it: summary, high and low (°F), chance of rain and wind. ' +
+        'Forecasts reach about 15 days ahead.',
+      strict: true,
+      input_schema: keyOnly('The event’s key, from find_events.'),
+    },
+  },
   find_tasks: {
     roles: ANYONE_SIGNED_IN,
     tool: {
@@ -220,7 +232,7 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
           },
           section: {
             type: 'string',
-            enum: ['dress_code', 'availability', 'details', 'none'],
+            enum: ['dress_code', 'availability', 'weather', 'details', 'none'],
             description: 'On an event’s page, the part the answer is about.',
           },
           choices: {

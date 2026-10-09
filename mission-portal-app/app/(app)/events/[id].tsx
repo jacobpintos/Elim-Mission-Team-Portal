@@ -281,42 +281,44 @@ export default function EventDetailScreen() {
 
           {/* Weather */}
           {weather ? (
-            <Pressable onPress={() => setShowWeather(true)}>
-              <XStack
-                backgroundColor={colors.surface}
-                borderRadius="$2"
-                padding="$2"
-                borderWidth={1}
-                borderColor={alerts.length > 0 ? '#e74c3c' : colors.border}
-                alignItems="center"
-                gap="$3"
-              >
-                <Text fontSize={24}>{weather.icon}</Text>
-                <YStack flex={1}>
-                  <Text color={colors.text} fontSize="$3" fontWeight="600">
-                    {weather.label}
-                  </Text>
-                  <Text color={colors.textMuted} fontSize="$2">
-                    {weather.high}°F / {weather.low}°F · {weather.precipPct}% chance of rain
-                  </Text>
-                </YStack>
-                {alerts.length > 0 ? (
-                  <XStack
-                    backgroundColor="#e74c3c"
-                    borderRadius={99}
-                    paddingHorizontal={8}
-                    paddingVertical={3}
-                  >
-                    <Text color="white" fontSize={11} fontWeight="700">
-                      ⚠ {alerts.length}
+            <Spot lit={lit === 'weather'} color={colors.primary} name="weather" onPlaced={placed}>
+              <Pressable onPress={() => setShowWeather(true)}>
+                <XStack
+                  backgroundColor={colors.surface}
+                  borderRadius="$2"
+                  padding="$2"
+                  borderWidth={1}
+                  borderColor={alerts.length > 0 ? '#e74c3c' : colors.border}
+                  alignItems="center"
+                  gap="$3"
+                >
+                  <Text fontSize={24}>{weather.icon}</Text>
+                  <YStack flex={1}>
+                    <Text color={colors.text} fontSize="$3" fontWeight="600">
+                      {weather.label}
                     </Text>
-                  </XStack>
-                ) : null}
-                <Text color={colors.textMuted} fontSize="$2">
-                  ›
-                </Text>
-              </XStack>
-            </Pressable>
+                    <Text color={colors.textMuted} fontSize="$2">
+                      {weather.high}°F / {weather.low}°F · {weather.precipPct}% chance of rain
+                    </Text>
+                  </YStack>
+                  {alerts.length > 0 ? (
+                    <XStack
+                      backgroundColor="#e74c3c"
+                      borderRadius={99}
+                      paddingHorizontal={8}
+                      paddingVertical={3}
+                    >
+                      <Text color="white" fontSize={11} fontWeight="700">
+                        ⚠ {alerts.length}
+                      </Text>
+                    </XStack>
+                  ) : null}
+                  <Text color={colors.textMuted} fontSize="$2">
+                    ›
+                  </Text>
+                </XStack>
+              </Pressable>
+            </Spot>
           ) : null}
 
           {/* Location */}
