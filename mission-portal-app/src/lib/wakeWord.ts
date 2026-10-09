@@ -1,22 +1,20 @@
 /**
- * Finding "Hey Miriam" in what speech recognition wrote down.
+ * Her name, at the start of a request.
  *
- * Recognisers spell a name they were not told about however it sounds to
- * them: Mariam, Merriam, Myriam. Each of those is taken as her name. Only
- * after a greeting, though: "Miriam is leading worship on Sunday" is not
- * talking to her. And not "Mary Ann", a different name that sounds close.
+ * "Hey Miriam" is heard by the wake word engine (lib/wakeEngine); what comes
+ * after it is heard by speech recognition, started the moment she is woken.
+ * Said in one breath — "Hey Miriam, create an event" — the recogniser can
+ * catch the tail of her name as it starts, and write it as however it sounds
+ * to it: Mariam, Merriam, Myriam. That is not part of the request.
  */
 const GREETING = String.raw`(?:hey|hay|hi|okay|ok|a)`
 const NAME = String.raw`(?:miriam|mariam|merriam|meriam|myriam|mirriam|miriem|mirium|marium|meriem)`
-const WAKE = new RegExp(String.raw`\b${GREETING}[\s,.!-]+${NAME}(?:'s)?\b[\s,.!?:;-]*`, 'gi')
+const LEADING = new RegExp(
+  String.raw`^\s*(?:${GREETING}[\s,.!-]+)?${NAME}(?:'s)?\b[\s,.!?:;-]*`,
+  'i'
+)
 
-/**
- * Whether "Hey Miriam" was said, and what was said after it — "Hey Miriam,
- * create an event" → "create an event". After the last time, should it be
- * said more than once.
- */
-export function findWake(text: string): { after: string } | null {
-  const last = [...text.matchAll(WAKE)].pop()
-  if (!last || last.index === undefined) return null
-  return { after: text.slice(last.index + last[0].length).trim() }
+/** The request without her name before it: "Miriam, create an event" → "create an event". */
+export function withoutHerName(text: string): string {
+  return text.replace(LEADING, '').trim()
 }

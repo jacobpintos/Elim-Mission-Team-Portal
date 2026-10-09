@@ -13,8 +13,12 @@ import { fileURLToPath } from 'node:url'
 const dist = process.argv[2] ?? 'dist'
 const here = fileURLToPath(new URL('.', import.meta.url))
 
-/** Not part of the app: Expo's build notes, source maps, the worker itself. */
-const LEAVE_OUT = /(^|\/)(metadata\.json|sw\.js)$|\.map$/
+/**
+ * Not part of the app: Expo's build notes, source maps, the worker itself.
+ * Nor the "Hey Miriam" engine (public/miriam-wake): 18 MB, fetched only by
+ * someone who switches it on, not by every phone that opens the app.
+ */
+const LEAVE_OUT = /(^|\/)(metadata\.json|sw\.js)$|\.map$|^\/miriam-wake\//
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {

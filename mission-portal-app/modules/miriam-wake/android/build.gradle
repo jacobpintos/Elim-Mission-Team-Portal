@@ -1,0 +1,52 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.miriamwake'
+version = '1.0.0'
+
+// sherpa-onnx, the keyword spotter: k2-fsa's own Android build, fetched on
+// the first build rather than kept in git (50 MB). Only what keyword
+// spotting needs is taken from it: its Kotlin API, its JNI library and ONNX
+// Runtime, for phones (arm64, armv7) and the emulator (x86_64).
+def sherpaVersion = '1.13.8'
+def sherpaDir = file("$projectDir/sherpa-onnx/$sherpaVersion")
+if (!file("$sherpaDir/classes.jar").exists()) {
+  sherpaDir.mkdirs()
+  def aar = file("$sherpaDir/sherpa-onnx.aar")
+  new URL("https://github.com/k2-fsa/sherpa-onnx/releases/download/v${sherpaVersion}/sherpa-onnx-${sherpaVersion}.aar")
+    .withInputStream { input -> aar.withOutputStream { it << input } }
+  copy {
+    from zipTree(aar)
+    into sherpaDir
+    include 'classes.jar'
+    ['arm64-v8a', 'armeabi-v7a', 'x86_64'].each { abi ->
+      include "jni/${abi}/libsherpa-onnx-jni.so"
+      include "jni/${abi}/libonnxruntime.so"
+    }
+  }
+  aar.delete()
+}
+
+android {
+  namespace "expo.modules.miriamwake"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+  sourceSets {
+    main {
+      jniLibs.srcDirs += ["$sherpaDir/jni"]
+      // The model and the phrase, shared with iOS: assets/miriam-wake/…
+      assets.srcDirs += ["$projectDir/../ios/model"]
+    }
+  }
+  androidResources {
+    noCompress += ['onnx']
+  }
+}
+
+dependencies {
+  implementation files("$sherpaDir/classes.jar")
+}

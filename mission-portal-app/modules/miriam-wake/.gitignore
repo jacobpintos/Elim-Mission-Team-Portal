@@ -1,0 +1,3 @@
+# Downloaded at build time (see ios/MiriamWake.podspec, android/build.gradle).
+ios/Frameworks/
+android/sherpa-onnx/

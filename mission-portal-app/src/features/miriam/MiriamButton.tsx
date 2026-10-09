@@ -8,7 +8,6 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-spe
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useThemeColors } from '@/theme/useThemeColors'
 import {
-  claimSpeech,
   claimSpeechInBackground,
   ownsSpeech,
   releaseSpeech,
@@ -17,30 +16,26 @@ import {
 } from '@/lib/speechOwner'
 import { listeningCue } from '@/lib/listeningCue'
 import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
-import { findWake } from '@/lib/wakeWord'
+import { wakeEngine } from '@/lib/wakeEngine'
+import { withoutHerName } from '@/lib/wakeWord'
 import { askMiriam, miriamError } from './askMiriam'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 
-/** This listener's claim on the phone's speech recognition (lib/speechOwner). */
+/** Claims on the microphone (lib/speechOwner): the request, and the wake word. */
 const SPEECH_ID = 'miriam'
+const WAKE_ID = 'miriam-wake'
 /** A pause this long ends the request: long enough to think mid-sentence. */
 const PAUSE_MS = 1800
-/** After "Hey Miriam" and nothing more: how long to wait for the request. */
-const AFTER_WAKE_MS = 6000
 /** Not left listening for a request if nothing is said. */
 const LISTEN_MS = 30_000
 /** How often listening for "Hey Miriam" is started again when it has stopped. */
 const WAKE_RETRY_MS = 3000
-/** Past this much heard without her name, listening starts over, kept short. */
-const WAKE_TEXT_MAX = 300
 /** Whether this device listens for "Hey Miriam" (AsyncStorage). */
 const WAKE_KEY = 'miriam_wake'
 
 type Stage = 'listening' | 'typing' | 'thinking' | 'answered'
-/** What the one listening session is for: waiting for her name, or a request. */
-type Mode = 'off' | 'wake' | 'request'
 
 function recognitionAvailable(): boolean {
   try {
@@ -52,6 +47,13 @@ function recognitionAvailable(): boolean {
 
 const joined = (a: string, b: string) => [a, b].filter((s) => s.trim()).join(' ')
 
+/** The microphone refused, rather than some passing trouble. */
+function refused(err: unknown): boolean {
+  const name = (err as { name?: string })?.name ?? ''
+  const message = (err as { message?: string })?.message ?? ''
+  return /NotAllowed|Permission|denied/i.test(`${name} ${message}`)
+}
+
 /**
  * Miriam's button, in the header, and what opens from it.
  *
@@ -62,14 +64,18 @@ const joined = (a: string, b: string) => [a, b].filter((s) => s.trim()).join(' '
  * it belongs, to be checked and saved: nothing is saved without that. It can
  * be typed instead, and is where the browser has no speech recognition.
  *
- * "Hey Miriam" is listened for only while the app is open and on screen, on
- * a device where it has been switched on (off unless it is). It is the same
- * speech recognition as everything else here, waiting in the background: on
- * a phone that can, kept on the phone, so what is said near it is not sent
- * anywhere until her name is heard. It gives the microphone up the moment
- * anything else wants it (lib/speechOwner) and comes back when that is done.
- * "Hey Miriam, create an event…" can be said in one breath: the same
- * listening carries on into the request.
+ * "Hey Miriam" is listened for by a wake word engine on the device itself
+ * (lib/wakeEngine: sherpa-onnx's keyword spotter), which hears that phrase and
+ * nothing else — so nothing said near the device is sent anywhere, and it is
+ * light enough to leave running. Only while the app is open and on screen,
+ * and only on a device where it has been switched on (off unless it is). It
+ * gives the microphone up the moment anything else wants it (lib/speechOwner)
+ * and comes back when that is done.
+ *
+ * When it hears her name it stops, there is a chime, and speech recognition
+ * takes the request, as when the button is tapped. Said in one breath, the
+ * first word or so of the request can fall in the moment between the two:
+ * "Hey Miriam" — chime — "create an event…" is surer.
  *
  * On a phone the microphone is set up as for a call — the phone's own
  * processing for a voice close by, which holds up better in a noisy room
@@ -100,14 +106,11 @@ export function MiriamButton() {
   const [waiting, setWaiting] = useState(false)
   const [appActive, setAppActive] = useState(AppState.currentState !== 'background')
 
-  const mode = useRef<Mode>('off')
-  // Everything the current session has heard: finished phrases, and the one
+  // Listening for a request now (speech recognition).
+  const requesting = useRef(false)
+  // What the request's listening has heard: finished phrases, and the one
   // still being made out.
   const settled = useRef('')
-  const full = useRef('')
-  // Where the request starts in it: after her name, or after what had been
-  // heard when the button was tapped.
-  const from = useRef<'wake' | { base: string }>({ base: '' })
   const request = useRef('')
   const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sent = useRef(false)
@@ -121,16 +124,23 @@ export function MiriamButton() {
     const sub = AppState.addEventListener('change', (s) => setAppActive(s !== 'background'))
     return () => sub.remove()
   }, [])
-  // Group names, for the recogniser to expect.
+  // Group names, for the recogniser to expect in a request.
   useEffect(() => {
-    if (!open && !wakeOn) return
+    if (!open) return
     subGroups()
     return () => unsubGroups()
-  }, [open, wakeOn, subGroups, unsubGroups])
+  }, [open, subGroups, unsubGroups])
 
   const setWake = (on: boolean) => {
     setWakeOn(on)
     AsyncStorage.setItem(WAKE_KEY, on ? '1' : '0').catch(() => {})
+  }
+
+  /** Stop listening for her name, and let the microphone go. */
+  const stopWake = () => {
+    wakeEngine?.stop()
+    releaseSpeech(WAKE_ID)
+    setWaiting(false)
   }
 
   const clearPause = () => {
@@ -139,51 +149,12 @@ export function MiriamButton() {
   }
   const stopListening = () => {
     clearPause()
-    mode.current = 'off'
+    requesting.current = false
     if (ownsSpeech(SPEECH_ID)) {
       releaseSpeech(SPEECH_ID)
       ExpoSpeechRecognitionModule.abort()
     }
     setListening(false)
-    setWaiting(false)
-  }
-
-  /** Start listening — for her name, or for a request. */
-  const startSession = (kind: 'wake' | 'request', onDevice: boolean) => {
-    settled.current = ''
-    full.current = ''
-    const start = () => {
-      mode.current = kind
-      ExpoSpeechRecognitionModule.start({
-        lang: 'en-US',
-        interimResults: true,
-        continuous: true,
-        addsPunctuation: true,
-        requiresOnDeviceRecognition: onDevice,
-        // Her name, and the names a request is likeliest to hold.
-        contextualStrings: [
-          'Hey Miriam',
-          ...groups.map((g) => g.name),
-          ...users.map((u) => u.displayName).filter(Boolean),
-        ].slice(0, 100),
-        iosTaskHint: 'dictation',
-        iosCategory: {
-          category: 'playAndRecord',
-          categoryOptions: ['defaultToSpeaker', 'allowBluetooth', 'mixWithOthers'],
-          mode: 'voiceChat',
-        },
-        iosVoiceProcessingEnabled: true,
-      })
-    }
-    if (kind === 'wake') {
-      claimSpeechInBackground(SPEECH_ID, () => {
-        mode.current = 'off'
-        ExpoSpeechRecognitionModule.abort()
-      })
-      start()
-    } else {
-      withSpeech(SPEECH_ID, start)
-    }
   }
 
   const send = async (text: string) => {
@@ -208,31 +179,18 @@ export function MiriamButton() {
     setStage('answered')
   }
 
-  /** Listen for a request: the panel open, waiting for what to do. */
-  const beginRequest = () => {
+  /** Listen for a request — tapped, or woken by her name. */
+  const listen = async () => {
+    stopWake()
     sent.current = false
+    settled.current = ''
     request.current = ''
     setHeard('')
     setAnswer(null)
     setStage('listening')
     setOpen(true)
-  }
-
-  /** Tapped: listen for a request — in the listening already going, if there is one. */
-  const listen = async () => {
-    beginRequest()
     if (!available) {
       setStage('typing')
-      return
-    }
-    if (mode.current === 'wake' && ownsSpeech(SPEECH_ID)) {
-      // Already listening for her name: carry on, for the request.
-      claimSpeech(SPEECH_ID)
-      mode.current = 'request'
-      from.current = { base: full.current }
-      setWaiting(false)
-      setListening(true)
-      listeningCue('start')
       return
     }
     let onDevice = false
@@ -251,83 +209,60 @@ export function MiriamButton() {
     // A moment for the chime before the microphone takes the sound over; a
     // browser plays it alongside, and must start listening within the tap.
     if (Platform.OS !== 'web') await new Promise((r) => setTimeout(r, 180))
-    from.current = { base: '' }
-    startSession('request', onDevice)
-  }
-
-  const requestIn = (text: string): string => {
-    const f = from.current
-    if (f === 'wake') return findWake(text)?.after ?? ''
-    return text.startsWith(f.base) ? text.slice(f.base.length).trim() : text
+    withSpeech(SPEECH_ID, () => {
+      requesting.current = true
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        continuous: true,
+        addsPunctuation: true,
+        requiresOnDeviceRecognition: onDevice,
+        // The names a request is likeliest to hold, and the hardest to hear.
+        contextualStrings: [
+          ...groups.map((g) => g.name),
+          ...users.map((u) => u.displayName).filter(Boolean),
+        ].slice(0, 100),
+        iosTaskHint: 'dictation',
+        iosCategory: {
+          category: 'playAndRecord',
+          categoryOptions: ['defaultToSpeaker', 'allowBluetooth', 'mixWithOthers'],
+          mode: 'voiceChat',
+        },
+        iosVoiceProcessingEnabled: true,
+      })
+    })
   }
 
   useSpeechRecognitionEvent('start', () => {
-    if (!ownsSpeech(SPEECH_ID)) return
-    if (mode.current === 'wake') setWaiting(true)
-    else setListening(true)
+    if (ownsSpeech(SPEECH_ID)) setListening(true)
   })
   useSpeechRecognitionEvent('result', (e) => {
-    if (!ownsSpeech(SPEECH_ID) || mode.current === 'off') return
+    if (!ownsSpeech(SPEECH_ID) || !requesting.current || sent.current) return
     const text = e.results[0]?.transcript ?? ''
     if (e.isFinal) settled.current = joined(settled.current, text)
-    full.current = e.isFinal ? settled.current : joined(settled.current, text)
-
-    if (mode.current === 'wake') {
-      const woke = findWake(full.current)
-      if (!woke) {
-        // Kept short: started over once a good deal has gone by without her.
-        if (full.current.length > WAKE_TEXT_MAX) ExpoSpeechRecognitionModule.stop()
-        return
-      }
-      // "Hey Miriam": listening on, now for the request.
-      claimSpeech(SPEECH_ID)
-      mode.current = 'request'
-      from.current = 'wake'
-      setWaiting(false)
-      setListening(true)
-      beginRequest()
-      listeningCue('start')
-    }
-    if (sent.current) return
-    request.current = requestIn(full.current)
+    request.current = withoutHerName(e.isFinal ? settled.current : joined(settled.current, text))
     setHeard(request.current)
     clearPause()
-    pauseTimer.current = setTimeout(
-      () => send(request.current),
-      request.current ? PAUSE_MS : AFTER_WAKE_MS
-    )
+    pauseTimer.current = setTimeout(() => send(request.current), PAUSE_MS)
   })
   useSpeechRecognitionEvent('end', () => {
     if (!ownsSpeech(SPEECH_ID)) return
-    const was = mode.current
-    mode.current = 'off'
+    const was = requesting.current
+    requesting.current = false
     releaseSpeech(SPEECH_ID)
-    setWaiting(false)
     setListening(false)
-    if (was !== 'request') return
+    if (!was) return
     listeningCue('stop')
     // Stopped by the recogniser itself: what it has is the request.
     if (!sent.current && request.current.trim()) send(request.current)
   })
   useSpeechRecognitionEvent('error', (e) => {
     if (!ownsSpeech(SPEECH_ID)) return
-    const was = mode.current
-    mode.current = 'off'
-    setWaiting(false)
+    const was = requesting.current
+    requesting.current = false
+    releaseSpeech(SPEECH_ID)
     setListening(false)
-    // Let go on the end that follows, the last thing this listening reports
-    // (lib/speechOwner) — or in a moment, should none come.
-    setTimeout(() => {
-      if (mode.current === 'off' && ownsSpeech(SPEECH_ID)) releaseSpeech(SPEECH_ID)
-    }, 1000)
-    if (e.error === 'aborted') return
-    if (was === 'wake') {
-      // Listening for her name is not something to report trouble with,
-      // unless it can never work: then it is switched off.
-      if (e.error === 'not-allowed') setWake(false)
-      return
-    }
-    if (was !== 'request') return
+    if (e.error === 'aborted' || !was) return
     listeningCue('stop')
     if (e.error === 'no-speech' || e.error === 'speech-timeout') {
       setAnswer('Didn’t hear anything. Try again, or type it.')
@@ -347,21 +282,52 @@ export function MiriamButton() {
 
   // Listening for "Hey Miriam": while switched on, the app on screen, the
   // panel closed and the microphone free — started again whenever it stops.
+  const listenRef = useRef(listen)
   useEffect(() => {
-    if (!available || !wakeOn || !appActive || open) return
-    const onDevice = Platform.OS !== 'web' && canRecogniseOnDevice()
+    listenRef.current = listen
+  })
+  useEffect(() => {
+    if (!wakeEngine || !wakeOn || !appActive || open) return
+    const engine = wakeEngine
+    let starting = false
+    let gaveUp = false
     const tryWake = () => {
-      if (mode.current === 'off' && speechFree()) startSession('wake', onDevice)
+      if (starting || gaveUp || ownsSpeech(WAKE_ID) || !speechFree()) return
+      starting = true
+      claimSpeechInBackground(WAKE_ID, stopWake)
+      engine
+        .start(() => {
+          // Heard her: the engine has stopped; the request is next.
+          releaseSpeech(WAKE_ID)
+          setWaiting(false)
+          listenRef.current()
+        })
+        .then(() => {
+          if (ownsSpeech(WAKE_ID)) setWaiting(true)
+          else engine.stop()
+        })
+        .catch((err) => {
+          releaseSpeech(WAKE_ID)
+          setWaiting(false)
+          // Not allowed the microphone: switched off, rather than asked again
+          // and again. Anything else is tried again in a moment.
+          if (refused(err)) {
+            gaveUp = true
+            setWake(false)
+          }
+        })
+        .finally(() => {
+          starting = false
+        })
     }
-    const first = setTimeout(tryWake, 400)
+    tryWake()
     const every = setInterval(tryWake, WAKE_RETRY_MS)
     return () => {
-      clearTimeout(first)
       clearInterval(every)
-      if (mode.current === 'wake' && ownsSpeech(SPEECH_ID)) stopListening()
+      if (ownsSpeech(WAKE_ID)) stopWake()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [available, wakeOn, appActive, open])
+  }, [wakeOn, appActive, open])
 
   // Not left listening for a request if nothing is said; never behind a
   // closed panel.
@@ -375,7 +341,10 @@ export function MiriamButton() {
   useEffect(
     () => () => {
       if (pauseTimer.current) clearTimeout(pauseTimer.current)
-      mode.current = 'off'
+      if (ownsSpeech(WAKE_ID)) {
+        wakeEngine?.stop()
+        releaseSpeech(WAKE_ID)
+      }
       if (ownsSpeech(SPEECH_ID)) {
         releaseSpeech(SPEECH_ID)
         ExpoSpeechRecognitionModule.abort()
@@ -389,7 +358,7 @@ export function MiriamButton() {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
       if (!permission.granted) {
         setAnswer(
-          'Mission Portal needs the microphone and speech recognition to listen for “Hey Miriam”. You can turn them on in Settings.'
+          'Mission Portal needs the microphone to listen for “Hey Miriam”. You can turn it on in Settings.'
         )
         setStage('answered')
         return
@@ -546,7 +515,7 @@ export function MiriamButton() {
               </Pressable>
             ) : null}
 
-            {available ? (
+            {wakeEngine ? (
               <Pressable
                 onPress={toggleWake}
                 accessibilityRole="switch"
@@ -561,8 +530,8 @@ export function MiriamButton() {
                     </Text>
                     <Text color={colors.textMuted} fontSize="$2">
                       {Platform.OS === 'web'
-                        ? 'While this page is open. The browser sends what it hears to its speech service to listen for her name.'
-                        : 'While the app is open, on this phone. Not over a loud band — tap the button then.'}
+                        ? 'While this page is open. Hears her name and nothing else, in the browser: nothing is sent anywhere until you speak to her. A 15 MB download the first time.'
+                        : 'While the app is open. Hears her name and nothing else, on this phone: nothing is sent anywhere until you speak to her. Not over a loud band — tap the button then.'}
                     </Text>
                   </YStack>
                   <View
