@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 /**
@@ -28,18 +28,25 @@ export function FloatingLayer({
     return el
   })
 
+  // The latest, without putting the layer back in the document each time a
+  // new one is passed — which would take the focus from a field being typed in.
+  const closeRef = useRef(onRequestClose)
+  useEffect(() => {
+    closeRef.current = onRequestClose
+  })
+
   useEffect(() => {
     if (!host || !visible) return
     document.body.appendChild(host)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onRequestClose()
+      if (e.key === 'Escape') closeRef.current()
     }
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
       host.remove()
     }
-  }, [host, visible, onRequestClose])
+  }, [host, visible])
 
   if (!host || !visible) return null
   return createPortal(<div style={{ pointerEvents: 'none', flex: 1 }}>{children}</div>, host)

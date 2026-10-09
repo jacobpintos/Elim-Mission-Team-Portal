@@ -32,7 +32,7 @@ import { MAX_REQUEST, miriamHref } from '@/lib/miriam'
 import { anyOverlayOpen } from '@/lib/overlays'
 import { rememberName } from '@/lib/miriamMemory'
 import { FD } from '@/lib/format'
-import { speak, stopSpeaking } from './speak'
+import { speak, stopSpeaking, unlockSpeech } from './speak'
 import { askMiriam, miriamError } from './askMiriam'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -187,6 +187,8 @@ export function MiriamButton() {
   const send = async (text: string, again = false) => {
     const said = text.trim()
     if (!said || sent.current) return
+    // Sent by a tap (the button, or a choice): lets a browser say the answer.
+    unlockSpeech()
     sent.current = true
     if (!again) asked.current = said
     setChoices([])
@@ -221,6 +223,9 @@ export function MiriamButton() {
 
   /** Listen for a request — tapped, or woken by her name. */
   const listen = async (byName = false) => {
+    // Tapped, this lets a browser say the answer; called by name, the tap
+    // that turned listening on did.
+    unlockSpeech()
     stopWake()
     stopSpeaking()
     setChoices([])
@@ -412,6 +417,7 @@ export function MiriamButton() {
   )
 
   const toggleWake = async () => {
+    unlockSpeech()
     if (!wakeOn && Platform.OS !== 'web') {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
       if (!permission.granted) {
@@ -444,6 +450,7 @@ export function MiriamButton() {
   }, [stage, open, answer, choices.length])
   /** One of the events she offered: learned as what was meant, and asked about. */
   const pick = async (choice: { key: string; title: string; date: string }) => {
+    unlockSpeech()
     // Saved first, so the question asked again already carries it.
     if (heardName.current) await rememberName(heardName.current, choice.title)
     sent.current = false

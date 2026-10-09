@@ -1,5 +1,8 @@
 import * as Speech from 'expo-speech'
 
+/** A phone's voice needs no tap first (speak.web.ts: a browser's does). */
+export function unlockSpeech(): void {}
+
 /**
  * Miriam's answers, read aloud — the phone's own voice, or the browser's.
  * Anything already being said is stopped first. Never a reason to fail:
