@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   ScrollView,
@@ -41,6 +41,18 @@ import { AudioControls } from '@/components/ui/AudioControls'
 import { useAuthStore } from '@/stores/authStore'
 import { useSheetNotesStore } from '@/stores/sheetNotesStore'
 import { NoteLine, SheetNotesEditor, SONG, useNoteColors } from './SheetNotes'
+import { STOP_LISTENING, useSheetVoice } from './useSheetVoice'
+import { COMMAND_HINTS, parseSheetCommand } from '@/lib/sheetCommands'
+import { KEY_HINTS } from '@/lib/songRequest'
+import { loadAliases } from '@/lib/songAliases'
+import { useChordSheetsStore } from '@/stores/chordSheetsStore'
+
+/** A song queued to come next ("queue Holy Forever in D"). */
+export interface QueuedSong {
+  sheet: ChordSheet
+  key: string | null
+  minor: boolean
+}
 
 interface KeyPrefs {
   key: string
@@ -239,6 +251,16 @@ interface ChordSheetViewerProps {
    * card on the set list — see TrackBar.
    */
   audio?: { url: string; name?: string } | null
+  /**
+   * The song queued to come next, said out loud ("queue Holy Forever in D")
+   * while this one stays open. Shown at the bottom; the next song — a swipe,
+   * ›, or "next song" — is it, ahead of the set's own next. Held by whoever
+   * opened the sheet, so it lasts from one song to the next.
+   */
+  queued?: QueuedSong | null
+  onQueue?: (queued: QueuedSong | null) => void
+  /** Open another sheet in this one's place — the queued song — in a key if one was asked for. */
+  onOpenSheet?: (sheet: ChordSheet, key: { key: string; minor: boolean } | null) => void
 }
 
 export function ChordSheetViewer({
@@ -252,6 +274,9 @@ export function ChordSheetViewer({
   heardChroma,
   openInKey,
   setNav,
+  queued,
+  onQueue,
+  onOpenSheet,
 }: ChordSheetViewerProps) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
@@ -409,6 +434,11 @@ export function ChordSheetViewer({
    * again, which writes them again.
    */
   const scrollRef = useRef<ScrollView>(null)
+  // A new sheet starts at its top, even in a viewer that stayed open — one
+  // song moved on to the next, as a queued song is.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false })
+  }, [sheetKey])
   const sectionOffsets = useRef<Record<string, number>>({})
   // Each lyric line's top within its section, keyed "section:line" — for
   // opening at the line a song found by listening had got to.
@@ -542,8 +572,8 @@ export function ChordSheetViewer({
   })
   const [ownChordsOnly, setOwnChordsOnly] = useState(false)
   const chordsOnly = setNav ? setNav.chordsOnly : ownChordsOnly
-  const toggleChordsOnly = () =>
-    setNav ? setNav.onChordsOnly(!setNav.chordsOnly) : setOwnChordsOnly((v) => !v)
+  const setChordsOnly = (on: boolean) => (setNav ? setNav.onChordsOnly(on) : setOwnChordsOnly(on))
+  const toggleChordsOnly = () => setChordsOnly(!chordsOnly)
   const [showKeyDropdown, setShowKeyDropdown] = useState(false)
   // A key asked for: taken up when it arrives. Set while rendering, as React
   // has it for state that follows a prop.
@@ -562,6 +592,112 @@ export function ChordSheetViewer({
   const [keyHintDoneFor, setKeyHintDoneFor] = useState<Chroma | null>(null)
 
   /**
+   * The next song: the one queued, if any, else the set's next. The queued
+   * song opens in its place and the queue empties.
+   */
+  const hasNext = Boolean((queued && onOpenSheet) || setNav?.onNext)
+  const goNext = () => {
+    if (queued && onOpenSheet) {
+      onQueue?.(null)
+      onOpenSheet(queued.sheet, queued.key ? { key: queued.key, minor: queued.minor } : null)
+      return
+    }
+    setNav?.onNext?.()
+  }
+  const goPrev = () => setNav?.onPrev?.()
+
+  /**
+   * Voice control (useSheetVoice): what was said, made into a command
+   * (lib/sheetCommands) and done, with a word to say what was done.
+   */
+  const allSheets = useChordSheetsStore((s) => s.chordSheets)
+  const voiceAliases = useRef<ReadonlyMap<string, string>>(new Map())
+  useEffect(() => {
+    loadAliases().then((m) => (voiceAliases.current = m))
+  }, [])
+  const voiceHints = useMemo(
+    () => [...COMMAND_HINTS, ...KEY_HINTS, ...allSheets.map((s) => s.title)].slice(0, 100),
+    [allSheets]
+  )
+  const setKey = (key: string, minor: boolean) => {
+    setSelectedKey(key)
+    setIsMinor(minor)
+    saveKeyPrefs({ key, isMinor: minor })
+  }
+  /** "Chorus": the next one down from here, or the first; "chorus two": that one. */
+  const goToSection = (kind: string, number: number | null): string | null => {
+    if (!sheet) return null
+    const ofKind = sheet.sections.filter((x) => x.type === kind)
+    const here = autoScroll.position()
+    const target = number
+      ? ofKind[number - 1]
+      : (ofKind.find((x) => (measuredOffset(x.id) ?? -1) > here + 20) ?? ofKind[0])
+    if (!target) return null
+    jumpTo(target.id)
+    return getSectionLabel(sheet.sections, target.id)
+  }
+  const handleVoice = (phrase: string, alternatives: string[]): string | null => {
+    if (!sheet) return null
+    let cmd = null
+    for (const said of [phrase, ...alternatives]) {
+      cmd = parseSheetCommand(said, allSheets, voiceAliases.current)
+      if (cmd) break
+    }
+    if (!cmd) return null
+    switch (cmd.type) {
+      case 'next':
+        if (!hasNext) return 'No next song'
+        goNext()
+        return queued ? `Next: ${queued.sheet.title}` : 'Next song'
+      case 'previous':
+        if (!setNav?.onPrev) return 'No song before this'
+        goPrev()
+        return 'Previous song'
+      case 'queue': {
+        if (!onQueue || !onOpenSheet) return null
+        const { sheet: next, key, minor } = cmd.request
+        onQueue({ sheet: next, key, minor })
+        return `Up next: ${next.title}${key ? ` in ${keyLabel(key, minor)}` : ''}`
+      }
+      case 'clearQueue':
+        onQueue?.(null)
+        return 'Queue cleared'
+      case 'key':
+        setKey(cmd.key, cmd.minor)
+        return `Key of ${keyLabel(cmd.key, cmd.minor)}`
+      case 'numbers':
+        setKey('', isMinor)
+        return 'Numbers'
+      case 'scroll':
+        if (cmd.action === 'start') {
+          if (autoScroll.state === 'paused') autoScroll.resume()
+          else if (autoScroll.state === 'off') autoScroll.start()
+          return 'Scrolling'
+        }
+        if (cmd.action === 'pause') {
+          if (autoScroll.state === 'running') autoScroll.pause()
+          return 'Paused'
+        }
+        autoScroll.changeSpeed(cmd.action === 'faster' ? 1 : -1)
+        return cmd.action === 'faster' ? 'Faster' : 'Slower'
+      case 'section':
+        return goToSection(cmd.kind, cmd.number) ?? 'No such section'
+      case 'top':
+        autoScroll.scrollTo(0)
+        return 'Top'
+      case 'chordsOnly':
+        setChordsOnly(cmd.on)
+        return cmd.on ? 'Chords only' : 'Lyrics'
+      case 'close':
+        onClose()
+        return 'Closed'
+      case 'stopListening':
+        return STOP_LISTENING
+    }
+  }
+  const voice = useSheetVoice(Boolean(sheet), handleVoice, voiceHints)
+
+  /**
    * A sideways swipe across the sheet: the next song in the set, or the one
    * before. Only a clear one — one finger, mostly sideways, far enough and
    * quick enough — so a scroll that drifts, a pinch, or a tap that pauses
@@ -569,56 +705,57 @@ export function ChordSheetViewer({
    * when a sideways drag is the way around it.
    */
   const swipe = useRef<{ x: number; y: number; t: number; endX: number; endY: number } | null>(null)
-  const swipeProps = setNav
-    ? {
-        onTouchStart: (e: GestureResponderEvent) => {
-          const n = e.nativeEvent
-          const { x, y } = touchPoint(e)
-          swipe.current =
-            (n.touches?.length ?? 1) === 1 ? { x, y, t: Date.now(), endX: x, endY: y } : null
-        },
-        onTouchMove: (e: GestureResponderEvent) => {
-          if (!swipe.current) return
-          if ((e.nativeEvent.touches?.length ?? 1) > 1) {
+  const swipeProps =
+    setNav || queued
+      ? {
+          onTouchStart: (e: GestureResponderEvent) => {
+            const n = e.nativeEvent
+            const { x, y } = touchPoint(e)
+            swipe.current =
+              (n.touches?.length ?? 1) === 1 ? { x, y, t: Date.now(), endX: x, endY: y } : null
+          },
+          onTouchMove: (e: GestureResponderEvent) => {
+            if (!swipe.current) return
+            if ((e.nativeEvent.touches?.length ?? 1) > 1) {
+              swipe.current = null
+              return
+            }
+            const { x, y } = touchPoint(e)
+            swipe.current.endX = x
+            swipe.current.endY = y
+          },
+          onTouchEnd: () => {
+            const s = swipe.current
             swipe.current = null
-            return
-          }
-          const { x, y } = touchPoint(e)
-          swipe.current.endX = x
-          swipe.current.endY = y
-        },
-        onTouchEnd: () => {
-          const s = swipe.current
-          swipe.current = null
-          if (!s || isZoomedIn()) return
-          const dx = s.endX - s.x
-          const dy = s.endY - s.y
-          if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < 2 * Math.abs(dy)) return
-          if (Date.now() - s.t > SWIPE_MAX_MS) return
-          if (dx < 0) setNav.onNext?.()
-          else setNav.onPrev?.()
-        },
-        onTouchCancel: () => {
-          swipe.current = null
-        },
-      }
-    : null
+            if (!s || isZoomedIn()) return
+            const dx = s.endX - s.x
+            const dy = s.endY - s.y
+            if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < 2 * Math.abs(dy)) return
+            if (Date.now() - s.t > SWIPE_MAX_MS) return
+            if (dx < 0) goNext()
+            else goPrev()
+          },
+          onTouchCancel: () => {
+            swipe.current = null
+          },
+        }
+      : null
 
   // And the arrow keys, on a keyboard or a page-turner pedal that sends them.
   // A browser that goes back a page on a sideways swipe (Chrome) is told not
   // to while the swipe means the next song.
-  const inSet = Boolean(setNav)
-  const navRef = useRef(setNav)
+  const inSet = Boolean(setNav || queued)
+  const navRef = useRef({ next: goNext, prev: goPrev })
   useEffect(() => {
-    navRef.current = setNav
+    navRef.current = { next: goNext, prev: goPrev }
   })
   useEffect(() => {
     if (Platform.OS !== 'web' || !sheetKey || !inSet) return
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return
-      if (e.key === 'ArrowRight') navRef.current?.onNext?.()
-      else if (e.key === 'ArrowLeft') navRef.current?.onPrev?.()
+      if (e.key === 'ArrowRight') navRef.current.next()
+      else if (e.key === 'ArrowLeft') navRef.current.prev()
     }
     window.addEventListener('keydown', onKey)
     const root = document.documentElement.style
@@ -899,35 +1036,58 @@ export function ChordSheetViewer({
                   ) : null}
                 </YStack>
               )}
-              {setNav && (setNav.onPrev || setNav.onNext) ? (
+              {/* Voice control: on for the set, until tapped off or closed. */}
+              {voice.available ? (
+                <Pressable
+                  onPress={() => voice.toggle()}
+                  style={styles.headerBtn}
+                  accessibilityRole="switch"
+                  aria-checked={voice.on}
+                  accessibilityLabel="Voice control"
+                >
+                  <View
+                    style={[
+                      styles.voiceDot,
+                      voice.on
+                        ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                        : { borderColor: colors.border },
+                    ]}
+                  >
+                    <Text fontSize={14}>🎤</Text>
+                  </View>
+                </Pressable>
+              ) : null}
+              {setNav?.onPrev || hasNext ? (
                 <XStack alignItems="center">
                   <Pressable
-                    onPress={setNav.onPrev}
-                    disabled={!setNav.onPrev}
+                    onPress={goPrev}
+                    disabled={!setNav?.onPrev}
                     style={styles.headerBtn}
                     accessibilityRole="button"
                     accessibilityLabel="Previous song"
                   >
                     <Text
-                      color={setNav.onPrev ? colors.primary : colors.border}
+                      color={setNav?.onPrev ? colors.primary : colors.border}
                       fontSize="$6"
                       fontWeight="700"
                     >
                       ‹
                     </Text>
                   </Pressable>
-                  <Text color={colors.textMuted} fontSize="$2">
-                    {setNav.position}
-                  </Text>
+                  {setNav?.position ? (
+                    <Text color={colors.textMuted} fontSize="$2">
+                      {setNav.position}
+                    </Text>
+                  ) : null}
                   <Pressable
-                    onPress={setNav.onNext}
-                    disabled={!setNav.onNext}
+                    onPress={goNext}
+                    disabled={!hasNext}
                     style={styles.headerBtn}
                     accessibilityRole="button"
                     accessibilityLabel="Next song"
                   >
                     <Text
-                      color={setNav.onNext ? colors.primary : colors.border}
+                      color={hasNext ? colors.primary : colors.border}
                       fontSize="$6"
                       fontWeight="700"
                     >
@@ -1499,6 +1659,17 @@ export function ChordSheetViewer({
                 {/* Room for the last lines to scroll up past the autoscroll control. */}
                 <View style={styles.underControl} />
               </ScrollView>
+              {/* What a voice command just did. */}
+              {voice.feedback ? (
+                <View
+                  pointerEvents="none"
+                  style={[styles.voiceToast, { backgroundColor: colors.text }]}
+                >
+                  <Text color={colors.surface} fontSize="$2" fontWeight="700">
+                    🎤 {voice.feedback}
+                  </Text>
+                </View>
+              ) : null}
               <AutoScrollControl
                 state={autoScroll.state}
                 level={autoScroll.level}
@@ -1507,6 +1678,47 @@ export function ChordSheetViewer({
                 onSpeed={autoScroll.changeSpeed}
               />
             </View>
+
+            {/* The song queued to come next: tap to go now, ✕ to unqueue. */}
+            {queued && onOpenSheet ? (
+              <XStack
+                alignItems="center"
+                gap="$2"
+                borderRadius="$3"
+                borderWidth={1}
+                borderColor={colors.primary + '55'}
+                backgroundColor={colors.primary + '12'}
+                paddingLeft="$3"
+              >
+                <Pressable
+                  onPress={goNext}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Go to the next song, ${queued.sheet.title}`}
+                  style={[styles.touch, { flex: 1 }]}
+                >
+                  <Text color={colors.text} fontSize="$3" numberOfLines={1}>
+                    <Text color={colors.textMuted} fontSize="$2">
+                      {'Up next  '}
+                    </Text>
+                    <Text fontWeight="700" color={colors.primary}>
+                      {queued.sheet.title}
+                    </Text>
+                    {queued.key ? ` · ${keyLabel(queued.key, queued.minor)}` : ''}
+                    {'  ›'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => onQueue?.(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove the queued song"
+                  style={styles.headerBtn}
+                >
+                  <Text color={colors.textMuted} fontSize="$3">
+                    ✕
+                  </Text>
+                </Pressable>
+              </XStack>
+            ) : null}
 
             {audio ? <TrackBar url={audio.url} name={audio.name} /> : null}
           </YStack>
@@ -1758,6 +1970,23 @@ const styles = StyleSheet.create({
    * The caret and the close. 44 tall, which also sets the folded header's
    * height, and narrow enough that two of them leave the title its room.
    */
+  voiceDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceToast: {
+    position: 'absolute',
+    left: 0,
+    bottom: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 99,
+    opacity: 0.92,
+  },
   headerBtn: {
     minWidth: 36,
     minHeight: 44,

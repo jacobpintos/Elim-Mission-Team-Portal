@@ -22,7 +22,7 @@ export interface SongRequest<T> {
 }
 
 /** Spoken text as words: lower case, no punctuation, ♭ and ♯ spelled out. */
-function spokenWords(text: string): string[] {
+export function spokenWords(text: string): string[] {
   return text
     .toLowerCase()
     .replace(/♭/g, ' flat ')

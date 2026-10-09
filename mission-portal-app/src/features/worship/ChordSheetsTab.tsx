@@ -6,7 +6,7 @@ import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { ChordSheetEditor } from './ChordSheetEditor'
 import { SongListener, type AskedKey } from './SongListener'
-import { ChordSheetViewer } from './ChordSheetViewer'
+import { ChordSheetViewer, type QueuedSong } from './ChordSheetViewer'
 import type { Chroma } from '@/lib/keyDetect'
 import type { ChordSheet } from '@/types/chordSheet'
 
@@ -31,6 +31,8 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
     sectionId: null,
     line: null,
   })
+  // A song queued by voice to come after the open one.
+  const [queued, setQueued] = useState<QueuedSong | null>(null)
   // A key asked for with the song's name ("Firm Foundation in E").
   const [askedKey, setAskedKey] = useState<AskedKey | null>(null)
   // The notes heard while finding that song, for suggesting its key.
@@ -264,6 +266,14 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
         // being played, so it scrolls along at its saved speed, if it has one.
         autoScrollAtStart
         openInKey={askedKey}
+        queued={queued}
+        onQueue={setQueued}
+        onOpenSheet={(sheet, key) => {
+          setStartAt({ sectionId: null, line: null })
+          setHeard(null)
+          setAskedKey(key)
+          setViewSheet(sheet)
+        }}
         heardChroma={
           heard && viewSheet && String(viewSheet.id) === heard.sheetId ? heard.chroma : null
         }
@@ -272,6 +282,7 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
           setStartAt({ sectionId: null, line: null })
           setHeard(null)
           setAskedKey(null)
+          setQueued(null)
         }}
       />
     </YStack>

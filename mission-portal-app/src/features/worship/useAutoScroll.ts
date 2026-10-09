@@ -318,6 +318,8 @@ export function useAutoScroll(
     start,
     pause,
     resume: run,
+    /** Where the sheet is scrolled to now. */
+    position: () => live.current.y,
     startIfSaved,
     stop,
     toggle,

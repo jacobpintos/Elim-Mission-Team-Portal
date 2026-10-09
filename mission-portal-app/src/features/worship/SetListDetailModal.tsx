@@ -6,7 +6,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
-import { ChordSheetViewer } from './ChordSheetViewer'
+import { ChordSheetViewer, type QueuedSong } from './ChordSheetViewer'
 import { keyLabel } from '@/lib/nashvilleNumbers'
 import type { SetList, SetListSong } from '@/types/worship'
 import type { Task } from '@/types/events'
@@ -41,10 +41,17 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
   // Chords Only, for every song in this set until it is switched off; a
   // different set list starts with it off.
   const [chordsOnly, setChordsOnly] = useState(false)
+  // A song queued by voice to come next, from inside the set or out of it;
+  // and, while one from outside the set is open, the set song it came after,
+  // for the set to carry on from.
+  const [queued, setQueued] = useState<QueuedSong | null>(null)
+  const [returnTo, setReturnTo] = useState<string | null>(null)
   const [chordsOnlyFor, setChordsOnlyFor] = useState(setList?.id)
   if (setList?.id !== chordsOnlyFor) {
     setChordsOnlyFor(setList?.id)
     setChordsOnly(false)
+    setQueued(null)
+    setReturnTo(null)
   }
   const [playingVideo, setPlayingVideo] = useState<{ url: string; title: string } | null>(null)
 
@@ -63,18 +70,48 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
     const cs = sheetFor(song)
     if (!cs) return
     setStepped(fromNeighbour)
+    setReturnTo(null)
     setViewSheet(cs)
     setViewSheetKey(song.key ?? '')
     setViewSheetAudio(song.audioUrl ? { url: song.audioUrl, name: song.audioName } : null)
     setViewSongId(song.id)
   }
 
-  const at = withSheets.findIndex((song) => song.id === viewSongId)
+  /**
+   * Open a song in the viewer's place (a queued one): the set's own song if
+   * it is in the set, else on its own, with the set carrying on after it
+   * from where it was left.
+   */
+  const openOther = (sheet: ChordSheet, key: { key: string; minor: boolean } | null) => {
+    const inSet = withSheets.find((song) => String(sheetFor(song)?.id) === String(sheet.id))
+    if (inSet) {
+      openSong(inSet, true)
+      if (key) setViewSheetKey(key.key)
+      return
+    }
+    setReturnTo(viewSongId ?? returnTo)
+    setViewSongId(null)
+    setViewSheet(sheet)
+    setViewSheetKey(key?.key ?? '')
+    setViewSheetAudio(null)
+    setStepped(true)
+  }
+
+  // Where in the set the open sheet is: its own place, or — a song from
+  // outside the set — just after the one it was played after.
+  const own = withSheets.findIndex((song) => song.id === viewSongId)
+  const after = own < 0 && returnTo ? withSheets.findIndex((song) => song.id === returnTo) : -1
+  const at = own >= 0 ? own : after
   const setNav =
     at >= 0
       ? {
-          position: `${at + 1} / ${withSheets.length}`,
-          onPrev: at > 0 ? () => openSong(withSheets[at - 1], true) : undefined,
+          position: own >= 0 ? `${at + 1} / ${withSheets.length}` : 'Extra',
+          onPrev:
+            own < 0
+              ? () => openSong(withSheets[at], true)
+              : at > 0
+                ? () => openSong(withSheets[at - 1], true)
+                : undefined,
           onNext: at < withSheets.length - 1 ? () => openSong(withSheets[at + 1], true) : undefined,
           stepped,
           chordsOnly,
@@ -111,10 +148,15 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
           setViewSheetKey('')
           setViewSheetAudio(null)
           setViewSongId(null)
+          setQueued(null)
+          setReturnTo(null)
         }}
         initialKey={viewSheetKey}
         audio={viewSheetAudio}
         setNav={setNav}
+        queued={queued}
+        onQueue={setQueued}
+        onOpenSheet={openOther}
       />
       <FullScreenOverlay
         visible={!!setList}

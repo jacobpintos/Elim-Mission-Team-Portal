@@ -21,3 +21,8 @@ export function ownsSpeech(id: string): boolean {
 export function releaseSpeech(id: string): void {
   if (owner === id) owner = null
 }
+
+/** Whether nobody is listening: the microphone can be taken without cutting anyone off. */
+export function speechFree(): boolean {
+  return owner === null
+}
