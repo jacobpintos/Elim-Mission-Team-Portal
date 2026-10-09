@@ -196,7 +196,7 @@ export function MiriamButton() {
   const listen = async (byName = false) => {
     stopWake()
     setWoken(byName)
-    if (byName) AccessibilityInfo.announceForAccessibility('Miriam is listening')
+    if (byName) AccessibilityInfo.announceForAccessibility('Miriam: Hineni, I am here')
     sent.current = false
     settled.current = ''
     request.current = ''
@@ -398,16 +398,17 @@ export function MiriamButton() {
   const called = woken && listening && stage === 'listening'
   const ink = called ? 'white' : colors.text
   const soft = called ? 'rgba(255,255,255,0.85)' : colors.textMuted
+  // What she says. Called by name, she answers as Samuel did: "Here I am."
   const title =
     stage === 'thinking'
       ? 'Working on it…'
       : stage === 'typing'
-        ? 'Miriam'
+        ? 'What can I do?'
         : listening
           ? called && !heard
-            ? 'You called — I’m listening'
+            ? 'Hineni — I am here'
             : 'Listening…'
-          : 'Miriam'
+          : null
 
   return (
     <>
@@ -446,13 +447,21 @@ export function MiriamButton() {
             accessibilityRole="alert"
           >
             <XStack alignItems="center" gap="$2.5">
-              {listening && stage === 'listening' ? (
-                <ListeningOrb color={called ? 'white' : colors.primary} />
-              ) : null}
+              <MiriamBadge
+                color={called ? 'white' : colors.primary}
+                letter={called ? colors.primary : 'white'}
+                pulsing={listening && stage === 'listening'}
+              />
               <YStack flex={1} gap="$0.5">
-                <Text color={ink} fontSize="$4" fontWeight="700" numberOfLines={1}>
-                  {title}
+                {/* Whose bar this is: hers, not the app's. */}
+                <Text color={soft} fontSize={11} fontWeight="800" letterSpacing={1.5}>
+                  MIRIAM
                 </Text>
+                {title ? (
+                  <Text color={ink} fontSize="$4" fontWeight="700" numberOfLines={1}>
+                    {title}
+                  </Text>
+                ) : null}
                 {stage === 'typing' ? null : heard ? (
                   <Text color={ink} fontSize="$3" fontStyle="italic" numberOfLines={3}>
                     “{heard}”
@@ -601,8 +610,19 @@ export function MiriamButton() {
   )
 }
 
-/** Rings pulsing out from a dot while Miriam listens. */
-function ListeningOrb({ color }: { color: string }) {
+/**
+ * Miriam's mark — an M in a circle, so the bar is plainly hers — with rings
+ * pulsing out from it while she listens.
+ */
+function MiriamBadge({
+  color,
+  letter,
+  pulsing,
+}: {
+  color: string
+  letter: string
+  pulsing: boolean
+}) {
   const [pulse] = useState(() => new Animated.Value(0))
   useEffect(() => {
     const loop = Animated.loop(
@@ -613,9 +633,10 @@ function ListeningOrb({ color }: { color: string }) {
         useNativeDriver: Platform.OS !== 'web',
       })
     )
+    if (!pulsing) return
     loop.start()
     return () => loop.stop()
-  }, [pulse])
+  }, [pulse, pulsing])
   const ring = (delay: number) => {
     const t = pulse.interpolate({
       inputRange: [0, delay, 1],
@@ -624,13 +645,13 @@ function ListeningOrb({ color }: { color: string }) {
     })
     return {
       position: 'absolute' as const,
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       borderWidth: 2,
       borderColor: color,
       opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] }),
-      transform: [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.3] }) }],
+      transform: [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.25] }) }],
     }
   }
   return (
@@ -639,9 +660,13 @@ function ListeningOrb({ color }: { color: string }) {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      <Animated.View style={ring(0)} />
-      <Animated.View style={ring(0.35)} />
-      <View style={[styles.orbDot, { backgroundColor: color }]} />
+      {pulsing ? <Animated.View style={ring(0)} /> : null}
+      {pulsing ? <Animated.View style={ring(0.35)} /> : null}
+      <View style={[styles.orbDot, { backgroundColor: color }]}>
+        <Text color={letter} fontSize={15} fontWeight="800">
+          M
+        </Text>
+      </View>
     </View>
   )
 }
@@ -673,15 +698,17 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   orb: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   orbDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   close: {
     minWidth: 36,
