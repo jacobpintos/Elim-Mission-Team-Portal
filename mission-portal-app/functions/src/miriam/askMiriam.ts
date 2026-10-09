@@ -11,6 +11,8 @@ import {
   type EventFormInput,
   type Roster,
 } from './plan'
+import { isAdminViewer, type Viewer } from './data'
+import { Lookups, withWeekday } from './lookups'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -38,24 +40,39 @@ function allowed(uid: string): boolean {
 
 const SYSTEM = `You are Miriam, the assistant in the Mission Portal app of The Well of Iowa, a church mission team.
 
-Someone has asked you, usually out loud, to do something in the app. Their words were turned into text by speech recognition, so names and words may be misheard: match a name to the lists below by how it sounds and by first name, and a misheard word to what makes sense.
+Someone has spoken to you, usually out loud. Their words were turned into text by speech recognition, so names and words may be misheard: match them to what the tools return by how they sound, and a misheard word to what makes sense.
 
-Do what they asked with the one tool that fits. A tool only fills in a form for them to check and save, so fill in what they said and leave the rest empty. If none of your tools fits what they asked, don't call one: say in one short sentence that you can't do that yet. Never ask a question back; they can't answer one.`
+A question: look it up with the tools — never answer from memory or guess — then finish with \`answer\`: a short reply to be heard, and where in the app to show it. The tools return only what this person is allowed to see. If something isn't there, say you couldn't find it, without suggesting that it exists. When several events match, take the nearest upcoming one unless they said otherwise, and say its date. When they ask who is unavailable, include everyone not plainly available — not available, partly available, not sure yet (TBD), and not answered — with what they wrote. When they ask what is pending, that is every task not done.
+
+Something to do: use the tool for it. It only fills in a form for them to check and save, so fill in what they said and leave the rest empty.
+
+If no tool fits, call \`answer\` saying in one sentence that you can't do that yet. Never ask a question back; they can't answer one.`
+
+/** How many rounds of looking things up before giving up on a question. */
+const MAX_ROUNDS = 6
+
+/** Where the app should take them to see an answer. */
+type Open =
+  | { kind: 'event'; key: string; section: 'dress_code' | 'availability' | 'details' | null }
+  | { kind: 'task'; id: string }
+  | { kind: 'availability' }
 
 /**
- * Miriam: a request, said or typed, turned into something done in the app —
- * for now, a new event's form, filled in.
+ * Miriam: a request or a question, said or typed.
+ *
+ * A request — for now, a new event — comes back as a form filled in, for the
+ * app to open; nothing is saved here. A question is looked up with read-only
+ * tools that see only what this person may see (./data.ts, ./lookups.ts),
+ * and comes back as a short answer to be read aloud, and where to show it.
  *
  * The caller's roles are read here from their profile, never taken from the
- * app. Claude is only offered the commands those roles allow (functions/src/
- * miriam/plan.ts), and its answer is checked against them again before it is
- * acted on. What comes back is a filled-in form for the app to open; nothing
- * is saved here.
+ * app. Claude is only offered the commands those roles allow (./plan.ts), and
+ * each one it uses is checked against them again before it runs.
  *
  * Nothing said is stored or logged, only how much it cost.
  */
 export const askMiriam = onCall(
-  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60 },
+  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 90 },
   async (req) => {
     const uid = req.auth?.uid
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in to use Miriam.')
@@ -72,7 +89,8 @@ export const askMiriam = onCall(
 
     const db = admin.firestore()
     const me = await db.doc(`users/${uid}`).get()
-    const commands = commandsFor(me.data()?.roles as string[] | undefined)
+    const roles: string[] = Array.isArray(me.data()?.roles) ? me.data()!.roles : []
+    const commands = commandsFor(roles)
     if (commands.length === 0) {
       return { kind: 'reply', text: 'There’s nothing I can do for you in the app yet.' }
     }
@@ -82,86 +100,141 @@ export const askMiriam = onCall(
         'That’s a lot of requests — try again in a few minutes.'
       )
     }
+    const viewer = { uid, roles }
+    const lookups = new Lookups(db, viewer, today)
 
-    // The people and groups a request may name. Only fetched for commands
-    // that assign people, which today are admins', who can see them all.
-    const [userSnap, groupSnap] = await Promise.all([
-      db.collection('users').get(),
-      db.collection('groups').get(),
-    ])
-    const roster: Roster = {
-      people: userSnap.docs
-        .filter((d) => {
-          const u = d.data()
-          const roles: string[] = Array.isArray(u.roles) ? u.roles : []
-          return u.displayName && !(roles.length > 0 && roles.every((r) => r === 'public'))
-        })
-        .map((d) => ({ id: d.id, name: String(d.data().displayName) }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-      groups: groupSnap.docs
-        .map((d) => ({
-          id: d.id,
-          name: String(d.data().name ?? ''),
-          members: Array.isArray(d.data().members) ? d.data().members.map(String) : [],
-        }))
-        .filter((g) => g.name)
-        .sort((a, b) => a.name.localeCompare(b.name)),
+    // The people and groups a new event's form can name: only for those who
+    // may make one (admins, who can see them all).
+    let roster: Roster | null = null
+    let lists = ''
+    if (commands.includes('open_event_form')) {
+      const [names, groups] = await Promise.all([lookups.names(), lookups.groups()])
+      const userSnap = await db.collection('users').get()
+      roster = {
+        people: userSnap.docs
+          .filter((d) => {
+            const roles: string[] = Array.isArray(d.data().roles) ? d.data().roles : []
+            return names.has(d.id) && !(roles.length > 0 && roles.every((r) => r === 'public'))
+          })
+          .map((d) => ({ id: d.id, name: names.get(d.id)! }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+        groups: groups.filter((g) => g.name).sort((a, b) => a.name.localeCompare(b.name)),
+      }
+      lists =
+        `For a new event's form — groups (id: name):\n${roster.groups.map((g) => `${g.id}: ${g.name}`).join('\n')}\n\n` +
+        `People (id: name):\n${roster.people.map((p) => `${p.id}: ${p.name}`).join('\n')}`
     }
-    const lists =
-      `Groups (id: name):\n${roster.groups.map((g) => `${g.id}: ${g.name}`).join('\n')}\n\n` +
-      `People (id: name):\n${roster.people.map((p) => `${p.id}: ${p.name}`).join('\n')}`
 
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() })
-    let response: Anthropic.Beta.BetaMessage
-    try {
-      response = await client.beta.messages.create({
-        model: MODEL,
-        max_tokens: 8000,
-        // Declined on safety grounds: tried again on the model Anthropic
-        // recommends for that, inside the same call.
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
-        output_config: { effort: 'low' },
-        system: [
-          { type: 'text', text: SYSTEM },
-          { type: 'text', text: lists, cache_control: { type: 'ephemeral' } },
-        ],
-        tools: commands.map((name) => COMMANDS[name].tool as Anthropic.Beta.BetaTool),
-        messages: [{ role: 'user', content: `Today is ${today}.\n\nThey said: “${text}”` }],
-      })
-    } catch (err) {
-      if (err instanceof Anthropic.AuthenticationError) {
-        logger.error('askMiriam: the Anthropic API key was refused')
-      } else if (err instanceof Anthropic.RateLimitError) {
-        throw new HttpsError('resource-exhausted', 'Miriam is busy — try again in a moment.')
-      } else {
-        logger.error('askMiriam: request failed', err)
+    const tools = commands.map((name) => COMMANDS[name].tool as Anthropic.Beta.BetaTool)
+    const system: Anthropic.Beta.BetaTextBlockParam[] = [{ type: 'text', text: SYSTEM }]
+    if (lists) system.push({ type: 'text', text: lists, cache_control: { type: 'ephemeral' } })
+    const messages: Anthropic.Beta.BetaMessageParam[] = [
+      { role: 'user', content: `Today is ${withWeekday(today)}.\n\nThey said: “${text}”` },
+    ]
+
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      let response: Anthropic.Beta.BetaMessage
+      try {
+        response = await client.beta.messages.create({
+          model: MODEL,
+          max_tokens: 8000,
+          // Declined on safety grounds: tried again on the model Anthropic
+          // recommends for that, inside the same call.
+          betas: ['server-side-fallback-2026-07-01'],
+          fallbacks: 'default',
+          output_config: { effort: 'low' },
+          system,
+          tools,
+          messages,
+        })
+      } catch (err) {
+        if (err instanceof Anthropic.AuthenticationError) {
+          logger.error('askMiriam: the Anthropic API key was refused')
+        } else if (err instanceof Anthropic.RateLimitError) {
+          throw new HttpsError('resource-exhausted', 'Miriam is busy — try again in a moment.')
+        } else {
+          logger.error('askMiriam: request failed', err)
+        }
+        throw new HttpsError('unavailable', 'Miriam couldn’t be reached. Try again.')
       }
-      throw new HttpsError('unavailable', 'Miriam couldn’t be reached. Try again.')
-    }
-    logger.info('askMiriam', { uid, model: response.model, usage: response.usage })
+      logger.info('askMiriam', { uid, round, model: response.model, usage: response.usage })
 
-    if (response.stop_reason === 'refusal') {
-      return { kind: 'reply', text: 'Sorry, I can’t help with that.' }
-    }
+      if (response.stop_reason === 'refusal') {
+        return { kind: 'reply', text: 'Sorry, I can’t help with that.' }
+      }
+      const calls = response.content.filter(
+        (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use'
+      )
+      if (calls.length === 0) {
+        const said = response.content
+          .map((b) => (b.type === 'text' ? b.text : ''))
+          .join(' ')
+          .trim()
+        return { kind: 'reply', text: said || 'Sorry, I didn’t catch that. Try again?' }
+      }
 
-    const call = response.content.find((b) => b.type === 'tool_use')
-    if (call && call.type === 'tool_use') {
-      const name = call.name as CommandName
       // Checked again: only a command this person may use is acted on.
-      if (!commands.includes(name)) {
-        return { kind: 'reply', text: 'You don’t have permission to do that.' }
-      }
-      if (name === 'open_event_form') {
-        const { draft, notes } = draftFromInput(call.input as Partial<EventFormInput>, roster)
+      const refusedCall = calls.find((c) => !commands.includes(c.name as CommandName))
+      if (refusedCall) return { kind: 'reply', text: 'You don’t have permission to do that.' }
+
+      const form = calls.find((c) => c.name === 'open_event_form')
+      if (form && roster) {
+        const { draft, notes } = draftFromInput(form.input as Partial<EventFormInput>, roster)
         return { kind: 'eventForm', draft, notes }
       }
-    }
+      const final = calls.find((c) => c.name === 'answer')
+      if (final) return finish(final.input as AnswerInput, lookups, viewer)
 
-    const said = response.content
-      .map((b) => (b.type === 'text' ? b.text : ''))
-      .join(' ')
-      .trim()
-    return { kind: 'reply', text: said || 'Sorry, I didn’t catch what to do. Try again?' }
+      // Looked up, and handed back for the next round.
+      const results: Anthropic.Beta.BetaToolResultBlockParam[] = []
+      for (const call of calls) {
+        const input = call.input as { query?: string; date?: string; key?: string }
+        let result: unknown
+        try {
+          result =
+            call.name === 'find_events'
+              ? await lookups.findEvents(String(input.query ?? ''), String(input.date ?? ''))
+              : call.name === 'get_event'
+                ? await lookups.getEvent(String(input.key ?? ''))
+                : call.name === 'event_availability'
+                  ? await lookups.availability(String(input.key ?? ''))
+                  : call.name === 'find_tasks'
+                    ? await lookups.findTasks(String(input.query ?? ''))
+                    : { error: 'Not a lookup.' }
+        } catch (err) {
+          logger.error(`askMiriam: ${call.name} failed`, err)
+          result = { error: 'That could not be looked up just now.' }
+        }
+        results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(result) })
+      }
+      messages.push({ role: 'assistant', content: response.content })
+      messages.push({ role: 'user', content: results })
+    }
+    return { kind: 'reply', text: 'I couldn’t work that out — try asking another way.' }
   }
 )
+
+interface AnswerInput {
+  spoken: string
+  open: 'event' | 'task' | 'availability' | 'none'
+  target: string
+  section: 'dress_code' | 'availability' | 'details' | 'none'
+}
+
+/** The answer, and where to show it — only somewhere this person may go. */
+async function finish(input: AnswerInput, lookups: Lookups, viewer: Viewer) {
+  const text = String(input.spoken ?? '').trim() || 'Sorry, I couldn’t find that.'
+  let open: Open | null = null
+  if (input.open === 'event' && (await lookups.event(String(input.target)))) {
+    const section = ['dress_code', 'availability', 'details'].includes(input.section)
+      ? (input.section as 'dress_code' | 'availability' | 'details')
+      : null
+    open = { kind: 'event', key: String(input.target), section }
+  } else if (input.open === 'task' && (await lookups.task(String(input.target)))) {
+    open = { kind: 'task', id: String(input.target) }
+  } else if (input.open === 'availability' && isAdminViewer(viewer)) {
+    open = { kind: 'availability' }
+  }
+  return { kind: 'answer', text, open }
+}

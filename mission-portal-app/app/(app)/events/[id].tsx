@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { ScrollView, Pressable, Linking } from 'react-native'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
+import { ScrollView, Pressable, Linking, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -59,7 +59,25 @@ function EmptyField({ label }: { label: string }) {
 }
 
 export default function EventDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>()
+  // `focus`: a part of the page to bring into view and light up — Miriam,
+  // answering a question about it ("What's the dress code for…").
+  const { id, focus } = useLocalSearchParams<{ id: string; focus?: string }>()
+  const scrollRef = useRef<ScrollView>(null)
+  const focusedFor = useRef<string | null>(null)
+  const [lit, setLit] = useState<string | null>(null)
+  useEffect(() => {
+    if (!lit) return
+    const t = setTimeout(() => setLit(null), 4000)
+    return () => clearTimeout(t)
+  }, [lit])
+  /** Where a part of the page is: scrolled to and lit, if it is the one asked about. */
+  const placed = (section: string, y: number) => {
+    const ask = `${id}:${focus}`
+    if (focus !== section || focusedFor.current === ask) return
+    focusedFor.current = ask
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true })
+    setLit(section)
+  }
   const router = useRouter()
   const colors = useThemeColors()
   const toast = useUIStore((s) => s.toast)
@@ -88,7 +106,8 @@ export default function EventDetailScreen() {
   }, [])
 
   // Resolve event: prefer selectedEvent matching this id, fallback to lookup
-  const resolved = selectedEvent?.instanceKey === id ? selectedEvent : id ? getInstanceByKey(id) : null
+  const resolved =
+    selectedEvent?.instanceKey === id ? selectedEvent : id ? getInstanceByKey(id) : null
 
   // Every signed-in user's app holds every event — the store subscribes to the
   // whole collection — and this screen rendered whatever the id resolved to.
@@ -189,7 +208,7 @@ export default function EventDetailScreen() {
           </Text>
         </XStack>
       </Pressable>
-      <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView ref={scrollRef} style={{ flex: 1, backgroundColor: colors.background }}>
         <YStack padding="$4" gap="$4" paddingBottom="$8">
           {/* Unpublished banner */}
           {isUnpublished ? (
@@ -361,7 +380,16 @@ export default function EventDetailScreen() {
           ) : null}
 
           {/* Dress Code — members only */}
-          {isMember ? <DressCodeDisplay event={event} uid={uid} /> : null}
+          {isMember ? (
+            <Spot
+              lit={lit === 'dress_code'}
+              color={colors.primary}
+              name="dress_code"
+              onPlaced={placed}
+            >
+              <DressCodeDisplay event={event} uid={uid} />
+            </Spot>
+          ) : null}
 
           {/* Food — members only */}
           {isMember && event.food ? (
@@ -403,52 +431,59 @@ export default function EventDetailScreen() {
 
           {/* Availability — members only */}
           {isMember ? (
-            <YStack gap="$2">
-              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                YOUR AVAILABILITY
-              </Text>
-              <XStack gap="$2" alignItems="center">
-                <AvailBadge status={myAvail?.status} />
-                {myAvail?.note ? (
-                  <Text color={colors.textMuted} fontSize="$2">
-                    {myAvail.note}
-                  </Text>
-                ) : null}
-                {event.isRec && instanceAvail ? (
-                  <Text color={colors.textMuted} fontSize={11}>
-                    (this date only)
-                  </Text>
-                ) : event.isRec && myAvail ? (
-                  <Text color={colors.textMuted} fontSize={11}>
-                    (series)
-                  </Text>
-                ) : null}
-              </XStack>
-              {event.isRec && !hasSeriesResponse ? (
-                <Text color={colors.textMuted} fontSize="$2">
-                  Set your series availability in the banner above first.
+            <Spot
+              lit={lit === 'availability'}
+              color={colors.primary}
+              name="availability"
+              onPlaced={placed}
+            >
+              <YStack gap="$2">
+                <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                  YOUR AVAILABILITY
                 </Text>
-              ) : !isUnpublished ? (
-                <Pressable onPress={() => setAvailModalOpen(true)}>
-                  <XStack
-                    borderWidth={1}
-                    borderColor={colors.primary}
-                    borderRadius="$2"
-                    paddingHorizontal="$3"
-                    paddingVertical="$2"
-                    alignSelf="flex-start"
-                  >
-                    <Text color={colors.primary} fontWeight="600" fontSize="$3">
-                      {instanceAvail
-                        ? 'Change This Date'
-                        : myAvail
-                          ? 'Override This Date'
-                          : 'Set RSVP'}
+                <XStack gap="$2" alignItems="center">
+                  <AvailBadge status={myAvail?.status} />
+                  {myAvail?.note ? (
+                    <Text color={colors.textMuted} fontSize="$2">
+                      {myAvail.note}
                     </Text>
-                  </XStack>
-                </Pressable>
-              ) : null}
-            </YStack>
+                  ) : null}
+                  {event.isRec && instanceAvail ? (
+                    <Text color={colors.textMuted} fontSize={11}>
+                      (this date only)
+                    </Text>
+                  ) : event.isRec && myAvail ? (
+                    <Text color={colors.textMuted} fontSize={11}>
+                      (series)
+                    </Text>
+                  ) : null}
+                </XStack>
+                {event.isRec && !hasSeriesResponse ? (
+                  <Text color={colors.textMuted} fontSize="$2">
+                    Set your series availability in the banner above first.
+                  </Text>
+                ) : !isUnpublished ? (
+                  <Pressable onPress={() => setAvailModalOpen(true)}>
+                    <XStack
+                      borderWidth={1}
+                      borderColor={colors.primary}
+                      borderRadius="$2"
+                      paddingHorizontal="$3"
+                      paddingVertical="$2"
+                      alignSelf="flex-start"
+                    >
+                      <Text color={colors.primary} fontWeight="600" fontSize="$3">
+                        {instanceAvail
+                          ? 'Change This Date'
+                          : myAvail
+                            ? 'Override This Date'
+                            : 'Set RSVP'}
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                ) : null}
+              </YStack>
+            </Spot>
           ) : null}
 
           {/* Planning Board */}
@@ -551,5 +586,40 @@ export default function EventDetailScreen() {
 
       <WeatherDetailSheet open={showWeather} onClose={() => setShowWeather(false)} event={event} />
     </>
+  )
+}
+
+/**
+ * A part of the page that can be brought into view and lit for a moment —
+ * the part an answer from Miriam is about. Says where it is once laid out.
+ */
+function Spot({
+  name,
+  lit,
+  color,
+  onPlaced,
+  children,
+}: {
+  name: string
+  lit: boolean
+  color: string
+  onPlaced: (name: string, y: number) => void
+  children: ReactNode
+}) {
+  return (
+    <View
+      onLayout={(e) => onPlaced(name, e.nativeEvent.layout.y)}
+      style={{
+        borderRadius: 10,
+        marginHorizontal: -8,
+        paddingHorizontal: 8,
+        paddingVertical: lit ? 8 : 0,
+        backgroundColor: lit ? color + '22' : 'transparent',
+        borderWidth: lit ? 2 : 0,
+        borderColor: color,
+      }}
+    >
+      {children}
+    </View>
   )
 }

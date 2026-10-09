@@ -8,7 +8,7 @@ import {
   type EventFormInput,
   type Roster,
 } from '../../functions/src/miriam/plan'
-import { canUseMiriam } from './miriam'
+import { canUseMiriam, miriamHref } from './miriam'
 import type { UserProfile } from '@/types/user'
 
 const roster: Roster = {
@@ -40,10 +40,11 @@ const input = (over: Partial<EventFormInput>): Partial<EventFormInput> => ({
 })
 
 describe('who may use what', () => {
-  it('gives event creation to admins only', () => {
-    expect(commandsFor(['admin'])).toEqual(['open_event_form'])
-    expect(commandsFor(['regular', 'worship', 'security'])).toEqual([])
-    expect(commandsFor(['guest'])).toEqual([])
+  it('gives event creation to admins only, and questions to every member and guest', () => {
+    const questions = ['find_events', 'get_event', 'event_availability', 'find_tasks', 'answer']
+    expect(commandsFor(['admin'])).toEqual(['open_event_form', ...questions])
+    expect(commandsFor(['regular', 'worship', 'security'])).toEqual(questions)
+    expect(commandsFor(['guest'])).toEqual(questions)
     expect(commandsFor(['public'])).toEqual([])
     expect(commandsFor(undefined)).toEqual([])
   })
@@ -127,5 +128,18 @@ describe('dates and times', () => {
     expect(validTime('0:15')).toBe('12:15 AM')
     expect(validTime('13:00 PM')).toBe('')
     expect(validTime('soon')).toBe('')
+  })
+})
+
+describe('where an answer is shown', () => {
+  it('is the event at the part asked about, the task, or the availability page', () => {
+    expect(miriamHref({ kind: 'event', key: 'ev1_2026-10-25', section: 'dress_code' })).toBe(
+      '/events/ev1_2026-10-25?focus=dress_code'
+    )
+    expect(miriamHref({ kind: 'event', key: 'ev1_2026-10-25', section: null })).toBe(
+      '/events/ev1_2026-10-25'
+    )
+    expect(miriamHref({ kind: 'task', id: 't 1' })).toBe('/assignments?taskId=t%201')
+    expect(miriamHref({ kind: 'availability' })).toBe('/admin/avail')
   })
 })

@@ -1,4 +1,3 @@
-import { isAdmin } from '@/lib/roles'
 import type { UserProfile } from '@/types/user'
 
 /**
@@ -13,7 +12,9 @@ import type { UserProfile } from '@/types/user'
  * offered one. Add a command there, and widen this to match.
  */
 export function canUseMiriam(profile: UserProfile | null): boolean {
-  return isAdmin(profile)
+  // Questions are for every member and guest (what each may see is decided
+  // there); a new event's form, for admins.
+  return (profile?.roles ?? []).some((r) => r !== 'public')
 }
 
 /** The longest request Miriam takes, typed or said (askMiriam's MAX_TEXT). */
@@ -34,6 +35,21 @@ export interface EventDraft {
   groups: string[]
 }
 
+/** Where an answer can be shown (functions/src/miriam/askMiriam.ts: Open). */
+export type MiriamOpen =
+  | { kind: 'event'; key: string; section: 'dress_code' | 'availability' | 'details' | null }
+  | { kind: 'task'; id: string }
+  | { kind: 'availability' }
+
 export type MiriamResult =
   | { kind: 'eventForm'; draft: EventDraft; notes: string[] }
+  | { kind: 'answer'; text: string; open: MiriamOpen | null }
   | { kind: 'reply'; text: string }
+
+/** The app's address for where an answer is shown. */
+export function miriamHref(open: MiriamOpen): string {
+  if (open.kind === 'task') return `/assignments?taskId=${encodeURIComponent(open.id)}`
+  if (open.kind === 'availability') return '/admin/avail'
+  const focus = open.section ? `?focus=${open.section}` : ''
+  return `/events/${encodeURIComponent(open.key)}${focus}`
+}

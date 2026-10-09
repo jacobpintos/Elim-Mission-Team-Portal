@@ -28,7 +28,9 @@ import { listeningCue } from '@/lib/listeningCue'
 import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
 import { wakeEngine } from '@/lib/wakeEngine'
 import { withoutHerName } from '@/lib/wakeWord'
-import { MAX_REQUEST } from '@/lib/miriam'
+import { MAX_REQUEST, miriamHref } from '@/lib/miriam'
+import { anyOverlayOpen } from '@/lib/overlays'
+import { speak, stopSpeaking } from './speak'
 import { askMiriam, miriamError } from './askMiriam'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -43,6 +45,8 @@ const PAUSE_MS = 1800
 const LISTEN_MS = 60_000
 /** How often listening for "Hey Miriam" is started again when it has stopped. */
 const WAKE_RETRY_MS = 3000
+/** How long an answer stays up once given, unless she is spoken to again. */
+const ANSWER_MS = 20_000
 /** Whether this device listens for "Hey Miriam" (AsyncStorage). */
 const WAKE_KEY = 'miriam_wake'
 
@@ -189,6 +193,13 @@ export function MiriamButton() {
         return
       }
       setAnswer(result.text)
+      speak(result.text)
+      // Taken to where the answer is — unless that would pull them out of
+      // something open over the page, a chord sheet being played: then it is
+      // said and shown here, and the page is left as it is.
+      if (result.kind === 'answer' && result.open && !anyOverlayOpen()) {
+        router.push(miriamHref(result.open) as never)
+      }
     } catch (err) {
       setAnswer(miriamError(err))
     }
@@ -198,6 +209,7 @@ export function MiriamButton() {
   /** Listen for a request — tapped, or woken by her name. */
   const listen = async (byName = false) => {
     stopWake()
+    stopSpeaking()
     setWoken(byName)
     setRanOut(false)
     if (byName) AccessibilityInfo.announceForAccessibility('Miriam: Hineni, I am here')
@@ -402,8 +414,19 @@ export function MiriamButton() {
   const close = () => {
     sent.current = true
     stopListening()
+    stopSpeaking()
     setOpen(false)
   }
+  // An answer stays up a while, then goes, so the bar is not left over the page.
+  const closeRef = useRef(close)
+  useEffect(() => {
+    closeRef.current = close
+  })
+  useEffect(() => {
+    if (stage !== 'answered' || !open) return
+    const t = setTimeout(() => closeRef.current(), ANSWER_MS)
+    return () => clearTimeout(t)
+  }, [stage, open, answer])
   const typeInstead = () => {
     stopListening()
     sent.current = false
@@ -487,11 +510,11 @@ export function MiriamButton() {
                   </Text>
                 ) : stage === 'listening' ? (
                   <Text color={soft} fontSize="$2" numberOfLines={2}>
-                    Say what to do — “Create an event on 9/25 called Revival…”
+                    Ask or say what to do — “What’s the dress code for Revival in the Heartland?”
                   </Text>
                 ) : null}
                 {answer ? (
-                  <Text color={ink} fontSize="$3" fontWeight="600" numberOfLines={4}>
+                  <Text color={ink} fontSize="$3" fontWeight="600" numberOfLines={6}>
                     {answer}
                   </Text>
                 ) : null}

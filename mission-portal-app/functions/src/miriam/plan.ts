@@ -10,11 +10,21 @@
  * Claude for them, and whatever Claude answers is checked against the same
  * table again before anything is done with it. Neither check is the last
  * word: a command only ever opens a form, and saving the form goes through
- * the Firestore rules like any other save.
+ * the Firestore rules like any other save; and what a question can look up
+ * is filtered by what the person may see (./data.ts).
  */
 
 /** A command Miriam can carry out. Mirrored in the app (src/lib/miriam.ts). */
-export type CommandName = 'open_event_form'
+export type CommandName =
+  | 'open_event_form'
+  | 'find_events'
+  | 'get_event'
+  | 'event_availability'
+  | 'find_tasks'
+  | 'answer'
+
+/** Every role but a public follower's: members, and guests. */
+const ANYONE_SIGNED_IN = ['admin', 'security', 'regular', 'intern', 'worship', 'guest']
 
 /** A tool definition, in the shape the Messages API takes. */
 export interface ToolDefinition {
@@ -25,6 +35,18 @@ export interface ToolDefinition {
 }
 
 const stringList = { type: 'array', items: { type: 'string' } }
+const keyOnly = (description: string) => ({
+  type: 'object',
+  properties: { key: { type: 'string', description } },
+  required: ['key'],
+  additionalProperties: false,
+})
+const queryOnly = (description: string) => ({
+  type: 'object',
+  properties: { query: { type: 'string', description } },
+  required: ['query'],
+  additionalProperties: false,
+})
 
 export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefinition }> = {
   open_event_form: {
@@ -89,6 +111,104 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
           'except_people',
           'unmatched_names',
         ],
+        additionalProperties: false,
+      },
+    },
+  },
+
+  // Questions: read only, and only what the person may see (./data.ts).
+  find_events: {
+    roles: ANYONE_SIGNED_IN,
+    tool: {
+      name: 'find_events',
+      description:
+        'Find events this person can see by name, city or venue, or on a date: returns each match’s key, title, date, time and city, nearest upcoming first. ' +
+        'Use it first for any question about an event. With neither, it lists the next few events.',
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              'Words from the event’s name, city or venue, as said: "revival heartland", "Dallas". "" for any.',
+          },
+          date: {
+            type: 'string',
+            description:
+              'YYYY-MM-DD, for "this Sunday", "tomorrow", "on the 25th"; "" for any date.',
+          },
+        },
+        required: ['query', 'date'],
+        additionalProperties: false,
+      },
+    },
+  },
+  get_event: {
+    roles: ANYONE_SIGNED_IN,
+    tool: {
+      name: 'get_event',
+      description:
+        'Everything about one event this person is shown: date, time, report times, venue and address, the meeting and sign-up links, dress code, ' +
+        'their food sign-up and the sheet, their car (every car for an admin), their flight and lodging (everyone’s for an admin), their own availability, and its tasks with status, due date and who has them (theirs, or all of them for an admin).',
+      strict: true,
+      input_schema: keyOnly('The event’s key, from find_events.'),
+    },
+  },
+  event_availability: {
+    roles: ANYONE_SIGNED_IN,
+    tool: {
+      name: 'event_availability',
+      description:
+        'Who on an event is not plainly available: not available, partly available, not sure yet (TBD), and not answered — with their notes. ' +
+        'Only admins are shown other people’s; anyone else gets their own.',
+      strict: true,
+      input_schema: keyOnly('The event’s key, from find_events.'),
+    },
+  },
+  find_tasks: {
+    roles: ANYONE_SIGNED_IN,
+    tool: {
+      name: 'find_tasks',
+      description:
+        'Find tasks this person can see by name, with status, due date, who it is assigned to and the event it is for. ' +
+        'An empty query lists their open tasks.',
+      strict: true,
+      input_schema: queryOnly('Words from the task’s name, as said.'),
+    },
+  },
+  answer: {
+    roles: ANYONE_SIGNED_IN,
+    tool: {
+      name: 'answer',
+      description:
+        'Give the answer — always the last step of a question. `spoken` is read aloud and shown; `open` is where the app takes them to see it.',
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          spoken: {
+            type: 'string',
+            description:
+              'The answer in one to three short sentences, to be heard: plain words, no lists or symbols, dates said in full ("Friday, September 25th").',
+          },
+          open: {
+            type: 'string',
+            enum: ['event', 'task', 'availability', 'none'],
+            description:
+              'event: the event’s page; task: the task; availability: the admin availability page; none: nothing to show.',
+          },
+          target: {
+            type: 'string',
+            description: 'The event’s key or the task’s id; "" when open is availability or none.',
+          },
+          section: {
+            type: 'string',
+            enum: ['dress_code', 'availability', 'details', 'none'],
+            description: 'On an event’s page, the part the answer is about.',
+          },
+        },
+        required: ['spoken', 'open', 'target', 'section'],
         additionalProperties: false,
       },
     },

@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { Modal, type ModalProps } from 'react-native'
+import { overlayOpened } from '@/lib/overlays'
 
 /**
  * A full-screen layer over the app, with the same props as react-native's
@@ -9,5 +11,7 @@ import { Modal, type ModalProps } from 'react-native'
  * wrong thing to put controls inside on a phone held sideways.
  */
 export function FullScreenOverlay({ visible = true, ...props }: ModalProps) {
+  // Counted while open (lib/overlays).
+  useEffect(() => (visible ? overlayOpened() : undefined), [visible])
   return <Modal visible={visible} {...props} />
 }

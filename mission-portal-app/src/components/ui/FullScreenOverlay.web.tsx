@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { View, type ModalProps } from 'react-native'
+import { overlayOpened } from '@/lib/overlays'
 
 /**
  * A full-screen layer over the app — absolutely positioned, not fixed.
@@ -78,7 +79,10 @@ export function FullScreenOverlay({
     setStyle(host, 'background', transparent ? 'transparent' : 'white')
     document.body.appendChild(host)
     openStack.push(id)
+    // Counted while open (lib/overlays).
+    const closed = overlayOpened()
     return () => {
+      closed()
       const at = openStack.indexOf(id)
       if (at !== -1) openStack.splice(at, 1)
       host.remove()
