@@ -267,6 +267,62 @@ export type AppToolName =
   | 'read_messages'
   | 'read_operations'
   | 'read_settings'
+  | ActionName
+
+/**
+ * Changes, made in the app as the person signed in, through the same code
+ * as its screens — and never straight away: calling one ends the request,
+ * and the app shows exactly what will be done, to be confirmed or not.
+ */
+export type ActionName =
+  | 'send_message'
+  | 'post_announcement'
+  | 'set_task_status'
+  | 'set_availability'
+  | 'sign_up_food'
+  | 'change_notification'
+
+export const ACTIONS: readonly ActionName[] = [
+  'send_message',
+  'post_announcement',
+  'set_task_status',
+  'set_availability',
+  'sign_up_food',
+  'change_notification',
+]
+
+/** Settings' notification switches (src/lib/notificationKeys.ts). */
+const NOTIFICATIONS = [
+  'newAssignment',
+  'newMessage',
+  'eventReminder',
+  'announcement',
+  'issueAssigned',
+  'eventJoin',
+  'eventRemoved',
+  'worshipSetAssigned',
+  'taskDueSoon',
+  'rsvpNonAvailable',
+  'kaizenSubmission',
+  'issueSubmission',
+  'eventHealthBehind',
+  'chatFlagged',
+  'securityReport',
+  'weatherAlertAdmin',
+  'textingListSignup',
+  'eventLogistics',
+  'flightReminder',
+  'foodSignupOpen',
+  'foodSignupReminder',
+  'livestream',
+  'publicAnnouncement',
+  'publicEvent',
+  'contentFeatured',
+  'weeklyDigest',
+  'monthlyDigest',
+  'securityReportUrgent',
+]
+const ACTS = ' Only when they plainly tell you to; they will be shown it to confirm first.'
 
 export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { name: AppToolName }> =
   {
@@ -314,6 +370,113 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
           query: { type: 'string', description: 'Words to look for; "" for all of them.' },
         },
         required: ['area', 'query'],
+        additionalProperties: false,
+      },
+    },
+    send_message: {
+      name: 'send_message',
+      description: 'Send a message in one of their conversations.' + ACTS,
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          conversation: {
+            type: 'string',
+            description: 'The person’s name or the group chat’s name, as said.',
+          },
+          text: {
+            type: 'string',
+            description: 'The message, in their words, as they would type it.',
+          },
+        },
+        required: ['conversation', 'text'],
+        additionalProperties: false,
+      },
+    },
+    post_announcement: {
+      name: 'post_announcement',
+      description:
+        'Post an announcement to every member (admins only). To choose who sees it, or add a photo, they use the Announcements screen.' +
+        ACTS,
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          body: { type: 'string', description: 'What it says, in their words.' },
+          last_day: {
+            type: 'string',
+            description: 'YYYY-MM-DD: the last day it is shown, if they said; "" to keep it.',
+          },
+        },
+        required: ['title', 'body', 'last_day'],
+        additionalProperties: false,
+      },
+    },
+    set_task_status: {
+      name: 'set_task_status',
+      description: 'Mark one of their tasks not started, in progress or done.' + ACTS,
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string', description: 'The task’s id, from find_tasks.' },
+          status: { type: 'string', enum: ['pending', 'in_progress', 'done'] },
+        },
+        required: ['task_id', 'status'],
+        additionalProperties: false,
+      },
+    },
+    set_availability: {
+      name: 'set_availability',
+      description: 'Answer whether they are available for an event, on that date.' + ACTS,
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          event_key: { type: 'string', description: 'The event’s key, from find_events.' },
+          status: {
+            type: 'string',
+            enum: ['yes', 'no', 'partial', 'tbd'],
+            description: 'yes: available; no: not; partial: part of it; tbd: not sure yet.',
+          },
+          note: { type: 'string', description: 'What they said about it, if anything; "".' },
+        },
+        required: ['event_key', 'status', 'note'],
+        additionalProperties: false,
+      },
+    },
+    sign_up_food: {
+      name: 'sign_up_food',
+      description:
+        'Sign them up to bring one of the items on an event’s food sign-up sheet.' + ACTS,
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          event_key: { type: 'string', description: 'The event’s key, from find_events.' },
+          item: { type: 'string', description: 'The item, as get_event lists it.' },
+        },
+        required: ['event_key', 'item'],
+        additionalProperties: false,
+      },
+    },
+    change_notification: {
+      name: 'change_notification',
+      description: 'Turn one of their notifications on or off, by push, email or both.' + ACTS,
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          notification: { type: 'string', enum: NOTIFICATIONS },
+          channel: {
+            type: 'string',
+            enum: ['push', 'email', 'both'],
+            description: 'For a digest, "email".',
+          },
+          on: { type: 'boolean' },
+        },
+        required: ['notification', 'channel', 'on'],
         additionalProperties: false,
       },
     },

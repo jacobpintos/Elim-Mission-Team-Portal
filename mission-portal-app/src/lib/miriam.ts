@@ -61,6 +61,8 @@ export type MiriamResult =
       heardName?: string
     }
   | { kind: 'reply'; text: string }
+  /** A change asked for, to be shown and confirmed before it is made (features/miriam/actions). */
+  | { kind: 'confirm'; name: string; input: Record<string, unknown> }
 
 /** The app's address for where an answer is shown. */
 export function miriamHref(open: Exclude<MiriamOpen, { kind: 'screen' | 'video' }>): string {

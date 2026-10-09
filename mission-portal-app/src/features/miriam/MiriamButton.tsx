@@ -34,6 +34,7 @@ import { rememberName } from '@/lib/miriamMemory'
 import { FD } from '@/lib/format'
 import { speak, stopSpeaking, unlockSpeech } from './speak'
 import { askMiriam, miriamError } from './askMiriam'
+import { prepareAction, type Prepared } from './actions'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
@@ -56,6 +57,8 @@ const PAUSE_MS = 1800
 const LISTEN_MS = 60_000
 /** How often listening for "Hey Miriam" is started again when it has stopped. */
 const WAKE_RETRY_MS = 3000
+/** How long a confirmed change is waited on before it is said to be waiting for a signal. */
+const SEND_WAIT_MS = 12_000
 /** How long an answer stays up once given, unless she is spoken to again. */
 const ANSWER_MS = 20_000
 /** Whether this device listens for "Hey Miriam" (AsyncStorage). */
@@ -142,6 +145,8 @@ export function MiriamButton() {
     key: { key: string; minor: boolean } | null
   } | null>(null)
   const [queued, setQueued] = useState<QueuedSong | null>(null)
+  // A change worked out and waiting to be confirmed — or a choice of which.
+  const [pending, setPending] = useState<{ name: string; prepared: Prepared } | null>(null)
   // A video from Content asked for, playing over the page.
   const [video, setVideo] = useState<MusicItem | null>(null)
   const [songGuesses, setSongGuesses] = useState<ChordSheet[]>([])
@@ -217,6 +222,7 @@ export function MiriamButton() {
     if (!again) asked.current = said
     setChoices([])
     setSongGuesses([])
+    setPending(null)
     stopListening()
     setHeard(said)
     // A song, opened here from the sheets on this device: no need to ask.
@@ -244,6 +250,12 @@ export function MiriamButton() {
         offerEventForm({ draft: result.draft, heard: said, notes: result.notes })
         setOpen(false)
         router.navigate('/events' as never)
+        return
+      }
+      // A change: worked out into exactly what will be done, and shown to
+      // be confirmed — nothing is done until it is.
+      if (result.kind === 'confirm') {
+        await offerAction(result.name, result.input)
         return
       }
       // A video asked for: played over the page, with nothing said over it.
@@ -281,6 +293,54 @@ export function MiriamButton() {
     setStage('answered')
   }
 
+  /** A change asked for: shown as exactly what will be done, or why it can't be. */
+  const offerAction = async (name: string, input: Record<string, unknown>) => {
+    setStage('thinking')
+    const prepared = await prepareAction(name, input)
+    if (prepared.kind === 'cannot') {
+      setPending(null)
+      setAnswer(prepared.message)
+      speak(prepared.message)
+    } else {
+      setPending({ name, prepared })
+      setAnswer(prepared.title)
+      speak(prepared.title)
+    }
+    setStage('answered')
+  }
+  /** Confirmed: done, and said so. */
+  const confirmAction = async () => {
+    if (pending?.prepared.kind !== 'ready') return
+    const { run } = pending.prepared
+    unlockSpeech()
+    setPending(null)
+    setStage('thinking')
+    let said: string
+    try {
+      // Without a signal the change waits on the phone to be sent: said so,
+      // rather than left on "Working on it…".
+      said = await Promise.race([
+        run(),
+        new Promise<string>((done) =>
+          setTimeout(
+            () => done('No signal yet — it will go through as soon as you’re connected.'),
+            SEND_WAIT_MS
+          )
+        ),
+      ])
+    } catch {
+      said = 'That didn’t go through. Nothing was changed — try it on the screen.'
+    }
+    setAnswer(said)
+    speak(said)
+    setStage('answered')
+  }
+  const cancelAction = () => {
+    setPending(null)
+    setAnswer('Okay — nothing was changed.')
+    speak('Okay.')
+  }
+
   /** A chord sheet, opened over the page; the bar goes, to leave it in view. */
   const openSong = (sheet: ChordSheet, key: { key: string; minor: boolean } | null) => {
     setSongGuesses([])
@@ -303,6 +363,7 @@ export function MiriamButton() {
     stopSpeaking()
     setChoices([])
     setSongGuesses([])
+    setPending(null)
     setWoken(byName)
     setRanOut(false)
     if (byName) AccessibilityInfo.announceForAccessibility('Miriam: Hineni, I am here')
@@ -518,10 +579,10 @@ export function MiriamButton() {
   })
   useEffect(() => {
     // Not while there are events or songs to choose from: that waits for a choice.
-    if (stage !== 'answered' || !open || choices.length || songGuesses.length) return
+    if (stage !== 'answered' || !open || choices.length || songGuesses.length || pending) return
     const t = setTimeout(() => closeRef.current(), ANSWER_MS)
     return () => clearTimeout(t)
-  }, [stage, open, answer, choices.length, songGuesses.length])
+  }, [stage, open, answer, choices.length, songGuesses.length, pending])
   /** One of the events she offered: learned as what was meant, and asked about. */
   const pick = async (choice: { key: string; title: string; date: string }) => {
     unlockSpeech()
@@ -643,6 +704,60 @@ export function MiriamButton() {
                         </Text>
                         <Text color={colors.textMuted} fontSize="$2">
                           {FD(c.date, { weekday: true })}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </YStack>
+                ) : null}
+                {stage === 'answered' && pending?.prepared.kind === 'ready' ? (
+                  <YStack gap="$1.5" paddingTop="$1.5">
+                    {pending.prepared.details.length ? (
+                      <YStack style={[styles.choice, { borderColor: colors.border }]} gap="$1">
+                        {pending.prepared.details.map((line, i) => (
+                          <Text key={i} color={ink} fontSize="$3" numberOfLines={8}>
+                            {line}
+                          </Text>
+                        ))}
+                      </YStack>
+                    ) : null}
+                    <XStack gap="$2">
+                      <Pressable
+                        onPress={confirmAction}
+                        accessibilityRole="button"
+                        style={[styles.small, { backgroundColor: colors.primary }]}
+                      >
+                        <Text color="white" fontWeight="700" fontSize="$3">
+                          {pending.prepared.confirm}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={cancelAction}
+                        accessibilityRole="button"
+                        style={[styles.small, { borderWidth: 1, borderColor: colors.border }]}
+                      >
+                        <Text color={ink} fontWeight="700" fontSize="$3">
+                          Cancel
+                        </Text>
+                      </Pressable>
+                    </XStack>
+                  </YStack>
+                ) : null}
+                {stage === 'answered' && pending?.prepared.kind === 'choose' ? (
+                  <YStack gap="$1.5" paddingTop="$1.5">
+                    {pending.prepared.options.map((o) => (
+                      <Pressable
+                        key={o.label}
+                        onPress={() => offerAction(pending.name, o.input)}
+                        accessibilityRole="button"
+                        style={[styles.choice, { borderColor: colors.primary }]}
+                      >
+                        <Text
+                          color={colors.primary}
+                          fontWeight="700"
+                          fontSize="$3"
+                          numberOfLines={1}
+                        >
+                          {o.label}
                         </Text>
                       </Pressable>
                     ))}

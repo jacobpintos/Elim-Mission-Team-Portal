@@ -4,6 +4,7 @@ import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
 import Anthropic from '@anthropic-ai/sdk'
 import {
+  ACTIONS,
   APP_TOOLS,
   appToolsFrom,
   COMMANDS,
@@ -63,7 +64,7 @@ A question: look it up with the tools — never answer from memory or guess — 
 
 Announcements, their messages, the Operations tab (issues, kaizen, planning, inventory), videos in Content, and their own profile and settings each have a lookup, where this person has that screen. To take them to a screen — "go to the admin users page", "open Kaizen" — answer with open "screen" and its id from the list they are sent; to show where an answer is, you may do the same.
 
-Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new event's form is only filled in for them to check and save, so fill in what they said and leave the rest empty. To play a video from Content, find it, then answer with open "video" and its id. Anything else that changes something — sending, posting, saving, deleting — you can't do yet: say so in one sentence.
+Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new event's form is only filled in for them to check and save, so fill in what they said and leave the rest empty. To play a video from Content, find it, then answer with open "video" and its id. To change something — send a message, post an announcement, mark a task, answer their availability, sign up for food, turn a notification on or off — use its tool once you have what it needs (an event's key, a task's id); they confirm it in the app before anything is done, so don't ask them first. Anything else that changes something you can't do yet: say so in one sentence.
 
 When you are not sure — a request with several parts, people or groups to match, a name you can't place, or anything you might get wrong — ask the advisor before you act. A plain question you can look up needs no advice.
 
@@ -314,6 +315,10 @@ export const askMiriam = onCall(
         )
         return { kind: 'eventForm', draft, notes }
       }
+      // A change: not made here. The app shows exactly what will be done,
+      // and does it only once they confirm.
+      const action = calls.find((c) => ACTIONS.includes(c.name as never) && isAppTool(c.name))
+      if (action) return { kind: 'confirm', name: action.name, input: action.input }
       const final = calls.find((c) => c.name === 'answer')
       if (final) return finish(final.input as AnswerInput, lookups, viewer)
 

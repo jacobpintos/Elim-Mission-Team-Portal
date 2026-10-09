@@ -113,11 +113,13 @@ service cloud.firestore {
 
     match /tasks/{id} {
       allow read: if isSignedIn();
-      // Members may move a task's status; a guest may not, being read-only.
+      // Members may move a task's status — with when it was done, which the
+      // app writes alongside 'done' (tasksStore.setStatus) and cleanup reads;
+      // a guest may not, being read-only.
       allow write: if isAdmin() ||
         (isSignedIn() && !isGuest() &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['status', 'overdueNotified', '_updatedAt']));
+           .hasOnly(['status', 'doneAt', 'overdueNotified', '_updatedAt']));
     }
 
     match /rooms/{id} {

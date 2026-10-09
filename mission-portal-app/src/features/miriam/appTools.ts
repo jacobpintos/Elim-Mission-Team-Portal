@@ -1,7 +1,7 @@
 import { collection, limit, orderBy, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getDocs } from '@/lib/liveFirestore'
-import { canUseMessages, isAdmin, visibleTabs } from '@/lib/roles'
+import { canUseMessages, isAdmin, isGuest, visibleTabs } from '@/lib/roles'
 import { todayStr } from '@/lib/events'
 import {
   announcementsFound,
@@ -36,8 +36,15 @@ export type AppToolName =
   | 'read_messages'
   | 'read_operations'
   | 'read_settings'
+  // Changes: offered as these are, made only once confirmed (./actions.ts).
+  | 'send_message'
+  | 'post_announcement'
+  | 'set_task_status'
+  | 'set_availability'
+  | 'sign_up_food'
+  | 'change_notification'
 
-/** The lookups this person's screens allow. */
+/** The lookups — and changes — this person's screens allow. */
 export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   if (!profile) return []
   const tabs = visibleTabs(profile)
@@ -46,6 +53,15 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   if (tabs.includes('announce')) tools.push('read_announcements')
   if (canUseMessages(profile)) tools.push('read_messages')
   if (tabs.includes('issues')) tools.push('read_operations')
+  // The same people the screens let make each change.
+  const admin = isAdmin(profile)
+  const guest = isGuest(profile) && !admin
+  if (canUseMessages(profile)) tools.push('send_message')
+  if (admin) tools.push('post_announcement')
+  if (tabs.includes('assignments') && !guest) tools.push('set_task_status')
+  if (tabs.includes('events')) tools.push('set_availability')
+  if (tabs.includes('events') && !guest) tools.push('sign_up_food')
+  if (tabs.includes('settings')) tools.push('change_notification')
   return tools
 }
 
@@ -145,8 +161,11 @@ export async function runAppTool(name: string, input: Record<string, unknown>): 
       result = await readMessages(profile, String(input.conversation ?? ''))
     } else if (name === 'read_operations') {
       result = await readOperations(profile, String(input.area ?? ''), q)
-    } else {
+    } else if (name === 'read_settings') {
       result = settingsShown(profile)
+    } else {
+      // A change is never run from here: it is confirmed first (./actions.ts).
+      result = { error: 'That is not a lookup.' }
     }
     return JSON.stringify(result)
   } catch {

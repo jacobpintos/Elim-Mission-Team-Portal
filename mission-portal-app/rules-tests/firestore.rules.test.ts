@@ -16,6 +16,7 @@ import {
   query,
   where,
   documentId,
+  serverTimestamp,
 } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -468,6 +469,17 @@ describe('tasks', () => {
   it('lets a member flip status but not retitle a task', async () => {
     await assertSucceeds(updateDoc(doc(as(MEMBER), 'tasks/t1'), { status: 'done' }))
     await assertFails(updateDoc(doc(as(MEMBER), 'tasks/t1'), { title: 'Changed' }))
+  })
+
+  it('lets a member mark a task done as the app does, with when it was done', async () => {
+    // tasksStore.setStatus writes doneAt with 'done': cleanup reads it.
+    await assertSucceeds(
+      updateDoc(doc(as(MEMBER), 'tasks/t1'), {
+        status: 'done',
+        doneAt: serverTimestamp(),
+        _updatedAt: serverTimestamp(),
+      })
+    )
   })
 
   it('lets an admin change anything', async () => {
