@@ -32,7 +32,6 @@ import {
   getPrevMatchingSection,
 } from './chordSheetFormat'
 import { buildChordSheetPdfBlob } from './chordSheetPdf'
-import { songProfile, suggestKey, type Chroma } from '@/lib/keyDetect'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useCoverViewport } from '@/lib/useCoverViewport'
 import { resetPageZoom } from '@/lib/resetPageZoom'
@@ -200,25 +199,6 @@ interface ChordSheetViewerProps {
   onClose: () => void
   initialKey?: string
   /**
-   * A section to open at rather than the top — the one a song recognised by
-   * listening was being sung from (SongListener).
-   */
-  startAtSectionId?: string | null
-  /** And the line within it to bring into view, counting from 0. */
-  startAtLine?: number | null
-  /**
-   * Once there, start autoscroll — if the song has a speed of its own saved
-   * from scrolling it before. For a song found by listening: the band is
-   * already playing it.
-   */
-  autoScrollAtStart?: boolean
-  /**
-   * The notes the microphone heard while finding this song (SongListener):
-   * compared with the sheet's chords to suggest the key it is being played
-   * in, if that is clear and not the key already showing.
-   */
-  heardChroma?: Chroma | null
-  /**
    * A key asked for out loud with the song ("Firm Foundation, key of E"):
    * the sheet is shown in it, and it becomes the key the next song opens in,
    * as choosing it here would. A song asked for without a key keeps the last.
@@ -268,10 +248,6 @@ export function ChordSheetViewer({
   onClose,
   initialKey,
   audio,
-  startAtSectionId,
-  startAtLine,
-  autoScrollAtStart,
-  heardChroma,
   openInKey,
   setNav,
   queued,
@@ -544,24 +520,6 @@ export function ChordSheetViewer({
     autoScroll.scrollTo(Math.max(0, y + (within ?? 0) - 6))
   }
 
-  // Opened at a section, or a line in one: once the sheet has been laid
-  // out, there — and scrolling on from there, if asked and the song has a
-  // speed saved. Started first, so the jump is made at once rather than as a
-  // glide the first frame would cut short (autoScroll.scrollTo).
-  useEffect(() => {
-    if (!sheetKey || !startAtSectionId) return
-    let cancelled = false
-    const timer = setTimeout(async () => {
-      if (autoScrollAtStart) await autoScroll.startIfSaved()
-      if (!cancelled) jumpTo(startAtSectionId, startAtLine ?? null)
-    }, 400)
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetKey, startAtSectionId, startAtLine])
-
   const [selectedKey, setSelectedKey] = useState(() => {
     if (initialKey && (NNS_KEYS as readonly string[]).includes(initialKey)) return initialKey
     return getKeyPrefs().key
@@ -588,8 +546,6 @@ export function ChordSheetViewer({
   useEffect(() => {
     if (keyAsked) saveKeyPrefs({ key: keyAsked.key, isMinor: keyAsked.minor })
   }, [keyAsked])
-  // The heard sound whose key suggestion was waved away or taken.
-  const [keyHintDoneFor, setKeyHintDoneFor] = useState<Chroma | null>(null)
 
   /**
    * The next song: the one queued, if any, else the set's next. The queued
@@ -768,19 +724,6 @@ export function ChordSheetViewer({
   }, [sheetKey, inSet])
 
   if (!sheet) return null
-
-  const heardKey =
-    heardChroma && heardChroma !== keyHintDoneFor
-      ? suggestKey(
-          heardChroma,
-          songProfile(
-            sheet.sections.flatMap((s) => (s.chordTokens ?? []).flat()),
-            isMinor
-          )
-        )
-      : null
-  const heardKeyName = heardKey ? NNS_KEYS[heardKey.keyIdx] : null
-  const showKeyHint = heardKeyName !== null && heardKeyName !== selectedKey
 
   const keyOptions: string[] = ['', ...NNS_KEYS]
   const keyIdx =
@@ -1312,51 +1255,6 @@ export function ChordSheetViewer({
                 </Pressable>
               </XStack>
             )}
-
-            {/* The key the song sounds like, from listening — offered, not applied. */}
-            {showKeyHint ? (
-              <XStack
-                alignItems="center"
-                gap="$2"
-                backgroundColor={colors.primary + '18'}
-                borderRadius="$3"
-                paddingLeft="$3"
-              >
-                <Text color={colors.text} fontSize="$3" flex={1}>
-                  🎤 Sounds like {keyLabel(heardKeyName, isMinor)}
-                </Text>
-                <Pressable
-                  onPress={() => {
-                    setKeyHintDoneFor(heardChroma ?? null)
-                    handleSelectKey(heardKeyName)
-                  }}
-                  accessibilityRole="button"
-                  style={styles.touch}
-                >
-                  <XStack
-                    backgroundColor={colors.primary}
-                    borderRadius={99}
-                    paddingHorizontal="$3"
-                    alignItems="center"
-                    flexGrow={1}
-                  >
-                    <Text color="white" fontSize="$2" fontWeight="700">
-                      Switch to {keyLabel(heardKeyName)}
-                    </Text>
-                  </XStack>
-                </Pressable>
-                <Pressable
-                  onPress={() => setKeyHintDoneFor(heardChroma ?? null)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Dismiss key suggestion"
-                  style={[styles.touch, styles.hintClose]}
-                >
-                  <Text color={colors.textMuted} fontSize="$3">
-                    ✕
-                  </Text>
-                </Pressable>
-              </XStack>
-            ) : null}
 
             {chipsInHeader ? null : jumpBar}
 
@@ -1898,10 +1796,6 @@ const styles = StyleSheet.create({
   touch: {
     minHeight: 44,
     justifyContent: 'center',
-  },
-  hintClose: {
-    minWidth: 44,
-    alignItems: 'center',
   },
   /** The chip strip on its own line: only as tall as the chips. */
   jumpRow: {

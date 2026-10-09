@@ -7,7 +7,6 @@ import { useUIStore } from '@/stores/uiStore'
 import { ChordSheetEditor } from './ChordSheetEditor'
 import { SongListener, type AskedKey } from './SongListener'
 import { ChordSheetViewer, type QueuedSong } from './ChordSheetViewer'
-import type { Chroma } from '@/lib/keyDetect'
 import type { ChordSheet } from '@/types/chordSheet'
 
 interface ChordSheetsTabProps {
@@ -26,17 +25,10 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
   const [showEditor, setShowEditor] = useState(false)
   const [editSheet, setEditSheet] = useState<ChordSheet | null>(null)
   const [viewSheet, setViewSheet] = useState<ChordSheet | null>(null)
-  // Where a song found by listening was being sung: section, and line in it.
-  const [startAt, setStartAt] = useState<{ sectionId: string | null; line: number | null }>({
-    sectionId: null,
-    line: null,
-  })
   // A song queued by voice to come after the open one.
   const [queued, setQueued] = useState<QueuedSong | null>(null)
   // A key asked for with the song's name ("Firm Foundation in E").
   const [askedKey, setAskedKey] = useState<AskedKey | null>(null)
-  // The notes heard while finding that song, for suggesting its key.
-  const [heard, setHeard] = useState<{ sheetId: string; chroma: Chroma } | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null)
 
   const filtered = [...chordSheets]
@@ -110,16 +102,13 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
           placeholder="Search chord sheets…"
           placeholderTextColor={colors.textMuted}
         />
-        {/* The phone app only: find a song by listening to it. */}
+        {/* Find a song by saying its name. */}
         <SongListener
           sheets={chordSheets}
-          onFound={(sheet, sectionId, line, key) => {
-            setStartAt({ sectionId, line })
-            setHeard(null)
-            setAskedKey(key ?? null)
+          onFound={(sheet, key) => {
+            setAskedKey(key)
             setViewSheet(sheet)
           }}
-          onHeard={(sheetId, chroma) => setHeard({ sheetId, chroma })}
         />
         {readOnly ? null : (
           <Pressable onPress={openNew} style={[styles.newBtn, { backgroundColor: colors.primary }]}>
@@ -154,13 +143,7 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
                 ]}
               >
                 {/* Content area — tappable to view */}
-                <Pressable
-                  style={styles.cardContent}
-                  onPress={() => {
-                    setHeard(null)
-                    setViewSheet(sheet)
-                  }}
-                >
+                <Pressable style={styles.cardContent} onPress={() => setViewSheet(sheet)}>
                   <Text color={colors.text} fontWeight="700" fontSize={16} numberOfLines={1}>
                     {sheet.title}
                   </Text>
@@ -260,27 +243,15 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
 
       <ChordSheetViewer
         sheet={viewSheet}
-        startAtSectionId={startAt.sectionId}
-        startAtLine={startAt.line}
-        // Found by listening (startAt is only set then): the song is already
-        // being played, so it scrolls along at its saved speed, if it has one.
-        autoScrollAtStart
         openInKey={askedKey}
         queued={queued}
         onQueue={setQueued}
         onOpenSheet={(sheet, key) => {
-          setStartAt({ sectionId: null, line: null })
-          setHeard(null)
           setAskedKey(key)
           setViewSheet(sheet)
         }}
-        heardChroma={
-          heard && viewSheet && String(viewSheet.id) === heard.sheetId ? heard.chroma : null
-        }
         onClose={() => {
           setViewSheet(null)
-          setStartAt({ sectionId: null, line: null })
-          setHeard(null)
           setAskedKey(null)
           setQueued(null)
         }}

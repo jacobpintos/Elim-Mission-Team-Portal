@@ -6,14 +6,6 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-spe
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useThemeColors } from '@/theme/useThemeColors'
 import {
-  buildLyricIndex,
-  confidentMatch,
-  hintPhrases,
-  rankSongs,
-  type LyricMatch,
-} from '@/lib/lyricMatch'
-import type { Chroma } from '@/lib/keyDetect'
-import {
   KEY_HINTS,
   closestTitles,
   parseSongRequest,
@@ -22,7 +14,6 @@ import {
   trailingKey,
   type SongRequest,
 } from '@/lib/songRequest'
-import { readHeardAudio } from './heardAudio'
 import { claimSpeech, ownsSpeech, releaseSpeech } from '@/lib/speechOwner'
 import { orderForHints, upcomingSheetIds } from '@/lib/hintOrder'
 import { loadAliases, rememberAlias } from '@/lib/songAliases'
@@ -34,12 +25,6 @@ import type { ChordSheet } from '@/types/chordSheet'
 
 /** This listener's claim on the phone's speech recognition (lib/speechOwner). */
 const SPEECH_ID = 'song-listener'
-
-/**
- * A song offered to pick by hand: by its lyrics, or — `byTitle` — because
- * what was said is close to its name.
- */
-type Guess = LyricMatch & { byTitle?: boolean }
 
 /** Today as YYYY-MM-DD, on this phone's calendar. */
 function localToday(): string {
@@ -64,8 +49,8 @@ const ALTERNATIVES = Platform.OS === 'web' ? 1 : 5
 
 /** How long to listen before giving up. */
 const LISTEN_MS = 45_000
-/** Only the most recent words are matched: the song being sung now. */
-const RECENT_WORDS = 40
+/** Only the most recent words are matched: the name being said now. */
+const RECENT_WORDS = 12
 /** How long a song asked for by name waits for the rest of what is said. */
 const REQUEST_PAUSE_MS = 1200
 
@@ -76,56 +61,35 @@ export interface AskedKey {
 }
 
 /**
- * Find a song by listening to it — or by asking for it.
+ * Find a song by saying its name.
  *
- * Said rather than played — "Firm Foundation, key of E", or just a title —
- * the song opens straight away, in the key asked for, or else the key the
- * last song was in (lib/songRequest). That needs nothing from the music, so
- * it works wherever speech recognition does: the phone app, and the web app
- * in Chrome and Safari. The rest below is for a song playing.
+ * "Firm Foundation, key of E", or just a title: the song opens, in the key
+ * asked for, or else the key the last song was in (lib/songRequest). Titles
+ * only — never lyrics, so a song is not opened for a line that happens to
+ * be in it. It works wherever speech recognition does: the phone app, and
+ * the web app in Chrome and Safari.
  *
- * The microphone button beside the chord sheet search. The phone's (or the
- * browser's) own speech recognition listens to whatever is being sung or played — the
- * band, a recording, someone humming the words — and the words it makes out
- * are matched against every chord sheet's lyrics (lib/lyricMatch: split
- * syllables and "_" placeholders ignored, misheard words forgiven, phrases
- * every song has counted for little). Once one song is clearly it, the
- * listening stops and its sheet opens at the line that was being sung.
- *
- * Until then, the songs it might be are shown to be picked by hand. It stops
- * on its own after 45 seconds.
- *
- * The sound itself is kept in a file while listening, only so that once the
- * song is known, the notes heard can be compared with its chords to suggest
- * the key it is being played in (lib/keyDetect, via `onHeard`). The file is
- * deleted as soon as it has been read, song found or not.
+ * The microphone button beside the chord sheet search. Until a name is
+ * clear, the titles closest to what was said are shown to be picked by
+ * hand, or the song can be searched for; either way, what was heard is
+ * learned as that song. It stops on its own after 45 seconds.
  */
 export function SongListener({
   sheets,
   onFound,
-  onHeard,
 }: {
   sheets: ChordSheet[]
-  onFound: (
-    sheet: ChordSheet,
-    sectionId: string | null,
-    line: number | null,
-    key?: AskedKey | null
-  ) => void
-  /** The notes heard while finding `sheetId`, once the recording is read. */
-  onHeard?: (sheetId: string, heard: Chroma) => void
+  onFound: (sheet: ChordSheet, key: AskedKey | null) => void
 }) {
   const colors = useThemeColors()
   const [open, setOpen] = useState(false)
   const [listening, setListening] = useState(false)
   const [heard, setHeard] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
-  const [guesses, setGuesses] = useState<Guess[]>([])
+  const [guesses, setGuesses] = useState<ChordSheet[]>([])
   // What has been heard and settled, and what is still being made out.
   const settled = useRef('')
   const done = useRef(false)
-  // The song found, whose key the recording is then read for.
-  const found = useRef<string | null>(null)
   // A song asked for by name, opened once nothing more is said.
   const requestTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clearRequest = () => {
@@ -138,8 +102,6 @@ export function SongListener({
   const pendingAct = useRef<(() => void) | null>(null)
   const pendingId = useRef<string | null>(null)
   const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Songs cancelled this time: not offered again on the same lyrics.
-  const declined = useRef(new Set<string>())
   // What this device has learned to hear as which song (lib/songAliases).
   const aliases = useRef<ReadonlyMap<string, string>>(new Map())
   // The songs those phrases were corrected to: told to the recogniser
@@ -169,19 +131,16 @@ export function SongListener({
     }
   })
 
-  // In the order the recogniser should be told to expect their titles, as
-  // it takes only so many (lib/hintOrder): not English first, then songs
-  // in the next two weeks' set lists.
+  // The titles the recogniser is told to expect, in order, as it takes only
+  // so many (lib/hintOrder): not English first, then songs corrected on
+  // this device, then songs in the next two weeks' set lists.
   const setLists = useWorshipStore((s) => s.setLists)
-  const index = useMemo(
-    () =>
-      buildLyricIndex(
-        orderForHints(sheets, upcomingSheetIds(setLists, localToday()), taught).map((s) => ({
-          id: String(s.id),
-          title: s.title,
-          sections: s.sections.map((sec) => ({ id: sec.id, lyrics: sec.lyrics })),
-        }))
+  const hintTitles = useMemo(
+    () => [
+      ...new Set(
+        orderForHints(sheets, upcomingSheetIds(setLists, localToday()), taught).map((s) => s.title)
       ),
+    ],
     [sheets, setLists, taught]
   )
 
@@ -194,26 +153,15 @@ export function SongListener({
       requiresOnDeviceRecognition: onDevice.current,
       continuous: true,
       addsPunctuation: false,
-      // Steer the recogniser towards this library's words: a sung "wretch"
-      // is otherwise as likely heard as "rich".
-      // And towards a key said with a title: "key of D", not "KFD".
-      contextualStrings: [...KEY_HINTS, ...hintPhrases(index, 100 - KEY_HINTS.length)],
-      iosTaskHint: 'dictation',
-      // The sound, for the key once the song is found; 16 kHz is plenty for
-      // notes up to the top of a voice.
-      recordingOptions: {
-        persist: true,
-        outputSampleRate: 16000,
-        outputEncoding: 'pcmFormatInt16',
-      },
-      // Keep whatever else is playing — a reference track in the app, or a
-      // song in another — playing, so it can be heard. Measurement mode: the
-      // microphone as it is, without the processing iOS does for a voice
-      // call, which treats a band as noise to be taken out.
+      // Steer the recogniser towards this library's titles — "Agnus Dei",
+      // not "Agnes Day" — and a key said with one: "key of D", not "KFD".
+      contextualStrings: [...KEY_HINTS, ...hintTitles].slice(0, 100),
+      iosTaskHint: 'search',
+      // Whatever else is playing — a reference track in the app, or a song
+      // in another — carries on.
       iosCategory: {
         category: 'playAndRecord',
         categoryOptions: ['defaultToSpeaker', 'allowBluetooth', 'mixWithOthers'],
-        mode: 'measurement',
       },
     })
   }
@@ -239,23 +187,10 @@ export function SongListener({
     act?.()
   }
   const cancelPending = () => {
-    if (pendingId.current) declined.current.add(pendingId.current)
     clearPending()
     clearRequest()
     // Listening carries on; should it have stopped meanwhile, it starts again.
     if (!done.current && !ownsSpeech(SPEECH_ID)) listenForWords()
-  }
-
-  const finish = (match: LyricMatch) => {
-    if (done.current) return
-    done.current = true
-    found.current = match.id
-    // Stopped, not aborted, so the recording is finished and handed over.
-    ExpoSpeechRecognitionModule.stop()
-    setListening(false)
-    setOpen(false)
-    const sheet = sheets.find((s) => String(s.id) === match.id)
-    if (sheet) onFound(sheet, match.sectionId, match.line)
   }
 
   const openAsked = (request: SongRequest<ChordSheet>) => {
@@ -265,12 +200,7 @@ export function SongListener({
     ExpoSpeechRecognitionModule.abort()
     setListening(false)
     setOpen(false)
-    onFound(
-      request.sheet,
-      null,
-      null,
-      request.key ? { key: request.key, minor: request.minor } : null
-    )
+    onFound(request.sheet, request.key ? { key: request.key, minor: request.minor } : null)
   }
 
   /**
@@ -288,25 +218,14 @@ export function SongListener({
     }
     const recent = text.trim().split(/\s+/).slice(-RECENT_WORDS).join(' ')
     setHeard(recent)
-    const ranked = rankSongs(index, recent)
-    // Titles close to what was said first — a name half heard is the
-    // likelier meaning — then songs whose lyrics share two word pairs or
-    // more with it. One pair ("king Jesus") is in half the library.
-    const nearTitles = candidates
-      .flatMap((c) => closestTitles(sheets, c.trim().split(/\s+/).slice(-RECENT_WORDS).join(' ')))
-      .filter((sheet, i, all) => all.findIndex((x) => x.id === sheet.id) === i)
-      .slice(0, 3)
-    const titled: Guess[] = nearTitles.map((sheet) => ({
-      id: String(sheet.id),
-      title: sheet.title,
-      score: 0,
-      pairs: 0,
-      sectionId: null,
-      line: null,
-      byTitle: true,
-    }))
-    const sung = ranked.filter((r) => r.pairs >= 2 && !titled.some((t) => t.id === r.id))
-    setGuesses([...titled, ...sung].slice(0, 3))
+    // The titles closest to what was said, trying each of the recogniser's
+    // guesses at it.
+    setGuesses(
+      candidates
+        .flatMap((c) => closestTitles(sheets, c.trim().split(/\s+/).slice(-RECENT_WORDS).join(' ')))
+        .filter((sheet, i, all) => all.findIndex((x) => x.id === sheet.id) === i)
+        .slice(0, 3)
+    )
     // A song asked for by name, once the asking stops: "Holy" is not yet
     // "Holy Forever", nor "Firm Foundation" yet "Firm Foundation in E".
     clearRequest()
@@ -330,15 +249,9 @@ export function SongListener({
         const key = asked.key ? ` in ${keyLabel(asked.key, asked.minor)}` : ''
         confirmThen(String(asked.sheet.id), `${asked.sheet.title}${key}`, () => openAsked(asked))
       }, REQUEST_PAUSE_MS)
-      return
-    }
-    const match = confidentMatch(ranked)
-    if (match && !declined.current.has(match.id)) {
-      confirmThen(match.id, match.title, () => finish(match))
     }
   }
 
-  /** A guess picked by hand: opened at once, and learned from. */
   /** Teach this device that what was heard means this song (lib/songAliases). */
   const learnFrom = (sheetId: string) => {
     if (!heard) return
@@ -346,14 +259,12 @@ export function SongListener({
     loadAliases().then(learned)
   }
 
-  const pick = (g: Guess) => {
+  /** A guess picked by hand: opened at once, in whatever key was said, and learned from. */
+  const pick = (sheet: ChordSheet) => {
     clearPending()
-    learnFrom(g.id)
-    if (!g.byTitle) return finish(g)
-    // Picked by name: in whatever key was said with it.
-    const sheet = sheets.find((s) => String(s.id) === g.id)
+    learnFrom(String(sheet.id))
     const key = trailingKey(heard)
-    if (sheet) openAsked({ sheet, key: key?.key ?? null, minor: key?.minor ?? false })
+    openAsked({ sheet, key: key?.key ?? null, minor: key?.minor ?? false })
   }
 
   /**
@@ -400,14 +311,6 @@ export function SongListener({
       (alts.length ? alts : ['']).map((a) => `${before} ${a}`)
     )
   })
-  useSpeechRecognitionEvent('audioend', (e) => {
-    if (!e.uri) return
-    const sheetId = found.current
-    found.current = null
-    readHeardAudio(e.uri, Boolean(sheetId && onHeard)).then((chroma) => {
-      if (chroma && sheetId) onHeard?.(sheetId, chroma)
-    })
-  })
   useSpeechRecognitionEvent('error', (e) => {
     if (!ownsSpeech(SPEECH_ID)) return
     releaseSpeech(SPEECH_ID)
@@ -427,7 +330,7 @@ export function SongListener({
           ? 'This browser isn’t allowed to use the microphone here. Allow it in the site settings (the icon by the address), then try again.'
           : 'Mission Portal isn’t allowed to use the microphone or speech recognition. You can turn them on in Settings.'
         : e.error === 'no-speech' || e.error === 'speech-timeout'
-          ? 'Didn’t hear any words. Try again closer to the music, during a verse or chorus.'
+          ? 'Didn’t hear any words. Try again, saying the song’s name.'
           : e.error === 'network'
             ? 'Couldn’t reach speech recognition — check your connection and try again.'
             : 'Listening stopped. Try again.'
@@ -440,8 +343,6 @@ export function SongListener({
     setGuesses([])
     settled.current = ''
     done.current = false
-    found.current = null
-    declined.current.clear()
     setSearching(false)
     clearPending()
     clearRequest()
@@ -491,9 +392,7 @@ export function SongListener({
     if (!listening) return
     const timer = setTimeout(() => {
       ExpoSpeechRecognitionModule.stop()
-      setProblem(
-        (p) => p ?? 'Couldn’t place the song. Try again during a chorus, or pick one below.'
-      )
+      setProblem((p) => p ?? 'Couldn’t make out a song name. Try again, or search for it below.')
     }, LISTEN_MS)
     return () => clearTimeout(timer)
   }, [listening])
@@ -517,7 +416,7 @@ export function SongListener({
       <Pressable
         onPress={openAndListen}
         accessibilityRole="button"
-        accessibilityLabel="Find a song by name or by listening"
+        accessibilityLabel="Find a song by saying its name"
         style={[styles.micBtn, { borderColor: colors.primary }]}
       >
         <Text fontSize={18}>🎤</Text>
@@ -627,7 +526,7 @@ export function SongListener({
               <Text color={colors.textMuted} fontSize="$3">
                 {problem ??
                   (listening
-                    ? 'Say a song’s name — “Firm Foundation in E” — or hold the phone near the music. The chord sheet opens as soon as the song is clear.'
+                    ? 'Say a song’s name — “Firm Foundation in E”. The chord sheet opens as soon as the name is clear.'
                     : 'Starting…')}
               </Text>
 
@@ -682,7 +581,7 @@ export function SongListener({
                   </Text>
                   {guesses.map((g) => (
                     <Pressable
-                      key={g.id}
+                      key={String(g.id)}
                       onPress={() => pick(g)}
                       accessibilityRole="button"
                       accessibilityLabel={`Open ${g.title}`}

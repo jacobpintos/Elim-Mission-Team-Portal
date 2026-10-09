@@ -2,7 +2,7 @@ import type { ExpoConfig, ConfigContext } from 'expo/config'
 
 /** Why the app uses the microphone: shown when the phone asks. */
 const MICROPHONE_REASON =
-  'Mission Portal uses the microphone when you tap 🎤: to type what you say into a text box, and to listen to a song being sung or played to find its chord sheet and the key it is in. Sound kept to find the key stays on your phone and is deleted as soon as the song is found.'
+  'Mission Portal uses the microphone when you tap 🎤: to type what you say into a text box, to open a chord sheet by its name, and for voice commands on an open chord sheet. Nothing is recorded or kept.'
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -140,21 +140,21 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     [
-      // "Find a song by listening" on the chord sheets: the phone's own speech
-      // recognition turns what is being sung into words, which are matched
-      // against the sheets' lyrics. Nothing is recorded or kept. The Google
-      // app is named so Android 11+ can see the recogniser it provides.
+      // Dictation, finding a chord sheet by its name, and voice commands on
+      // an open one: the phone's own speech recognition turns what is said
+      // into words. Nothing is recorded or kept. The Google app is named so
+      // Android 11+ can see the recogniser it provides.
       'expo-speech-recognition',
       {
         microphonePermission: MICROPHONE_REASON,
         speechRecognitionPermission:
-          'Mission Portal turns speech into text: what you say into a text box, and the words of a song it hears, to find the chord sheet with those lyrics.',
+          'Mission Portal turns speech into text: what you say into a text box, the name of a song to open its chord sheet, and voice commands on an open chord sheet.',
         androidSpeechServicePackages: ['com.google.android.googlequicksearchbox'],
       },
     ],
     [
       // Playback; expo-audio never records. Its microphone reason is the one
-      // for listening for a song (expo-speech-recognition, above) rather than
+      // for speech recognition (expo-speech-recognition, above) rather than
       // off: switched off, expo-audio clears that reason from the iOS
       // settings after it has been set, and iOS refuses the microphone to an
       // app that gives none. Android's RECORD_AUDIO comes from the speech
