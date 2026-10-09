@@ -23,6 +23,8 @@ import { readHeardAudio } from './heardAudio'
 import { claimSpeech, ownsSpeech, releaseSpeech } from '@/lib/speechOwner'
 import { shazam, type ShazamHit } from '@/lib/shazam'
 import { findByTitle } from '@/lib/titleMatch'
+import { orderForHints, upcomingSheetIds } from '@/lib/hintOrder'
+import { useWorshipStore } from '@/stores/worshipStore'
 import type { ChordSheet } from '@/types/chordSheet'
 
 /** This listener's claim on the phone's speech recognition (lib/speechOwner). */
@@ -33,6 +35,13 @@ const SPEECH_ID = 'song-listener'
  * what was said is close to its name.
  */
 type Guess = LyricMatch & { byTitle?: boolean }
+
+/** Today as YYYY-MM-DD, on this phone's calendar. */
+function localToday(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
 
 /** How long to listen before giving up. */
 const LISTEN_MS = 45_000
@@ -135,16 +144,20 @@ export function SongListener({
     }
   })
 
+  // In the order the recogniser should be told to expect their titles, as
+  // it takes only so many (lib/hintOrder): not English first, then songs
+  // in the next two weeks' set lists.
+  const setLists = useWorshipStore((s) => s.setLists)
   const index = useMemo(
     () =>
       buildLyricIndex(
-        sheets.map((s) => ({
+        orderForHints(sheets, upcomingSheetIds(setLists, localToday())).map((s) => ({
           id: String(s.id),
           title: s.title,
           sections: s.sections.map((sec) => ({ id: sec.id, lyrics: sec.lyrics })),
         }))
       ),
-    [sheets]
+    [sheets, setLists]
   )
 
   const finish = (match: LyricMatch) => {
