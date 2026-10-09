@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router'
 import { Text, XStack, YStack } from 'tamagui'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
-import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
+import { FloatingLayer } from '@/components/ui/FloatingLayer'
 import { useThemeColors } from '@/theme/useThemeColors'
 import {
   claimSpeechInBackground,
@@ -394,7 +394,20 @@ export function MiriamButton() {
     setStage('typing')
   }
 
-  const typing = stage === 'typing'
+  // Woken by her name and listening: the bar in her colour, so it is seen.
+  const called = woken && listening && stage === 'listening'
+  const ink = called ? 'white' : colors.text
+  const soft = called ? 'rgba(255,255,255,0.85)' : colors.textMuted
+  const title =
+    stage === 'thinking'
+      ? 'Working on it…'
+      : stage === 'typing'
+        ? 'Miriam'
+        : listening
+          ? called && !heard
+            ? 'You called — I’m listening'
+            : 'Listening…'
+          : 'Miriam'
 
   return (
     <>
@@ -416,44 +429,83 @@ export function MiriamButton() {
         </XStack>
       </Pressable>
 
-      <FullScreenOverlay visible={open} animationType="fade" transparent onRequestClose={close}>
-        <View style={[styles.backdrop, { paddingTop: insets.top + 12 }]}>
+      {/* A bar at the top, not a screen: a chord sheet stays in view beneath. */}
+      <FloatingLayer visible={open} onRequestClose={close}>
+        <View style={[styles.anchor, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
           <YStack
-            backgroundColor={colors.surface}
+            style={styles.bar}
+            backgroundColor={called ? colors.primary : colors.surface}
+            borderColor={colors.primary}
+            borderWidth={called ? 0 : 1}
             borderRadius="$4"
-            padding="$4"
-            gap="$3"
-            width="92%"
-            maxWidth={520}
+            paddingHorizontal="$3"
+            paddingVertical="$2"
+            gap="$2"
+            width="94%"
+            maxWidth={560}
+            accessibilityRole="alert"
           >
-            <XStack alignItems="center" justifyContent="space-between">
-              <Text color={colors.text} fontSize="$5" fontWeight="700">
-                {stage === 'thinking'
-                  ? 'Miriam is working on it…'
-                  : listening
-                    ? woken && !heard
-                      ? 'You called — I’m listening'
-                      : 'Miriam is listening…'
-                    : 'Miriam'}
-              </Text>
+            <XStack alignItems="center" gap="$2.5">
+              {listening && stage === 'listening' ? (
+                <ListeningOrb color={called ? 'white' : colors.primary} />
+              ) : null}
+              <YStack flex={1} gap="$0.5">
+                <Text color={ink} fontSize="$4" fontWeight="700" numberOfLines={1}>
+                  {title}
+                </Text>
+                {stage === 'typing' ? null : heard ? (
+                  <Text color={ink} fontSize="$3" fontStyle="italic" numberOfLines={3}>
+                    “{heard}”
+                  </Text>
+                ) : stage === 'listening' ? (
+                  <Text color={soft} fontSize="$2" numberOfLines={2}>
+                    Say what to do — “Create an event on 9/25 called Revival…”
+                  </Text>
+                ) : null}
+                {answer ? (
+                  <Text color={ink} fontSize="$3" fontWeight="600" numberOfLines={4}>
+                    {answer}
+                  </Text>
+                ) : null}
+              </YStack>
+              {stage === 'listening' && heard ? (
+                <Pressable
+                  onPress={() => send(request.current)}
+                  accessibilityRole="button"
+                  style={[styles.small, { backgroundColor: called ? 'white' : colors.primary }]}
+                >
+                  <Text color={called ? colors.primary : 'white'} fontWeight="700" fontSize="$2">
+                    Done
+                  </Text>
+                </Pressable>
+              ) : null}
+              {stage === 'answered' ? (
+                <Pressable
+                  onPress={() => listen()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Ask again"
+                  style={[styles.small, { backgroundColor: colors.primary }]}
+                >
+                  <Text color="white" fontWeight="700" fontSize="$2">
+                    {available ? '🎤 Again' : 'Again'}
+                  </Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={close}
                 accessibilityRole="button"
                 accessibilityLabel="Close"
+                hitSlop={8}
                 style={styles.close}
               >
-                <Text color={colors.textMuted} fontSize="$4">
+                <Text color={soft} fontSize="$4">
                   ✕
                 </Text>
               </Pressable>
             </XStack>
 
-            {listening && stage === 'listening' ? (
-              <ListeningOrb color={colors.primary} big={woken && !heard} />
-            ) : null}
-
-            {typing ? (
-              <YStack gap="$2">
+            {stage === 'typing' ? (
+              <XStack gap="$2" alignItems="flex-end">
                 <TextInput
                   value={typed}
                   onChangeText={setTyped}
@@ -477,110 +529,80 @@ export function MiriamButton() {
                   disabled={!typed.trim()}
                   accessibilityRole="button"
                   style={[
-                    styles.primary,
+                    styles.small,
                     { backgroundColor: colors.primary, opacity: typed.trim() ? 1 : 0.5 },
                   ]}
                 >
-                  <Text color="white" fontWeight="700">
+                  <Text color="white" fontWeight="700" fontSize="$2">
                     Send
                   </Text>
                 </Pressable>
-              </YStack>
-            ) : (
-              <>
-                {stage === 'listening' && !heard ? (
-                  <Text color={colors.textMuted} fontSize="$3">
-                    Say what to do — “Create an event on 9/25 called Revival in the Heartland,
-                    starting at 9 PM in Coralville, Iowa.” I’ll fill in the form for you to check.
-                  </Text>
-                ) : null}
-                {heard ? (
-                  <Text color={colors.text} fontSize="$4" fontStyle="italic">
-                    “{heard}”
-                  </Text>
-                ) : null}
-                {answer ? (
-                  <Text color={colors.text} fontSize="$4" fontWeight="600">
-                    {answer}
-                  </Text>
-                ) : null}
-              </>
-            )}
-
-            {stage === 'listening' && heard ? (
-              <Pressable
-                onPress={() => send(request.current)}
-                accessibilityRole="button"
-                style={[styles.primary, { backgroundColor: colors.primary }]}
-              >
-                <Text color="white" fontWeight="700">
-                  Done
-                </Text>
-              </Pressable>
+              </XStack>
             ) : null}
 
-            {stage === 'answered' ? (
-              <Pressable
-                onPress={() => listen()}
-                accessibilityRole="button"
-                style={[styles.primary, { backgroundColor: colors.primary }]}
-              >
-                <Text color="white" fontWeight="700">
-                  {available ? '🎤 Ask again' : 'Ask again'}
-                </Text>
-              </Pressable>
-            ) : null}
-
-            {stage !== 'typing' && stage !== 'thinking' ? (
-              <Pressable onPress={typeInstead} accessibilityRole="button" style={styles.link}>
-                <Text color={colors.primary} fontSize="$3" fontWeight="600">
-                  ⌨︎ Type instead
-                </Text>
-              </Pressable>
-            ) : null}
-
-            {wakeEngine ? (
-              <Pressable
-                onPress={toggleWake}
-                accessibilityRole="switch"
-                aria-checked={wakeOn}
-                accessibilityLabel="Listen for “Hey Miriam” on this device"
-                style={[styles.wake, { borderTopColor: colors.border }]}
-              >
-                <XStack alignItems="center" gap="$2">
-                  <YStack flex={1} gap="$1">
-                    <Text color={colors.text} fontSize="$3" fontWeight="600">
-                      Listen for “Hey Miriam”
+            {/* Typing, and "Hey Miriam" on or off: kept out of the way once she hears something. */}
+            {!heard && stage !== 'thinking' ? (
+              <XStack alignItems="center" justifyContent="space-between" gap="$3">
+                {stage !== 'typing' ? (
+                  <Pressable onPress={typeInstead} accessibilityRole="button" style={styles.link}>
+                    <Text color={ink} fontSize="$2" fontWeight="600">
+                      ⌨︎ Type instead
                     </Text>
-                    <Text color={colors.textMuted} fontSize="$2">
-                      {Platform.OS === 'web'
-                        ? 'While this page is open. Hears her name and nothing else, in the browser: nothing is sent anywhere until you speak to her. An 18 MB download the first time.'
-                        : 'While the app is open. Hears her name and nothing else, on this phone: nothing is sent anywhere until you speak to her. Not over a loud band — tap the button then.'}
-                    </Text>
-                  </YStack>
-                  <View
-                    style={[
-                      styles.track,
-                      { backgroundColor: wakeOn ? colors.primary : colors.border },
-                    ]}
+                  </Pressable>
+                ) : (
+                  <View />
+                )}
+                {wakeEngine ? (
+                  <Pressable
+                    onPress={toggleWake}
+                    accessibilityRole="switch"
+                    aria-checked={wakeOn}
+                    accessibilityLabel="Listen for “Hey Miriam” on this device"
+                    accessibilityHint={
+                      Platform.OS === 'web'
+                        ? 'While this page is open. Hears her name and nothing else, in the browser. An 18 MB download the first time.'
+                        : 'While the app is open. Hears her name and nothing else, on this phone. Not over a loud band.'
+                    }
+                    style={styles.link}
                   >
-                    <View style={[styles.knob, wakeOn ? styles.knobOn : null]} />
-                  </View>
-                </XStack>
-              </Pressable>
+                    <XStack alignItems="center" gap="$2">
+                      <Text color={ink} fontSize="$2" fontWeight="600">
+                        “Hey Miriam”
+                      </Text>
+                      <View
+                        style={[
+                          styles.track,
+                          {
+                            backgroundColor: wakeOn
+                              ? called
+                                ? 'white'
+                                : colors.primary
+                              : colors.border,
+                          },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.knob,
+                            { backgroundColor: called && wakeOn ? colors.primary : 'white' },
+                            wakeOn ? styles.knobOn : null,
+                          ]}
+                        />
+                      </View>
+                    </XStack>
+                  </Pressable>
+                ) : null}
+              </XStack>
             ) : null}
           </YStack>
         </View>
-      </FullScreenOverlay>
+      </FloatingLayer>
     </>
   )
 }
 
-/**
- * Rings pulsing out from a dot while Miriam listens — larger when she has
- * been woken by her name, so it can be seen from across a room.
- */
-function ListeningOrb({ color, big }: { color: string; big: boolean }) {
+/** Rings pulsing out from a dot while Miriam listens. */
+function ListeningOrb({ color }: { color: string }) {
   const [pulse] = useState(() => new Animated.Value(0))
   useEffect(() => {
     const loop = Animated.loop(
@@ -594,7 +616,6 @@ function ListeningOrb({ color, big }: { color: string; big: boolean }) {
     loop.start()
     return () => loop.stop()
   }, [pulse])
-  const size = big ? 96 : 56
   const ring = (delay: number) => {
     const t = pulse.interpolate({
       inputRange: [0, delay, 1],
@@ -603,44 +624,29 @@ function ListeningOrb({ color, big }: { color: string; big: boolean }) {
     })
     return {
       position: 'absolute' as const,
-      width: size,
-      height: size,
-      borderRadius: size / 2,
-      borderWidth: 3,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      borderWidth: 2,
       borderColor: color,
-      opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
-      transform: [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.4] }) }],
+      opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] }),
+      transform: [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.3] }) }],
     }
   }
   return (
     <View
-      style={[styles.orb, { height: size * 1.5 }]}
+      style={styles.orb}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
       <Animated.View style={ring(0)} />
       <Animated.View style={ring(0.35)} />
-      <View
-        style={{
-          width: size * 0.42,
-          height: size * 0.42,
-          borderRadius: size * 0.21,
-          backgroundColor: color,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text fontSize={big ? 20 : 13}>🎤</Text>
-      </View>
+      <View style={[styles.orbDot, { backgroundColor: color }]} />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  orb: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   button: {
     minHeight: 36,
     paddingHorizontal: 12,
@@ -654,56 +660,70 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+  anchor: {
     alignItems: 'center',
-    justifyContent: 'flex-start',
+  },
+  bar: {
+    // The layer passes touches through; the bar takes its own.
+    pointerEvents: 'auto',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  orb: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orbDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
   },
   close: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'flex-end',
+    minWidth: 36,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  small: {
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   field: {
-    minHeight: 96,
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 96,
     borderWidth: 1,
     borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     // 16pt: smaller, and an iPhone zooms the page in on the field.
     fontSize: 16,
     textAlignVertical: 'top',
   },
-  primary: {
-    minHeight: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   link: {
-    minHeight: 40,
+    minHeight: 36,
     justifyContent: 'center',
-  },
-  wake: {
-    borderTopWidth: 1,
-    paddingTop: 12,
-    minHeight: 44,
   },
   track: {
-    width: 44,
-    height: 26,
-    borderRadius: 13,
+    width: 40,
+    height: 24,
+    borderRadius: 12,
     padding: 3,
   },
   knob: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'white',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
   },
   knobOn: {
-    marginLeft: 18,
+    marginLeft: 16,
   },
 })
