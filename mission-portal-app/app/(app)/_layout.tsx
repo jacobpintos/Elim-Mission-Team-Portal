@@ -18,7 +18,7 @@ import { useWorshipStore } from '@/stores/worshipStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useSecurityStore } from '@/stores/securityStore'
 import { useUIStore } from '@/stores/uiStore'
-import { visibleTabs, isSecurity, isPublic, hasRole, isWorship } from '@/lib/roles'
+import { visibleTabs, isSecurity, isPublic, hasRole, isWorship, isGuest } from '@/lib/roles'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { ReportFormModal } from '@/features/security/ReportFormModal'
@@ -139,8 +139,11 @@ export default function AppLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Set lists and chord sheets, held app-wide so Miriam and a sheet's own
+  // voice commands can open any song: for the worship team and admins, and
+  // for guests, who read them (firestore.rules: setLists, chordSheets).
   useEffect(() => {
-    if (!profile || !isWorship(profile)) return
+    if (!profile || !(isWorship(profile) || isGuest(profile))) return
     subWorship()
     subChords()
     return () => {

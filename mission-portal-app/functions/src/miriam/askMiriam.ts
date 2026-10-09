@@ -4,8 +4,11 @@ import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
 import Anthropic from '@anthropic-ai/sdk'
 import {
+  APP_TOOLS,
+  appToolsFrom,
   COMMANDS,
   commandsFor,
+  type AppToolName,
   draftFromInput,
   type CommandName,
   type EventFormInput,
@@ -13,6 +16,7 @@ import {
 } from './plan'
 import { isAdminViewer, type Viewer } from './data'
 import { Lookups, withWeekday } from './lookups'
+import { PAUSE_MS, MAX_RESULT, seal, unseal } from './pause'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -57,7 +61,9 @@ Someone has spoken to you, usually out loud. Their words were turned into text b
 
 A question: look it up with the tools — never answer from memory or guess — then finish with \`answer\`: a short reply to be heard, and where in the app to show it. The tools return only what this person is allowed to see. If something isn't there, say you couldn't find it, without suggesting that it exists. When several events match, take the nearest upcoming one unless they said otherwise, and say its date. When nothing fits well, find_events gives the nearest names instead: if one is plainly what they meant — it sounds the same, or it is a name they have used before — use it, and say which you took ("I took that as Revival in the Heartland"); if you can't tell, say you couldn't find that name, and offer the nearest as \`choices\`. Always set \`heard_name\` to the words they used for the event. When they ask who is unavailable, include everyone not plainly available — not available, partly available, not sure yet (TBD), and not answered — with what they wrote. When they ask what is pending, that is every task not done.
 
-Something to do: use the tool for it. It only fills in a form for them to check and save, so fill in what they said and leave the rest empty.
+Announcements, their messages, the Operations tab (issues, kaizen, planning, inventory), videos in Content, and their own profile and settings each have a lookup, where this person has that screen. To take them to a screen — "go to the admin users page", "open Kaizen" — answer with open "screen" and its id from the list they are sent; to show where an answer is, you may do the same.
+
+Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new event's form is only filled in for them to check and save, so fill in what they said and leave the rest empty. To play a video from Content, find it, then answer with open "video" and its id. Anything else that changes something — sending, posting, saving, deleting — you can't do yet: say so in one sentence.
 
 When you are not sure — a request with several parts, people or groups to match, a name you can't place, or anything you might get wrong — ask the advisor before you act. A plain question you can look up needs no advice.
 
@@ -68,6 +74,8 @@ const MAX_ROUNDS = 6
 
 /** Where the app should take them to see an answer. */
 type Open =
+  | { kind: 'screen'; id: string }
+  | { kind: 'video'; id: string }
   | {
       kind: 'event'
       key: string
@@ -75,6 +83,17 @@ type Open =
     }
   | { kind: 'task'; id: string }
   | { kind: 'availability' }
+
+/** The screens the app says this person can open, to name in a request. */
+function screensFrom(list: unknown): string[] {
+  return (Array.isArray(list) ? list : [])
+    .filter(
+      (s): s is { id: string; label: string } =>
+        !!s && typeof s.id === 'string' && typeof s.label === 'string'
+    )
+    .slice(0, 80)
+    .map((s) => `${s.id.slice(0, 40)}: ${s.label.slice(0, 80)}`)
+}
 
 /**
  * Miriam: a request or a question, said or typed.
@@ -88,6 +107,10 @@ type Open =
  * app. Claude is only offered the commands those roles allow (./plan.ts), and
  * each one it uses is checked against them again before it runs.
  *
+ * Some lookups run in the app, as the person signed in (APP_TOOLS): then the
+ * request pauses, the app is handed the calls with the request sealed, and
+ * it carries on when the app sends back what it found (`resume`).
+ *
  * Nothing said is stored or logged, only how much it cost.
  */
 export const askMiriam = onCall(
@@ -96,15 +119,16 @@ export const askMiriam = onCall(
     const uid = req.auth?.uid
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in to use Miriam.')
 
-    const text = typeof req.data?.text === 'string' ? req.data.text.trim() : ''
-    if (!text) throw new HttpsError('invalid-argument', 'Nothing was asked.')
-    if (text.length > MAX_TEXT)
-      throw new HttpsError('invalid-argument', 'That was too long — try it in two.')
     // The person's own day, for "Friday" and "9/25": the server's is UTC.
     const today =
       typeof req.data?.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.data.today)
         ? req.data.today
         : new Date().toISOString().slice(0, 10)
+    const key = ANTHROPIC_API_KEY.value()
+    const paused = req.data?.resume ? unseal(req.data.resume.state, key) : null
+    if (req.data?.resume && (!paused || paused.uid !== uid || paused.until < Date.now())) {
+      throw new HttpsError('failed-precondition', 'That took too long — ask again.')
+    }
 
     const db = admin.firestore()
     const me = await db.doc(`users/${uid}`).get()
@@ -113,27 +137,76 @@ export const askMiriam = onCall(
     if (commands.length === 0) {
       return { kind: 'reply', text: 'There’s nothing I can do for you in the app yet.' }
     }
-    if (!allowed(uid)) {
-      throw new HttpsError(
-        'resource-exhausted',
-        'That’s a lot of requests — try again in a few minutes.'
-      )
-    }
     const viewer = { uid, roles }
-    // Names this device has learned: what they said, and the event they meant.
-    const known = (Array.isArray(req.data?.known) ? req.data.known : [])
-      .filter(
-        (k: unknown): k is { heard: string; title: string } =>
-          !!k &&
-          typeof (k as { heard?: unknown }).heard === 'string' &&
-          typeof (k as { title?: unknown }).title === 'string'
-      )
-      .slice(0, 30)
-      .map(
-        (k: { heard: string; title: string }) =>
-          `“${k.heard.slice(0, 80)}” meant “${k.title.slice(0, 120)}”`
-      )
     const lookups = new Lookups(db, viewer, today)
+
+    let messages: Anthropic.Beta.BetaMessageParam[]
+    let appTools: AppToolName[]
+    let firstRound = 0
+    // Haiku, with Opus to advise; or — if that is ever turned down before
+    // anything has been said — Opus alone, as before, so the question is
+    // still answered.
+    let alone = false
+    if (paused) {
+      // Carried on with what the app found: a result for each call it was
+      // given, in the same turn as those done here.
+      const sent: unknown[] = Array.isArray(req.data.resume.results) ? req.data.resume.results : []
+      const fromApp = paused.waiting.map((id): Anthropic.Beta.BetaToolResultBlockParam => {
+        const r = sent.find((x) => (x as { id?: unknown })?.id === id) as
+          | { content?: unknown }
+          | undefined
+        return {
+          type: 'tool_result',
+          tool_use_id: id,
+          content:
+            typeof r?.content === 'string'
+              ? r.content.slice(0, MAX_RESULT)
+              : JSON.stringify({ error: 'The app could not look that up.' }),
+        }
+      })
+      messages = [...paused.messages, { role: 'user', content: [...paused.done, ...fromApp] }]
+      appTools = appToolsFrom(paused.appTools)
+      firstRound = paused.round + 1
+      alone = paused.alone
+    } else {
+      const text = typeof req.data?.text === 'string' ? req.data.text.trim() : ''
+      if (!text) throw new HttpsError('invalid-argument', 'Nothing was asked.')
+      if (text.length > MAX_TEXT)
+        throw new HttpsError('invalid-argument', 'That was too long — try it in two.')
+      if (!allowed(uid)) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'That’s a lot of requests — try again in a few minutes.'
+        )
+      }
+      // Names this device has learned: what they said, and the event they meant.
+      const known = (Array.isArray(req.data?.known) ? req.data.known : [])
+        .filter(
+          (k: unknown): k is { heard: string; title: string } =>
+            !!k &&
+            typeof (k as { heard?: unknown }).heard === 'string' &&
+            typeof (k as { title?: unknown }).title === 'string'
+        )
+        .slice(0, 30)
+        .map(
+          (k: { heard: string; title: string }) =>
+            `“${k.heard.slice(0, 80)}” meant “${k.title.slice(0, 120)}”`
+        )
+      const screens = screensFrom(req.data?.screens)
+      appTools = appToolsFrom(req.data?.appTools)
+      messages = [
+        {
+          role: 'user',
+          content:
+            `Today is ${withWeekday(today)}.\n\n` +
+            (screens.length ? `Screens they can open (id: name):\n${screens.join('\n')}\n\n` : '') +
+            (known.length
+              ? `Names they have used before for events:\n${known.join('\n')}\n\n`
+              : '') +
+            `They said: “${text}”`,
+        },
+      ]
+    }
 
     // The people and groups a new event's form can name: only for those who
     // may make one (admins, who can see them all), and only once asked for.
@@ -155,12 +228,11 @@ export const askMiriam = onCall(
       return roster
     }
 
-    const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() })
-    const commandTools = commands.map((name) => COMMANDS[name].tool as Anthropic.Beta.BetaTool)
-    // Haiku, with Opus to advise; or — if that is ever turned down before
-    // anything has been said — Opus alone, as before, so the question is
-    // still answered.
-    let alone = false
+    const client = new Anthropic({ apiKey: key })
+    const commandTools = [
+      ...commands.map((name) => COMMANDS[name].tool as Anthropic.Beta.BetaTool),
+      ...appTools.map((name) => APP_TOOLS[name] as Anthropic.Beta.BetaTool),
+    ]
     const ask = () =>
       alone
         ? client.beta.messages.create({
@@ -186,17 +258,8 @@ export const askMiriam = onCall(
             tools: [...commandTools, ADVISOR],
             messages,
           })
-    const messages: Anthropic.Beta.BetaMessageParam[] = [
-      {
-        role: 'user',
-        content:
-          `Today is ${withWeekday(today)}.\n\n` +
-          (known.length ? `Names they have used before for events:\n${known.join('\n')}\n\n` : '') +
-          `They said: “${text}”`,
-      },
-    ]
 
-    for (let round = 0; round < MAX_ROUNDS; round++) {
+    for (let round = firstRound; round < MAX_ROUNDS; round++) {
       let response: Anthropic.Beta.BetaMessage
       try {
         response = await ask().catch((err: unknown) => {
@@ -237,7 +300,10 @@ export const askMiriam = onCall(
       }
 
       // Checked again: only a command this person may use is acted on.
-      const refusedCall = calls.find((c) => !commands.includes(c.name as CommandName))
+      const isAppTool = (name: string) => appTools.includes(name as AppToolName)
+      const refusedCall = calls.find(
+        (c) => !commands.includes(c.name as CommandName) && !isAppTool(c.name)
+      )
       if (refusedCall) return { kind: 'reply', text: 'You don’t have permission to do that.' }
 
       const form = calls.find((c) => c.name === 'open_event_form')
@@ -253,7 +319,7 @@ export const askMiriam = onCall(
 
       // Looked up, and handed back for the next round.
       const results: Anthropic.Beta.BetaToolResultBlockParam[] = []
-      for (const call of calls) {
+      for (const call of calls.filter((c) => !isAppTool(c.name))) {
         const input = call.input as { query?: string; date?: string; key?: string }
         let result: unknown
         try {
@@ -281,6 +347,27 @@ export const askMiriam = onCall(
         results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(result) })
       }
       messages.push({ role: 'assistant', content: response.content })
+      // Lookups the app makes: handed to it, to carry on when it answers.
+      const forApp = calls.filter((c) => isAppTool(c.name))
+      if (forApp.length) {
+        return {
+          kind: 'run',
+          calls: forApp.map((c) => ({ id: c.id, name: c.name, input: c.input })),
+          state: seal(
+            {
+              uid,
+              until: Date.now() + PAUSE_MS,
+              round,
+              alone,
+              appTools,
+              messages,
+              done: results,
+              waiting: forApp.map((c) => c.id),
+            },
+            key
+          ),
+        }
+      }
       messages.push({ role: 'user', content: results })
     }
     return { kind: 'reply', text: 'I couldn’t work that out — try asking another way.' }
@@ -289,7 +376,7 @@ export const askMiriam = onCall(
 
 interface AnswerInput {
   spoken: string
-  open: 'event' | 'task' | 'availability' | 'none'
+  open: 'event' | 'task' | 'availability' | 'screen' | 'video' | 'none'
   target: string
   section: 'dress_code' | 'availability' | 'weather' | 'details' | 'none'
   choices?: string[]
@@ -309,6 +396,9 @@ async function finish(input: AnswerInput, lookups: Lookups, viewer: Viewer) {
     open = { kind: 'task', id: String(input.target) }
   } else if (input.open === 'availability' && isAdminViewer(viewer)) {
     open = { kind: 'availability' }
+  } else if ((input.open === 'screen' || input.open === 'video') && input.target) {
+    // Opened only if the app has it for this person: it checks again.
+    open = { kind: input.open, id: String(input.target).slice(0, 80) }
   }
   // Offered choices: only events this person may see, as they will be shown.
   const choices: { key: string; title: string; date: string }[] = []

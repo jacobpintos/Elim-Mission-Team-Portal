@@ -42,6 +42,10 @@ import { ChordSheetViewer, type QueuedSong } from '@/features/worship/ChordSheet
 import { songAsked } from '@/lib/miriamSongs'
 import { loadAliases, rememberAlias } from '@/lib/songAliases'
 import type { ChordSheet } from '@/types/chordSheet'
+import { VideoPlayerModal } from '@/components/ui/VideoPlayerModal'
+import { useMusicStore, type MusicItem } from '@/stores/musicStore'
+import { useAuthStore } from '@/stores/authStore'
+import { screensFor } from '@/lib/miriamScreens'
 
 /** Claims on the microphone (lib/speechOwner): the request, and the wake word. */
 const SPEECH_ID = 'miriam'
@@ -138,6 +142,8 @@ export function MiriamButton() {
     key: { key: string; minor: boolean } | null
   } | null>(null)
   const [queued, setQueued] = useState<QueuedSong | null>(null)
+  // A video from Content asked for, playing over the page.
+  const [video, setVideo] = useState<MusicItem | null>(null)
   const [songGuesses, setSongGuesses] = useState<ChordSheet[]>([])
   const songAsk = useRef<{ name: string; key: { key: string; minor: boolean } | null }>({
     name: '',
@@ -240,6 +246,16 @@ export function MiriamButton() {
         router.navigate('/events' as never)
         return
       }
+      // A video asked for: played over the page, with nothing said over it.
+      const wanted = result.kind === 'answer' ? result.open : null
+      if (wanted?.kind === 'video') {
+        const item = useMusicStore.getState().items.find((m) => m.id === wanted.id)
+        if (item) {
+          setVideo(item)
+          setOpen(false)
+          return
+        }
+      }
       setAnswer(result.text)
       speak(result.text)
       if (result.kind === 'answer') {
@@ -249,8 +265,15 @@ export function MiriamButton() {
       // Taken to where the answer is — unless that would pull them out of
       // something open over the page, a chord sheet being played: then it is
       // said and shown here, and the page is left as it is.
-      if (result.kind === 'answer' && result.open && !anyOverlayOpen()) {
-        router.push(miriamHref(result.open) as never)
+      const open = result.kind === 'answer' ? result.open : null
+      if (open && open.kind !== 'video' && !anyOverlayOpen()) {
+        if (open.kind === 'screen') {
+          // Only a screen this person has: checked again here.
+          const screen = screensFor(useAuthStore.getState().profile).find((x) => x.id === open.id)
+          if (screen) router.push(screen.path as never)
+        } else {
+          router.push(miriamHref(open) as never)
+        }
       }
     } catch (err) {
       setAnswer(miriamError(err))
@@ -782,6 +805,12 @@ export function MiriamButton() {
           </YStack>
         </View>
       </FloatingLayer>
+      <VideoPlayerModal
+        url={video?.youtubeUrl ?? null}
+        title={video?.title}
+        subtitle={video?.album ?? video?.preacher ?? video?.host}
+        onClose={() => setVideo(null)}
+      />
       {song ? (
         <ChordSheetViewer
           sheet={song.sheet}

@@ -222,13 +222,15 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
           },
           open: {
             type: 'string',
-            enum: ['event', 'task', 'availability', 'none'],
+            enum: ['event', 'task', 'availability', 'screen', 'video', 'none'],
             description:
-              'event: the event’s page; task: the task; availability: the admin availability page; none: nothing to show.',
+              'event: the event’s page; task: the task; availability: the admin availability page; ' +
+              'screen: one of the screens they can open, from the list they are sent; video: a video from Content, to play; none: nothing to show.',
           },
           target: {
             type: 'string',
-            description: 'The event’s key or the task’s id; "" when open is availability or none.',
+            description:
+              'The event’s key, the task’s id, the screen’s id, or the Content item’s id (from find_content); "" when open is availability or none.',
           },
           section: {
             type: 'string',
@@ -251,6 +253,83 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
       },
     },
   },
+}
+
+/**
+ * Lookups run in the app, as the person signed in — so the database's own
+ * rules decide what they return, as they do for the screens — and offered
+ * only where the app says this person has the screen they come from
+ * (src/features/miriam/appTools.ts). Read only.
+ */
+export type AppToolName =
+  | 'find_content'
+  | 'read_announcements'
+  | 'read_messages'
+  | 'read_operations'
+  | 'read_settings'
+
+export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { name: AppToolName }> =
+  {
+    find_content: {
+      name: 'find_content',
+      description:
+        'Videos in Content — music, sermons and podcasts — by title, album, preacher, host or kind ("sermon"): each with its id, kind, title and who and when. ' +
+        'An empty query lists the newest. To play one, answer with open "video" and its id.',
+      strict: true,
+      input_schema: queryOnly('Words from the title, album, preacher or host, or the kind.'),
+    },
+    read_announcements: {
+      name: 'read_announcements',
+      description:
+        'The announcements this person is shown, newest first, with what they say, who posted them and when. An empty query lists the latest.',
+      strict: true,
+      input_schema: queryOnly('Words to look for in the title or text; "" for the latest.'),
+    },
+    read_messages: {
+      name: 'read_messages',
+      description:
+        'Their messages. With a conversation — a person’s name or a group chat’s — its latest messages, who sent each and when; with "", their conversations, unread first, each with its latest message.',
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          conversation: {
+            type: 'string',
+            description: 'A person’s name or a group chat’s name, as said; "" for all of them.',
+          },
+        },
+        required: ['conversation'],
+        additionalProperties: false,
+      },
+    },
+    read_operations: {
+      name: 'read_operations',
+      description:
+        'The Operations tab: issues reported (with status, root cause and actions), kaizen ideas (with status and votes), and — for admins — planning boards and inventory.',
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          area: { type: 'string', enum: ['issues', 'kaizen', 'planning', 'inventory'] },
+          query: { type: 'string', description: 'Words to look for; "" for all of them.' },
+        },
+        required: ['area', 'query'],
+        additionalProperties: false,
+      },
+    },
+    read_settings: {
+      name: 'read_settings',
+      description:
+        'Their own profile and settings: name, email, title, roles, location for nearby events, and which notifications they get by push and by email.',
+      strict: true,
+      input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    },
+  }
+
+/** The app's lookups named in a request, those that exist. */
+export function appToolsFrom(names: unknown): AppToolName[] {
+  if (!Array.isArray(names)) return []
+  return (Object.keys(APP_TOOLS) as AppToolName[]).filter((n) => names.includes(n))
 }
 
 /** The commands someone with these roles may use. */

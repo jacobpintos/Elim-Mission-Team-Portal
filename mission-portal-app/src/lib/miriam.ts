@@ -44,6 +44,10 @@ export type MiriamOpen =
     }
   | { kind: 'task'; id: string }
   | { kind: 'availability' }
+  /** A screen from lib/miriamScreens, by id; opened only if it is this person's. */
+  | { kind: 'screen'; id: string }
+  /** A video from Content, by id: played over the page. */
+  | { kind: 'video'; id: string }
 
 export type MiriamResult =
   | { kind: 'eventForm'; draft: EventDraft; notes: string[] }
@@ -59,7 +63,7 @@ export type MiriamResult =
   | { kind: 'reply'; text: string }
 
 /** The app's address for where an answer is shown. */
-export function miriamHref(open: MiriamOpen): string {
+export function miriamHref(open: Exclude<MiriamOpen, { kind: 'screen' | 'video' }>): string {
   if (open.kind === 'task') return `/assignments?taskId=${encodeURIComponent(open.id)}`
   if (open.kind === 'availability') return '/admin/avail'
   const focus = open.section ? `?focus=${open.section}` : ''
