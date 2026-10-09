@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppState, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
+import {
+  AccessibilityInfo,
+  Animated,
+  AppState,
+  Easing,
+  Platform,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Text, XStack, YStack } from 'tamagui'
@@ -104,6 +114,9 @@ export function MiriamButton() {
   // "Hey Miriam": wanted on this device, and listening for it right now.
   const [wakeOn, setWakeOn] = useState(false)
   const [waiting, setWaiting] = useState(false)
+  // Opened by her name rather than a tap: shown unmistakably, as it may be
+  // across the room from whoever said it.
+  const [woken, setWoken] = useState(false)
   const [appActive, setAppActive] = useState(AppState.currentState !== 'background')
 
   // Listening for a request now (speech recognition).
@@ -180,8 +193,10 @@ export function MiriamButton() {
   }
 
   /** Listen for a request — tapped, or woken by her name. */
-  const listen = async () => {
+  const listen = async (byName = false) => {
     stopWake()
+    setWoken(byName)
+    if (byName) AccessibilityInfo.announceForAccessibility('Miriam is listening')
     sent.current = false
     settled.current = ''
     request.current = ''
@@ -300,7 +315,7 @@ export function MiriamButton() {
           // Heard her: the engine has stopped; the request is next.
           releaseSpeech(WAKE_ID)
           setWaiting(false)
-          listenRef.current()
+          listenRef.current(true)
         })
         .then(() => {
           if (ownsSpeech(WAKE_ID)) setWaiting(true)
@@ -384,15 +399,18 @@ export function MiriamButton() {
   return (
     <>
       <Pressable
-        onPress={listen}
+        onPress={() => listen()}
         accessibilityRole="button"
         accessibilityLabel={waiting ? 'Ask Miriam. Listening for “Hey Miriam”' : 'Ask Miriam'}
         hitSlop={6}
-        style={[styles.button, { borderColor: colors.primary }]}
+        style={[
+          styles.button,
+          { borderColor: colors.primary, backgroundColor: open ? colors.primary : 'transparent' },
+        ]}
       >
         <XStack alignItems="center" gap="$1.5">
           {waiting ? <View style={[styles.dot, { backgroundColor: '#2ecc71' }]} /> : null}
-          <Text fontSize={13} fontWeight="700" color={colors.primary}>
+          <Text fontSize={13} fontWeight="700" color={open ? 'white' : colors.primary}>
             🎤 Miriam
           </Text>
         </XStack>
@@ -413,7 +431,9 @@ export function MiriamButton() {
                 {stage === 'thinking'
                   ? 'Miriam is working on it…'
                   : listening
-                    ? 'Miriam is listening…'
+                    ? woken && !heard
+                      ? 'You called — I’m listening'
+                      : 'Miriam is listening…'
                     : 'Miriam'}
               </Text>
               <Pressable
@@ -427,6 +447,10 @@ export function MiriamButton() {
                 </Text>
               </Pressable>
             </XStack>
+
+            {listening && stage === 'listening' ? (
+              <ListeningOrb color={colors.primary} big={woken && !heard} />
+            ) : null}
 
             {typing ? (
               <YStack gap="$2">
@@ -497,7 +521,7 @@ export function MiriamButton() {
 
             {stage === 'answered' ? (
               <Pressable
-                onPress={listen}
+                onPress={() => listen()}
                 accessibilityRole="button"
                 style={[styles.primary, { backgroundColor: colors.primary }]}
               >
@@ -530,7 +554,7 @@ export function MiriamButton() {
                     </Text>
                     <Text color={colors.textMuted} fontSize="$2">
                       {Platform.OS === 'web'
-                        ? 'While this page is open. Hears her name and nothing else, in the browser: nothing is sent anywhere until you speak to her. A 15 MB download the first time.'
+                        ? 'While this page is open. Hears her name and nothing else, in the browser: nothing is sent anywhere until you speak to her. An 18 MB download the first time.'
                         : 'While the app is open. Hears her name and nothing else, on this phone: nothing is sent anywhere until you speak to her. Not over a loud band — tap the button then.'}
                     </Text>
                   </YStack>
@@ -552,7 +576,71 @@ export function MiriamButton() {
   )
 }
 
+/**
+ * Rings pulsing out from a dot while Miriam listens — larger when she has
+ * been woken by her name, so it can be seen from across a room.
+ */
+function ListeningOrb({ color, big }: { color: string; big: boolean }) {
+  const [pulse] = useState(() => new Animated.Value(0))
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(pulse, {
+        toValue: 1,
+        duration: 1400,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: Platform.OS !== 'web',
+      })
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [pulse])
+  const size = big ? 96 : 56
+  const ring = (delay: number) => {
+    const t = pulse.interpolate({
+      inputRange: [0, delay, 1],
+      outputRange: [0, 0, 1 - delay],
+      extrapolate: 'clamp',
+    })
+    return {
+      position: 'absolute' as const,
+      width: size,
+      height: size,
+      borderRadius: size / 2,
+      borderWidth: 3,
+      borderColor: color,
+      opacity: t.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
+      transform: [{ scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.4] }) }],
+    }
+  }
+  return (
+    <View
+      style={[styles.orb, { height: size * 1.5 }]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Animated.View style={ring(0)} />
+      <Animated.View style={ring(0.35)} />
+      <View
+        style={{
+          width: size * 0.42,
+          height: size * 0.42,
+          borderRadius: size * 0.21,
+          backgroundColor: color,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text fontSize={big ? 20 : 13}>🎤</Text>
+      </View>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
+  orb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   button: {
     minHeight: 36,
     paddingHorizontal: 12,

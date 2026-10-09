@@ -3,7 +3,7 @@ import type { WakeEngine } from './wakeEngine'
 /**
  * Listening for "Hey Miriam" in the browser: sherpa-onnx's keyword spotter,
  * built for the web (WebAssembly) and served from /miriam-wake/ — fetched
- * the first time it is switched on, about 15 MB, and from then on from the
+ * the first time it is switched on, about 18 MB, and from then on from the
  * browser's cache. It hears whether that one phrase was said and nothing
  * else; nothing heard leaves the browser.
  *
