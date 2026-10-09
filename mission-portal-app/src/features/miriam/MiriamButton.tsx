@@ -28,6 +28,7 @@ import { listeningCue } from '@/lib/listeningCue'
 import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
 import { wakeEngine } from '@/lib/wakeEngine'
 import { withoutHerName } from '@/lib/wakeWord'
+import { MAX_REQUEST } from '@/lib/miriam'
 import { askMiriam, miriamError } from './askMiriam'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -38,8 +39,8 @@ const SPEECH_ID = 'miriam'
 const WAKE_ID = 'miriam-wake'
 /** A pause this long ends the request: long enough to think mid-sentence. */
 const PAUSE_MS = 1800
-/** Not left listening for a request if nothing is said. */
-const LISTEN_MS = 30_000
+/** The longest a request is listened to: a minute, room for a long one. */
+const LISTEN_MS = 60_000
 /** How often listening for "Hey Miriam" is started again when it has stopped. */
 const WAKE_RETRY_MS = 3000
 /** Whether this device listens for "Hey Miriam" (AsyncStorage). */
@@ -110,6 +111,8 @@ export function MiriamButton() {
   const [listening, setListening] = useState(false)
   const [heard, setHeard] = useState('')
   const [typed, setTyped] = useState('')
+  // The minute ran out while still talking: what was heard, to finish or send.
+  const [ranOut, setRanOut] = useState(false)
   const [answer, setAnswer] = useState<string | null>(null)
   // "Hey Miriam": wanted on this device, and listening for it right now.
   const [wakeOn, setWakeOn] = useState(false)
@@ -196,6 +199,7 @@ export function MiriamButton() {
   const listen = async (byName = false) => {
     stopWake()
     setWoken(byName)
+    setRanOut(false)
     if (byName) AccessibilityInfo.announceForAccessibility('Miriam: Hineni, I am here')
     sent.current = false
     settled.current = ''
@@ -344,14 +348,27 @@ export function MiriamButton() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wakeOn, appActive, open])
 
-  // Not left listening for a request if nothing is said; never behind a
-  // closed panel.
+  // Not left listening past a minute; never behind a closed panel. Cut off
+  // mid-request, it is not sent half-said: what was heard is put in the box,
+  // to be finished or sent as it is.
   useEffect(() => {
     if (!listening) return
     const t = setTimeout(() => {
-      if (ownsSpeech(SPEECH_ID)) ExpoSpeechRecognitionModule.stop()
+      if (!ownsSpeech(SPEECH_ID) || sent.current) return
+      const said = request.current.trim()
+      stopListening()
+      listeningCue('stop')
+      if (said) {
+        setTyped(said.slice(0, MAX_REQUEST))
+        setRanOut(true)
+        setStage('typing')
+      } else {
+        setAnswer('Didn’t hear anything. Try again, or type it.')
+        setStage('answered')
+      }
     }, LISTEN_MS)
     return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listening])
   useEffect(
     () => () => {
@@ -403,7 +420,9 @@ export function MiriamButton() {
     stage === 'thinking'
       ? 'Working on it…'
       : stage === 'typing'
-        ? 'What can I do?'
+        ? ranOut
+          ? 'That’s a minute — finish it or send it'
+          : 'What can I do?'
         : listening
           ? called && !heard
             ? 'Hineni — I am here'
@@ -522,7 +541,7 @@ export function MiriamButton() {
                   placeholderTextColor={colors.textMuted}
                   autoFocus
                   multiline
-                  maxLength={600}
+                  maxLength={MAX_REQUEST}
                   accessibilityLabel="What should Miriam do?"
                   style={[
                     styles.field,

@@ -20,8 +20,8 @@ const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY')
 /** The model that reads requests. One line to change. */
 const MODEL = 'claude-opus-5-5'
 
-/** Longer than any spoken request; past it, it isn't one. */
-const MAX_TEXT = 600
+/** A minute of talking, with room to spare; past it, it isn't a request. Mirrored in the app (lib/miriam: MAX_REQUEST). */
+const MAX_TEXT = 1500
 
 /** Per person: enough for real use, not enough to run up a bill. */
 const PER_WINDOW = 20
@@ -62,7 +62,8 @@ export const askMiriam = onCall(
 
     const text = typeof req.data?.text === 'string' ? req.data.text.trim() : ''
     if (!text) throw new HttpsError('invalid-argument', 'Nothing was asked.')
-    if (text.length > MAX_TEXT) throw new HttpsError('invalid-argument', 'That was too long.')
+    if (text.length > MAX_TEXT)
+      throw new HttpsError('invalid-argument', 'That was too long — try it in two.')
     // The person's own day, for "Friday" and "9/25": the server's is UTC.
     const today =
       typeof req.data?.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.data.today)

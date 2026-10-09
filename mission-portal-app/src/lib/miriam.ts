@@ -16,6 +16,9 @@ export function canUseMiriam(profile: UserProfile | null): boolean {
   return isAdmin(profile)
 }
 
+/** The longest request Miriam takes, typed or said (askMiriam's MAX_TEXT). */
+export const MAX_REQUEST = 1500
+
 /** A new event's form, filled in (functions/src/miriam/plan.ts: EventDraft). */
 export interface EventDraft {
   title: string
