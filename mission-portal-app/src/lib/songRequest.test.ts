@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { closestTitles, parseSongRequest, soundOf, spokenKey, trailingKey } from './songRequest'
+import {
+  closestTitles,
+  parseSongRequest,
+  requestFromAliases,
+  soundOf,
+  splitSpokenKey,
+  spokenKey,
+  trailingKey,
+} from './songRequest'
 
 const sheets = [
   { id: 1, title: 'Firm Foundation (He Won’t)' },
@@ -153,5 +161,32 @@ describe('trailingKey', () => {
     expect(trailingKey('oh hill king jesus and c-sharp')).toEqual({ key: 'Db', minor: false })
     expect(trailingKey('something something in b flat minor')).toEqual({ key: 'Bb', minor: true })
     expect(trailingKey('something something')).toBeNull()
+  })
+})
+
+describe('splitSpokenKey', () => {
+  it('parts the name of the song from a key said after it', () => {
+    expect(splitSpokenKey('Oh Hill King Jesus and C-sharp')).toEqual({
+      name: 'oh hill king jesus',
+      key: { key: 'Db', minor: false },
+    })
+    expect(splitSpokenKey('pull up agnes day please')).toEqual({ name: 'agnes day', key: null })
+  })
+})
+
+describe('requestFromAliases', () => {
+  const aliases = new Map([['oh hill king jesus', '9']])
+  it('opens the song a phrase was corrected to, in any key said with it', () => {
+    expect(requestFromAliases(aliases, sheets, 'Oh hill King Jesus in D')).toEqual({
+      sheet: { id: 9, title: 'All Hail King Jesus' },
+      key: 'D',
+      minor: false,
+    })
+    expect(requestFromAliases(aliases, sheets, 'oh hill king jesus')?.key).toBeNull()
+  })
+
+  it('knows nothing it has not been taught', () => {
+    expect(requestFromAliases(aliases, sheets, 'oh hill king')).toBeNull()
+    expect(requestFromAliases(new Map([['x', 'gone']]), sheets, 'x')).toBeNull()
   })
 })

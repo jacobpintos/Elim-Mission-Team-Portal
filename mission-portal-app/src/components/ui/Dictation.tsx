@@ -16,6 +16,8 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
 import { joinDictation } from '@/lib/dictation'
 import { claimSpeech, ownsSpeech, releaseSpeech } from '@/lib/speechOwner'
+import { listeningCue } from '@/lib/listeningCue'
+import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
 
 /** Long enough for a full account; past it, the mic is not left on by mistake. */
 const MAX_MS = 2 * 60 * 1000
@@ -63,6 +65,8 @@ export function DictateButton({
   // What the field held when listening began, and what has been settled since.
   const base = useRef('')
   const settled = useRef('')
+  // Listening on the phone itself: asked for, or for want of a signal.
+  const local = useRef(false)
   // Kept current so a result writes onto the field as the parent has it now.
   const write = useRef(onChangeText)
   useEffect(() => {
@@ -72,6 +76,19 @@ export function DictateButton({
   const show = (interim: string) => {
     const spoken = [settled.current, interim].filter(Boolean).join(' ')
     write.current(joinDictation(base.current, spoken, multiline))
+  }
+
+  const begin = () => {
+    claimSpeech(id)
+    setListening(true)
+    ExpoSpeechRecognitionModule.start({
+      lang: 'en-US',
+      interimResults: true,
+      continuous: true,
+      addsPunctuation: true,
+      requiresOnDeviceRecognition: local.current,
+      iosTaskHint: 'dictation',
+    })
   }
 
   useSpeechRecognitionEvent('result', (e) => {
@@ -88,11 +105,21 @@ export function DictateButton({
     if (!ownsSpeech(id)) return
     releaseSpeech(id)
     setListening(false)
+    listeningCue('stop')
   })
   useSpeechRecognitionEvent('error', (e) => {
     if (!ownsSpeech(id)) return
     releaseSpeech(id)
     setListening(false)
+    // Lost the signal: carry on, on the phone, keeping what was said so far.
+    if (e.error === 'network' && !local.current && canRecogniseOnDevice()) {
+      local.current = true
+      base.current = joinDictation(base.current, settled.current, multiline)
+      settled.current = ''
+      begin()
+      return
+    }
+    listeningCue('stop')
     if (e.error === 'not-allowed') {
       toast(
         Platform.OS === 'web'
@@ -136,24 +163,14 @@ export function DictateButton({
     }
     base.current = value
     settled.current = ''
-    claimSpeech(id)
-    setListening(true)
-    let local = false
-    if (onDevice && Platform.OS !== 'web') {
-      try {
-        local = ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()
-      } catch {
-        local = false
-      }
-    }
-    ExpoSpeechRecognitionModule.start({
-      lang: 'en-US',
-      interimResults: true,
-      continuous: true,
-      addsPunctuation: true,
-      requiresOnDeviceRecognition: local,
-      iosTaskHint: 'dictation',
-    })
+    // On the phone where asked to, or where there is no signal to send to.
+    local.current =
+      Platform.OS !== 'web' && canRecogniseOnDevice() && (onDevice || (await isOffline()))
+    listeningCue('start')
+    // A moment for the chime before the microphone takes the sound over; a
+    // browser plays it alongside, and must start listening within the tap.
+    if (Platform.OS !== 'web') await new Promise((r) => setTimeout(r, 180))
+    begin()
   }
 
   const stop = () => {

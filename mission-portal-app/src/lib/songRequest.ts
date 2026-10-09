@@ -383,3 +383,41 @@ export function trailingKey(text: string): { key: string; minor: boolean } | nul
   }
   return null
 }
+
+/**
+ * What was said with any key at its end taken off, and asking words either
+ * side ("pull up", "please"): the part that names the song. "Oh hill king
+ * Jesus and C-sharp" gives "oh hill king jesus", and the key.
+ */
+export function splitSpokenKey(text: string): {
+  name: string
+  key: { key: string; minor: boolean } | null
+} {
+  const words = spokenWords(text)
+  for (let n = Math.min(6, words.length - 1); n >= 1; n--) {
+    const key = spokenKey(stripFiller(words.slice(words.length - n)))
+    if (key) {
+      return { name: stripFiller(words.slice(0, words.length - n)).join(' '), key }
+    }
+  }
+  return { name: stripFiller(words).join(' '), key: null }
+}
+
+/**
+ * A song asked for by words it has been heard as before: the phrases a
+ * person corrected by picking the song from the guesses (songAliases).
+ * Said again — with or without a key — they open that song.
+ */
+export function requestFromAliases<T extends { id: string | number; title: string }>(
+  aliases: ReadonlyMap<string, string>,
+  sheets: T[],
+  text: string
+): SongRequest<T> | null {
+  const { name, key } = splitSpokenKey(text)
+  if (!name) return null
+  const id = aliases.get(name)
+  if (!id) return null
+  const sheet = sheets.find((s) => String(s.id) === id)
+  if (!sheet) return null
+  return { sheet, key: key?.key ?? null, minor: key?.minor ?? false }
+}

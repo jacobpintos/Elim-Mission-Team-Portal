@@ -16,6 +16,7 @@ import {
   KEY_HINTS,
   closestTitles,
   parseSongRequest,
+  requestFromAliases,
   trailingKey,
   type SongRequest,
 } from '@/lib/songRequest'
@@ -24,6 +25,10 @@ import { claimSpeech, ownsSpeech, releaseSpeech } from '@/lib/speechOwner'
 import { shazam, type ShazamHit } from '@/lib/shazam'
 import { findByTitle } from '@/lib/titleMatch'
 import { orderForHints, upcomingSheetIds } from '@/lib/hintOrder'
+import { loadAliases, rememberAlias } from '@/lib/songAliases'
+import { listeningCue } from '@/lib/listeningCue'
+import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
+import { keyLabel } from '@/lib/nashvilleNumbers'
 import { useWorshipStore } from '@/stores/worshipStore'
 import type { ChordSheet } from '@/types/chordSheet'
 
@@ -42,6 +47,20 @@ function localToday(): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
+
+/**
+ * How long a song found without being picked waits before it opens —
+ * "Opening Breathe in D…" — for a mishearing to be caught and cancelled.
+ */
+const CONFIRM_MS = 1500
+/** Said while a song is about to open: don't. */
+const CANCEL_WORDS = /\b(cancel|no|nope|wait|stop|wrong)\b/i
+/**
+ * How many of the recogniser's guesses at what was said to try. The phone
+ * gives them cleanly; a browser runs them together while words are still
+ * coming, so there it is the best guess alone.
+ */
+const ALTERNATIVES = Platform.OS === 'web' ? 1 : 5
 
 /** How long to listen before giving up. */
 const LISTEN_MS = 45_000
@@ -135,6 +154,26 @@ export function SongListener({
     if (requestTimer.current) clearTimeout(requestTimer.current)
     requestTimer.current = null
   }
+  // A song about to open, and what will open it: shown for a moment to be
+  // cancelled ("Opening Breathe in D…").
+  const [pending, setPending] = useState<string | null>(null)
+  const pendingAct = useRef<(() => void) | null>(null)
+  const pendingId = useRef<string | null>(null)
+  const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Songs cancelled this time: not offered again on the same lyrics.
+  const declined = useRef(new Set<string>())
+  // What this device has learned to hear as which song (lib/songAliases).
+  const aliases = useRef<ReadonlyMap<string, string>>(new Map())
+  useEffect(() => {
+    loadAliases().then((m) => (aliases.current = m))
+  }, [])
+  // No signal: listening on the phone itself, where it can.
+  const onDevice = useRef(false)
+  const [offline, setOffline] = useState(false)
+  // Listening stopped only to start again (Shazam's turn, or on the phone
+  // instead): no "stopped" chime for that.
+  const restarting = useRef(false)
+
   // Not every browser has speech recognition (Firefox has none).
   const [available] = useState(() => {
     try {
@@ -159,6 +198,68 @@ export function SongListener({
       ),
     [sheets, setLists]
   )
+
+  const listenForWords = () => {
+    restarting.current = false
+    claimSpeech(SPEECH_ID)
+    ExpoSpeechRecognitionModule.start({
+      lang: 'en-US',
+      interimResults: true,
+      maxAlternatives: ALTERNATIVES,
+      requiresOnDeviceRecognition: onDevice.current,
+      continuous: true,
+      addsPunctuation: false,
+      // Steer the recogniser towards this library's words: a sung "wretch"
+      // is otherwise as likely heard as "rich".
+      // And towards a key said with a title: "key of D", not "KFD".
+      contextualStrings: [...KEY_HINTS, ...hintPhrases(index, 100 - KEY_HINTS.length)],
+      iosTaskHint: 'dictation',
+      // The sound, for the key once the song is found; 16 kHz is plenty for
+      // notes up to the top of a voice.
+      recordingOptions: {
+        persist: true,
+        outputSampleRate: 16000,
+        outputEncoding: 'pcmFormatInt16',
+      },
+      // Keep whatever else is playing — a reference track in the app, or a
+      // song in another — playing, so it can be heard. Measurement mode: the
+      // microphone as it is, without the processing iOS does for a voice
+      // call, which treats a band as noise to be taken out.
+      iosCategory: {
+        category: 'playAndRecord',
+        categoryOptions: ['defaultToSpeaker', 'allowBluetooth', 'mixWithOthers'],
+        mode: 'measurement',
+      },
+    })
+  }
+
+  const clearPending = () => {
+    if (pendingTimer.current) clearTimeout(pendingTimer.current)
+    pendingTimer.current = null
+    pendingAct.current = null
+    pendingId.current = null
+    setPending(null)
+  }
+  /** Open a song found on its own — after a moment to say it is the wrong one. */
+  const confirmThen = (sheetId: string, label: string, act: () => void) => {
+    if (done.current || pendingAct.current) return
+    pendingAct.current = act
+    pendingId.current = sheetId
+    setPending(label)
+    pendingTimer.current = setTimeout(openNow, CONFIRM_MS)
+  }
+  const openNow = () => {
+    const act = pendingAct.current
+    clearPending()
+    act?.()
+  }
+  const cancelPending = () => {
+    if (pendingId.current) declined.current.add(pendingId.current)
+    clearPending()
+    clearRequest()
+    // Shazam's find is cancelled with the words stopped: listen for them again.
+    if (!done.current && !ownsSpeech(SPEECH_ID)) listenForWords()
+  }
 
   const finish = (match: LyricMatch) => {
     if (done.current) return
@@ -187,14 +288,30 @@ export function SongListener({
     )
   }
 
-  const hear = (text: string) => {
+  /**
+   * `text` is the best guess at everything said so far; `candidates`, the
+   * same with each of the recogniser's other guesses for the latest words,
+   * best first — the right one is often second ("Oh Hill King Jesus" first,
+   * "All Hail King Jesus" after it).
+   */
+  const hear = (text: string, candidates: string[] = [text]) => {
+    // A song about to open: only listening for "cancel".
+    if (pendingAct.current) {
+      const last = text.trim().split(/\s+/).slice(-3).join(' ')
+      if (CANCEL_WORDS.test(last)) cancelPending()
+      return
+    }
     const recent = text.trim().split(/\s+/).slice(-RECENT_WORDS).join(' ')
     setHeard(recent)
     const ranked = rankSongs(index, recent)
     // Titles close to what was said first — a name half heard is the
     // likelier meaning — then songs whose lyrics share two word pairs or
     // more with it. One pair ("king Jesus") is in half the library.
-    const titled: Guess[] = closestTitles(sheets, recent).map((sheet) => ({
+    const nearTitles = candidates
+      .flatMap((c) => closestTitles(sheets, c.trim().split(/\s+/).slice(-RECENT_WORDS).join(' ')))
+      .filter((sheet, i, all) => all.findIndex((x) => x.id === sheet.id) === i)
+      .slice(0, 3)
+    const titled: Guess[] = nearTitles.map((sheet) => ({
       id: String(sheet.id),
       title: sheet.title,
       score: 0,
@@ -208,13 +325,46 @@ export function SongListener({
     // A song asked for by name, once the asking stops: "Holy" is not yet
     // "Holy Forever", nor "Firm Foundation" yet "Firm Foundation in E".
     clearRequest()
-    const request = parseSongRequest(sheets, text)
+    // Words this device has learned first — a correction is the surest sign
+    // of what is meant — then a title, trying each of the recogniser's guesses.
+    let request: SongRequest<ChordSheet> | null = null
+    for (const c of candidates) {
+      request = requestFromAliases(aliases.current, sheets, c)
+      if (request) break
+    }
+    if (!request) {
+      for (const c of candidates) {
+        request = parseSongRequest(sheets, c)
+        if (request) break
+      }
+    }
     if (request) {
-      requestTimer.current = setTimeout(() => openAsked(request), REQUEST_PAUSE_MS)
+      const asked = request
+      requestTimer.current = setTimeout(() => {
+        requestTimer.current = null
+        const key = asked.key ? ` in ${keyLabel(asked.key, asked.minor)}` : ''
+        confirmThen(String(asked.sheet.id), `${asked.sheet.title}${key}`, () => openAsked(asked))
+      }, REQUEST_PAUSE_MS)
       return
     }
     const match = confidentMatch(ranked)
-    if (match) finish(match)
+    if (match && !declined.current.has(match.id)) {
+      confirmThen(match.id, match.title, () => finish(match))
+    }
+  }
+
+  /** A guess picked by hand: opened at once, and learned from. */
+  const pick = (g: Guess) => {
+    clearPending()
+    if (heard) {
+      rememberAlias(heard, g.id)
+      loadAliases().then((m) => (aliases.current = m))
+    }
+    if (!g.byTitle) return finish(g)
+    // Picked by name: in whatever key was said with it.
+    const sheet = sheets.find((s) => String(s.id) === g.id)
+    const key = trailingKey(heard)
+    if (sheet) openAsked({ sheet, key: key?.key ?? null, minor: key?.minor ?? false })
   }
 
   // Only while listening for a song: the recogniser's events also carry
@@ -227,16 +377,18 @@ export function SongListener({
     if (!ownsSpeech(SPEECH_ID)) return
     releaseSpeech(SPEECH_ID)
     setListening(false)
+    if (!restarting.current) listeningCue('stop')
   })
   useSpeechRecognitionEvent('result', (e) => {
     if (done.current || !ownsSpeech(SPEECH_ID)) return
-    const text = e.results[0]?.transcript ?? ''
-    if (e.isFinal) {
-      settled.current = `${settled.current} ${text}`
-      hear(settled.current)
-    } else {
-      hear(`${settled.current} ${text}`)
-    }
+    const alts = (e.results ?? []).map((r) => r.transcript ?? '').filter(Boolean)
+    const before = settled.current
+    const best = alts[0] ?? ''
+    if (e.isFinal) settled.current = `${before} ${best}`
+    hear(
+      `${before} ${best}`,
+      (alts.length ? alts : ['']).map((a) => `${before} ${a}`)
+    )
   })
   useSpeechRecognitionEvent('audioend', (e) => {
     if (!e.uri) return
@@ -251,6 +403,14 @@ export function SongListener({
     releaseSpeech(SPEECH_ID)
     setListening(false)
     if (e.error === 'aborted') return
+    // Lost the signal mid-listen: carry on, on the phone.
+    if (e.error === 'network' && !onDevice.current && canRecogniseOnDevice() && !done.current) {
+      onDevice.current = true
+      setOffline(true)
+      listenForWords()
+      return
+    }
+    listeningCue('stop')
     setProblem(
       e.error === 'not-allowed'
         ? Platform.OS === 'web'
@@ -272,8 +432,12 @@ export function SongListener({
     settled.current = ''
     done.current = false
     found.current = null
+    declined.current.clear()
+    clearPending()
     clearRequest()
     clearShazamTurn()
+    onDevice.current = false
+    setOffline(false)
     // The browser asks for the microphone itself, when listening starts.
     if (Platform.OS !== 'web') {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
@@ -283,9 +447,22 @@ export function SongListener({
         )
         return
       }
+      // No signal: on the phone, where it can — and no Shazam, which needs it.
+      if ((await isOffline()) && canRecogniseOnDevice()) {
+        onDevice.current = true
+        setOffline(true)
+      }
     }
+    listeningCue('start')
+    // On the phone, a moment for the chime before the microphone takes over
+    // the sound. A browser plays it alongside, and must start listening
+    // within the tap.
+    if (Platform.OS !== 'web') await new Promise((r) => setTimeout(r, 180))
+    if (done.current) return
     listenForWords()
-    if (shazam) shazamTimer.current = setTimeout(shazamTurn, WORDS_FIRST_MS)
+    if (shazam && !onDevice.current) {
+      shazamTimer.current = setTimeout(shazamTurn, WORDS_FIRST_MS)
+    }
   }
 
   /**
@@ -295,7 +472,8 @@ export function SongListener({
    */
   const shazamTurn = async () => {
     shazamTimer.current = null
-    if (!shazam || done.current || requestTimer.current) return
+    if (!shazam || done.current || requestTimer.current || pendingAct.current) return
+    restarting.current = true
     ExpoSpeechRecognitionModule.abort()
     setIdentifying(true)
     let hit: ShazamHit | null = null
@@ -309,9 +487,11 @@ export function SongListener({
     if (hit?.title) {
       const sheet = findByTitle(sheets, hit.title)
       if (sheet) {
-        done.current = true
-        setOpen(false)
-        onFound(sheet, null, null)
+        confirmThen(String(sheet.id), sheet.title, () => {
+          done.current = true
+          setOpen(false)
+          onFound(sheet, null, null)
+        })
         return
       }
       // Perhaps under another title: the words may still find it.
@@ -320,39 +500,9 @@ export function SongListener({
     listenForWords()
   }
 
-  const listenForWords = () => {
-    claimSpeech(SPEECH_ID)
-    ExpoSpeechRecognitionModule.start({
-      lang: 'en-US',
-      interimResults: true,
-      continuous: true,
-      addsPunctuation: false,
-      // Steer the recogniser towards this library's words: a sung "wretch"
-      // is otherwise as likely heard as "rich".
-      // And towards a key said with a title: "key of D", not "KFD".
-      contextualStrings: [...KEY_HINTS, ...hintPhrases(index, 100 - KEY_HINTS.length)],
-      iosTaskHint: 'dictation',
-      // The sound, for the key once the song is found; 16 kHz is plenty for
-      // notes up to the top of a voice.
-      recordingOptions: {
-        persist: true,
-        outputSampleRate: 16000,
-        outputEncoding: 'pcmFormatInt16',
-      },
-      // Keep whatever else is playing — a reference track in the app, or a
-      // song in another — playing, so it can be heard. Measurement mode: the
-      // microphone as it is, without the processing iOS does for a voice
-      // call, which treats a band as noise to be taken out.
-      iosCategory: {
-        category: 'playAndRecord',
-        categoryOptions: ['defaultToSpeaker', 'allowBluetooth', 'mixWithOthers'],
-        mode: 'measurement',
-      },
-    })
-  }
-
   const close = () => {
     done.current = true
+    clearPending()
     clearRequest()
     clearShazamTurn()
     shazam?.cancel()
@@ -384,6 +534,7 @@ export function SongListener({
       shazam?.cancel()
       clearRequest()
       clearShazamTurn()
+      if (pendingTimer.current) clearTimeout(pendingTimer.current)
       if (ownsSpeech(SPEECH_ID)) {
         releaseSpeech(SPEECH_ID)
         ExpoSpeechRecognitionModule.abort()
@@ -440,6 +591,44 @@ export function SongListener({
                     : 'Starting…')}
             </Text>
 
+            {offline ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                No signal — listening on this phone instead.
+              </Text>
+            ) : null}
+
+            {pending ? (
+              <YStack gap="$2">
+                <Text color={colors.text} fontSize="$4" fontWeight="700">
+                  Opening {pending}…
+                </Text>
+                <XStack gap="$2">
+                  <Pressable
+                    onPress={cancelPending}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel, that's the wrong song"
+                    style={[styles.choice, { borderColor: colors.border }]}
+                  >
+                    <Text color={colors.text} fontWeight="700">
+                      Cancel
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={openNow}
+                    accessibilityRole="button"
+                    style={[
+                      styles.choice,
+                      { backgroundColor: colors.primary, borderColor: colors.primary },
+                    ]}
+                  >
+                    <Text color="white" fontWeight="700">
+                      Open now
+                    </Text>
+                  </Pressable>
+                </XStack>
+              </YStack>
+            ) : null}
+
             {notInLibrary ? (
               <Text color={colors.text} fontSize="$3">
                 Shazam heard “{notInLibrary.title}”
@@ -462,15 +651,7 @@ export function SongListener({
                 {guesses.map((g) => (
                   <Pressable
                     key={g.id}
-                    onPress={() => {
-                      if (!g.byTitle) return finish(g)
-                      // Picked by name: in whatever key was said with it.
-                      const sheet = sheets.find((s) => String(s.id) === g.id)
-                      const key = trailingKey(heard)
-                      if (sheet) {
-                        openAsked({ sheet, key: key?.key ?? null, minor: key?.minor ?? false })
-                      }
-                    }}
+                    onPress={() => pick(g)}
                     accessibilityRole="button"
                     accessibilityLabel={`Open ${g.title}`}
                     style={[styles.guess, { borderColor: colors.border }]}
@@ -483,7 +664,7 @@ export function SongListener({
               </YStack>
             ) : null}
 
-            {!listening && !identifying ? (
+            {!listening && !identifying && !pending ? (
               <Pressable
                 onPress={start}
                 accessibilityRole="button"
@@ -527,6 +708,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  choice: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 99,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   again: {
     borderRadius: 99,
