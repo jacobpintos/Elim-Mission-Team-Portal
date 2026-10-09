@@ -42,6 +42,18 @@ module.exports = [
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', 'functions/', '.expo/', 'babel.config.js', 'eslint.config.js'],
+    ignores: [
+      'dist/',
+      'node_modules/',
+      'functions/',
+      '.expo/',
+      'babel.config.js',
+      'eslint.config.js',
+      // sherpa-onnx's own build for the browser, generated, not ours to lint.
+      'public/miriam-wake/',
+      // Downloaded at build time by the native module.
+      'modules/miriam-wake/ios/Frameworks/',
+      'modules/miriam-wake/android/sherpa-onnx/',
+    ],
   },
 ]
