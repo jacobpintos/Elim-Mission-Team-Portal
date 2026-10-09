@@ -1,7 +1,0 @@
-{
-  "name": "shazam-match",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Recognise a recorded song from the microphone with ShazamKit",
-  "license": "MIT"
-}

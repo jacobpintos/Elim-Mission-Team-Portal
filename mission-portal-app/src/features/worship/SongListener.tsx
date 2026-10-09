@@ -22,8 +22,6 @@ import {
 } from '@/lib/songRequest'
 import { readHeardAudio } from './heardAudio'
 import { claimSpeech, ownsSpeech, releaseSpeech } from '@/lib/speechOwner'
-import { shazam, type ShazamHit } from '@/lib/shazam'
-import { findByTitle } from '@/lib/titleMatch'
 import { orderForHints, upcomingSheetIds } from '@/lib/hintOrder'
 import { loadAliases, rememberAlias } from '@/lib/songAliases'
 import { listeningCue } from '@/lib/listeningCue'
@@ -66,12 +64,6 @@ const ALTERNATIVES = Platform.OS === 'web' ? 1 : 5
 const LISTEN_MS = 45_000
 /** Only the most recent words are matched: the song being sung now. */
 const RECENT_WORDS = 40
-/**
- * How long the words get first — enough to say a song's name — before
- * Shazam is given its turn at naming a recording, and how long it gets.
- */
-const WORDS_FIRST_MS = 6000
-const SHAZAM_SECONDS = 12
 /** How long a song asked for by name waits for the rest of what is said. */
 const REQUEST_PAUSE_MS = 1200
 
@@ -90,14 +82,8 @@ export interface AskedKey {
  * it works wherever speech recognition does: the phone app, and the web app
  * in Chrome and Safari. The rest below is for a song playing.
  *
- * The microphone button beside the chord sheet search. On an iPhone, Shazam
- * gets the first few seconds: a recording — a reference track, a song on
- * someone's phone — it names at once, and the sheet with that title opens.
- * Speech recognition is made for talking, and hears little or nothing of a
- * record's vocals over its band; Shazam is made for exactly that. It knows
- * only released recordings, though, not a band playing the song live, so
- * after that, or straight away where there is no Shazam, the phone's
- * own speech recognition listens to whatever is being sung or played — the
+ * The microphone button beside the chord sheet search. The phone's (or the
+ * browser's) own speech recognition listens to whatever is being sung or played — the
  * band, a recording, someone humming the words — and the words it makes out
  * are matched against every chord sheet's lyrics (lib/lyricMatch: split
  * syllables and "_" placeholders ignored, misheard words forgiven, phrases
@@ -133,21 +119,11 @@ export function SongListener({
   const [heard, setHeard] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
   const [guesses, setGuesses] = useState<Guess[]>([])
-  // Shazam at work, before the words are listened for.
-  const [identifying, setIdentifying] = useState(false)
-  // A recording Shazam named that has no sheet under that title.
-  const [notInLibrary, setNotInLibrary] = useState<ShazamHit | null>(null)
   // What has been heard and settled, and what is still being made out.
   const settled = useRef('')
   const done = useRef(false)
   // The song found, whose key the recording is then read for.
   const found = useRef<string | null>(null)
-  // When Shazam is to have its turn, and whether it has had it.
-  const shazamTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const clearShazamTurn = () => {
-    if (shazamTimer.current) clearTimeout(shazamTimer.current)
-    shazamTimer.current = null
-  }
   // A song asked for by name, opened once nothing more is said.
   const requestTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clearRequest = () => {
@@ -170,9 +146,6 @@ export function SongListener({
   // No signal: listening on the phone itself, where it can.
   const onDevice = useRef(false)
   const [offline, setOffline] = useState(false)
-  // Listening stopped only to start again (Shazam's turn, or on the phone
-  // instead): no "stopped" chime for that.
-  const restarting = useRef(false)
 
   // Not every browser has speech recognition (Firefox has none).
   const [available] = useState(() => {
@@ -200,7 +173,6 @@ export function SongListener({
   )
 
   const listenForWords = () => {
-    restarting.current = false
     claimSpeech(SPEECH_ID)
     ExpoSpeechRecognitionModule.start({
       lang: 'en-US',
@@ -257,7 +229,7 @@ export function SongListener({
     if (pendingId.current) declined.current.add(pendingId.current)
     clearPending()
     clearRequest()
-    // Shazam's find is cancelled with the words stopped: listen for them again.
+    // Listening carries on; should it have stopped meanwhile, it starts again.
     if (!done.current && !ownsSpeech(SPEECH_ID)) listenForWords()
   }
 
@@ -377,7 +349,7 @@ export function SongListener({
     if (!ownsSpeech(SPEECH_ID)) return
     releaseSpeech(SPEECH_ID)
     setListening(false)
-    if (!restarting.current) listeningCue('stop')
+    listeningCue('stop')
   })
   useSpeechRecognitionEvent('result', (e) => {
     if (done.current || !ownsSpeech(SPEECH_ID)) return
@@ -428,14 +400,12 @@ export function SongListener({
     setProblem(null)
     setHeard('')
     setGuesses([])
-    setNotInLibrary(null)
     settled.current = ''
     done.current = false
     found.current = null
     declined.current.clear()
     clearPending()
     clearRequest()
-    clearShazamTurn()
     onDevice.current = false
     setOffline(false)
     // The browser asks for the microphone itself, when listening starts.
@@ -447,7 +417,7 @@ export function SongListener({
         )
         return
       }
-      // No signal: on the phone, where it can — and no Shazam, which needs it.
+      // No signal: on the phone, where it can.
       if ((await isOffline()) && canRecogniseOnDevice()) {
         onDevice.current = true
         setOffline(true)
@@ -460,53 +430,12 @@ export function SongListener({
     if (Platform.OS !== 'web') await new Promise((r) => setTimeout(r, 180))
     if (done.current) return
     listenForWords()
-    if (shazam && !onDevice.current) {
-      shazamTimer.current = setTimeout(shazamTurn, WORDS_FIRST_MS)
-    }
-  }
-
-  /**
-   * Shazam's turn, once the words have had theirs: the words stop — the two
-   * do not share the microphone — while it tries to name a recording, and
-   * go on if it cannot. Skipped while a song asked for by name is waiting.
-   */
-  const shazamTurn = async () => {
-    shazamTimer.current = null
-    if (!shazam || done.current || requestTimer.current || pendingAct.current) return
-    restarting.current = true
-    ExpoSpeechRecognitionModule.abort()
-    setIdentifying(true)
-    let hit: ShazamHit | null = null
-    try {
-      hit = await shazam.match(SHAZAM_SECONDS)
-    } catch {
-      // Unreachable, or not set up for this app: the words will have to do.
-    }
-    setIdentifying(false)
-    if (done.current) return
-    if (hit?.title) {
-      const sheet = findByTitle(sheets, hit.title)
-      if (sheet) {
-        confirmThen(String(sheet.id), sheet.title, () => {
-          done.current = true
-          setOpen(false)
-          onFound(sheet, null, null)
-        })
-        return
-      }
-      // Perhaps under another title: the words may still find it.
-      setNotInLibrary(hit)
-    }
-    listenForWords()
   }
 
   const close = () => {
     done.current = true
     clearPending()
     clearRequest()
-    clearShazamTurn()
-    shazam?.cancel()
-    setIdentifying(false)
     ExpoSpeechRecognitionModule.abort()
     setListening(false)
     setOpen(false)
@@ -531,9 +460,7 @@ export function SongListener({
   // Never left listening behind a closed screen.
   useEffect(
     () => () => {
-      shazam?.cancel()
       clearRequest()
-      clearShazamTurn()
       if (pendingTimer.current) clearTimeout(pendingTimer.current)
       if (ownsSpeech(SPEECH_ID)) {
         releaseSpeech(SPEECH_ID)
@@ -568,7 +495,7 @@ export function SongListener({
           >
             <XStack alignItems="center" justifyContent="space-between">
               <Text color={colors.text} fontSize="$5" fontWeight="700">
-                {listening || identifying ? 'Listening…' : 'Find a song'}
+                {listening ? 'Listening…' : 'Find a song'}
               </Text>
               <Pressable
                 onPress={close}
@@ -584,11 +511,9 @@ export function SongListener({
 
             <Text color={colors.textMuted} fontSize="$3">
               {problem ??
-                (identifying
-                  ? 'Checking whether it’s a recording Shazam knows…'
-                  : listening
-                    ? 'Say a song’s name — “Firm Foundation in E” — or hold the phone near the music. The chord sheet opens as soon as the song is clear.'
-                    : 'Starting…')}
+                (listening
+                  ? 'Say a song’s name — “Firm Foundation in E” — or hold the phone near the music. The chord sheet opens as soon as the song is clear.'
+                  : 'Starting…')}
             </Text>
 
             {offline ? (
@@ -629,14 +554,6 @@ export function SongListener({
               </YStack>
             ) : null}
 
-            {notInLibrary ? (
-              <Text color={colors.text} fontSize="$3">
-                Shazam heard “{notInLibrary.title}”
-                {notInLibrary.artist ? ` by ${notInLibrary.artist}` : ''}, but there’s no chord
-                sheet with that title. Listening for the words in case it’s under another name…
-              </Text>
-            ) : null}
-
             {heard ? (
               <Text color={colors.text} fontSize="$3" fontStyle="italic" numberOfLines={3}>
                 “…{heard}”
@@ -664,7 +581,7 @@ export function SongListener({
               </YStack>
             ) : null}
 
-            {!listening && !identifying && !pending ? (
+            {!listening && !pending ? (
               <Pressable
                 onPress={start}
                 accessibilityRole="button"
