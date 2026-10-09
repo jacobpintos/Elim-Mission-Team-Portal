@@ -30,6 +30,8 @@ import { wakeEngine } from '@/lib/wakeEngine'
 import { withoutHerName } from '@/lib/wakeWord'
 import { MAX_REQUEST, miriamHref } from '@/lib/miriam'
 import { anyOverlayOpen } from '@/lib/overlays'
+import { rememberName } from '@/lib/miriamMemory'
+import { FD } from '@/lib/format'
 import { speak, stopSpeaking } from './speak'
 import { askMiriam, miriamError } from './askMiriam'
 import { useMiriamStore } from '@/stores/miriamStore'
@@ -118,6 +120,11 @@ export function MiriamButton() {
   // The minute ran out while still talking: what was heard, to finish or send.
   const [ranOut, setRanOut] = useState(false)
   const [answer, setAnswer] = useState<string | null>(null)
+  // Events she offers when she isn't sure which was meant, and what was said
+  // for it — learned from the one picked — and the question they answer.
+  const [choices, setChoices] = useState<{ key: string; title: string; date: string }[]>([])
+  const heardName = useRef('')
+  const asked = useRef('')
   // "Hey Miriam": wanted on this device, and listening for it right now.
   const [wakeOn, setWakeOn] = useState(false)
   const [waiting, setWaiting] = useState(false)
@@ -177,10 +184,12 @@ export function MiriamButton() {
     setListening(false)
   }
 
-  const send = async (text: string) => {
+  const send = async (text: string, again = false) => {
     const said = text.trim()
     if (!said || sent.current) return
     sent.current = true
+    if (!again) asked.current = said
+    setChoices([])
     stopListening()
     setHeard(said)
     setStage('thinking')
@@ -194,6 +203,10 @@ export function MiriamButton() {
       }
       setAnswer(result.text)
       speak(result.text)
+      if (result.kind === 'answer') {
+        setChoices(result.choices ?? [])
+        heardName.current = result.heardName ?? ''
+      }
       // Taken to where the answer is — unless that would pull them out of
       // something open over the page, a chord sheet being played: then it is
       // said and shown here, and the page is left as it is.
@@ -210,6 +223,7 @@ export function MiriamButton() {
   const listen = async (byName = false) => {
     stopWake()
     stopSpeaking()
+    setChoices([])
     setWoken(byName)
     setRanOut(false)
     if (byName) AccessibilityInfo.announceForAccessibility('Miriam: Hineni, I am here')
@@ -423,10 +437,20 @@ export function MiriamButton() {
     closeRef.current = close
   })
   useEffect(() => {
-    if (stage !== 'answered' || !open) return
+    // Not while there are events to choose from: that waits for a choice.
+    if (stage !== 'answered' || !open || choices.length) return
     const t = setTimeout(() => closeRef.current(), ANSWER_MS)
     return () => clearTimeout(t)
-  }, [stage, open, answer])
+  }, [stage, open, answer, choices.length])
+  /** One of the events she offered: learned as what was meant, and asked about. */
+  const pick = async (choice: { key: string; title: string; date: string }) => {
+    // Saved first, so the question asked again already carries it.
+    if (heardName.current) await rememberName(heardName.current, choice.title)
+    sent.current = false
+    stopSpeaking()
+    send(`${asked.current} — I mean “${choice.title}” on ${choice.date}`, true)
+  }
+
   const typeInstead = () => {
     stopListening()
     sent.current = false
@@ -517,6 +541,31 @@ export function MiriamButton() {
                   <Text color={ink} fontSize="$3" fontWeight="600" numberOfLines={6}>
                     {answer}
                   </Text>
+                ) : null}
+                {stage === 'answered' && choices.length ? (
+                  <YStack gap="$1.5" paddingTop="$1.5">
+                    {choices.map((c) => (
+                      <Pressable
+                        key={c.key}
+                        onPress={() => pick(c)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${c.title}, ${FD(c.date, { weekday: true })}`}
+                        style={[styles.choice, { borderColor: colors.primary }]}
+                      >
+                        <Text
+                          color={colors.primary}
+                          fontWeight="700"
+                          fontSize="$3"
+                          numberOfLines={1}
+                        >
+                          {c.title}
+                        </Text>
+                        <Text color={colors.textMuted} fontSize="$2">
+                          {FD(c.date, { weekday: true })}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </YStack>
                 ) : null}
               </YStack>
               {stage === 'listening' && heard ? (
@@ -756,6 +805,14 @@ const styles = StyleSheet.create({
     minWidth: 36,
     minHeight: 36,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  choice: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     justifyContent: 'center',
   },
   small: {

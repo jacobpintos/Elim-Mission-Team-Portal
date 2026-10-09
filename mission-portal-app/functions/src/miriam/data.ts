@@ -24,6 +24,8 @@
  * (src/lib/miriamData.test.ts in the app).
  */
 
+import { nameScore } from './names'
+
 export interface Viewer {
   uid: string
   roles: string[]
@@ -215,20 +217,9 @@ export function canSeeEvent(ev: EventTemplate, viewer: Viewer, groups: Group[]):
   return admin || ev.isPublic === true || assignedTo(ev, groups).has(viewer.uid)
 }
 
-const words = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length > 1 && !['the', 'of', 'and', 'for', 'in', 'at', 'on'].includes(w))
-
-/** How well an event's title answers a name said for it, 0 to 1. */
+/** How well an event's or task's name answers a name said for it, 0 to 1 (./names). */
 export function titleMatch(title: string, query: string): number {
-  const q = words(query)
-  if (q.length === 0) return 0
-  const t = words(title)
-  const hit = q.filter((w) => t.some((x) => x === w || x.startsWith(w) || w.startsWith(x))).length
-  return hit / q.length
+  return nameScore(title, query)
 }
 
 /**
@@ -261,6 +252,39 @@ export function findEvents(
     (d >= today ? 0 : 1_000_000) + Math.abs(dayNumber(d) - dayNumber(today))
   return scored
     .sort((a, b) => b.score - a.score || distance(a.ev.date) - distance(b.ev.date))
+    .slice(0, limit)
+    .map((x) => x.ev)
+}
+
+/**
+ * When nothing fits well: the few events this person can see whose names
+ * come nearest to what was said, to offer — never one they cannot see.
+ */
+export function closestEvents(
+  templates: EventTemplate[],
+  overrides: Record<string, Partial<EventTemplate>>,
+  groups: Group[],
+  viewer: Viewer,
+  query: string,
+  today: string,
+  limit = 3
+): EventInstance[] {
+  if (!query.trim()) return []
+  const seen = templates
+    .filter((t) => canSeeEvent(t, viewer, groups))
+    .flatMap((t) => instancesOf(t, shiftDate(today, -60), shiftDate(today, 365), overrides))
+    .filter((ev) => canSeeEvent(ev, viewer, groups))
+  // One date per name: the nearest upcoming, else the latest past.
+  const byTitle = new Map<string, EventInstance>()
+  for (const ev of seen.sort((a, b) => a.date.localeCompare(b.date))) {
+    const had = byTitle.get(ev.title)
+    if (!had || (had.date < today && ev.date >= today) || (had.date < today && ev.date > had.date))
+      byTitle.set(ev.title, ev)
+  }
+  return [...byTitle.values()]
+    .map((ev) => ({ ev, score: titleMatch(ev.title, query) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((x) => x.ev)
 }

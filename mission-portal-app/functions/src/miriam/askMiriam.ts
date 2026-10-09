@@ -42,7 +42,7 @@ const SYSTEM = `You are Miriam, the assistant in the Mission Portal app of The W
 
 Someone has spoken to you, usually out loud. Their words were turned into text by speech recognition, so names and words may be misheard: match them to what the tools return by how they sound, and a misheard word to what makes sense.
 
-A question: look it up with the tools — never answer from memory or guess — then finish with \`answer\`: a short reply to be heard, and where in the app to show it. The tools return only what this person is allowed to see. If something isn't there, say you couldn't find it, without suggesting that it exists. When several events match, take the nearest upcoming one unless they said otherwise, and say its date. When they ask who is unavailable, include everyone not plainly available — not available, partly available, not sure yet (TBD), and not answered — with what they wrote. When they ask what is pending, that is every task not done.
+A question: look it up with the tools — never answer from memory or guess — then finish with \`answer\`: a short reply to be heard, and where in the app to show it. The tools return only what this person is allowed to see. If something isn't there, say you couldn't find it, without suggesting that it exists. When several events match, take the nearest upcoming one unless they said otherwise, and say its date. When nothing fits well, find_events gives the nearest names instead: if one is plainly what they meant — it sounds the same, or it is a name they have used before — use it, and say which you took ("I took that as Revival in the Heartland"); if you can't tell, say you couldn't find that name, and offer the nearest as \`choices\`. Always set \`heard_name\` to the words they used for the event. When they ask who is unavailable, include everyone not plainly available — not available, partly available, not sure yet (TBD), and not answered — with what they wrote. When they ask what is pending, that is every task not done.
 
 Something to do: use the tool for it. It only fills in a form for them to check and save, so fill in what they said and leave the rest empty.
 
@@ -101,6 +101,19 @@ export const askMiriam = onCall(
       )
     }
     const viewer = { uid, roles }
+    // Names this device has learned: what they said, and the event they meant.
+    const known = (Array.isArray(req.data?.known) ? req.data.known : [])
+      .filter(
+        (k: unknown): k is { heard: string; title: string } =>
+          !!k &&
+          typeof (k as { heard?: unknown }).heard === 'string' &&
+          typeof (k as { title?: unknown }).title === 'string'
+      )
+      .slice(0, 30)
+      .map(
+        (k: { heard: string; title: string }) =>
+          `“${k.heard.slice(0, 80)}” meant “${k.title.slice(0, 120)}”`
+      )
     const lookups = new Lookups(db, viewer, today)
 
     // The people and groups a new event's form can name: only for those who
@@ -130,7 +143,13 @@ export const askMiriam = onCall(
     const system: Anthropic.Beta.BetaTextBlockParam[] = [{ type: 'text', text: SYSTEM }]
     if (lists) system.push({ type: 'text', text: lists, cache_control: { type: 'ephemeral' } })
     const messages: Anthropic.Beta.BetaMessageParam[] = [
-      { role: 'user', content: `Today is ${withWeekday(today)}.\n\nThey said: “${text}”` },
+      {
+        role: 'user',
+        content:
+          `Today is ${withWeekday(today)}.\n\n` +
+          (known.length ? `Names they have used before for events:\n${known.join('\n')}\n\n` : '') +
+          `They said: “${text}”`,
+      },
     ]
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -220,6 +239,8 @@ interface AnswerInput {
   open: 'event' | 'task' | 'availability' | 'none'
   target: string
   section: 'dress_code' | 'availability' | 'details' | 'none'
+  choices?: string[]
+  heard_name?: string
 }
 
 /** The answer, and where to show it — only somewhere this person may go. */
@@ -236,5 +257,16 @@ async function finish(input: AnswerInput, lookups: Lookups, viewer: Viewer) {
   } else if (input.open === 'availability' && isAdminViewer(viewer)) {
     open = { kind: 'availability' }
   }
-  return { kind: 'answer', text, open }
+  // Offered choices: only events this person may see, as they will be shown.
+  const choices: { key: string; title: string; date: string }[] = []
+  for (const key of Array.isArray(input.choices) ? input.choices.slice(0, 3) : []) {
+    const ev = await lookups.event(String(key))
+    if (ev && !choices.some((c) => c.key === ev.instanceKey)) {
+      choices.push({ key: ev.instanceKey, title: ev.title, date: ev.date })
+    }
+  }
+  const heardName = String(input.heard_name ?? '')
+    .trim()
+    .slice(0, 80)
+  return { kind: 'answer', text, open, choices, heardName }
 }

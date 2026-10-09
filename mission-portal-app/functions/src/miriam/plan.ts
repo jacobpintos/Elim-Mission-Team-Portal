@@ -207,8 +207,18 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
             enum: ['dress_code', 'availability', 'details', 'none'],
             description: 'On an event’s page, the part the answer is about.',
           },
+          choices: {
+            ...stringList,
+            description:
+              'When you are not sure which event they meant: up to three event keys from find_events’ closest, offered as buttons. Otherwise [].',
+          },
+          heard_name: {
+            type: 'string',
+            description:
+              'The words they used for the event, as heard ("revival in the hard land"); "" if they named none.',
+          },
         },
-        required: ['spoken', 'open', 'target', 'section'],
+        required: ['spoken', 'open', 'target', 'section', 'choices', 'heard_name'],
         additionalProperties: false,
       },
     },

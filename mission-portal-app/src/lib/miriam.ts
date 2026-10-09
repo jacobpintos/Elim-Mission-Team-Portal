@@ -43,7 +43,15 @@ export type MiriamOpen =
 
 export type MiriamResult =
   | { kind: 'eventForm'; draft: EventDraft; notes: string[] }
-  | { kind: 'answer'; text: string; open: MiriamOpen | null }
+  | {
+      kind: 'answer'
+      text: string
+      open: MiriamOpen | null
+      /** Events offered when she isn't sure which was meant. */
+      choices?: { key: string; title: string; date: string }[]
+      /** The words used for the event, as heard: learned when a choice is picked. */
+      heardName?: string
+    }
   | { kind: 'reply'; text: string }
 
 /** The app's address for where an answer is shown. */

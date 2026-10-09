@@ -2,6 +2,7 @@ import {
   availabilityReport,
   canSeeTask,
   carpoolFor,
+  closestEvents,
   dressCodeFor,
   eventByKey,
   findEvents,
@@ -159,17 +160,25 @@ export class Lookups {
       this.today,
       /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : ''
     )
-    if (found.length === 0) return { found: [], note: 'No event this person can see matches.' }
-    return {
-      found: found.map((ev) => ({
-        key: ev.instanceKey,
-        title: ev.title,
-        date: withWeekday(ev.date),
-        startTime: ev.startTime || undefined,
-        city: [ev.city, ev.state].filter(Boolean).join(', ') || undefined,
-        past: ev.date < this.today || undefined,
-      })),
+    const brief = (ev: EventInstance) => ({
+      key: ev.instanceKey,
+      title: ev.title,
+      date: withWeekday(ev.date),
+      startTime: ev.startTime || undefined,
+      city: [ev.city, ev.state].filter(Boolean).join(', ') || undefined,
+      past: ev.date < this.today || undefined,
+    })
+    if (found.length === 0) {
+      const closest = closestEvents(templates, overrides, groups, this.viewer, query, this.today)
+      return closest.length
+        ? {
+            found: [],
+            closest: closest.map(brief),
+            note: 'Nothing fits well. These are the nearest names this person can see.',
+          }
+        : { found: [], note: 'No event this person can see is anything like that.' }
     }
+    return { found: found.map(brief) }
   }
 
   async getEvent(key: string) {

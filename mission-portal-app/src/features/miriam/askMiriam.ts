@@ -1,6 +1,7 @@
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import type { MiriamResult } from '@/lib/miriam'
+import { loadNames, type LearnedName } from '@/lib/miriamMemory'
 
 /** Today on this device's calendar, for "Friday" and "9/25". */
 function localToday(): string {
@@ -11,8 +12,11 @@ function localToday(): string {
 
 /** Ask Miriam. Rejects with the function's message when it cannot be done. */
 export async function askMiriam(text: string): Promise<MiriamResult> {
-  const call = httpsCallable<{ text: string; today: string }, MiriamResult>(functions, 'askMiriam')
-  const { data } = await call({ text, today: localToday() })
+  const call = httpsCallable<{ text: string; today: string; known: LearnedName[] }, MiriamResult>(
+    functions,
+    'askMiriam'
+  )
+  const { data } = await call({ text, today: localToday(), known: await loadNames() })
   return data
 }
 
