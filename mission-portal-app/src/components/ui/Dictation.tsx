@@ -15,7 +15,7 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-spe
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
 import { joinDictation } from '@/lib/dictation'
-import { claimSpeech, ownsSpeech, releaseSpeech } from '@/lib/speechOwner'
+import { ownsSpeech, releaseSpeech, withSpeech } from '@/lib/speechOwner'
 import { listeningCue } from '@/lib/listeningCue'
 import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
 
@@ -79,16 +79,17 @@ export function DictateButton({
   }
 
   const begin = () => {
-    claimSpeech(id)
     setListening(true)
-    ExpoSpeechRecognitionModule.start({
-      lang: 'en-US',
-      interimResults: true,
-      continuous: true,
-      addsPunctuation: true,
-      requiresOnDeviceRecognition: local.current,
-      iosTaskHint: 'dictation',
-    })
+    withSpeech(id, () =>
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        continuous: true,
+        addsPunctuation: true,
+        requiresOnDeviceRecognition: local.current,
+        iosTaskHint: 'dictation',
+      })
+    )
   }
 
   useSpeechRecognitionEvent('result', (e) => {

@@ -7,6 +7,8 @@ import { collection } from 'firebase/firestore'
 import { getDocs } from '@/lib/liveFirestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
+import { canUseMiriam } from '@/lib/miriam'
+import { MiriamButton } from '@/features/miriam/MiriamButton'
 import { allInstances, todayStr } from '@/lib/events'
 import type { EventTemplate } from '@/types/events'
 import { useAuthStore } from '@/stores/authStore'
@@ -464,6 +466,7 @@ export default function AppLayout() {
           <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700', flex: 1 }}>
             {currentTitle}
           </Text>
+          {canUseMiriam(profile) ? <MiriamButton /> : null}
         </View>
 
         {/* Tabs with hidden bar — handles all routing */}

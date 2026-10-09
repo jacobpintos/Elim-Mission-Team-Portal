@@ -14,7 +14,7 @@ import {
   trailingKey,
   type SongRequest,
 } from '@/lib/songRequest'
-import { claimSpeech, ownsSpeech, releaseSpeech } from '@/lib/speechOwner'
+import { ownsSpeech, releaseSpeech, withSpeech } from '@/lib/speechOwner'
 import { orderForHints, upcomingSheetIds } from '@/lib/hintOrder'
 import { loadAliases, rememberAlias } from '@/lib/songAliases'
 import { listeningCue } from '@/lib/listeningCue'
@@ -145,25 +145,26 @@ export function SongListener({
   )
 
   const listenForWords = () => {
-    claimSpeech(SPEECH_ID)
-    ExpoSpeechRecognitionModule.start({
-      lang: 'en-US',
-      interimResults: true,
-      maxAlternatives: ALTERNATIVES,
-      requiresOnDeviceRecognition: onDevice.current,
-      continuous: true,
-      addsPunctuation: false,
-      // Steer the recogniser towards this library's titles — "Agnus Dei",
-      // not "Agnes Day" — and a key said with one: "key of D", not "KFD".
-      contextualStrings: [...KEY_HINTS, ...hintTitles].slice(0, 100),
-      iosTaskHint: 'search',
-      // Whatever else is playing — a reference track in the app, or a song
-      // in another — carries on.
-      iosCategory: {
-        category: 'playAndRecord',
-        categoryOptions: ['defaultToSpeaker', 'allowBluetooth', 'mixWithOthers'],
-      },
-    })
+    withSpeech(SPEECH_ID, () =>
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        maxAlternatives: ALTERNATIVES,
+        requiresOnDeviceRecognition: onDevice.current,
+        continuous: true,
+        addsPunctuation: false,
+        // Steer the recogniser towards this library's titles — "Agnus Dei",
+        // not "Agnes Day" — and a key said with one: "key of D", not "KFD".
+        contextualStrings: [...KEY_HINTS, ...hintTitles].slice(0, 100),
+        iosTaskHint: 'search',
+        // Whatever else is playing — a reference track in the app, or a song
+        // in another — carries on.
+        iosCategory: {
+          category: 'playAndRecord',
+          categoryOptions: ['defaultToSpeaker', 'allowBluetooth', 'mixWithOthers'],
+        },
+      })
+    )
   }
 
   const clearPending = () => {

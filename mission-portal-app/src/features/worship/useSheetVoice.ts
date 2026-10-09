@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Platform } from 'react-native'
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
-import { claimSpeech, ownsSpeech, releaseSpeech, speechFree } from '@/lib/speechOwner'
+import { ownsSpeech, releaseSpeech, speechTakeable, withSpeech } from '@/lib/speechOwner'
 import { listeningCue } from '@/lib/listeningCue'
 import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
 import { spokenWords } from '@/lib/songRequest'
@@ -92,23 +92,24 @@ export function useSheetVoice(
 
   const listen = () => {
     consumed.current = ''
-    claimSpeech(id)
-    ExpoSpeechRecognitionModule.start({
-      lang: 'en-US',
-      interimResults: true,
-      continuous: true,
-      addsPunctuation: false,
-      maxAlternatives: Platform.OS === 'web' ? 1 : 3,
-      requiresOnDeviceRecognition: onDevice.current,
-      contextualStrings: hintsRef.current.slice(0, 100),
-      iosTaskHint: 'confirmation',
-      // Alongside whatever is playing, and the microphone as it is.
-      iosCategory: {
-        category: 'playAndRecord',
-        categoryOptions: ['defaultToSpeaker', 'allowBluetooth', 'mixWithOthers'],
-        mode: 'measurement',
-      },
-    })
+    withSpeech(id, () =>
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        continuous: true,
+        addsPunctuation: false,
+        maxAlternatives: Platform.OS === 'web' ? 1 : 3,
+        requiresOnDeviceRecognition: onDevice.current,
+        contextualStrings: hintsRef.current.slice(0, 100),
+        iosTaskHint: 'confirmation',
+        // Alongside whatever is playing, and the microphone as it is.
+        iosCategory: {
+          category: 'playAndRecord',
+          categoryOptions: ['defaultToSpeaker', 'allowBluetooth', 'mixWithOthers'],
+          mode: 'measurement',
+        },
+      })
+    )
   }
 
   const stopListening = () => {
@@ -148,7 +149,7 @@ export function useSheetVoice(
   useSpeechRecognitionEvent('end', () => {
     if (!ownsSpeech(id)) return
     releaseSpeech(id)
-    if (wanted && open) setTimeout(() => wanted && speechFree() && listen(), 250)
+    if (wanted && open) setTimeout(() => wanted && speechTakeable() && listen(), 250)
   })
   useSpeechRecognitionEvent('error', (e) => {
     if (!ownsSpeech(id)) return
@@ -171,7 +172,7 @@ export function useSheetVoice(
       }
     }
     // Nothing heard for a while, or a hiccup: listen on.
-    if (wanted && open) setTimeout(() => wanted && speechFree() && listen(), 400)
+    if (wanted && open) setTimeout(() => wanted && speechTakeable() && listen(), 400)
   })
 
   // On when wanted: on opening, on moving to another song of the set, and
@@ -179,7 +180,7 @@ export function useSheetVoice(
   useEffect(() => {
     if (!on || !open) return
     const tryListen = () => {
-      if (wanted && speechFree()) listen()
+      if (wanted && speechTakeable()) listen()
     }
     const first = setTimeout(tryListen, 300)
     const every = setInterval(tryListen, 2000)
@@ -210,7 +211,7 @@ export function useSheetVoice(
       listeningCue('start')
       setOn(true)
       // At once, within the tap: a browser may not start listening later.
-      if (speechFree()) listen()
+      if (speechTakeable()) listen()
     } else {
       wanted = false
       setOn(false)

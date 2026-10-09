@@ -42,3 +42,4 @@ export {
   syncFbPageNow,
   disconnectFbPage,
 } from './facebook/admin'
+export { askMiriam } from './miriam/askMiriam'

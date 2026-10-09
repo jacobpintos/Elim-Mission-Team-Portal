@@ -11,6 +11,7 @@ import { EventFormModal } from '@/features/events/EventFormModal'
 import { AvailQueueBanner } from '@/features/events/AvailQueueBanner'
 import { isAdmin, isPublic, isGuest } from '@/lib/roles'
 import { useGroupsStore } from '@/stores/groupsStore'
+import { useMiriamStore } from '@/stores/miriamStore'
 import { FD } from '@/lib/format'
 import type { EventInstance, EventTemplate } from '@/types/events'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -78,7 +79,10 @@ export default function EventsScreen() {
   // modal is a Sheet, and a Sheet replaced in the same moment it is told to
   // open never appears. Deferring the open flag by a frame was an attempt at
   // the same problem and did not hold either, so both are gone.
-  const formOpen = showCreateModal || !!editInstance || !!editDraft
+  // A new event Miriam filled in, brought here to be checked and saved.
+  const miriamForm = useMiriamStore((s) => (admin ? s.eventForm : null))
+  const clearMiriamForm = useMiriamStore((s) => s.clearEventForm)
+  const formOpen = showCreateModal || !!editInstance || !!editDraft || !!miriamForm
 
   const openDetail = (ev: EventInstance) => {
     setSelectedEvent(ev)
@@ -557,10 +561,12 @@ export default function EventsScreen() {
           event={editInstance ?? editDraft}
           instanceKey={editInstance?.isRec ? editInstance.instanceKey : undefined}
           open={formOpen}
+          prefill={editInstance || editDraft ? null : miriamForm}
           onClose={() => {
             setShowCreateModal(false)
             setEditInstance(null)
             setEditDraft(null)
+            clearMiriamForm()
           }}
           selectedDate={!editInstance && !editDraft && selectedDay ? selectedDay : undefined}
         />

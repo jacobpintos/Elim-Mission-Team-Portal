@@ -36,6 +36,7 @@ import {
   notifyFoodSignupOpen,
 } from '@/lib/taskNotifications'
 import { newLogisticsAssignments } from '@/lib/guestItinerary'
+import type { PendingEventForm } from '@/stores/miriamStore'
 import type {
   EventTemplate,
   CarpoolCarData,
@@ -58,6 +59,8 @@ interface EventFormModalProps {
   onDelete?: () => void
   selectedDate?: string
   instanceKey?: string
+  /** A new event filled in by Miriam, opened for checking and saving. */
+  prefill?: PendingEventForm | null
 }
 
 type FormData = {
@@ -121,20 +124,30 @@ const EVENT_AUDIT_DETAIL: Record<EventAuditAction, string> = {
  * series, so the occurrence is part of the identity; a blank form is its own
  * value rather than null, so switching from a draft back to creating reloads.
  */
-function identify(event: EventTemplate | null | undefined, instanceKey?: string): string {
-  if (!event) return 'new'
+function identify(
+  event: EventTemplate | null | undefined,
+  instanceKey?: string,
+  prefill?: PendingEventForm | null
+): string {
+  if (!event) return prefill ? `miriam:${prefill.id}` : 'new'
   return `${String(event.id)}::${instanceKey ?? ''}`
 }
 
-function blankForm(event: EventTemplate | null | undefined, date: string): FormData {
+function blankForm(
+  event: EventTemplate | null | undefined,
+  date: string,
+  prefill?: PendingEventForm | null
+): FormData {
+  // Miriam's details, for a new event only.
+  const draft = event ? undefined : prefill?.draft
   return {
-    title: event?.title ?? '',
+    title: event?.title ?? draft?.title ?? '',
     date,
-    location: event?.location ?? '',
-    address: event?.address ?? '',
-    city: event?.city ?? '',
-    state: event?.state ?? '',
-    startTime: event?.startTime ?? '',
+    location: event?.location ?? draft?.location ?? '',
+    address: event?.address ?? draft?.address ?? '',
+    city: event?.city ?? draft?.city ?? '',
+    state: event?.state ?? draft?.state ?? '',
+    startTime: event?.startTime ?? draft?.startTime ?? '',
     isRec: event?.isRec ?? false,
     recur: event?.recur ?? 'weekly',
     recDay: event?.recDay ?? 0,
@@ -148,8 +161,8 @@ function blankForm(event: EventTemplate | null | undefined, date: string): FormD
     isVirtual: event?.isVirtual ?? false,
     virtualLink: event?.virtualLink ?? '',
     taskTemplateId: event?.taskTemplateId ?? '',
-    users: event?.users ?? [],
-    groups: event?.groups ?? [],
+    users: event?.users ?? draft?.users ?? [],
+    groups: event?.groups ?? draft?.groups ?? [],
   }
 }
 
@@ -160,6 +173,7 @@ export function EventFormModal({
   onDelete,
   selectedDate,
   instanceKey,
+  prefill,
 }: EventFormModalProps) {
   const colors = useThemeColors()
   const { createEvent, updateEvent, deleteEvent, setOverride } = useEventsStore()
@@ -201,11 +215,13 @@ export function EventFormModal({
 
   const initDate = event?.date
     ? isoToDisplay(event.date)
-    : selectedDate
-      ? isoToDisplay(selectedDate)
-      : ''
+    : prefill?.draft.date
+      ? isoToDisplay(prefill.draft.date)
+      : selectedDate
+        ? isoToDisplay(selectedDate)
+        : ''
 
-  const [form, setForm] = useState<FormData>(() => blankForm(event, initDate))
+  const [form, setForm] = useState<FormData>(() => blankForm(event, initDate, prefill))
   const [teams, setTeams] = useState<EventTeam[]>(event?.teams ?? [])
   const [dressCode, setDressCode] = useState<DressCodeEntry[]>(event?.dressCode ?? [])
   const [lodgingEntries, setLodgingEntries] = useState<LodgingEntry[]>(event?.lodgingEntries ?? [])
@@ -228,14 +244,14 @@ export function EventFormModal({
    * it re-renders immediately, before anything is shown, rather than painting
    * one frame of the previous event's details.
    */
-  const [loadedFor, setLoadedFor] = useState<string | null>(identify(event, instanceKey))
-  const identity = identify(event, instanceKey)
+  const [loadedFor, setLoadedFor] = useState<string | null>(identify(event, instanceKey, prefill))
+  const identity = identify(event, instanceKey, prefill)
   // Only while open: the caller clears its selection as it closes, and
   // reloading then would blank the fields in view during the closing
   // animation. Anything changed while closed is picked up on the way back in.
   if (open && identity !== loadedFor) {
     setLoadedFor(identity)
-    setForm(blankForm(event, initDate))
+    setForm(blankForm(event, initDate, prefill))
     setTeams(event?.teams ?? [])
     setDressCode(event?.dressCode ?? [])
     setLodgingEntries(event?.lodgingEntries ?? [])
@@ -777,6 +793,30 @@ export function EventFormModal({
             </XStack>
           </YStack>
         )}
+
+        {/* Filled in by Miriam: what was asked, and what she couldn't do. */}
+        {!event && prefill ? (
+          <YStack
+            backgroundColor={colors.primary + '14'}
+            borderWidth={1}
+            borderColor={colors.primary}
+            borderRadius="$3"
+            padding="$3"
+            gap="$1"
+          >
+            <Text color={colors.text} fontSize="$3" fontWeight="600">
+              Filled in by Miriam — check it before saving.
+            </Text>
+            <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
+              “{prefill.heard}”
+            </Text>
+            {prefill.notes.map((note) => (
+              <Text key={note} color={colors.text} fontSize="$2">
+                {note}
+              </Text>
+            ))}
+          </YStack>
+        ) : null}
 
         {/* Title */}
         <YStack gap="$1">
