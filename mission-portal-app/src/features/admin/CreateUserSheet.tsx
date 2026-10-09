@@ -14,9 +14,11 @@ import { db } from '@/lib/firebase'
 interface CreateUserSheetProps {
   open: boolean
   onClose: () => void
+  /** What Miriam was asked to fill in (stores/miriamStore): the password is left to them. */
+  initial?: { id: number; name: string; email: string; roles: string[] } | null
 }
 
-export function CreateUserSheet({ open, onClose }: CreateUserSheetProps) {
+export function CreateUserSheet({ open, onClose, initial }: CreateUserSheetProps) {
   const { toast } = useUIStore()
   const { profile } = useAuthStore()
 
@@ -27,6 +29,15 @@ export function CreateUserSheet({ open, onClose }: CreateUserSheetProps) {
   const [roles, setRoles] = useState<string[]>(['regular'])
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // Filled in from what Miriam was asked, once each time she asks — as
+  // EditUserSheet reloads for a different user, during render.
+  const [filledFor, setFilledFor] = useState<number | null>(null)
+  if (initial && initial.id !== filledFor) {
+    setFilledFor(initial.id)
+    setName(initial.name)
+    setEmail(initial.email)
+    if (initial.roles.length) setRoles(initial.roles)
+  }
 
   const validate = () => {
     const e: Record<string, string> = {}

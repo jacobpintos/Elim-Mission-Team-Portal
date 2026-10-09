@@ -301,6 +301,13 @@ export function MiriamButton() {
       setPending(null)
       setAnswer(prepared.message)
       speak(prepared.message)
+    } else if (prepared.kind === 'open') {
+      // A form to finish: nothing is changed until it is saved there.
+      setPending(null)
+      const said = await prepared.run()
+      setAnswer(said)
+      speak(said)
+      if (name === 'create_user' && !anyOverlayOpen()) router.push('/admin/users' as never)
     } else {
       setPending({ name, prepared })
       setAnswer(prepared.title)
@@ -724,7 +731,14 @@ export function MiriamButton() {
                       <Pressable
                         onPress={confirmAction}
                         accessibilityRole="button"
-                        style={[styles.small, { backgroundColor: colors.primary }]}
+                        style={[
+                          styles.small,
+                          {
+                            backgroundColor: pending.prepared.destructive
+                              ? '#c0392b'
+                              : colors.primary,
+                          },
+                        ]}
                       >
                         <Text color="white" fontWeight="700" fontSize="$3">
                           {pending.prepared.confirm}

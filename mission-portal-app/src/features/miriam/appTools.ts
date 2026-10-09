@@ -43,6 +43,32 @@ export type AppToolName =
   | 'set_availability'
   | 'sign_up_food'
   | 'change_notification'
+  | 'create_user'
+  | 'update_user'
+  | 'reset_user_password'
+  | 'delete_user'
+  | 'create_group'
+  | 'update_group'
+  | 'delete_group'
+  | 'create_team'
+  | 'update_team'
+  | 'delete_team'
+  | 'delete_task_template'
+
+/** Admins' changes: offered to admins only (./actions.ts checks again). */
+const ADMIN_ACTIONS: AppToolName[] = [
+  'create_user',
+  'update_user',
+  'reset_user_password',
+  'delete_user',
+  'create_group',
+  'update_group',
+  'delete_group',
+  'create_team',
+  'update_team',
+  'delete_team',
+  'delete_task_template',
+]
 
 /** The lookups — and changes — this person's screens allow. */
 export function appToolsFor(profile: UserProfile | null): AppToolName[] {
@@ -57,7 +83,7 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   const admin = isAdmin(profile)
   const guest = isGuest(profile) && !admin
   if (canUseMessages(profile)) tools.push('send_message')
-  if (admin) tools.push('post_announcement')
+  if (admin) tools.push('post_announcement', ...ADMIN_ACTIONS)
   if (tabs.includes('assignments') && !guest) tools.push('set_task_status')
   if (tabs.includes('events')) tools.push('set_availability')
   if (tabs.includes('events') && !guest) tools.push('sign_up_food')

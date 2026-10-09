@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { foodItemFor, notificationSwitch } from './miriamActions'
+import {
+  foodItemFor,
+  membersAfter,
+  notificationSwitch,
+  rolesAfter,
+  teamsAfter,
+} from './miriamActions'
 import { ACTIONS, APP_TOOLS, appToolsFrom } from '../../functions/src/miriam/plan'
 
 describe('which food item was meant', () => {
@@ -35,6 +41,56 @@ describe('which notification switch', () => {
 describe('the changes Miriam can be asked for', () => {
   it('are each defined, and offered only by name', () => {
     for (const a of ACTIONS) expect(APP_TOOLS[a].name).toBe(a)
-    expect(appToolsFrom(['send_message', 'delete_user'])).toEqual(['send_message'])
+    expect(appToolsFrom(['send_message', 'drop_database'])).toEqual(['send_message'])
+  })
+})
+
+describe('admins’ changes, worked out', () => {
+  const ROLES = ['admin', 'security', 'worship', 'regular', 'intern', 'guest', 'public'] as const
+
+  it('adds and takes away roles, only ones that exist', () => {
+    expect(rolesAfter(['regular'], ['worship', 'wizard'], [], ROLES)).toEqual([
+      'regular',
+      'worship',
+    ])
+    expect(rolesAfter(['regular', 'worship'], [], ['worship'], ROLES)).toEqual(['regular'])
+    expect(rolesAfter(['regular'], [], ['regular'], ROLES)).toEqual([])
+  })
+
+  it('adds and takes people out of a group, each once', () => {
+    expect(membersAfter(['a', 'b'], ['b', 'c'], ['a'])).toEqual(['b', 'c'])
+  })
+
+  it('changes the common teams as the screen keeps them', () => {
+    const teams = [
+      { name: 'Production', members: ['a'] },
+      { name: 'Hospitality', members: ['b'] },
+    ]
+    expect(teamsAfter(teams, { kind: 'add', name: 'Media', members: ['c'] })).toHaveLength(3)
+    expect(teamsAfter(teams, { kind: 'add', name: 'production', members: [] })).toBe(
+      'There is already a team called production.'
+    )
+    expect(
+      teamsAfter(teams, {
+        kind: 'update',
+        team: 'hospitality',
+        newName: '',
+        add: ['c'],
+        remove: ['b'],
+      })
+    ).toEqual([teams[0], { name: 'Hospitality', members: ['c'] }])
+    expect(
+      teamsAfter(teams, {
+        kind: 'update',
+        team: 'Hospitality',
+        newName: 'Production',
+        add: [],
+        remove: [],
+      })
+    ).toBe('There is already a team called Production.')
+    expect(teamsAfter(teams, { kind: 'remove', team: 'Production' })).toEqual([teams[1]])
+    expect(teamsAfter(teams, { kind: 'remove', team: 'Sound' })).toBe(
+      'There is no team called Sound.'
+    )
   })
 })

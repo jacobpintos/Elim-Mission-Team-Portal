@@ -5,6 +5,7 @@ import { useUsersStore } from '@/stores/usersStore'
 import { useAuthStore } from '@/stores/authStore'
 import { UserCard } from '@/features/admin/UserCard'
 import { CreateUserSheet } from '@/features/admin/CreateUserSheet'
+import { useMiriamStore, type PendingUserForm } from '@/stores/miriamStore'
 import { EditUserSheet } from '@/features/admin/EditUserSheet'
 import { AuthAuditSheet } from '@/features/admin/AuthAuditSheet'
 import { PendingDeletionCard, type PendingDeletion } from '@/features/admin/PendingDeletionCard'
@@ -25,6 +26,18 @@ export default function AdminUsers() {
 
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
+  // A new account's form Miriam was asked to fill in: opened with it, once.
+  const miriamForm = useMiriamStore((s) => s.userForm)
+  const clearMiriamForm = useMiriamStore((s) => s.clearUserForm)
+  const [createFrom, setCreateFrom] = useState<PendingUserForm | null>(null)
+  if (miriamForm && miriamForm.id !== createFrom?.id) {
+    setCreateFrom(miriamForm)
+    setShowCreate(true)
+  }
+  // Taken: not offered again on coming back to this screen.
+  useEffect(() => {
+    if (miriamForm) clearMiriamForm()
+  }, [miriamForm, clearMiriamForm])
   const [showAudit, setShowAudit] = useState(false)
   // Auth Audit lists every login in the project, mints accounts with a known
   // password and deletes them in bulk. The callables behind it refuse anyone
@@ -240,7 +253,11 @@ export default function AdminUsers() {
       />
 
       {owner ? <AuthAuditSheet open={showAudit} onClose={() => setShowAudit(false)} /> : null}
-      <CreateUserSheet open={showCreate} onClose={() => setShowCreate(false)} />
+      <CreateUserSheet
+        open={showCreate}
+        initial={createFrom}
+        onClose={() => setShowCreate(false)}
+      />
       {/* No key: remounting this on each open gave the dialog no closed state
           to animate from, and it never appeared. It resets itself instead. */}
       <EditUserSheet

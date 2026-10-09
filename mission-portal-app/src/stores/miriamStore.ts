@@ -17,14 +17,28 @@ export interface PendingEventForm {
   notes: string[]
 }
 
+/** A new account's form, filled in by Miriam, for an admin to give a password and save. */
+export interface PendingUserForm {
+  id: number
+  name: string
+  email: string
+  roles: string[]
+}
+
 interface MiriamStore {
   eventForm: PendingEventForm | null
   offerEventForm: (form: Omit<PendingEventForm, 'id'>) => void
   clearEventForm: () => void
+  userForm: PendingUserForm | null
+  offerUserForm: (form: Omit<PendingUserForm, 'id'>) => void
+  clearUserForm: () => void
 }
 
 export const useMiriamStore = create<MiriamStore>((set) => ({
   eventForm: null,
   offerEventForm: (form) => set({ eventForm: { ...form, id: Date.now() } }),
   clearEventForm: () => set({ eventForm: null }),
+  userForm: null,
+  offerUserForm: (form) => set({ userForm: { ...form, id: Date.now() } }),
+  clearUserForm: () => set({ userForm: null }),
 }))

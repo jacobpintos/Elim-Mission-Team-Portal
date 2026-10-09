@@ -58,3 +58,57 @@ export function notificationSwitch(
     label: `${label} (${channel === 'both' ? 'push and email' : channel})`,
   }
 }
+
+/** Who is in it after adding and taking out — each once, the order kept. */
+export function membersAfter(before: string[], add: string[], remove: string[]): string[] {
+  return [...new Set([...before.map(String).filter((m) => !remove.includes(m)), ...add])]
+}
+
+/** A person's roles after the change, only roles that exist; [] means none left. */
+export function rolesAfter(
+  before: string[],
+  add: string[],
+  remove: string[],
+  known: readonly string[]
+): string[] {
+  return membersAfter(
+    before,
+    add.filter((r) => known.includes(r)),
+    remove
+  )
+}
+
+export interface Team {
+  name: string
+  members: string[]
+}
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+
+/** The common teams with one changed, or why it can't be: as the Common Teams screen keeps them. */
+export function teamsAfter(
+  teams: Team[],
+  change:
+    | { kind: 'add'; name: string; members: string[] }
+    | { kind: 'update'; team: string; newName: string; add: string[]; remove: string[] }
+    | { kind: 'remove'; team: string }
+): Team[] | string {
+  if (change.kind === 'add') {
+    return teams.some((t) => same(t.name, change.name))
+      ? `There is already a team called ${change.name}.`
+      : [...teams, { name: change.name, members: change.members }]
+  }
+  const at = teams.findIndex((t) => same(t.name, change.team))
+  if (at < 0) return `There is no team called ${change.team}.`
+  if (change.kind === 'remove') return teams.filter((_, i) => i !== at)
+  if (change.newName && teams.some((t, i) => i !== at && same(t.name, change.newName))) {
+    return `There is already a team called ${change.newName}.`
+  }
+  return teams.map((t, i) =>
+    i === at
+      ? {
+          name: change.newName || t.name,
+          members: membersAfter(t.members, change.add, change.remove),
+        }
+      : t
+  )
+}

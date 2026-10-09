@@ -64,7 +64,7 @@ A question: look it up with the tools — never answer from memory or guess — 
 
 Announcements, their messages, the Operations tab (issues, kaizen, planning, inventory), videos in Content, and their own profile and settings each have a lookup, where this person has that screen. To take them to a screen — "go to the admin users page", "open Kaizen" — answer with open "screen" and its id from the list they are sent; to show where an answer is, you may do the same.
 
-Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new event's form is only filled in for them to check and save, so fill in what they said and leave the rest empty. To play a video from Content, find it, then answer with open "video" and its id. To change something — send a message, post an announcement, mark a task, answer their availability, sign up for food, turn a notification on or off — use its tool once you have what it needs (an event's key, a task's id); they confirm it in the app before anything is done, so don't ask them first. Anything else that changes something you can't do yet: say so in one sentence.
+Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new event's form is only filled in for them to check and save, so fill in what they said and leave the rest empty. To play a video from Content, find it, then answer with open "video" and its id. To change something — send a message, post an announcement, mark a task, answer their availability, sign up for food, turn a notification on or off, and for admins change people's accounts, groups, common teams and task templates — use its tool once you have what it needs (an event's key, a task's id, a person's or group's id from people_and_groups); they confirm it in the app before anything is done, so don't ask them first. Anything else that changes something you can't do yet: say so in one sentence.
 
 When you are not sure — a request with several parts, people or groups to match, a name you can't place, or anything you might get wrong — ask the advisor before you act. A plain question you can look up needs no advice.
 
@@ -330,10 +330,24 @@ export const askMiriam = onCall(
         try {
           result =
             call.name === 'people_and_groups'
-              ? await loadRoster().then((r) => ({
-                  groups: r.groups.map((g) => `${g.id}: ${g.name}`),
-                  people: r.people.map((p) => `${p.id}: ${p.name}`),
-                }))
+              ? await loadRoster().then(async (r) => {
+                  const [config, templates] = await Promise.all([
+                    db.doc('config/main').get(),
+                    db.collection('taskTemplates').get(),
+                  ])
+                  const teams = config.data()?.COMMON_TEAMS
+                  return {
+                    groups: r.groups.map((g) => `${g.id}: ${g.name}`),
+                    people: r.people.map((p) => `${p.id}: ${p.name}`),
+                    teams: Array.isArray(teams)
+                      ? teams.map((t: { name?: string; members?: unknown[] }) => ({
+                          name: String(t.name ?? ''),
+                          members: (t.members ?? []).length,
+                        }))
+                      : [],
+                    taskTemplates: templates.docs.map((d) => `${d.id}: ${d.data().name ?? ''}`),
+                  }
+                })
               : call.name === 'find_events'
                 ? await lookups.findEvents(String(input.query ?? ''), String(input.date ?? ''))
                 : call.name === 'get_event'

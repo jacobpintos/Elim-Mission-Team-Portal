@@ -1,11 +1,32 @@
-import { collection, doc, query, setDoc, updateDoc, where } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  query,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
+import { audit } from '@/lib/audit'
+import { isOwner } from '@/lib/owner'
+import { ALL_ROLES } from '@/features/admin/RoleCheckboxes'
+import { useMiriamStore } from '@/stores/miriamStore'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
 import { allInstances } from '@/lib/events'
 import { AVAIL_LABELS } from '@/lib/availability'
 import { isAdmin, isGuest } from '@/lib/roles'
 import { roomName, roomsFor } from '@/lib/miriamAppData'
-import { foodItemFor, notificationSwitch } from '@/lib/miriamActions'
+import {
+  foodItemFor,
+  membersAfter,
+  notificationSwitch,
+  rolesAfter,
+  teamsAfter,
+} from '@/lib/miriamActions'
 import { FD } from '@/lib/format'
 import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -13,7 +34,14 @@ import { sendMessageAs } from '@/stores/messagesStore'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useEventsStore } from '@/stores/eventsStore'
-import type { AvailResponse, EventInstance, EventTemplate, Room, Task } from '@/types/events'
+import type {
+  AvailResponse,
+  CommonTeam,
+  EventInstance,
+  EventTemplate,
+  Room,
+  Task,
+} from '@/types/events'
 import type { UserProfile } from '@/types/user'
 
 /**
@@ -30,9 +58,13 @@ export type Prepared =
       /** The details, each a line: the message itself, the date. */
       details: string[]
       confirm: string
+      /** Deleting: shown in red. */
+      destructive?: boolean
       /** Does it; what to say when it is done. */
       run: () => Promise<string>
     }
+  /** Changes nothing — opens a form to finish — so done straight away. */
+  | { kind: 'open'; run: () => Promise<string> }
   /** More than one fits: each to pick from, worked out in full. */
   | { kind: 'choose'; title: string; options: { label: string; input: Record<string, unknown> }[] }
   | { kind: 'cannot'; message: string }
@@ -243,6 +275,370 @@ async function changeNotification(profile: UserProfile, input: Record<string, un
   } satisfies Prepared
 }
 
+// --- Admins' changes: each as its admin screen makes it, audit entry and all.
+
+const adminOnly = (profile: UserProfile) =>
+  isAdmin(profile) ? null : cannot('Only admins can do that.')
+const by = (profile: UserProfile) => profile.displayName ?? ''
+const idList = (v: unknown) => (Array.isArray(v) ? v.map(String).filter(Boolean) : [])
+const ROLE_SET = new Set<string>(ALL_ROLES)
+
+async function personById(id: string): Promise<UserProfile | null> {
+  if (!id) return null
+  const snap = await getDoc(doc(db, 'users', id))
+  return snap.exists() ? ({ ...(snap.data() as UserProfile), uid: snap.id } as UserProfile) : null
+}
+const listNames = (uids: string[]) => {
+  const who = names()
+  return uids.map((u) => who.get(u) ?? 'someone').join(', ')
+}
+
+async function createUser(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const roles = idList(input.roles).filter((r) => ROLE_SET.has(r))
+  return {
+    kind: 'open',
+    run: async () => {
+      useMiriamStore.getState().offerUserForm({
+        name: String(input.name ?? '').trim(),
+        email: String(input.email ?? '').trim(),
+        roles,
+      })
+      return 'Here’s the form, filled in — give them a first password, then save.'
+    },
+  } satisfies Prepared
+}
+
+async function updateUser(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const user = await personById(String(input.person_id ?? ''))
+  if (!user) return cannot('I couldn’t find that person.')
+  if (isOwner(user) && !isOwner(profile)) return cannot('The owner’s account is theirs to change.')
+  const name = String(input.name ?? '').trim() || user.displayName
+  const email = String(input.email ?? '').trim() || user.email
+  const add = idList(input.add_roles).filter((r) => ROLE_SET.has(r))
+  const remove = idList(input.remove_roles)
+  const roles = rolesAfter(user.roles ?? [], add, remove, ALL_ROLES)
+  if (roles.length === 0) return cannot('Everyone needs at least one role.')
+  if (String(user.uid) === String(profile.uid) && !roles.includes('admin')) {
+    return cannot('Taking away your own admin role is done on the screen.')
+  }
+  const emailChanged = email.toLowerCase() !== (user.email ?? '').toLowerCase()
+  const details = [
+    ...(name !== user.displayName ? [`Name: ${user.displayName} → ${name}`] : []),
+    ...(emailChanged ? [`Email: ${user.email} → ${email}`] : []),
+    ...(roles.join() !== (user.roles ?? []).join() ? [`Roles: ${roles.join(', ')}`] : []),
+  ]
+  if (details.length === 0) return cannot(`${user.displayName} already has that.`)
+  return {
+    kind: 'ready',
+    title: `Change ${user.displayName}’s account?`,
+    details,
+    confirm: 'Save',
+    run: async () => {
+      if (emailChanged) {
+        await httpsCallable(functions, 'updateUserEmail')({ uid: user.uid, newEmail: email })
+      }
+      await updateDoc(doc(db, 'users', user.uid), { displayName: name, email, roles })
+      await audit(
+        'user.updated',
+        `Updated user ${user.email} → name: ${name}, email: ${email}, roles: ${roles.join(', ')}`,
+        by(profile)
+      )
+      return 'Saved.'
+    },
+  } satisfies Prepared
+}
+
+async function resetPassword(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const user = await personById(String(input.person_id ?? ''))
+  if (!user) return cannot('I couldn’t find that person.')
+  // As EditUserSheet: the owner's, by no one but the owner.
+  if (isOwner(user) && String(user.uid) !== String(profile.uid)) {
+    return cannot('The owner’s password can only be reset by the owner.')
+  }
+  return {
+    kind: 'ready',
+    title: `Reset ${user.displayName}’s password?`,
+    details: ['It will be the temporary one, 12345678, until they change it.'],
+    confirm: 'Reset',
+    destructive: true,
+    run: async () => {
+      await httpsCallable(functions, 'resetUserPassword')({ uid: user.uid })
+      await audit('user.passwordReset', `Reset password for ${user.email}`, by(profile))
+      return 'Done — their password is reset to the temporary one.'
+    },
+  } satisfies Prepared
+}
+
+async function deleteUser(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const user = await personById(String(input.person_id ?? ''))
+  if (!user) return cannot('I couldn’t find that person.')
+  if (String(user.uid) === String(profile.uid))
+    return cannot('You can’t delete your own account here.')
+  if (isOwner(user)) return cannot('The owner’s account can’t be deleted.')
+  const config = doc(db, 'config', 'main')
+  const pending = async () =>
+    ((await getDoc(config)).data()?.pendingDel ?? []) as {
+      uid: string
+      name: string
+      requestedBy: string
+      approvals: string[]
+      totalAdmins: number
+    }[]
+  const remove = async () => {
+    // As the User Management screen: the profile, and out of every group.
+    const batch = writeBatch(db)
+    batch.delete(doc(db, 'users', user.uid))
+    for (const g of (await getDocs(collection(db, 'groups'))).docs) {
+      const members: string[] = g.data().members ?? []
+      if (members.includes(user.uid)) {
+        batch.update(g.ref, { members: members.filter((m) => m !== user.uid) })
+      }
+    }
+    await batch.commit()
+    await updateDoc(config, { pendingDel: (await pending()).filter((d) => d.uid !== user.uid) })
+    await audit('user.deleted', `Deleted user ${user.email}`, by(profile))
+  }
+  if (!user.roles?.includes('admin')) {
+    return {
+      kind: 'ready',
+      title: `Delete ${user.displayName}’s account?`,
+      details: [`${user.email} — this can’t be undone.`],
+      confirm: 'Delete',
+      destructive: true,
+      run: async () => {
+        await remove()
+        return `${user.displayName} is deleted.`
+      },
+    } satisfies Prepared
+  }
+  // An admin: the other admins approve it first, as on the screen.
+  const otherAdmins = (
+    await getDocs(query(collection(db, 'users'), where('roles', 'array-contains', 'admin')))
+  ).docs.filter((d) => d.id !== user.uid).length
+  const needed = Math.max(otherAdmins, 1)
+  if ((await pending()).some((d) => d.uid === user.uid)) {
+    return cannot(`A request to delete ${user.displayName} is already waiting for approval.`)
+  }
+  return {
+    kind: 'ready',
+    title: `Ask the admins to approve deleting ${user.displayName}?`,
+    details: [
+      `${user.displayName} is an admin: ${needed} admin approval${needed === 1 ? '' : 's'} needed, yours counted.`,
+    ],
+    confirm: 'Ask',
+    destructive: true,
+    run: async () => {
+      const request = {
+        uid: user.uid,
+        name: user.displayName,
+        requestedBy: by(profile),
+        approvals: [String(profile.uid)],
+        totalAdmins: needed,
+      }
+      await updateDoc(config, { pendingDel: [...(await pending()), request] })
+      await audit(
+        'user.deletionRequested',
+        `Requested deletion of admin ${user.email}`,
+        by(profile)
+      )
+      if (request.approvals.length >= needed) {
+        await remove()
+        return `${user.displayName} is deleted.`
+      }
+      return 'The request is in, for the other admins to approve.'
+    },
+  } satisfies Prepared
+}
+
+async function createGroup(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const name = String(input.name ?? '').trim()
+  if (!name) return cannot('A group needs a name.')
+  const members = idList(input.people_ids)
+  return {
+    kind: 'ready',
+    title: `Make the group “${name}”?`,
+    details: members.length ? [listNames(members)] : ['No one in it yet.'],
+    confirm: 'Make it',
+    run: async () => {
+      await addDoc(collection(db, 'groups'), { name, members, createdAt: new Date() })
+      await audit(
+        'group.created',
+        `Created group "${name}" with ${members.length} members`,
+        by(profile)
+      )
+      return 'Made.'
+    },
+  } satisfies Prepared
+}
+
+async function updateGroup(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const snap = await getDoc(doc(db, 'groups', String(input.group_id ?? '') || '-'))
+  if (!snap.exists()) return cannot('I couldn’t find that group.')
+  const group = snap.data() as { name: string; members?: string[] }
+  const name = String(input.new_name ?? '').trim() || group.name
+  if (group.name === 'All' && name !== 'All') return cannot('The All group keeps its name.')
+  const add = idList(input.add_people_ids)
+  const remove = idList(input.remove_people_ids)
+  const before = (group.members ?? []).map(String)
+  const members = membersAfter(before, add, remove)
+  const added = members.filter((m) => !before.includes(m))
+  const taken = before.filter((m) => !members.includes(m))
+  const details = [
+    ...(name !== group.name ? [`Name: ${group.name} → ${name}`] : []),
+    ...(added.length ? [`Add: ${listNames(added)}`] : []),
+    ...(taken.length ? [`Take out: ${listNames(taken)}`] : []),
+  ]
+  if (details.length === 0) return cannot('The group already has that.')
+  return {
+    kind: 'ready',
+    title: `Change the group “${group.name}”?`,
+    details,
+    confirm: 'Save',
+    run: async () => {
+      await updateDoc(snap.ref, { name, members, updatedAt: new Date() })
+      await audit(
+        'group.updated',
+        `Updated group "${group.name}" → "${name}", ${members.length} members`,
+        by(profile)
+      )
+      return 'Saved.'
+    },
+  } satisfies Prepared
+}
+
+async function deleteGroup(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const snap = await getDoc(doc(db, 'groups', String(input.group_id ?? '') || '-'))
+  if (!snap.exists()) return cannot('I couldn’t find that group.')
+  const group = snap.data() as { name: string; members?: string[] }
+  if (group.name === 'All') return cannot('The All group can’t be deleted.')
+  return {
+    kind: 'ready',
+    title: `Delete the group “${group.name}”?`,
+    details: [`${(group.members ?? []).length} people are in it — this can’t be undone.`],
+    confirm: 'Delete',
+    destructive: true,
+    run: async () => {
+      await deleteDoc(snap.ref)
+      await audit('group.deleted', `Deleted group "${group.name}"`, by(profile))
+      return 'Deleted.'
+    },
+  } satisfies Prepared
+}
+
+/** The common teams, and a change to them saved as the Common Teams screen saves it. */
+async function teamsChange(
+  profile: UserProfile,
+  change: (teams: CommonTeam[]) => CommonTeam[] | string,
+  title: string,
+  details: string[],
+  confirm: string,
+  destructive = false
+): Promise<Prepared> {
+  const no = adminOnly(profile)
+  if (no) return no
+  const config = doc(db, 'config', 'main')
+  const current = async () => ((await getDoc(config)).data()?.COMMON_TEAMS ?? []) as CommonTeam[]
+  const checked = change(await current())
+  if (typeof checked === 'string') return cannot(checked)
+  return {
+    kind: 'ready',
+    title,
+    details,
+    confirm,
+    destructive,
+    run: async () => {
+      // Worked out again from what is saved now, in case it changed since.
+      const next = change(await current())
+      if (typeof next === 'string') return next
+      await updateDoc(config, { COMMON_TEAMS: next })
+      await audit(
+        'teams.updated',
+        `Updated common teams: ${next.map((t) => t.name).join(', ')}`,
+        by(profile)
+      )
+      return 'Saved.'
+    },
+  }
+}
+async function createTeam(profile: UserProfile, input: Record<string, unknown>) {
+  const name = String(input.name ?? '').trim()
+  const members = idList(input.people_ids)
+  if (!name) return cannot('A team needs a name.')
+  return teamsChange(
+    profile,
+    (teams) => teamsAfter(teams, { kind: 'add', name, members }),
+    `Add the team “${name}”?`,
+    members.length ? [listNames(members)] : ['No one on it yet.'],
+    'Add it'
+  )
+}
+
+async function updateTeam(profile: UserProfile, input: Record<string, unknown>) {
+  const team = String(input.team ?? '')
+  const newName = String(input.new_name ?? '').trim()
+  const add = idList(input.add_people_ids)
+  const remove = idList(input.remove_people_ids)
+  const details = [
+    ...(newName ? [`Name: ${team} → ${newName}`] : []),
+    ...(add.length ? [`Add: ${listNames(add)}`] : []),
+    ...(remove.length ? [`Take off: ${listNames(remove)}`] : []),
+  ]
+  if (details.length === 0) return cannot('Nothing to change on it.')
+  return teamsChange(
+    profile,
+    (teams) => teamsAfter(teams, { kind: 'update', team, newName, add, remove }),
+    `Change the team “${team}”?`,
+    details,
+    'Save'
+  )
+}
+
+async function deleteTeam(profile: UserProfile, input: Record<string, unknown>) {
+  const team = String(input.team ?? '')
+  return teamsChange(
+    profile,
+    (teams) => teamsAfter(teams, { kind: 'remove', team }),
+    `Remove the team “${team}”?`,
+    ['This can’t be undone.'],
+    'Remove',
+    true
+  )
+}
+
+async function deleteTaskTemplate(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const snap = await getDoc(doc(db, 'taskTemplates', String(input.template_id ?? '') || '-'))
+  if (!snap.exists()) return cannot('I couldn’t find that task template.')
+  const name = String(snap.data()?.name ?? 'that template')
+  return {
+    kind: 'ready',
+    title: `Delete the task template “${name}”?`,
+    details: ['This can’t be undone.'],
+    confirm: 'Delete',
+    destructive: true,
+    run: async () => {
+      await deleteDoc(snap.ref)
+      await audit('taskTemplate.deleted', `Deleted task template "${name}"`, by(profile))
+      return 'Deleted.'
+    },
+  } satisfies Prepared
+}
+
 const ACTIONS: Record<
   string,
   (profile: UserProfile, input: Record<string, unknown>) => Promise<Prepared>
@@ -253,6 +649,17 @@ const ACTIONS: Record<
   set_availability: setAvailability,
   sign_up_food: signUpFood,
   change_notification: changeNotification,
+  create_user: createUser,
+  update_user: updateUser,
+  reset_user_password: resetPassword,
+  delete_user: deleteUser,
+  create_group: createGroup,
+  update_group: updateGroup,
+  delete_group: deleteGroup,
+  create_team: createTeam,
+  update_team: updateTeam,
+  delete_team: deleteTeam,
+  delete_task_template: deleteTaskTemplate,
 }
 
 /** A change asked for, worked out into exactly what will be done. Never throws. */

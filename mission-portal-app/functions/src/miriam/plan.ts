@@ -125,8 +125,8 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
     tool: {
       name: 'people_and_groups',
       description:
-        'The groups and people a new event can be assigned to, with their ids. ' +
-        'Call it before open_event_form when the request names any people or groups.',
+        'The people, groups, common teams and task templates, with their ids. ' +
+        'Call it before open_event_form, or any admin change, that names any of them.',
       strict: true,
       input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
     },
@@ -281,8 +281,31 @@ export type ActionName =
   | 'set_availability'
   | 'sign_up_food'
   | 'change_notification'
+  // Admins'
+  | 'create_user'
+  | 'update_user'
+  | 'reset_user_password'
+  | 'delete_user'
+  | 'create_group'
+  | 'update_group'
+  | 'delete_group'
+  | 'create_team'
+  | 'update_team'
+  | 'delete_team'
+  | 'delete_task_template'
 
 export const ACTIONS: readonly ActionName[] = [
+  'create_user',
+  'update_user',
+  'reset_user_password',
+  'delete_user',
+  'create_group',
+  'update_group',
+  'delete_group',
+  'create_team',
+  'update_team',
+  'delete_team',
+  'delete_task_template',
   'send_message',
   'post_announcement',
   'set_task_status',
@@ -323,6 +346,15 @@ const NOTIFICATIONS = [
   'securityReportUrgent',
 ]
 const ACTS = ' Only when they plainly tell you to; they will be shown it to confirm first.'
+const ADMINS = ' Admins only. Ids from people_and_groups.' + ACTS
+const ROLES = ['admin', 'security', 'worship', 'regular', 'intern', 'guest', 'public']
+const ids = (description: string) => ({ type: 'array', items: { type: 'string' }, description })
+const objectOf = (properties: Record<string, unknown>) => ({
+  type: 'object',
+  properties,
+  required: Object.keys(properties),
+  additionalProperties: false,
+})
 
 export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { name: AppToolName }> =
   {
@@ -479,6 +511,94 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
         required: ['notification', 'channel', 'on'],
         additionalProperties: false,
       },
+    },
+    create_user: {
+      name: 'create_user',
+      description:
+        'Open the form for a new account, filled in, for them to set its first password and save (admins only).',
+      strict: true,
+      input_schema: objectOf({
+        name: { type: 'string' },
+        email: { type: 'string', description: '"" if not said.' },
+        roles: { type: 'array', items: { type: 'string', enum: ROLES } },
+      }),
+    },
+    update_user: {
+      name: 'update_user',
+      description: 'Change a person’s name, email or roles.' + ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        person_id: { type: 'string' },
+        name: { type: 'string', description: 'The new name; "" to keep it.' },
+        email: { type: 'string', description: 'The new email; "" to keep it.' },
+        add_roles: { type: 'array', items: { type: 'string', enum: ROLES } },
+        remove_roles: { type: 'array', items: { type: 'string', enum: ROLES } },
+      }),
+    },
+    reset_user_password: {
+      name: 'reset_user_password',
+      description: 'Reset a person’s password to the temporary one.' + ADMINS,
+      strict: true,
+      input_schema: objectOf({ person_id: { type: 'string' } }),
+    },
+    delete_user: {
+      name: 'delete_user',
+      description:
+        'Delete a person’s account; for an admin, ask the other admins to approve it.' + ADMINS,
+      strict: true,
+      input_schema: objectOf({ person_id: { type: 'string' } }),
+    },
+    create_group: {
+      name: 'create_group',
+      description: 'Make a group of people.' + ADMINS,
+      strict: true,
+      input_schema: objectOf({ name: { type: 'string' }, people_ids: ids('Who is in it.') }),
+    },
+    update_group: {
+      name: 'update_group',
+      description: 'Rename a group, or add or take people out of it.' + ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        group_id: { type: 'string' },
+        new_name: { type: 'string', description: '"" to keep it.' },
+        add_people_ids: ids('People to add.'),
+        remove_people_ids: ids('People to take out.'),
+      }),
+    },
+    delete_group: {
+      name: 'delete_group',
+      description: 'Delete a group.' + ADMINS,
+      strict: true,
+      input_schema: objectOf({ group_id: { type: 'string' } }),
+    },
+    create_team: {
+      name: 'create_team',
+      description: 'Add a common team (Admin — Common Teams).' + ADMINS,
+      strict: true,
+      input_schema: objectOf({ name: { type: 'string' }, people_ids: ids('Who is on it.') }),
+    },
+    update_team: {
+      name: 'update_team',
+      description: 'Rename a common team, or add or take people off it.' + ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        team: { type: 'string', description: 'Its name, from people_and_groups.' },
+        new_name: { type: 'string', description: '"" to keep it.' },
+        add_people_ids: ids('People to add.'),
+        remove_people_ids: ids('People to take off.'),
+      }),
+    },
+    delete_team: {
+      name: 'delete_team',
+      description: 'Remove a common team.' + ADMINS,
+      strict: true,
+      input_schema: objectOf({ team: { type: 'string', description: 'Its name.' } }),
+    },
+    delete_task_template: {
+      name: 'delete_task_template',
+      description: 'Delete a task template. Making or changing one is done on its screen.' + ADMINS,
+      strict: true,
+      input_schema: objectOf({ template_id: { type: 'string' } }),
     },
     read_settings: {
       name: 'read_settings',
