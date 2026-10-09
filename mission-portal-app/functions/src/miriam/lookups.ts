@@ -1,4 +1,3 @@
-import type { Firestore } from 'firebase-admin/firestore'
 import {
   availabilityReport,
   canSeeTask,
@@ -24,6 +23,26 @@ import {
   type Viewer,
 } from './data'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Fields = Record<string, any>
+interface Snapshot {
+  id: string
+  data(): Fields | undefined
+}
+/** A document from a collection's listing: always has its fields. */
+interface Listed {
+  id: string
+  data(): Fields
+}
+/**
+ * The little of Firestore the lookups use — admin.firestore() is one — so
+ * this file, and the app's tests of it, need nothing from firebase-admin.
+ */
+export interface Db {
+  collection(name: string): { get(): Promise<{ docs: Listed[] }> }
+  doc(path: string): { get(): Promise<Snapshot> }
+}
+
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 /** "Friday, 2026-09-25": the day said with the date, as it will be spoken. */
 export const withWeekday = (d: string) =>
@@ -44,7 +63,7 @@ export class Lookups {
   private tasksP?: Promise<Task[]>
 
   constructor(
-    private db: Firestore,
+    private db: Db,
     private viewer: Viewer,
     private today: string
   ) {}
@@ -122,7 +141,7 @@ export class Lookups {
       this.db.doc(`avail/${availKey(ev)}`).get(),
       ev.isRec ? this.db.doc(`avail/${seriesAvailKey(ev.templateId)}`).get() : null,
     ])
-    const responses = (s: FirebaseFirestore.DocumentSnapshot | null) =>
+    const responses = (s: Snapshot | null) =>
       (s?.data()?.responses ?? {}) as Record<string, AvailResponse>
     return { instance: responses(inst), series: responses(series) }
   }
