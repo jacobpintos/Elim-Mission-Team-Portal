@@ -197,10 +197,11 @@ export function parseSheetCommand<T extends { id: string | number; title: string
     }
   }
 
-  // Another song now: "open Above All in E", "switch to Way Maker".
+  // Another song now: "open Above All in E", "switch to Way Maker" — and a
+  // title that itself begins with the word: "Open the Eyes of My Heart".
   for (const p of [...OPEN_BEFORE].sort((a, b) => b.length - a.length)) {
     if (startsWith(raw, p)) {
-      const request = asSong(raw.slice(p.length))
+      const request = asSong(raw.slice(p.length)) ?? asSong(raw)
       if (request) return { type: 'open', request }
     }
   }

@@ -38,7 +38,7 @@ function localToday(): string {
  * How long a song found without being picked waits before it opens —
  * "Opening Breathe in D…" — for a mishearing to be caught and cancelled.
  */
-const CONFIRM_MS = 1500
+const CONFIRM_MS = 700
 /** Said while a song is about to open: don't. */
 const CANCEL_WORDS = /\b(cancel|no|nope|wait|stop|wrong)\b/i
 /**
@@ -53,7 +53,7 @@ const LISTEN_MS = 45_000
 /** Only the most recent words are matched: the name being said now. */
 const RECENT_WORDS = 12
 /** How long a song asked for by name waits for the rest of what is said. */
-const REQUEST_PAUSE_MS = 1200
+const REQUEST_PAUSE_MS = 700
 
 /** A key asked for with a song's name. */
 export interface AskedKey {

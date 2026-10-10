@@ -600,6 +600,15 @@ export function ChordSheetViewer({
   /** Another song now, in this one's place, in the key asked for. */
   const openNow = (request: { sheet: ChordSheet; key: string | null; minor: boolean }) => {
     if (!onOpenSheet) return null
+    // This very song, as it is — a line sung that is also its title ("Open
+    // the eyes of my heart") — is nothing to do.
+    if (
+      sheet &&
+      String(request.sheet.id) === String(sheet.id) &&
+      (!request.key || (request.key === selectedKey && request.minor === isMinor))
+    ) {
+      return null
+    }
     onOpenSheet(request.sheet, request.key ? { key: request.key, minor: request.minor } : null)
     return `Opening ${request.sheet.title}${request.key ? ` in ${keyLabel(request.key, request.minor)}` : ''}`
   }

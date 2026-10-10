@@ -55,3 +55,34 @@ describe('asking for another song with a sheet open', () => {
     expect(songAsked(sheets, new Map(), 'way maker remix version')).toBeNull()
   })
 })
+
+describe('titles that begin with an asking word', () => {
+  const songs = [
+    { id: 'o1', title: 'Open The Eyes Of My Heart' },
+    { id: 'o2', title: 'Open Heaven' },
+    { id: 'o3', title: 'Way Maker' },
+  ]
+  it('opens "Open the Eyes of My Heart" from a sheet, said with or without "open"', () => {
+    for (const said of ['open the eyes of my heart', 'open open the eyes of my heart in D']) {
+      expect(parseSheetCommand(said, songs)).toMatchObject({
+        type: 'open',
+        request: { sheet: songs[0] },
+      })
+    }
+    expect(parseSheetCommand('switch to open heaven in G', songs)).toMatchObject({
+      type: 'open',
+      request: { sheet: songs[1], key: 'G' },
+    })
+  })
+
+  it('opens them when asked of Miriam, too', () => {
+    for (const [said, title] of [
+      ['open the eyes of my heart', 'Open The Eyes Of My Heart'],
+      ['switch to open heaven in G', 'Open Heaven'],
+      ['open heaven', 'Open Heaven'],
+    ]) {
+      const asked = songAsked(songs, new Map(), said)
+      expect(asked?.kind === 'open' && asked.sheet.title).toBe(title)
+    }
+  })
+})

@@ -43,6 +43,7 @@ import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { ChordSheetViewer, type QueuedSong } from '@/features/worship/ChordSheetViewer'
 import { songAsked } from '@/lib/miriamSongs'
 import { songHost } from '@/lib/songHost'
+import { KEY_HINTS } from '@/lib/songRequest'
 import { loadAliases, rememberAlias } from '@/lib/songAliases'
 import type { ChordSheet } from '@/types/chordSheet'
 import { VideoPlayerModal } from '@/components/ui/VideoPlayerModal'
@@ -63,6 +64,14 @@ const PAUSE_MS = 1800
 const LISTEN_MS = 60_000
 /** How often listening for "Hey Miriam" is started again when it has stopped. */
 const WAKE_RETRY_MS = 3000
+/**
+ * A song named in full, with a song screen up: no need to wait out a pause
+ * for the rest — a beat for a key to follow, none once one has.
+ */
+const SONG_PAUSE_MS = 700
+const SONG_WITH_KEY_PAUSE_MS = 300
+/** The end of a key that can't run on: "E flat", "F sharp minor", "G major". */
+const KEY_DONE = /(?:flat|sharp|minor|major|[♭♯#])$/i
 /** How long a confirmed change is waited on before it is said to be waiting for a signal. */
 const SEND_WAIT_MS = 12_000
 /** How long an answer stays up once given, unless she is spoken to again. */
@@ -419,6 +428,23 @@ export function MiriamButton() {
     openSong(sheet, songAsk.current.key)
   }
 
+  // Words this device has learned for songs, ready for matching as they are heard.
+  const songAliases = useRef<ReadonlyMap<string, string>>(new Map())
+  /** How long to wait after the last words before acting on them. */
+  const pauseFor = (text: string) => {
+    if (!songHost()) return PAUSE_MS
+    const asked = songAsked(
+      useChordSheetsStore.getState().chordSheets,
+      songAliases.current,
+      text,
+      true
+    )
+    if (asked?.kind !== 'open') return PAUSE_MS
+    // "in E" may yet become "in E flat" or "in E minor": only a key that can
+    // say no more is acted on at once.
+    return asked.key && KEY_DONE.test(text.trim()) ? SONG_WITH_KEY_PAUSE_MS : SONG_PAUSE_MS
+  }
+
   /** Listen for a request — tapped, or woken by her name. */
   const listen = async (byName = false) => {
     // Tapped, this lets a browser say the answer; called by name, the tap
@@ -426,6 +452,7 @@ export function MiriamButton() {
     unlockSpeech()
     stopWake()
     stopSpeaking()
+    loadAliases().then((m) => (songAliases.current = m))
     setChoices([])
     setSongGuesses([])
     setPending(null)
@@ -454,7 +481,9 @@ export function MiriamButton() {
         setStage('answered')
         return
       }
-      onDevice = (await isOffline()) && canRecogniseOnDevice()
+      // For a song, the phone's own recogniser where it has one: words come
+      // back sooner than from the network, and the titles are given as hints.
+      onDevice = songHost() ? canRecogniseOnDevice() : (await isOffline()) && canRecogniseOnDevice()
     }
     listeningCue('start')
     // A moment for the chime before the microphone takes the sound over; a
@@ -468,11 +497,12 @@ export function MiriamButton() {
         continuous: true,
         addsPunctuation: true,
         requiresOnDeviceRecognition: onDevice,
-        // The names a request is likeliest to hold, and the hardest to hear.
-        contextualStrings: [
-          ...groups.map((g) => g.name),
-          ...users.map((u) => u.displayName).filter(Boolean),
-        ].slice(0, 100),
+        // The names a request is likeliest to hold, and the hardest to hear:
+        // with a song screen up, the songs'.
+        contextualStrings: (songHost()
+          ? [...useChordSheetsStore.getState().chordSheets.map((c) => c.title), ...KEY_HINTS]
+          : [...groups.map((g) => g.name), ...users.map((u) => u.displayName).filter(Boolean)]
+        ).slice(0, 100),
         iosTaskHint: 'dictation',
         iosCategory: {
           category: 'playAndRecord',
@@ -494,7 +524,7 @@ export function MiriamButton() {
     request.current = withoutHerName(e.isFinal ? settled.current : joined(settled.current, text))
     setHeard(request.current)
     clearPause()
-    pauseTimer.current = setTimeout(() => send(request.current), PAUSE_MS)
+    pauseTimer.current = setTimeout(() => send(request.current), pauseFor(request.current))
   })
   useSpeechRecognitionEvent('end', () => {
     if (!ownsSpeech(SPEECH_ID)) return

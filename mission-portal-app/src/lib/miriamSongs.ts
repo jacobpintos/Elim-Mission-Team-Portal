@@ -44,7 +44,14 @@ export function songAsked<T extends { id: string | number; title: string }>(
   onlySongs = false
 ): SongAsk<T> | null {
   if (sheets.length === 0) return null
-  const found = requestFromAliases(aliases, sheets, text) ?? parseSongRequest(sheets, text)
+  // As said, then without the asking ("switch to Open Heaven"): a title can
+  // begin with the asking word itself ("Open the Eyes of My Heart").
+  const asked = text.trim().replace(OPENING, '').trim()
+  let found = null
+  for (const said of asked && asked !== text.trim() ? [text, asked] : [text]) {
+    found = requestFromAliases(aliases, sheets, said) ?? parseSongRequest(sheets, said)
+    if (found) break
+  }
   if (found) {
     return {
       kind: 'open',
