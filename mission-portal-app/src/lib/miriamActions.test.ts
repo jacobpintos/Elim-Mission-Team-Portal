@@ -121,6 +121,8 @@ describe('what one request offers the API', () => {
   it('offers the app’s lookups and changes, unstrict, as well', () => {
     const tools = toolsFor(commandsFor(['admin']), ['send_message', 'delete_user'])
     expect(tools.filter((t) => !t.strict).map((t) => t.name)).toEqual([
+      'open_event_form',
+      'edit_event',
       'send_message',
       'delete_user',
     ])

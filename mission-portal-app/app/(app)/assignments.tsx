@@ -14,6 +14,8 @@ import { useEventsStore } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useUIStore } from '@/stores/uiStore'
+import { useMiriamStore } from '@/stores/miriamStore'
+import type { TaskDraft } from '@/lib/miriam'
 import { useKaizenStore } from '@/stores/kaizenStore'
 import { useWorshipStore } from '@/stores/worshipStore'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -221,6 +223,7 @@ function CreateTaskModal({
   users,
   groups,
   colors,
+  initial,
 }: {
   visible: boolean
   onClose: () => void
@@ -233,6 +236,8 @@ function CreateTaskModal({
   users: UserProfile[]
   groups: GroupDoc[]
   colors: ReturnType<typeof useThemeColors>
+  /** What Miriam was asked to fill in (stores/miriamStore), once for each time she is. */
+  initial?: { id: number; draft: TaskDraft } | null
 }) {
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -241,6 +246,20 @@ function CreateTaskModal({
   const [selectedGroup, setSelectedGroup] = useState<string>('')
   const [selectedLead, setSelectedLead] = useState<string>('')
   const [saving, setSaving] = useState(false)
+  const [filledFor, setFilledFor] = useState<number | null>(null)
+  if (initial && initial.id !== filledFor) {
+    const d = initial.draft
+    setFilledFor(initial.id)
+    setTitle(d.title)
+    // The field takes mm/dd/yy.
+    setDueDate(
+      d.dueDate ? `${d.dueDate.slice(5, 7)}/${d.dueDate.slice(8, 10)}/${d.dueDate.slice(2, 4)}` : ''
+    )
+    setTargetType(d.group ? 'group' : 'individuals')
+    setSelectedUsers(d.users)
+    setSelectedGroup(d.group)
+    setSelectedLead(d.lead)
+  }
 
   const groupMembers = (() => {
     if (targetType !== 'group' || !selectedGroup) return []
@@ -1188,6 +1207,20 @@ export default function Assignments() {
   const [editTaskItem, setEditTaskItem] = useState<Task | null>(null)
   const [setListAckTask, setSetListAckTask] = useState<Task | null>(null)
   const [showCreateTask, setShowCreateTask] = useState(false)
+  // A task Miriam was asked to fill in: its form opened with it, once.
+  const miriamTask = useMiriamStore((s) => s.taskForm)
+  const clearMiriamTask = useMiriamStore((s) => s.clearTaskForm)
+  const [taskFrom, setTaskFrom] = useState<{ id: number; draft: TaskDraft } | null>(null)
+  if (miriamTask && miriamTask.id !== taskFrom?.id) {
+    setTaskFrom(miriamTask)
+    setShowCreateTask(true)
+  }
+  useEffect(() => {
+    if (!miriamTask) return
+    for (const note of miriamTask.notes) toast(note, 'info')
+    clearMiriamTask()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [miriamTask])
   const [groups, setGroups] = useState<GroupDoc[]>([])
 
   /**
@@ -1821,6 +1854,7 @@ export default function Assignments() {
           users={allUsers}
           groups={groups}
           colors={colors}
+          initial={taskFrom}
         />
       ) : null}
 

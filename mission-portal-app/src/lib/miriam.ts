@@ -20,7 +20,22 @@ export function canUseMiriam(profile: UserProfile | null): boolean {
 /** The longest request Miriam takes, typed or said (askMiriam's MAX_TEXT). */
 export const MAX_REQUEST = 1500
 
-/** A new event's form, filled in (functions/src/miriam/plan.ts: EventDraft). */
+/** One way of a flight, as Miriam fills it in. */
+export interface FlightLegDraft {
+  date: string
+  time: string
+  airport: string
+  airline: string
+  flight: string
+  confirmation: string
+  arrival: string
+}
+
+/**
+ * An event's form, filled in (functions/src/miriam/plan.ts: EventDraft). For
+ * a new event, fields not said are '' or []; for an edit, only what changes
+ * is here, and a field left out is as the event has it.
+ */
 export interface EventDraft {
   title: string
   /** YYYY-MM-DD, or '' */
@@ -31,8 +46,38 @@ export interface EventDraft {
   address: string
   city: string
   state: string
+  users?: string[]
+  groups?: string[]
+  /** null: not repeating. */
+  repeat?: { recur: 'weekly' | 'biweekly' | 'monthly'; recDay: number } | null
+  isPublic?: boolean
+  isVirtual?: boolean
+  virtualLink?: string
+  foodItems?: string[]
+  cars?: { label: string; seats?: number; driver: string; riders: string[] }[]
+  lodging?: {
+    name: string
+    address: string
+    room: string
+    confirmation: string
+    assignees: string[]
+  }[]
+  flights?: { uid: string; out: FlightLegDraft; ret: FlightLegDraft }[]
+  teams?: { name: string; leaders: string[]; members: string[] }[]
+  dressCode?: { group: string; text: string }[]
+  extraDays?: { date: string; startTime: string; location: string }[]
+  taskTemplateId?: string
+}
+
+/** A new task's form, filled in (functions/src/miriam/plan.ts: TaskDraft). */
+export interface TaskDraft {
+  title: string
+  /** YYYY-MM-DD, or '' */
+  dueDate: string
   users: string[]
-  groups: string[]
+  /** A group to assign instead of people; '' for none. */
+  group: string
+  lead: string
 }
 
 /** Where an answer can be shown (functions/src/miriam/askMiriam.ts: Open). */
@@ -48,9 +93,12 @@ export type MiriamOpen =
   | { kind: 'screen'; id: string }
   /** A video from Content, by id: played over the page. */
   | { kind: 'video'; id: string }
+  /** A reorder list item, by id: its link opened, to buy it (admins). */
+  | { kind: 'reorder'; id: string }
 
 export type MiriamResult =
-  | { kind: 'eventForm'; draft: EventDraft; notes: string[] }
+  /** With `editKey`, an existing event's form (its instance key) with the changes made. */
+  | { kind: 'eventForm'; draft: EventDraft; notes: string[]; editKey?: string }
   | {
       kind: 'answer'
       text: string
@@ -61,11 +109,15 @@ export type MiriamResult =
       heardName?: string
     }
   | { kind: 'reply'; text: string }
+  /** A new task's form, filled in, for an admin to check and save. */
+  | { kind: 'taskForm'; draft: TaskDraft; notes: string[] }
   /** A change asked for, to be shown and confirmed before it is made (features/miriam/actions). */
   | { kind: 'confirm'; name: string; input: Record<string, unknown> }
 
 /** The app's address for where an answer is shown. */
-export function miriamHref(open: Exclude<MiriamOpen, { kind: 'screen' | 'video' }>): string {
+export function miriamHref(
+  open: Exclude<MiriamOpen, { kind: 'screen' | 'video' | 'reorder' }>
+): string {
   if (open.kind === 'task') return `/assignments?taskId=${encodeURIComponent(open.id)}`
   if (open.kind === 'availability') return '/admin/avail'
   const focus = open.section ? `?focus=${open.section}` : ''

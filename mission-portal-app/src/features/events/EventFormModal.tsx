@@ -37,6 +37,7 @@ import {
 } from '@/lib/taskNotifications'
 import { newLogisticsAssignments } from '@/lib/guestItinerary'
 import type { PendingEventForm } from '@/stores/miriamStore'
+import type { EventDraft, FlightLegDraft } from '@/lib/miriam'
 import type {
   EventTemplate,
   CarpoolCarData,
@@ -130,7 +131,8 @@ function identify(
   prefill?: PendingEventForm | null
 ): string {
   if (!event) return prefill ? `miriam:${prefill.id}` : 'new'
-  return `${String(event.id)}::${instanceKey ?? ''}`
+  // An event Miriam changed: the same event, but filled in afresh.
+  return `${String(event.id)}::${instanceKey ?? ''}${prefill ? `::miriam:${prefill.id}` : ''}`
 }
 
 function blankForm(
@@ -138,16 +140,14 @@ function blankForm(
   date: string,
   prefill?: PendingEventForm | null
 ): FormData {
-  // Miriam's details, for a new event only.
-  const draft = event ? undefined : prefill?.draft
-  return {
-    title: event?.title ?? draft?.title ?? '',
+  const form: FormData = {
+    title: event?.title ?? '',
     date,
-    location: event?.location ?? draft?.location ?? '',
-    address: event?.address ?? draft?.address ?? '',
-    city: event?.city ?? draft?.city ?? '',
-    state: event?.state ?? draft?.state ?? '',
-    startTime: event?.startTime ?? draft?.startTime ?? '',
+    location: event?.location ?? '',
+    address: event?.address ?? '',
+    city: event?.city ?? '',
+    state: event?.state ?? '',
+    startTime: event?.startTime ?? '',
     isRec: event?.isRec ?? false,
     recur: event?.recur ?? 'weekly',
     recDay: event?.recDay ?? 0,
@@ -161,8 +161,93 @@ function blankForm(
     isVirtual: event?.isVirtual ?? false,
     virtualLink: event?.virtualLink ?? '',
     taskTemplateId: event?.taskTemplateId ?? '',
-    users: event?.users ?? draft?.users ?? [],
-    groups: event?.groups ?? draft?.groups ?? [],
+    users: event?.users ?? [],
+    groups: event?.groups ?? [],
+  }
+  return prefill ? withDraft(form, prefill.draft) : form
+}
+
+/**
+ * What Miriam filled in, over the form as it starts — blank for a new event,
+ * or the event as it is, for a change. What she left out stays as it was.
+ */
+function withDraft(form: FormData, draft: EventDraft): FormData {
+  const next = { ...form }
+  if (draft.title) next.title = draft.title
+  if (draft.location) next.location = draft.location
+  if (draft.address) next.address = draft.address
+  if (draft.city) next.city = draft.city
+  if (draft.state) next.state = draft.state
+  if (draft.startTime) next.startTime = draft.startTime
+  if (draft.users) next.users = draft.users
+  if (draft.groups) next.groups = draft.groups
+  if (draft.repeat === null) next.isRec = false
+  else if (draft.repeat) {
+    next.isRec = true
+    next.recur = draft.repeat.recur
+    next.recDay = draft.repeat.recDay
+  }
+  if (draft.isPublic !== undefined) next.isPublic = draft.isPublic
+  if (draft.isVirtual !== undefined) next.isVirtual = draft.isVirtual
+  if (draft.virtualLink) next.virtualLink = draft.virtualLink
+  if (draft.foodItems) {
+    next.food = draft.foodItems.length > 0
+    next.foodItems = draft.foodItems
+  }
+  if (draft.cars) {
+    next.carpool = draft.cars.length > 0
+    next.carpoolCars = draft.cars.map((c, i) => ({
+      id: `${Date.now()}_${i}`,
+      label: c.label,
+      ...(c.seats ? { seats: c.seats } : {}),
+      driver: c.driver,
+      riders: c.riders,
+    }))
+  }
+  if (draft.lodging) next.lodging = draft.lodging.length > 0
+  if (draft.flights) next.flights = draft.flights.length > 0
+  if (draft.taskTemplateId) next.taskTemplateId = draft.taskTemplateId
+  return next
+}
+
+/** The form's lists that live apart from it: the event's, or what Miriam filled in. */
+function listsFor(event: EventTemplate | null | undefined, draft?: EventDraft) {
+  const leg = (prefix: 'out' | 'ret', l: FlightLegDraft) =>
+    Object.fromEntries(
+      Object.entries({
+        Date: l.date,
+        Time: l.time,
+        Airport: l.airport,
+        Airline: l.airline,
+        Flight: l.flight,
+        Confirmation: l.confirmation,
+        Arrival: l.arrival,
+      })
+        .filter(([, v]) => v)
+        .map(([k, v]) => [`${prefix}${k}`, v])
+    )
+  return {
+    teams: draft?.teams ?? event?.teams ?? [],
+    dressCode: draft?.dressCode ?? event?.dressCode ?? [],
+    lodgingEntries: draft?.lodging
+      ? draft.lodging.map((l, i) => ({
+          id: `${Date.now()}_${i}`,
+          name: l.name,
+          ...(l.address ? { address: l.address } : {}),
+          ...(l.room ? { room: l.room } : {}),
+          ...(l.confirmation ? { confirmation: l.confirmation } : {}),
+          assignees: l.assignees,
+        }))
+      : (event?.lodgingEntries ?? []),
+    flightEntries: draft?.flights
+      ? draft.flights.map((f, i) => ({
+          id: `${Date.now()}_${i}`,
+          uid: f.uid,
+          ...leg('out', f.out),
+          ...leg('ret', f.ret),
+        }))
+      : (event?.flightEntries ?? []),
+    extraDays: toExtraDayRows(draft?.extraDays ?? event?.extraDays),
   }
 }
 
@@ -213,20 +298,21 @@ export function EventFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const initDate = event?.date
-    ? isoToDisplay(event.date)
-    : prefill?.draft.date
-      ? isoToDisplay(prefill.draft.date)
+  const initDate = prefill?.draft.date
+    ? isoToDisplay(prefill.draft.date)
+    : event?.date
+      ? isoToDisplay(event.date)
       : selectedDate
         ? isoToDisplay(selectedDate)
         : ''
 
   const [form, setForm] = useState<FormData>(() => blankForm(event, initDate, prefill))
-  const [teams, setTeams] = useState<EventTeam[]>(event?.teams ?? [])
-  const [dressCode, setDressCode] = useState<DressCodeEntry[]>(event?.dressCode ?? [])
-  const [lodgingEntries, setLodgingEntries] = useState<LodgingEntry[]>(event?.lodgingEntries ?? [])
-  const [flightEntries, setFlightEntries] = useState<FlightEntry[]>(event?.flightEntries ?? [])
-  const [extraDays, setExtraDays] = useState<ExtraDayRow[]>(toExtraDayRows(event?.extraDays))
+  const [lists] = useState(() => listsFor(event, prefill?.draft))
+  const [teams, setTeams] = useState<EventTeam[]>(lists.teams)
+  const [dressCode, setDressCode] = useState<DressCodeEntry[]>(lists.dressCode)
+  const [lodgingEntries, setLodgingEntries] = useState<LodgingEntry[]>(lists.lodgingEntries)
+  const [flightEntries, setFlightEntries] = useState<FlightEntry[]>(lists.flightEntries)
+  const [extraDays, setExtraDays] = useState<ExtraDayRow[]>(lists.extraDays)
   const [saving, setSaving] = useState(false)
   const [editScope, setEditScope] = useState<'instance' | 'all'>(instanceKey ? 'instance' : 'all')
 
@@ -252,11 +338,12 @@ export function EventFormModal({
   if (open && identity !== loadedFor) {
     setLoadedFor(identity)
     setForm(blankForm(event, initDate, prefill))
-    setTeams(event?.teams ?? [])
-    setDressCode(event?.dressCode ?? [])
-    setLodgingEntries(event?.lodgingEntries ?? [])
-    setFlightEntries(event?.flightEntries ?? [])
-    setExtraDays(toExtraDayRows(event?.extraDays))
+    const next = listsFor(event, prefill?.draft)
+    setTeams(next.teams)
+    setDressCode(next.dressCode)
+    setLodgingEntries(next.lodgingEntries)
+    setFlightEntries(next.flightEntries)
+    setExtraDays(next.extraDays)
     setEditScope(instanceKey ? 'instance' : 'all')
   }
 

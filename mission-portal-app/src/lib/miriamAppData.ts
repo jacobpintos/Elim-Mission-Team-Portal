@@ -201,7 +201,12 @@ export function inventoryFound(
     toReorder: reorder
       .filter((r) => fits(r.name, query))
       .slice(0, 30)
-      .map((r) => ({ name: r.name, price: r.price ?? undefined })),
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        price: r.price ?? undefined,
+        hasLink: !!r.link || undefined,
+      })),
   }
 }
 

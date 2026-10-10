@@ -10,6 +10,7 @@ import {
   commandsFor,
   type AppToolName,
   draftFromInput,
+  taskDraftFromInput,
   type CommandName,
   type EventFormInput,
   type Roster,
@@ -63,7 +64,7 @@ A question: look it up with the tools — never answer from memory or guess — 
 
 Announcements, their messages, the Operations tab (issues, kaizen, planning, inventory), videos in Content, and their own profile and settings each have a lookup, where this person has that screen. To take them to a screen — "go to the admin users page", "open Kaizen" — answer with open "screen" and its id from the list they are sent; to show where an answer is, you may do the same.
 
-Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new event's form is only filled in for them to check and save, so fill in what they said and leave the rest empty. To play a video from Content, find it, then answer with open "video" and its id. To change something — send a message, post an announcement, mark a task, answer their availability, sign up for food, turn a notification on or off, and for admins change people's accounts, groups, common teams and task templates — use its tool once you have what it needs (an event's key, a task's id, a person's or group's id from people_and_groups); they confirm it in the app before anything is done, so don't ask them first. Anything else that changes something you can't do yet: say so in one sentence.
+Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new task's form (open_task_form) or an event's form — a new one (open_event_form), or an existing one changed (edit_event: find the event first) — is only filled in for them to check and save, so fill in what they said and leave the rest out. To play a video from Content, find it, then answer with open "video" and its id. To buy something ("buy triple A batteries"), find it in the reorder list (read_operations, inventory) and answer with open "reorder" and its id, saying what you're opening; if it isn't on the list, or has no link, say so. To change something — send a message, post an announcement, mark a task, answer their availability, sign up for food, turn a notification on or off, and for admins change people's accounts, groups, common teams and task templates — use its tool once you have what it needs (an event's key, a task's id, a person's or group's id from people_and_groups); they confirm it in the app before anything is done, so don't ask them first. Anything else that changes something you can't do yet: say so in one sentence.
 
 When you are not sure — a request with several parts, people or groups to match, a name you can't place, or anything you might get wrong — ask the advisor before you act. A plain question you can look up needs no advice.
 
@@ -76,6 +77,7 @@ const MAX_ROUNDS = 6
 type Open =
   | { kind: 'screen'; id: string }
   | { kind: 'video'; id: string }
+  | { kind: 'reorder'; id: string }
   | {
       kind: 'event'
       key: string
@@ -213,8 +215,14 @@ export const askMiriam = onCall(
     let roster: Roster | null = null
     const loadRoster = async (): Promise<Roster> => {
       if (roster) return roster
-      const [names, groups] = await Promise.all([lookups.names(), lookups.groups()])
-      const userSnap = await db.collection('users').get()
+      const [names, groups, userSnap, config, templates] = await Promise.all([
+        lookups.names(),
+        lookups.groups(),
+        db.collection('users').get(),
+        db.doc('config/main').get(),
+        db.collection('taskTemplates').get(),
+      ])
+      const teams: unknown = config.data()?.COMMON_TEAMS
       roster = {
         people: userSnap.docs
           .filter((d) => {
@@ -224,6 +232,13 @@ export const askMiriam = onCall(
           .map((d) => ({ id: d.id, name: names.get(d.id)! }))
           .sort((a, b) => a.name.localeCompare(b.name)),
         groups: groups.filter((g) => g.name).sort((a, b) => a.name.localeCompare(b.name)),
+        commonTeams: (Array.isArray(teams) ? teams : []).map(
+          (t: { name?: unknown; members?: unknown[] }) => ({
+            name: String(t.name ?? ''),
+            members: (t.members ?? []).map(String),
+          })
+        ),
+        taskTemplates: templates.docs.map((d) => ({ id: d.id, name: String(d.data().name ?? '') })),
       }
       return roster
     }
@@ -305,11 +320,28 @@ export const askMiriam = onCall(
 
       const form = calls.find((c) => c.name === 'open_event_form')
       if (form) {
-        const { draft, notes } = draftFromInput(
-          form.input as Partial<EventFormInput>,
+        const { draft, notes } = draftFromInput(form.input as EventFormInput, await loadRoster())
+        return { kind: 'eventForm', draft, notes }
+      }
+      const task = calls.find((c) => c.name === 'open_task_form')
+      if (task) {
+        const { draft, notes } = taskDraftFromInput(
+          task.input as Record<string, unknown>,
           await loadRoster()
         )
-        return { kind: 'eventForm', draft, notes }
+        return { kind: 'taskForm', draft, notes }
+      }
+      // An existing event's form, with the changes asked for made.
+      const edit = calls.find((c) => c.name === 'edit_event')
+      if (edit) {
+        const input = edit.input as EventFormInput
+        const ev = await lookups.event(String(input.event_key ?? ''))
+        if (!ev) return { kind: 'reply', text: 'I couldn’t find that event to change.' }
+        const { draft, notes } = draftFromInput(input, await loadRoster(), {
+          users: (ev.users ?? []).map(String),
+          groups: (ev.groups ?? []).map(String),
+        })
+        return { kind: 'eventForm', draft, notes, editKey: ev.instanceKey }
       }
       // A change: not made here. The app shows exactly what will be done,
       // and does it only once they confirm.
@@ -326,24 +358,15 @@ export const askMiriam = onCall(
         try {
           result =
             call.name === 'people_and_groups'
-              ? await loadRoster().then(async (r) => {
-                  const [config, templates] = await Promise.all([
-                    db.doc('config/main').get(),
-                    db.collection('taskTemplates').get(),
-                  ])
-                  const teams = config.data()?.COMMON_TEAMS
-                  return {
-                    groups: r.groups.map((g) => `${g.id}: ${g.name}`),
-                    people: r.people.map((p) => `${p.id}: ${p.name}`),
-                    teams: Array.isArray(teams)
-                      ? teams.map((t: { name?: string; members?: unknown[] }) => ({
-                          name: String(t.name ?? ''),
-                          members: (t.members ?? []).length,
-                        }))
-                      : [],
-                    taskTemplates: templates.docs.map((d) => `${d.id}: ${d.data().name ?? ''}`),
-                  }
-                })
+              ? await loadRoster().then((r) => ({
+                  groups: r.groups.map((g) => `${g.id}: ${g.name}`),
+                  people: r.people.map((p) => `${p.id}: ${p.name}`),
+                  teams: (r.commonTeams ?? []).map((t) => ({
+                    name: t.name,
+                    members: t.members.length,
+                  })),
+                  taskTemplates: (r.taskTemplates ?? []).map((t) => `${t.id}: ${t.name}`),
+                }))
               : call.name === 'find_events'
                 ? await lookups.findEvents(String(input.query ?? ''), String(input.date ?? ''))
                 : call.name === 'get_event'
@@ -391,7 +414,7 @@ export const askMiriam = onCall(
 
 interface AnswerInput {
   spoken: string
-  open: 'event' | 'task' | 'availability' | 'screen' | 'video' | 'none'
+  open: 'event' | 'task' | 'availability' | 'screen' | 'video' | 'reorder' | 'none'
   target: string
   section: 'dress_code' | 'availability' | 'weather' | 'details' | 'none'
   choices?: string[]
@@ -411,7 +434,10 @@ async function finish(input: AnswerInput, lookups: Lookups, viewer: Viewer) {
     open = { kind: 'task', id: String(input.target) }
   } else if (input.open === 'availability' && isAdminViewer(viewer)) {
     open = { kind: 'availability' }
-  } else if ((input.open === 'screen' || input.open === 'video') && input.target) {
+  } else if (
+    (input.open === 'screen' || input.open === 'video' || input.open === 'reorder') &&
+    input.target
+  ) {
     // Opened only if the app has it for this person: it checks again.
     open = { kind: input.open, id: String(input.target).slice(0, 80) }
   }

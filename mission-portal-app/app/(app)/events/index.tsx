@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, Pressable, Linking, Platform } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack, useRouter } from 'expo-router'
@@ -82,7 +82,19 @@ export default function EventsScreen() {
   // A new event Miriam filled in, brought here to be checked and saved.
   const miriamForm = useMiriamStore((s) => (admin ? s.eventForm : null))
   const clearMiriamForm = useMiriamStore((s) => s.clearEventForm)
-  const formOpen = showCreateModal || !!editInstance || !!editDraft || !!miriamForm
+  // An existing event Miriam was asked to change: opened once it is loaded,
+  // never as a new event in its place.
+  const loadedTemplates = useEventsStore((s) => s.templates)
+  const loadedOverrides = useEventsStore((s) => s.overrides)
+  const miriamEdit = useMemo(
+    () =>
+      miriamForm?.editKey ? useEventsStore.getState().getInstanceByKey(miriamForm.editKey) : null,
+    // Worked out again as the events load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [miriamForm, loadedTemplates, loadedOverrides]
+  )
+  const miriamReady = !!miriamForm && (!miriamForm.editKey || !!miriamEdit)
+  const formOpen = showCreateModal || !!editInstance || !!editDraft || miriamReady
 
   const openDetail = (ev: EventInstance) => {
     setSelectedEvent(ev)
@@ -558,8 +570,14 @@ export default function EventsScreen() {
 
       {admin ? (
         <EventFormModal
-          event={editInstance ?? editDraft}
-          instanceKey={editInstance?.isRec ? editInstance.instanceKey : undefined}
+          event={editInstance ?? editDraft ?? (miriamReady ? miriamEdit : null)}
+          instanceKey={
+            editInstance?.isRec
+              ? editInstance.instanceKey
+              : !editDraft && miriamReady && miriamEdit?.isRec
+                ? miriamEdit.instanceKey
+                : undefined
+          }
           open={formOpen}
           prefill={editInstance || editDraft ? null : miriamForm}
           onClose={() => {

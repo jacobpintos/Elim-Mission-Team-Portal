@@ -4,6 +4,7 @@ import {
   Animated,
   AppState,
   Easing,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -47,6 +48,10 @@ import { VideoPlayerModal } from '@/components/ui/VideoPlayerModal'
 import { useMusicStore, type MusicItem } from '@/stores/musicStore'
 import { useAuthStore } from '@/stores/authStore'
 import { screensFor } from '@/lib/miriamScreens'
+import { isAdmin } from '@/lib/roles'
+import { doc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { getDoc } from '@/lib/liveFirestore'
 
 /** Claims on the microphone (lib/speechOwner): the request, and the wake word. */
 const SPEECH_ID = 'miriam'
@@ -147,6 +152,8 @@ export function MiriamButton() {
   const [queued, setQueued] = useState<QueuedSong | null>(null)
   // A change worked out and waiting to be confirmed — or a choice of which.
   const [pending, setPending] = useState<{ name: string; prepared: Prepared } | null>(null)
+  // A link to buy something, for a tap to open (in a browser).
+  const [link, setLink] = useState<{ url: string; name: string } | null>(null)
   // A video from Content asked for, playing over the page.
   const [video, setVideo] = useState<MusicItem | null>(null)
   const [songGuesses, setSongGuesses] = useState<ChordSheet[]>([])
@@ -223,6 +230,7 @@ export function MiriamButton() {
     setChoices([])
     setSongGuesses([])
     setPending(null)
+    setLink(null)
     stopListening()
     setHeard(said)
     // A song, opened here from the sheets on this device: no need to ask.
@@ -247,9 +255,20 @@ export function MiriamButton() {
     try {
       const result = await askMiriam(said)
       if (result.kind === 'eventForm') {
-        offerEventForm({ draft: result.draft, heard: said, notes: result.notes })
+        offerEventForm({
+          draft: result.draft,
+          heard: said,
+          notes: result.notes,
+          editKey: result.editKey,
+        })
         setOpen(false)
         router.navigate('/events' as never)
+        return
+      }
+      if (result.kind === 'taskForm') {
+        useMiriamStore.getState().offerTaskForm({ draft: result.draft, notes: result.notes })
+        setOpen(false)
+        router.navigate('/assignments' as never)
         return
       }
       // A change: worked out into exactly what will be done, and shown to
@@ -278,7 +297,14 @@ export function MiriamButton() {
       // something open over the page, a chord sheet being played: then it is
       // said and shown here, and the page is left as it is.
       const open = result.kind === 'answer' ? result.open : null
-      if (open && open.kind !== 'video' && !anyOverlayOpen()) {
+      // Something to buy: its link opened. In a browser, a page may only
+      // open a link from a tap, and this answer came after one — so there it
+      // is a button to tap.
+      if (open?.kind === 'reorder') {
+        const found = await reorderLink(open.id)
+        if (found && Platform.OS === 'web') setLink(found)
+        else if (found) Linking.openURL(found.url).catch(() => setLink(found))
+      } else if (open && open.kind !== 'video' && !anyOverlayOpen()) {
         if (open.kind === 'screen') {
           // Only a screen this person has: checked again here.
           const screen = screensFor(useAuthStore.getState().profile).find((x) => x.id === open.id)
@@ -348,6 +374,20 @@ export function MiriamButton() {
     speak('Okay.')
   }
 
+  /** A reorder list item's link, if it has one: admins' list (Operations — Inventory). */
+  const reorderLink = async (id: string) => {
+    if (!isAdmin(useAuthStore.getState().profile)) return null
+    try {
+      const item = (await getDoc(doc(db, 'reorderItems', id))).data() as
+        | { name?: string; link?: string }
+        | undefined
+      const url = item?.link?.trim() ?? ''
+      return /^https?:\/\//i.test(url) ? { url, name: item?.name ?? 'it' } : null
+    } catch {
+      return null
+    }
+  }
+
   /** A chord sheet, opened over the page; the bar goes, to leave it in view. */
   const openSong = (sheet: ChordSheet, key: { key: string; minor: boolean } | null) => {
     setSongGuesses([])
@@ -371,6 +411,7 @@ export function MiriamButton() {
     setChoices([])
     setSongGuesses([])
     setPending(null)
+    setLink(null)
     setWoken(byName)
     setRanOut(false)
     if (byName) AccessibilityInfo.announceForAccessibility('Miriam: Hineni, I am here')
@@ -586,10 +627,11 @@ export function MiriamButton() {
   })
   useEffect(() => {
     // Not while there are events or songs to choose from: that waits for a choice.
-    if (stage !== 'answered' || !open || choices.length || songGuesses.length || pending) return
+    if (stage !== 'answered' || !open || choices.length || songGuesses.length || pending || link)
+      return
     const t = setTimeout(() => closeRef.current(), ANSWER_MS)
     return () => clearTimeout(t)
-  }, [stage, open, answer, choices.length, songGuesses.length, pending])
+  }, [stage, open, answer, choices.length, songGuesses.length, pending, link])
   /** One of the events she offered: learned as what was meant, and asked about. */
   const pick = async (choice: { key: string; title: string; date: string }) => {
     unlockSpeech()
@@ -715,6 +757,18 @@ export function MiriamButton() {
                       </Pressable>
                     ))}
                   </YStack>
+                ) : null}
+                {stage === 'answered' && link ? (
+                  <Pressable
+                    onPress={() => Linking.openURL(link.url).catch(() => {})}
+                    accessibilityRole="link"
+                    accessibilityLabel={`Open the link for ${link.name}`}
+                    style={[styles.choice, { borderColor: colors.primary, marginTop: 6 }]}
+                  >
+                    <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
+                      Open the link — {link.name}
+                    </Text>
+                  </Pressable>
                 ) : null}
                 {stage === 'answered' && pending?.prepared.kind === 'ready' ? (
                   <YStack gap="$1.5" paddingTop="$1.5">
