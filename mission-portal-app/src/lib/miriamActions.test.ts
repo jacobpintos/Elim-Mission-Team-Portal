@@ -6,7 +6,14 @@ import {
   rolesAfter,
   teamsAfter,
 } from './miriamActions'
-import { ACTIONS, APP_TOOLS, appToolsFrom } from '../../functions/src/miriam/plan'
+import {
+  ACTIONS,
+  APP_TOOLS,
+  appToolsFrom,
+  commandsFor,
+  MAX_STRICT_TOOLS,
+  toolsFor,
+} from '../../functions/src/miriam/plan'
 
 describe('which food item was meant', () => {
   const items = ['Paper plates', 'Chips & salsa', 'Brownies', 'Bottled water']
@@ -92,5 +99,30 @@ describe('admins’ changes, worked out', () => {
     expect(teamsAfter(teams, { kind: 'remove', team: 'Sound' })).toBe(
       'There is no team called Sound.'
     )
+  })
+})
+
+describe('what one request offers the API', () => {
+  const everyAppTool = Object.keys(APP_TOOLS) as Parameters<typeof toolsFor>[1]
+  for (const roles of [['admin'], ['regular', 'worship', 'security'], ['guest']]) {
+    it(`stays within the API's limits for strict tools, for ${roles.join(', ')}`, () => {
+      const tools = toolsFor(commandsFor(roles), everyAppTool)
+      const strict = tools.filter((t) => t.strict)
+      expect(strict.length).toBeLessThanOrEqual(MAX_STRICT_TOOLS)
+      // Optional parameters across strict schemas: the API takes 24.
+      const optional = strict.reduce((n, t) => {
+        const schema = t.input_schema as { properties?: object; required?: string[] }
+        return n + Object.keys(schema.properties ?? {}).length - (schema.required ?? []).length
+      }, 0)
+      expect(optional).toBeLessThanOrEqual(24)
+    })
+  }
+
+  it('offers the app’s lookups and changes, unstrict, as well', () => {
+    const tools = toolsFor(commandsFor(['admin']), ['send_message', 'delete_user'])
+    expect(tools.filter((t) => !t.strict).map((t) => t.name)).toEqual([
+      'send_message',
+      'delete_user',
+    ])
   })
 })

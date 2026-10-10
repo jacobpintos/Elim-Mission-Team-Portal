@@ -609,6 +609,26 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
     },
   }
 
+/**
+ * The API takes at most this many strict tools in one request (structured
+ * outputs' limits); past it, the whole request is turned away.
+ */
+export const MAX_STRICT_TOOLS = 20
+
+/**
+ * The tools offered in a request: Miriam's own commands strict, so what she
+ * hands back always fits their schemas — and the app's lookups and changes
+ * not, as the app checks every input to them itself (features/miriam:
+ * appTools, actions), and an admin has more of them than the API allows
+ * strict tools.
+ */
+export function toolsFor(commands: CommandName[], appTools: AppToolName[]) {
+  return [
+    ...commands.map((name) => COMMANDS[name].tool),
+    ...appTools.map((name) => ({ ...APP_TOOLS[name], strict: false as const })),
+  ]
+}
+
 /** The app's lookups named in a request, those that exist. */
 export function appToolsFrom(names: unknown): AppToolName[] {
   if (!Array.isArray(names)) return []

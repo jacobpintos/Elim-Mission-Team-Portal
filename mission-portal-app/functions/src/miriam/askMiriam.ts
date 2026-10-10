@@ -5,9 +5,8 @@ import * as admin from 'firebase-admin'
 import Anthropic from '@anthropic-ai/sdk'
 import {
   ACTIONS,
-  APP_TOOLS,
+  toolsFor,
   appToolsFrom,
-  COMMANDS,
   commandsFor,
   type AppToolName,
   draftFromInput,
@@ -230,10 +229,7 @@ export const askMiriam = onCall(
     }
 
     const client = new Anthropic({ apiKey: key })
-    const commandTools = [
-      ...commands.map((name) => COMMANDS[name].tool as Anthropic.Beta.BetaTool),
-      ...appTools.map((name) => APP_TOOLS[name] as Anthropic.Beta.BetaTool),
-    ]
+    const commandTools = toolsFor(commands, appTools) as Anthropic.Beta.BetaTool[]
     const ask = () =>
       alone
         ? client.beta.messages.create({
