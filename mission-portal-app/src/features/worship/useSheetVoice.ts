@@ -18,6 +18,14 @@ export const STOP_LISTENING = '\u0000stop'
 
 /** How long a pause ends a phrase, so it can be acted on before the recogniser says so. */
 const PAUSE_MS = 700
+/** The same, after a word that plainly has more to come: "queue…", "…in". */
+const PAUSE_MORE_MS = 1600
+const MORE_TO_COME =
+  /\b(?:queue|cue|q|few|open|switch to|change to|pull up|bring up|up next|key|key of|in|at|on|to|speed|level|miriam)$/i
+/** How long a phrase that did nothing is kept, as the first half of one cut at a pause. */
+const CARRY_MS = 3000
+/** Only a few words: the start of a command, not a line being sung. */
+const CARRY_WORDS = 4
 /** The same words heard again this soon are the same phrase, not a second command. */
 const REPEAT_MS = 3000
 /** How long what was done stays on screen ("Next song"). */
@@ -99,13 +107,29 @@ export function useSheetVoice(
     return () => clearTimeout(t)
   }, [feedback])
 
+  // A short phrase that did nothing, kept a moment: "queue…" [pause]
+  // "…10,000 Reasons in D" is one command cut in two.
+  const carried = useRef<{ text: string; at: number } | null>(null)
   const act = (phrase: string, alternatives: string[]) => {
     setHeard('')
     const words = spokenWords(phrase).join(' ')
     if (!words) return
     const last = lastActed.current
     if (last && last.words === words && Date.now() - last.at < REPEAT_MS) return
-    const done = handleRef.current(phrase, alternatives, !onRef.current)
+    const before =
+      carried.current && Date.now() - carried.current.at < CARRY_MS ? carried.current.text : null
+    carried.current = null
+    let done = before
+      ? handleRef.current(
+          `${before} ${phrase}`,
+          alternatives.map((a) => `${before} ${a}`),
+          !onRef.current
+        )
+      : null
+    if (!done) done = handleRef.current(phrase, alternatives, !onRef.current)
+    if (!done && words.split(' ').length <= CARRY_WORDS) {
+      carried.current = { text: phrase, at: Date.now() }
+    }
     if (done === STOP_LISTENING) {
       toggleRef.current(false)
       show('Voice control off')
@@ -182,11 +206,14 @@ export function useSheetVoice(
       consumed.current = ''
       return
     }
-    pauseTimer.current = setTimeout(() => {
-      pauseTimer.current = null
-      act(phrase, others)
-      consumed.current = text
-    }, PAUSE_MS)
+    pauseTimer.current = setTimeout(
+      () => {
+        pauseTimer.current = null
+        act(phrase, others)
+        consumed.current = text
+      },
+      MORE_TO_COME.test(phrase.trim()) ? PAUSE_MORE_MS : PAUSE_MS
+    )
   })
 
   // Started again whenever it stops, while wanted.

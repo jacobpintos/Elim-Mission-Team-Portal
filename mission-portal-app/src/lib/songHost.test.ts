@@ -128,3 +128,31 @@ describe('titles that begin with an asking word', () => {
     }
   })
 })
+
+describe('queueing a song as it is really heard', () => {
+  const library = [
+    { id: 'r', title: '10,000 Reasons (Ten Thousand Reasons)' },
+    { id: 'a', title: 'Above All' },
+    { id: 'w', title: 'Way Maker' },
+  ]
+  it('takes a title heard not quite as written, after "queue", when it is the only one near', () => {
+    expect(parseSheetCommand('Q 1000 reasons indeed', library)).toMatchObject({
+      type: 'queue',
+      request: { sheet: library[0], key: 'D' },
+    })
+    expect(parseSheetCommand('open 1000 reasons', library)).toMatchObject({
+      type: 'open',
+      request: { sheet: library[0] },
+    })
+    // Without "queue" or "open", a near title is not a command.
+    expect(parseSheetCommand('1000 reasons', library)).toBeNull()
+  })
+
+  it('hears "few" as "queue" only with a title said plainly', () => {
+    expect(parseSheetCommand('few Above All', library)).toMatchObject({
+      type: 'queue',
+      request: { sheet: library[1] },
+    })
+    expect(parseSheetCommand('few 1000 reasons', library)).toBeNull()
+  })
+})

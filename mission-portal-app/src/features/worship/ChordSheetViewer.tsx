@@ -731,6 +731,13 @@ export function ChordSheetViewer({
       const cmd = parseSheetCommand(ask, allSheets, voiceAliases.current)
       if (cmd) return runCommand(cmd)
     }
+    // "Hey Miriam, queue…" cut off at a pause: the rest is still to come, and
+    // is heard with this (useSheetVoice keeps it a moment).
+    if (asks.every((a) => a.trim().split(/\s+/).length <= 2)) {
+      miriamUntil.current = Date.now() + MIRIAM_WAIT_MS
+      setMiriamHere(true)
+      return null
+    }
     return 'I couldn’t find that song'
   }
   const handleVoice = (

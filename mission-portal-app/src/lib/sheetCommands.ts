@@ -1,9 +1,11 @@
 import type { SectionType } from '@/types/chordSheet'
 import {
+  closestTitles,
   parseSongRequest,
   requestFromAliases,
   spokenKey,
   spokenWords,
+  splitSpokenKey,
   type SongRequest,
 } from '@/lib/songRequest'
 
@@ -180,6 +182,7 @@ const QUEUE_BEFORE = [
   // As "queue" is sometimes written down.
   ['que'],
   ['kew'],
+  ['few'],
   ['queued'],
   ['cued'],
   ['up', 'next'],
@@ -280,9 +283,23 @@ export function parseSheetCommand<T extends { id: string | number; title: string
     const said = rest.join(' ')
     return requestFromAliases(aliases, sheets, said) ?? parseSongRequest(sheets, said)
   }
+  // After "queue" or "open", asked for plainly: a title heard not quite as it
+  // is written ("1000 reasons" for 10,000 Reasons) is the one, if it is the
+  // only one near.
+  const nearSong = (rest: string[]): SongRequest<T> | null => {
+    const exact = asSong(rest)
+    if (exact || rest.length === 0) return exact
+    const { name, key } = splitSpokenKey(rest.join(' '))
+    const near = name ? closestTitles(sheets, name, 2) : []
+    if (near.length !== 1) return null
+    return { sheet: near[0], key: key?.key ?? null, minor: key?.minor ?? false }
+  }
   for (const p of QUEUE_BEFORE) {
     if (startsWith(raw, p)) {
-      const request = asSong(raw.slice(p.length))
+      // "Few", as "queue" is sometimes heard, only with a title said plainly:
+      // it begins too many lines that are only sung.
+      const rest = raw.slice(p.length)
+      const request = p[0] === 'few' ? asSong(rest) : nearSong(rest)
       if (request) return { type: 'queue', request }
     }
   }
@@ -298,7 +315,7 @@ export function parseSheetCommand<T extends { id: string | number; title: string
   // title that itself begins with the word: "Open the Eyes of My Heart".
   for (const p of [...OPEN_BEFORE].sort((a, b) => b.length - a.length)) {
     if (startsWith(raw, p)) {
-      const request = asSong(raw.slice(p.length)) ?? asSong(raw)
+      const request = asSong(raw.slice(p.length)) ?? asSong(raw) ?? nearSong(raw.slice(p.length))
       if (request) return { type: 'open', request }
     }
   }
