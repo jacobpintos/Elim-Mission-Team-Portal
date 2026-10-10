@@ -37,7 +37,8 @@ class MiriamWakeModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("MiriamWake")
-    Events("onWake")
+    // onEnd: sent by the iPhone module; declared here too, never sent.
+    Events("onWake", "onEnd")
 
     Function("isAvailable") { true }
 

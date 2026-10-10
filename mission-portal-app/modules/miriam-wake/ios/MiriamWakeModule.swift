@@ -16,27 +16,33 @@ import ExpoModulesCore
 /// 16 kHz the model takes, and fed to it as it comes.
 ///
 /// When the phrase is heard, `onWake` is sent and listening stops: the request
-/// that follows is for speech recognition, which needs the microphone.
+/// that follows is for speech recognition, which needs the microphone. If the
+/// microphone changes under it (headphones, a call), it stops and sends
+/// `onEnd`, for the app to start it again.
 public class MiriamWakeModule: Module {
-  private let engine = AVAudioEngine()
+  /// Made afresh each time listening starts (`startListening`).
+  private var engine: AVAudioEngine?
+  private var configObserver: NSObjectProtocol?
+  /// Where listening is started and stopped: one at a time, whichever thread asks.
+  private let control = DispatchQueue(label: "miriam-wake.control")
+  /// Where the model runs.
   private let work = DispatchQueue(label: "miriam-wake")
   private var spotter: OpaquePointer?
   private var stream: OpaquePointer?
-  private var converter: AVAudioConverter?
   private var listening = false
   /// C strings handed to sherpa-onnx, kept for as long as the spotter is.
   private var cStrings: [UnsafeMutablePointer<CChar>] = []
 
   public func definition() -> ModuleDefinition {
     Name("MiriamWake")
-    Events("onWake")
+    Events("onWake", "onEnd")
 
     Function("isAvailable") { () -> Bool in
       return true
     }
 
     AsyncFunction("start") { (promise: Promise) in
-      DispatchQueue.main.async {
+      self.control.async {
         do {
           try self.startListening()
           promise.resolve(nil)
@@ -47,12 +53,13 @@ public class MiriamWakeModule: Module {
       }
     }
 
+    // Stopped before this returns: the microphone is free for whoever asked.
     Function("stop") {
-      self.stopListening()
+      self.control.sync { self.stopListening() }
     }
 
     OnDestroy {
-      self.stopListening()
+      self.control.sync { self.stopListening() }
       self.work.sync {
         if let spotter = self.spotter {
           SherpaOnnxDestroyKeywordSpotter(spotter)
@@ -108,6 +115,7 @@ public class MiriamWakeModule: Module {
     return made
   }
 
+  /// On the control queue.
   private func startListening() throws {
     if listening { return }
     let spotter = try work.sync { try makeSpotter() }
@@ -121,45 +129,53 @@ public class MiriamWakeModule: Module {
       .playAndRecord, mode: .voiceChat,
       options: [.mixWithOthers, .defaultToSpeaker, .allowBluetooth])
     try session.setActive(true)
+    guard session.isInputAvailable else {
+      throw WakeError("The microphone is not available.")
+    }
 
+    // A new engine each time. One kept from before still has the microphone
+    // as it was then — before speech recognition, or Miriam's voice, changed
+    // how the phone's sound is set — and listening to it in that old format
+    // brings the whole app down.
+    let engine = AVAudioEngine()
     let input = engine.inputNode
-    let inFormat = input.outputFormat(forBus: 0)
-    guard inFormat.sampleRate > 0,
+    let hardware = input.inputFormat(forBus: 0)
+    guard hardware.sampleRate > 0, hardware.channelCount > 0,
       let outFormat = AVAudioFormat(
-        commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false),
-      let converter = AVAudioConverter(from: inFormat, to: outFormat)
+        commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)
     else {
       throw WakeError("The microphone is not available.")
     }
-    self.converter = converter
 
-    input.installTap(onBus: 0, bufferSize: 2048, format: inFormat) { [weak self] buffer, _ in
-      guard let self = self, let samples = self.resample(buffer, to: outFormat) else { return }
+    // The microphone's own format, whatever it is now (`nil`), each buffer
+    // converted from the format it arrives in.
+    let resampler = Resampler(to: outFormat)
+    input.installTap(onBus: 0, bufferSize: 2048, format: nil) { [weak self] buffer, _ in
+      guard let self = self, let samples = resampler.samples(from: buffer) else { return }
       self.work.async { self.feed(samples) }
     }
     engine.prepare()
-    try engine.start()
-    listening = true
-  }
-
-  private func resample(_ buffer: AVAudioPCMBuffer, to format: AVAudioFormat) -> [Float]? {
-    guard let converter = converter else { return nil }
-    let ratio = format.sampleRate / buffer.format.sampleRate
-    let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 32
-    guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return nil }
-    var given = false
-    var error: NSError?
-    converter.convert(to: out, error: &error) { _, status in
-      if given {
-        status.pointee = .noDataNow
-        return nil
-      }
-      given = true
-      status.pointee = .haveData
-      return buffer
+    do {
+      try engine.start()
+    } catch {
+      input.removeTap(onBus: 0)
+      throw error
     }
-    guard error == nil, let channel = out.floatChannelData?[0], out.frameLength > 0 else { return nil }
-    return Array(UnsafeBufferPointer(start: channel, count: Int(out.frameLength)))
+    self.engine = engine
+    listening = true
+
+    // The microphone changed under it (headphones, a call, another app): the
+    // engine has stopped. Let go, and tell the app, which starts it again.
+    configObserver = NotificationCenter.default.addObserver(
+      forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
+    ) { [weak self] _ in
+      guard let self = self else { return }
+      self.control.async {
+        guard self.listening else { return }
+        self.stopListening()
+        self.sendEvent("onEnd", [:])
+      }
+    }
   }
 
   /// On the work queue: hand the model what was heard, and see if it was her name.
@@ -175,7 +191,9 @@ public class MiriamWakeModule: Module {
       SherpaOnnxDestroyKeywordResult(result)
       if !keyword.isEmpty {
         SherpaOnnxResetKeywordStream(spotter, stream)
-        DispatchQueue.main.async {
+        control.async {
+          // Stopped meanwhile (the microphone handed to someone else): not heard.
+          guard self.listening else { return }
           // Stopped first, so the microphone is free for the request.
           self.stopListening()
           self.sendEvent("onWake", ["keyword": keyword])
@@ -185,19 +203,62 @@ public class MiriamWakeModule: Module {
     }
   }
 
+  /// On the control queue.
   private func stopListening() {
-    if listening {
+    if let observer = configObserver {
+      NotificationCenter.default.removeObserver(observer)
+      configObserver = nil
+    }
+    if let engine = engine {
       engine.inputNode.removeTap(onBus: 0)
       engine.stop()
-      listening = false
+      self.engine = nil
     }
-    converter = nil
+    listening = false
     work.async {
       if let stream = self.stream {
         SherpaOnnxDestroyOnlineStream(stream)
         self.stream = nil
       }
     }
+  }
+}
+
+/// Brings what the microphone hears down to the model's 16 kHz, one buffer at
+/// a time — from whatever format each arrives in. Used on the tap's thread only.
+private final class Resampler: @unchecked Sendable {
+  private let out: AVAudioFormat
+  private var converter: AVAudioConverter?
+
+  init(to out: AVAudioFormat) {
+    self.out = out
+  }
+
+  func samples(from buffer: AVAudioPCMBuffer) -> [Float]? {
+    let format = buffer.format
+    guard format.sampleRate > 0, format.channelCount > 0, buffer.frameLength > 0 else { return nil }
+    if converter == nil || converter?.inputFormat != format {
+      converter = AVAudioConverter(from: format, to: out)
+    }
+    guard let converter = converter else { return nil }
+    let ratio = out.sampleRate / format.sampleRate
+    let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 32
+    guard let result = AVAudioPCMBuffer(pcmFormat: out, frameCapacity: capacity) else { return nil }
+    var given = false
+    var error: NSError?
+    converter.convert(to: result, error: &error) { _, status in
+      if given {
+        status.pointee = .noDataNow
+        return nil
+      }
+      given = true
+      status.pointee = .haveData
+      return buffer
+    }
+    guard error == nil, let channel = result.floatChannelData?[0], result.frameLength > 0 else {
+      return nil
+    }
+    return Array(UnsafeBufferPointer(start: channel, count: Int(result.frameLength)))
   }
 }
 

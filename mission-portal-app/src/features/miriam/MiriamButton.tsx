@@ -605,12 +605,19 @@ export function MiriamButton() {
       starting = true
       claimSpeechInBackground(WAKE_ID, stopWake)
       engine
-        .start(() => {
-          // Heard her: the engine has stopped; the request is next.
-          releaseSpeech(WAKE_ID)
-          setWaiting(false)
-          listenRef.current(true)
-        })
+        .start(
+          () => {
+            // Heard her: the engine has stopped; the request is next.
+            releaseSpeech(WAKE_ID)
+            setWaiting(false)
+            listenRef.current(true)
+          },
+          () => {
+            // Stopped by itself (headphones in, a call): started again in a moment.
+            releaseSpeech(WAKE_ID)
+            setWaiting(false)
+          }
+        )
         .then(() => {
           if (ownsSpeech(WAKE_ID)) setWaiting(true)
           else engine.stop()
