@@ -1,6 +1,9 @@
 import { Platform } from 'react-native'
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition'
-import { speechFree } from './speechOwner'
+import { ownsSpeech, speechFree } from './speechOwner'
+
+/** Who holds the microphone while Miriam speaks (features/miriam/speak.ts). */
+export const SPEAKING_ID = 'miriam-voice'
 
 /**
  * The iPhone's sound, made ready for Miriam's chime (`cue`) or voice
@@ -13,7 +16,7 @@ import { speechFree } from './speechOwner'
  * would cut that listening off.
  */
 export function readySpeaker(use: 'cue' | 'voice' = 'cue'): void {
-  if (Platform.OS !== 'ios' || !speechFree()) return
+  if (Platform.OS !== 'ios' || !(speechFree() || ownsSpeech(SPEAKING_ID))) return
   try {
     ExpoSpeechRecognitionModule.setCategoryIOS(
       use === 'voice'

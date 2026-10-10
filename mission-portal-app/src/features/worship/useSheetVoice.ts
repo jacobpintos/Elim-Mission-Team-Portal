@@ -1,7 +1,14 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Platform } from 'react-native'
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition'
-import { ownsSpeech, releaseSpeech, speechTakeable, withSpeech } from '@/lib/speechOwner'
+import {
+  claimSpeech,
+  ownsSpeech,
+  releaseSpeech,
+  speechTakeable,
+  withSpeech,
+  withSpeechInBackground,
+} from '@/lib/speechOwner'
 import { listeningCue } from '@/lib/listeningCue'
 import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
 import { spokenWords } from '@/lib/songRequest'
@@ -32,11 +39,18 @@ let wanted = false
  * offered to `handle`, which acts on it if it is a command and says what it
  * did ("Next song"), shown for a moment. Each phrase is acted on once: a
  * recogniser's later, final version of words already acted on is passed by.
+ *
+ * Off, with "Hey Miriam" switched on (`byName`), it listens anyway, for her
+ * name alone (`handle` is told so: nothing sung is taken as a command) — in
+ * the background, giving way to anyone else who wants the microphone, and
+ * taking over from the app's own listening for her name while the sheet is
+ * open, so what follows her name is heard here.
  */
 export function useSheetVoice(
   open: boolean,
-  handle: (phrase: string, alternatives: string[]) => string | null,
-  hints: string[]
+  handle: (phrase: string, alternatives: string[], onlyName: boolean) => string | null,
+  hints: string[],
+  byName = false
 ) {
   const id = `sheet-voice-${useId()}`
   const [available] = useState(() => {
@@ -47,6 +61,15 @@ export function useSheetVoice(
     }
   })
   const [on, setOn] = useState(() => wanted && open)
+  // Listening for her name refused (no microphone, no signal): not tried again on this sheet.
+  const [nameRefused, setNameRefused] = useState(false)
+  const forName = available && open && byName && !on && !nameRefused
+  const forNameRef = useRef(forName)
+  const onRef = useRef(on)
+  useEffect(() => {
+    forNameRef.current = forName
+    onRef.current = on
+  })
   const [feedback, setFeedback] = useState<string | null>(null)
   // What is being heard right now, before it is acted on: shown, so they
   // can see they were heard.
@@ -82,7 +105,7 @@ export function useSheetVoice(
     if (!words) return
     const last = lastActed.current
     if (last && last.words === words && Date.now() - last.at < REPEAT_MS) return
-    const done = handleRef.current(phrase, alternatives)
+    const done = handleRef.current(phrase, alternatives, !onRef.current)
     if (done === STOP_LISTENING) {
       toggleRef.current(false)
       show('Voice control off')
@@ -94,9 +117,15 @@ export function useSheetVoice(
     }
   }
 
-  const listen = () => {
+  /** Listening: for commands, or (`background`) for her name alone. */
+  const listen = (background = false) => {
+    if (ownsSpeech(id)) {
+      // Already listening for her name: now for everything, as it is.
+      if (!background) claimSpeech(id)
+      return
+    }
     consumed.current = ''
-    withSpeech(id, () =>
+    const start = () =>
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
         interimResults: true,
@@ -113,7 +142,17 @@ export function useSheetVoice(
           mode: 'measurement',
         },
       })
-    )
+    if (background) {
+      withSpeechInBackground(id, () => ExpoSpeechRecognitionModule.abort(), start)
+    } else {
+      withSpeech(id, start)
+    }
+  }
+  /** Listening again, as wanted, once it has stopped. */
+  const again = () => {
+    if (ownsSpeech(id) || !speechTakeable()) return
+    if (wanted) listen()
+    else if (forNameRef.current) listen(true)
   }
 
   const stopListening = () => {
@@ -154,12 +193,22 @@ export function useSheetVoice(
   useSpeechRecognitionEvent('end', () => {
     if (!ownsSpeech(id)) return
     releaseSpeech(id)
-    if (wanted && open) setTimeout(() => wanted && speechTakeable() && listen(), 250)
+    if (open) setTimeout(again, 250)
   })
   useSpeechRecognitionEvent('error', (e) => {
     if (!ownsSpeech(id)) return
     releaseSpeech(id)
     if (e.error === 'aborted') return
+    if (!wanted) {
+      // Listening for her name: quietly given up if it can't be done.
+      if (e.error === 'not-allowed') return setNameRefused(true)
+      if (e.error === 'network') {
+        if (onDevice.current || !canRecogniseOnDevice()) return setNameRefused(true)
+        onDevice.current = true
+      }
+      if (open) setTimeout(again, 400)
+      return
+    }
     if (e.error === 'not-allowed') {
       wanted = false
       setOn(false)
@@ -177,7 +226,7 @@ export function useSheetVoice(
       }
     }
     // Nothing heard for a while, or a hiccup: listen on.
-    if (wanted && open) setTimeout(() => wanted && speechTakeable() && listen(), 400)
+    if (open) setTimeout(again, 400)
   })
 
   // On when wanted: on opening, on moving to another song of the set, and
@@ -185,7 +234,7 @@ export function useSheetVoice(
   useEffect(() => {
     if (!on || !open) return
     const tryListen = () => {
-      if (wanted && speechTakeable()) listen()
+      if (wanted && speechTakeable() && !ownsSpeech(id)) listen()
     }
     const first = setTimeout(tryListen, 300)
     const every = setInterval(tryListen, 2000)
@@ -196,6 +245,25 @@ export function useSheetVoice(
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on, open])
+
+  // Listening for her name, while off and "Hey Miriam" is on: on the phone's
+  // own recogniser where it has one (nothing sent off, no time limit).
+  useEffect(() => {
+    if (!forName) return
+    onDevice.current = canRecogniseOnDevice()
+    const tryListen = () => {
+      if (speechTakeable() && !ownsSpeech(id)) listen(true)
+    }
+    const first = setTimeout(tryListen, 300)
+    const every = setInterval(tryListen, 2000)
+    return () => {
+      clearTimeout(first)
+      clearInterval(every)
+      // Switched on fully: carries on, as it is (`listen`).
+      if (!onRef.current) stopListening()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forName])
 
   // Closing the sheet ends it.
   useEffect(() => {
@@ -213,12 +281,15 @@ export function useSheetVoice(
         onDevice.current = (await isOffline()) && canRecogniseOnDevice()
       }
       wanted = true
+      // At once: listening for her name hands over rather than stopping (above).
+      onRef.current = true
       listeningCue('start')
       setOn(true)
       // At once, within the tap: a browser may not start listening later.
       if (speechTakeable()) listen()
     } else {
       wanted = false
+      onRef.current = false
       setOn(false)
       stopListening()
       listeningCue('stop')
@@ -229,5 +300,5 @@ export function useSheetVoice(
     toggleRef.current = toggle
   })
 
-  return { available, on, toggle, feedback, show, heard }
+  return { available, on, toggle, feedback, show, heard, forName }
 }

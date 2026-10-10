@@ -65,6 +65,18 @@ const GIVE_WAY_MS = 800
  * as soon as the wake word has stopped.
  */
 export function withSpeech(id: string, start: () => void): void {
+  take(id, start, () => claimSpeech(id))
+}
+
+/**
+ * The same, as a background listener — stopped with `stop` when anyone else
+ * asks for it — taking it from another background listener if one has it.
+ */
+export function withSpeechInBackground(id: string, stop: () => void, start: () => void): void {
+  take(id, start, () => claimSpeechInBackground(id, stop))
+}
+
+function take(id: string, start: () => void, claim: () => void): void {
   if (owner && owner !== id && giveWay) {
     const stop = giveWay
     const was = owner
@@ -73,7 +85,7 @@ export function withSpeech(id: string, start: () => void): void {
       if (started) return
       started = true
       if (owner === was) owner = null
-      claimSpeech(id)
+      claim()
       start()
     }
     waiting = go
@@ -81,6 +93,6 @@ export function withSpeech(id: string, start: () => void): void {
     stop()
     return
   }
-  claimSpeech(id)
+  claim()
   start()
 }

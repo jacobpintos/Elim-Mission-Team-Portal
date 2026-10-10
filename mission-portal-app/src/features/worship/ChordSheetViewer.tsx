@@ -48,6 +48,7 @@ import { registerSongHost } from '@/lib/songHost'
 import { listeningCue } from '@/lib/listeningCue'
 import { loadAliases } from '@/lib/songAliases'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
+import { useMiriamStore } from '@/stores/miriamStore'
 
 /** How long, after "Hey Miriam" alone, what is said next is taken as a song to open. */
 const MIRIAM_WAIT_MS = 8000
@@ -578,7 +579,11 @@ export function ChordSheetViewer({
     loadAliases().then((m) => (voiceAliases.current = m))
   }, [])
   const voiceHints = useMemo(
-    () => [...COMMAND_HINTS, ...KEY_HINTS, ...allSheets.map((s) => s.title)].slice(0, 100),
+    () =>
+      ['Hey Miriam', ...COMMAND_HINTS, ...KEY_HINTS, ...allSheets.map((s) => s.title)].slice(
+        0,
+        100
+      ),
     [allSheets]
   )
   const setKey = (key: string, minor: boolean) => {
@@ -669,10 +674,16 @@ export function ChordSheetViewer({
     setMiriamHere(false)
     return 'I couldn’t find that song'
   }
-  const handleVoice = (phrase: string, alternatives: string[]): string | null => {
+  const handleVoice = (
+    phrase: string,
+    alternatives: string[],
+    onlyName: boolean
+  ): string | null => {
     if (!sheet) return null
     const forMiriam = askedOfMiriam([phrase, ...alternatives])
     if (forMiriam !== undefined) return forMiriam
+    // Listening only for her name: nothing else said (or sung) is a command.
+    if (onlyName) return null
     let cmd = null
     for (const said of [phrase, ...alternatives]) {
       cmd = parseSheetCommand(said, allSheets, voiceAliases.current)
@@ -728,7 +739,9 @@ export function ChordSheetViewer({
         return STOP_LISTENING
     }
   }
-  const voice = useSheetVoice(Boolean(sheet), handleVoice, voiceHints)
+  // "Hey Miriam" switched on: listened for here, voice control on or not.
+  const wakeOn = useMiriamStore((s) => s.wakeOn)
+  const voice = useSheetVoice(Boolean(sheet), handleVoice, voiceHints, wakeOn)
 
   // Open: where a song asked of Miriam opens — in this one's place — or
   // is queued to come after it.
@@ -1084,14 +1097,19 @@ export function ChordSheetViewer({
                   style={styles.headerBtn}
                   accessibilityRole="switch"
                   aria-checked={voice.on}
-                  accessibilityLabel="Voice control"
+                  accessibilityLabel={
+                    voice.forName ? 'Voice control (listening for “Hey Miriam”)' : 'Voice control'
+                  }
                 >
+                  {/* Filled: voice control on. Ringed: listening for "Hey Miriam" only. */}
                   <View
                     style={[
                       styles.voiceDot,
                       voice.on
                         ? { backgroundColor: colors.primary, borderColor: colors.primary }
-                        : { borderColor: colors.border },
+                        : voice.forName
+                          ? { borderColor: colors.primary, borderWidth: 2 }
+                          : { borderColor: colors.border },
                     ]}
                   >
                     <Text fontSize={14}>🎤</Text>
@@ -1656,7 +1674,7 @@ export function ChordSheetViewer({
                 <View style={styles.underControl} />
               </ScrollView>
               {/* What voice control is hearing, as it hears it; Miriam, when called. */}
-              {voice.on && (miriamHere || voice.heard) ? (
+              {(voice.on && (miriamHere || voice.heard)) || (voice.forName && miriamHere) ? (
                 <View
                   pointerEvents="none"
                   style={[

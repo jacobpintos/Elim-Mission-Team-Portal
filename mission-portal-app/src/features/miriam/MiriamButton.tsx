@@ -174,7 +174,8 @@ export function MiriamButton() {
     key: null,
   })
   // "Hey Miriam": wanted on this device, and listening for it right now.
-  const [wakeOn, setWakeOn] = useState(false)
+  const wakeOn = useMiriamStore((s) => s.wakeOn)
+  const setWakeOn = useMiriamStore((s) => s.setWakeOn)
   const [waiting, setWaiting] = useState(false)
   // Opened by her name rather than a tap: shown unmistakably, as it may be
   // across the room from whoever said it.

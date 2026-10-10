@@ -28,6 +28,9 @@ export interface PendingUserForm {
 }
 
 interface MiriamStore {
+  /** "Hey Miriam" switched on, on this device: listened for wherever it can be. */
+  wakeOn: boolean
+  setWakeOn: (on: boolean) => void
   eventForm: PendingEventForm | null
   offerEventForm: (form: Omit<PendingEventForm, 'id'>) => void
   clearEventForm: () => void
@@ -40,6 +43,8 @@ interface MiriamStore {
 }
 
 export const useMiriamStore = create<MiriamStore>((set) => ({
+  wakeOn: false,
+  setWakeOn: (wakeOn) => set({ wakeOn }),
   eventForm: null,
   offerEventForm: (form) => set({ eventForm: { ...form, id: Date.now() } }),
   clearEventForm: () => set({ eventForm: null }),
