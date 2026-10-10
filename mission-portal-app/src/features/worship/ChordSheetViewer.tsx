@@ -45,6 +45,7 @@ import { COMMAND_HINTS, parseSheetCommand } from '@/lib/sheetCommands'
 import { KEY_HINTS, parseSongRequest, requestFromAliases } from '@/lib/songRequest'
 import { withoutHerName } from '@/lib/wakeWord'
 import { registerSongHost } from '@/lib/songHost'
+import { listeningCue } from '@/lib/listeningCue'
 import { loadAliases } from '@/lib/songAliases'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 
@@ -639,6 +640,8 @@ export function ChordSheetViewer({
     if (asks.length === 0) {
       miriamUntil.current = Date.now() + MIRIAM_WAIT_MS
       setMiriamHere(true)
+      // Heard, as her button says it: the chime.
+      listeningCue('start')
       return 'Hineni — which song?'
     }
     for (const ask of asks) {

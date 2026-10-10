@@ -25,7 +25,7 @@ import {
   speechFree,
   withSpeech,
 } from '@/lib/speechOwner'
-import { listeningCue } from '@/lib/listeningCue'
+import { CUE_MS, listeningCue, prepareCues } from '@/lib/listeningCue'
 import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
 import { wakeEngine } from '@/lib/wakeEngine'
 import { withoutHerName } from '@/lib/wakeWord'
@@ -191,6 +191,7 @@ export function MiriamButton() {
   const sent = useRef(false)
 
   useEffect(() => {
+    prepareCues()
     AsyncStorage.getItem(WAKE_KEY)
       .then((v) => setWakeOn(v === '1'))
       .catch(() => {})
@@ -505,10 +506,11 @@ export function MiriamButton() {
       // back sooner than from the network, and the titles are given as hints.
       onDevice = songHost() ? canRecogniseOnDevice() : (await isOffline()) && canRecogniseOnDevice()
     }
+    // The chime, heard — the ringer off or not — and played out before the
+    // microphone takes the sound over; a browser plays it alongside, and
+    // must start listening within the tap.
     listeningCue('start')
-    // A moment for the chime before the microphone takes the sound over; a
-    // browser plays it alongside, and must start listening within the tap.
-    if (Platform.OS !== 'web') await new Promise((r) => setTimeout(r, 180))
+    if (Platform.OS !== 'web') await new Promise((r) => setTimeout(r, CUE_MS + 30))
     withSpeech(SPEECH_ID, () => {
       requesting.current = true
       ExpoSpeechRecognitionModule.start({

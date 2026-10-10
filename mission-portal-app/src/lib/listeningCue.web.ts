@@ -9,6 +9,12 @@
  */
 let context: AudioContext | null = null
 
+/** How long a chime lasts (listeningCue.ts). */
+export const CUE_MS = 200
+
+/** Made on the spot: nothing to load. */
+export function prepareCues(): void {}
+
 function audio(): AudioContext | null {
   if (typeof window === 'undefined') return null
   const Ctx =
