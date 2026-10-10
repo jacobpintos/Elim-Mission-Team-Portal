@@ -84,3 +84,34 @@ describe('"queue" as it is misheard', () => {
     expect(parseSheetCommand('kill the lights', library)).toBeNull()
   })
 })
+
+describe('songs asked for as they are said', () => {
+  const library = [
+    { id: 'f', title: 'Show Me Your Face / Alpha and Omega' },
+    { id: 'j', title: 'I Have Decided to Follow Jesus' },
+    { id: 'a', title: 'Above All' },
+  ]
+  it('opens a medley by either of its songs, or both', () => {
+    for (const said of [
+      'open show me your face',
+      'open alpha and omega',
+      'open show me your face alpha and omega',
+    ]) {
+      expect(parseSheetCommand(said, library), said).toMatchObject({
+        type: 'open',
+        request: { sheet: library[0] },
+      })
+    }
+  })
+
+  it('takes "opened", "opening", "oh pen" for "open", before a title said plainly', () => {
+    for (const said of ['opened Above All', 'opening above all', 'oh pen above all']) {
+      expect(parseSheetCommand(said, library), said).toMatchObject({ type: 'open' })
+    }
+    expect(parseSheetCommand('hope in the Lord', library)).toBeNull()
+  })
+
+  it('takes a sung line with "back" in it for nothing', () => {
+    expect(parseSheetCommand('no turning back', library)).toBeNull()
+  })
+})

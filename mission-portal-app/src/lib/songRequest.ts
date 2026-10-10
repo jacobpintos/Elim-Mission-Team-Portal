@@ -38,14 +38,20 @@ export function spokenWords(text: string): string[] {
 
 /**
  * A title as words: in full, without what is in brackets, and what is in
- * brackets on its own — "Abba (Arms of a Father)" is asked for either way.
+ * brackets on its own — "Abba (Arms of a Father)" is asked for either way —
+ * and each of two songs sung as one: "Show Me Your Face / Alpha and Omega".
  */
 function titleForms(title: string): string[][] {
-  const forms = [
-    spokenWords(title),
-    spokenWords(title.replace(/\s*[([].*?[)\]]/g, ' ')),
-    ...[...title.matchAll(/[([](.*?)[)\]]/g)].map((m) => spokenWords(m[1])),
-  ].filter((f) => f.length > 0)
+  const parts = title.split(/\s*[/|]\s*/).filter(Boolean)
+  const forms = [title, ...(parts.length > 1 ? parts : [])].flatMap((t) => [
+    spokenWords(t),
+    spokenWords(t.replace(/\s*[([].*?[)\]]/g, ' ')),
+    ...[...t.matchAll(/[([](.*?)[)\]]/g)].map((m) => spokenWords(m[1])),
+  ])
+  return dedupe(forms.filter((f) => f.length > 0))
+}
+
+function dedupe(forms: string[][]): string[][] {
   const seen = new Set<string>()
   return forms.filter((f) => {
     const k = f.join(' ')

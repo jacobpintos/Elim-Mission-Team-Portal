@@ -21,11 +21,17 @@ const PAUSE_MS = 700
 /** The same, after a word that plainly has more to come: "queue…", "…in". */
 const PAUSE_MORE_MS = 1600
 const MORE_TO_COME =
-  /\b(?:queue|cue|q|few|kill|cute|open|switch to|change to|pull up|bring up|up next|key|key of|in|at|on|to|speed|level|miriam)$/i
+  /\b(?:queue|cue|q|few|kill|cute|open|opened|opening|switch to|change to|pull up|bring up|up next|key|key of|in|at|on|to|speed|level|miriam)$/i
 /** How long a phrase that did nothing is kept, as the first half of one cut at a pause. */
 const CARRY_MS = 3000
 /** Only a few words: the start of a command, not a line being sung. */
 const CARRY_WORDS = 4
+/**
+ * A word on its own is a command only after this long without words, or
+ * just after another command: straight after words that did nothing it is
+ * the end of a line held on a long note — "no turning … back".
+ */
+const LONE_WORD_QUIET_MS = 1500
 /** The same words heard again this soon are the same phrase, not a second command. */
 const REPEAT_MS = 3000
 /** How long what was done stays on screen ("Next song"). */
@@ -110,7 +116,14 @@ export function useSheetVoice(
   // A short phrase that did nothing, kept a moment: "queue…" [pause]
   // "…10,000 Reasons in D" is one command cut in two.
   const carried = useRef<{ text: string; at: number } | null>(null)
+  // When words were last heard, how long it had been quiet before this
+  // phrase began, and whether the phrase before it was a command.
+  const lastWordsAt = useRef(0)
+  const quietBefore = useRef(Infinity)
+  const phraseOpen = useRef(false)
+  const lastWasCommand = useRef(false)
   const act = (phrase: string, alternatives: string[]) => {
+    phraseOpen.current = false
     setHeard('')
     const words = spokenWords(phrase).join(' ')
     if (!words) return
@@ -126,7 +139,12 @@ export function useSheetVoice(
           !onRef.current
         )
       : null
-    if (!done) done = handleRef.current(phrase, alternatives, !onRef.current)
+    const loneWordInSong =
+      words.split(' ').length === 1 &&
+      quietBefore.current < LONE_WORD_QUIET_MS &&
+      !lastWasCommand.current
+    if (!done && !loneWordInSong) done = handleRef.current(phrase, alternatives, !onRef.current)
+    lastWasCommand.current = Boolean(done)
     if (!done && words.split(' ').length <= CARRY_WORDS) {
       carried.current = { text: phrase, at: Date.now() }
     }
@@ -200,7 +218,15 @@ export function useSheetVoice(
     const others = alts.slice(1).map((a) => a.slice(from).trim())
     if (pauseTimer.current) clearTimeout(pauseTimer.current)
     pauseTimer.current = null
-    if (phrase) setHeard(phrase.split(/\s+/).slice(-8).join(' '))
+    if (phrase) {
+      const now = Date.now()
+      if (!phraseOpen.current) {
+        phraseOpen.current = true
+        quietBefore.current = now - lastWordsAt.current
+      }
+      lastWordsAt.current = now
+      setHeard(phrase.split(/\s+/).slice(-8).join(' '))
+    }
     if (e.isFinal) {
       act(phrase, others)
       consumed.current = ''

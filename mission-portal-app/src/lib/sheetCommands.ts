@@ -265,7 +265,14 @@ const OPEN_BEFORE = [
   ['bring', 'up'],
   ['switch', 'to'],
   ['change', 'to'],
+  // As "open" is sometimes written down: taken only before a title said plainly.
+  ['opened'],
+  ['opening'],
+  ['oh', 'pen'],
+  ['o', 'pen'],
+  ['hope', 'in'],
 ]
+const HEARD_AS_OPEN = new Set(['opened', 'opening', 'oh pen', 'o pen', 'hope in'])
 
 const startsWith = (w: string[], p: string[]) => p.every((x, i) => w[i] === x)
 
@@ -319,7 +326,10 @@ export function parseSheetCommand<T extends { id: string | number; title: string
   // title that itself begins with the word: "Open the Eyes of My Heart".
   for (const p of [...OPEN_BEFORE].sort((a, b) => b.length - a.length)) {
     if (startsWith(raw, p)) {
-      const request = asSong(raw.slice(p.length)) ?? asSong(raw) ?? nearSong(raw.slice(p.length))
+      const rest = raw.slice(p.length)
+      const request = HEARD_AS_OPEN.has(p.join(' '))
+        ? asSong(rest)
+        : (asSong(rest) ?? asSong(raw) ?? nearSong(rest))
       if (request) return { type: 'open', request }
     }
   }
