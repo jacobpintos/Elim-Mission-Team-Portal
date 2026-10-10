@@ -41,7 +41,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useSheetNotesStore } from '@/stores/sheetNotesStore'
 import { NoteLine, SheetNotesEditor, SONG, useNoteColors } from './SheetNotes'
 import { STOP_LISTENING, useSheetVoice } from './useSheetVoice'
-import { COMMAND_HINTS, parseSheetCommand } from '@/lib/sheetCommands'
+import { COMMAND_HINTS, parseSheetCommand, type SheetCommand } from '@/lib/sheetCommands'
 import { KEY_HINTS, parseSongRequest, requestFromAliases } from '@/lib/songRequest'
 import { withoutHerName } from '@/lib/wakeWord'
 import { registerSongHost } from '@/lib/songHost'
@@ -625,6 +625,60 @@ export function ChordSheetViewer({
     onQueue({ sheet: next, key, minor })
     return `Up next: ${next.title}${key ? ` in ${keyLabel(key, minor)}` : ''}`
   }
+  /** A voice command, done: what was done, to show ("Next song"). */
+  const runCommand = (cmd: SheetCommand<ChordSheet>): string | null => {
+    switch (cmd.type) {
+      case 'next':
+        if (!hasNext) return 'No next song'
+        goNext()
+        return queued ? `Next: ${queued.sheet.title}` : 'Next song'
+      case 'previous':
+        if (!setNav?.onPrev) return 'No song before this'
+        goPrev()
+        return 'Previous song'
+      case 'queue':
+        return queueNext(cmd.request)
+      case 'open':
+        return openNow(cmd.request)
+      case 'clearQueue':
+        onQueue?.(null)
+        return 'Queue cleared'
+      case 'key':
+        setKey(cmd.key, cmd.minor)
+        return `Key of ${keyLabel(cmd.key, cmd.minor)}`
+      case 'numbers':
+        setKey('', isMinor)
+        return 'Numbers'
+      case 'scroll':
+        // "Autoscroll on five", "speed seven": that speed (1–12, as shown).
+        if (cmd.level) autoScroll.changeSpeed(cmd.level - autoScroll.level)
+        if (cmd.action === 'speed') return `Speed ${cmd.level}`
+        if (cmd.action === 'start') {
+          if (autoScroll.state === 'paused') autoScroll.resume()
+          else if (autoScroll.state === 'off') autoScroll.start()
+          return cmd.level ? `Scrolling at ${cmd.level}` : 'Scrolling'
+        }
+        if (cmd.action === 'pause') {
+          if (autoScroll.state === 'running') autoScroll.pause()
+          return 'Paused'
+        }
+        autoScroll.changeSpeed(cmd.action === 'faster' ? 1 : -1)
+        return cmd.action === 'faster' ? 'Faster' : 'Slower'
+      case 'section':
+        return goToSection(cmd.kind, cmd.number) ?? 'No such section'
+      case 'top':
+        autoScroll.scrollTo(0)
+        return 'Top'
+      case 'chordsOnly':
+        setChordsOnly(cmd.on)
+        return cmd.on ? 'Chords only' : 'Lyrics'
+      case 'close':
+        onClose()
+        return 'Closed'
+      case 'stopListening':
+        return STOP_LISTENING
+    }
+  }
   /**
    * "Hey Miriam" heard by voice control itself (it has the microphone, so
    * listening for her name is not running): what comes with it, or next, is
@@ -672,6 +726,11 @@ export function ChordSheetViewer({
     if (!named) return undefined
     miriamUntil.current = 0
     setMiriamHere(false)
+    // "Hey Miriam, start autoscroll on five": not a song, but something to do.
+    for (const ask of asks) {
+      const cmd = parseSheetCommand(ask, allSheets, voiceAliases.current)
+      if (cmd) return runCommand(cmd)
+    }
     return 'I couldn’t find that song'
   }
   const handleVoice = (
@@ -689,55 +748,7 @@ export function ChordSheetViewer({
       cmd = parseSheetCommand(said, allSheets, voiceAliases.current)
       if (cmd) break
     }
-    if (!cmd) return null
-    switch (cmd.type) {
-      case 'next':
-        if (!hasNext) return 'No next song'
-        goNext()
-        return queued ? `Next: ${queued.sheet.title}` : 'Next song'
-      case 'previous':
-        if (!setNav?.onPrev) return 'No song before this'
-        goPrev()
-        return 'Previous song'
-      case 'queue':
-        return queueNext(cmd.request)
-      case 'open':
-        return openNow(cmd.request)
-      case 'clearQueue':
-        onQueue?.(null)
-        return 'Queue cleared'
-      case 'key':
-        setKey(cmd.key, cmd.minor)
-        return `Key of ${keyLabel(cmd.key, cmd.minor)}`
-      case 'numbers':
-        setKey('', isMinor)
-        return 'Numbers'
-      case 'scroll':
-        if (cmd.action === 'start') {
-          if (autoScroll.state === 'paused') autoScroll.resume()
-          else if (autoScroll.state === 'off') autoScroll.start()
-          return 'Scrolling'
-        }
-        if (cmd.action === 'pause') {
-          if (autoScroll.state === 'running') autoScroll.pause()
-          return 'Paused'
-        }
-        autoScroll.changeSpeed(cmd.action === 'faster' ? 1 : -1)
-        return cmd.action === 'faster' ? 'Faster' : 'Slower'
-      case 'section':
-        return goToSection(cmd.kind, cmd.number) ?? 'No such section'
-      case 'top':
-        autoScroll.scrollTo(0)
-        return 'Top'
-      case 'chordsOnly':
-        setChordsOnly(cmd.on)
-        return cmd.on ? 'Chords only' : 'Lyrics'
-      case 'close':
-        onClose()
-        return 'Closed'
-      case 'stopListening':
-        return STOP_LISTENING
-    }
+    return cmd ? runCommand(cmd) : null
   }
   // "Hey Miriam" switched on: listened for here, voice control on or not.
   const wakeOn = useMiriamStore((s) => s.wakeOn)

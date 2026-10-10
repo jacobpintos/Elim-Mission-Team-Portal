@@ -24,7 +24,11 @@ export type SheetCommand<T> =
   | { type: 'clearQueue' }
   | { type: 'key'; key: string; minor: boolean }
   | { type: 'numbers' }
-  | { type: 'scroll'; action: 'start' | 'pause' | 'faster' | 'slower' }
+  /**
+   * Autoscroll. `level`: a speed asked for (1–12, as shown) — "autoscroll on
+   * five"; `speed` sets it without starting: "speed seven".
+   */
+  | { type: 'scroll'; action: 'start' | 'pause' | 'faster' | 'slower' | 'speed'; level?: number }
   | { type: 'section'; kind: SectionType; number: number | null }
   | { type: 'top' }
   | { type: 'chordsOnly'; on: boolean }
@@ -125,13 +129,38 @@ said(
   'start scrolling',
   'autoscroll',
   'auto scroll',
+  'start autoscroll',
+  'start auto scroll',
+  'start auto scrolling',
+  'start the autoscroll',
+  'begin scrolling',
+  'autoscroll on',
+  'auto scroll on',
+  'turn on autoscroll',
+  'turn on auto scroll',
   'start',
   'resume',
   'keep going',
   'continue',
   'go'
 )
-said({ type: 'scroll', action: 'pause' }, 'stop', 'pause', 'hold', 'stop scrolling', 'wait')
+said(
+  { type: 'scroll', action: 'pause' },
+  'stop',
+  'pause',
+  'hold',
+  'stop scrolling',
+  'wait',
+  'stop autoscroll',
+  'stop auto scroll',
+  'pause autoscroll',
+  'pause auto scroll',
+  'pause scrolling',
+  'autoscroll off',
+  'auto scroll off',
+  'turn off autoscroll',
+  'turn off auto scroll'
+)
 said({ type: 'scroll', action: 'faster' }, 'faster', 'speed up', 'scroll faster')
 said({ type: 'scroll', action: 'slower' }, 'slower', 'slow down', 'scroll slower')
 said({ type: 'top' }, 'top', 'from the top', 'start over', 'beginning', 'top of the song')
@@ -158,6 +187,69 @@ const QUEUE_BEFORE = [
   ['play', 'next'],
 ]
 const QUEUE_AFTER = [['next'], ['up', 'next']]
+
+/** Speeds as said, 1–12 (lib/autoScroll), and what they are often written down as. */
+const LEVELS: Record<string, number> = {
+  one: 1,
+  won: 1,
+  two: 2,
+  too: 2,
+  three: 3,
+  four: 4,
+  for: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  ate: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [String(i + 1), i + 1])),
+}
+const START_SCROLL = [['start'], ['begin'], ['turn', 'on'], ['resume'], ['set']]
+const SCROLL_NAMES = [
+  ['auto', 'scrolling'],
+  ['auto', 'scroll'],
+  ['autoscrolling'],
+  ['autoscroll'],
+  ['scrolling'],
+  ['scroll'],
+]
+/** Words between the asking and the speed: "on", "at speed", "to level"... */
+const SPEED_LINKS = new Set(['on', 'at', 'to', 'speed', 'level', 'the', 'a', 'of'])
+
+/**
+ * Autoscroll at a speed: "start auto scroll on five", "autoscroll at speed
+ * 7", "scroll 3" start it at that speed; "speed seven", "set the speed to 4"
+ * only change it. A number alone is nothing.
+ */
+function scrollAtSpeed(words: string[]): SheetCommand<never> | null {
+  let rest = words
+  let start = false
+  for (const p of START_SCROLL) {
+    if (startsWith(rest, p)) {
+      start = p[0] !== 'set'
+      rest = rest.slice(p.length)
+      break
+    }
+  }
+  let named = false
+  for (const n of SCROLL_NAMES) {
+    if (startsWith(rest, n)) {
+      named = true
+      rest = rest.slice(n.length)
+      break
+    }
+  }
+  const level = LEVELS[rest[rest.length - 1]]
+  if (!level || !rest.slice(0, -1).every((w) => SPEED_LINKS.has(w))) return null
+  if (named || start) return { type: 'scroll', action: 'start', level }
+  return rest.includes('speed') || rest.includes('level')
+    ? { type: 'scroll', action: 'speed', level }
+    : null
+}
 /** Ways of asking for another song now, in place of this one. */
 const OPEN_BEFORE = [
   ['open'],
@@ -214,6 +306,8 @@ export function parseSheetCommand<T extends { id: string | number; title: string
   for (const [form, make] of PHRASES) {
     if (form.join(' ') === joined) return make(words) as SheetCommand<T>
   }
+  const atSpeed = scrollAtSpeed(words)
+  if (atSpeed) return atSpeed
 
   // A section: "chorus", "the bridge", "verse two", "chorus 2".
   for (const [name, kind] of SECTIONS) {
@@ -253,6 +347,8 @@ export const COMMAND_HINTS = [
   'lyrics',
   'faster',
   'slower',
+  'autoscroll',
+  'speed',
   'start scrolling',
   'stop listening',
 ]

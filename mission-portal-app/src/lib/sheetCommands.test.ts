@@ -53,6 +53,25 @@ describe('parseSheetCommand', () => {
     expect(cmd('slow down')).toEqual({ type: 'scroll', action: 'slower' })
   })
 
+  it('starts autoscroll at a speed, as asked in a sentence', () => {
+    const at = (level: number) => ({ type: 'scroll', action: 'start', level })
+    expect(cmd('Start auto scroll on five')).toEqual(at(5))
+    expect(cmd('start autoscroll at speed 7')).toEqual(at(7))
+    expect(cmd('autoscroll on twelve')).toEqual(at(12))
+    expect(cmd('scroll three')).toEqual(at(3))
+    expect(cmd('okay start scrolling at 10 please')).toEqual(at(10))
+    expect(cmd('speed seven')).toEqual({ type: 'scroll', action: 'speed', level: 7 })
+    expect(cmd('set the speed to four')).toEqual({ type: 'scroll', action: 'speed', level: 4 })
+    // Said without a speed, as before; and a number alone, or out of range, is nothing.
+    expect(cmd('start auto scroll')).toEqual({ type: 'scroll', action: 'start' })
+    expect(cmd('autoscroll on')).toEqual({ type: 'scroll', action: 'start' })
+    expect(cmd('stop autoscroll')).toEqual({ type: 'scroll', action: 'pause' })
+    expect(cmd('autoscroll off')).toEqual({ type: 'scroll', action: 'pause' })
+    expect(cmd('five')).toBeNull()
+    expect(cmd('autoscroll on thirteen')).toBeNull()
+    expect(cmd('verse two')).toEqual({ type: 'section', kind: 'verse', number: 2 })
+  })
+
   it('goes to a section', () => {
     expect(cmd('chorus')).toEqual({ type: 'section', kind: 'chorus', number: null })
     expect(cmd('go to the bridge')).toEqual({ type: 'section', kind: 'bridge', number: null })
