@@ -19,6 +19,8 @@ export type SheetCommand<T> =
   | { type: 'next' }
   | { type: 'previous' }
   | { type: 'queue'; request: SongRequest<T> }
+  /** Another song, now, in this one's place: "open Above All in E". */
+  | { type: 'open'; request: SongRequest<T> }
   | { type: 'clearQueue' }
   | { type: 'key'; key: string; minor: boolean }
   | { type: 'numbers' }
@@ -151,6 +153,15 @@ const QUEUE_BEFORE = [
   ['play', 'next'],
 ]
 const QUEUE_AFTER = [['next'], ['up', 'next']]
+/** Ways of asking for another song now, in place of this one. */
+const OPEN_BEFORE = [
+  ['open'],
+  ['open', 'up'],
+  ['pull', 'up'],
+  ['bring', 'up'],
+  ['switch', 'to'],
+  ['change', 'to'],
+]
 
 const startsWith = (w: string[], p: string[]) => p.every((x, i) => w[i] === x)
 
@@ -186,6 +197,14 @@ export function parseSheetCommand<T extends { id: string | number; title: string
     }
   }
 
+  // Another song now: "open Above All in E", "switch to Way Maker".
+  for (const p of [...OPEN_BEFORE].sort((a, b) => b.length - a.length)) {
+    if (startsWith(raw, p)) {
+      const request = asSong(raw.slice(p.length))
+      if (request) return { type: 'open', request }
+    }
+  }
+
   for (const [form, make] of PHRASES) {
     if (form.join(' ') === joined) return make(words) as SheetCommand<T>
   }
@@ -212,6 +231,8 @@ export const COMMAND_HINTS = [
   'previous song',
   'queue',
   'up next',
+  'open',
+  'switch to',
   'clear queue',
   'chorus',
   'verse',

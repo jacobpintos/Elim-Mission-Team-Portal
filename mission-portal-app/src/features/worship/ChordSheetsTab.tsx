@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, TextInput, StyleSheet, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -8,6 +8,7 @@ import { ChordSheetEditor } from './ChordSheetEditor'
 import { SongListener, type AskedKey } from './SongListener'
 import { ChordSheetViewer, type QueuedSong } from './ChordSheetViewer'
 import type { ChordSheet } from '@/types/chordSheet'
+import { registerSongHost } from '@/lib/songHost'
 
 interface ChordSheetsTabProps {
   createdBy: string | number
@@ -29,6 +30,16 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
   const [queued, setQueued] = useState<QueuedSong | null>(null)
   // A key asked for with the song's name ("Firm Foundation in E").
   const [askedKey, setAskedKey] = useState<AskedKey | null>(null)
+  // The page Miriam opens songs on while it is up (lib/songHost); an open
+  // sheet registers over it, and opens them in its own place.
+  useEffect(
+    () =>
+      registerSongHost((sheet, key) => {
+        setAskedKey(key)
+        setViewSheet(sheet)
+      }),
+    []
+  )
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null)
 
   const filtered = [...chordSheets]

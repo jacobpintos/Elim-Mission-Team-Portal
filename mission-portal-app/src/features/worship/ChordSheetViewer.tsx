@@ -42,9 +42,14 @@ import { useSheetNotesStore } from '@/stores/sheetNotesStore'
 import { NoteLine, SheetNotesEditor, SONG, useNoteColors } from './SheetNotes'
 import { STOP_LISTENING, useSheetVoice } from './useSheetVoice'
 import { COMMAND_HINTS, parseSheetCommand } from '@/lib/sheetCommands'
-import { KEY_HINTS } from '@/lib/songRequest'
+import { KEY_HINTS, parseSongRequest, requestFromAliases } from '@/lib/songRequest'
+import { withoutHerName } from '@/lib/wakeWord'
+import { registerSongHost } from '@/lib/songHost'
 import { loadAliases } from '@/lib/songAliases'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
+
+/** How long, after "Hey Miriam" alone, what is said next is taken as a song to open. */
+const MIRIAM_WAIT_MS = 8000
 
 /** A song queued to come next ("queue Holy Forever in D"). */
 export interface QueuedSong {
@@ -592,8 +597,57 @@ export function ChordSheetViewer({
     jumpTo(target.id)
     return getSectionLabel(sheet.sections, target.id)
   }
+  /** Another song now, in this one's place, in the key asked for. */
+  const openNow = (request: { sheet: ChordSheet; key: string | null; minor: boolean }) => {
+    if (!onOpenSheet) return null
+    onOpenSheet(request.sheet, request.key ? { key: request.key, minor: request.minor } : null)
+    return `Opening ${request.sheet.title}${request.key ? ` in ${keyLabel(request.key, request.minor)}` : ''}`
+  }
+  /**
+   * "Hey Miriam" heard by voice control itself (it has the microphone, so
+   * listening for her name is not running): what comes with it, or next, is
+   * a song to open in this one's place — here, on the phone, never sent off.
+   */
+  const miriamUntil = useRef(0)
+  const [miriamHere, setMiriamHere] = useState(false)
+  useEffect(() => {
+    if (!miriamHere) return
+    const t = setTimeout(() => setMiriamHere(false), MIRIAM_WAIT_MS)
+    return () => clearTimeout(t)
+  }, [miriamHere])
+  const askedOfMiriam = (said: string[]): string | null | undefined => {
+    const named = said.some((p) => withoutHerName(p) !== p.trim())
+    const waiting = miriamUntil.current > Date.now()
+    if (!named && !waiting) return undefined
+    const asks = said.map(withoutHerName).filter(Boolean)
+    if (asks.length === 0) {
+      miriamUntil.current = Date.now() + MIRIAM_WAIT_MS
+      setMiriamHere(true)
+      return 'Hineni — which song?'
+    }
+    for (const ask of asks) {
+      const cmd = parseSheetCommand(ask, allSheets, voiceAliases.current)
+      const request =
+        cmd?.type === 'open' || cmd?.type === 'queue'
+          ? cmd.request
+          : (requestFromAliases(voiceAliases.current, allSheets, ask) ??
+            parseSongRequest(allSheets, ask))
+      if (request) {
+        miriamUntil.current = 0
+        setMiriamHere(false)
+        return openNow(request) ?? 'Can’t open another song here'
+      }
+    }
+    // Waiting, and what came was not a song: perhaps a command ("chorus").
+    if (!named) return undefined
+    miriamUntil.current = 0
+    setMiriamHere(false)
+    return 'I couldn’t find that song'
+  }
   const handleVoice = (phrase: string, alternatives: string[]): string | null => {
     if (!sheet) return null
+    const forMiriam = askedOfMiriam([phrase, ...alternatives])
+    if (forMiriam !== undefined) return forMiriam
     let cmd = null
     for (const said of [phrase, ...alternatives]) {
       cmd = parseSheetCommand(said, allSheets, voiceAliases.current)
@@ -615,6 +669,8 @@ export function ChordSheetViewer({
         onQueue({ sheet: next, key, minor })
         return `Up next: ${next.title}${key ? ` in ${keyLabel(key, minor)}` : ''}`
       }
+      case 'open':
+        return openNow(cmd.request)
       case 'clearQueue':
         onQueue?.(null)
         return 'Queue cleared'
@@ -652,6 +708,17 @@ export function ChordSheetViewer({
     }
   }
   const voice = useSheetVoice(Boolean(sheet), handleVoice, voiceHints)
+
+  // Open: where a song asked of Miriam opens — in this one's place.
+  const openSheetRef = useRef(onOpenSheet)
+  useEffect(() => {
+    openSheetRef.current = onOpenSheet
+  })
+  const canOpenOthers = Boolean(sheet && onOpenSheet)
+  useEffect(() => {
+    if (!canOpenOthers) return
+    return registerSongHost((next, key) => openSheetRef.current?.(next, key))
+  }, [canOpenOthers])
 
   /**
    * A sideways swipe across the sheet: the next song in the set, or the one
@@ -1557,6 +1624,42 @@ export function ChordSheetViewer({
                 {/* Room for the last lines to scroll up past the autoscroll control. */}
                 <View style={styles.underControl} />
               </ScrollView>
+              {/* What voice control is hearing, as it hears it; Miriam, when called. */}
+              {voice.on && (miriamHere || voice.heard) ? (
+                <View
+                  pointerEvents="none"
+                  style={[
+                    styles.voiceToast,
+                    {
+                      // Above what was just done, when that is showing too.
+                      bottom: voice.feedback ? 54 : 10,
+                      backgroundColor: miriamHere ? colors.primary : colors.surface,
+                      borderColor: colors.primary,
+                      borderWidth: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      maxWidth: '92%',
+                    },
+                  ]}
+                >
+                  {miriamHere ? (
+                    <Text color="white" fontSize="$2" fontWeight="800">
+                      M · Miriam — which song?
+                    </Text>
+                  ) : null}
+                  {voice.heard ? (
+                    <Text
+                      color={miriamHere ? 'white' : colors.text}
+                      fontSize="$2"
+                      fontStyle="italic"
+                      numberOfLines={1}
+                    >
+                      🎤 “{voice.heard}”
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
               {/* What a voice command just did. */}
               {voice.feedback ? (
                 <View

@@ -42,6 +42,7 @@ import { useGroupsStore } from '@/stores/groupsStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { ChordSheetViewer, type QueuedSong } from '@/features/worship/ChordSheetViewer'
 import { songAsked } from '@/lib/miriamSongs'
+import { songHost } from '@/lib/songHost'
 import { loadAliases, rememberAlias } from '@/lib/songAliases'
 import type { ChordSheet } from '@/types/chordSheet'
 import { VideoPlayerModal } from '@/components/ui/VideoPlayerModal'
@@ -234,9 +235,12 @@ export function MiriamButton() {
     stopListening()
     setHeard(said)
     // A song, opened here from the sheets on this device: no need to ask.
+    // With a song screen up (a sheet open, or the Chord Sheets page), that is
+    // all that is asked of her, and it is never sent off to be worked out.
     const sheets = useChordSheetsStore.getState().chordSheets
+    const songMode = !!songHost() && sheets.length > 0
     if (!again && sheets.length) {
-      const asking = songAsked(sheets, await loadAliases(), said)
+      const asking = songAsked(sheets, await loadAliases(), withoutHerName(said), songMode)
       if (asking?.kind === 'open') {
         openSong(asking.sheet, asking.key)
         return
@@ -245,6 +249,13 @@ export function MiriamButton() {
         songAsk.current = { name: asking.name, key: asking.key }
         setSongGuesses(asking.sheets)
         const text = 'I couldn’t find that song. Did you mean one of these?'
+        setAnswer(text)
+        speak(text)
+        setStage('answered')
+        return
+      }
+      if (songMode) {
+        const text = 'I couldn’t find that song.'
         setAnswer(text)
         speak(text)
         setStage('answered')
@@ -391,9 +402,16 @@ export function MiriamButton() {
   /** A chord sheet, opened over the page; the bar goes, to leave it in view. */
   const openSong = (sheet: ChordSheet, key: { key: string; minor: boolean } | null) => {
     setSongGuesses([])
+    setOpen(false)
+    // Where a song screen is up, there — an open sheet's own place — rather
+    // than another sheet on top of it.
+    const host = songHost()
+    if (host && !song) {
+      host(sheet, key)
+      return
+    }
     setQueued(null)
     setSong({ sheet, key })
-    setOpen(false)
   }
   /** One of the songs she offered: opened, and learned as what was meant. */
   const pickSong = (sheet: ChordSheet) => {
@@ -725,7 +743,9 @@ export function MiriamButton() {
                   </Text>
                 ) : stage === 'listening' ? (
                   <Text color={soft} fontSize="$2" numberOfLines={2}>
-                    Ask or say what to do — “What’s the dress code for Revival in the Heartland?”
+                    {songHost()
+                      ? 'Which song? — “Above All in E”'
+                      : 'Ask or say what to do — “What’s the dress code for Revival in the Heartland?”'}
                   </Text>
                 ) : null}
                 {answer ? (

@@ -32,10 +32,16 @@ const OPENING =
 const NOT_A_SONG =
   /\b(?:events?|tasks?|dress|address|flights?|cars?|ride|availab\w*|meeting|link|food|bring|due|pending|status|schedule|when|where|who)\b/i
 
+/**
+ * `onlySongs`: a song screen is up (lib/songHost), so whatever was said is
+ * taken as asking for a song — "Above All key of E" — and the nearest titles
+ * are offered however it was asked.
+ */
 export function songAsked<T extends { id: string | number; title: string }>(
   sheets: T[],
   aliases: ReadonlyMap<string, string>,
-  text: string
+  text: string,
+  onlySongs = false
 ): SongAsk<T> | null {
   if (sheets.length === 0) return null
   const found = requestFromAliases(aliases, sheets, text) ?? parseSongRequest(sheets, text)
@@ -46,7 +52,7 @@ export function songAsked<T extends { id: string | number; title: string }>(
       key: found.key ? { key: found.key, minor: found.minor } : null,
     }
   }
-  if (!OPENING.test(text.trim()) || NOT_A_SONG.test(text)) return null
+  if (!onlySongs && (!OPENING.test(text.trim()) || NOT_A_SONG.test(text))) return null
   const near = closestTitles(sheets, text)
   if (near.length === 0) return null
   return { kind: 'guess', sheets: near, key: trailingKey(text), name: splitSpokenKey(text).name }

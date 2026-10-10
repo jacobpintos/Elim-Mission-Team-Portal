@@ -48,6 +48,9 @@ export function useSheetVoice(
   })
   const [on, setOn] = useState(() => wanted && open)
   const [feedback, setFeedback] = useState<string | null>(null)
+  // What is being heard right now, before it is acted on: shown, so they
+  // can see they were heard.
+  const [heard, setHeard] = useState('')
   const handleRef = useRef(handle)
   const hintsRef = useRef(hints)
   useEffect(() => {
@@ -74,6 +77,7 @@ export function useSheetVoice(
   }, [feedback])
 
   const act = (phrase: string, alternatives: string[]) => {
+    setHeard('')
     const words = spokenWords(phrase).join(' ')
     if (!words) return
     const last = lastActed.current
@@ -133,6 +137,7 @@ export function useSheetVoice(
     const others = alts.slice(1).map((a) => a.slice(from).trim())
     if (pauseTimer.current) clearTimeout(pauseTimer.current)
     pauseTimer.current = null
+    if (phrase) setHeard(phrase.split(/\s+/).slice(-8).join(' '))
     if (e.isFinal) {
       act(phrase, others)
       consumed.current = ''
@@ -224,5 +229,5 @@ export function useSheetVoice(
     toggleRef.current = toggle
   })
 
-  return { available, on, toggle, feedback, show }
+  return { available, on, toggle, feedback, show, heard }
 }

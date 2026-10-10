@@ -17,6 +17,7 @@ import {
 import { ownsSpeech, releaseSpeech, withSpeech } from '@/lib/speechOwner'
 import { orderForHints, upcomingSheetIds } from '@/lib/hintOrder'
 import { loadAliases, rememberAlias } from '@/lib/songAliases'
+import { withoutHerName } from '@/lib/wakeWord'
 import { listeningCue } from '@/lib/listeningCue'
 import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
 import { keyLabel } from '@/lib/nashvilleNumbers'
@@ -210,7 +211,10 @@ export function SongListener({
    * best first — the right one is often second ("Oh Hill King Jesus" first,
    * "All Hail King Jesus" after it).
    */
-  const hear = (text: string, candidates: string[] = [text]) => {
+  const hear = (said: string, heardAs: string[] = [said]) => {
+    // "Hey Miriam, Above All in E": her name is not part of the song.
+    const text = withoutHerName(said)
+    const candidates = heardAs.map(withoutHerName)
     // A song about to open: only listening for "cancel".
     if (pendingAct.current) {
       const last = text.trim().split(/\s+/).slice(-3).join(' ')
