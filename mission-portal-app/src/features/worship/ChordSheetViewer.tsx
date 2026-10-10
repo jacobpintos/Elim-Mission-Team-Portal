@@ -612,6 +612,13 @@ export function ChordSheetViewer({
     onOpenSheet(request.sheet, request.key ? { key: request.key, minor: request.minor } : null)
     return `Opening ${request.sheet.title}${request.key ? ` in ${keyLabel(request.key, request.minor)}` : ''}`
   }
+  /** A song to come after this one ("queue Holy Forever in D"). */
+  const queueNext = (request: { sheet: ChordSheet; key: string | null; minor: boolean }) => {
+    if (!onQueue || !onOpenSheet) return null
+    const { sheet: next, key, minor } = request
+    onQueue({ sheet: next, key, minor })
+    return `Up next: ${next.title}${key ? ` in ${keyLabel(key, minor)}` : ''}`
+  }
   /**
    * "Hey Miriam" heard by voice control itself (it has the microphone, so
    * listening for her name is not running): what comes with it, or next, is
@@ -636,8 +643,14 @@ export function ChordSheetViewer({
     }
     for (const ask of asks) {
       const cmd = parseSheetCommand(ask, allSheets, voiceAliases.current)
+      // "Hey Miriam, queue Above All": next, not now.
+      if (cmd?.type === 'queue') {
+        miriamUntil.current = 0
+        setMiriamHere(false)
+        return queueNext(cmd.request) ?? 'Can’t queue a song here'
+      }
       const request =
-        cmd?.type === 'open' || cmd?.type === 'queue'
+        cmd?.type === 'open'
           ? cmd.request
           : (requestFromAliases(voiceAliases.current, allSheets, ask) ??
             parseSongRequest(allSheets, ask))
@@ -672,12 +685,8 @@ export function ChordSheetViewer({
         if (!setNav?.onPrev) return 'No song before this'
         goPrev()
         return 'Previous song'
-      case 'queue': {
-        if (!onQueue || !onOpenSheet) return null
-        const { sheet: next, key, minor } = cmd.request
-        onQueue({ sheet: next, key, minor })
-        return `Up next: ${next.title}${key ? ` in ${keyLabel(key, minor)}` : ''}`
-      }
+      case 'queue':
+        return queueNext(cmd.request)
       case 'open':
         return openNow(cmd.request)
       case 'clearQueue':
@@ -718,16 +727,26 @@ export function ChordSheetViewer({
   }
   const voice = useSheetVoice(Boolean(sheet), handleVoice, voiceHints)
 
-  // Open: where a song asked of Miriam opens — in this one's place.
+  // Open: where a song asked of Miriam opens — in this one's place — or
+  // is queued to come after it.
   const openSheetRef = useRef(onOpenSheet)
+  const queueRef = useRef(onQueue)
   useEffect(() => {
     openSheetRef.current = onOpenSheet
+    queueRef.current = onQueue
   })
   const canOpenOthers = Boolean(sheet && onOpenSheet)
+  const canQueue = Boolean(onQueue)
   useEffect(() => {
     if (!canOpenOthers) return
-    return registerSongHost((next, key) => openSheetRef.current?.(next, key))
-  }, [canOpenOthers])
+    return registerSongHost(
+      (next, key) => openSheetRef.current?.(next, key),
+      canQueue
+        ? (next, key) =>
+            queueRef.current?.({ sheet: next, key: key?.key ?? null, minor: key?.minor ?? false })
+        : undefined
+    )
+  }, [canOpenOthers, canQueue])
 
   /**
    * A sideways swipe across the sheet: the next song in the set, or the one

@@ -148,6 +148,11 @@ const QUEUE_BEFORE = [
   ['queue'],
   ['cue'],
   ['q'],
+  // As "queue" is sometimes written down.
+  ['que'],
+  ['kew'],
+  ['queued'],
+  ['cued'],
   ['up', 'next'],
   ['next', 'up'],
   ['play', 'next'],

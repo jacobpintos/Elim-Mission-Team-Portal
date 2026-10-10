@@ -42,7 +42,9 @@ import { useGroupsStore } from '@/stores/groupsStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { ChordSheetViewer, type QueuedSong } from '@/features/worship/ChordSheetViewer'
 import { songAsked } from '@/lib/miriamSongs'
-import { songHost } from '@/lib/songHost'
+import { songHost, songQueue } from '@/lib/songHost'
+import { parseSheetCommand } from '@/lib/sheetCommands'
+import { keyLabel } from '@/lib/nashvilleNumbers'
 import { KEY_HINTS } from '@/lib/songRequest'
 import { loadAliases, rememberAlias } from '@/lib/songAliases'
 import type { ChordSheet } from '@/types/chordSheet'
@@ -249,7 +251,25 @@ export function MiriamButton() {
     const sheets = useChordSheetsStore.getState().chordSheets
     const songMode = !!songHost() && sheets.length > 0
     if (!again && sheets.length) {
-      const asking = songAsked(sheets, await loadAliases(), withoutHerName(said), songMode)
+      const aliases = await loadAliases()
+      // "Queue Above All", "Above All next": to come after the open song, not now.
+      const cmd = songMode ? parseSheetCommand(withoutHerName(said), sheets, aliases) : null
+      if (cmd?.type === 'queue') {
+        const { sheet, key, minor } = cmd.request
+        const queue = songQueue()
+        if (!queue) {
+          // Nothing open to come after: it is the song now.
+          openSong(sheet, key ? { key, minor } : null)
+          return
+        }
+        queue(sheet, key ? { key, minor } : null)
+        const text = `Up next: ${sheet.title}${key ? ` in ${keyLabel(key, minor)}` : ''}`
+        setAnswer(text)
+        speak(text)
+        setStage('answered')
+        return
+      }
+      const asking = songAsked(sheets, aliases, withoutHerName(said), songMode)
       if (asking?.kind === 'open') {
         openSong(asking.sheet, asking.key)
         return
@@ -433,13 +453,13 @@ export function MiriamButton() {
   /** How long to wait after the last words before acting on them. */
   const pauseFor = (text: string) => {
     if (!songHost()) return PAUSE_MS
-    const asked = songAsked(
-      useChordSheetsStore.getState().chordSheets,
-      songAliases.current,
-      text,
-      true
-    )
-    if (asked?.kind !== 'open') return PAUSE_MS
+    const sheets = useChordSheetsStore.getState().chordSheets
+    const cmd = parseSheetCommand(text, sheets, songAliases.current)
+    const asked =
+      cmd?.type === 'queue'
+        ? { key: cmd.request.key }
+        : songAsked(sheets, songAliases.current, text, true)
+    if (!asked || ('kind' in asked && asked.kind !== 'open')) return PAUSE_MS
     // "in E" may yet become "in E flat" or "in E minor": only a key that can
     // say no more is acted on at once.
     return asked.key && KEY_DONE.test(text.trim()) ? SONG_WITH_KEY_PAUSE_MS : SONG_PAUSE_MS
@@ -500,7 +520,12 @@ export function MiriamButton() {
         // The names a request is likeliest to hold, and the hardest to hear:
         // with a song screen up, the songs'.
         contextualStrings: (songHost()
-          ? [...useChordSheetsStore.getState().chordSheets.map((c) => c.title), ...KEY_HINTS]
+          ? [
+              'queue',
+              'up next',
+              ...useChordSheetsStore.getState().chordSheets.map((c) => c.title),
+              ...KEY_HINTS,
+            ]
           : [...groups.map((g) => g.name), ...users.map((u) => u.displayName).filter(Boolean)]
         ).slice(0, 100),
         iosTaskHint: 'dictation',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { registerSongHost, songHost } from './songHost'
+import { registerSongHost, songHost, songQueue } from './songHost'
 import { parseSheetCommand } from './sheetCommands'
 import { songAsked } from './miriamSongs'
 import { withoutHerName } from './wakeWord'
@@ -21,6 +21,48 @@ describe('where a song asked for opens', () => {
     offPage()
     expect(opened).toEqual(['sheet', 'page'])
     expect(songHost()).toBeNull()
+  })
+
+  it('queues only where a song is open to come after', () => {
+    const queued: string[] = []
+    const offPage = registerSongHost(() => {})
+    expect(songQueue()).toBeNull()
+    const offSheet = registerSongHost(
+      () => {},
+      (s) => queued.push(s.title)
+    )
+    songQueue()?.(sheets[1] as never, null)
+    offSheet()
+    expect(songQueue()).toBeNull()
+    offPage()
+    expect(queued).toEqual(['Way Maker'])
+  })
+})
+
+describe('asking for a song to come next', () => {
+  it('is queuing, however "queue" was written down, and before or after the name', () => {
+    for (const said of [
+      'queue Above All',
+      'cue Above All',
+      'Q Above All',
+      'que Above All',
+      'kew Above All',
+      'queue up Above All',
+      'up next Above All',
+      'Above All next',
+      'Hey Miriam queue Above All',
+    ]) {
+      expect(parseSheetCommand(withoutHerName(said), sheets), said).toMatchObject({
+        type: 'queue',
+        request: { sheet: sheets[0] },
+      })
+    }
+  })
+
+  it('never opens a song when the asking word is lost or unknown', () => {
+    // A word before the title that is neither "open" nor "queue": not a song now.
+    expect(parseSheetCommand('cute Above All', sheets)).toBeNull()
+    expect(songAsked(sheets, new Map(), 'cute Above All', true)?.kind).not.toBe('open')
   })
 })
 

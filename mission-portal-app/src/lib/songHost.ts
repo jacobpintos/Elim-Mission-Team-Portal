@@ -9,11 +9,14 @@ import type { ChordSheet } from '@/types/chordSheet'
  */
 export type OpenSong = (sheet: ChordSheet, key: { key: string; minor: boolean } | null) => void
 
-const hosts: { open: OpenSong }[] = []
+const hosts: { open: OpenSong; queue?: OpenSong }[] = []
 
-/** Registers a place songs open; returns its unregistering. */
-export function registerSongHost(open: OpenSong): () => void {
-  const entry = { open }
+/**
+ * Registers a place songs open — and, where a song is open, are queued to
+ * come after it ("queue Above All"); returns its unregistering.
+ */
+export function registerSongHost(open: OpenSong, queue?: OpenSong): () => void {
+  const entry = { open, queue }
   hosts.push(entry)
   return () => {
     const at = hosts.indexOf(entry)
@@ -24,4 +27,9 @@ export function registerSongHost(open: OpenSong): () => void {
 /** Where a song asked for opens now, if a song screen is up. */
 export function songHost(): OpenSong | null {
   return hosts.length ? hosts[hosts.length - 1].open : null
+}
+
+/** Where a song asked to come next is queued, if the song screen in front has a song open. */
+export function songQueue(): OpenSong | null {
+  return hosts.length ? (hosts[hosts.length - 1].queue ?? null) : null
 }
