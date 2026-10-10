@@ -6,7 +6,8 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
-import { ChordSheetViewer, type QueuedSong } from './ChordSheetViewer'
+import { ChordSheetViewer } from './ChordSheetViewer'
+import { useSongQueue } from './useSongQueue'
 import { keyLabel } from '@/lib/nashvilleNumbers'
 import type { SetList, SetListSong } from '@/types/worship'
 import type { Task } from '@/types/events'
@@ -41,16 +42,16 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
   // Chords Only, for every song in this set until it is switched off; a
   // different set list starts with it off.
   const [chordsOnly, setChordsOnly] = useState(false)
-  // A song queued by voice to come next, from inside the set or out of it;
-  // and, while one from outside the set is open, the set song it came after,
-  // for the set to carry on from.
-  const [queued, setQueued] = useState<QueuedSong | null>(null)
+  // Songs queued by voice to come next, from inside the set or out of it,
+  // and those moved on from; and, while one from outside the set is open,
+  // the set song it came after, for the set to carry on from.
+  const songQueue = useSongQueue()
   const [returnTo, setReturnTo] = useState<string | null>(null)
   const [chordsOnlyFor, setChordsOnlyFor] = useState(setList?.id)
   if (setList?.id !== chordsOnlyFor) {
     setChordsOnlyFor(setList?.id)
     setChordsOnly(false)
-    setQueued(null)
+    songQueue.reset()
     setReturnTo(null)
   }
   const [playingVideo, setPlayingVideo] = useState<{ url: string; title: string } | null>(null)
@@ -148,14 +149,13 @@ export function SetListDetailModal({ setList, ackTask, onClose }: SetListDetailM
           setViewSheetKey('')
           setViewSheetAudio(null)
           setViewSongId(null)
-          setQueued(null)
+          songQueue.reset()
           setReturnTo(null)
         }}
         initialKey={viewSheetKey}
         audio={viewSheetAudio}
         setNav={setNav}
-        queued={queued}
-        onQueue={setQueued}
+        queue={songQueue}
         onOpenSheet={openOther}
       />
       <FullScreenOverlay

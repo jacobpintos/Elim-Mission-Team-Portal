@@ -6,7 +6,8 @@ import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { ChordSheetEditor } from './ChordSheetEditor'
 import { SongListener, type AskedKey } from './SongListener'
-import { ChordSheetViewer, type QueuedSong } from './ChordSheetViewer'
+import { ChordSheetViewer } from './ChordSheetViewer'
+import { useSongQueue } from './useSongQueue'
 import type { ChordSheet } from '@/types/chordSheet'
 import { registerSongHost } from '@/lib/songHost'
 
@@ -26,8 +27,8 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
   const [showEditor, setShowEditor] = useState(false)
   const [editSheet, setEditSheet] = useState<ChordSheet | null>(null)
   const [viewSheet, setViewSheet] = useState<ChordSheet | null>(null)
-  // A song queued by voice to come after the open one.
-  const [queued, setQueued] = useState<QueuedSong | null>(null)
+  // Songs queued by voice to come after the open one, and those moved on from.
+  const songQueue = useSongQueue()
   // A key asked for with the song's name ("Firm Foundation in E").
   const [askedKey, setAskedKey] = useState<AskedKey | null>(null)
   // The page Miriam opens songs on while it is up (lib/songHost); an open
@@ -255,8 +256,7 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
       <ChordSheetViewer
         sheet={viewSheet}
         openInKey={askedKey}
-        queued={queued}
-        onQueue={setQueued}
+        queue={songQueue}
         onOpenSheet={(sheet, key) => {
           setAskedKey(key)
           setViewSheet(sheet)
@@ -264,7 +264,7 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
         onClose={() => {
           setViewSheet(null)
           setAskedKey(null)
-          setQueued(null)
+          songQueue.reset()
         }}
       />
     </YStack>

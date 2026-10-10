@@ -60,9 +60,12 @@ describe('asking for a song to come next', () => {
   })
 
   it('never opens a song when the asking word is lost or unknown', () => {
-    // A word before the title that is neither "open" nor "queue": not a song now.
-    expect(parseSheetCommand('cute Above All', sheets)).toBeNull()
-    expect(songAsked(sheets, new Map(), 'cute Above All', true)?.kind).not.toBe('open')
+    // A word before the title that is neither "open" nor "queue" (nor heard
+    // for it, as "cute" is): not a song now.
+    expect(parseSheetCommand('cool Above All', sheets)).toBeNull()
+    expect(songAsked(sheets, new Map(), 'cool Above All', true)?.kind).not.toBe('open')
+    // "Cute", as "queue" is heard: queued, never opened.
+    expect(parseSheetCommand('cute Above All', sheets)).toMatchObject({ type: 'queue' })
   })
 })
 

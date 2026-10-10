@@ -40,7 +40,8 @@ import { useMiriamStore } from '@/stores/miriamStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
-import { ChordSheetViewer, type QueuedSong } from '@/features/worship/ChordSheetViewer'
+import { ChordSheetViewer } from '@/features/worship/ChordSheetViewer'
+import { useSongQueue } from '@/features/worship/useSongQueue'
 import { songAsked } from '@/lib/miriamSongs'
 import { songHost, songQueue } from '@/lib/songHost'
 import { parseSheetCommand } from '@/lib/sheetCommands'
@@ -161,7 +162,7 @@ export function MiriamButton() {
     sheet: ChordSheet
     key: { key: string; minor: boolean } | null
   } | null>(null)
-  const [queued, setQueued] = useState<QueuedSong | null>(null)
+  const sheetQueue = useSongQueue()
   // A change worked out and waiting to be confirmed — or a choice of which.
   const [pending, setPending] = useState<{ name: string; prepared: Prepared } | null>(null)
   // A link to buy something, for a tap to open (in a browser).
@@ -441,7 +442,7 @@ export function MiriamButton() {
       host(sheet, key)
       return
     }
-    setQueued(null)
+    sheetQueue.reset()
     setSong({ sheet, key })
   }
   /** One of the songs she offered: opened, and learned as what was meant. */
@@ -1083,12 +1084,11 @@ export function MiriamButton() {
         <ChordSheetViewer
           sheet={song.sheet}
           openInKey={song.key}
-          queued={queued}
-          onQueue={setQueued}
+          queue={sheetQueue}
           onOpenSheet={(sheet, key) => setSong({ sheet, key })}
           onClose={() => {
             setSong(null)
-            setQueued(null)
+            sheetQueue.reset()
           }}
         />
       ) : null}

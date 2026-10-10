@@ -45,6 +45,7 @@ import { COMMAND_HINTS, parseSheetCommand, type SheetCommand } from '@/lib/sheet
 import { KEY_HINTS, parseSongRequest, requestFromAliases } from '@/lib/songRequest'
 import { withoutHerName } from '@/lib/wakeWord'
 import { registerSongHost } from '@/lib/songHost'
+import type { QueuedSong, SongQueue } from './useSongQueue'
 import { listeningCue } from '@/lib/listeningCue'
 import { loadAliases } from '@/lib/songAliases'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
@@ -53,12 +54,7 @@ import { useMiriamStore } from '@/stores/miriamStore'
 /** How long, after "Hey Miriam" alone, what is said next is taken as a song to open. */
 const MIRIAM_WAIT_MS = 8000
 
-/** A song queued to come next ("queue Holy Forever in D"). */
-export interface QueuedSong {
-  sheet: ChordSheet
-  key: string | null
-  minor: boolean
-}
+export type { QueuedSong } from './useSongQueue'
 
 interface KeyPrefs {
   key: string
@@ -239,13 +235,13 @@ interface ChordSheetViewerProps {
    */
   audio?: { url: string; name?: string } | null
   /**
-   * The song queued to come next, said out loud ("queue Holy Forever in D")
-   * while this one stays open. Shown at the bottom; the next song — a swipe,
-   * ›, or "next song" — is it, ahead of the set's own next. Held by whoever
-   * opened the sheet, so it lasts from one song to the next.
+   * The songs queued to come next, said out loud ("queue Holy Forever in D")
+   * while this one stays open, and those moved on from, for "back". The
+   * first is shown at the bottom; the next song — a swipe, ›, or "next song"
+   * — is it, ahead of the set's own next. Held by whoever opened the sheet
+   * (useSongQueue), so it lasts from one song to the next.
    */
-  queued?: QueuedSong | null
-  onQueue?: (queued: QueuedSong | null) => void
+  queue?: SongQueue
   /** Open another sheet in this one's place — the queued song — in a key if one was asked for. */
   onOpenSheet?: (sheet: ChordSheet, key: { key: string; minor: boolean } | null) => void
 }
@@ -257,8 +253,7 @@ export function ChordSheetViewer({
   audio,
   openInKey,
   setNav,
-  queued,
-  onQueue,
+  queue,
   onOpenSheet,
 }: ChordSheetViewerProps) {
   const colors = useThemeColors()
@@ -558,16 +553,27 @@ export function ChordSheetViewer({
    * The next song: the one queued, if any, else the set's next. The queued
    * song opens in its place and the queue empties.
    */
-  const hasNext = Boolean((queued && onOpenSheet) || setNav?.onNext)
+  /** This song as it is now: for "back" to return to, in the key it was in. */
+  const current = (): QueuedSong | null =>
+    sheet ? { sheet, key: selectedKey || null, minor: isMinor } : null
+  const openQueued = (song: QueuedSong) =>
+    onOpenSheet?.(song.sheet, song.key ? { key: song.key, minor: song.minor } : null)
+  const queuedNext = (onOpenSheet && queue?.upcoming[0]) || null
+  const hasNext = Boolean(queuedNext || setNav?.onNext)
   const goNext = () => {
-    if (queued && onOpenSheet) {
-      onQueue?.(null)
-      onOpenSheet(queued.sheet, queued.key ? { key: queued.key, minor: queued.minor } : null)
-      return
-    }
+    const now = current()
+    const next = queuedNext && now ? queue?.advance(now) : null
+    if (next) return openQueued(next)
     setNav?.onNext?.()
   }
-  const goPrev = () => setNav?.onPrev?.()
+  /** Back: to the song moved on from, if any, else the set's song before. */
+  const hasPrev = Boolean((onOpenSheet && queue?.canGoBack) || setNav?.onPrev)
+  const goPrev = () => {
+    const now = current()
+    const before = onOpenSheet && now && queue?.canGoBack ? queue.back(now) : null
+    if (before) return openQueued(before)
+    setNav?.onPrev?.()
+  }
 
   /**
    * Voice control (useSheetVoice): what was said, made into a command
@@ -615,15 +621,20 @@ export function ChordSheetViewer({
     ) {
       return null
     }
+    // Kept, for "back".
+    const now = current()
+    if (now) queue?.leave(now)
     onOpenSheet(request.sheet, request.key ? { key: request.key, minor: request.minor } : null)
     return `Opening ${request.sheet.title}${request.key ? ` in ${keyLabel(request.key, request.minor)}` : ''}`
   }
   /** A song to come after this one ("queue Holy Forever in D"). */
   const queueNext = (request: { sheet: ChordSheet; key: string | null; minor: boolean }) => {
-    if (!onQueue || !onOpenSheet) return null
+    if (!queue || !onOpenSheet) return null
     const { sheet: next, key, minor } = request
-    onQueue({ sheet: next, key, minor })
-    return `Up next: ${next.title}${key ? ` in ${keyLabel(key, minor)}` : ''}`
+    const ahead = queue.upcoming.length
+    queue.add({ sheet: next, key, minor })
+    const named = `${next.title}${key ? ` in ${keyLabel(key, minor)}` : ''}`
+    return ahead === 0 ? `Up next: ${named}` : `Queued: ${named} (${ahead + 1} in line)`
   }
   /** A voice command, done: what was done, to show ("Next song"). */
   const runCommand = (cmd: SheetCommand<ChordSheet>): string | null => {
@@ -631,9 +642,9 @@ export function ChordSheetViewer({
       case 'next':
         if (!hasNext) return 'No next song'
         goNext()
-        return queued ? `Next: ${queued.sheet.title}` : 'Next song'
+        return queuedNext ? `Next: ${queuedNext.sheet.title}` : 'Next song'
       case 'previous':
-        if (!setNav?.onPrev) return 'No song before this'
+        if (!hasPrev) return 'No song before this'
         goPrev()
         return 'Previous song'
       case 'queue':
@@ -641,7 +652,7 @@ export function ChordSheetViewer({
       case 'open':
         return openNow(cmd.request)
       case 'clearQueue':
-        onQueue?.(null)
+        queue?.clear()
         return 'Queue cleared'
       case 'key':
         setKey(cmd.key, cmd.minor)
@@ -764,20 +775,24 @@ export function ChordSheetViewer({
   // Open: where a song asked of Miriam opens — in this one's place — or
   // is queued to come after it.
   const openSheetRef = useRef(onOpenSheet)
-  const queueRef = useRef(onQueue)
+  const queueRef = useRef(queue)
   useEffect(() => {
     openSheetRef.current = onOpenSheet
-    queueRef.current = onQueue
+    queueRef.current = queue
   })
   const canOpenOthers = Boolean(sheet && onOpenSheet)
-  const canQueue = Boolean(onQueue)
+  const canQueue = Boolean(queue)
   useEffect(() => {
     if (!canOpenOthers) return
     return registerSongHost(
       (next, key) => openSheetRef.current?.(next, key),
       canQueue
         ? (next, key) =>
-            queueRef.current?.({ sheet: next, key: key?.key ?? null, minor: key?.minor ?? false })
+            queueRef.current?.add({
+              sheet: next,
+              key: key?.key ?? null,
+              minor: key?.minor ?? false,
+            })
         : undefined
     )
   }, [canOpenOthers, canQueue])
@@ -791,7 +806,7 @@ export function ChordSheetViewer({
    */
   const swipe = useRef<{ x: number; y: number; t: number; endX: number; endY: number } | null>(null)
   const swipeProps =
-    setNav || queued
+    setNav || queuedNext || hasPrev
       ? {
           onTouchStart: (e: GestureResponderEvent) => {
             const n = e.nativeEvent
@@ -829,7 +844,7 @@ export function ChordSheetViewer({
   // And the arrow keys, on a keyboard or a page-turner pedal that sends them.
   // A browser that goes back a page on a sideways swipe (Chrome) is told not
   // to while the swipe means the next song.
-  const inSet = Boolean(setNav || queued)
+  const inSet = Boolean(setNav || queuedNext || hasPrev)
   const navRef = useRef({ next: goNext, prev: goPrev })
   useEffect(() => {
     navRef.current = { next: goNext, prev: goPrev }
@@ -1134,17 +1149,17 @@ export function ChordSheetViewer({
                   </View>
                 </Pressable>
               ) : null}
-              {setNav?.onPrev || hasNext ? (
+              {hasPrev || hasNext ? (
                 <XStack alignItems="center">
                   <Pressable
                     onPress={goPrev}
-                    disabled={!setNav?.onPrev}
+                    disabled={!hasPrev}
                     style={styles.headerBtn}
                     accessibilityRole="button"
                     accessibilityLabel="Previous song"
                   >
                     <Text
-                      color={setNav?.onPrev ? colors.primary : colors.border}
+                      color={hasPrev ? colors.primary : colors.border}
                       fontSize="$6"
                       fontWeight="700"
                     >
@@ -1748,7 +1763,7 @@ export function ChordSheetViewer({
             </View>
 
             {/* The song queued to come next: tap to go now, ✕ to unqueue. */}
-            {queued && onOpenSheet ? (
+            {queuedNext ? (
               <XStack
                 alignItems="center"
                 gap="$2"
@@ -1761,7 +1776,7 @@ export function ChordSheetViewer({
                 <Pressable
                   onPress={goNext}
                   accessibilityRole="button"
-                  accessibilityLabel={`Go to the next song, ${queued.sheet.title}`}
+                  accessibilityLabel={`Go to the next song, ${queuedNext.sheet.title}`}
                   style={[styles.touch, { flex: 1 }]}
                 >
                   <Text color={colors.text} fontSize="$3" numberOfLines={1}>
@@ -1769,14 +1784,17 @@ export function ChordSheetViewer({
                       {'Up next  '}
                     </Text>
                     <Text fontWeight="700" color={colors.primary}>
-                      {queued.sheet.title}
+                      {queuedNext.sheet.title}
                     </Text>
-                    {queued.key ? ` · ${keyLabel(queued.key, queued.minor)}` : ''}
+                    {queuedNext.key ? ` · ${keyLabel(queuedNext.key, queuedNext.minor)}` : ''}
+                    {queue && queue.upcoming.length > 1
+                      ? `  +${queue.upcoming.length - 1} more`
+                      : ''}
                     {'  ›'}
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => onQueue?.(null)}
+                  onPress={() => queue?.dropNext()}
                   accessibilityRole="button"
                   accessibilityLabel="Remove the queued song"
                   style={styles.headerBtn}

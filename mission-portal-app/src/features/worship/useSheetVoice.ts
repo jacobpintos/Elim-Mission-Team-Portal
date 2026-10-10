@@ -21,7 +21,7 @@ const PAUSE_MS = 700
 /** The same, after a word that plainly has more to come: "queue…", "…in". */
 const PAUSE_MORE_MS = 1600
 const MORE_TO_COME =
-  /\b(?:queue|cue|q|few|open|switch to|change to|pull up|bring up|up next|key|key of|in|at|on|to|speed|level|miriam)$/i
+  /\b(?:queue|cue|q|few|kill|cute|open|switch to|change to|pull up|bring up|up next|key|key of|in|at|on|to|speed|level|miriam)$/i
 /** How long a phrase that did nothing is kept, as the first half of one cut at a pause. */
 const CARRY_MS = 3000
 /** Only a few words: the start of a command, not a line being sung. */
