@@ -89,6 +89,18 @@ describe('the tour, kept up to date', () => {
     expect(tourFor('you', person('regular'))?.title).toBe('Miriam')
   })
 
+  it('shows everyone with Worship how to use a set list and its practice tracks', () => {
+    for (const roles of [['guest'], ['regular', 'worship'], ['admin']]) {
+      expect(ids(tourFor('worship', person(...roles))), roles.join()).toEqual(
+        expect.arrayContaining(['worship-setlist', 'worship-tracks'])
+      )
+    }
+    // Building one is the worship team's: a guest only uses them.
+    expect(ids(tourFor('worship', person('guest')))).not.toContain('worship-build')
+    expect(ids(tourFor('worship', person('guest')))).not.toContain('worship-notify')
+    expect(ids(tourFor('set lists', person('regular', 'worship')))).toContain('worship-build')
+  })
+
   it('shows the worship team voice control and playing from a sheet', () => {
     const worship = ids(tourFor('worship', person('regular', 'worship')))
     expect(worship).toEqual(expect.arrayContaining(['worship-play', 'worship-voice']))

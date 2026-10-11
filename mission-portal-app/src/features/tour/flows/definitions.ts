@@ -184,9 +184,41 @@ export const worshipFlow: TourFlow = {
     {
       id: 'worship-setlist',
       route: '/worship',
+      title: 'Using a set list',
+      body: 'Open a set list to see its songs in order. Each song’s card has what you need to learn it.',
+      bullets: [
+        'Open chord sheet — in the key the song is set in',
+        '▶ Play video — watch the YouTube recording right here',
+        'YouTube ↗ — open it in YouTube, to cast to a TV or keep it playing',
+        'Other links (Spotify and the like) open in their own app',
+        '✓ Acknowledge Set List — when it’s given to you as a task',
+      ],
+    },
+    {
+      id: 'worship-tracks',
+      route: '/worship',
+      title: 'Practice tracks',
+      body: 'A song with a practice track plays right on its card — and under its chord sheet, so you can play along.',
+      bullets: [
+        '▶ Play / pause; ↺10 and 10↻ jump back or ahead',
+        'Drag the bar to any point in the song',
+        'Start loop, then End loop: a part repeats until you have it',
+        '1× → 0.75× → 0.5×: slower, in the same key',
+        'Keeps playing with the screen locked, controls on the lock screen',
+      ],
+    },
+    {
+      id: 'worship-build',
+      route: '/worship',
       title: 'Building a set list',
       body: 'Add songs in order, attach details, and link the set list to an event. Try adding a song and previewing its chords below.',
+      bullets: [
+        'Each song: its name, key and chord sheet',
+        'A link (YouTube, Spotify…) and notes for the team',
+        'Upload a practice track for everyone to play',
+      ],
       showcase: 'setlist',
+      roles: ['admin', 'worship'],
     },
     {
       id: 'worship-chords',
@@ -228,6 +260,7 @@ export const worshipFlow: TourFlow = {
       route: '/worship',
       title: 'Linking to an event',
       body: 'When you attach a set list to an event, the whole worship team is notified automatically so everyone’s practicing the same songs.',
+      roles: ['admin', 'worship'],
     },
   ],
 }
