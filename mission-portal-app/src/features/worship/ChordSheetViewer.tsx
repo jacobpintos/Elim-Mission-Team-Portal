@@ -50,6 +50,7 @@ import { listeningCue } from '@/lib/listeningCue'
 import { loadAliases } from '@/lib/songAliases'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useMiriamStore } from '@/stores/miriamStore'
+import { asksAQuestion } from '@/lib/miriamSongs'
 
 /** How long, after "Hey Miriam" alone, what is said next is taken as a song to open. */
 const MIRIAM_WAIT_MS = 8000
@@ -713,6 +714,14 @@ export function ChordSheetViewer({
       // Heard, as her button says it: the chime.
       listeningCue('start')
       return 'Hineni — which song?'
+    }
+    // "Hey Miriam, what's the dress code?": not for a sheet — Miriam answers it.
+    const question = named ? asks.find((a) => asksAQuestion(a)) : undefined
+    if (question) {
+      miriamUntil.current = 0
+      setMiriamHere(false)
+      useMiriamStore.getState().hand(question)
+      return 'Asking Miriam…'
     }
     for (const ask of asks) {
       const cmd = parseSheetCommand(ask, allSheets, voiceAliases.current)

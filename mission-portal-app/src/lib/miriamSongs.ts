@@ -64,3 +64,22 @@ export function songAsked<T extends { id: string | number; title: string }>(
   if (near.length === 0) return null
   return { kind: 'guess', sheets: near, key: trailingKey(text), name: splitSpokenKey(text).name }
 }
+
+/** Asking for a song by its asking words: "open…", "queue…", "play…", "switch to…". */
+const FOR_A_SONG =
+  /^(?:(?:hey|ok|okay)\s+)?(?:miriam[,\s]+)?(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:open|pull\s+up|bring\s+up|put\s+up|play|load|switch\s+to|change\s+to|queue|cue)\b/i
+/** How a question starts. */
+const QUESTION =
+  /^(?:what|what's|whats|when|where|who|whose|why|how|which|is|are|am|do|does|did|should|will|would|could|can|tell\s+me|remind\s+me)\b/i
+
+/**
+ * A question, or something plainly about other than a song ("What am I
+ * wearing today?", "show me the dress code") — answered, never taken for a
+ * song asked for, even with a song screen up. Asking for a song in a
+ * question's words ("can you open Above All?") is still asking for a song.
+ */
+export function asksAQuestion(text: string): boolean {
+  const said = text.trim()
+  if (!said || FOR_A_SONG.test(said)) return false
+  return said.includes('?') || QUESTION.test(said) || NOT_A_SONG.test(said)
+}

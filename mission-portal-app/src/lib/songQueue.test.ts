@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makeSongQueue } from '../features/worship/useSongQueue'
 import { parseSheetCommand } from './sheetCommands'
+import { asksAQuestion } from './miriamSongs'
 
 const song = (id: string, key: string | null = null) => ({
   sheet: { id, title: id } as never,
@@ -113,5 +114,31 @@ describe('songs asked for as they are said', () => {
 
   it('takes a sung line with "back" in it for nothing', () => {
     expect(parseSheetCommand('no turning back', library)).toBeNull()
+  })
+})
+
+describe('a question, never taken for a song', () => {
+  it('answers questions and things that are plainly not songs', () => {
+    for (const said of [
+      'What am I wearing today',
+      'what’s the dress code for Revival',
+      'When is Sunday service?',
+      'show me the dress code',
+      'who is in my car',
+      'is it going to rain',
+    ]) {
+      expect(asksAQuestion(said), said).toBe(true)
+    }
+  })
+  it('still takes songs asked for, even in a question’s words', () => {
+    for (const said of [
+      'Above All in E',
+      'can you open Above All',
+      'queue Way Maker',
+      'Way Maker',
+      'play 10,000 Reasons',
+    ]) {
+      expect(asksAQuestion(said), said).toBe(false)
+    }
   })
 })

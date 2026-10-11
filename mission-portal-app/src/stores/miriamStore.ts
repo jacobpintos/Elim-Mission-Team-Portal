@@ -28,6 +28,13 @@ export interface PendingUserForm {
 }
 
 interface MiriamStore {
+  /**
+   * A question heard elsewhere ("Hey Miriam, what's the dress code?" said to
+   * an open chord sheet, which only knows songs), for Miriam to answer.
+   */
+  handed: { id: number; text: string } | null
+  hand: (text: string) => void
+  clearHanded: () => void
   /** "Hey Miriam" switched on, on this device: listened for wherever it can be. */
   wakeOn: boolean
   setWakeOn: (on: boolean) => void
@@ -43,6 +50,9 @@ interface MiriamStore {
 }
 
 export const useMiriamStore = create<MiriamStore>((set) => ({
+  handed: null,
+  hand: (text) => set({ handed: { id: Date.now(), text } }),
+  clearHanded: () => set({ handed: null }),
   wakeOn: false,
   setWakeOn: (wakeOn) => set({ wakeOn }),
   eventForm: null,

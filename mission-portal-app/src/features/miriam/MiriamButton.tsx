@@ -46,7 +46,7 @@ import { useSongQueue } from '@/features/worship/useSongQueue'
 import { tourFor, tourNames } from '@/features/tour/flows'
 import { tourAsked } from '@/lib/miriamTour'
 import { useTourStore } from '@/features/tour/tourStore'
-import { songAsked } from '@/lib/miriamSongs'
+import { asksAQuestion, songAsked } from '@/lib/miriamSongs'
 import { songHost, songQueue } from '@/lib/songHost'
 import { parseSheetCommand } from '@/lib/sheetCommands'
 import { keyLabel } from '@/lib/nashvilleNumbers'
@@ -277,7 +277,9 @@ export function MiriamButton() {
     // all that is asked of her, and it is never sent off to be worked out.
     const sheets = useChordSheetsStore.getState().chordSheets
     const songMode = !!songHost() && sheets.length > 0
-    if (!again && sheets.length) {
+    // A question is answered, even with a song screen up: "What am I wearing
+    // today?" is not a song.
+    if (!again && sheets.length && !asksAQuestion(withoutHerName(said))) {
       const aliases = await loadAliases()
       // "Queue Above All", "Above All next": to come after the open song, not now.
       const cmd = songMode ? parseSheetCommand(withoutHerName(said), sheets, aliases) : null
@@ -310,6 +312,7 @@ export function MiriamButton() {
         setStage('answered')
         return
       }
+      // A song screen up, and not a question: a song not found, said here.
       if (songMode) {
         const text = 'I couldn’t find that song.'
         setAnswer(text)
@@ -504,6 +507,34 @@ export function MiriamButton() {
     // say no more is acted on at once.
     return asked.key && KEY_DONE.test(text.trim()) ? SONG_WITH_KEY_PAUSE_MS : SONG_PAUSE_MS
   }
+
+  // A question handed over (an open chord sheet heard it): asked here, as if
+  // typed — the panel opens with it, and her answer.
+  const askHanded = useRef<(text: string) => void>(() => {})
+  useEffect(() => {
+    askHanded.current = (text) => {
+      stopListening()
+      setChoices([])
+      setSongGuesses([])
+      setPending(null)
+      setLink(null)
+      setRanOut(false)
+      sent.current = false
+      setAnswer(null)
+      setOpen(true)
+      send(text)
+    }
+  })
+  useEffect(
+    () =>
+      useMiriamStore.subscribe((now, before) => {
+        if (!now.handed || now.handed === before.handed) return
+        const { text } = now.handed
+        useMiriamStore.getState().clearHanded()
+        askHanded.current(text)
+      }),
+    []
+  )
 
   /** Listen for a request — tapped, or woken by her name. */
   const listen = async (byName = false) => {

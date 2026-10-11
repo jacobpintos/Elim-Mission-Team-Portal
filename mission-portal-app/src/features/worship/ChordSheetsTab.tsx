@@ -10,6 +10,7 @@ import { ChordSheetViewer } from './ChordSheetViewer'
 import { useSongQueue } from './useSongQueue'
 import type { ChordSheet } from '@/types/chordSheet'
 import { registerSongHost } from '@/lib/songHost'
+import { useIsFocused } from 'expo-router'
 
 interface ChordSheetsTabProps {
   createdBy: string | number
@@ -33,14 +34,16 @@ export function ChordSheetsTab({ createdBy, readOnly = false }: ChordSheetsTabPr
   const [askedKey, setAskedKey] = useState<AskedKey | null>(null)
   // The page Miriam opens songs on while it is up (lib/songHost); an open
   // sheet registers over it, and opens them in its own place.
-  useEffect(
-    () =>
-      registerSongHost((sheet, key) => {
-        setAskedKey(key)
-        setViewSheet(sheet)
-      }),
-    []
-  )
+  // Only while it is the screen in front: kept mounted behind other tabs, it
+  // would otherwise hold Miriam to songs everywhere else in the app.
+  const focused = useIsFocused()
+  useEffect(() => {
+    if (!focused) return
+    return registerSongHost((sheet, key) => {
+      setAskedKey(key)
+      setViewSheet(sheet)
+    })
+  }, [focused])
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | number | null>(null)
 
   const filtered = [...chordSheets]
