@@ -10,6 +10,7 @@ import {
   StyleSheet,
   TextInput,
   View,
+  ScrollView,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -42,6 +43,8 @@ import { useGroupsStore } from '@/stores/groupsStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { ChordSheetViewer } from '@/features/worship/ChordSheetViewer'
 import { useSongQueue } from '@/features/worship/useSongQueue'
+import { tourFor } from '@/features/tour/flows'
+import { useTourStore } from '@/features/tour/tourStore'
 import { songAsked } from '@/lib/miriamSongs'
 import { songHost, songQueue } from '@/lib/songHost'
 import { parseSheetCommand } from '@/lib/sheetCommands'
@@ -322,6 +325,17 @@ export function MiriamButton() {
       }
       // A video asked for: played over the page, with nothing said over it.
       const wanted = result.kind === 'answer' ? result.open : null
+      // A tour asked for: the app's own, to each screen in turn, as their role
+      // has it — Miriam steps aside for it.
+      if (wanted?.kind === 'tour') {
+        const tour = tourFor(wanted.id, useAuthStore.getState().profile)
+        if (tour) {
+          speak(result.text)
+          setOpen(false)
+          useTourStore.getState().start(tour)
+          return
+        }
+      }
       if (wanted?.kind === 'video') {
         const item = useMusicStore.getState().items.find((m) => m.id === wanted.id)
         if (item) {
@@ -347,7 +361,7 @@ export function MiriamButton() {
         const found = await reorderLink(open.id)
         if (found && Platform.OS === 'web') setLink(found)
         else if (found) Linking.openURL(found.url).catch(() => setLink(found))
-      } else if (open && open.kind !== 'video' && !anyOverlayOpen()) {
+      } else if (open && open.kind !== 'video' && open.kind !== 'tour' && !anyOverlayOpen()) {
         if (open.kind === 'screen') {
           // Only a screen this person has: checked again here.
           const screen = screensFor(useAuthStore.getState().profile).find((x) => x.id === open.id)
@@ -815,9 +829,12 @@ export function MiriamButton() {
                   </Text>
                 ) : null}
                 {answer ? (
-                  <Text color={ink} fontSize="$3" fontWeight="600" numberOfLines={6}>
-                    {answer}
-                  </Text>
+                  // A walkthrough runs long: scrolled within the bar rather than cut off.
+                  <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled>
+                    <Text color={ink} fontSize="$3" fontWeight="600">
+                      {answer}
+                    </Text>
+                  </ScrollView>
                 ) : null}
                 {stage === 'answered' && choices.length ? (
                   <YStack gap="$1.5" paddingTop="$1.5">

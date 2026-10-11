@@ -79,3 +79,81 @@ export function buildTabTour(
   const steps = filterFlow(flow, profile)
   return steps.length ? { title: flow.title, steps } : null
 }
+
+/** Ways a tab is asked for, by the key its tour is filed under. */
+const ASKED_AS: Record<string, string> = {
+  dashboard: 'dashboard',
+  home: 'home',
+  events: 'events',
+  event: 'events',
+  calendar: 'events',
+  tasks: 'assignments',
+  task: 'assignments',
+  assignments: 'assignments',
+  announcements: 'announce',
+  announce: 'announce',
+  operations: 'issues',
+  issues: 'issues',
+  kaizen: 'issues',
+  planning: 'issues',
+  security: 'security',
+  worship: 'worship',
+  'chord sheets': 'worship',
+  'set lists': 'worship',
+  content: 'music',
+  music: 'music',
+  sermons: 'music',
+  podcasts: 'music',
+  admin: 'rolehub',
+  'admin panel': 'rolehub',
+  settings: 'settings',
+  profile: 'settings',
+  notifications: 'settings',
+  'public facing': 'public',
+  posts: 'posts',
+  giving: 'giving',
+  story: 'story',
+  'our story': 'story',
+  connect: 'connect',
+}
+
+/**
+ * The tour Miriam is asked for ("give me a tour", "show me how Events
+ * works"): the whole app's, or one part's — only a part this person has, and
+ * in it only the steps their role sees, as the "Need help?" tours are.
+ */
+export function tourFor(
+  asked: string,
+  profile: UserProfile | null
+): { title: string; steps: TourStep[] } | null {
+  const said = asked
+    .trim()
+    .toLowerCase()
+    .replace(/^the\s+/, '')
+    .replace(/\s+(tab|page|screen)$/, '')
+  if (!said || ['all', 'app', 'everything', 'whole app', 'full'].includes(said)) {
+    const steps = buildFullTour(profile)
+    return steps.length > 1 ? { title: 'Mission Portal', steps } : null
+  }
+  const only = (flow: TourFlow) => {
+    const steps = filterFlow(flow, profile)
+    return steps.length ? { title: flow.title, steps } : null
+  }
+  // Parts of another tab: messages (in Announcements), inventory (in Operations).
+  if (/^messag|^chat|^rooms?$/.test(said))
+    return canUseMessages(profile) ? only(messagesFlow) : null
+  if (/^inventory|^reorder/.test(said)) return isAdmin(profile) ? only(inventoryFlow) : null
+  const tab = (ASKED_AS[said] ??
+    TAB_FLOWS.find((f) => f.title.toLowerCase() === said)?.tab ??
+    null) as Tab | null
+  if (!tab || !visibleTabs(profile).includes(tab)) return null
+  const flows = flowsForTab(tab, profile)
+  const steps = flows.flatMap((f) => filterFlow(f, profile))
+  return steps.length ? { title: flows[0].title, steps } : null
+}
+
+/** The parts of the app this person can be given a tour of, by name. */
+export function tourNames(profile: UserProfile | null): string[] {
+  const names = visibleTabs(profile).flatMap((t) => flowsForTab(t, profile).map((f) => f.title))
+  return [...new Set(names)]
+}

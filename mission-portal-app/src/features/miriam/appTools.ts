@@ -16,6 +16,7 @@ import {
   roomsFor,
   settingsShown,
 } from '@/lib/miriamAppData'
+import { tourFor, tourNames } from '@/features/tour/flows'
 import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useMusicStore } from '@/stores/musicStore'
@@ -36,6 +37,7 @@ export type AppToolName =
   | 'read_messages'
   | 'read_operations'
   | 'read_settings'
+  | 'app_guide'
   // Changes: offered as these are, made only once confirmed (./actions.ts).
   | 'send_message'
   | 'post_announcement'
@@ -74,7 +76,7 @@ const ADMIN_ACTIONS: AppToolName[] = [
 export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   if (!profile) return []
   const tabs = visibleTabs(profile)
-  const tools: AppToolName[] = ['read_settings']
+  const tools: AppToolName[] = ['read_settings', 'app_guide']
   if (tabs.includes('music')) tools.push('find_content')
   if (tabs.includes('announce')) tools.push('read_announcements')
   if (canUseMessages(profile)) tools.push('read_messages')
@@ -162,6 +164,25 @@ async function readOperations(profile: UserProfile, area: string, q: string) {
   return { error: 'No such part of Operations.' }
 }
 
+/**
+ * How to use a part of the app, as this person can: the steps of its tour
+ * (features/tour), only those their role sees — what the tour shows, as text.
+ */
+function guideFor(profile: UserProfile, tab: string) {
+  const tour = tourFor(tab, profile)
+  if (!tour) {
+    return {
+      note: `There is no ${tab} for this person. They can be shown: ${tourNames(profile).join(', ')}.`,
+    }
+  }
+  return {
+    tour: tour.title,
+    steps: tour.steps
+      .filter((s) => s.id !== 'welcome')
+      .map((s) => ({ title: s.title, about: s.body, ...(s.bullets ? { points: s.bullets } : {}) })),
+  }
+}
+
 /** One lookup, run: what it found, as text for Claude. Never throws. */
 export async function runAppTool(name: string, input: Record<string, unknown>): Promise<string> {
   const profile = useAuthStore.getState().profile
@@ -189,6 +210,8 @@ export async function runAppTool(name: string, input: Record<string, unknown>): 
       result = await readOperations(profile, String(input.area ?? ''), q)
     } else if (name === 'read_settings') {
       result = settingsShown(profile)
+    } else if (name === 'app_guide') {
+      result = guideFor(profile, String(input.tab ?? ''))
     } else {
       // A change is never run from here: it is confirmed first (./actions.ts).
       result = { error: 'That is not a lookup.' }

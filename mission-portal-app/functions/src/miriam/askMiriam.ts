@@ -66,6 +66,8 @@ Announcements, their messages, the Operations tab (issues, kaizen, planning, inv
 
 Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new task's form (open_task_form) or an event's form — a new one (open_event_form), or an existing one changed (edit_event: find the event first) — is only filled in for them to check and save, so fill in what they said and leave the rest out. To play a video from Content, find it, then answer with open "video" and its id. To buy something ("buy triple A batteries"), find it in the reorder list (read_operations, inventory) and answer with open "reorder" and its id, saying what you're opening; if it isn't on the list, or has no link, say so. To change something — send a message, post an announcement, mark a task, answer their availability, sign up for food, turn a notification on or off, and for admins change people's accounts, groups, common teams and task templates — use its tool once you have what it needs (an event's key, a task's id, a person's or group's id from people_and_groups); they confirm it in the app before anything is done, so don't ask them first. Anything else that changes something you can't do yet: say so in one sentence.
 
+How to use the app. Asked for a tour or a walkthrough ("give me a tour", "show me around", "walk me through Worship", "show me how Events works"): answer with open "tour" and target the part asked for ("" for the whole app) — the app's guided tour goes to each screen and shows its features, as their role has them — and one sentence to start it ("Here's a tour of Events."). A "how do I…" or "what can I do in…" question: use app_guide for that part and answer from what it returns, in plain words and short steps; then offer to show them with the tour. Only what app_guide returns: it is what their role lets them do, so never describe anything it doesn't list. Something it doesn't list: say it isn't something they can do in the app (an admin does it), without explaining how. If app_guide says there is no such part for them, say so and name what you can show them.
+
 When you are not sure — a request with several parts, people or groups to match, a name you can't place, or anything you might get wrong — ask the advisor before you act. A plain question you can look up needs no advice.
 
 If no tool fits, call \`answer\` saying in one sentence that you can't do that yet. Never ask a question back; they can't answer one.`
@@ -76,6 +78,8 @@ const MAX_ROUNDS = 6
 /** Where the app should take them to see an answer. */
 type Open =
   | { kind: 'screen'; id: string }
+  /** The guided tour: of the whole app (""), or one part. */
+  | { kind: 'tour'; id: string }
   | { kind: 'video'; id: string }
   | { kind: 'reorder'; id: string }
   | {
@@ -414,7 +418,7 @@ export const askMiriam = onCall(
 
 interface AnswerInput {
   spoken: string
-  open: 'event' | 'task' | 'availability' | 'screen' | 'video' | 'reorder' | 'none'
+  open: 'event' | 'task' | 'availability' | 'screen' | 'video' | 'reorder' | 'tour' | 'none'
   target: string
   section: 'dress_code' | 'availability' | 'weather' | 'details' | 'none'
   choices?: string[]
@@ -440,6 +444,9 @@ async function finish(input: AnswerInput, lookups: Lookups, viewer: Viewer) {
   ) {
     // Opened only if the app has it for this person: it checks again.
     open = { kind: input.open, id: String(input.target).slice(0, 80) }
+  } else if (input.open === 'tour') {
+    // The whole app's ("") or one part's; the app gives only what is theirs.
+    open = { kind: 'tour', id: String(input.target ?? '').slice(0, 40) }
   }
   // Offered choices: only events this person may see, as they will be shown.
   const choices: { key: string; title: string; date: string }[] = []

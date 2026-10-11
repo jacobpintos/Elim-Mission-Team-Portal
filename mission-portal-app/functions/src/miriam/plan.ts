@@ -325,15 +325,15 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
           },
           open: {
             type: 'string',
-            enum: ['event', 'task', 'availability', 'screen', 'video', 'reorder', 'none'],
+            enum: ['event', 'task', 'availability', 'screen', 'video', 'reorder', 'tour', 'none'],
             description:
               'event: the event’s page; task: the task; availability: the admin availability page; ' +
-              'screen: one of the screens they can open, from the list they are sent; video: a video from Content, to play; reorder: a reorder list item’s link, to buy it; none: nothing to show.',
+              'screen: one of the screens they can open, from the list they are sent; video: a video from Content, to play; reorder: a reorder list item’s link, to buy it; tour: the app’s guided tour, going to each screen and showing its features; none: nothing to show.',
           },
           target: {
             type: 'string',
             description:
-              'The event’s key, the task’s id, the screen’s id, the Content item’s id (from find_content), or the reorder item’s id (from read_operations); "" when open is availability or none.',
+              'The event’s key, the task’s id, the screen’s id, the Content item’s id (from find_content), the reorder item’s id (from read_operations), or for a tour the part of the app as app_guide names it ("events", "worship"; "" for the whole app); "" when open is availability or none.',
           },
           section: {
             type: 'string',
@@ -370,6 +370,7 @@ export type AppToolName =
   | 'read_messages'
   | 'read_operations'
   | 'read_settings'
+  | 'app_guide'
   | ActionName
 
 /**
@@ -710,6 +711,18 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
         'Their own profile and settings: name, email, title, roles, location for nearby events, and which notifications they get by push and by email.',
       strict: true,
       input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    },
+    app_guide: {
+      name: 'app_guide',
+      description:
+        'How to use the app, as this person can: the steps of its guided tour — what each screen is for and how to do things there, only what their role sees. For "how do I…", "what can I do in Events?". tab: the part asked about ("events", "tasks", "chord sheets", "messages", "admin"), or empty for the whole app.',
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: { tab: { type: 'string' } },
+        required: ['tab'],
+        additionalProperties: false,
+      },
     },
   }
 

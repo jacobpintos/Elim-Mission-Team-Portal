@@ -95,6 +95,8 @@ export type MiriamOpen =
   | { kind: 'video'; id: string }
   /** A reorder list item, by id: its link opened, to buy it (admins). */
   | { kind: 'reorder'; id: string }
+  /** The guided tour (features/tour): of the whole app (""), or one part — only what is theirs. */
+  | { kind: 'tour'; id: string }
 
 export type MiriamResult =
   /** With `editKey`, an existing event's form (its instance key) with the changes made. */
@@ -116,7 +118,7 @@ export type MiriamResult =
 
 /** The app's address for where an answer is shown. */
 export function miriamHref(
-  open: Exclude<MiriamOpen, { kind: 'screen' | 'video' | 'reorder' }>
+  open: Exclude<MiriamOpen, { kind: 'screen' | 'video' | 'reorder' | 'tour' }>
 ): string {
   if (open.kind === 'task') return `/assignments?taskId=${encodeURIComponent(open.id)}`
   if (open.kind === 'availability') return '/admin/avail'
