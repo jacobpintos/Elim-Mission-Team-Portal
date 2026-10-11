@@ -43,7 +43,8 @@ import { useGroupsStore } from '@/stores/groupsStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { ChordSheetViewer } from '@/features/worship/ChordSheetViewer'
 import { useSongQueue } from '@/features/worship/useSongQueue'
-import { tourFor } from '@/features/tour/flows'
+import { tourFor, tourNames } from '@/features/tour/flows'
+import { tourAsked } from '@/lib/miriamTour'
 import { useTourStore } from '@/features/tour/tourStore'
 import { songAsked } from '@/lib/miriamSongs'
 import { songHost, songQueue } from '@/lib/songHost'
@@ -76,6 +77,8 @@ const WAKE_RETRY_MS = 3000
  */
 const SONG_PAUSE_MS = 700
 const SONG_WITH_KEY_PAUSE_MS = 300
+/** A tour asked for, of a part named ("a tour of worship"). */
+const TOUR_PAUSE_MS = 1000
 /** The end of a key that can't run on: "E flat", "F sharp minor", "G major". */
 const KEY_DONE = /(?:flat|sharp|minor|major|[♭♯#])$/i
 /** How long a confirmed change is waited on before it is said to be waiting for a signal. */
@@ -251,6 +254,24 @@ export function MiriamButton() {
     setLink(null)
     stopListening()
     setHeard(said)
+    // A tour asked for: the app's own, started here — nothing to work out.
+    const tourAsk = again ? null : tourAsked(withoutHerName(said))
+    if (tourAsk) {
+      const profile = useAuthStore.getState().profile
+      const tour = tourFor(tourAsk.part, profile)
+      if (tour) {
+        const text = tourAsk.part ? `Here’s a tour of ${tour.title}.` : 'Here’s a tour of the app.'
+        speak(text)
+        setOpen(false)
+        useTourStore.getState().start(tour)
+        return
+      }
+      const text = `I can give you a tour of ${tourNames(profile).join(', ')}.`
+      setAnswer(text)
+      speak(text)
+      setStage('answered')
+      return
+    }
     // A song, opened here from the sheets on this device: no need to ask.
     // With a song screen up (a sheet open, or the Chord Sheets page), that is
     // all that is asked of her, and it is never sent off to be worked out.
@@ -469,6 +490,8 @@ export function MiriamButton() {
   const songAliases = useRef<ReadonlyMap<string, string>>(new Map())
   /** How long to wait after the last words before acting on them. */
   const pauseFor = (text: string) => {
+    // A tour of a part named in full: nothing more to wait for.
+    if (tourAsked(text)?.part) return TOUR_PAUSE_MS
     if (!songHost()) return PAUSE_MS
     const sheets = useChordSheetsStore.getState().chordSheets
     const cmd = parseSheetCommand(text, sheets, songAliases.current)

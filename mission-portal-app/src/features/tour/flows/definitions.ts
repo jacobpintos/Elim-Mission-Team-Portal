@@ -194,9 +194,33 @@ export const worshipFlow: TourFlow = {
       title: 'Chord sheets',
       body: 'Charts are written once in the Nashville Number System and transpose to any key instantly. A “Chords Only” mode collapses repeats for quick reference.',
       bullets: [
-        'Transpose to any key',
+        'Transpose to any key, major or minor, or show the numbers',
         'Chords-Only collapses repeated sections',
         'Supports imported PDFs & images',
+      ],
+    },
+    {
+      id: 'worship-play',
+      route: '/worship',
+      title: 'Playing from a sheet',
+      body: 'Open a sheet on a music stand and keep your hands on your instrument.',
+      bullets: [
+        '▶ Autoscroll, faster or slower to suit the song',
+        'Jump to a section with its button (V1, C, B…)',
+        'Size − / +, your own ✎ Notes, and Export PDF',
+        'In a set list, swipe or use ‹ › for the next song',
+      ],
+    },
+    {
+      id: 'worship-voice',
+      route: '/worship',
+      title: 'Voice control',
+      body: 'Tap 🎤 on a sheet and say what you need — no hands.',
+      bullets: [
+        '“Next song”, “back”, “chorus two”, “key of G”, “chords only”',
+        '“Start autoscroll on five”, “faster”, “stop”',
+        '“Queue Way Maker in D” lines songs up; “open Above All” switches now',
+        'With “Hey Miriam” on, the sheet listens for her name by itself',
       ],
     },
     {
@@ -256,6 +280,10 @@ export const inventoryFlow: TourFlow = {
       route: '/issues/inventory',
       title: 'Reorder alerts',
       body: 'Each item has a reorder threshold. When stock drops to or below it, the item automatically surfaces on the Reorder tab.',
+      bullets: [
+        'A reorder item can carry a link to buy it',
+        'Or ask Miriam: “buy triple A batteries”',
+      ],
     },
     {
       id: 'inv-admin',
@@ -277,6 +305,7 @@ export const messagesFlow: TourFlow = {
       route: '/messages',
       title: 'Messages',
       body: 'Team chat organized into rooms. Open a room to see its history and send a message.',
+      bullets: ['Mute a room to stop its notifications', 'Block someone from Settings'],
       showcase: 'messages',
     },
     {
@@ -601,6 +630,52 @@ export const settingsFlow: TourFlow = {
       body: EMAIL_FEATURES_ENABLED
         ? 'Choose exactly which notifications you get by push and email, opt into digests, and set your location for nearby events.'
         : 'Choose exactly which notifications you get, and set your location so events near you are flagged.',
+    },
+  ],
+}
+
+/** Miriam, the assistant at the top of every screen — not a tab, so not filed under one. */
+export const miriamFlow: TourFlow = {
+  id: 'miriam',
+  title: 'Miriam',
+  steps: [
+    {
+      id: 'miriam-intro',
+      title: 'Meet Miriam',
+      body: 'Tap Miriam at the top of any screen and ask, typed or spoken. She answers from the app — only what you are allowed to see — and takes you to where the answer is.',
+      bullets: [
+        '“When is Sunday service?”',
+        '“What’s the dress code for the retreat?”',
+        '“Give me a tour of Worship”',
+      ],
+    },
+    {
+      id: 'miriam-hey',
+      title: '“Hey Miriam”',
+      body: 'Switch on “Hey Miriam” in her panel and call her by name, hands free. Listening for her name happens on your device; nothing is sent until she is called.',
+    },
+    {
+      id: 'miriam-actions',
+      title: 'Asking her to do things',
+      body: 'Tell her plainly and she shows you exactly what she will do, for you to confirm — nothing changes until you do.',
+      bullets: [
+        'Answer your availability, mark a task done',
+        'Send a message, sign up to bring food',
+        'Turn a notification on or off',
+      ],
+      roles: ['admin', 'regular', 'worship', 'security', 'intern'],
+    },
+    {
+      id: 'miriam-songs',
+      title: 'Songs by name',
+      body: 'Ask for a chord sheet in any key — “Above All in E” — and it opens, straight from your phone.',
+      roles: ['admin', 'worship', 'guest'],
+    },
+    {
+      id: 'miriam-admin',
+      title: 'Forms and admin work',
+      body: 'She fills in a new event, an event’s changes, a task or a new account for you to check and save, and manages people, groups, common teams and task templates — each confirmed first.',
+      adminOnly: true,
     },
   ],
 }

@@ -8,6 +8,7 @@ import {
   inventoryFlow,
   announceFlow,
   messagesFlow,
+  miriamFlow,
   TAB_FLOWS,
 } from './definitions'
 
@@ -65,7 +66,8 @@ export function buildFullTour(profile: UserProfile | null): TourStep[] {
       ordered.push(f)
     }
   }
-  const steps = ordered.flatMap((f) => filterFlow(f, profile))
+  // Miriam first: she is on every screen, and can show the rest again later.
+  const steps = [miriamFlow, ...ordered].flatMap((f) => filterFlow(f, profile))
   return [welcomeFlow.steps[0], ...steps]
 }
 
@@ -139,6 +141,7 @@ export function tourFor(
     const steps = filterFlow(flow, profile)
     return steps.length ? { title: flow.title, steps } : null
   }
+  if (/^(miriam|you|yourself|the assistant)$/.test(said)) return only(miriamFlow)
   // Parts of another tab: messages (in Announcements), inventory (in Operations).
   if (/^messag|^chat|^rooms?$/.test(said))
     return canUseMessages(profile) ? only(messagesFlow) : null
@@ -155,5 +158,5 @@ export function tourFor(
 /** The parts of the app this person can be given a tour of, by name. */
 export function tourNames(profile: UserProfile | null): string[] {
   const names = visibleTabs(profile).flatMap((t) => flowsForTab(t, profile).map((f) => f.title))
-  return [...new Set(names)]
+  return [...new Set([...names, miriamFlow.title])]
 }

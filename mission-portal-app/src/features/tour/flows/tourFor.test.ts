@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { tourFor, tourNames } from './index'
+import { tourAsked } from '@/lib/miriamTour'
 import type { UserProfile } from '@/types/user'
 
 const person = (...roles: string[]) =>
@@ -46,5 +47,50 @@ describe('the tour Miriam gives, as each person’s role has it', () => {
     expect(tourNames(member)).toContain('Events')
     expect(tourNames(member)).not.toContain('Security')
     expect(tourNames(admin)).toContain('Security')
+  })
+})
+
+describe('a tour asked of Miriam, heard on the device', () => {
+  it('hears a tour asked for, and of which part', () => {
+    const cases: [string, string][] = [
+      ['Give me a tour', ''],
+      ['Hey Miriam, can you give me a quick tour of the app?', ''],
+      ['give me a tour of the worship tab please', 'worship'],
+      ['Start the tour of events', 'events'],
+      ['tour of chord sheets', 'chord sheets'],
+      ['Walk me through Operations', 'operations'],
+      ['show me around', ''],
+      ['Show me around the admin panel', 'admin panel'],
+      ['show me how the Events tab works', 'events'],
+    ]
+    for (const [said, part] of cases) expect(tourAsked(said), said).toEqual({ part })
+  })
+
+  it('leaves questions and everything else to be answered', () => {
+    for (const said of [
+      'How do I create an event?',
+      'when is the tour bus leaving',
+      'who is going on the Kenya tour',
+      'open Above All',
+    ]) {
+      expect(tourAsked(said), said).toBeNull()
+    }
+  })
+})
+
+describe('the tour, kept up to date', () => {
+  it('starts with Miriam, as each role can use her', () => {
+    const member = tourFor('', person('regular'))!.steps.map((s) => s.id)
+    expect(member.slice(0, 2)).toEqual(['welcome', 'miriam-intro'])
+    expect(member).toContain('miriam-actions')
+    expect(member).not.toContain('miriam-admin')
+    expect(tourFor('', person('admin'))!.steps.map((s) => s.id)).toContain('miriam-admin')
+    expect(ids(tourFor('', person('guest')))).not.toContain('miriam-actions')
+    expect(tourFor('you', person('regular'))?.title).toBe('Miriam')
+  })
+
+  it('shows the worship team voice control and playing from a sheet', () => {
+    const worship = ids(tourFor('worship', person('regular', 'worship')))
+    expect(worship).toEqual(expect.arrayContaining(['worship-play', 'worship-voice']))
   })
 })
