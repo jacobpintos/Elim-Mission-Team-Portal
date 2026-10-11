@@ -142,3 +142,27 @@ describe('a question, never taken for a song', () => {
     }
   })
 })
+
+describe('"you" and "knew", as "queue" is heard', () => {
+  const library = [
+    { id: 'a', title: 'Above All' },
+    { id: 'w', title: 'Way Maker' },
+    { id: 'k', title: 'You Are My King' },
+  ]
+  it('queue a song said plainly after them, as the first word', () => {
+    expect(parseSheetCommand('you Above All', library)).toMatchObject({
+      type: 'queue',
+      request: { sheet: library[0] },
+    })
+    expect(parseSheetCommand('Knew Way Maker in D', library)).toMatchObject({
+      type: 'queue',
+      request: { sheet: library[1], key: 'D' },
+    })
+  })
+  it('are nothing anywhere else, or when they begin a title', () => {
+    expect(parseSheetCommand('thank you above all', library)).toBeNull()
+    expect(parseSheetCommand('I knew Way Maker', library)).toBeNull()
+    expect(parseSheetCommand('you are my king', library)?.type).not.toBe('queue')
+    expect(parseSheetCommand('you are so good', library)).toBeNull()
+  })
+})

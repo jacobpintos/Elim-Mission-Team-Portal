@@ -185,6 +185,8 @@ const QUEUE_BEFORE = [
   ['few'],
   ['kill'],
   ['cute'],
+  ['you'],
+  ['knew'],
   ['queued'],
   ['cued'],
   ['up', 'next'],
@@ -193,7 +195,7 @@ const QUEUE_BEFORE = [
 ]
 const QUEUE_AFTER = [['next'], ['up', 'next']]
 /** Everyday words "queue" is written down as: taken for it only before a title said plainly. */
-const HEARD_AS_QUEUE = new Set(['few', 'kill', 'cute'])
+const HEARD_AS_QUEUE = new Set(['few', 'kill', 'cute', 'you', 'knew'])
 
 /** Speeds as said, 1–12 (lib/autoScroll), and what they are often written down as. */
 const LEVELS: Record<string, number> = {
@@ -307,10 +309,15 @@ export function parseSheetCommand<T extends { id: string | number; title: string
   }
   for (const p of QUEUE_BEFORE) {
     if (startsWith(raw, p)) {
-      // "Few", "kill", "cute", as "queue" is sometimes heard, only with a
-      // title said plainly: they begin too many lines that are only sung.
+      // "Few", "kill", "cute", "you", "knew", as "queue" is sometimes heard —
+      // as the first word, and only with a title said plainly: they begin too
+      // many lines that are only sung. Nor when all that was said is a title
+      // itself: "You Are My King" is that song.
       const rest = raw.slice(p.length)
-      const request = HEARD_AS_QUEUE.has(p[0]) ? asSong(rest) : nearSong(rest)
+      const heardAs = HEARD_AS_QUEUE.has(p[0])
+      const whole = heardAs ? asSong(raw) : null
+      if (whole && spokenWords(whole.sheet.title)[0] === p[0]) continue
+      const request = heardAs ? asSong(rest) : nearSong(rest)
       if (request) return { type: 'queue', request }
     }
   }
