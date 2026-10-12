@@ -45,7 +45,23 @@ import { ChordSheetViewer } from '@/features/worship/ChordSheetViewer'
 import { useSongQueue } from '@/features/worship/useSongQueue'
 import { tourFor, tourNames } from '@/features/tour/flows'
 import { tourAsked } from '@/lib/miriamTour'
-import { quickAnswer, screenAsked } from '@/lib/miriamQuick'
+import {
+  availabilityAsked,
+  availabilityEvent,
+  listAnswer,
+  listAsked,
+  playAsked,
+  playPick,
+  quickAnswer,
+  screenAsked,
+  tasksAnswer,
+  tasksAsked,
+  weatherLine,
+  type QuickData,
+} from '@/lib/miriamQuick'
+import { fetchWeather } from '@/lib/weather'
+import { useTasksStore } from '@/stores/tasksStore'
+import { appToolsFor } from './appTools'
 import { useEventsStore } from '@/stores/eventsStore'
 import { todayStr } from '@/lib/events'
 import { useTourStore } from '@/features/tour/tourStore'
@@ -145,17 +161,23 @@ function refused(err: unknown): boolean {
  * rules the server would use (lib/miriamQuick) — or null, to ask Claude.
  */
 function quickFromApp(said: string) {
+  const data = appData()
+  return data ? quickAnswer(said, data) : null
+}
+
+/** The events, groups and people the app has loaded, as lib/miriamQuick reads them; null before the events are in. */
+function appData(): QuickData | null {
   const profile = useAuthStore.getState().profile
-  if (!profile) return null
   const { templates, overrides } = useEventsStore.getState()
-  return quickAnswer(said, {
+  if (!profile || templates.length === 0) return null
+  return {
     templates: templates as never,
     overrides: overrides as never,
     groups: useGroupsStore.getState().groups,
     viewer: { uid: String(profile.uid), roles: profile.roles ?? [] },
     names: new Map(useUsersStore.getState().users.map((u) => [String(u.uid), u.displayName])),
     today: todayStr(),
-  })
+  }
 }
 
 export function MiriamButton() {
@@ -236,9 +258,13 @@ export function MiriamButton() {
     subGroups()
     const events = useEventsStore.getState()
     events.subscribe()
+    // Their tasks too, for "what's due?"
+    const tasks = useTasksStore.getState()
+    tasks.subscribe()
     return () => {
       unsubGroups()
       events.unsubscribe()
+      tasks.unsubscribe()
     }
   }, [open, subGroups, unsubGroups])
 
@@ -362,9 +388,32 @@ export function MiriamButton() {
         return
       }
     }
+    if (!again && (await answeredHere(withoutHerName(said)))) return
     // A plain question about an event — its dress code, time, place, your
     // team, car, room or flight — answered from what the app already has.
     const quick = again ? null : quickFromApp(withoutHerName(said))
+    if (quick?.weather) {
+      // Its forecast, fetched as the event's page does.
+      setStage('thinking')
+      const today = todayStr()
+      const lines = await Promise.all(
+        quick.weather.map(async (ev) => {
+          const at =
+            typeof ev._geocodeLat === 'number' && typeof ev._geocodeLng === 'number'
+              ? await fetchWeather(ev._geocodeLat, ev._geocodeLng, ev.date).catch(() => null)
+              : null
+          return weatherLine(ev, at, today)
+        })
+      )
+      const text = lines.join(' ')
+      setAnswer(text)
+      speak(text)
+      setStage('answered')
+      if (quick.open && !anyOverlayOpen()) {
+        router.push(miriamHref({ kind: 'event', ...quick.open }) as never)
+      }
+      return
+    }
     if (quick) {
       setAnswer(quick.text)
       speak(quick.text)
@@ -451,6 +500,64 @@ export function MiriamButton() {
       setAnswer(miriamError(err))
     }
     setStage('answered')
+  }
+
+  /**
+   * Asked for something the app already has — the next event, what's on,
+   * their tasks, a sermon to play — or an availability to give: done here,
+   * nothing sent off. False when it isn't one of those, or isn't plain, for
+   * Claude to work out.
+   */
+  const answeredHere = async (said: string): Promise<boolean> => {
+    const say = (text: string, at: { key: string; section: 'details' } | null = null) => {
+      setAnswer(text)
+      speak(text)
+      setStage('answered')
+      if (at && !anyOverlayOpen()) router.push(miriamHref({ kind: 'event', ...at }) as never)
+      return true
+    }
+    // "Play the sermon from Sunday": played over the page.
+    const play = playAsked(said)
+    if (play) {
+      const music = useMusicStore.getState()
+      if (music.items.length === 0) await music.load()
+      const item = playPick(play, useMusicStore.getState().items)
+      if (item) {
+        setVideo(item)
+        setOpen(false)
+        return true
+      }
+      return false
+    }
+    const data = appData()
+    // "I'm available for Revival": shown to be confirmed, as any change is.
+    const avail = data && availabilityAsked(said, data.today)
+    if (avail) {
+      const profile = useAuthStore.getState().profile
+      const ev = appToolsFor(profile).includes('set_availability')
+        ? availabilityEvent(avail, data)
+        : null
+      if (!ev) return false
+      await offerAction('set_availability', {
+        event_key: ev.instanceKey,
+        status: avail.status,
+        note: '',
+      })
+      return true
+    }
+    // "What's my next event?", "what's on this week?"
+    const list = data && listAsked(said, data.today)
+    if (list) {
+      const { text, open } = listAnswer(list, data)
+      return say(text, open?.section === 'details' ? { key: open.key, section: 'details' } : null)
+    }
+    // "What's due this week?": once their tasks are in.
+    const tasksAsk = tasksAsked(said)
+    const tasks = useTasksStore.getState()
+    if (tasksAsk && data && tasks._refCount > 0 && !tasks.loading) {
+      return say(tasksAnswer(tasksAsk, tasks.tasks, data.viewer.uid, data.today).text)
+    }
+    return false
   }
 
   /** A change asked for: shown as exactly what will be done, or why it can't be. */

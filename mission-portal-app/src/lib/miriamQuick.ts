@@ -1,8 +1,11 @@
 import {
+  assignedTo,
+  canSeeEvent,
   carpoolFor,
   dressCodeFor,
   findEvents,
   flightsFor,
+  instancesOf,
   lodgingFor,
   shiftDate,
   type EventInstance,
@@ -23,7 +26,15 @@ import {
  * not here — is left to Claude: null.
  */
 
-export type QuickField = 'dress' | 'time' | 'place' | 'team' | 'car' | 'lodging' | 'flight'
+export type QuickField =
+  | 'dress'
+  | 'time'
+  | 'place'
+  | 'team'
+  | 'car'
+  | 'lodging'
+  | 'flight'
+  | 'weather'
 
 export interface QuickAsk {
   field: QuickField
@@ -34,6 +45,7 @@ export interface QuickAsk {
 }
 
 const FIELDS: [QuickField, RegExp][] = [
+  ['weather', /\b(?:weather|rain|raining|forecast|temperature|how\s+(?:hot|cold|warm))\b/],
   [
     'lodging',
     /\b(?:where\s+am\s+i\s+staying|where\s+(?:do|will)\s+i\s+(?:stay|sleep)|hotel|lodging|my\s+room)\b/,
@@ -54,7 +66,7 @@ const FIELDS: [QuickField, RegExp][] = [
 
 /** Asked about many, or something only Claude can work out: left to Claude. */
 const NOT_QUICK =
-  /\b(?:everyone|everybody|who\s+(?:is|isn't|is\s+not)\s+(?:available|coming|going)|availab|unavailable|report\s+time|call\s+time|weather|rain|forecast|food|bring|task|due|all\s+(?:the\s+)?events|this\s+week|next\s+week|this\s+month)\b/
+  /\b(?:everyone|everybody|who\s+(?:is|isn't|is\s+not)\s+(?:available|coming|going)|availab|unavailable|report\s+time|call\s+time|food|bring|task|due|all\s+(?:the\s+)?events|this\s+week|next\s+week|this\s+month)\b/
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
@@ -151,6 +163,21 @@ const ASKING = new Set([
   'leave',
   'depart',
   'fly',
+  'weather',
+  'rain',
+  'raining',
+  'forecast',
+  'temperature',
+  'hot',
+  'cold',
+  'warm',
+  'how',
+  'gonna',
+  'going',
+  'it',
+  'there',
+  'any',
+  'like',
   'its',
   'it’s',
   'whats',
@@ -173,6 +200,22 @@ export function quickAsked(text: string, today: string): QuickAsk | null {
   const field = FIELDS.find(([, re]) => re.test(plain))?.[0]
   if (!field) return null
 
+  const ref = eventRef(said, today)
+  if (!ref) return null
+  return { field, ...ref }
+}
+
+/**
+ * Which event was meant: a day ("today", "Friday", "next Sunday") and the
+ * words left naming it ("revival"), once the asking words are taken off.
+ * Null when there is neither. `extra`: more asking words to take off.
+ */
+export function eventRef(
+  said: string,
+  today: string,
+  extra: ReadonlySet<string> = new Set()
+): { date: string | null; name: string } | null {
+  const plain = said.replace(/’/g, "'")
   let date: string | null = null
   if (/\b(?:today|tonight|this\s+(?:morning|afternoon|evening))\b/.test(plain)) date = today
   else if (/\btomorrow\b/.test(plain)) date = shiftDate(today, 1)
@@ -189,12 +232,12 @@ export function quickAsked(text: string, today: string): QuickAsk | null {
   // "Sunday service" is an event's name as much as a day: kept as a name too.
   const name = said
     .split(' ')
-    .filter((w) => !ASKING.has(w))
+    .filter((w) => !ASKING.has(w) && !extra.has(w))
     .join(' ')
     .trim()
   const sundayService = /\bsunday\s+service\b/.test(plain)
   if (!date && !name && !sundayService) return null
-  return { field, date, name: sundayService ? `sunday service ${name}`.trim() : name }
+  return { date, name: sundayService ? `sunday service ${name}`.trim() : name }
 }
 
 export interface QuickData {
@@ -209,7 +252,9 @@ export interface QuickData {
 export interface QuickAnswer {
   text: string
   /** The one event answered about, to open at what was asked. */
-  open: { key: string; section: 'dress_code' | 'details' } | null
+  open: { key: string; section: 'dress_code' | 'details' | 'weather' } | null
+  /** Asked the weather: the events to fetch a forecast for (lib/weather), and say with weatherLine. */
+  weather?: EventInstance[]
 }
 
 /** The events asked about: on that day, or by that name (nearest first). */
@@ -280,6 +325,9 @@ function answerFor(field: QuickField, ev: EventInstance, data: QuickData, alone:
         ? `${title}: ${rooms.join('. ')}.`
         : `You haven’t been given a room for ${title} yet.`
     }
+    case 'weather':
+      // Fetched, then said by weatherLine.
+      return ''
     case 'flight': {
       if (!ev.flights) return `${title} has no flights.`
       const flights = flightsFor(ev, viewer, names)
@@ -298,6 +346,13 @@ export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
   const events = eventsFor(ask, data)
   // Nothing found, or more than can be said in a breath: Claude works it out.
   if (events.length === 0 || events.length > 3) return null
+  if (ask.field === 'weather') {
+    return {
+      text: '',
+      open: events.length === 1 ? { key: events[0].instanceKey, section: 'weather' } : null,
+      weather: events,
+    }
+  }
   if (events.length === 1) {
     const ev = events[0]
     return {
@@ -367,4 +422,398 @@ export function screenAsked(text: string, screens: { id: string; label: string }
   // By the label it is listed under: "Profile & Settings".
   const byLabel = screens.find((s) => s.label.toLowerCase() === asked)
   return byLabel?.id ?? null
+}
+
+/** A forecast, as said for one event; `forecast` null when there is none to be had. */
+export function weatherLine(
+  ev: EventInstance,
+  forecast: { high: number; low: number; precipPct: number; label: string } | null,
+  today: string
+): string {
+  const when = whenSaid(ev.date, today)
+  if (ev.isVirtual) return `${ev.title} is virtual — no weather to give.`
+  if (typeof ev._geocodeLat !== 'number' || typeof ev._geocodeLng !== 'number') {
+    return `${ev.title} has no forecast: no place is set for it.`
+  }
+  if (!forecast) return `There’s no forecast yet for ${ev.title} ${when}.`
+  const rain = forecast.precipPct >= 20 ? `, ${forecast.precipPct}% chance of rain` : ''
+  return `${ev.title} ${when}: ${forecast.label.toLowerCase()}, high ${Math.round(forecast.high)}°, low ${Math.round(forecast.low)}°${rain}.`
+}
+
+// --- What's coming up ------------------------------------------------------
+
+/** Lowered, punctuation off: as the parsers below read what was said. */
+const clean = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/[.?!,]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(
+      /^(?:(?:hey|ok|okay)\s+)?(?:miriam\s+)?(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?/,
+      ''
+    )
+
+export interface ListAsk {
+  /** Just the next one. */
+  next: boolean
+  from: string
+  to: string
+  /** Said as a span: "this week". */
+  span: string
+}
+
+/** "What's my next event?", "what's on this week?", "what do I have tomorrow?" */
+export function listAsked(text: string, today: string): ListAsk | null {
+  const said = clean(text)
+  if (
+    /\b(?:my\s+)?next\s+event\b|^what'?s\s+next\b|\bwhat(?:'s|\s+is)\s+coming\s+up\b|\bwhat\s+do\s+i\s+have\s+(?:coming\s+up|next)\b/.test(
+      said
+    )
+  ) {
+    return { next: true, from: today, to: shiftDate(today, 365), span: '' }
+  }
+  const asksEvents =
+    /\b(?:what'?s\s+on|what(?:'s|\s+is)\s+happening|what\s+do\s+i\s+have|what\s+events|any\s+events|my\s+events|my\s+schedule|what'?s\s+(?:going\s+on|planned))\b/.test(
+      said
+    )
+  if (!asksEvents) return null
+  const day = new Date(`${today}T12:00:00`).getDay()
+  if (/\btoday\b|\btonight\b/.test(said))
+    return { next: false, from: today, to: today, span: 'today' }
+  if (/\btomorrow\b/.test(said)) {
+    const t = shiftDate(today, 1)
+    return { next: false, from: t, to: t, span: 'tomorrow' }
+  }
+  if (/\bthis\s+weekend\b/.test(said)) {
+    const sat = shiftDate(today, (6 - day + 7) % 7)
+    return {
+      next: false,
+      from: day === 0 ? today : sat,
+      to: day === 0 ? today : shiftDate(sat, 1),
+      span: 'this weekend',
+    }
+  }
+  if (/\bnext\s+week\b/.test(said)) {
+    const sun = shiftDate(today, 7 - day)
+    return { next: false, from: sun, to: shiftDate(sun, 6), span: 'next week' }
+  }
+  if (/\bthis\s+month\b/.test(said)) {
+    const last = new Date(`${today}T12:00:00`)
+    last.setMonth(last.getMonth() + 1, 0)
+    return { next: false, from: today, to: last.toISOString().slice(0, 10), span: 'this month' }
+  }
+  // "This week", or no span at all: the rest of this week.
+  return { next: false, from: today, to: shiftDate(today, 6 - day), span: 'this week' }
+}
+
+/** When, short: "today at 5 PM", "Friday", "Sunday, Oct 18". */
+function whenShort(ev: EventInstance, today: string): string {
+  const day =
+    ev.date === today
+      ? 'today'
+      : ev.date === shiftDate(today, 1)
+        ? 'tomorrow'
+        : new Date(`${ev.date}T12:00:00`).toLocaleDateString('en-US', {
+            weekday: 'long',
+            ...(ev.date > shiftDate(today, 6) ? { month: 'short', day: 'numeric' } : {}),
+          })
+  return ev.startTime ? `${day} at ${ev.startTime}` : day
+}
+
+/** The events this person can see between two dates, theirs before the rest, by date. */
+function eventsBetween(data: QuickData, from: string, to: string): EventInstance[] {
+  const { templates, overrides, groups, viewer } = data
+  return templates
+    .filter((t) => canSeeEvent(t, viewer, groups))
+    .flatMap((t) => instancesOf(t, from, to, overrides))
+    .filter((ev) => canSeeEvent(ev, viewer, groups))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+export function listAnswer(ask: ListAsk, data: QuickData): QuickAnswer {
+  const { viewer, groups, today } = data
+  const all = eventsBetween(data, ask.from, ask.to)
+  const mine = all.filter((ev) => assignedTo(ev, groups).has(viewer.uid))
+  if (ask.next) {
+    const ev = mine[0] ?? all[0]
+    if (!ev) return { text: 'You have nothing coming up.', open: null }
+    return {
+      text: `Your next event is ${ev.title}, ${whenShort(ev, today)}.`,
+      open: { key: ev.instanceKey, section: 'details' },
+    }
+  }
+  if (all.length === 0) return { text: `Nothing is on ${ask.span}.`, open: null }
+  const shown = all.slice(0, 5).map((ev) => `${ev.title}, ${whenShort(ev, today)}`)
+  const more = all.length > 5 ? `; and ${all.length - 5} more` : ''
+  return { text: `On ${ask.span}: ${shown.join('; ')}${more}.`, open: null }
+}
+
+// --- Your tasks --------------------------------------------------------------
+
+export type TasksAsk = 'open' | 'today' | 'week' | 'overdue'
+
+/** "What are my tasks?", "what's due this week?", "anything overdue?" */
+export function tasksAsked(text: string): TasksAsk | null {
+  const said = clean(text)
+  const asks =
+    /\b(?:my\s+tasks|any\s+tasks|what\s+tasks|what(?:'s|\s+is)\s+due|what\s+do\s+i\s+(?:need|have)\s+to\s+do|my\s+to\s*do|overdue|what(?:'s|\s+is)\s+on\s+my\s+(?:plate|list))\b/.test(
+      said
+    )
+  if (!asks || /\b(?:everyone|everybody|all\s+tasks|team'?s|their)\b/.test(said)) return null
+  if (/\boverdue\b|\blate\b|\bbehind\b/.test(said)) return 'overdue'
+  if (/\btoday\b|\btonight\b/.test(said)) return 'today'
+  if (/\bthis\s+week\b/.test(said)) return 'week'
+  return 'open'
+}
+
+export interface TaskLike {
+  id: string | number
+  title: string
+  status: string
+  dueDate?: string | null
+  assignees: (string | number)[]
+  lead?: string | number | null
+}
+
+export function tasksAnswer(
+  ask: TasksAsk,
+  tasks: TaskLike[],
+  uid: string,
+  today: string
+): QuickAnswer {
+  const day = new Date(`${today}T12:00:00`).getDay()
+  const weekEnd = shiftDate(today, 6 - day)
+  const mine = tasks
+    .filter((t) => t.status !== 'done')
+    .filter((t) => t.assignees.some((a) => sameId(a, uid)) || sameId(t.lead ?? '', uid))
+    .filter((t) =>
+      ask === 'overdue'
+        ? !!t.dueDate && t.dueDate < today
+        : ask === 'today'
+          ? t.dueDate === today
+          : ask === 'week'
+            ? !!t.dueDate && t.dueDate <= weekEnd
+            : true
+    )
+    .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'))
+  const span = { open: '', today: ' due today', week: ' due this week', overdue: ' overdue' }[ask]
+  if (mine.length === 0) {
+    return {
+      text: ask === 'open' ? 'You have no open tasks.' : `Nothing of yours is${span}.`,
+      open: null,
+    }
+  }
+  const due = (t: TaskLike) => {
+    if (!t.dueDate) return ''
+    if (t.dueDate < today) return ' (overdue)'
+    if (t.dueDate === today) return ' (due today)'
+    const d = new Date(`${t.dueDate}T12:00:00`)
+    return ` (due ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })})`
+  }
+  const shown = mine.slice(0, 5).map((t) => `${t.title}${due(t)}`)
+  const more = mine.length > 5 ? `; and ${mine.length - 5} more` : ''
+  const count = `${mine.length} ${mine.length === 1 ? 'task' : 'tasks'}${span}`
+  return { text: `You have ${count}: ${shown.join('; ')}${more}.`, open: null }
+}
+
+// --- Playing something from Content -------------------------------------------
+
+export interface PlayAsk {
+  kind: 'sermon' | 'podcast' | 'music' | null
+  /** The newest of that kind, asked for as such. */
+  latest: boolean
+  /** The words naming it, if any. */
+  query: string
+}
+
+const PLAY_WORDS = new Set([
+  'the',
+  'a',
+  'an',
+  'latest',
+  'last',
+  'newest',
+  'new',
+  'recent',
+  'most',
+  'from',
+  'on',
+  'this',
+  'past',
+  'week',
+  'weeks',
+  'sunday',
+  'sundays',
+  'sunday’s',
+  "sunday's",
+  'service',
+  'message',
+  'sermon',
+  'podcast',
+  'episode',
+  'song',
+  'music',
+  'video',
+  'me',
+  'please',
+  'some',
+  'by',
+  'of',
+])
+
+/** "Play the sermon from Sunday", "play the latest podcast", "play the Kenya sermon". */
+export function playAsked(text: string): PlayAsk | null {
+  const m = clean(text).match(/^(?:play|watch|listen\s+to|put\s+on|start)\s+(.+)$/)
+  if (!m) return null
+  const rest = m[1]
+  const kind = /\b(?:sermon|message|preaching)\b/.test(rest)
+    ? 'sermon'
+    : /\b(?:podcast|episode)\b/.test(rest)
+      ? 'podcast'
+      : null
+  const latest =
+    /\b(?:latest|last|newest|recent|from\s+(?:this\s+)?sunday|sunday'?s|this\s+(?:past\s+)?(?:week|sunday))\b/.test(
+      rest
+    )
+  const query = rest
+    .split(' ')
+    .filter((w) => !PLAY_WORDS.has(w))
+    .join(' ')
+    .trim()
+  // A song is a chord sheet's to open, unless it is plainly Content: left to the song finder.
+  if (!kind && !latest) return null
+  return { kind, latest, query }
+}
+
+export interface PlayItem {
+  id: string
+  type: string
+  title: string
+  album?: string
+  preacher?: string
+  host?: string
+  guest?: string
+  year?: number
+  month?: number
+}
+
+/** The one item asked for, or null when it isn't plain which. */
+export function playPick<T extends PlayItem>(ask: PlayAsk, items: T[]): T | null {
+  const newest = (a: T, b: T) => (b.year ?? 0) - (a.year ?? 0) || (b.month ?? 0) - (a.month ?? 0)
+  let pool = items.filter((m) => !ask.kind || m.type === ask.kind)
+  if (ask.query) {
+    pool = pool.filter((m) =>
+      fitsWords(
+        [m.title, m.album, m.preacher, m.host, m.guest].filter(Boolean).join(' '),
+        ask.query
+      )
+    )
+  }
+  if (pool.length === 0) return null
+  if (ask.latest || pool.length === 1) return [...pool].sort(newest)[0]
+  return null
+}
+
+const fitsWords = (text: string, query: string) => {
+  const have = text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+  return query
+    .split(' ')
+    .filter(Boolean)
+    .every((q) => have.some((w) => w.startsWith(q) || q.startsWith(w)))
+}
+
+// --- Answering availability ---------------------------------------------------
+
+export interface AvailAsk {
+  status: 'yes' | 'no' | 'partial' | 'tbd'
+  date: string | null
+  name: string
+}
+
+const AVAIL_WORDS = new Set([
+  "i'm",
+  'i’m',
+  'im',
+  'i',
+  'am',
+  'will',
+  'be',
+  "i'll",
+  'i’ll',
+  'available',
+  'unavailable',
+  'not',
+  'can',
+  "can't",
+  'can’t',
+  'cannot',
+  'make',
+  'it',
+  'come',
+  'there',
+  'count',
+  'me',
+  'in',
+  'out',
+  'put',
+  'down',
+  'as',
+  'mark',
+  'sure',
+  'maybe',
+  'partly',
+  'partially',
+  'part',
+  'of',
+  'for',
+  'to',
+  'the',
+  'won’t',
+  "won't",
+  'able',
+  'might',
+  'tbd',
+  'yes',
+  'no',
+  'going',
+  'attend',
+])
+
+/** "I'm available for Revival", "I can't make it Friday", "not sure about the banquet". */
+export function availabilityAsked(text: string, today: string): AvailAsk | null {
+  const said = clean(text)
+  if (text.includes('?') || /^(?:am|is|are|who|what|when|which)\b/.test(said)) return null
+  if (!/^(?:i\b|i'm|im\b|i'll|put\s+me|mark\s+me|count\s+me|not\s+sure|maybe)/.test(said))
+    return null
+  const status: AvailAsk['status'] | null =
+    /\bnot\s+sure\b|\bmaybe\b|\btbd\b|\bmight\s+(?:make\s+it|come|be)\b/.test(said)
+      ? 'tbd'
+      : /\bpart(?:ly|ially)?\s+available\b|\bpart\s+of\s+(?:it|the)\b/.test(said)
+        ? 'partial'
+        : /\bnot\s+available\b|\bunavailable\b|\bcan(?:'t|not)\s+(?:make\s+it|come|be\s+there|go|attend)\b|\bwon't\s+(?:be\s+(?:there|able)|make\s+it)\b|\bcount\s+me\s+out\b/.test(
+              said
+            )
+          ? 'no'
+          : /\bavailable\b|\bcan\s+(?:make\s+it|come|be\s+there|go|attend)\b|\bwill\s+be\s+there\b|\bi'll\s+be\s+there\b|\bcount\s+me\s+in\b/.test(
+                said
+              )
+            ? 'yes'
+            : null
+  if (!status) return null
+  const ref = eventRef(said.replace(/'/g, '’'), today, AVAIL_WORDS)
+  if (!ref) return null
+  return { status, ...ref }
+}
+
+/** The one event an availability answer is for, or null when it isn't plain which. */
+export function availabilityEvent(ask: AvailAsk, data: QuickData): EventInstance | null {
+  const events = eventsFor({ field: 'time', date: ask.date, name: ask.name }, data).filter(
+    (ev) => ev.date >= data.today
+  )
+  return events.length === 1 ? events[0] : null
 }
