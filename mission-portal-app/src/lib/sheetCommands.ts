@@ -278,12 +278,43 @@ const HEARD_AS_OPEN = new Set(['opened', 'opening', 'oh pen', 'o pen', 'hope in'
 
 const startsWith = (w: string[], p: string[]) => p.every((x, i) => w[i] === x)
 
+/** How "autoscroll" is sometimes written down: "auto troll", "otto scroll". */
+const AUTOSCROLL_HEARD = new Set([
+  'auto troll',
+  'autotroll',
+  'auto stroll',
+  'autostroll',
+  'auto roll',
+  'autoroll',
+  'auto scrawl',
+  'otto scroll',
+  'otto troll',
+  'auto school',
+])
+
+/** The words as meant, where a command's own words are known to be misheard. */
+function asSaid(words: string[]): string[] {
+  const out: string[] = []
+  for (let i = 0; i < words.length; i++) {
+    const two = `${words[i]} ${words[i + 1] ?? ''}`
+    if (AUTOSCROLL_HEARD.has(two)) {
+      out.push('autoscroll')
+      i++
+    } else if (AUTOSCROLL_HEARD.has(words[i])) {
+      out.push('autoscroll')
+    } else {
+      out.push(words[i])
+    }
+  }
+  return out
+}
+
 export function parseSheetCommand<T extends { id: string | number; title: string }>(
   text: string,
   sheets: T[],
   aliases: ReadonlyMap<string, string> = new Map()
 ): SheetCommand<T> | null {
-  const raw = spokenWords(text)
+  const raw = asSaid(spokenWords(text))
   // "Go back" is the song before; "back to the chorus" is not.
   if (['go back', 'back', 'go back one'].includes(raw.join(' '))) return { type: 'previous' }
   const words = strip(raw)

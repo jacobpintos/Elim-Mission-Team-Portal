@@ -166,3 +166,17 @@ describe('"you" and "knew", as "queue" is heard', () => {
     expect(parseSheetCommand('you are so good', library)).toBeNull()
   })
 })
+
+describe('"autoscroll" as it is misheard', () => {
+  it('starts, speeds and stops autoscroll all the same', () => {
+    expect(parseSheetCommand('auto troll', [])).toEqual({ type: 'scroll', action: 'start' })
+    expect(parseSheetCommand('start auto troll on five', [])).toEqual({
+      type: 'scroll',
+      action: 'start',
+      level: 5,
+    })
+    expect(parseSheetCommand('Otto scroll', [])).toEqual({ type: 'scroll', action: 'start' })
+    expect(parseSheetCommand('stop auto troll', [])).toEqual({ type: 'scroll', action: 'pause' })
+    expect(parseSheetCommand('the auto troll was here', [])).toBeNull()
+  })
+})
