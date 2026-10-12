@@ -346,6 +346,10 @@ export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
   const events = eventsFor(ask, data)
   // Nothing found, or more than can be said in a breath: Claude works it out.
   if (events.length === 0 || events.length > 3) return null
+  // Cars set on an event's page, for its date, aren't loaded here: looked up there.
+  if (ask.field === 'car' && events.some((ev) => ev.carpool && !ev.carpoolCars?.length)) {
+    return null
+  }
   if (ask.field === 'weather') {
     return {
       text: '',

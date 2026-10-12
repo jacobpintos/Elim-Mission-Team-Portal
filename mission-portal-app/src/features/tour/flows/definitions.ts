@@ -688,12 +688,18 @@ export const miriamFlow: TourFlow = {
       body: 'Switch on “Hey Miriam” in her panel and call her by name, hands free. Listening for her name happens on your device; nothing is sent until she is called.',
     },
     {
+      id: 'miriam-talk',
+      title: 'Talking it through',
+      body: 'She remembers the last few things you asked, so you can follow on — “what time is it?”, “move it to Friday”. If something she needs is missing, she says what she thinks you want and asks for it, then listens for your answer.',
+    },
+    {
       id: 'miriam-actions',
       title: 'Asking her to do things',
       body: 'Tell her plainly and she shows you exactly what she will do, for you to confirm — nothing changes until you do.',
       bullets: [
         'Answer your availability, mark a task done',
         'Send a message, sign up to bring food',
+        'Report an issue, put forward or vote for a kaizen idea',
         'Turn a notification on or off',
       ],
       roles: ['admin', 'regular', 'worship', 'security', 'intern'],
@@ -701,13 +707,13 @@ export const miriamFlow: TourFlow = {
     {
       id: 'miriam-songs',
       title: 'Songs by name',
-      body: 'Ask for a chord sheet in any key — “Above All in E” — and it opens, straight from your phone.',
+      body: 'Ask for a chord sheet in any key — “Above All in E” — and it opens, straight from your phone. Ask what’s on a set list; the worship team can add songs to one, or make a new one, by asking.',
       roles: ['admin', 'worship', 'guest'],
     },
     {
       id: 'miriam-admin',
       title: 'Forms and admin work',
-      body: 'She fills in a new event, an event’s changes, a task or a new account for you to check and save, and manages people, groups, common teams and task templates — each confirmed first.',
+      body: 'She fills in a new event, an event’s changes, a task or a new account for you to check and save; assigns several tasks at once, changes, reassigns or deletes tasks; makes task templates with their sections; sets an event’s cars; and manages people, groups and common teams — each confirmed first. Ask for several things at once and she takes them one at a time.',
       adminOnly: true,
     },
   ],

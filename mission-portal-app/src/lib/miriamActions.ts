@@ -112,3 +112,139 @@ export function teamsAfter(
       : t
   )
 }
+
+// --- Task templates -----------------------------------------------------------
+
+/** Section colours, in the order the template editor gives them (EditTaskTemplateSheet). */
+const SECTION_COLORS = [
+  '#f56c5a',
+  '#2980b9',
+  '#27ae60',
+  '#f39c12',
+  '#9b59b6',
+  '#1abc9c',
+  '#e91e8c',
+  '#607d8b',
+]
+
+export interface TemplateAsked {
+  name: string
+  sections: {
+    name: string
+    tasks: {
+      title: string
+      people_ids: string[]
+      group_ids: string[]
+      days_before: number
+      days_after: number
+    }[]
+  }[]
+}
+
+/**
+ * A task template as the template editor saves it: its sections, each with
+ * an id made from its name, and every task in one — or a reason it can't be.
+ */
+export function templateFrom(asked: TemplateAsked):
+  | {
+      name: string
+      sections: { id: string; label: string; color: string }[]
+      tasks: {
+        title: string
+        assignees: string[]
+        assigneeGroups: string[]
+        daysBefore: number
+        daysAfterEvent?: number
+        section: string
+      }[]
+    }
+  | string {
+  const name = String(asked.name ?? '').trim()
+  if (!name) return 'A task template needs a name.'
+  const sections: { id: string; label: string; color: string }[] = []
+  const tasks: ReturnType<typeof templateTask>[] = []
+  for (const s of Array.isArray(asked.sections) ? asked.sections : []) {
+    const label = String(s?.name ?? '').trim() || 'Tasks'
+    let id = sections.find((x) => x.label.toLowerCase() === label.toLowerCase())?.id
+    if (!id) {
+      const base =
+        label
+          .toLowerCase()
+          .replace(/\s+/g, '_')
+          .replace(/[^a-z0-9_]/g, '') || 'section'
+      id = base
+      for (let i = 2; sections.some((x) => x.id === id); i++) id = `${base}_${i}`
+      sections.push({ id, label, color: SECTION_COLORS[sections.length % SECTION_COLORS.length] })
+    }
+    for (const t of Array.isArray(s?.tasks) ? s.tasks : []) {
+      const task = templateTask(t, id)
+      if (task.title) tasks.push(task)
+    }
+  }
+  if (tasks.length === 0) return 'A task template needs at least one task.'
+  return { name, sections, tasks }
+}
+
+const days = (v: unknown) => {
+  const n = Math.round(Number(v))
+  return Number.isFinite(n) && n > 0 && n < 400 ? n : 0
+}
+const strings = (v: unknown) => (Array.isArray(v) ? v.map(String).filter(Boolean) : [])
+
+function templateTask(t: TemplateAsked['sections'][number]['tasks'][number], section: string) {
+  const after = days(t?.days_after)
+  return {
+    title: String(t?.title ?? '').trim(),
+    assignees: strings(t?.people_ids),
+    assigneeGroups: strings(t?.group_ids),
+    // The editor's own default, when no day was said.
+    daysBefore: after ? 0 : days(t?.days_before) || 7,
+    ...(after ? { daysAfterEvent: after } : {}),
+    section,
+  }
+}
+
+/** When a template task is due, as said: "7 days before", "2 days after". */
+export function templateDue(task: { daysBefore: number; daysAfterEvent?: number }): string {
+  if (task.daysAfterEvent) return `${task.daysAfterEvent} ${plural(task.daysAfterEvent)} after`
+  return `${task.daysBefore} ${plural(task.daysBefore)} before`
+}
+const plural = (n: number) => (n === 1 ? 'day' : 'days')
+
+// --- Set lists --------------------------------------------------------------------
+
+/** The keys a set list's songs are given in (lib/nashvilleNumbers: NNS_KEYS), as spelled there. */
+const KEY_SPELLING: Record<string, string> = {
+  C: 'C',
+  'C#': 'Db',
+  DB: 'Db',
+  D: 'D',
+  'D#': 'Eb',
+  EB: 'Eb',
+  E: 'E',
+  F: 'F',
+  'F#': 'F#',
+  GB: 'F#',
+  G: 'G',
+  'G#': 'Ab',
+  AB: 'Ab',
+  A: 'A',
+  'A#': 'Bb',
+  BB: 'Bb',
+  B: 'B',
+}
+
+/** A key as said ("D", "B flat", "F#m", "c sharp minor") as a set list holds it, or "" for none. */
+export function setListKey(said: string): string {
+  const k = String(said ?? '')
+    .trim()
+    .replace(/\s*(?:minor|min|m)$/i, '')
+    .replace(/\s*flat$/i, 'b')
+    .replace(/\s*sharp$/i, '#')
+    .replace(/♭/g, 'b')
+    .replace(/♯/g, '#')
+  const m = k.match(/^([A-Ga-g])([b#]?)$/)
+  if (!m) return ''
+  // Upper-cased, a flat is "B": "Bb" is "BB", "Db" is "DB".
+  return KEY_SPELLING[(m[1] + m[2]).toUpperCase()] ?? ''
+}

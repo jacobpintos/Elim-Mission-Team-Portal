@@ -336,13 +336,20 @@ export function dressCodeFor(ev: EventTemplate, viewer: Viewer): string[] {
 
 const nameOf = (names: Map<string, string>, uid: string) => names.get(String(uid)) ?? 'someone'
 
-/** The cars: yours, or every one for an admin — driver and riders by name. */
+/**
+ * The cars: yours, or every one for an admin — driver and riders by name.
+ *
+ * An event's cars are set in its form (carpoolCars, the same for every date),
+ * or — when the form has none — on its page, for each date (the carpool
+ * collection, `${templateId}_${date}`).
+ */
 export function carpoolFor(
   ev: EventTemplate,
   viewer: Viewer,
-  names: Map<string, string>
+  names: Map<string, string>,
+  /** The cars for this date, set on the event's page, when its form has none. */
+  cars: Car[] = ev.carpoolCars ?? []
 ): string[] {
-  const cars = ev.carpoolCars ?? []
   const mine = (c: Car) => same(c.driver, viewer.uid) || c.riders.some((r) => same(r, viewer.uid))
   const shown = isAdminViewer(viewer) ? cars : cars.filter(mine)
   return shown.map((c, i) => {

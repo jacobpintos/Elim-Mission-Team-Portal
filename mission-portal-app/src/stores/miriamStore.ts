@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { EventDraft, TaskDraft } from '@/lib/miriam'
+import { withExchange, type Exchange } from '@/lib/miriamConversation'
 
 /**
  * What Miriam has filled in, waiting for the screen it belongs on to open it.
@@ -47,6 +48,12 @@ interface MiriamStore {
   clearTaskForm: () => void
   offerUserForm: (form: Omit<PendingUserForm, 'id'>) => void
   clearUserForm: () => void
+  /** What was said and answered lately (lib/miriamConversation). */
+  conversation: Exchange[]
+  remember: (said: string, reply: string) => void
+  /** She asked something back, and what is said next answers it. */
+  awaiting: boolean
+  setAwaiting: (awaiting: boolean) => void
 }
 
 export const useMiriamStore = create<MiriamStore>((set) => ({
@@ -64,4 +71,13 @@ export const useMiriamStore = create<MiriamStore>((set) => ({
   clearTaskForm: () => set({ taskForm: null }),
   offerUserForm: (form) => set({ userForm: { ...form, id: Date.now() } }),
   clearUserForm: () => set({ userForm: null }),
+  conversation: [],
+  remember: (said, reply) =>
+    set((s) =>
+      said.trim() && reply.trim()
+        ? { conversation: withExchange(s.conversation, { said, reply, at: Date.now() }) }
+        : s
+    ),
+  awaiting: false,
+  setAwaiting: (awaiting) => set({ awaiting }),
 }))

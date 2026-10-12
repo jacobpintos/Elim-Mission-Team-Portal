@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   query,
+  serverTimestamp,
   setDoc,
   updateDoc,
   where,
@@ -18,15 +19,32 @@ import { useMiriamStore } from '@/stores/miriamStore'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
 import { allInstances } from '@/lib/events'
 import { AVAIL_LABELS } from '@/lib/availability'
-import { isAdmin, isGuest } from '@/lib/roles'
+import { isAdmin, isGuest, isWorship, visibleTabs } from '@/lib/roles'
 import { roomName, roomsFor } from '@/lib/miriamAppData'
 import {
   foodItemFor,
   membersAfter,
   notificationSwitch,
   rolesAfter,
+  setListKey,
   teamsAfter,
+  templateDue,
+  templateFrom,
+  type TemplateAsked,
 } from '@/lib/miriamActions'
+import { closestTitles, parseSongRequest } from '@/lib/songRequest'
+import { matchContentByTitle } from '@/lib/contentMatch'
+import { keyLabel } from '@/lib/nashvilleNumbers'
+import { notifyAssignees } from '@/lib/taskNotifications'
+import { useGroupsStore } from '@/stores/groupsStore'
+import { useChordSheetsStore } from '@/stores/chordSheetsStore'
+import { useMusicStore } from '@/stores/musicStore'
+import { useWorshipStore } from '@/stores/worshipStore'
+import { useIssuesStore } from '@/stores/issuesStore'
+import { useKaizenStore } from '@/stores/kaizenStore'
+import type { ChordSheet } from '@/types/chordSheet'
+import type { SetList, SetListSong } from '@/types/worship'
+import type { IssueCategory, KaizenCard } from '@/types/operations'
 import { FD } from '@/lib/format'
 import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -639,6 +657,438 @@ async function deleteTaskTemplate(profile: UserProfile, input: Record<string, un
   } satisfies Prepared
 }
 
+// --- Tasks and task templates: admins' -------------------------------------------
+
+const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+const groupNames = () =>
+  new Map(useGroupsStore.getState().groups.map((g) => [String(g.id), g.name]))
+
+async function createTaskTemplate(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const made = templateFrom(input as unknown as TemplateAsked)
+  if (typeof made === 'string') return cannot(made)
+  const groups = groupNames()
+  const who = (t: (typeof made.tasks)[number]) =>
+    [
+      ...t.assignees.map((u) => names().get(u) ?? 'someone'),
+      ...t.assigneeGroups.map((g) => groups.get(g) ?? 'a group'),
+    ].join(', ') || 'no one yet'
+  return {
+    kind: 'ready',
+    title: `Make the task template “${made.name}”?`,
+    details: made.sections.map(
+      (s) =>
+        `${s.label}: ${made.tasks
+          .filter((t) => t.section === s.id)
+          .map((t) => `${t.title} (${who(t)}; ${templateDue(t)})`)
+          .join('; ')}`
+    ),
+    confirm: 'Make it',
+    run: async () => {
+      await addDoc(collection(db, 'taskTemplates'), {
+        ...made,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      await audit('taskTemplate.created', `Created task template "${made.name}"`, by(profile))
+      return `Done — the task template “${made.name}” is made.`
+    },
+  } satisfies Prepared
+}
+
+/** The most tasks assigned at once. */
+const MAX_TASKS = 30
+
+async function createTasks(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const asked = (Array.isArray(input.tasks) ? input.tasks : []).slice(0, MAX_TASKS) as Record<
+    string,
+    unknown
+  >[]
+  const tasks: {
+    title: string
+    assignees: string[]
+    lead: string | null
+    dueDate: string | null
+    event: EventInstance | null
+  }[] = []
+  for (const t of asked) {
+    const title = String(t.title ?? '').trim()
+    if (!title) continue
+    const group = String(t.group_id ?? '')
+    const members = group
+      ? (((await getDoc(doc(db, 'groups', group))).data()?.members ?? []) as unknown[]).map(String)
+      : []
+    const assignees = [...new Set([...idList(t.people_ids), ...members])]
+    const leadAsked = String(t.lead_id ?? '')
+    const event = t.event_key ? await eventByKey(String(t.event_key)) : null
+    tasks.push({
+      title,
+      assignees,
+      lead: assignees.includes(leadAsked) ? leadAsked : (assignees[0] ?? null),
+      dueDate: isDate(t.due_date) ? t.due_date : null,
+      event,
+    })
+  }
+  if (tasks.length === 0) return cannot('There were no tasks to assign.')
+  const uid = String(profile.uid)
+  return {
+    kind: 'ready',
+    title:
+      tasks.length === 1 ? `Assign “${tasks[0].title}”?` : `Assign these ${tasks.length} tasks?`,
+    details: tasks.map(
+      (t) =>
+        `${t.title} — ${t.assignees.length ? listNames(t.assignees) : 'no one yet'}${t.dueDate ? `; due ${day(t.dueDate)}` : ''}${t.event ? `; for ${t.event.title}` : ''}`
+    ),
+    confirm: 'Assign',
+    run: async () => {
+      for (const t of tasks) {
+        const id = await useTasksStore.getState().createTask({
+          title: t.title,
+          assignees: t.assignees,
+          lead: t.lead,
+          by: uid,
+          status: 'pending',
+          dueDate: t.dueDate,
+          ...(t.event ? { evTemplateId: t.event.templateId, evDate: t.event.date } : {}),
+        })
+        notifyAssignees(t.assignees, t.title, id)
+      }
+      return tasks.length === 1 ? 'Assigned.' : `Done — ${tasks.length} tasks assigned.`
+    },
+  } satisfies Prepared
+}
+
+async function taskById(id: string): Promise<Task | null> {
+  if (!id) return null
+  const snap = await getDoc(doc(db, 'tasks', id))
+  return snap.exists() ? { ...(snap.data() as Task), id: snap.id } : null
+}
+
+async function updateTask(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const task = await taskById(String(input.task_id ?? ''))
+  if (!task) return cannot('I couldn’t find that task.')
+  const before = task.assignees.map(String)
+  const title = String(input.title ?? '').trim()
+  const due = String(input.due_date ?? '').trim()
+  const leadAsked = String(input.lead_id ?? '')
+  let assignees = membersAfter(
+    before,
+    idList(input.add_people_ids),
+    idList(input.remove_people_ids)
+  )
+  if (leadAsked && !assignees.includes(leadAsked)) assignees = [...assignees, leadAsked]
+  const added = assignees.filter((a) => !before.includes(a))
+  const removed = before.filter((a) => !assignees.includes(a))
+  const oldLead = task.lead == null ? null : String(task.lead)
+  const lead =
+    leadAsked || (oldLead && assignees.includes(oldLead) ? oldLead : (assignees[0] ?? null))
+  const patch: Partial<Task> = {}
+  const details: string[] = []
+  if (title && title !== task.title) {
+    patch.title = title
+    details.push(`Name: ${task.title} → ${title}`)
+  }
+  if (due === 'none' && task.dueDate) {
+    patch.dueDate = null
+    details.push('No due date')
+  } else if (isDate(due) && due !== task.dueDate) {
+    patch.dueDate = due
+    details.push(`Due: ${task.dueDate ? `${day(task.dueDate)} → ` : ''}${day(due)}`)
+  }
+  if (added.length || removed.length) {
+    patch.assignees = assignees
+    if (added.length) details.push(`Give to: ${listNames(added)}`)
+    if (removed.length) details.push(`Take off: ${listNames(removed)}`)
+  }
+  if (lead !== oldLead) {
+    patch.lead = lead
+    if (lead) details.push(`Lead: ${listNames([lead])}`)
+  }
+  if (details.length === 0) return cannot(`Nothing to change on “${task.title}”.`)
+  return {
+    kind: 'ready',
+    title: `Change the task “${task.title}”?`,
+    details,
+    confirm: 'Save',
+    run: async () => {
+      await useTasksStore.getState().updateTask(task.id, patch)
+      if (added.length) notifyAssignees(added, patch.title ?? task.title, task.id)
+      return 'Saved.'
+    },
+  } satisfies Prepared
+}
+
+async function deleteTask(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const task = await taskById(String(input.task_id ?? ''))
+  if (!task) return cannot('I couldn’t find that task.')
+  return {
+    kind: 'ready',
+    title: `Delete the task “${task.title}”?`,
+    details: [
+      `${task.assignees.length ? listNames(task.assignees.map(String)) : 'No one'}${task.dueDate ? ` — due ${day(task.dueDate)}` : ''}`,
+      'This can’t be undone.',
+    ],
+    confirm: 'Delete',
+    destructive: true,
+    run: async () => {
+      await useTasksStore.getState().deleteTask(task.id)
+      return 'Deleted.'
+    },
+  } satisfies Prepared
+}
+
+/** An event's cars for one date, set as its page sets them (EventDetailModal: CarpoolPanel). */
+async function setCarpool(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const ev = await eventByKey(String(input.event_key ?? ''))
+  if (!ev) return cannot('I couldn’t find that event.')
+  if (!ev.carpool) return cannot(`${ev.title} has no carpool — turn it on in its form first.`)
+  if (ev.carpoolCars?.length) {
+    return cannot(`${ev.title}’s cars are set in its form — ask me to change the event instead.`)
+  }
+  const cars = (Array.isArray(input.cars) ? input.cars : []).slice(0, 30).map((c, i) => {
+    const car = (c ?? {}) as Record<string, unknown>
+    const driver = String(car.driver_id ?? '')
+    return {
+      id: `${Date.now()}${i}`,
+      label: String(car.label ?? '').trim(),
+      driver,
+      riders: idList(car.rider_ids).filter((r) => r !== driver),
+    }
+  })
+  const ref = doc(db, 'carpool', `${ev.templateId}_${ev.date}`)
+  const had = (((await getDoc(ref)).data()?.cars ?? []) as unknown[]).length
+  return {
+    kind: 'ready',
+    title: `Set the cars for ${ev.title}?`,
+    details: [
+      `${day(ev.date)}${ev.isRec ? ' — this date only' : ''}${had ? ` — instead of the ${had} there now` : ''}`,
+      ...(cars.length
+        ? cars.map(
+            (c, i) =>
+              `${c.label || `Car ${i + 1}`}: ${c.driver ? `${listNames([c.driver])} driving` : 'no driver yet'}${c.riders.length ? `; ${listNames(c.riders)}` : ''}`
+          )
+        : ['No cars.']),
+    ],
+    confirm: 'Save',
+    run: async () => {
+      await setDoc(ref, { cars })
+      return 'Saved.'
+    },
+  } satisfies Prepared
+}
+
+// --- Operations ---------------------------------------------------------------------
+
+/** Anyone with Operations may report there; a guest only reads. */
+const operations = (profile: UserProfile) =>
+  !visibleTabs(profile).includes('issues') || (isGuest(profile) && !isAdmin(profile))
+    ? cannot('You can’t report in Operations.')
+    : null
+
+const CATEGORIES: IssueCategory[] = ['equipment', 'safety', 'facility', 'logistics', 'other']
+
+async function reportIssue(profile: UserProfile, input: Record<string, unknown>) {
+  const no = operations(profile)
+  if (no) return no
+  const title = String(input.title ?? '').trim()
+  const description = String(input.description ?? '').trim()
+  const suggested = String(input.suggested_action ?? '').trim()
+  const category = CATEGORIES.includes(input.category as IssueCategory)
+    ? (input.category as IssueCategory)
+    : 'other'
+  if (!title) return cannot('An issue needs a name.')
+  return {
+    kind: 'ready',
+    title: `Report this issue?`,
+    details: [
+      title,
+      ...(description ? [description] : []),
+      `Kind: ${category}`,
+      ...(suggested ? [`Suggested: ${suggested}`] : []),
+    ],
+    confirm: 'Report',
+    run: async () => {
+      await useIssuesStore.getState().createIssue({
+        title,
+        description: description || title,
+        category,
+        suggestedAction: suggested,
+        reportedBy: String(profile.uid),
+      })
+      return 'Reported — thank you.'
+    },
+  } satisfies Prepared
+}
+
+async function submitKaizen(profile: UserProfile, input: Record<string, unknown>) {
+  const no = operations(profile)
+  if (no) return no
+  const title = String(input.title ?? '').trim()
+  const description = String(input.description ?? '').trim()
+  if (!title) return cannot('An idea needs a name.')
+  return {
+    kind: 'ready',
+    title: 'Submit this kaizen idea?',
+    details: [title, ...(description ? [description] : [])],
+    confirm: 'Submit',
+    run: async () => {
+      await useKaizenStore.getState().addCard({
+        title,
+        description: description || title,
+        createdBy: String(profile.uid),
+      })
+      return 'Submitted — thank you.'
+    },
+  } satisfies Prepared
+}
+
+async function voteKaizen(profile: UserProfile, input: Record<string, unknown>) {
+  const no = operations(profile)
+  if (no) return no
+  const snap = await getDoc(doc(db, 'kaizen', String(input.kaizen_id ?? '') || '-'))
+  if (!snap.exists()) return cannot('I couldn’t find that idea.')
+  const card = snap.data() as KaizenCard
+  const uid = String(profile.uid)
+  const voted = (card.upvotes ?? []).some((u) => String(u) === uid)
+  const vote = input.vote !== false
+  if (vote === voted) {
+    return cannot(
+      vote ? `You’ve already voted for “${card.title}”.` : `You haven’t voted for “${card.title}”.`
+    )
+  }
+  return {
+    kind: 'ready',
+    title: vote ? `Vote for “${card.title}”?` : `Take back your vote for “${card.title}”?`,
+    details: [`${(card.upvotes ?? []).length} votes now`],
+    confirm: vote ? 'Vote' : 'Take it back',
+    run: async () => {
+      // Read again, so another vote cast meanwhile is kept.
+      const now = (((await getDoc(snap.ref)).data()?.upvotes ?? []) as (string | number)[]).filter(
+        (u) => String(u) !== uid
+      )
+      await updateDoc(snap.ref, {
+        upvotes: vote ? [...now, uid] : now,
+        updatedAt: serverTimestamp(),
+      })
+      return vote ? 'Voted.' : 'Your vote is taken back.'
+    },
+  } satisfies Prepared
+}
+
+// --- Set lists: the worship team's and admins' -------------------------------------
+
+/** The chord sheets, loaded if the screens haven't. */
+async function chordSheets(): Promise<ChordSheet[]> {
+  const loaded = useChordSheetsStore.getState().chordSheets
+  if (loaded.length) return loaded
+  return (await getDocs(collection(db, 'chordSheets'))).docs.map(
+    (d) => ({ ...(d.data() as ChordSheet), id: d.id }) as ChordSheet
+  )
+}
+
+/** Songs as asked for, as a set list holds them: each with its chord sheet and video where one fits. */
+async function songsFor(asked: unknown): Promise<SetListSong[]> {
+  const sheets = await chordSheets()
+  const music = useMusicStore.getState()
+  if (music.items.length === 0) await music.load()
+  const items = useMusicStore.getState().items
+  return (Array.isArray(asked) ? asked : []).slice(0, 30).flatMap((a, i) => {
+    const said = String((a as Record<string, unknown>)?.title ?? '').trim()
+    if (!said) return []
+    const exact = sheets.filter((c) => c.title.trim().toLowerCase() === said.toLowerCase())
+    const near = closestTitles(sheets, said, 2)
+    const sheet =
+      (exact.length === 1 ? exact[0] : null) ??
+      parseSongRequest(sheets, said)?.sheet ??
+      (near.length === 1 ? near[0] : null)
+    const name = sheet?.title ?? said
+    return [
+      {
+        id: String(Date.now() + i + Math.random()),
+        name,
+        key: setListKey(String((a as Record<string, unknown>)?.key ?? '')),
+        link: matchContentByTitle(name, items)?.youtubeUrl ?? '',
+        notes: '',
+        chordSheetId: sheet ? sheet.id : null,
+      },
+    ]
+  })
+}
+
+const songLine = (s: SetListSong, n: number) =>
+  `${n}. ${s.name}${s.key ? ` in ${keyLabel(s.key)}` : ''}${s.chordSheetId == null ? ' (no chord sheet found)' : ''}`
+
+const worshipOnly = (profile: UserProfile) =>
+  isWorship(profile) ? null : cannot('Only the worship team and admins change set lists.')
+
+async function addToSetList(profile: UserProfile, input: Record<string, unknown>) {
+  const no = worshipOnly(profile)
+  if (no) return no
+  const ref = doc(db, 'setLists', String(input.set_list_id ?? '') || '-')
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return cannot('I couldn’t find that set list.')
+  const list = snap.data() as SetList
+  const songs = await songsFor(input.songs)
+  if (songs.length === 0) return cannot('There were no songs to add.')
+  const pos = Math.round(Number(input.position))
+  // Where the first goes: 1 the opener; past the end, or 0, the end.
+  const at = pos > 0 ? Math.min(pos - 1, (list.songs ?? []).length) : (list.songs ?? []).length
+  return {
+    kind: 'ready',
+    title: `Add to “${list.title}”?`,
+    details: [
+      ...(list.eventDate ? [day(list.eventDate)] : []),
+      ...songs.map((s, i) => songLine(s, at + i + 1)),
+    ],
+    confirm: 'Add',
+    run: async () => {
+      // Added to the set as it is now, in case it changed meanwhile.
+      const now = (((await getDoc(ref)).data()?.songs ?? []) as SetListSong[]).slice()
+      now.splice(Math.min(at, now.length), 0, ...songs)
+      await useWorshipStore.getState().updateSetList(snap.id, { songs: now })
+      return 'Added.'
+    },
+  } satisfies Prepared
+}
+
+async function createSetList(profile: UserProfile, input: Record<string, unknown>) {
+  const no = worshipOnly(profile)
+  if (no) return no
+  const ev = input.event_key ? await eventByKey(String(input.event_key)) : null
+  if (input.event_key && !ev) return cannot('I couldn’t find that event.')
+  const title = String(input.title ?? '').trim() || ev?.title || ''
+  if (!title) return cannot('A set list needs a name, or an event.')
+  const songs = await songsFor(input.songs)
+  return {
+    kind: 'ready',
+    title: `Make the set list “${title}”?`,
+    details: [
+      ...(ev ? [`For ${ev.title}, ${day(ev.date)}`] : []),
+      ...(songs.length ? songs.map((s, i) => songLine(s, i + 1)) : ['No songs yet.']),
+    ],
+    confirm: 'Make it',
+    run: async () => {
+      await useWorshipStore.getState().createSetList({
+        title,
+        eventTemplateId: ev?.templateId ?? null,
+        eventDate: ev?.date ?? null,
+        songs,
+        createdBy: String(profile.uid),
+      })
+      return `Done — the set list “${title}” is made.`
+    },
+  } satisfies Prepared
+}
+
 const ACTIONS: Record<
   string,
   (profile: UserProfile, input: Record<string, unknown>) => Promise<Prepared>
@@ -660,6 +1110,16 @@ const ACTIONS: Record<
   update_team: updateTeam,
   delete_team: deleteTeam,
   delete_task_template: deleteTaskTemplate,
+  create_task_template: createTaskTemplate,
+  create_tasks: createTasks,
+  update_task: updateTask,
+  delete_task: deleteTask,
+  set_carpool: setCarpool,
+  report_issue: reportIssue,
+  submit_kaizen: submitKaizen,
+  vote_kaizen: voteKaizen,
+  add_to_set_list: addToSetList,
+  create_set_list: createSetList,
 }
 
 /** A change asked for, worked out into exactly what will be done. Never throws. */

@@ -2,6 +2,8 @@ import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import type { MiriamResult } from '@/lib/miriam'
 import { loadNames } from '@/lib/miriamMemory'
+import { recentExchanges } from '@/lib/miriamConversation'
+import { useMiriamStore } from '@/stores/miriamStore'
 import { screensFor } from '@/lib/miriamScreens'
 import { useAuthStore } from '@/stores/authStore'
 import { appToolsFor, runAppTool } from './appTools'
@@ -36,6 +38,8 @@ export async function askMiriam(text: string): Promise<MiriamResult> {
     text,
     today,
     known: await loadNames(),
+    // What was said and answered just before: for "it", "there", or an answer to her question.
+    history: recentExchanges(useMiriamStore.getState().conversation, Date.now()),
     appTools: appToolsFor(profile),
     screens: screensFor(profile).map(({ id, label }) => ({ id, label })),
   })

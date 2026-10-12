@@ -17,6 +17,7 @@ import {
   availKey,
   seriesAvailKey,
   type AvailResponse,
+  type Car,
   type EventInstance,
   type EventTemplate,
   type Group,
@@ -206,6 +207,12 @@ export class Lookups {
         String(t.evTemplateId ?? '') === String(ev.templateId) &&
         (!t.evDate || t.evDate === ev.date)
     )
+    // Cars set on its page for this date, when its form has none.
+    const perDate =
+      ev.carpool && !ev.carpoolCars?.length
+        ? (((await this.db.doc(`carpool/${ev.templateId}_${ev.date}`).get()).data()?.cars ??
+            []) as Car[])
+        : null
     const myTeam = (ev.teams ?? []).find((t) =>
       [...t.leaders, ...t.members].some((m) => String(m) === this.viewer.uid)
     )
@@ -228,7 +235,9 @@ export class Lookups {
       carpool: ev.carpool
         ? {
             meetingPlace: ev.carpoolLoc || undefined,
-            cars: carpoolFor(ev, this.viewer, names),
+            cars: carpoolFor(ev, this.viewer, names, perDate ?? undefined),
+            // Where its cars are set: for this date on its page (set_carpool), or for every date in its form (edit_event).
+            carsSet: perDate ? 'for this date, on its page' : 'for every date, in its form',
           }
         : undefined,
       flights: ev.flights ? flightsFor(ev, this.viewer, names) : undefined,

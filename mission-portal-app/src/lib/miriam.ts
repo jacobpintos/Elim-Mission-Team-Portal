@@ -109,12 +109,20 @@ export type MiriamResult =
       choices?: { key: string; title: string; date: string }[]
       /** The words used for the event, as heard: learned when a choice is picked. */
       heardName?: string
+      /** She asked something back: what is said next is the reply. */
+      followUp?: boolean
     }
   | { kind: 'reply'; text: string }
   /** A new task's form, filled in, for an admin to check and save. */
   | { kind: 'taskForm'; draft: TaskDraft; notes: string[] }
   /** A change asked for, to be shown and confirmed before it is made (features/miriam/actions). */
-  | { kind: 'confirm'; name: string; input: Record<string, unknown> }
+  | {
+      kind: 'confirm'
+      name: string
+      input: Record<string, unknown>
+      /** More was asked after it: once it is done, she carries on. */
+      more?: boolean
+    }
 
 /** The app's address for where an answer is shown. */
 export function miriamHref(

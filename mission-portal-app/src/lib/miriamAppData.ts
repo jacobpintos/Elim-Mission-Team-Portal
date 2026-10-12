@@ -233,3 +233,45 @@ export function settingsShown(profile: UserProfile) {
     notifications,
   }
 }
+
+/** A set list as Miriam reads it (features/miriam/appTools: read_set_lists). */
+export interface SetListShown {
+  id: string | number
+  title: string
+  eventDate?: string | null
+  songs: { name: string; key: string }[]
+}
+
+/**
+ * Set lists by words from their name or their event's, or on a date: with
+ * neither, the next ones coming up. Songs in order, with their keys.
+ */
+export function setListsFound<T extends SetListShown>(
+  lists: T[],
+  eventTitle: (list: T) => string,
+  query: string,
+  date: string,
+  today: string,
+  limit = 5
+) {
+  const found = lists
+    .filter((l) => (date ? l.eventDate === date : true))
+    .filter((l) => fits(`${l.title} ${eventTitle(l)}`, query))
+    // Coming up first, nearest first; then the rest, latest first.
+    .sort((a, b) => {
+      const da = a.eventDate ?? ''
+      const db = b.eventDate ?? ''
+      const upA = da >= today
+      const upB = db >= today
+      if (upA !== upB) return upA ? -1 : 1
+      return upA ? da.localeCompare(db) : db.localeCompare(da)
+    })
+    .slice(0, limit)
+  return found.map((l) => ({
+    id: String(l.id),
+    name: l.title,
+    event: eventTitle(l) || undefined,
+    date: l.eventDate || undefined,
+    songs: l.songs.map((s, i) => `${i + 1}. ${s.name || 'untitled'}${s.key ? ` (${s.key})` : ''}`),
+  }))
+}

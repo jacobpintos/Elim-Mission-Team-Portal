@@ -34,7 +34,7 @@ import { MAX_REQUEST, miriamHref } from '@/lib/miriam'
 import { anyOverlayOpen } from '@/lib/overlays'
 import { rememberName } from '@/lib/miriamMemory'
 import { FD } from '@/lib/format'
-import { speak, stopSpeaking, unlockSpeech } from './speak'
+import { speak, stopSpeaking, unlockSpeech, whenSpoken } from './speak'
 import { askMiriam, miriamError } from './askMiriam'
 import { prepareAction, type Prepared } from './actions'
 import { useMiriamStore } from '@/stores/miriamStore'
@@ -104,6 +104,11 @@ const KEY_DONE = /(?:flat|sharp|minor|major|[♭♯#])$/i
 const SEND_WAIT_MS = 12_000
 /** How long an answer stays up once given, unless she is spoken to again. */
 const ANSWER_MS = 20_000
+/** Said to her, answering a question she asked back: nothing more is wanted. */
+const NEVER_MIND =
+  /^(?:never\s*mind|cancel|forget\s+(?:it|that)|stop|no(?:\s+thanks?)?|nothing|that'?s\s+all)\b/i
+/** Sent once a change she was asked for among others is done, for her to go on to the rest. */
+const CARRY_ON = 'That’s done. Carry on with the rest of what I asked.'
 /** Whether this device listens for "Hey Miriam" (AsyncStorage). */
 const WAKE_KEY = 'miriam_wake'
 
@@ -213,7 +218,17 @@ export function MiriamButton() {
   } | null>(null)
   const sheetQueue = useSongQueue()
   // A change worked out and waiting to be confirmed — or a choice of which.
-  const [pending, setPending] = useState<{ name: string; prepared: Prepared } | null>(null)
+  const [pending, setPending] = useState<{
+    name: string
+    prepared: Prepared
+    /** More was asked after it: once it is done, she carries on. */
+    more?: boolean
+  } | null>(null)
+  // She asked something back, and is waiting to hear the reply: kept up meanwhile.
+  const [askingBack, setAskingBack] = useState(false)
+  // What was shown with the answer, remembered with it: "showing the event rev_2026-10-11".
+  const shownNote = useRef('')
+  const openRef = useRef(false)
   // A link to buy something, for a tap to open (in a browser).
   const [link, setLink] = useState<{ url: string; name: string } | null>(null)
   // A video from Content asked for, playing over the page.
@@ -300,21 +315,38 @@ export function MiriamButton() {
     // Sent by a tap (the button, or a choice): lets a browser say the answer.
     unlockSpeech()
     sent.current = true
+    // Typed rather than said: a question back is answered by typing too.
+    const typing = stage === 'typing'
     if (!again) asked.current = said
     setChoices([])
     setSongGuesses([])
     setPending(null)
     setLink(null)
+    setAskingBack(false)
+    shownNote.current = ''
     stopListening()
     setHeard(said)
+    // Answering what she asked back: hers to work out with what came before,
+    // not taken for a song or a screen on its own.
+    const replying = !again && useMiriamStore.getState().awaiting
+    if (replying && NEVER_MIND.test(withoutHerName(said))) {
+      useMiriamStore.getState().setAwaiting(false)
+      setAnswer('Okay.')
+      speak('Okay.')
+      setStage('answered')
+      return
+    }
+    // Worked out here, from what the app has, when it plainly can be.
+    const local = !again && !replying
     // A tour asked for: the app's own, started here — nothing to work out.
-    const tourAsk = again ? null : tourAsked(withoutHerName(said))
+    const tourAsk = local ? tourAsked(withoutHerName(said)) : null
     if (tourAsk) {
       const profile = useAuthStore.getState().profile
       const tour = tourFor(tourAsk.part, profile)
       if (tour) {
         const text = tourAsk.part ? `Here’s a tour of ${tour.title}.` : 'Here’s a tour of the app.'
         speak(text)
+        noteDone(text)
         setOpen(false)
         useTourStore.getState().start(tour)
         return
@@ -328,19 +360,20 @@ export function MiriamButton() {
     // "Play Revive Me", "play the sermon from Sunday": a video from Content,
     // played over the page. "Play" is never a chord sheet ("open" is): one
     // not found here is left to Claude, which looks further.
-    const play = again ? null : playAsked(withoutHerName(said))
+    const play = local ? playAsked(withoutHerName(said)) : null
     if (play) {
       const music = useMusicStore.getState()
       if (music.items.length === 0) await music.load()
       const item = playPick(play, useMusicStore.getState().items)
       if (item) {
+        noteDone(`Playing “${item.title}” from Content.`)
         setVideo(item)
         setOpen(false)
         return
       }
     }
     // A screen asked for by name ("open settings"): gone to from here.
-    if (!again && !play && !anyOverlayOpen()) {
+    if (local && !play && !anyOverlayOpen()) {
       const screens = screensFor(useAuthStore.getState().profile)
       const screenId = screenAsked(withoutHerName(said), screens)
       const screen = screens.find((x) => x.id === screenId)
@@ -360,7 +393,7 @@ export function MiriamButton() {
     const songMode = !!songHost() && sheets.length > 0
     // A question is answered, even with a song screen up: "What am I wearing
     // today?" is not a song.
-    if (!again && !play && sheets.length && !asksAQuestion(withoutHerName(said))) {
+    if (local && !play && sheets.length && !asksAQuestion(withoutHerName(said))) {
       const aliases = await loadAliases()
       // "Queue Above All", "Above All next": to come after the open song, not now.
       const cmd = songMode ? parseSheetCommand(withoutHerName(said), sheets, aliases) : null
@@ -402,10 +435,10 @@ export function MiriamButton() {
         return
       }
     }
-    if (!again && !play && (await answeredHere(withoutHerName(said)))) return
+    if (local && !play && (await answeredHere(withoutHerName(said)))) return
     // A plain question about an event — its dress code, time, place, your
     // team, car, room or flight — answered from what the app already has.
-    const quick = again || play ? null : quickFromApp(withoutHerName(said))
+    const quick = local && !play ? quickFromApp(withoutHerName(said)) : null
     if (quick?.weather) {
       // Its forecast, fetched as the event's page does.
       setStage('thinking')
@@ -437,10 +470,24 @@ export function MiriamButton() {
       }
       return
     }
+    await askClaude(said, typing)
+  }
+
+  /**
+   * Worked out by Claude (functions/src/miriam), with what was said and
+   * answered just before: shown, said, and opened. `typing`: a question she
+   * asks back is answered by typing, rather than listened for.
+   */
+  const askClaude = async (said: string, typing: boolean) => {
     setStage('thinking')
     try {
       const result = await askMiriam(said)
+      const followUp = result.kind === 'answer' && !!result.followUp
+      useMiriamStore.getState().setAwaiting(followUp)
       if (result.kind === 'eventForm') {
+        noteDone(
+          `Opened the ${result.editKey ? 'event’s' : 'new event'} form, filled in, to check and save.`
+        )
         offerEventForm({
           draft: result.draft,
           heard: said,
@@ -452,6 +499,7 @@ export function MiriamButton() {
         return
       }
       if (result.kind === 'taskForm') {
+        noteDone('Opened the new task form, filled in, to check and save.')
         useMiriamStore.getState().offerTaskForm({ draft: result.draft, notes: result.notes })
         setOpen(false)
         router.navigate('/assignments' as never)
@@ -460,7 +508,7 @@ export function MiriamButton() {
       // A change: worked out into exactly what will be done, and shown to
       // be confirmed — nothing is done until it is.
       if (result.kind === 'confirm') {
-        await offerAction(result.name, result.input)
+        await offerAction(result.name, result.input, result.more)
         return
       }
       // A video asked for: played over the page, with nothing said over it.
@@ -471,6 +519,7 @@ export function MiriamButton() {
         const tour = tourFor(wanted.id, useAuthStore.getState().profile)
         if (tour) {
           speak(result.text)
+          noteDone(result.text)
           setOpen(false)
           useTourStore.getState().start(tour)
           return
@@ -479,16 +528,26 @@ export function MiriamButton() {
       if (wanted?.kind === 'video') {
         const item = useMusicStore.getState().items.find((m) => m.id === wanted.id)
         if (item) {
+          noteDone(`Playing “${item.title}” from Content.`)
           setVideo(item)
           setOpen(false)
           return
         }
       }
+      const shown = result.kind === 'answer' ? result.open : null
+      if (shown?.kind === 'event') shownNote.current = `showing the event ${shown.key}`
+      else if (shown?.kind === 'task') shownNote.current = `showing the task ${shown.id}`
       setAnswer(result.text)
       speak(result.text)
       if (result.kind === 'answer') {
         setChoices(result.choices ?? [])
         heardName.current = result.heardName ?? ''
+      }
+      // Asked something back: the reply listened for once she has asked it.
+      if (followUp) {
+        setStage('answered')
+        askBack(typing)
+        return
       }
       // Taken to where the answer is — unless that would pull them out of
       // something open over the page, a chord sheet being played: then it is
@@ -514,6 +573,23 @@ export function MiriamButton() {
       setAnswer(miriamError(err))
     }
     setStage('answered')
+  }
+
+  /** Done without a word shown (a video played, a form opened): remembered for what comes next. */
+  const noteDone = (reply: string) => useMiriamStore.getState().remember(asked.current, reply)
+
+  /** Her question back, answered: listened for once she has said it, or typed. */
+  const askBack = async (typing: boolean) => {
+    setAskingBack(true)
+    if (typing) {
+      setTyped('')
+      setStage('typing')
+      return
+    }
+    await whenSpoken()
+    // Closed meanwhile, or something else asked: not listened for.
+    if (!openRef.current || !useMiriamStore.getState().awaiting) return
+    listen(false, true)
   }
 
   /**
@@ -562,7 +638,7 @@ export function MiriamButton() {
   }
 
   /** A change asked for: shown as exactly what will be done, or why it can't be. */
-  const offerAction = async (name: string, input: Record<string, unknown>) => {
+  const offerAction = async (name: string, input: Record<string, unknown>, more = false) => {
     setStage('thinking')
     const prepared = await prepareAction(name, input)
     if (prepared.kind === 'cannot') {
@@ -577,7 +653,7 @@ export function MiriamButton() {
       speak(said)
       if (name === 'create_user' && !anyOverlayOpen()) router.push('/admin/users' as never)
     } else {
-      setPending({ name, prepared })
+      setPending({ name, prepared, more })
       setAnswer(prepared.title)
       speak(prepared.title)
     }
@@ -587,10 +663,12 @@ export function MiriamButton() {
   const confirmAction = async () => {
     if (pending?.prepared.kind !== 'ready') return
     const { run } = pending.prepared
+    const more = !!pending.more
     unlockSpeech()
     setPending(null)
     setStage('thinking')
     let said: string
+    let done = false
     try {
       // Without a signal the change waits on the phone to be sent: said so,
       // rather than left on "Working on it…".
@@ -603,15 +681,22 @@ export function MiriamButton() {
           )
         ),
       ])
+      done = true
     } catch {
       said = 'That didn’t go through. Nothing was changed — try it on the screen.'
     }
     setAnswer(said)
     speak(said)
     setStage('answered')
+    // One of several things asked: on to the next, with this one remembered as done.
+    if (more && done) {
+      useMiriamStore.getState().remember(asked.current, said)
+      await askClaude(CARRY_ON, false)
+    }
   }
   const cancelAction = () => {
     setPending(null)
+    useMiriamStore.getState().setAwaiting(false)
     setAnswer('Okay — nothing was changed.')
     speak('Okay.')
   }
@@ -632,6 +717,7 @@ export function MiriamButton() {
 
   /** A chord sheet, opened over the page; the bar goes, to leave it in view. */
   const openSong = (sheet: ChordSheet, key: { key: string; minor: boolean } | null) => {
+    noteDone(`Opened the chord sheet “${sheet.title}”.`)
     setSongGuesses([])
     setOpen(false)
     // Where a song screen is up, there — an open sheet's own place — rather
@@ -698,7 +784,8 @@ export function MiriamButton() {
   )
 
   /** Listen for a request — tapped, or woken by her name. */
-  const listen = async (byName = false) => {
+  /** `keepQuestion`: listening for the reply to what she asked back, which stays shown. */
+  const listen = async (byName = false, keepQuestion = false) => {
     // Tapped, this lets a browser say the answer; called by name, the tap
     // that turned listening on did.
     unlockSpeech()
@@ -716,7 +803,11 @@ export function MiriamButton() {
     settled.current = ''
     request.current = ''
     setHeard('')
-    setAnswer(null)
+    if (!keepQuestion) {
+      setAnswer(null)
+      setAskingBack(false)
+      asked.current = ''
+    }
     setStage('listening')
     setOpen(true)
     if (!available) {
@@ -931,8 +1022,20 @@ export function MiriamButton() {
     sent.current = true
     stopListening()
     stopSpeaking()
+    setAskingBack(false)
+    useMiriamStore.getState().setAwaiting(false)
     setOpen(false)
   }
+  // Each answer remembered with what was asked, for what is said next (lib/miriamConversation).
+  useEffect(() => {
+    openRef.current = open
+  }, [open])
+  useEffect(() => {
+    if (stage !== 'answered' || !answer || !asked.current) return
+    const shown = shownNote.current ? ` (${shownNote.current})` : ''
+    useMiriamStore.getState().remember(asked.current, answer + shown)
+  }, [stage, answer])
+
   // An answer stays up a while, then goes, so the bar is not left over the page.
   const closeRef = useRef(close)
   useEffect(() => {
@@ -940,11 +1043,19 @@ export function MiriamButton() {
   })
   useEffect(() => {
     // Not while there are events or songs to choose from: that waits for a choice.
-    if (stage !== 'answered' || !open || choices.length || songGuesses.length || pending || link)
+    if (
+      stage !== 'answered' ||
+      !open ||
+      askingBack ||
+      choices.length ||
+      songGuesses.length ||
+      pending ||
+      link
+    )
       return
     const t = setTimeout(() => closeRef.current(), ANSWER_MS)
     return () => clearTimeout(t)
-  }, [stage, open, answer, choices.length, songGuesses.length, pending, link])
+  }, [stage, open, answer, askingBack, choices.length, songGuesses.length, pending, link])
   /** One of the events she offered: learned as what was meant, and asked about. */
   const pick = async (choice: { key: string; title: string; date: string }) => {
     unlockSpeech()
@@ -1036,7 +1147,7 @@ export function MiriamButton() {
                   <Text color={ink} fontSize="$3" fontStyle="italic" numberOfLines={3}>
                     “{heard}”
                   </Text>
-                ) : stage === 'listening' ? (
+                ) : stage === 'listening' && !answer ? (
                   <Text color={soft} fontSize="$2" numberOfLines={2}>
                     {songHost()
                       ? 'Which song? — “Above All in E”'

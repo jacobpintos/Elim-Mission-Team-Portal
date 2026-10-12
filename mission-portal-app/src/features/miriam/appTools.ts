@@ -1,7 +1,7 @@
 import { collection, limit, orderBy, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getDocs } from '@/lib/liveFirestore'
-import { canUseMessages, isAdmin, isGuest, visibleTabs } from '@/lib/roles'
+import { canUseMessages, isAdmin, isGuest, isWorship, visibleTabs } from '@/lib/roles'
 import { todayStr } from '@/lib/events'
 import {
   announcementsFound,
@@ -14,8 +14,11 @@ import {
   planningFound,
   roomName,
   roomsFor,
+  setListsFound,
   settingsShown,
 } from '@/lib/miriamAppData'
+import { useEventsStore } from '@/stores/eventsStore'
+import type { SetList } from '@/types/worship'
 import { tourFor, tourNames } from '@/features/tour/flows'
 import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -38,6 +41,7 @@ export type AppToolName =
   | 'read_operations'
   | 'read_settings'
   | 'app_guide'
+  | 'read_set_lists'
   // Changes: offered as these are, made only once confirmed (./actions.ts).
   | 'send_message'
   | 'post_announcement'
@@ -56,6 +60,16 @@ export type AppToolName =
   | 'update_team'
   | 'delete_team'
   | 'delete_task_template'
+  | 'create_task_template'
+  | 'create_tasks'
+  | 'update_task'
+  | 'delete_task'
+  | 'set_carpool'
+  | 'report_issue'
+  | 'submit_kaizen'
+  | 'vote_kaizen'
+  | 'add_to_set_list'
+  | 'create_set_list'
 
 /** Admins' changes: offered to admins only (./actions.ts checks again). */
 const ADMIN_ACTIONS: AppToolName[] = [
@@ -70,6 +84,11 @@ const ADMIN_ACTIONS: AppToolName[] = [
   'update_team',
   'delete_team',
   'delete_task_template',
+  'create_task_template',
+  'create_tasks',
+  'update_task',
+  'delete_task',
+  'set_carpool',
 ]
 
 /** The lookups — and changes — this person's screens allow. */
@@ -90,6 +109,11 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   if (tabs.includes('events')) tools.push('set_availability')
   if (tabs.includes('events') && !guest) tools.push('sign_up_food')
   if (tabs.includes('settings')) tools.push('change_notification')
+  // Operations: anyone there may report an issue or put forward an idea — not a guest, who only reads.
+  if (tabs.includes('issues') && !guest) tools.push('report_issue', 'submit_kaizen', 'vote_kaizen')
+  // Set lists: read where Worship is; built by the worship team and admins (firestore.rules).
+  if (tabs.includes('worship')) tools.push('read_set_lists')
+  if (isWorship(profile)) tools.push('add_to_set_list', 'create_set_list')
   return tools
 }
 
@@ -212,6 +236,14 @@ export async function runAppTool(name: string, input: Record<string, unknown>): 
       result = settingsShown(profile)
     } else if (name === 'app_guide') {
       result = guideFor(profile, String(input.tab ?? ''))
+    } else if (name === 'read_set_lists') {
+      const lists = await all<SetList>('setLists')
+      const templates = useEventsStore.getState().templates
+      const eventTitle = (l: SetList) =>
+        templates.find((t) => String(t.id) === String(l.eventTemplateId ?? ''))?.title ?? ''
+      const date = typeof input.date === 'string' ? input.date : ''
+      const found = setListsFound(lists, eventTitle, q, date, todayStr())
+      result = found.length ? { setLists: found } : { setLists: [], note: 'No set list fits that.' }
     } else {
       // A change is never run from here: it is confirmed first (./actions.ts).
       result = { error: 'That is not a lookup.' }

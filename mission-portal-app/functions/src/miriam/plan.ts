@@ -350,8 +350,13 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
             description:
               'The words they used for the event, as heard ("revival in the hard land"); "" if they named none.',
           },
+          follow_up: {
+            type: 'boolean',
+            description:
+              'True when `spoken` asks them for something you need to do what they asked: the app listens for their reply.',
+          },
         },
-        required: ['spoken', 'open', 'target', 'section', 'choices', 'heard_name'],
+        required: ['spoken', 'open', 'target', 'section', 'choices', 'heard_name', 'follow_up'],
         additionalProperties: false,
       },
     },
@@ -371,6 +376,7 @@ export type AppToolName =
   | 'read_operations'
   | 'read_settings'
   | 'app_guide'
+  | 'read_set_lists'
   | ActionName
 
 /**
@@ -397,6 +403,18 @@ export type ActionName =
   | 'update_team'
   | 'delete_team'
   | 'delete_task_template'
+  | 'create_task_template'
+  | 'create_tasks'
+  | 'update_task'
+  | 'delete_task'
+  | 'set_carpool'
+  // Operations
+  | 'report_issue'
+  | 'submit_kaizen'
+  | 'vote_kaizen'
+  // Worship
+  | 'add_to_set_list'
+  | 'create_set_list'
 
 export const ACTIONS: readonly ActionName[] = [
   'create_user',
@@ -410,6 +428,16 @@ export const ACTIONS: readonly ActionName[] = [
   'update_team',
   'delete_team',
   'delete_task_template',
+  'create_task_template',
+  'create_tasks',
+  'update_task',
+  'delete_task',
+  'set_carpool',
+  'report_issue',
+  'submit_kaizen',
+  'vote_kaizen',
+  'add_to_set_list',
+  'create_set_list',
   'send_message',
   'post_announcement',
   'set_task_status',
@@ -701,9 +729,208 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
     },
     delete_task_template: {
       name: 'delete_task_template',
-      description: 'Delete a task template. Making or changing one is done on its screen.' + ADMINS,
+      description: 'Delete a task template.' + ADMINS,
       strict: true,
       input_schema: objectOf({ template_id: { type: 'string' } }),
+    },
+    create_task_template: {
+      name: 'create_task_template',
+      description:
+        'Make a task template: its sections, each with its tasks — who each goes to, and when it is due, in days before the event (or after it). ' +
+        '"Tasks 4, 5 and 6" are three tasks: "Task 4", "Task 5", "Task 6". What is said for several tasks ("due 7 days before, assigned to Bob") goes on each of them.' +
+        ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        name: { type: 'string' },
+        sections: {
+          type: 'array',
+          items: objectOf({
+            name: { type: 'string', description: 'The section, as said: "Production", "Merch".' },
+            tasks: {
+              type: 'array',
+              items: objectOf({
+                title: { type: 'string' },
+                people_ids: ids('Who it goes to.'),
+                group_ids: ids('Groups it goes to.'),
+                days_before: {
+                  type: 'integer',
+                  description: 'Due this many days before the event; 0 if not said.',
+                },
+                days_after: {
+                  type: 'integer',
+                  description: 'Or due this many days after it (a task after the event); 0 if not.',
+                },
+              }),
+            },
+          }),
+        },
+      }),
+    },
+    create_tasks: {
+      name: 'create_tasks',
+      description:
+        'Assign several new tasks at once, each with who it goes to and when it is due — for one task, open_task_form instead. ' +
+        'What is said for several ("all due Friday, to Greg") goes on each.' +
+        ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        tasks: {
+          type: 'array',
+          items: objectOf({
+            title: { type: 'string' },
+            due_date: { type: 'string', description: 'YYYY-MM-DD; "" if not said.' },
+            people_ids: ids('Who it goes to.'),
+            group_id: { type: 'string', description: 'A group it goes to instead; "" if none.' },
+            lead_id: { type: 'string', description: 'Who leads it, of those; "" if not said.' },
+            event_key: {
+              type: 'string',
+              description: 'The event it is for, from find_events; "" if none.',
+            },
+          }),
+        },
+      }),
+    },
+    update_task: {
+      name: 'update_task',
+      description:
+        'Change a task: rename it, move its due date, give it to someone else, add or take people off it, or change who leads it. Its id from find_tasks.' +
+        ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        task_id: { type: 'string' },
+        title: { type: 'string', description: 'The new name; "" to keep it.' },
+        due_date: {
+          type: 'string',
+          description: 'YYYY-MM-DD; "" to keep it; "none" to take the due date off.',
+        },
+        add_people_ids: ids('People to add to it.'),
+        remove_people_ids: ids(
+          'People to take off it. "Reassign it to Greg": add Greg, take off everyone else on it.'
+        ),
+        lead_id: { type: 'string', description: 'Who leads it now; "" to keep it.' },
+      }),
+    },
+    delete_task: {
+      name: 'delete_task',
+      description: 'Delete a task. Its id from find_tasks.' + ADMINS,
+      strict: true,
+      input_schema: objectOf({ task_id: { type: 'string' } }),
+    },
+    set_carpool: {
+      name: 'set_carpool',
+      description:
+        'Set the cars for one date of an event whose cars are set on its page (get_event: carpool carsSet "for this date"): every car, whole — read it first with get_event. ' +
+        'For an event whose cars are set in its form, use edit_event.' +
+        ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        event_key: { type: 'string' },
+        cars: {
+          type: 'array',
+          items: objectOf({
+            label: { type: 'string', description: 'Its name: "Andy’s truck".' },
+            driver_id: { type: 'string', description: '"" if no one yet.' },
+            rider_ids: ids('Who rides in it.'),
+          }),
+        },
+      }),
+    },
+    report_issue: {
+      name: 'report_issue',
+      description:
+        'Report an issue in Operations: something broken, unsafe or in the way, in their words.' +
+        ACTS,
+      strict: true,
+      input_schema: objectOf({
+        title: {
+          type: 'string',
+          description: 'A short name for it: "Projector in room 2 broken".',
+        },
+        description: { type: 'string', description: 'What is wrong, in their words.' },
+        category: {
+          type: 'string',
+          enum: ['equipment', 'safety', 'facility', 'logistics', 'other'],
+        },
+        suggested_action: {
+          type: 'string',
+          description: 'What they think should be done, if they said; "".',
+        },
+      }),
+    },
+    submit_kaizen: {
+      name: 'submit_kaizen',
+      description:
+        'Submit a kaizen idea in Operations: something that could be done better.' + ACTS,
+      strict: true,
+      input_schema: objectOf({
+        title: { type: 'string', description: 'A short name for the idea.' },
+        description: { type: 'string', description: 'The idea, in their words.' },
+      }),
+    },
+    vote_kaizen: {
+      name: 'vote_kaizen',
+      description:
+        'Vote for a kaizen idea, or take their vote back. Its id from read_operations.' + ACTS,
+      strict: true,
+      input_schema: objectOf({
+        kaizen_id: { type: 'string' },
+        vote: { type: 'boolean', description: 'false to take their vote back.' },
+      }),
+    },
+    add_to_set_list: {
+      name: 'add_to_set_list',
+      description:
+        'Add songs to a set list, each in the key asked for. Its id from read_set_lists; songs by title, as said — the app finds their chord sheets.' +
+        ACTS,
+      strict: true,
+      input_schema: objectOf({
+        set_list_id: { type: 'string' },
+        songs: {
+          type: 'array',
+          items: objectOf({
+            title: { type: 'string' },
+            key: { type: 'string', description: 'Like "D", "Bb", "F#m"; "" if not said.' },
+          }),
+        },
+        position: {
+          type: 'integer',
+          description: 'Where in the set the first goes: 1 for the opener; 0 for the end.',
+        },
+      }),
+    },
+    create_set_list: {
+      name: 'create_set_list',
+      description:
+        'Make a new set list, for an event or not, with its songs in order, each in the key asked for. Songs by title, as said.' +
+        ACTS,
+      strict: true,
+      input_schema: objectOf({
+        title: { type: 'string', description: 'Its name; "" to name it after the event.' },
+        event_key: { type: 'string', description: 'The event it is for, from find_events; "".' },
+        songs: {
+          type: 'array',
+          items: objectOf({
+            title: { type: 'string' },
+            key: { type: 'string', description: '"" if not said.' },
+          }),
+        },
+      }),
+    },
+    read_set_lists: {
+      name: 'read_set_lists',
+      description:
+        'Set lists in Worship: each with its id, name, the event and date it is for, and its songs in order with their keys. ' +
+        'By words from its name or event, or by date; both "" for the next ones coming up.',
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Words from its name or its event’s; "" for any.' },
+          date: { type: 'string', description: 'YYYY-MM-DD, for "Sunday’s set"; "" for any.' },
+        },
+        required: ['query', 'date'],
+        additionalProperties: false,
+      },
     },
     read_settings: {
       name: 'read_settings',
@@ -742,7 +969,26 @@ export const MAX_STRICT_TOOLS = 20
 export function toolsFor(commands: CommandName[], appTools: AppToolName[]) {
   return [
     ...commands.map((name) => COMMANDS[name].tool),
-    ...appTools.map((name) => ({ ...APP_TOOLS[name], strict: false as const })),
+    ...appTools.map((name) => {
+      const tool = { ...APP_TOOLS[name], strict: false as const }
+      if (!ACTIONS.includes(name as ActionName)) return tool
+      // A change can be one of several asked for: said so, to carry on once it is done.
+      const schema = tool.input_schema as { properties?: Record<string, unknown> }
+      return {
+        ...tool,
+        input_schema: {
+          ...tool.input_schema,
+          properties: {
+            ...schema.properties,
+            more_to_do: {
+              type: 'boolean',
+              description:
+                'True when they asked for more after this, to be done once it is confirmed.',
+            },
+          },
+        },
+      }
+    }),
   ]
 }
 

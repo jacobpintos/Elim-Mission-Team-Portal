@@ -1,6 +1,7 @@
 import * as Speech from 'expo-speech'
 import { readySpeaker, SPEAKING_ID } from '@/lib/audioOut'
 import { ownsSpeech, releaseSpeech, speechTakeable, withSpeech } from '@/lib/speechOwner'
+import { pickVoice } from '@/lib/miriamVoice'
 
 /** A phone's voice needs no tap first (speak.web.ts: a browser's does). */
 export function unlockSpeech(): void {}
@@ -16,11 +17,55 @@ let turn = 0
 let waiting: ReturnType<typeof setTimeout> | null = null
 let giveBack: ReturnType<typeof setTimeout> | null = null
 
+/** Her voice (lib/miriamVoice): undefined until the phone has listed its voices; null for its own. */
+let voiceId: string | null | undefined
+let choosing = false
+/** Picked once; tried again if the phone had none to list yet (Android, as its voice starts up). */
+function chooseVoice() {
+  if (voiceId !== undefined || choosing) return
+  choosing = true
+  Speech.getAvailableVoicesAsync()
+    .then((list) => {
+      if (list.length === 0) return
+      voiceId =
+        pickVoice(
+          list.map((v) => ({
+            id: v.identifier,
+            name: v.name,
+            lang: v.language,
+            quality: v.quality,
+          }))
+        )?.id ?? null
+    })
+    .catch(() => {
+      voiceId = null
+    })
+    .finally(() => {
+      choosing = false
+    })
+}
+chooseVoice()
+
+/** Waiting for what is being said to end (whenSpoken). */
+let afterSpeech: (() => void)[] = []
+/** An answer is being said, or about to be. */
+let busy = false
+
 /** Lets the microphone go again: to the sheet, or "Hey Miriam", listening in the background. */
 function letGo() {
   if (giveBack) clearTimeout(giveBack)
   giveBack = null
   releaseSpeech(SPEAKING_ID)
+  busy = false
+  const waiting = afterSpeech
+  afterSpeech = []
+  waiting.forEach((done) => done())
+}
+
+/** Once what is being said now has been said (or stopped): at once, if nothing is. */
+export function whenSpoken(): Promise<void> {
+  if (!busy) return Promise.resolve()
+  return new Promise((done) => afterSpeech.push(done))
 }
 
 /**
@@ -34,7 +79,9 @@ function letGo() {
  * phone's sound can be made ready for her voice (lib/audioOut).
  */
 export function speak(text: string): void {
+  chooseVoice()
   const mine = ++turn
+  busy = true
   if (waiting) clearTimeout(waiting)
   waiting = null
   const say = () => {
@@ -56,6 +103,7 @@ export function speak(text: string): void {
       }
       Speech.speak(text, {
         language: 'en-US',
+        ...(voiceId ? { voice: voiceId } : {}),
         rate: 1.0,
         onDone: done,
         onStopped: done,
