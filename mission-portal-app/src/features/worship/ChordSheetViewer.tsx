@@ -51,6 +51,7 @@ import { loadAliases } from '@/lib/songAliases'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { asksAQuestion } from '@/lib/miriamSongs'
+import { playAsked } from '@/lib/miriamQuick'
 
 /** How long, after "Hey Miriam" alone, what is said next is taken as a song to open. */
 const MIRIAM_WAIT_MS = 8000
@@ -715,8 +716,9 @@ export function ChordSheetViewer({
       listeningCue('start')
       return 'Hineni — which song?'
     }
-    // "Hey Miriam, what's the dress code?": not for a sheet — Miriam answers it.
-    const question = named ? asks.find((a) => asksAQuestion(a)) : undefined
+    // "Hey Miriam, what's the dress code?", "Hey Miriam, play Revive Me": not
+    // for a sheet — Miriam answers it, or plays the video from Content.
+    const question = named ? asks.find((a) => asksAQuestion(a) || !!playAsked(a)) : undefined
     if (question) {
       miriamUntil.current = 0
       setMiriamHere(false)

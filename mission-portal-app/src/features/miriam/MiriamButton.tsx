@@ -325,8 +325,22 @@ export function MiriamButton() {
       setStage('answered')
       return
     }
+    // "Play Revive Me", "play the sermon from Sunday": a video from Content,
+    // played over the page. "Play" is never a chord sheet ("open" is): one
+    // not found here is left to Claude, which looks further.
+    const play = again ? null : playAsked(withoutHerName(said))
+    if (play) {
+      const music = useMusicStore.getState()
+      if (music.items.length === 0) await music.load()
+      const item = playPick(play, useMusicStore.getState().items)
+      if (item) {
+        setVideo(item)
+        setOpen(false)
+        return
+      }
+    }
     // A screen asked for by name ("open settings"): gone to from here.
-    if (!again && !anyOverlayOpen()) {
+    if (!again && !play && !anyOverlayOpen()) {
       const screens = screensFor(useAuthStore.getState().profile)
       const screenId = screenAsked(withoutHerName(said), screens)
       const screen = screens.find((x) => x.id === screenId)
@@ -346,7 +360,7 @@ export function MiriamButton() {
     const songMode = !!songHost() && sheets.length > 0
     // A question is answered, even with a song screen up: "What am I wearing
     // today?" is not a song.
-    if (!again && sheets.length && !asksAQuestion(withoutHerName(said))) {
+    if (!again && !play && sheets.length && !asksAQuestion(withoutHerName(said))) {
       const aliases = await loadAliases()
       // "Queue Above All", "Above All next": to come after the open song, not now.
       const cmd = songMode ? parseSheetCommand(withoutHerName(said), sheets, aliases) : null
@@ -388,10 +402,10 @@ export function MiriamButton() {
         return
       }
     }
-    if (!again && (await answeredHere(withoutHerName(said)))) return
+    if (!again && !play && (await answeredHere(withoutHerName(said)))) return
     // A plain question about an event — its dress code, time, place, your
     // team, car, room or flight — answered from what the app already has.
-    const quick = again ? null : quickFromApp(withoutHerName(said))
+    const quick = again || play ? null : quickFromApp(withoutHerName(said))
     if (quick?.weather) {
       // Its forecast, fetched as the event's page does.
       setStage('thinking')
@@ -504,7 +518,7 @@ export function MiriamButton() {
 
   /**
    * Asked for something the app already has — the next event, what's on,
-   * their tasks, a sermon to play — or an availability to give: done here,
+   * their tasks — or an availability to give: done here,
    * nothing sent off. False when it isn't one of those, or isn't plain, for
    * Claude to work out.
    */
@@ -515,19 +529,6 @@ export function MiriamButton() {
       setStage('answered')
       if (at && !anyOverlayOpen()) router.push(miriamHref({ kind: 'event', ...at }) as never)
       return true
-    }
-    // "Play the sermon from Sunday": played over the page.
-    const play = playAsked(said)
-    if (play) {
-      const music = useMusicStore.getState()
-      if (music.items.length === 0) await music.load()
-      const item = playPick(play, useMusicStore.getState().items)
-      if (item) {
-        setVideo(item)
-        setOpen(false)
-        return true
-      }
-      return false
     }
     const data = appData()
     // "I'm available for Revival": shown to be confirmed, as any change is.

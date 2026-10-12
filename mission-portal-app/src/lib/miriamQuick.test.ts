@@ -255,9 +255,28 @@ describe('playing from Content', () => {
     expect(playPick(playAsked('play the faith over fear sermon')!, items)?.id).toBe('a')
     expect(playPick(playAsked('play pastor dan’s sermon')!, items)?.id).toBe('a')
   })
-  it('leaves songs to the chord sheets, and a vague ask to Claude', () => {
-    expect(playAsked('play Above All')).toBeNull()
+  it('plays a video by its title: "play" is always for Content', () => {
+    const videos = [
+      ...items,
+      { id: 'r1', type: 'music', title: 'Revive Me', year: 2024 },
+      { id: 'r2', type: 'music', title: 'Revive Us Again', year: 2026 },
+      { id: 't', type: 'music', title: '10,000 Reasons (Live)', year: 2023 },
+    ]
+    expect(playPick(playAsked('Play Revive Me')!, videos)?.id).toBe('r1')
+    expect(playPick(playAsked('play above all')!, videos)?.id).toBe('d')
+    expect(playPick(playAsked('open the Revive Me video')!, videos)?.id).toBe('r1')
+    expect(playPick(playAsked('show me the video revive us again')!, videos)?.id).toBe('r2')
+    expect(playPick(playAsked('watch revive me')!, videos)?.id).toBe('r1')
+    expect(playPick(playAsked('play 10,000 reasons')!, videos)?.id).toBe('t')
+    // Not plain which: left to Claude, which can look further.
+    expect(playPick(playAsked('play revive')!, videos)).toBeNull()
     expect(playPick(playAsked('play a sermon')!, items)).toBeNull()
+  })
+  it('leaves chord sheets to "open", and queueing to the sheet', () => {
+    expect(playAsked('open Revive Me')).toBeNull()
+    expect(playAsked('open above all in E')).toBeNull()
+    expect(playAsked('play Above All next')).toBeNull()
+    expect(playAsked('play next Above All')).toBeNull()
   })
 })
 

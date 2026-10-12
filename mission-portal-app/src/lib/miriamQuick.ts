@@ -626,6 +626,8 @@ export interface PlayAsk {
   latest: boolean
   /** The words naming it, if any. */
   query: string
+  /** As said, for a title: "revive me". */
+  title: string
 }
 
 const PLAY_WORDS = new Set([
@@ -663,11 +665,25 @@ const PLAY_WORDS = new Set([
   'of',
 ])
 
-/** "Play the sermon from Sunday", "play the latest podcast", "play the Kenya sermon". */
+/**
+ * A video from Content asked for: "play Revive Me", "watch the sermon from
+ * Sunday", "play the latest podcast", "open the Revive Me video". "Play" is
+ * always for Content; a chord sheet is opened ("open Revive Me"), and "play
+ * Above All next" queues one on an open sheet (lib/sheetCommands).
+ */
 export function playAsked(text: string): PlayAsk | null {
-  const m = clean(text).match(/^(?:play|watch|listen\s+to|put\s+on|start)\s+(.+)$/)
-  if (!m) return null
-  const rest = m[1]
+  const said = clean(text)
+  let rest = said.match(/^(?:play|watch|listen\s+to|put\s+on)\s+(.+)$/)?.[1]
+  if (!rest) {
+    // Opened, as a video: "open the Revive Me video", "pull up the latest sermon".
+    const m = said.match(
+      /^(?:open|show(?:\s+me)?|pull\s+up|bring\s+up|put\s+up|start|load|find|get)\s+(.+)$/
+    )
+    if (m && /\b(?:videos?|sermon|podcast|episode)\b/.test(m[1])) rest = m[1]
+  }
+  if (!rest) return null
+  // "Play next Above All", "play Above All next": queued on an open sheet.
+  if (/^next\b|\bnext$/.test(rest)) return null
   const kind = /\b(?:sermon|message|preaching)\b/.test(rest)
     ? 'sermon'
     : /\b(?:podcast|episode)\b/.test(rest)
@@ -682,9 +698,13 @@ export function playAsked(text: string): PlayAsk | null {
     .filter((w) => !PLAY_WORDS.has(w))
     .join(' ')
     .trim()
-  // A song is a chord sheet's to open, unless it is plainly Content: left to the song finder.
-  if (!kind && !latest) return null
-  return { kind, latest, query }
+  const title = rest
+    .replace(/\b(?:music\s+)?videos?\b/g, ' ')
+    .replace(/\s+(?:on|from|in)\s+content\s*$/, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(?:the|a)\s+/, '')
+  return { kind, latest, query, title }
 }
 
 export interface PlayItem {
@@ -703,6 +723,19 @@ export interface PlayItem {
 export function playPick<T extends PlayItem>(ask: PlayAsk, items: T[]): T | null {
   const newest = (a: T, b: T) => (b.year ?? 0) - (a.year ?? 0) || (b.month ?? 0) - (a.month ?? 0)
   let pool = items.filter((m) => !ask.kind || m.type === ask.kind)
+  if (ask.title) {
+    // Its title, as said: "Revive Me" — not "Revive Us Again".
+    const said = titleWords(ask.title)
+    const exact = pool.filter((m) => titleWords(m.title) === said)
+    if (exact.length) return [...exact].sort(newest)[0]
+    // Every word said, in one title only: "Revive Me" for "Revive Me (Live)".
+    const words = said.split(' ')
+    const within = pool.filter((m) => {
+      const have = titleWords(m.title).split(' ')
+      return words.every((w) => have.includes(w))
+    })
+    if (within.length === 1) return within[0]
+  }
   if (ask.query) {
     pool = pool.filter((m) =>
       fitsWords(
@@ -715,6 +748,14 @@ export function playPick<T extends PlayItem>(ask: PlayAsk, items: T[]): T | null
   if (ask.latest || pool.length === 1) return [...pool].sort(newest)[0]
   return null
 }
+
+/** A title's words, lowered, without punctuation: "10,000 Reasons" as "10000 reasons". */
+const titleWords = (title: string) =>
+  title
+    .toLowerCase()
+    .replace(/[’',]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
 
 const fitsWords = (text: string, query: string) => {
   const have = text
