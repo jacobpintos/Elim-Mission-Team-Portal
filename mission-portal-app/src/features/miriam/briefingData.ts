@@ -301,6 +301,17 @@ async function attentionFor(
   return items
 }
 
+/** Their answer for an event's date — or, for a repeating one, for the series — if they gave one. */
+async function answered(ev: EventInstance, uid: string): Promise<AvailResponse | null> {
+  const read = async (key: string) =>
+    ((await getDoc(doc(db, 'avail', key))).data()?.responses ?? {}) as Record<string, AvailResponse>
+  const [instance, series] = await Promise.all([
+    quietly(() => read(ev.instanceKey.replace(/\//g, '_')), {}),
+    ev.isRec ? quietly(() => read(`${String(ev.templateId).replace(/\//g, '_')}_series`), {}) : {},
+  ])
+  return effectiveResponse(ev, uid, instance, series)
+}
+
 /** Those on an event who haven't answered its availability, by uid. */
 async function noAnswer(ev: EventInstance, groups: Group[]): Promise<string[]> {
   const read = async (key: string) =>
@@ -366,6 +377,8 @@ async function foodOpen(
       )
       if (!signups) return null
       if (Object.values(signups).some((s) => String(s?.uid) === uid)) return null
+      // Said they can't come: not asked to bring anything.
+      if ((await answered(ev, uid))?.status === 'no') return null
       const open = (ev.foodItems ?? []).filter((item, i) => item && !signups[String(i)])
       if (open.length === 0) return null
       return {

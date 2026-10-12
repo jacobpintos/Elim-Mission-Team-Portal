@@ -64,7 +64,8 @@ async function inviteeUids(db: admin.firestore.Firestore, event: EventRaw): Prom
  * Runs once a day and looks only at events exactly REMINDER_DAYS out, so a
  * given event nudges once rather than every day of the week before it.
  * Nothing is sent when every item is already claimed — the point is the open
- * ones. Guests are skipped; they are not asked to bring food.
+ * ones. Guests are skipped; they are not asked to bring food — nor is anyone
+ * who has answered that they are not available.
  */
 export const foodSignupReminders = onSchedule(
   { schedule: '0 15 * * *', secrets: [RESEND_API_KEY] },
@@ -90,10 +91,15 @@ export const foodSignupReminders = onSchedule(
 
       const claimedBy = new Set(Object.values(signups).map((s) => String(s?.uid ?? '')))
       const uids = await inviteeUids(db, event)
+      // Who said they can't come: not asked to bring anything.
+      const availSnap = await db.collection('avail').doc(foodKey.replace(/\//g, '_')).get()
+      const answers = (availSnap.data()?.responses as Record<string, { status?: string }>) ?? {}
 
       for (const uid of uids) {
         // Already bringing something — no nudge needed.
         if (claimedBy.has(uid)) continue
+        // Not coming.
+        if (answers[uid]?.status === 'no') continue
 
         const userSnap = await db.collection('users').doc(uid).get()
         const roles = (userSnap.data()?.roles as string[]) ?? []
