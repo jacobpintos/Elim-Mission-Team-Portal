@@ -111,6 +111,10 @@ export type MiriamResult =
       heardName?: string
       /** She asked something back: what is said next is the reply. */
       followUp?: boolean
+      /** How she read what was heard, when she corrected it: shown under it. */
+      understood?: string
+      /** Words misheard, and what was meant: remembered on the device. */
+      misheard?: { heard: string; meant: string }[]
     }
   | { kind: 'reply'; text: string }
   /** A new task's form, filled in, for an admin to check and save. */

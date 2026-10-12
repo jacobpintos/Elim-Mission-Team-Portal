@@ -28,11 +28,14 @@ interface ExpoPushMessage {
   badge?: number
   interruptionLevel?: InterruptionLevel
   priority?: 'default' | 'normal' | 'high'
+  categoryId?: string
 }
 
 export interface SendPushOptions {
   /** Omit for the ordinary `active` treatment. */
   interruptionLevel?: InterruptionLevel
+  /** Buttons on it, as the app registered them under this name (a reminder's Snooze and Done). */
+  categoryId?: string
 }
 
 export async function sendExpoPush(
@@ -40,9 +43,9 @@ export async function sendExpoPush(
   title: string,
   body: string,
   data: object = {},
-  options: SendPushOptions = {},
+  options: SendPushOptions = {}
 ): Promise<void> {
-  const { interruptionLevel } = options
+  const { interruptionLevel, categoryId } = options
   // Asking to break through Focus and then letting the delivery be held back
   // for batching would defeat the point, so an elevated notification is also
   // asked for immediately.
@@ -60,6 +63,7 @@ export async function sendExpoPush(
       badge: 1,
       ...(interruptionLevel ? { interruptionLevel } : {}),
       ...(priority ? { priority } : {}),
+      ...(categoryId ? { categoryId } : {}),
     }))
 
   if (!messages.length) return

@@ -43,3 +43,47 @@ export async function rememberName(heard: string, title: string): Promise<void> 
     // Not remembered this time; nothing else depends on it.
   }
 }
+
+/**
+ * Words this device's speech recognition has misheard, and what was meant —
+ * "even" for "event", "Mariam" for "Miriam" — as Claude worked out from the
+ * rest of a request. Sent with each request, so the same mishearing is
+ * read right at once next time.
+ */
+const WORDS_KEY = 'miriam_words'
+const WORDS_KEEP = 40
+
+export interface MisheardWord {
+  heard: string
+  meant: string
+}
+
+export async function loadWords(): Promise<MisheardWord[]> {
+  try {
+    const raw = await AsyncStorage.getItem(WORDS_KEY)
+    const list = raw ? (JSON.parse(raw) as unknown) : []
+    return Array.isArray(list)
+      ? list.filter(
+          (w): w is MisheardWord =>
+            !!w && typeof w.heard === 'string' && typeof w.meant === 'string'
+        )
+      : []
+  } catch {
+    return []
+  }
+}
+
+/** Remember mishearings; the newest of a word wins. */
+export async function rememberWords(words: MisheardWord[]): Promise<void> {
+  const fresh = words
+    .map((w) => ({ heard: w.heard.trim().toLowerCase(), meant: w.meant.trim() }))
+    .filter((w) => w.heard && w.meant && w.heard !== w.meant.toLowerCase())
+    .slice(0, 5)
+  if (fresh.length === 0) return
+  const kept = (await loadWords()).filter((w) => !fresh.some((f) => f.heard === w.heard))
+  try {
+    await AsyncStorage.setItem(WORDS_KEY, JSON.stringify([...fresh, ...kept].slice(0, WORDS_KEEP)))
+  } catch {
+    // Not remembered this time.
+  }
+}

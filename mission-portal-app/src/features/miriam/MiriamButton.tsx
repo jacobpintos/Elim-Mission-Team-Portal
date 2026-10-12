@@ -33,10 +33,10 @@ import { wakeEngine } from '@/lib/wakeEngine'
 import { namesHer, stopListeningAsked, withoutHerName } from '@/lib/wakeWord'
 import { MAX_REQUEST, miriamHref } from '@/lib/miriam'
 import { anyOverlayOpen } from '@/lib/overlays'
-import { rememberName } from '@/lib/miriamMemory'
+import { rememberName, rememberWords } from '@/lib/miriamMemory'
 import { FD } from '@/lib/format'
 import { speak, stopSpeaking, unlockSpeech, whenSpoken } from './speak'
-import { askMiriam, miriamError } from './askMiriam'
+import { askMiriam, miriamError, type Heard } from './askMiriam'
 import { prepareAction, type Prepared } from './actions'
 import { useMiriamStore, WAKE_KEY } from '@/stores/miriamStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -63,7 +63,9 @@ import {
 import { fetchWeather } from '@/lib/weather'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useRemindersStore } from '@/stores/remindersStore'
-import { reminderAsked, reminderWhen } from '@/lib/reminders'
+import { reminderAsked, reminderWhen, repeatWhen, type Repeat } from '@/lib/reminders'
+import { clockOf } from '../../../functions/src/push/reminderTime'
+import type { ReminderExtra } from '@/stores/remindersStore'
 import { briefingAsked, type Briefing } from '@/lib/briefing'
 import { gatherBriefing, remindToAnswer } from './briefingData'
 import { BriefingView } from './BriefingView'
@@ -113,6 +115,46 @@ const ANSWER_MS = 20_000
 /** Said to her, answering a question she asked back: nothing more is wanted. */
 const NEVER_MIND =
   /^(?:never\s*mind|cancel|forget\s+(?:it|that)|stop|no(?:\s+thanks?)?|nothing|that'?s\s+all)\b/i
+/** Words a request is likely to hold, given to the recogniser to expect. */
+const APP_WORDS = [
+  'Miriam',
+  'event',
+  'task',
+  'set list',
+  'reminder',
+  'availability',
+  'carpool',
+  'dress code',
+  'announcement',
+  'kaizen',
+  'queue',
+]
+
+/** The names of events from a week ago to two months on, for the recogniser to expect. */
+function eventTitles(): string[] {
+  const now = Date.now()
+  const from = new Date(now - 7 * 86_400_000).toISOString().slice(0, 10)
+  const to = new Date(now + 60 * 86_400_000).toISOString().slice(0, 10)
+  const titles = useEventsStore
+    .getState()
+    .templates.filter((t) => t.isRec || ((t.date ?? '') >= from && (t.date ?? '') <= to))
+    .map((t) => t.title)
+    .filter(Boolean)
+  return [...new Set(titles)].slice(0, 30)
+}
+
+/** The day the briefing was last offered on this device, and whether it is offered at all. */
+const BRIEFING_DAY_KEY = 'miriam_briefing_day'
+const BRIEFING_OFF_KEY = 'miriam_briefing_off'
+/** Offered from the morning into early afternoon; later, the day is mostly done. */
+const OFFER_FROM_HOUR = 5
+const OFFER_UNTIL_HOUR = 14
+/** "Stop offering my briefing", "offer my briefing every morning". */
+const BRIEFING_OFF =
+  /\b(?:stop|don'?t|do\s+not|quit)\s+(?:offering|showing|giving)\s+(?:me\s+)?(?:my|the)\s+(?:morning\s+|daily\s+)?briefing\b|\bturn\s+off\s+(?:my|the)\s+(?:morning\s+|daily\s+)?briefing\b/i
+const BRIEFING_ON =
+  /\b(?:offer|show|give)\s+(?:me\s+)?(?:my|the)\s+briefing\s+(?:each|every)\s+(?:morning|day)\b|\bturn\s+on\s+(?:my|the)\s+(?:morning\s+|daily\s+)?briefing\b/i
+
 /** The time now: read when something is asked, never while drawing. */
 const timeNow = () => Date.now()
 /** Sent once a change she was asked for among others is done, for her to go on to the rest. */
@@ -217,6 +259,10 @@ export function MiriamButton() {
   const heardName = useRef('')
   // Her name said at the start of what was heard (taken off what is shown and sent).
   const saidHerName = useRef(false)
+  // How the request was heard: the recogniser's other guesses, and how sure it was.
+  const heardAs = useRef<Heard | null>(null)
+  // How she read it, when that differs from what was heard: shown under it.
+  const [understood, setUnderstood] = useState('')
   const asked = useRef('')
   // A chord sheet asked for: open, in the key asked for. Or, when none was
   // plain, the nearest titles offered — and the words and key it was asked
@@ -242,6 +288,8 @@ export function MiriamButton() {
   const [link, setLink] = useState<{ url: string; name: string } | null>(null)
   // The daily briefing, shown in place of an answer; and whether it is being read out.
   const [briefing, setBriefing] = useState<Briefing | null>(null)
+  // The first time the app is opened in a morning: the briefing offered.
+  const [offerBriefing, setOfferBriefing] = useState(false)
   const [reading, setReading] = useState(false)
   // Something just done that can be taken back at a tap: a reminder set.
   const [undo, setUndo] = useState<{ label: string; run: () => Promise<string> } | null>(null)
@@ -280,6 +328,23 @@ export function MiriamButton() {
     const sub = AppState.addEventListener('change', (s) => setAppActive(s !== 'background'))
     return () => sub.remove()
   }, [])
+  // The first time the app is opened in a morning, the day's briefing offered — once a day.
+  useEffect(() => {
+    if (!appActive) return
+    const hour = new Date().getHours()
+    if (hour < OFFER_FROM_HOUR || hour >= OFFER_UNTIL_HOUR) return
+    let cancelled = false
+    Promise.all([AsyncStorage.getItem(BRIEFING_DAY_KEY), AsyncStorage.getItem(BRIEFING_OFF_KEY)])
+      .then(([day, off]) => {
+        if (cancelled || off === '1' || day === todayStr()) return
+        AsyncStorage.setItem(BRIEFING_DAY_KEY, todayStr()).catch(() => {})
+        setOfferBriefing(true)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [appActive])
   // Group names, for the recogniser to expect in a request — and, with the
   // events, what a plain question about an event is answered from here.
   useEffect(() => {
@@ -339,6 +404,7 @@ export function MiriamButton() {
     setLink(null)
     setUndo(null)
     setBriefing(null)
+    setUnderstood('')
     setAskingBack(false)
     shownNote.current = ''
     stopListening()
@@ -370,6 +436,18 @@ export function MiriamButton() {
     }
     // Worked out here, from what the app has, when it plainly can be.
     const local = !again && !replying
+    // "Stop offering my briefing" / "offer my briefing every morning".
+    if (local && (BRIEFING_OFF.test(said) || BRIEFING_ON.test(said))) {
+      const off = BRIEFING_OFF.test(said)
+      AsyncStorage.setItem(BRIEFING_OFF_KEY, off ? '1' : '0').catch(() => {})
+      const text = off
+        ? 'Okay — I won’t offer your briefing in the mornings. Ask for it any time.'
+        : 'Okay — I’ll offer your briefing the first time you open the app each morning.'
+      setAnswer(text)
+      speak(text)
+      setStage('answered')
+      return
+    }
     // "What do I need to know today?": the daily briefing, put together here.
     if (local && briefingAsked(withoutHerName(said))) {
       await giveBriefing()
@@ -378,7 +456,7 @@ export function MiriamButton() {
     // "Remind me to go to Costco at 5 pm tomorrow": set here, at once.
     const reminder = local ? reminderAsked(withoutHerName(said), new Date()) : null
     if (reminder) {
-      await setReminder(reminder.text, reminder.at, reminder.spoken)
+      await setReminder(reminder.text, reminder.at, reminder.spoken, { repeat: reminder.repeat })
       return
     }
     // A tour asked for: the app's own, started here — nothing to work out.
@@ -524,7 +602,20 @@ export function MiriamButton() {
   const askClaude = async (said: string, typing: boolean) => {
     setStage('thinking')
     try {
-      const result = await askMiriam(said)
+      // How it was heard, when it is what was just said (not typed, nor her carrying on).
+      const heard = !typing && said === request.current ? (heardAs.current ?? undefined) : undefined
+      const result = await askMiriam(said, heard)
+      if (result.kind === 'answer') {
+        if (result.misheard?.length) rememberWords(result.misheard).catch(() => {})
+        const plain = (t: string) =>
+          t
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim()
+        if (result.understood && plain(result.understood) !== plain(said)) {
+          setUnderstood(result.understood)
+        }
+      }
       const followUp = result.kind === 'answer' && !!result.followUp
       useMiriamStore.getState().setAwaiting(followUp)
       if (result.kind === 'eventForm') {
@@ -553,7 +644,32 @@ export function MiriamButton() {
       // A reminder: theirs alone, set at once, with a tap to take it back.
       if (result.kind === 'confirm' && result.name === 'create_reminder') {
         const text = String(result.input.text ?? '').trim()
-        const at = new Date(String(result.input.when ?? ''))
+        const repeats = ['daily', 'weekdays', 'weekly', 'monthly']
+        const repeat = repeats.includes(String(result.input.repeat))
+          ? (String(result.input.repeat) as Repeat)
+          : undefined
+        // Tied to an event: from its start, here, so it can move with it.
+        const ev = result.input.event_key
+          ? useEventsStore.getState().getInstanceByKey(String(result.input.event_key))
+          : null
+        const minutesBefore = Math.max(0, Math.round(Number(result.input.minutes_before) || 0))
+        const start = ev ? clockOf(ev.startTime) : null
+        const at =
+          ev && start
+            ? new Date(
+                new Date(`${ev.date}T00:00:00`).getTime() +
+                  (start.h * 60 + start.min - minutesBefore) * 60_000
+              )
+            : new Date(String(result.input.when ?? ''))
+        const extra: ReminderExtra =
+          ev && start
+            ? {
+                eventKey: ev.instanceKey,
+                eventTemplateId: String(ev.templateId),
+                eventTitle: ev.title,
+                minutesBefore,
+              }
+            : { repeat }
         if (!text || isNaN(at.getTime()) || at.getTime() <= timeNow()) {
           const no =
             'I couldn’t tell when to remind you — try saying the time, like “at 5 PM tomorrow.”'
@@ -562,7 +678,7 @@ export function MiriamButton() {
           setStage('answered')
           return
         }
-        await setReminder(text, at, `to ${text.charAt(0).toLowerCase()}${text.slice(1)}`)
+        await setReminder(text, at, `to ${text.charAt(0).toLowerCase()}${text.slice(1)}`, extra)
         return
       }
       if (result.kind === 'confirm') {
@@ -653,14 +769,38 @@ export function MiriamButton() {
     setStage('answered')
   }
 
+  /** The morning offer taken up: the panel opened on the briefing. */
+  const openBriefing = async () => {
+    unlockSpeech()
+    setOfferBriefing(false)
+    stopWake()
+    sent.current = true
+    asked.current = 'What do I need to know today?'
+    setHeard('')
+    setAnswer(null)
+    setChoices([])
+    setSongGuesses([])
+    setPending(null)
+    setUndo(null)
+    setUnderstood('')
+    setOpen(true)
+    await giveBriefing()
+  }
+
   /** A reminder set for them, said back with when — and a tap to take it back. */
-  const setReminder = async (text: string, at: Date, spoken: string) => {
+  const setReminder = async (text: string, at: Date, spoken: string, extra: ReminderExtra = {}) => {
     const uid = useAuthStore.getState().profile?.uid
     if (!uid) return
     setStage('thinking')
     try {
-      const id = await useRemindersStore.getState().add(String(uid), text, at)
-      const said = `Okay — I’ll remind you ${reminderWhen(at, new Date())} ${spoken}.`
+      const id = await useRemindersStore.getState().add(String(uid), text, at, extra)
+      // A monthly one says when it starts; the others say it in how often.
+      const when = extra.repeat
+        ? extra.repeat === 'monthly'
+          ? `${repeatWhen(at, extra.repeat)}, starting ${reminderWhen(at, new Date())}`
+          : repeatWhen(at, extra.repeat)
+        : reminderWhen(at, new Date())
+      const said = `Okay — I’ll remind you ${when} ${spoken}.`
       setAnswer(said)
       speak(said)
       setUndo({
@@ -779,7 +919,7 @@ export function MiriamButton() {
   /** Confirmed: done, and said so. */
   const confirmAction = async () => {
     if (pending?.prepared.kind !== 'ready') return
-    const { run } = pending.prepared
+    const { run, undo: takeBack } = pending.prepared
     const more = !!pending.more
     unlockSpeech()
     setPending(null)
@@ -804,6 +944,8 @@ export function MiriamButton() {
     }
     setAnswer(said)
     speak(said)
+    // Done, and it can be taken back: a tap to, while it is shown.
+    if (done && takeBack) setUndo({ label: 'Undo', run: takeBack })
     setStage('answered')
     // One of several things asked: on to the next, with this one remembered as done.
     if (more && done) {
@@ -913,6 +1055,7 @@ export function MiriamButton() {
     setSongGuesses([])
     setPending(null)
     setLink(null)
+    setUnderstood('')
     setBriefing(null)
     setUndo(null)
     setWoken(byName)
@@ -921,6 +1064,7 @@ export function MiriamButton() {
     sent.current = false
     settled.current = ''
     saidHerName.current = false
+    heardAs.current = null
     request.current = ''
     setHeard('')
     if (!keepQuestion) {
@@ -970,8 +1114,15 @@ export function MiriamButton() {
               ...useChordSheetsStore.getState().chordSheets.map((c) => c.title),
               ...KEY_HINTS,
             ]
-          : [...groups.map((g) => g.name), ...users.map((u) => u.displayName).filter(Boolean)]
+          : [
+              ...APP_WORDS,
+              ...eventTitles(),
+              ...groups.map((g) => g.name),
+              ...users.map((u) => u.displayName).filter(Boolean),
+            ]
         ).slice(0, 100),
+        // The recogniser's next guesses too, for Claude to weigh against what makes sense.
+        maxAlternatives: 3,
         iosTaskHint: 'dictation',
         iosCategory: {
           category: 'playAndRecord',
@@ -989,9 +1140,21 @@ export function MiriamButton() {
   useSpeechRecognitionEvent('result', (e) => {
     if (!ownsSpeech(SPEECH_ID) || !requesting.current || sent.current) return
     const text = e.results[0]?.transcript ?? ''
+    const before = settled.current
     if (e.isFinal) settled.current = joined(settled.current, text)
     const all = e.isFinal ? settled.current : joined(settled.current, text)
     if (namesHer(all)) saidHerName.current = true
+    if (e.isFinal) {
+      const confidence = e.results[0]?.confidence
+      heardAs.current = {
+        alternatives: e.results
+          .slice(1, 3)
+          .map((r) => r.transcript?.trim())
+          .filter((t): t is string => !!t && t !== text.trim())
+          .map((t) => withoutHerName(joined(before, t))),
+        confidence: typeof confidence === 'number' && confidence >= 0 ? confidence : null,
+      }
+    }
     request.current = withoutHerName(all)
     setHeard(request.current)
     clearPause()
@@ -1270,7 +1433,12 @@ export function MiriamButton() {
                   <Text color={ink} fontSize="$3" fontStyle="italic" numberOfLines={3}>
                     “{heard}”
                   </Text>
-                ) : stage === 'listening' && !answer ? (
+                ) : null}
+                {understood && stage === 'answered' && !briefing ? (
+                  <Text color={soft} fontSize="$2">
+                    I took that as “{understood}”
+                  </Text>
+                ) : stage === 'listening' && !answer && !heard ? (
                   <Text color={soft} fontSize="$2" numberOfLines={2}>
                     {songHost()
                       ? 'Which song? — “Above All in E”'
@@ -1537,7 +1705,7 @@ export function MiriamButton() {
             ) : null}
 
             {/* Typing, and "Hey Miriam" on or off: kept out of the way once she hears something. */}
-            {!heard && stage !== 'thinking' ? (
+            {!heard && !briefing && stage !== 'thinking' ? (
               <XStack alignItems="center" justifyContent="space-between" gap="$3">
                 {stage !== 'typing' ? (
                   <Pressable onPress={typeInstead} accessibilityRole="button" style={styles.link}>
@@ -1591,6 +1759,57 @@ export function MiriamButton() {
               </XStack>
             ) : null}
           </YStack>
+        </View>
+      </FloatingLayer>
+      {/* The morning offer: small, at the top, gone at a tap. */}
+      <FloatingLayer
+        visible={offerBriefing && !open}
+        onRequestClose={() => setOfferBriefing(false)}
+      >
+        <View style={[styles.anchor, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+          <XStack
+            style={styles.bar}
+            backgroundColor={colors.surface}
+            borderColor={colors.primary}
+            borderWidth={1}
+            borderRadius="$4"
+            paddingHorizontal="$3"
+            paddingVertical="$2"
+            gap="$2.5"
+            alignItems="center"
+            width="94%"
+            maxWidth={560}
+          >
+            <MiriamBadge color={colors.primary} letter="white" pulsing={false} />
+            <YStack flex={1}>
+              <Text color={colors.text} fontWeight="700" fontSize="$4">
+                Good morning
+              </Text>
+              <Text color={colors.textMuted} fontSize="$2">
+                Want your briefing for today?
+              </Text>
+            </YStack>
+            <Pressable
+              onPress={openBriefing}
+              accessibilityRole="button"
+              style={[styles.small, { backgroundColor: colors.primary }]}
+            >
+              <Text color="white" fontWeight="700" fontSize="$2">
+                Show me
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setOfferBriefing(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Not today"
+              hitSlop={8}
+              style={styles.close}
+            >
+              <Text color={colors.textMuted} fontSize="$4">
+                ✕
+              </Text>
+            </Pressable>
+          </XStack>
         </View>
       </FloatingLayer>
       <VideoPlayerModal

@@ -11,6 +11,12 @@ import * as Notifications from 'expo-notifications'
 import { DynamicThemeProvider } from '@/theme/DynamicThemeProvider'
 import { useAuthStore } from '@/stores/authStore'
 import { takePendingNotificationLink } from '@/lib/notificationLink'
+import {
+  registerReminderButtons,
+  reminderButton,
+  REMINDER_DONE,
+  REMINDER_SNOOZE,
+} from '@/lib/reminderActions'
 import { registerServiceWorker } from '@/lib/serviceWorker'
 import { useThemeStore } from '@/stores/themeStore'
 import { ToastContainer } from '@/components/ui/Toast'
@@ -113,9 +119,27 @@ function NotificationRouter() {
 
   useEffect(() => {
     if (!lastResponse) return
-    // A tap, not a dismissal or a button on the notification itself.
-    if (lastResponse.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return
     if (!fbUser || !profile || !inApp) return
+    // A reminder's own buttons: Snooze and Done, done here, then to the Tasks tab.
+    const action = lastResponse.actionIdentifier
+    if (action === REMINDER_SNOOZE || action === REMINDER_DONE) {
+      const id = lastResponse.notification.request.identifier
+      if (handled.current === id) return
+      handled.current = id
+      const { reminderId } = lastResponse.notification.request.content.data as {
+        reminderId?: string
+      }
+      try {
+        Notifications.clearLastNotificationResponse()
+      } catch {
+        // Nothing to clear.
+      }
+      if (reminderId) reminderButton(action, reminderId).catch(() => {})
+      router.push('/assignments' as Parameters<typeof router.push>[0])
+      return
+    }
+    // A tap, not a dismissal or a button on the notification itself.
+    if (action !== Notifications.DEFAULT_ACTION_IDENTIFIER) return
 
     const data = lastResponse.notification.request.content.data as { link?: string }
     if (!data?.link) return
@@ -194,6 +218,7 @@ export default function RootLayout() {
     // at startup (independent of the deferred token registration). A throw
     // here must not take down the app.
     try {
+      registerReminderButtons()
       notifListener.current = Notifications.addNotificationReceivedListener((notification) => {
         console.log('Notification received:', notification)
       })

@@ -355,8 +355,34 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
             description:
               'True when `spoken` asks them for something you need to do what they asked: the app listens for their reply.',
           },
+          understood: {
+            type: 'string',
+            description:
+              'When you read a word differently from how it was heard: the request as you understood it ("create an event named Test"); otherwise "".',
+          },
+          misheard: {
+            type: 'array',
+            description:
+              'Words heard wrongly, and what was meant: [{heard: "even", meant: "event"}]; otherwise [].',
+            items: {
+              type: 'object',
+              properties: { heard: { type: 'string' }, meant: { type: 'string' } },
+              required: ['heard', 'meant'],
+              additionalProperties: false,
+            },
+          },
         },
-        required: ['spoken', 'open', 'target', 'section', 'choices', 'heard_name', 'follow_up'],
+        required: [
+          'spoken',
+          'open',
+          'target',
+          'section',
+          'choices',
+          'heard_name',
+          'follow_up',
+          'understood',
+          'misheard',
+        ],
         additionalProperties: false,
       },
     },
@@ -377,6 +403,7 @@ export type AppToolName =
   | 'read_settings'
   | 'app_guide'
   | 'read_set_lists'
+  | 'read_meeting_requests'
   | ActionName
 
 /**
@@ -417,6 +444,18 @@ export type ActionName =
   | 'create_set_list'
   // Their own
   | 'create_reminder'
+  | 'report_security'
+  | 'set_availability_range'
+  | 'meeting_request'
+  | 'change_my_name'
+  // Admins'
+  | 'delete_event'
+  | 'start_chat'
+  | 'post_livestream'
+  | 'take_down_livestream'
+  // Worship
+  | 'edit_set_list'
+  | 'notify_set_list'
 
 export const ACTIONS: readonly ActionName[] = [
   'create_user',
@@ -441,6 +480,16 @@ export const ACTIONS: readonly ActionName[] = [
   'add_to_set_list',
   'create_set_list',
   'create_reminder',
+  'report_security',
+  'set_availability_range',
+  'meeting_request',
+  'change_my_name',
+  'delete_event',
+  'start_chat',
+  'post_livestream',
+  'take_down_livestream',
+  'edit_set_list',
+  'notify_set_list',
   'send_message',
   'post_announcement',
   'set_task_status',
@@ -564,7 +613,7 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
     post_announcement: {
       name: 'post_announcement',
       description:
-        'Post an announcement to every member (admins only). To choose who sees it, or add a photo, they use the Announcements screen.' +
+        'Post an announcement (admins only): to every member, or only to the people and groups named (ids from people_and_groups). A photo is added on the Announcements screen.' +
         ACTS,
       strict: true,
       input_schema: {
@@ -576,6 +625,8 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
             type: 'string',
             description: 'YYYY-MM-DD: the last day it is shown, if they said; "" to keep it.',
           },
+          audience_people_ids: ids('Only these people see it; [] for everyone.'),
+          audience_group_ids: ids('Only these groups see it; [] for everyone.'),
         },
         required: ['title', 'body', 'last_day'],
         additionalProperties: false,
@@ -923,6 +974,7 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
       name: 'create_reminder',
       description:
         'Set a reminder for them, sent to their phone at the time ("remind me to go to Costco at 5 pm tomorrow") and shown in their tasks. ' +
+        'It can repeat ("every Sunday at 8": when is the first, repeat weekly), or be tied to an event ("an hour before Revival": its event_key and minutes_before, and it moves with the event). ' +
         'No time said: ask when, with follow_up. A day without a time: 9 AM. Set at once — they can take it back.',
       strict: true,
       input_schema: objectOf({
@@ -933,9 +985,156 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
         when: {
           type: 'string',
           description:
-            'Their local date and time, YYYY-MM-DDTHH:MM (24-hour), worked out from today’s date: "tomorrow at 5 pm" → the next day at 17:00.',
+            'Their local date and time, YYYY-MM-DDTHH:MM (24-hour), worked out from today’s date: "tomorrow at 5 pm" → the next day at 17:00. For a repeating one, the first time; "" when tied to an event.',
+        },
+        repeat: {
+          type: 'string',
+          enum: ['none', 'daily', 'weekdays', 'weekly', 'monthly'],
+        },
+        event_key: {
+          type: 'string',
+          description: 'The event it is before, from find_events; "" if none.',
+        },
+        minutes_before: {
+          type: 'integer',
+          description:
+            'How long before the event’s start: 60 for "an hour before"; 0 if not tied to one.',
         },
       }),
+    },
+    report_security: {
+      name: 'report_security',
+      description:
+        'Report a concern to security — something unsafe or someone needing help — as Report a Concern does: security and admins are told at once. ' +
+        'It needs where; if they didn’t say, ask with follow_up.' +
+        ACTS,
+      strict: true,
+      input_schema: objectOf({
+        description: { type: 'string', description: 'What is happening, in their words.' },
+        location: { type: 'string', description: 'Where: "the lobby", "parking lot B".' },
+        witnesses: { type: 'string', description: 'Anyone who saw it, if said; "".' },
+      }),
+    },
+    set_availability_range: {
+      name: 'set_availability_range',
+      description:
+        'Answer their availability for every event of theirs between two dates: "I’m out all of November", "I can’t do anything next week".' +
+        ACTS,
+      strict: true,
+      input_schema: objectOf({
+        from: { type: 'string', description: 'YYYY-MM-DD, the first day.' },
+        to: { type: 'string', description: 'YYYY-MM-DD, the last day.' },
+        status: { type: 'string', enum: ['yes', 'no', 'partial', 'tbd'] },
+        note: { type: 'string', description: 'What they said about it, if anything; "".' },
+      }),
+    },
+    meeting_request: {
+      name: 'meeting_request',
+      description:
+        'A meeting request sent to them (read_meeting_requests): say they’ll answer it ("claim"), or mark it answered ("handled").' +
+        ACTS,
+      strict: true,
+      input_schema: objectOf({
+        request_id: { type: 'string' },
+        action: { type: 'string', enum: ['claim', 'handled'] },
+      }),
+    },
+    change_my_name: {
+      name: 'change_my_name',
+      description: 'Change their own name as it shows in the app.' + ACTS,
+      strict: true,
+      input_schema: objectOf({ name: { type: 'string' } }),
+    },
+    delete_event: {
+      name: 'delete_event',
+      description:
+        'Cancel (delete) an event: one date of a repeating one ("cancel Sunday service on the 25th"), or the whole of it. Its key from find_events.' +
+        ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        event_key: { type: 'string' },
+        scope: {
+          type: 'string',
+          enum: ['date', 'all'],
+          description:
+            'date: only that date of a repeating event; all: every date. A one-time event is all.',
+        },
+      }),
+    },
+    start_chat: {
+      name: 'start_chat',
+      description:
+        'Start a new conversation with people (admins only), as Messages does; they are in it too.' +
+        ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        name: {
+          type: 'string',
+          description: 'A name for a group chat; "" for one with one person.',
+        },
+        people_ids: ids('Who is in it.'),
+      }),
+    },
+    post_livestream: {
+      name: 'post_livestream',
+      description:
+        'Put up the livestream card at the top of the app (admins only), replacing one that is up. It needs the YouTube link — if they didn’t give one, ask for it with follow_up (they can type it).' +
+        ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        title: {
+          type: 'string',
+          description: 'What it is: "Sunday Service — live"; "" for “We’re live”.',
+        },
+        youtube_url: { type: 'string' },
+        hours: { type: 'integer', description: 'How long it stays up; 0 for the usual 6.' },
+      }),
+    },
+    take_down_livestream: {
+      name: 'take_down_livestream',
+      description: 'Take down the livestream card that is up (admins only).' + ADMINS,
+      strict: true,
+      input_schema: objectOf({}),
+    },
+    edit_set_list: {
+      name: 'edit_set_list',
+      description:
+        'Change a set list (id from read_set_lists): take songs out, move them ("move Way Maker to the top" is position 1), or change their key. Songs by name, as the set list has them.' +
+        ACTS,
+      strict: true,
+      input_schema: objectOf({
+        set_list_id: { type: 'string' },
+        remove: ids('Songs to take out.'),
+        move: {
+          type: 'array',
+          items: objectOf({
+            title: { type: 'string' },
+            position: { type: 'integer', description: '1 for the first; past the end for last.' },
+          }),
+        },
+        keys: {
+          type: 'array',
+          items: objectOf({
+            title: { type: 'string' },
+            key: { type: 'string', description: 'Like "D", "Bb".' },
+          }),
+        },
+      }),
+    },
+    notify_set_list: {
+      name: 'notify_set_list',
+      description:
+        'Tell the worship team about a set list, as when one is made: everyone on worship notified, and those on its event asked to acknowledge it.' +
+        ACTS,
+      strict: true,
+      input_schema: objectOf({ set_list_id: { type: 'string' } }),
+    },
+    read_meeting_requests: {
+      name: 'read_meeting_requests',
+      description:
+        'Meeting requests sent to them that are still open: who from, what they wrote, when they are free, and who has said they’ll answer it.',
+      strict: true,
+      input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
     },
     read_set_lists: {
       name: 'read_set_lists',

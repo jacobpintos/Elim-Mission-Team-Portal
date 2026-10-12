@@ -11,8 +11,13 @@ export interface ReminderAsk {
   text: string
   /** As it will be said back: "to go to Costco", "about the meeting". */
   spoken: string
+  /** The first time; for a repeating one, the next of it. */
   at: Date
+  repeat?: Repeat
 }
+
+/** How often a reminder comes round (functions/src/push/reminderTime). */
+export type Repeat = 'daily' | 'weekdays' | 'weekly' | 'monthly'
 
 const ASKED =
   /^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+)?(?:remind\s+me|set\s+(?:a|me\s+a)\s+reminder|add\s+a\s+reminder|make\s+a\s+reminder|create\s+a\s+reminder)(?:\s+for\s+me)?\s*(.*)$/i
@@ -91,6 +96,30 @@ export function reminderAsked(said: string, now: Date): ReminderAsk | null {
     return found && found.map((x) => (x ?? '').toLowerCase())
   }
 
+  // "Every day at 8", "every Sunday", "every weekday morning", "every month", "daily".
+  let repeat: Repeat | undefined
+  let everyDay = -1
+  let partDefault: number | null = null
+  const every = cut(
+    /\s(?:every|each)\s+(day|morning|afternoon|evening|night|weekday|week|month|sunday|monday|tuesday|wednesday|thursday|friday|saturday)s?(?=\s)/i
+  )
+  if (every) {
+    const w = every[1]
+    if (w === 'weekday') repeat = 'weekdays'
+    else if (w === 'week') repeat = 'weekly'
+    else if (w === 'month') repeat = 'monthly'
+    else if (WEEKDAYS.includes(w)) {
+      repeat = 'weekly'
+      everyDay = WEEKDAYS.indexOf(w)
+    } else {
+      repeat = 'daily'
+      if (w !== 'day') partDefault = PARTS[w]
+    }
+  } else {
+    const plain = cut(/\s(daily|weekly|monthly)(?=\s)/i)
+    if (plain) repeat = plain[1] as Repeat
+  }
+
   // "In 20 minutes", "in an hour", "in half an hour", "in 2 days".
   const rel = cut(
     /\s(?:in|after)\s+(half\s+an?\s+hour|\d+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|forty-five|fifty)\s*(minutes?|mins?|hours?|hrs?|days?)?(?=\s)/i
@@ -108,7 +137,9 @@ export function reminderAsked(said: string, now: Date): ReminderAsk | null {
   if (!at) {
     // The day.
     let day: Date | null = null
-    if (cut(/\s(?:the\s+)?day\s+after\s+tomorrow(?=\s)/i)) day = atDay(now, 2)
+    // "Every Sunday": the next one, today if its time is still to come.
+    if (everyDay >= 0) day = atDay(now, (everyDay - now.getDay() + 7) % 7)
+    else if (cut(/\s(?:the\s+)?day\s+after\s+tomorrow(?=\s)/i)) day = atDay(now, 2)
     else if (cut(/\stomorrow(?=\s)/i)) day = atDay(now, 1)
     else if (cut(/\stoday(?=\s)/i)) day = atDay(now, 0)
     else {
@@ -163,7 +194,8 @@ export function reminderAsked(said: string, now: Date): ReminderAsk | null {
       if (hour === null) hour = PARTS[part[1]]
       else if (!meridiem && part[1] !== 'morning' && hour < 12) meridiem = 'pm'
     }
-    if (hour === null && !day) return null
+    if (hour === null && partDefault !== null) hour = partDefault
+    if (hour === null && !day && !repeat) return null
     if (hour === null) hour = 9
 
     const on = (base: Date, h: number) => {
@@ -176,15 +208,28 @@ export function reminderAsked(said: string, now: Date): ReminderAsk | null {
       const h = meridiem ? h24(hour, meridiem) : hour
       at = on(day ?? atDay(now, 0), h)
       if (!day && at <= now) at = on(atDay(now, 1), h)
-    } else if (day) {
-      // A day, and an hour said without am or pm: as it would be meant.
-      at = on(day, hour >= 7 && hour <= 11 ? hour : h24(hour, 'pm'))
+    } else if (day || repeat) {
+      // A day (or every day), and an hour said without am or pm: as it would be meant.
+      at = on(day ?? atDay(now, 0), hour >= 7 && hour <= 11 ? hour : h24(hour, 'pm'))
     } else {
       // Today, the next time that hour comes round.
       const options = [on(atDay(now, 0), hour % 12), on(atDay(now, 0), (hour % 12) + 12)]
       at =
         options.find((d) => d > now) ??
         on(atDay(now, 1), hour >= 7 && hour <= 11 ? hour : h24(hour, 'pm'))
+    }
+  }
+  if (at && repeat) {
+    // The first of a repeating one still to come: the next of that weekday,
+    // else the next day — and it repeats from there.
+    const step = repeat === 'weekly' && everyDay >= 0 ? 7 : 1
+    for (let i = 0; i < 14 && at <= now; i++) {
+      at = new Date(at)
+      at.setDate(at.getDate() + step)
+    }
+    while (repeat === 'weekdays' && (at.getDay() === 0 || at.getDay() === 6)) {
+      at = new Date(at)
+      at.setDate(at.getDate() + 1)
     }
   }
   if (!at || at <= now) return null
@@ -199,7 +244,7 @@ export function reminderAsked(said: string, now: Date): ReminderAsk | null {
   const text = rest.charAt(0).toUpperCase() + rest.slice(1)
   const yours = rest.replace(/\bmy\b/gi, 'your').replace(/\bme\b/gi, 'you')
   const about = /^(?:about|of)$/i.test(lead?.[1] ?? '')
-  return { text, spoken: `${about ? 'about' : 'to'} ${yours}`, at }
+  return { text, spoken: `${about ? 'about' : 'to'} ${yours}`, at, ...(repeat ? { repeat } : {}) }
 }
 
 /** When, as said back: "today at 5 PM", "tomorrow at 9 AM", "on Friday at 6:30 PM", "in 20 minutes". */
@@ -215,4 +260,26 @@ export function reminderWhen(at: Date, now: Date): string {
   if (days === 1) return `tomorrow at ${time}`
   if (days < 7) return `on ${at.toLocaleDateString('en-US', { weekday: 'long' })} at ${time}`
   return `on ${at.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} at ${time}`
+}
+
+/** A repeating reminder's when, as said: "every Sunday at 8 AM", "every weekday at 7 AM". */
+export function repeatWhen(at: Date, repeat: Repeat): string {
+  const time = at.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: at.getMinutes() ? '2-digit' : undefined,
+  })
+  if (repeat === 'daily') return `every day at ${time}`
+  if (repeat === 'weekdays') return `every weekday at ${time}`
+  if (repeat === 'weekly')
+    return `every ${at.toLocaleDateString('en-US', { weekday: 'long' })} at ${time}`
+  const d = at.getDate()
+  const th =
+    d % 10 === 1 && d !== 11
+      ? 'st'
+      : d % 10 === 2 && d !== 12
+        ? 'nd'
+        : d % 10 === 3 && d !== 13
+          ? 'rd'
+          : 'th'
+  return `on the ${d}${th} of every month at ${time}`
 }

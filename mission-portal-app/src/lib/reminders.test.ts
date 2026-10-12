@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reminderAsked, reminderWhen } from './reminders'
+import { reminderAsked, reminderWhen, repeatWhen } from './reminders'
 
 // Monday, October 12 2026, 3:00 PM on this device.
 const now = new Date(2026, 9, 12, 15, 0)
@@ -53,5 +53,41 @@ describe('when, as said back', () => {
     expect(reminderWhen(new Date(2026, 9, 12, 17, 0), now)).toBe('today at 5 PM')
     expect(reminderWhen(new Date(2026, 9, 13, 17, 30), now)).toBe('tomorrow at 5:30 PM')
     expect(reminderWhen(new Date(2026, 9, 16, 9, 0), now)).toBe('on Friday at 9 AM')
+  })
+})
+
+describe('repeating reminders', () => {
+  const rep = (said: string) => {
+    const r = reminderAsked(said, now)
+    return r && { text: r.text, repeat: r.repeat, at: r.at.toString().slice(0, 21) }
+  }
+  it('hears how often, and starts at the next one', () => {
+    expect(rep('remind me every Sunday at 8 am to pack the merch table')).toEqual({
+      text: 'Pack the merch table',
+      repeat: 'weekly',
+      at: at(18, 8),
+    })
+    // Monday at 3 PM: 8 AM today has gone, so tomorrow.
+    expect(rep('remind me every day at 8 to read my Bible')).toMatchObject({
+      repeat: 'daily',
+      at: at(13, 8),
+    })
+    expect(rep('remind me every weekday morning to check email')).toMatchObject({
+      repeat: 'weekdays',
+      at: at(13, 9),
+    })
+    expect(rep('remind me every month to pay rent')).toMatchObject({
+      repeat: 'monthly',
+      at: at(13, 9),
+    })
+    // Monday at 3 PM, "every Monday at 5 pm": today.
+    expect(rep('remind me every monday at 5 pm to call home')?.at).toBe(at(12, 17))
+  })
+  it('says it back', () => {
+    expect(repeatWhen(new Date(2026, 9, 18, 8, 0), 'weekly')).toBe('every Sunday at 8 AM')
+    expect(repeatWhen(new Date(2026, 9, 13, 7, 30), 'weekdays')).toBe('every weekday at 7:30 AM')
+    expect(repeatWhen(new Date(2026, 10, 1, 9, 0), 'monthly')).toBe(
+      'on the 1st of every month at 9 AM'
+    )
   })
 })

@@ -19,7 +19,9 @@ import { useMiriamStore } from '@/stores/miriamStore'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
 import { allInstances } from '@/lib/events'
 import { AVAIL_LABELS } from '@/lib/availability'
-import { isAdmin, isGuest, isWorship, visibleTabs } from '@/lib/roles'
+import { isAdmin, isGuest, isSecurity, isWorship, visibleTabs } from '@/lib/roles'
+import { useSecurityStore } from '@/stores/securityStore'
+import { assignedTo, type Group } from '../../../functions/src/miriam/data'
 import { roomName, roomsFor } from '@/lib/miriamAppData'
 import {
   foodItemFor,
@@ -38,8 +40,9 @@ import { keyLabel } from '@/lib/nashvilleNumbers'
 import { notifyAssignees } from '@/lib/taskNotifications'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
-import { useMusicStore } from '@/stores/musicStore'
+import { extractYouTubeId, useMusicStore } from '@/stores/musicStore'
 import { useWorshipStore } from '@/stores/worshipStore'
+import { announceSetList } from '@/features/worship/announceSetList'
 import { useIssuesStore } from '@/stores/issuesStore'
 import { useKaizenStore } from '@/stores/kaizenStore'
 import type { ChordSheet } from '@/types/chordSheet'
@@ -48,7 +51,17 @@ import type { IssueCategory, KaizenCard } from '@/types/operations'
 import { FD } from '@/lib/format'
 import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
-import { sendMessageAs } from '@/stores/messagesStore'
+import { sendMessageAs, useMessagesStore } from '@/stores/messagesStore'
+import { useLivestreamStore } from '@/stores/livestreamStore'
+import { useMeetingRequestsStore } from '@/stores/meetingRequestsStore'
+import {
+  activeStream,
+  DEFAULT_STREAM_HOURS,
+  expiryFrom,
+  MAX_STREAM_HOURS,
+  type Livestream,
+} from '@/lib/livestream'
+import type { MeetingRequest } from '@/types/meeting'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -80,6 +93,8 @@ export type Prepared =
       destructive?: boolean
       /** Does it; what to say when it is done. */
       run: () => Promise<string>
+      /** Takes it back, once done: offered for a little while after. */
+      undo?: () => Promise<string>
     }
   /** Changes nothing — opens a form to finish — so done straight away. */
   | { kind: 'open'; run: () => Promise<string> }
@@ -153,17 +168,42 @@ async function postAnnouncement(profile: UserProfile, input: Record<string, unkn
   const lastDay = String(input.last_day ?? '')
   if (!title || !body) return cannot('An announcement needs a title and what it says.')
   const until = /^\d{4}-\d{2}-\d{2}$/.test(lastDay) ? lastDay : ''
+  // Only some: those named, and everyone in the groups named (as the screen's picker gives them).
+  const groupIds = idList(input.audience_group_ids)
+  const groupMembers = (
+    await Promise.all(
+      groupIds.map(async (g) =>
+        (((await getDoc(doc(db, 'groups', g))).data()?.members ?? []) as unknown[]).map(String)
+      )
+    )
+  ).flat()
+  const audience = [...new Set([...idList(input.audience_people_ids), ...groupMembers])]
+  if ((groupIds.length || idList(input.audience_people_ids).length) && audience.length === 0) {
+    return cannot('No one is in the groups named.')
+  }
+  const groupNames_ = groupIds.map((g) => groupNames().get(g) ?? 'a group')
   return {
     kind: 'ready',
-    title: 'Post this announcement to every member?',
-    details: [title, body, ...(until ? [`Shown until ${day(until)}`] : [])],
+    title: audience.length
+      ? `Post this announcement to ${audience.length === 1 ? 'one person' : `${audience.length} people`}?`
+      : 'Post this announcement to every member?',
+    details: [
+      title,
+      body,
+      ...(audience.length
+        ? [
+            `To: ${[...groupNames_, ...idList(input.audience_people_ids).map((u) => names().get(u) ?? 'someone')].join(', ')}`,
+          ]
+        : []),
+      ...(until ? [`Shown until ${day(until)}`] : []),
+    ],
     confirm: 'Post',
     run: async () => {
       await useAnnounceStore.getState().createAnnouncement({
         title,
         body,
         isPublic: false,
-        audience: [],
+        audience,
         attachment: null,
         by: String(profile.uid),
         ts: Date.now(),
@@ -201,6 +241,10 @@ async function setTaskStatus(profile: UserProfile, input: Record<string, unknown
       await useTasksStore.getState().setStatus(task.id, status as Task['status'])
       return 'Done.'
     },
+    undo: async () => {
+      await useTasksStore.getState().setStatus(task.id, task.status)
+      return `“${task.title}” is ${TASK_WORDS[task.status] ?? task.status} again.`
+    },
   } satisfies Prepared
 }
 
@@ -210,6 +254,11 @@ async function setAvailability(profile: UserProfile, input: Record<string, unkno
   const ev = await eventByKey(String(input.event_key ?? ''))
   if (!ev) return cannot('I couldn’t find that event.')
   const note = String(input.note ?? '').trim()
+  // As it was, for Undo.
+  const before = (
+    ((await getDoc(doc(db, 'avail', ev.instanceKey.replace(/\//g, '_')))).data()?.responses ??
+      {}) as Record<string, AvailResponse>
+  )[String(profile.uid)]
   return {
     kind: 'ready',
     title: `Answer “${AVAIL_LABELS[status]}” for ${ev.title}?`,
@@ -221,6 +270,12 @@ async function setAvailability(profile: UserProfile, input: Record<string, unkno
     run: async () => {
       await useEventsStore.getState().setAvail(ev, String(profile.uid), status, note)
       return 'Done — your availability is in.'
+    },
+    undo: async () => {
+      await useEventsStore
+        .getState()
+        .setAvail(ev, String(profile.uid), before?.status ?? null, before?.note ?? '')
+      return before ? 'Your answer is back as it was.' : 'Your answer is taken back.'
     },
   } satisfies Prepared
 }
@@ -734,6 +789,8 @@ async function createTasks(profile: UserProfile, input: Record<string, unknown>)
   }
   if (tasks.length === 0) return cannot('There were no tasks to assign.')
   const uid = String(profile.uid)
+  // The tasks made, for Undo.
+  const made: (string | number)[] = []
   return {
     kind: 'ready',
     title:
@@ -744,6 +801,7 @@ async function createTasks(profile: UserProfile, input: Record<string, unknown>)
     ),
     confirm: 'Assign',
     run: async () => {
+      made.length = 0
       for (const t of tasks) {
         const id = await useTasksStore.getState().createTask({
           title: t.title,
@@ -755,8 +813,13 @@ async function createTasks(profile: UserProfile, input: Record<string, unknown>)
           ...(t.event ? { evTemplateId: t.event.templateId, evDate: t.event.date } : {}),
         })
         notifyAssignees(t.assignees, t.title, id)
+        made.push(id)
       }
       return tasks.length === 1 ? 'Assigned.' : `Done — ${tasks.length} tasks assigned.`
+    },
+    undo: async () => {
+      for (const id of made) await useTasksStore.getState().deleteTask(id)
+      return made.length === 1 ? 'That task is gone.' : `Those ${made.length} tasks are gone.`
     },
   } satisfies Prepared
 }
@@ -820,6 +883,13 @@ async function updateTask(profile: UserProfile, input: Record<string, unknown>) 
       if (added.length) notifyAssignees(added, patch.title ?? task.title, task.id)
       return 'Saved.'
     },
+    undo: async () => {
+      const back = Object.fromEntries(
+        Object.keys(patch).map((k) => [k, (task as unknown as Record<string, unknown>)[k] ?? null])
+      ) as Partial<Task>
+      await useTasksStore.getState().updateTask(task.id, back)
+      return 'The task is back as it was.'
+    },
   } satisfies Prepared
 }
 
@@ -865,7 +935,8 @@ async function setCarpool(profile: UserProfile, input: Record<string, unknown>) 
     }
   })
   const ref = doc(db, 'carpool', `${ev.templateId}_${ev.date}`)
-  const had = (((await getDoc(ref)).data()?.cars ?? []) as unknown[]).length
+  const carsBefore = ((await getDoc(ref)).data()?.cars ?? []) as unknown[]
+  const had = carsBefore.length
   return {
     kind: 'ready',
     title: `Set the cars for ${ev.title}?`,
@@ -882,6 +953,10 @@ async function setCarpool(profile: UserProfile, input: Record<string, unknown>) 
     run: async () => {
       await setDoc(ref, { cars })
       return 'Saved.'
+    },
+    undo: async () => {
+      await setDoc(ref, { cars: carsBefore })
+      return 'The cars are back as they were.'
     },
   } satisfies Prepared
 }
@@ -981,6 +1056,16 @@ async function voteKaizen(profile: UserProfile, input: Record<string, unknown>) 
       })
       return vote ? 'Voted.' : 'Your vote is taken back.'
     },
+    undo: async () => {
+      const now = (((await getDoc(snap.ref)).data()?.upvotes ?? []) as (string | number)[]).filter(
+        (u) => String(u) !== uid
+      )
+      await updateDoc(snap.ref, {
+        upvotes: vote ? now : [...now, uid],
+        updatedAt: serverTimestamp(),
+      })
+      return vote ? 'Your vote is taken back.' : 'Your vote is back.'
+    },
   } satisfies Prepared
 }
 
@@ -1057,6 +1142,14 @@ async function addToSetList(profile: UserProfile, input: Record<string, unknown>
       await useWorshipStore.getState().updateSetList(snap.id, { songs: now })
       return 'Added.'
     },
+    undo: async () => {
+      const now = ((await getDoc(ref)).data()?.songs ?? []) as SetListSong[]
+      const added = new Set(songs.map((x) => x.id))
+      await useWorshipStore
+        .getState()
+        .updateSetList(snap.id, { songs: now.filter((x) => !added.has(x.id)) })
+      return 'Taken back out.'
+    },
   } satisfies Prepared
 }
 
@@ -1077,14 +1170,404 @@ async function createSetList(profile: UserProfile, input: Record<string, unknown
     ],
     confirm: 'Make it',
     run: async () => {
-      await useWorshipStore.getState().createSetList({
+      const data = {
         title,
         eventTemplateId: ev?.templateId ?? null,
         eventDate: ev?.date ?? null,
-        songs,
+      }
+      const id = await useWorshipStore
+        .getState()
+        .createSetList({ ...data, songs, createdBy: String(profile.uid) })
+      // Told to the worship team, as one made on the Worship screen is.
+      await announceSetList(id, data, String(profile.uid))
+      return `Done — the set list “${title}” is made, and the worship team told.`
+    },
+  } satisfies Prepared
+}
+
+// --- Security, events, availability ------------------------------------------------
+
+/** A concern reported to security, as the drawer's Report a Concern does: saved, and security and admins told. */
+async function reportSecurity(profile: UserProfile, input: Record<string, unknown>) {
+  const description = String(input.description ?? '').trim()
+  const location = String(input.location ?? '').trim()
+  const witnesses = String(input.witnesses ?? '').trim()
+  if (!description) return cannot('A report needs what is happening.')
+  if (!location) return cannot('Where is it? Say where, and I’ll report it.')
+  return {
+    kind: 'ready',
+    title: 'Report this to security?',
+    details: [`Where: ${location}`, description, ...(witnesses ? [`Witnesses: ${witnesses}`] : [])],
+    confirm: 'Report now',
+    run: async () => {
+      await useSecurityStore.getState().createReport({
+        description,
+        location,
+        witnesses,
+        reportedBy: String(profile.uid),
+        reporterName: profile.displayName ?? 'Unknown',
+      })
+      // Security and admins, once each (app/(app)/_layout: securityReportAudience).
+      const send = httpsCallable(functions, 'sendNotification')
+      const audience = useUsersStore
+        .getState()
+        .users.filter((u) => isSecurity(u) || u.roles?.includes('admin'))
+      const short = description.length > 80 ? `${description.slice(0, 80)}…` : description
+      await Promise.all(
+        [...new Set(audience.map((u) => String(u.uid)))].map((uid) =>
+          send({
+            uid,
+            type: 'securityReport',
+            data: { message: `🚨 New incident at ${location}: ${short}` },
+          }).catch(() => {})
+        )
+      )
+      return 'Reported — security has been told.'
+    },
+  } satisfies Prepared
+}
+
+/** An event deleted — the whole of it, or one date of a repeating one — as its form deletes it. */
+async function deleteEvent(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const ev = await eventByKey(String(input.event_key ?? ''))
+  if (!ev) return cannot('I couldn’t find that event.')
+  const oneDate = input.scope === 'date' && !!ev.isRec
+  return {
+    kind: 'ready',
+    title: oneDate
+      ? `Remove ${ev.title} on ${day(ev.date)}?`
+      : `Delete “${ev.title}”${ev.isRec ? ' and every date of it' : ''}?`,
+    details: oneDate
+      ? ['Only this date. The rest of the series stays.']
+      : [`${day(ev.date)}${ev.isRec ? ' — and every other date' : ''}`, 'This can’t be undone.'],
+    confirm: oneDate ? 'Remove this date' : 'Delete',
+    destructive: true,
+    run: async () => {
+      const events = useEventsStore.getState()
+      if (oneDate) await events.setOverride(ev.instanceKey, { deleted: true } as never)
+      else await events.deleteEvent(ev.templateId)
+      await audit(
+        oneDate ? 'event.occurrenceRemoved' : 'event.deleted',
+        oneDate ? `Removed ${ev.date} of "${ev.title}"` : `Deleted event "${ev.title}"`,
+        by(profile)
+      )
+      return oneDate ? 'Removed.' : 'Deleted.'
+    },
+    // One date of a series comes back; a whole event deleted does not.
+    ...(oneDate
+      ? {
+          undo: async () => {
+            await useEventsStore.getState().setOverride(ev.instanceKey, { deleted: false } as never)
+            return `${ev.title} on ${day(ev.date)} is back.`
+          },
+        }
+      : {}),
+  } satisfies Prepared
+}
+
+const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+/** The most events one availability answer covers. */
+const MAX_RANGE_EVENTS = 40
+
+/** One answer for every event of theirs between two dates: "I'm out all of November". */
+async function setAvailabilityRange(profile: UserProfile, input: Record<string, unknown>) {
+  const status = String(input.status ?? '') as AvailResponse['status']
+  if (!(status in AVAIL_LABELS)) return cannot('That isn’t an answer availability takes.')
+  if (!isDay(input.from) || !isDay(input.to) || input.to < input.from) {
+    return cannot('I couldn’t tell which dates you meant.')
+  }
+  const note = String(input.note ?? '').trim()
+  const uid = String(profile.uid)
+  const { templates, overrides } = useEventsStore.getState()
+  const groups = useGroupsStore.getState().groups as unknown as Group[]
+  const events = allInstances(templates, overrides, input.from, input.to)
+    .filter((ev) => assignedTo(ev as never, groups).has(uid))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, MAX_RANGE_EVENTS)
+  if (events.length === 0) {
+    return cannot(`You’re not on any events from ${day(input.from)} to ${day(input.to)}.`)
+  }
+  return {
+    kind: 'ready',
+    title: `Answer “${AVAIL_LABELS[status]}” for ${events.length === 1 ? 'this event' : `these ${events.length} events`}?`,
+    details: [
+      ...events.map((ev) => `${ev.title} — ${day(ev.date)}`),
+      ...(note ? [`Note: ${note}`] : []),
+    ],
+    confirm: 'Answer',
+    run: async () => {
+      for (const ev of events) await useEventsStore.getState().setAvail(ev, uid, status, note)
+      return events.length === 1
+        ? 'Done — your availability is in.'
+        : `Done — answered for ${events.length} events.`
+    },
+  } satisfies Prepared
+}
+
+/** A song in a set list by its name as said: the same, else the one it is plainly closest to. */
+function songIn(songs: SetListSong[], said: string): number {
+  const asked = said.trim().toLowerCase()
+  const exact = songs.findIndex((s) => s.name.trim().toLowerCase() === asked)
+  if (exact >= 0) return exact
+  const near = closestTitles(
+    songs.map((s, i) => ({ title: s.name, i })),
+    said,
+    2
+  )
+  return near.length === 1 ? near[0].i : -1
+}
+
+/** A set list changed: songs taken out, moved, or given another key. */
+async function editSetList(profile: UserProfile, input: Record<string, unknown>) {
+  const no = worshipOnly(profile)
+  if (no) return no
+  const ref = doc(db, 'setLists', String(input.set_list_id ?? '') || '-')
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return cannot('I couldn’t find that set list.')
+  const list = snap.data() as SetList
+  const list_ = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : [])
+  const removes = list_(input.remove).map((r) => String(r?.title ?? r ?? ''))
+  const keys = list_(input.keys).map((k) => ({
+    title: String(k.title ?? ''),
+    key: setListKey(String(k.key ?? '')),
+  }))
+  const moves = list_(input.move).map((m) => ({
+    title: String(m.title ?? ''),
+    position: Math.round(Number(m.position)),
+  }))
+
+  /** The changes made to a set of songs; or what couldn't be found. */
+  const apply = (before: SetListSong[]) => {
+    let songs = before.slice()
+    const missing: string[] = []
+    const details: string[] = []
+    for (const t of removes) {
+      const i = songIn(songs, t)
+      if (i < 0) missing.push(t)
+      else {
+        details.push(`Take out ${songs[i].name}`)
+        songs = songs.filter((_, j) => j !== i)
+      }
+    }
+    for (const k of keys) {
+      const i = songIn(songs, k.title)
+      if (i < 0 || !k.key) missing.push(k.title)
+      else {
+        details.push(
+          `${songs[i].name}: ${songs[i].key ? `${keyLabel(songs[i].key)} → ` : ''}${keyLabel(k.key)}`
+        )
+        songs[i] = { ...songs[i], key: k.key }
+      }
+    }
+    for (const m of moves) {
+      const i = songIn(songs, m.title)
+      if (i < 0 || !(m.position >= 1)) missing.push(m.title)
+      else {
+        const [song] = songs.splice(i, 1)
+        const to = Math.min(m.position - 1, songs.length)
+        songs.splice(to, 0, song)
+        details.push(
+          `Move ${song.name} to ${to === 0 ? 'the top' : to === songs.length - 1 ? 'the end' : `number ${to + 1}`}`
+        )
+      }
+    }
+    return { songs, missing, details }
+  }
+  const { songs, missing, details } = apply(list.songs ?? [])
+  if (missing.length) {
+    return cannot(
+      `I couldn’t find ${listed(missing.map((m) => `“${m}”`))} on ${list.title}. It has: ${(list.songs ?? []).map((s) => s.name).join(', ')}.`
+    )
+  }
+  if (details.length === 0) return cannot('Nothing to change on it.')
+  // As it was just before the change, for Undo.
+  let songsBefore: SetListSong[] | null = null
+  return {
+    kind: 'ready',
+    title: `Change “${list.title}”?`,
+    details: [...details, 'Then:', ...songs.map((s, i) => songLine(s, i + 1))],
+    confirm: 'Save',
+    run: async () => {
+      // Made to the set as it is now, in case it changed meanwhile.
+      const now = ((await getDoc(ref)).data()?.songs ?? []) as SetListSong[]
+      const again = apply(now)
+      if (again.missing.length) return 'The set list changed meanwhile — ask me again.'
+      songsBefore = now
+      await useWorshipStore.getState().updateSetList(snap.id, { songs: again.songs })
+      return 'Saved.'
+    },
+    undo: async () => {
+      if (!songsBefore) return 'Nothing to undo.'
+      await useWorshipStore.getState().updateSetList(snap.id, { songs: songsBefore })
+      return 'The set list is back as it was.'
+    },
+  } satisfies Prepared
+}
+
+/** The worship team told about a set list, as when one is made (features/worship/announceSetList). */
+async function notifySetList(profile: UserProfile, input: Record<string, unknown>) {
+  const no = worshipOnly(profile)
+  if (no) return no
+  const snap = await getDoc(doc(db, 'setLists', String(input.set_list_id ?? '') || '-'))
+  if (!snap.exists()) return cannot('I couldn’t find that set list.')
+  const list = snap.data() as SetList
+  return {
+    kind: 'ready',
+    title: `Tell the worship team about “${list.title}”?`,
+    details: [
+      ...(list.eventDate ? [day(list.eventDate)] : []),
+      'Everyone on worship is notified; those on its event are asked to acknowledge it.',
+    ],
+    confirm: 'Notify',
+    run: async () => {
+      await announceSetList(snap.id, list, String(profile.uid))
+      return 'Done — the worship team has been told.'
+    },
+  } satisfies Prepared
+}
+
+const listed = (xs: string[]) =>
+  xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`
+
+// --- Chats, the livestream, meeting requests, their name -----------------------------
+
+/** A new conversation, as an admin makes one on the Messages screen; them in it too. */
+async function startChat(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const uid = String(profile.uid)
+  const people = idList(input.people_ids).filter((p) => p !== uid)
+  if (people.length === 0) return cannot('Who should be in it?')
+  const name = String(input.name ?? '').trim()
+  return {
+    kind: 'ready',
+    title: name ? `Start the chat “${name}”?` : `Start a chat with ${listNames(people)}?`,
+    details: [`With ${listNames(people)}, and you`],
+    confirm: 'Start it',
+    run: async () => {
+      await useMessagesStore.getState().createRoom(name, [uid, ...people])
+      return 'Started — it’s in your messages.'
+    },
+  } satisfies Prepared
+}
+
+/** The livestream card at the top of the app, as Admin posts it (features/livestream). */
+async function postLivestream(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const title = String(input.title ?? '').trim() || 'We’re live'
+  const url = String(input.youtube_url ?? '').trim()
+  if (!extractYouTubeId(url))
+    return cannot('I need the YouTube link of the stream — type it or paste it.')
+  const hours = Math.min(
+    Math.max(Math.round(Number(input.hours)) || DEFAULT_STREAM_HOURS, 1),
+    MAX_STREAM_HOURS
+  )
+  const streams = (await getDocs(collection(db, 'livestreams'))).docs.map(
+    (d) => ({ ...(d.data() as Livestream), id: d.id }) as Livestream
+  )
+  const live = activeStream(streams)
+  return {
+    kind: 'ready',
+    title: live ? 'Replace the livestream that’s up?' : 'Put up the livestream?',
+    details: [title, url, `Up for ${hours} ${hours === 1 ? 'hour' : 'hours'}`],
+    confirm: 'Post',
+    run: async () => {
+      const now = Date.now()
+      // The one up replaced, not one beside it (StreamCardModal does the same).
+      await useLivestreamStore.getState().post({
+        id: live?.id ?? `${now.toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+        title,
+        youtubeUrl: url,
+        createdAt: now,
+        expiresAt: expiryFrom(now, hours),
         createdBy: String(profile.uid),
       })
-      return `Done — the set list “${title}” is made.`
+      return 'The livestream is up.'
+    },
+  } satisfies Prepared
+}
+
+async function takeDownLivestream(profile: UserProfile) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const streams = (await getDocs(collection(db, 'livestreams'))).docs.map(
+    (d) => ({ ...(d.data() as Livestream), id: d.id }) as Livestream
+  )
+  const live = activeStream(streams)
+  if (!live) return cannot('There’s no livestream up.')
+  return {
+    kind: 'ready',
+    title: `Take down “${live.title}”?`,
+    details: ['It comes off the top of the app for everyone.'],
+    confirm: 'Take it down',
+    destructive: true,
+    run: async () => {
+      await useLivestreamStore.getState().takeDown(live.id)
+      return 'Taken down.'
+    },
+  } satisfies Prepared
+}
+
+/** A meeting request sent to them: said they'll answer it, or marked answered. */
+async function meetingRequest(profile: UserProfile, input: Record<string, unknown>) {
+  const snap = await getDoc(doc(db, 'meetingRequests', String(input.request_id ?? '') || '-'))
+  if (!snap.exists()) return cannot('I couldn’t find that meeting request.')
+  const req = snap.data() as MeetingRequest
+  const uid = String(profile.uid)
+  if (!(req.leaders ?? []).includes(uid)) return cannot('That request wasn’t sent to you.')
+  const handle = input.action === 'handled'
+  if (handle && req.status === 'handled') return cannot('It’s already been answered.')
+  if (!handle && req.claimedBy) {
+    return cannot(
+      req.claimedBy === uid
+        ? 'You’ve already said you’ll answer it.'
+        : `${req.claimedByName ?? 'Someone'} is already answering it.`
+    )
+  }
+  const name = profile.displayName ?? ''
+  return {
+    kind: 'ready',
+    title: handle
+      ? `Mark ${req.fromName}’s meeting request answered?`
+      : `Say you’ll answer ${req.fromName}’s meeting request?`,
+    details: [
+      req.message.slice(0, 200),
+      ...(req.availability ? [`Free: ${req.availability}`] : []),
+    ],
+    confirm: handle ? 'Mark answered' : 'I’ll answer it',
+    run: async () => {
+      const store = useMeetingRequestsStore.getState()
+      if (handle) await store.markHandled(snap.id, uid, name)
+      else await store.claim(snap.id, uid, name)
+      return handle
+        ? 'Marked answered.'
+        : `Done — ${req.fromEmail ? `their email is ${req.fromEmail}.` : 'it’s yours.'}`
+    },
+  } satisfies Prepared
+}
+
+/** Their own name, as Settings changes it. */
+async function changeMyName(profile: UserProfile, input: Record<string, unknown>) {
+  const name = String(input.name ?? '').trim()
+  if (!name || name.length > 80) return cannot('What should your name be?')
+  if (name === profile.displayName) return cannot(`Your name is already ${name}.`)
+  return {
+    kind: 'ready',
+    title: `Change your name to ${name}?`,
+    details: [`From ${profile.displayName ?? 'no name'}`],
+    confirm: 'Change',
+    run: async () => {
+      await updateDoc(doc(db, 'users', String(profile.uid)), { displayName: name })
+      return 'Changed.'
+    },
+    undo: async () => {
+      await updateDoc(doc(db, 'users', String(profile.uid)), {
+        displayName: profile.displayName ?? '',
+      })
+      return 'Your name is back as it was.'
     },
   } satisfies Prepared
 }
@@ -1120,6 +1603,16 @@ const ACTIONS: Record<
   vote_kaizen: voteKaizen,
   add_to_set_list: addToSetList,
   create_set_list: createSetList,
+  report_security: reportSecurity,
+  delete_event: deleteEvent,
+  set_availability_range: setAvailabilityRange,
+  edit_set_list: editSetList,
+  notify_set_list: notifySetList,
+  start_chat: startChat,
+  post_livestream: postLivestream,
+  take_down_livestream: takeDownLivestream,
+  meeting_request: meetingRequest,
+  change_my_name: changeMyName,
 }
 
 /** A change asked for, worked out into exactly what will be done. Never throws. */

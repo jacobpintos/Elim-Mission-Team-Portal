@@ -3,8 +3,6 @@ import { ScrollView, Pressable, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
-import { httpsCallable } from 'firebase/functions'
-import { functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useWorshipStore } from '@/stores/worshipStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
@@ -17,6 +15,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { isWorship } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { SetListFormModal } from '@/features/worship/SetListFormModal'
+import { announceSetList } from '@/features/worship/announceSetList'
 import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
 import { ChordSheetsTab } from '@/features/worship/ChordSheetsTab'
 import { InputListTab } from '@/features/worship/InputListTab'
@@ -34,7 +33,8 @@ export default function WorshipScreen() {
     useWorshipStore()
   const { subscribe: subChords, unsubscribe: unsubChords } = useChordSheetsStore()
   const { templates, subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
-  const { users, subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
+  // The people, loaded for telling the worship team about a new set list (announceSetList).
+  const { subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
   // The CCLI license lives in config and has to be printed on every chord
   // sheet. Held for the whole tab rather than only while a sheet is open, so
   // it is already loaded by the time one is.
@@ -72,8 +72,6 @@ export default function WorshipScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid])
-
-  const worshipUsers = users.filter((u) => isWorship(u) && !u.roles?.includes('admin'))
 
   /**
    * The event a set list is linked to, as the form's picker understands it.
@@ -114,58 +112,8 @@ export default function WorshipScreen() {
     try {
       const setListId = await createSetList(data)
 
-      // Notify all worship users
-      const sendNotif = httpsCallable(functions, 'sendNotification')
-      worshipUsers.forEach((u) => {
-        sendNotif({
-          uid: String(u.uid),
-          type: 'announcement',
-          data: { title: 'New Set List', body: data.title },
-        }).catch(() => {})
-      })
-
-      // Create acknowledge tasks for worship users assigned to the linked event
-      if (data.eventTemplateId) {
-        const evTemplate = templates.find((t) => sameId(t.id, data.eventTemplateId!))
-        const evUsers = evTemplate?.users ?? []
-        const assignedWorshipUsers = evUsers.length
-          ? worshipUsers.filter((wu) => evUsers.some((eu) => sameId(eu, wu.uid)))
-          : []
-
-        // Notify anyone on a team whose NAME contains "worship" for this event
-        // (per spec this is team-name-based, not role-based, so e.g. a
-        // "Worship Band" team member gets it even without the worship role).
-        const worshipTeamUids = new Set<string>()
-        for (const team of evTemplate?.teams ?? []) {
-          if (!team.name?.toLowerCase().includes('worship')) continue
-          ;[...team.leaders, ...team.members].forEach((m) => worshipTeamUids.add(String(m)))
-        }
-        worshipTeamUids.forEach((wuid) => {
-          sendNotif({
-            uid: wuid,
-            type: 'worshipSetAssigned',
-            data: {
-              setListTitle: data.title,
-              eventTitle: evTemplate?.title ?? 'an event',
-            },
-          }).catch(() => {})
-        })
-
-        for (const wu of assignedWorshipUsers) {
-          await tasksStore.createTask({
-            title: `Acknowledge set list: ${data.title}`,
-            assignees: [String(wu.uid)],
-            lead: String(wu.uid),
-            by: String(uid),
-            status: 'pending',
-            evTemplateId: data.eventTemplateId,
-            evDate: data.eventDate ?? null,
-            taskType: 'worship_setlist_ack',
-            setListId,
-            dueDate: data.eventDate ?? null,
-          })
-        }
-      }
+      // The worship team told, and asked to acknowledge it (features/worship/announceSetList).
+      await announceSetList(setListId, data, String(uid))
 
       toast('Set list saved!', 'success')
       setShowForm(false)

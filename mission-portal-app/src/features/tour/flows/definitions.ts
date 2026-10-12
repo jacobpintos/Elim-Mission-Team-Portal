@@ -677,6 +677,8 @@ export const miriamFlow: TourFlow = {
       title: 'Meet Miriam',
       body: 'Tap Miriam at the top of any screen and ask, typed or spoken. She answers from the app — only what you are allowed to see — and takes you to where the answer is.',
       bullets: [
+        '“What do I need to know today?” — your daily briefing',
+        '“Remind me to go to Costco at 5 PM tomorrow”',
         '“When is Sunday service?”',
         '“What’s the dress code for the retreat?”',
         '“Give me a tour of Worship”',
@@ -685,7 +687,7 @@ export const miriamFlow: TourFlow = {
     {
       id: 'miriam-hey',
       title: '“Hey Miriam”',
-      body: 'Switch on “Hey Miriam” in her panel and call her by name, hands free. Listening for her name happens on your device; nothing is sent until she is called.',
+      body: 'Switch on “Hey Miriam” in her panel and call her by name, hands free. Listening for her name happens on your device; nothing is sent until she is called. “Hey Miriam, stop listening” switches it off.',
     },
     {
       id: 'miriam-talk',
@@ -699,7 +701,9 @@ export const miriamFlow: TourFlow = {
       bullets: [
         'Answer your availability, mark a task done',
         'Send a message, sign up to bring food',
-        'Report an issue, put forward or vote for a kaizen idea',
+        'Report an issue, put forward or vote for a kaizen idea, or report a concern to security',
+        'Answer availability for a stretch of dates — “I’m out all of November”',
+        'Set reminders, even repeating ones — “every Sunday at 8” — they show in your tasks',
         'Turn a notification on or off',
       ],
       roles: ['admin', 'regular', 'worship', 'security', 'intern'],

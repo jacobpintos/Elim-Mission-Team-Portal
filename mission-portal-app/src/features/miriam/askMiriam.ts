@@ -1,7 +1,7 @@
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import type { MiriamResult } from '@/lib/miriam'
-import { loadNames } from '@/lib/miriamMemory'
+import { loadNames, loadWords } from '@/lib/miriamMemory'
 import { recentExchanges } from '@/lib/miriamConversation'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { screensFor } from '@/lib/miriamScreens'
@@ -30,7 +30,14 @@ const MAX_RUNS = 6
  * in, and handed back for her to carry on. Rejects with the function's
  * message when it cannot be done.
  */
-export async function askMiriam(text: string): Promise<MiriamResult> {
+/** How it was heard, when it was said: the recogniser's other guesses, and how sure it was of the first. */
+export interface Heard {
+  alternatives: string[]
+  /** 0–1, or null when the recogniser doesn't say. */
+  confidence: number | null
+}
+
+export async function askMiriam(text: string, heard?: Heard): Promise<MiriamResult> {
   const call = httpsCallable<Record<string, unknown>, MiriamResult | Run>(functions, 'askMiriam')
   const profile = useAuthStore.getState().profile
   const today = localToday()
@@ -38,6 +45,9 @@ export async function askMiriam(text: string): Promise<MiriamResult> {
     text,
     today,
     known: await loadNames(),
+    // Words misheard before, and what was meant.
+    words: await loadWords(),
+    ...(heard ? { heardAs: heard.alternatives, confidence: heard.confidence } : {}),
     // What was said and answered just before: for "it", "there", or an answer to her question.
     history: recentExchanges(useMiriamStore.getState().conversation, Date.now()),
     appTools: appToolsFor(profile),

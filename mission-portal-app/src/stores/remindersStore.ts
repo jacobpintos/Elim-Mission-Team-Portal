@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
+import type { Repeat } from '@/lib/reminders'
 
 /**
  * Reminders people set for themselves through Miriam ("remind me to go to
@@ -26,7 +27,22 @@ export interface Reminder {
   done: boolean
   /** Not sent yet: what sendDueReminders looks for. */
   pending: boolean
+  /** How often it comes round, if it does (lib/reminders). */
+  repeat?: Repeat
+  /** Where it was set: its times are theirs there. */
+  tz?: string
+  /** Tied to an event ("an hour before Revival"): it moves with it (functions: moveEventReminders). */
+  eventKey?: string
+  eventTemplateId?: string
+  eventTitle?: string
+  minutesBefore?: number
 }
+
+/** What else a reminder may carry. */
+export type ReminderExtra = Pick<
+  Reminder,
+  'repeat' | 'eventKey' | 'eventTemplateId' | 'eventTitle' | 'minutesBefore'
+>
 
 /** How long to wait for the database to have it, before taking it as saved for when there is a signal. */
 const SAVE_WAIT_MS = 4000
@@ -38,7 +54,9 @@ interface RemindersStore {
   _refCount: number
   subscribe: (uid: string) => void
   unsubscribe: () => void
-  add: (uid: string, text: string, at: Date) => Promise<string>
+  add: (uid: string, text: string, at: Date, extra?: ReminderExtra) => Promise<string>
+  /** Again in a while: "snooze an hour". */
+  snooze: (r: Reminder, minutes: number) => Promise<void>
   setDone: (r: Reminder, done: boolean) => Promise<void>
   remove: (id: string) => Promise<void>
 }
@@ -75,7 +93,7 @@ export const useRemindersStore = create<RemindersStore>((set, get) => ({
     }
   },
 
-  add: async (uid, text, at) => {
+  add: async (uid, text, at, extra = {}) => {
     // Its id made here, so it is set even without a signal: saved on the
     // phone at once, and sent as soon as there is one.
     const ref = doc(collection(db, 'reminders'))
@@ -85,6 +103,8 @@ export const useRemindersStore = create<RemindersStore>((set, get) => ({
       remindAt: at.getTime(),
       done: false,
       pending: true,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      ...Object.fromEntries(Object.entries(extra).filter(([, v]) => v !== undefined)),
       createdAt: serverTimestamp(),
     })
     await Promise.race([saved, new Promise((done) => setTimeout(done, SAVE_WAIT_MS))])
@@ -99,6 +119,29 @@ export const useRemindersStore = create<RemindersStore>((set, get) => ({
       done,
       ...(done ? {} : { pending: r.remindAt > Date.now() }),
     })
+  },
+
+  snooze: async (r, minutes) => {
+    const remindAt = Date.now() + minutes * 60_000
+    set((s) => ({
+      reminders: s.reminders.map((x) =>
+        x.id === r.id ? { ...x, remindAt, done: false, pending: true } : x
+      ),
+    }))
+    // A repeating one is snoozed as a one-off copy; it keeps its own times.
+    if (r.repeat) {
+      await setDoc(doc(collection(db, 'reminders')), {
+        uid: r.uid,
+        text: r.text,
+        remindAt,
+        done: false,
+        pending: true,
+        tz: r.tz ?? null,
+        createdAt: serverTimestamp(),
+      })
+      return
+    }
+    await updateDoc(doc(db, 'reminders', r.id), { remindAt, done: false, pending: true })
   },
 
   remove: async (id) => {

@@ -318,7 +318,11 @@ export async function deliverNotification(
             type,
             ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v ?? '')])),
           },
-          { interruptionLevel: interruptionLevelFor(type, profile) }
+          {
+            interruptionLevel: interruptionLevelFor(type, profile),
+            // A reminder's own buttons: Snooze and Done (src/lib/reminderActions).
+            ...(type === 'reminder' ? { categoryId: 'reminder' } : {}),
+          }
         )
       } catch (err) {
         logger.error('Push send failed', err)

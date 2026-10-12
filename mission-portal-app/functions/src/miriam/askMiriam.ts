@@ -58,13 +58,13 @@ function allowed(uid: string): boolean {
 
 const SYSTEM = `You are Miriam, the assistant in the Mission Portal app of The Well of Iowa, a church mission team.
 
-Someone has spoken to you, usually out loud. Their words were turned into text by speech recognition, so names and words may be misheard: match them to what the tools return by how they sound, and a misheard word to what makes sense.
+Someone has spoken to you, usually out loud. Their words were turned into text by speech recognition, so names and words may be misheard: match them to what the tools return by how they sound, and a misheard word to what makes sense. Read every word in the light of the whole request and of this app: "create an even named Test, assign the All group" is an event; "cue Above All" is queue. The recognizer's other guesses, how sure it was, and words it has misheard for them before come with the request: take the reading that makes sense. When you read a word differently from how it was heard, put the request as you understood it in \`understood\`, and the words in \`misheard\`. When two readings would do different things and nothing tells you which — or the recognizer was unsure, and it is a change — don't guess: ask with follow_up, saying what you think they meant ("Did you mean create an event called Test, with the All group?").
 
 A question: look it up with the tools — never answer from memory or guess — then finish with \`answer\`: a short reply to be heard, and where in the app to show it. The tools return only what this person is allowed to see. If something isn't there, say you couldn't find it, without suggesting that it exists. When several events match, take the nearest upcoming one unless they said otherwise, and say its date. When nothing fits well, find_events gives the nearest names instead: if one is plainly what they meant — it sounds the same, or it is a name they have used before — use it, and say which you took ("I took that as Revival in the Heartland"); if you can't tell, say you couldn't find that name, and offer the nearest as \`choices\`. Always set \`heard_name\` to the words they used for the event. When they ask who is unavailable, include everyone not plainly available — not available, partly available, not sure yet (TBD), and not answered — with what they wrote. When they ask what is pending, that is every task not done.
 
 Announcements, their messages, the Operations tab (issues, kaizen, planning, inventory), videos in Content, and their own profile and settings each have a lookup, where this person has that screen. To take them to a screen — "go to the admin users page", "open Kaizen" — answer with open "screen" and its id from the list they are sent; to show where an answer is, you may do the same.
 
-Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new task's form (open_task_form) or an event's form — a new one (open_event_form), or an existing one changed (edit_event: find the event first) — is only filled in for them to check and save, so fill in what they said and leave the rest out. To play a video from Content, find it, then answer with open "video" and its id. To buy something ("buy triple A batteries"), find it in the reorder list (read_operations, inventory) and answer with open "reorder" and its id, saying what you're opening; if it isn't on the list, or has no link, say so. A reminder for themselves ("remind me to call Sam on Friday"): create_reminder, with the time in their own day — if they gave no time, ask when. To change something — send a message, post an announcement, mark a task, answer their availability, sign up for food, turn a notification on or off, report an issue, submit or vote for a kaizen idea, add songs to a set list or make one; and for admins assign several tasks, change or delete a task, make or delete a task template, set an event's cars, and change people's accounts, groups and common teams — use its tool once you have what it needs (an event's key, a task's id, a person's or group's id from people_and_groups); they confirm it in the app before anything is done, so don't ask them first. Anything else that changes something you can't do yet: say so in one sentence.
+Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new task's form (open_task_form) or an event's form — a new one (open_event_form), or an existing one changed (edit_event: find the event first) — is only filled in for them to check and save, so fill in what they said and leave the rest out. To play a video from Content, find it, then answer with open "video" and its id. To buy something ("buy triple A batteries"), find it in the reorder list (read_operations, inventory) and answer with open "reorder" and its id, saying what you're opening; if it isn't on the list, or has no link, say so. A reminder for themselves ("remind me to call Sam on Friday"): create_reminder, with the time in their own day — if they gave no time, ask when. To change something — send a message, post an announcement, mark a task, answer their availability, sign up for food, turn a notification on or off, report an issue, submit or vote for a kaizen idea, report a concern to security, answer availability for a stretch of dates, add songs to a set list, make one, change one (take out, move, key) or tell the worship team about it, answer a meeting request sent to them, change their own name; and for admins assign several tasks, change or delete a task, make or delete a task template, set an event's cars, cancel an event or one date of it, start a chat, put up or take down the livestream, post an announcement to everyone or to people and groups, and change people's accounts, groups and common teams — use its tool once you have what it needs (an event's key, a task's id, a person's or group's id from people_and_groups); they confirm it in the app before anything is done, so don't ask them first. Anything else that changes something you can't do yet: say so in one sentence.
 
 How to use the app. Asked for a tour or a walkthrough ("give me a tour", "show me around", "walk me through Worship", "show me how Events works"): answer with open "tour" and target the part asked for ("" for the whole app) — the app's guided tour goes to each screen and shows its features, as their role has them — and one sentence to start it ("Here's a tour of Events."). A "how do I…" or "what can I do in…" question: use app_guide for that part and answer from what it returns, in plain words and short steps; then offer to show them with the tour. Only what app_guide returns: it is what their role lets them do, so never describe anything it doesn't list. Something it doesn't list: say it isn't something they can do in the app (an admin does it), without explaining how. If app_guide says there is no such part for them, say so and name what you can show them.
 
@@ -92,6 +92,27 @@ function historyFrom(list: unknown): string[] {
     )
     .slice(-MAX_HISTORY)
     .map((h) => `They said: “${h.said.slice(0, 400)}”\nYou answered: “${h.reply.slice(0, 600)}”`)
+}
+
+/** The recognizer's other guesses for what was said, from the app. */
+function alternativesFrom(list: unknown): string[] {
+  return (Array.isArray(list) ? list : [])
+    .filter((a): a is string => typeof a === 'string' && !!a.trim())
+    .slice(0, 3)
+    .map((a) => a.slice(0, MAX_TEXT))
+}
+
+/** Words misheard for this person before, and what was meant. */
+function wordsFrom(list: unknown): string[] {
+  return (Array.isArray(list) ? list : [])
+    .filter(
+      (w): w is { heard: string; meant: string } =>
+        !!w &&
+        typeof (w as { heard?: unknown }).heard === 'string' &&
+        typeof (w as { meant?: unknown }).meant === 'string'
+    )
+    .slice(0, 40)
+    .map((w) => `“${w.heard.slice(0, 40)}” meant “${w.meant.slice(0, 60)}”`)
 }
 
 /** How many rounds of looking things up before giving up on a question. */
@@ -222,6 +243,21 @@ export const askMiriam = onCall(
         )
       const screens = screensFrom(req.data?.screens)
       const history = historyFrom(req.data?.history)
+      const alternatives = alternativesFrom(req.data?.heardAs)
+      const confidence =
+        typeof req.data?.confidence === 'number' &&
+        req.data.confidence >= 0 &&
+        req.data.confidence <= 1
+          ? req.data.confidence
+          : null
+      const words = wordsFrom(req.data?.words)
+      const hearing =
+        (alternatives.length
+          ? `\nSpeech recognition also heard it as: ${alternatives.map((a) => `“${a}”`).join('; ')}.`
+          : '') +
+        (confidence !== null
+          ? `\nIt was ${confidence < 0.6 ? 'unsure of it' : 'fairly sure of it'} (${confidence.toFixed(2)}).`
+          : '')
       appTools = appToolsFrom(req.data?.appTools)
       messages = [
         {
@@ -232,9 +268,11 @@ export const askMiriam = onCall(
             (known.length
               ? `Names they have used before for events:\n${known.join('\n')}\n\n`
               : '') +
+            (words.length ? `Words misheard for them before:\n${words.join('\n')}\n\n` : '') +
             (history.length
               ? `Earlier in this conversation, oldest first:\n${history.join('\n')}\n\nNow they said: “${text}”`
-              : `They said: “${text}”`),
+              : `They said: “${text}”`) +
+            hearing,
         },
       ]
     }
@@ -453,6 +491,8 @@ interface AnswerInput {
   choices?: string[]
   heard_name?: string
   follow_up?: boolean
+  understood?: string
+  misheard?: { heard?: unknown; meant?: unknown }[]
 }
 
 /** The answer, and where to show it — only somewhere this person may go. */
@@ -491,5 +531,13 @@ async function finish(input: AnswerInput, lookups: Lookups, viewer: Viewer) {
     .slice(0, 80)
   // A question back: the app listens for the reply, and sends it with this conversation.
   const followUp = input.follow_up === true
-  return { kind: 'answer', text, open, choices, heardName, followUp }
+  // How it was read, where a word was taken differently from how it was heard.
+  const understood = String(input.understood ?? '')
+    .trim()
+    .slice(0, 300)
+  const misheard = (Array.isArray(input.misheard) ? input.misheard : [])
+    .filter((w) => typeof w?.heard === 'string' && typeof w?.meant === 'string')
+    .slice(0, 5)
+    .map((w) => ({ heard: String(w.heard).slice(0, 40), meant: String(w.meant).slice(0, 60) }))
+  return { kind: 'answer', text, open, choices, heardName, followUp, understood, misheard }
 }

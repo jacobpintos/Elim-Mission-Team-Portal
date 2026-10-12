@@ -3,7 +3,7 @@ import { Pressable, StyleSheet } from 'react-native'
 import { XStack, YStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useRemindersStore, type Reminder } from '@/stores/remindersStore'
-import { reminderWhen } from '@/lib/reminders'
+import { reminderWhen, repeatWhen } from '@/lib/reminders'
 
 /** Done ones stay in the list this long, ticked, then drop out of it. */
 const KEEP_DONE_MS = 24 * 60 * 60 * 1000
@@ -17,6 +17,7 @@ export function RemindersSection({ uid }: { uid: string }) {
   const reminders = useRemindersStore((s) => s.reminders)
   const setDone = useRemindersStore((s) => s.setDone)
   const remove = useRemindersStore((s) => s.remove)
+  const snooze = useRemindersStore((s) => s.snooze)
   // The time now, moved on each minute, so "in 5 minutes" and "past" stay true.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -51,6 +52,7 @@ export function RemindersSection({ uid }: { uid: string }) {
             now={now}
             onToggle={() => setDone(r, !r.done).catch(() => {})}
             onRemove={() => remove(r.id).catch(() => {})}
+            onSnooze={() => snooze(r, 60).catch(() => {})}
           />
         ))
       )}
@@ -63,18 +65,25 @@ function ReminderRow({
   now,
   onToggle,
   onRemove,
+  onSnooze,
 }: {
   reminder: Reminder
   now: number
   onToggle: () => void
   onRemove: () => void
+  onSnooze: () => void
 }) {
   const colors = useThemeColors()
   const at = new Date(r.remindAt)
   const past = r.remindAt <= now
-  const when = past
-    ? `${at.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}, ${at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
-    : reminderWhen(at, new Date(now))
+  const clock = `${at.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}, ${at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+  const when = r.repeat
+    ? `${repeatWhen(at, r.repeat).replace(/^./, (c) => c.toUpperCase())} · next ${reminderWhen(at, new Date(now))}`
+    : r.eventTitle && typeof r.minutesBefore === 'number'
+      ? `${before(r.minutesBefore)} ${r.eventTitle} · ${past ? clock : reminderWhen(at, new Date(now))}`
+      : past
+        ? clock
+        : reminderWhen(at, new Date(now))
   return (
     <XStack
       backgroundColor={colors.surface}
@@ -127,6 +136,18 @@ function ReminderRow({
           {when}
         </Text>
       </YStack>
+      {past && !r.done ? (
+        <Pressable
+          onPress={onSnooze}
+          accessibilityRole="button"
+          accessibilityLabel={`Snooze an hour: ${r.text}`}
+          style={[styles.snooze, { borderColor: colors.border }]}
+        >
+          <Text color={colors.text} fontSize="$2" fontWeight="700">
+            +1 hr
+          </Text>
+        </Pressable>
+      ) : null}
       <Pressable
         onPress={onRemove}
         accessibilityRole="button"
@@ -141,6 +162,27 @@ function ReminderRow({
   )
 }
 
+/** "1 hour before", "30 minutes before", "1 day before". */
+function before(minutes: number): string {
+  if (minutes >= 1440 && minutes % 1440 === 0) {
+    const d = minutes / 1440
+    return `${d} ${d === 1 ? 'day' : 'days'} before`
+  }
+  if (minutes >= 60 && minutes % 60 === 0) {
+    const h = minutes / 60
+    return `${h} ${h === 1 ? 'hour' : 'hours'} before`
+  }
+  return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} before`
+}
+
 const styles = StyleSheet.create({
   hit: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  snooze: {
+    minHeight: 36,
+    paddingHorizontal: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 })

@@ -19,6 +19,7 @@ import {
 } from '@/lib/miriamAppData'
 import { useEventsStore } from '@/stores/eventsStore'
 import type { SetList } from '@/types/worship'
+import type { MeetingRequest } from '@/types/meeting'
 import { tourFor, tourNames } from '@/features/tour/flows'
 import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -42,6 +43,7 @@ export type AppToolName =
   | 'read_settings'
   | 'app_guide'
   | 'read_set_lists'
+  | 'read_meeting_requests'
   // Changes: offered as these are, made only once confirmed (./actions.ts).
   | 'send_message'
   | 'post_announcement'
@@ -71,6 +73,16 @@ export type AppToolName =
   | 'add_to_set_list'
   | 'create_set_list'
   | 'create_reminder'
+  | 'report_security'
+  | 'delete_event'
+  | 'set_availability_range'
+  | 'edit_set_list'
+  | 'notify_set_list'
+  | 'start_chat'
+  | 'post_livestream'
+  | 'take_down_livestream'
+  | 'meeting_request'
+  | 'change_my_name'
 
 /** Admins' changes: offered to admins only (./actions.ts checks again). */
 const ADMIN_ACTIONS: AppToolName[] = [
@@ -90,6 +102,10 @@ const ADMIN_ACTIONS: AppToolName[] = [
   'update_task',
   'delete_task',
   'set_carpool',
+  'delete_event',
+  'start_chat',
+  'post_livestream',
+  'take_down_livestream',
 ]
 
 /** The lookups — and changes — this person's screens allow. */
@@ -116,7 +132,14 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   if (tabs.includes('issues') && !guest) tools.push('report_issue', 'submit_kaizen', 'vote_kaizen')
   // Set lists: read where Worship is; built by the worship team and admins (firestore.rules).
   if (tabs.includes('worship')) tools.push('read_set_lists')
-  if (isWorship(profile)) tools.push('add_to_set_list', 'create_set_list')
+  if (isWorship(profile))
+    tools.push('add_to_set_list', 'create_set_list', 'edit_set_list', 'notify_set_list')
+  // A concern for security: anyone, as the drawer's Report a Concern is.
+  tools.push('report_security')
+  if (tabs.includes('events')) tools.push('set_availability_range')
+  // Meeting requests are sent to leaders by name; anyone but a guest may be one.
+  if (!guest) tools.push('read_meeting_requests', 'meeting_request')
+  if (tabs.includes('settings')) tools.push('change_my_name')
   return tools
 }
 
@@ -239,6 +262,29 @@ export async function runAppTool(name: string, input: Record<string, unknown>): 
       result = settingsShown(profile)
     } else if (name === 'app_guide') {
       result = guideFor(profile, String(input.tab ?? ''))
+    } else if (name === 'read_meeting_requests') {
+      const snap = await getDocs(
+        query(
+          collection(db, 'meetingRequests'),
+          where('leaders', 'array-contains', String(profile.uid))
+        )
+      )
+      const requests = snap.docs
+        .map((d) => ({ ...(d.data() as MeetingRequest), id: d.id }))
+        .filter((r) => r.status !== 'handled')
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 10)
+        .map((r) => ({
+          id: r.id,
+          from: r.fromName,
+          message: r.message.slice(0, 400),
+          free: r.availability || undefined,
+          asked: new Date(r.createdAt).toISOString().slice(0, 10),
+          answering: r.claimedByName || undefined,
+        }))
+      result = requests.length
+        ? { requests }
+        : { requests: [], note: 'No open meeting requests for them.' }
     } else if (name === 'read_set_lists') {
       const lists = await all<SetList>('setLists')
       const templates = useEventsStore.getState().templates
