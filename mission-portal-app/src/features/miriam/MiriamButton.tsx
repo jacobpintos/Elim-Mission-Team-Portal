@@ -45,6 +45,9 @@ import { ChordSheetViewer } from '@/features/worship/ChordSheetViewer'
 import { useSongQueue } from '@/features/worship/useSongQueue'
 import { tourFor, tourNames } from '@/features/tour/flows'
 import { tourAsked } from '@/lib/miriamTour'
+import { quickAnswer, screenAsked } from '@/lib/miriamQuick'
+import { useEventsStore } from '@/stores/eventsStore'
+import { todayStr } from '@/lib/events'
 import { useTourStore } from '@/features/tour/tourStore'
 import { asksAQuestion, songAsked } from '@/lib/miriamSongs'
 import { songHost, songQueue } from '@/lib/songHost'
@@ -137,6 +140,24 @@ function refused(err: unknown): boolean {
  *
  * Shown only to people Miriam can do something for (canUseMiriam).
  */
+/**
+ * A question answered from what the app has loaded — the same events and
+ * rules the server would use (lib/miriamQuick) — or null, to ask Claude.
+ */
+function quickFromApp(said: string) {
+  const profile = useAuthStore.getState().profile
+  if (!profile) return null
+  const { templates, overrides } = useEventsStore.getState()
+  return quickAnswer(said, {
+    templates: templates as never,
+    overrides: overrides as never,
+    groups: useGroupsStore.getState().groups,
+    viewer: { uid: String(profile.uid), roles: profile.roles ?? [] },
+    names: new Map(useUsersStore.getState().users.map((u) => [String(u.uid), u.displayName])),
+    today: todayStr(),
+  })
+}
+
 export function MiriamButton() {
   const colors = useThemeColors()
   const router = useRouter()
@@ -208,11 +229,17 @@ export function MiriamButton() {
     const sub = AppState.addEventListener('change', (s) => setAppActive(s !== 'background'))
     return () => sub.remove()
   }, [])
-  // Group names, for the recogniser to expect in a request.
+  // Group names, for the recogniser to expect in a request — and, with the
+  // events, what a plain question about an event is answered from here.
   useEffect(() => {
     if (!open) return
     subGroups()
-    return () => unsubGroups()
+    const events = useEventsStore.getState()
+    events.subscribe()
+    return () => {
+      unsubGroups()
+      events.unsubscribe()
+    }
   }, [open, subGroups, unsubGroups])
 
   const setWake = (on: boolean) => {
@@ -272,6 +299,20 @@ export function MiriamButton() {
       setStage('answered')
       return
     }
+    // A screen asked for by name ("open settings"): gone to from here.
+    if (!again && !anyOverlayOpen()) {
+      const screens = screensFor(useAuthStore.getState().profile)
+      const screenId = screenAsked(withoutHerName(said), screens)
+      const screen = screens.find((x) => x.id === screenId)
+      if (screen) {
+        const text = `Opening ${screen.label}.`
+        setAnswer(text)
+        speak(text)
+        setStage('answered')
+        router.push(screen.path as never)
+        return
+      }
+    }
     // A song, opened here from the sheets on this device: no need to ask.
     // With a song screen up (a sheet open, or the Chord Sheets page), that is
     // all that is asked of her, and it is never sent off to be worked out.
@@ -320,6 +361,18 @@ export function MiriamButton() {
         setStage('answered')
         return
       }
+    }
+    // A plain question about an event — its dress code, time, place, your
+    // team, car, room or flight — answered from what the app already has.
+    const quick = again ? null : quickFromApp(withoutHerName(said))
+    if (quick) {
+      setAnswer(quick.text)
+      speak(quick.text)
+      setStage('answered')
+      if (quick.open && !anyOverlayOpen()) {
+        router.push(miriamHref({ kind: 'event', ...quick.open }) as never)
+      }
+      return
     }
     setStage('thinking')
     try {
