@@ -415,6 +415,8 @@ export type ActionName =
   // Worship
   | 'add_to_set_list'
   | 'create_set_list'
+  // Their own
+  | 'create_reminder'
 
 export const ACTIONS: readonly ActionName[] = [
   'create_user',
@@ -438,6 +440,7 @@ export const ACTIONS: readonly ActionName[] = [
   'vote_kaizen',
   'add_to_set_list',
   'create_set_list',
+  'create_reminder',
   'send_message',
   'post_announcement',
   'set_task_status',
@@ -913,6 +916,24 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
             title: { type: 'string' },
             key: { type: 'string', description: '"" if not said.' },
           }),
+        },
+      }),
+    },
+    create_reminder: {
+      name: 'create_reminder',
+      description:
+        'Set a reminder for them, sent to their phone at the time ("remind me to go to Costco at 5 pm tomorrow") and shown in their tasks. ' +
+        'No time said: ask when, with follow_up. A day without a time: 9 AM. Set at once — they can take it back.',
+      strict: true,
+      input_schema: objectOf({
+        text: {
+          type: 'string',
+          description: 'What to remind them of, as a short task: "Go to Costco", "Call Sam".',
+        },
+        when: {
+          type: 'string',
+          description:
+            'Their local date and time, YYYY-MM-DDTHH:MM (24-hour), worked out from today’s date: "tomorrow at 5 pm" → the next day at 17:00.',
         },
       }),
     },

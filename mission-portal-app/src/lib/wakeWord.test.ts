@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { withoutHerName } from './wakeWord'
+import { namesHer, stopListeningAsked, withoutHerName } from './wakeWord'
 
 describe('withoutHerName', () => {
   it('takes her name off the start of a request', () => {
@@ -16,5 +16,42 @@ describe('withoutHerName', () => {
 
   it('takes it from the start only', () => {
     expect(withoutHerName('assign Miriam to the event')).toBe('assign Miriam to the event')
+  })
+})
+
+describe('"Hey Miriam, stop listening"', () => {
+  it('hears it, and how it is misheard', () => {
+    for (const said of [
+      'stop listening',
+      'Stop listening.',
+      'stop lessening',
+      'top listening',
+      'stop glistening',
+      'stop listen',
+      'please stop listening for now',
+      'turn off hey miriam',
+      'turn Hey Mariam off',
+      'switch off the wake word',
+      'stop listening for hey miriam',
+      'disable hey miriam',
+    ]) {
+      expect(stopListeningAsked(withoutHerName(`Hey Miriam, ${said}`)), said).toBe(true)
+    }
+  })
+  it('leaves everything else alone', () => {
+    for (const said of [
+      'stop',
+      'stop the music',
+      'listening to Above All',
+      'when do I stop listening to the sermon',
+      'turn off autoscroll',
+    ]) {
+      expect(stopListeningAsked(said), said).toBe(false)
+    }
+  })
+  it('knows when her name was said', () => {
+    expect(namesHer('Hey Miriam stop listening')).toBe(true)
+    expect(namesHer('Hey Mariam, stop listening')).toBe(true)
+    expect(namesHer('stop listening')).toBe(false)
   })
 })

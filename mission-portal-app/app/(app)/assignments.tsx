@@ -34,6 +34,7 @@ import type { KaizenCard, KaizenVerificationResult } from '@/types/operations'
 import type { UserProfile } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { WithDictation } from '@/components/ui/Dictation'
+import { RemindersSection } from '@/features/reminders/RemindersSection'
 
 interface GroupDoc {
   id: string
@@ -1713,6 +1714,10 @@ export default function Assignments() {
         /* Task list view */
         <ScrollView style={{ flex: 1 }}>
           <YStack padding="$3" gap="$3">
+            {/* Their own reminders, set by asking Miriam: on their own list, not everyone's. */}
+            {adminView === 'mine' && uid && (filter === 'all' || filter === 'pending') ? (
+              <RemindersSection uid={String(uid)} />
+            ) : null}
             {focusedTask ? (
               <TaskGroup
                 title="Asked for"

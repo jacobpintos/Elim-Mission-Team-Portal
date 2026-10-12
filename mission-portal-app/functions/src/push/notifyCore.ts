@@ -29,6 +29,10 @@ export type NotificationType =
   | 'flightReminder'
   | 'foodSignupOpen'
   | 'foodSignupReminder'
+  /** One set for themselves, through Miriam: "remind me to go to Costco at 5 pm tomorrow". */
+  | 'reminder'
+  /** An admin asking those who haven't answered an event's availability to answer it. */
+  | 'availabilityNudge'
 
 /**
  * Notification types the user asked to be "bulk" (starred in their spec):
@@ -88,6 +92,8 @@ export function interruptionLevelFor(
   type: NotificationType,
   profile: { roles?: unknown; notificationPrefs?: Record<string, unknown> } | undefined
 ): InterruptionLevel | undefined {
+  // Asked for at a time: shown then, through Focus, as a phone's own reminders are.
+  if (type === 'reminder') return 'time-sensitive'
   if (type !== 'securityReport') return undefined
   if (!profile || !isSecurityUser(profile.roles)) return undefined
   if (profile.notificationPrefs?.securityReportUrgent === false) return undefined
@@ -187,6 +193,10 @@ export function inAppMessage(type: NotificationType, data: Record<string, unknow
       return `${data.openCount ?? 'Some'} food items are still unclaimed for ${data.eventTitle ?? 'an event'}`
     case 'flightReminder':
       return `Your ${data.legLabel ?? 'flight'} for ${data.eventTitle ?? 'an event'} departs at ${data.departsAt ?? 'soon'}`
+    case 'reminder':
+      return `Reminder: ${data.text ?? 'something you asked to be reminded of'}`
+    case 'availabilityNudge':
+      return `Are you available for ${data.eventTitle ?? 'an event'}${data.eventDate ? ` on ${data.eventDate}` : ''}? Please answer in the app.`
     case 'textingListSignup':
       // Built by signupDigestMessage — names and numbers in full, so the
       // coordinator can act on it without opening anything.
@@ -221,6 +231,8 @@ function subjectFor(type: NotificationType, _data: Record<string, unknown>): str
     securityReport: 'Security report — Mission Portal',
     weatherAlertAdmin: 'Weather alert — Mission Portal',
     textingListSignup: 'Texting list sign-ups — Mission Portal',
+    reminder: 'Reminder',
+    availabilityNudge: 'Are you available? — Mission Portal',
   }
   return subjects[type] ?? 'Mission Portal notification'
 }

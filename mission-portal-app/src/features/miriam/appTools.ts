@@ -70,6 +70,7 @@ export type AppToolName =
   | 'vote_kaizen'
   | 'add_to_set_list'
   | 'create_set_list'
+  | 'create_reminder'
 
 /** Admins' changes: offered to admins only (./actions.ts checks again). */
 const ADMIN_ACTIONS: AppToolName[] = [
@@ -109,6 +110,8 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   if (tabs.includes('events')) tools.push('set_availability')
   if (tabs.includes('events') && !guest) tools.push('sign_up_food')
   if (tabs.includes('settings')) tools.push('change_notification')
+  // Reminders are their own, for anyone with tasks (the Tasks tab shows them).
+  if (tabs.includes('assignments')) tools.push('create_reminder')
   // Operations: anyone there may report an issue or put forward an idea — not a guest, who only reads.
   if (tabs.includes('issues') && !guest) tools.push('report_issue', 'submit_kaizen', 'vote_kaizen')
   // Set lists: read where Worship is; built by the worship team and admins (firestore.rules).

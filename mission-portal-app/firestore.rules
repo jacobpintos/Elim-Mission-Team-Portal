@@ -270,6 +270,17 @@ service cloud.firestore {
 
     // Guests read set lists and chord sheets but never write them. Without the
     // read they would have been given a worship tab that renders nothing.
+    // Reminders people set for themselves (Miriam): theirs alone to read and
+    // change. Sent by sendDueReminders (functions, as admin).
+    match /reminders/{id} {
+      allow read, delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.text is string && request.resource.data.text.size() <= 300
+        && request.resource.data.remindAt is number;
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
+    }
+
     match /setLists/{id} {
       allow read: if isWorshipOrAdmin() || isGuest();
       allow write: if isWorshipOrAdmin();

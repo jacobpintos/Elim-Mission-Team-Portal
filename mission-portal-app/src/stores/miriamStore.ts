@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { EventDraft, TaskDraft } from '@/lib/miriam'
 import { withExchange, type Exchange } from '@/lib/miriamConversation'
 
@@ -39,6 +40,8 @@ interface MiriamStore {
   /** "Hey Miriam" switched on, on this device: listened for wherever it can be. */
   wakeOn: boolean
   setWakeOn: (on: boolean) => void
+  /** Switched on or off, and kept that way on this device. */
+  saveWakeOn: (on: boolean) => void
   eventForm: PendingEventForm | null
   offerEventForm: (form: Omit<PendingEventForm, 'id'>) => void
   clearEventForm: () => void
@@ -56,12 +59,19 @@ interface MiriamStore {
   setAwaiting: (awaiting: boolean) => void
 }
 
+/** Where "Hey Miriam" on or off is kept, on this device. */
+export const WAKE_KEY = 'miriam_wake'
+
 export const useMiriamStore = create<MiriamStore>((set) => ({
   handed: null,
   hand: (text) => set({ handed: { id: Date.now(), text } }),
   clearHanded: () => set({ handed: null }),
   wakeOn: false,
   setWakeOn: (wakeOn) => set({ wakeOn }),
+  saveWakeOn: (wakeOn) => {
+    set({ wakeOn })
+    AsyncStorage.setItem(WAKE_KEY, wakeOn ? '1' : '0').catch(() => {})
+  },
   eventForm: null,
   offerEventForm: (form) => set({ eventForm: { ...form, id: Date.now() } }),
   clearEventForm: () => set({ eventForm: null }),

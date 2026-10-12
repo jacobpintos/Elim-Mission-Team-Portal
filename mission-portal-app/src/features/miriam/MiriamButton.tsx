@@ -3,6 +3,7 @@ import {
   AccessibilityInfo,
   Animated,
   AppState,
+  Dimensions,
   Easing,
   Linking,
   Platform,
@@ -29,7 +30,7 @@ import {
 import { CUE_MS, listeningCue, prepareCues } from '@/lib/listeningCue'
 import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
 import { wakeEngine } from '@/lib/wakeEngine'
-import { withoutHerName } from '@/lib/wakeWord'
+import { namesHer, stopListeningAsked, withoutHerName } from '@/lib/wakeWord'
 import { MAX_REQUEST, miriamHref } from '@/lib/miriam'
 import { anyOverlayOpen } from '@/lib/overlays'
 import { rememberName } from '@/lib/miriamMemory'
@@ -37,7 +38,7 @@ import { FD } from '@/lib/format'
 import { speak, stopSpeaking, unlockSpeech, whenSpoken } from './speak'
 import { askMiriam, miriamError } from './askMiriam'
 import { prepareAction, type Prepared } from './actions'
-import { useMiriamStore } from '@/stores/miriamStore'
+import { useMiriamStore, WAKE_KEY } from '@/stores/miriamStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
@@ -61,6 +62,11 @@ import {
 } from '@/lib/miriamQuick'
 import { fetchWeather } from '@/lib/weather'
 import { useTasksStore } from '@/stores/tasksStore'
+import { useRemindersStore } from '@/stores/remindersStore'
+import { reminderAsked, reminderWhen } from '@/lib/reminders'
+import { briefingAsked, type Briefing } from '@/lib/briefing'
+import { gatherBriefing, remindToAnswer } from './briefingData'
+import { BriefingView } from './BriefingView'
 import { appToolsFor } from './appTools'
 import { useEventsStore } from '@/stores/eventsStore'
 import { todayStr } from '@/lib/events'
@@ -107,10 +113,11 @@ const ANSWER_MS = 20_000
 /** Said to her, answering a question she asked back: nothing more is wanted. */
 const NEVER_MIND =
   /^(?:never\s*mind|cancel|forget\s+(?:it|that)|stop|no(?:\s+thanks?)?|nothing|that'?s\s+all)\b/i
+/** The time now: read when something is asked, never while drawing. */
+const timeNow = () => Date.now()
 /** Sent once a change she was asked for among others is done, for her to go on to the rest. */
 const CARRY_ON = 'That’s done. Carry on with the rest of what I asked.'
 /** Whether this device listens for "Hey Miriam" (AsyncStorage). */
-const WAKE_KEY = 'miriam_wake'
 
 type Stage = 'listening' | 'typing' | 'thinking' | 'answered'
 
@@ -208,6 +215,8 @@ export function MiriamButton() {
   // for it — learned from the one picked — and the question they answer.
   const [choices, setChoices] = useState<{ key: string; title: string; date: string }[]>([])
   const heardName = useRef('')
+  // Her name said at the start of what was heard (taken off what is shown and sent).
+  const saidHerName = useRef(false)
   const asked = useRef('')
   // A chord sheet asked for: open, in the key asked for. Or, when none was
   // plain, the nearest titles offered — and the words and key it was asked
@@ -231,6 +240,11 @@ export function MiriamButton() {
   const openRef = useRef(false)
   // A link to buy something, for a tap to open (in a browser).
   const [link, setLink] = useState<{ url: string; name: string } | null>(null)
+  // The daily briefing, shown in place of an answer; and whether it is being read out.
+  const [briefing, setBriefing] = useState<Briefing | null>(null)
+  const [reading, setReading] = useState(false)
+  // Something just done that can be taken back at a tap: a reminder set.
+  const [undo, setUndo] = useState<{ label: string; run: () => Promise<string> } | null>(null)
   // A video from Content asked for, playing over the page.
   const [video, setVideo] = useState<MusicItem | null>(null)
   const [songGuesses, setSongGuesses] = useState<ChordSheet[]>([])
@@ -273,20 +287,21 @@ export function MiriamButton() {
     subGroups()
     const events = useEventsStore.getState()
     events.subscribe()
-    // Their tasks too, for "what's due?"
+    // Their tasks too, for "what's due?", and their reminders.
     const tasks = useTasksStore.getState()
     tasks.subscribe()
+    const uid = useAuthStore.getState().profile?.uid
+    const reminders = useRemindersStore.getState()
+    if (uid) reminders.subscribe(String(uid))
     return () => {
       unsubGroups()
       events.unsubscribe()
       tasks.unsubscribe()
+      if (uid) reminders.unsubscribe()
     }
   }, [open, subGroups, unsubGroups])
 
-  const setWake = (on: boolean) => {
-    setWakeOn(on)
-    AsyncStorage.setItem(WAKE_KEY, on ? '1' : '0').catch(() => {})
-  }
+  const setWake = (on: boolean) => useMiriamStore.getState().saveWakeOn(on)
 
   /** Stop listening for her name, and let the microphone go. */
   const stopWake = () => {
@@ -322,10 +337,27 @@ export function MiriamButton() {
     setSongGuesses([])
     setPending(null)
     setLink(null)
+    setUndo(null)
+    setBriefing(null)
     setAskingBack(false)
     shownNote.current = ''
     stopListening()
     setHeard(said)
+    // "Hey Miriam, stop listening": her name said, or her woken by it — never
+    // the words alone, which are as likely sung or said to someone else.
+    if (
+      !again &&
+      (woken || saidHerName.current || namesHer(said)) &&
+      stopListeningAsked(withoutHerName(said))
+    ) {
+      useMiriamStore.getState().setAwaiting(false)
+      setWake(false)
+      const text = 'Okay — I’ve stopped listening for “Hey Miriam.” Turn it back on here any time.'
+      setAnswer(text)
+      speak(text)
+      setStage('answered')
+      return
+    }
     // Answering what she asked back: hers to work out with what came before,
     // not taken for a song or a screen on its own.
     const replying = !again && useMiriamStore.getState().awaiting
@@ -338,6 +370,17 @@ export function MiriamButton() {
     }
     // Worked out here, from what the app has, when it plainly can be.
     const local = !again && !replying
+    // "What do I need to know today?": the daily briefing, put together here.
+    if (local && briefingAsked(withoutHerName(said))) {
+      await giveBriefing()
+      return
+    }
+    // "Remind me to go to Costco at 5 pm tomorrow": set here, at once.
+    const reminder = local ? reminderAsked(withoutHerName(said), new Date()) : null
+    if (reminder) {
+      await setReminder(reminder.text, reminder.at, reminder.spoken)
+      return
+    }
     // A tour asked for: the app's own, started here — nothing to work out.
     const tourAsk = local ? tourAsked(withoutHerName(said)) : null
     if (tourAsk) {
@@ -507,6 +550,21 @@ export function MiriamButton() {
       }
       // A change: worked out into exactly what will be done, and shown to
       // be confirmed — nothing is done until it is.
+      // A reminder: theirs alone, set at once, with a tap to take it back.
+      if (result.kind === 'confirm' && result.name === 'create_reminder') {
+        const text = String(result.input.text ?? '').trim()
+        const at = new Date(String(result.input.when ?? ''))
+        if (!text || isNaN(at.getTime()) || at.getTime() <= timeNow()) {
+          const no =
+            'I couldn’t tell when to remind you — try saying the time, like “at 5 PM tomorrow.”'
+          setAnswer(no)
+          speak(no)
+          setStage('answered')
+          return
+        }
+        await setReminder(text, at, `to ${text.charAt(0).toLowerCase()}${text.slice(1)}`)
+        return
+      }
       if (result.kind === 'confirm') {
         await offerAction(result.name, result.input, result.more)
         return
@@ -575,6 +633,51 @@ export function MiriamButton() {
     setStage('answered')
   }
 
+  /** The daily briefing (lib/briefing): shown to tap through, and read out. */
+  const giveBriefing = async () => {
+    setStage('thinking')
+    const b = await gatherBriefing().catch(() => null)
+    if (!b) {
+      const no = 'I couldn’t put your briefing together just now. Try again in a moment.'
+      setAnswer(no)
+      speak(no)
+      setStage('answered')
+      return
+    }
+    setAnswer(null)
+    setBriefing(b)
+    noteDone(b.spoken)
+    speak(b.spoken)
+    setReading(true)
+    whenSpoken().then(() => setReading(false))
+    setStage('answered')
+  }
+
+  /** A reminder set for them, said back with when — and a tap to take it back. */
+  const setReminder = async (text: string, at: Date, spoken: string) => {
+    const uid = useAuthStore.getState().profile?.uid
+    if (!uid) return
+    setStage('thinking')
+    try {
+      const id = await useRemindersStore.getState().add(String(uid), text, at)
+      const said = `Okay — I’ll remind you ${reminderWhen(at, new Date())} ${spoken}.`
+      setAnswer(said)
+      speak(said)
+      setUndo({
+        label: 'Undo',
+        run: async () => {
+          await useRemindersStore.getState().remove(id)
+          return 'Okay — that reminder is gone.'
+        },
+      })
+    } catch {
+      const no = 'That reminder didn’t save. Try again in a moment.'
+      setAnswer(no)
+      speak(no)
+    }
+    setStage('answered')
+  }
+
   /** Done without a word shown (a video played, a form opened): remembered for what comes next. */
   const noteDone = (reply: string) => useMiriamStore.getState().remember(asked.current, reply)
 
@@ -627,6 +730,20 @@ export function MiriamButton() {
     if (list) {
       const { text, open } = listAnswer(list, data)
       return say(text, open?.section === 'details' ? { key: open.key, section: 'details' } : null)
+    }
+    // "What are my reminders?"
+    if (/\b(?:my|any|what|which)\s+reminders?\b/i.test(said)) {
+      const now = timeNow()
+      const upcoming = useRemindersStore
+        .getState()
+        .reminders.filter((r) => !r.done && r.remindAt > now)
+      if (upcoming.length === 0) return say('You have no reminders coming up.')
+      const lines = upcoming
+        .slice(0, 5)
+        .map((r) => `${r.text}, ${reminderWhen(new Date(r.remindAt), new Date(now))}`)
+      return say(
+        `You have ${upcoming.length} ${upcoming.length === 1 ? 'reminder' : 'reminders'}: ${lines.join('; ')}.`
+      )
     }
     // "What's due this week?": once their tasks are in.
     const tasksAsk = tasksAsked(said)
@@ -796,11 +913,14 @@ export function MiriamButton() {
     setSongGuesses([])
     setPending(null)
     setLink(null)
+    setBriefing(null)
+    setUndo(null)
     setWoken(byName)
     setRanOut(false)
     if (byName) AccessibilityInfo.announceForAccessibility('Miriam: Hineni, I am here')
     sent.current = false
     settled.current = ''
+    saidHerName.current = false
     request.current = ''
     setHeard('')
     if (!keepQuestion) {
@@ -870,7 +990,9 @@ export function MiriamButton() {
     if (!ownsSpeech(SPEECH_ID) || !requesting.current || sent.current) return
     const text = e.results[0]?.transcript ?? ''
     if (e.isFinal) settled.current = joined(settled.current, text)
-    request.current = withoutHerName(e.isFinal ? settled.current : joined(settled.current, text))
+    const all = e.isFinal ? settled.current : joined(settled.current, text)
+    if (namesHer(all)) saidHerName.current = true
+    request.current = withoutHerName(all)
     setHeard(request.current)
     clearPause()
     pauseTimer.current = setTimeout(() => send(request.current), pauseFor(request.current))
@@ -963,7 +1085,6 @@ export function MiriamButton() {
       clearInterval(every)
       if (ownsSpeech(WAKE_ID)) stopWake()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wakeOn, appActive, open])
 
   // Not left listening past a minute; never behind a closed panel. Cut off
@@ -1023,6 +1144,7 @@ export function MiriamButton() {
     stopListening()
     stopSpeaking()
     setAskingBack(false)
+    setBriefing(null)
     useMiriamStore.getState().setAwaiting(false)
     setOpen(false)
   }
@@ -1047,6 +1169,7 @@ export function MiriamButton() {
       stage !== 'answered' ||
       !open ||
       askingBack ||
+      briefing ||
       choices.length ||
       songGuesses.length ||
       pending ||
@@ -1055,7 +1178,7 @@ export function MiriamButton() {
       return
     const t = setTimeout(() => closeRef.current(), ANSWER_MS)
     return () => clearTimeout(t)
-  }, [stage, open, answer, askingBack, choices.length, songGuesses.length, pending, link])
+  }, [stage, open, answer, askingBack, briefing, choices.length, songGuesses.length, pending, link])
   /** One of the events she offered: learned as what was meant, and asked about. */
   const pick = async (choice: { key: string; title: string; date: string }) => {
     unlockSpeech()
@@ -1143,7 +1266,7 @@ export function MiriamButton() {
                     {title}
                   </Text>
                 ) : null}
-                {stage === 'typing' ? null : heard ? (
+                {briefing && stage === 'answered' ? null : stage === 'typing' ? null : heard ? (
                   <Text color={ink} fontSize="$3" fontStyle="italic" numberOfLines={3}>
                     “{heard}”
                   </Text>
@@ -1186,6 +1309,31 @@ export function MiriamButton() {
                       </Pressable>
                     ))}
                   </YStack>
+                ) : null}
+                {stage === 'answered' && undo ? (
+                  <Pressable
+                    onPress={async () => {
+                      const { run } = undo
+                      setUndo(null)
+                      const said = await run().catch(() => 'That couldn’t be undone just now.')
+                      setAnswer(said)
+                      speak(said)
+                    }}
+                    accessibilityRole="button"
+                    style={[
+                      styles.small,
+                      {
+                        borderWidth: 1,
+                        borderColor: colors.primary,
+                        alignSelf: 'flex-start',
+                        marginTop: 6,
+                      },
+                    ]}
+                  >
+                    <Text color={colors.primary} fontWeight="700" fontSize="$2">
+                      {undo.label}
+                    </Text>
+                  </Pressable>
                 ) : null}
                 {stage === 'answered' && link ? (
                   <Pressable
@@ -1323,6 +1471,34 @@ export function MiriamButton() {
                 </Text>
               </Pressable>
             </XStack>
+
+            {briefing && stage === 'answered' ? (
+              // Long: scrolled within the panel, most of the screen at most.
+              <ScrollView
+                style={{ maxHeight: Math.round(Dimensions.get('window').height * 0.62) }}
+                nestedScrollEnabled
+              >
+                <BriefingView
+                  briefing={briefing}
+                  speaking={reading}
+                  onStop={() => {
+                    stopSpeaking()
+                    setReading(false)
+                  }}
+                  onOpen={(href) => {
+                    close()
+                    router.push(href as never)
+                  }}
+                  onTaskDone={(id) => useTasksStore.getState().setStatus(id, 'done')}
+                  onReminderDone={(r) => useRemindersStore.getState().setDone(r, true)}
+                  onRemind={async (item) => {
+                    await remindToAnswer(item)
+                    const said = `Okay — I’ve asked ${item.uids.length === 1 ? 'them' : `all ${item.uids.length}`} to answer for ${item.eventTitle}.`
+                    speak(said)
+                  }}
+                />
+              </ScrollView>
+            ) : null}
 
             {stage === 'typing' ? (
               <XStack gap="$2" alignItems="flex-end">

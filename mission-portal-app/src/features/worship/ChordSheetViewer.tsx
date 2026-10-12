@@ -43,7 +43,7 @@ import { NoteLine, SheetNotesEditor, SONG, useNoteColors } from './SheetNotes'
 import { STOP_LISTENING, useSheetVoice } from './useSheetVoice'
 import { COMMAND_HINTS, parseSheetCommand, type SheetCommand } from '@/lib/sheetCommands'
 import { KEY_HINTS, parseSongRequest, requestFromAliases } from '@/lib/songRequest'
-import { withoutHerName } from '@/lib/wakeWord'
+import { stopListeningAsked, withoutHerName } from '@/lib/wakeWord'
 import { registerSongHost } from '@/lib/songHost'
 import type { QueuedSong, SongQueue } from './useSongQueue'
 import { listeningCue } from '@/lib/listeningCue'
@@ -715,6 +715,14 @@ export function ChordSheetViewer({
       // Heard, as her button says it: the chime.
       listeningCue('start')
       return 'Hineni — which song?'
+    }
+    // "Hey Miriam, stop listening": "Hey Miriam" switched off — her name said
+    // first (or just before), never the words alone.
+    if (asks.some((a) => stopListeningAsked(a))) {
+      miriamUntil.current = 0
+      setMiriamHere(false)
+      useMiriamStore.getState().saveWakeOn(false)
+      return 'Stopped listening for “Hey Miriam”'
     }
     // "Hey Miriam, what's the dress code?", "Hey Miriam, play Revive Me": not
     // for a sheet — Miriam answers it, or plays the video from Content.
