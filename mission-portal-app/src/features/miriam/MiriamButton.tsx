@@ -157,6 +157,13 @@ const BRIEFING_ON =
 
 /** The time now: read when something is asked, never while drawing. */
 const timeNow = () => Date.now()
+/** A change shown to confirm, answered out loud: yes, or no. Anything else leaves it to a tap. */
+const SAID_YES =
+  /^(?:yes|yeah|yep|yup|yes please|sure|ok(?:ay)?|do it|go ahead|confirm(?:ed)?|please do|that'?s right|correct|sounds good)\b/i
+const SAID_NO = /^(?:no|nope|cancel|don'?t|stop|never\s*mind|wait|hold on)\b/i
+/** How long she listens for that yes or no before leaving it to a tap. */
+const CONFIRM_LISTEN_MS = 8000
+
 /** Sent once a change she was asked for among others is done, for her to go on to the rest. */
 const CARRY_ON = 'That’s done. Carry on with the rest of what I asked.'
 /** Whether this device listens for "Hey Miriam" (AsyncStorage). */
@@ -281,6 +288,12 @@ export function MiriamButton() {
   } | null>(null)
   // She asked something back, and is waiting to hear the reply: kept up meanwhile.
   const [askingBack, setAskingBack] = useState(false)
+  // A change shown to confirm, and her listening for a spoken yes or no to it.
+  const [confirmByVoice, setConfirmByVoice] = useState(false)
+  const confirmingByVoice = useRef(false)
+  // The last request was said, not typed: a change it brings is listened for a yes to.
+  const saidAloud = useRef(false)
+  const pendingRef = useRef<typeof pending>(null)
   // What was shown with the answer, remembered with it: "showing the event rev_2026-10-11".
   const shownNote = useRef('')
   const openRef = useRef(false)
@@ -395,6 +408,27 @@ export function MiriamButton() {
     // Sent by a tap (the button, or a choice): lets a browser say the answer.
     unlockSpeech()
     sent.current = true
+    // A yes or no to the change she just showed: done, or not, from here.
+    const shown = pendingRef.current
+    if (confirmingByVoice.current && shown?.prepared.kind === 'ready') {
+      endVoiceConfirm()
+      stopListening()
+      const reply = withoutHerName(said)
+      if (SAID_YES.test(reply)) {
+        await confirmAction(shown)
+        return
+      }
+      if (SAID_NO.test(reply)) {
+        cancelAction()
+        setStage('answered')
+        return
+      }
+      // Something else: the card stays, for a tap.
+      setHeard(said)
+      setStage('answered')
+      return
+    }
+    saidAloud.current = stage !== 'typing'
     // Typed rather than said: a question back is answered by typing too.
     const typing = stage === 'typing'
     if (!again) asked.current = said
@@ -913,14 +947,39 @@ export function MiriamButton() {
       setPending({ name, prepared, more })
       setAnswer(prepared.title)
       speak(prepared.title)
+      setStage('answered')
+      // Asked out loud: a yes or no listened for once it has been said.
+      if (saidAloud.current && available) listenForYes()
+      return
     }
     setStage('answered')
   }
+
+  /** The change on screen, answered by voice: listened for once she has asked, a short while. */
+  const listenForYes = async () => {
+    confirmingByVoice.current = true
+    setConfirmByVoice(true)
+    await whenSpoken()
+    if (!openRef.current || !confirmingByVoice.current) return endVoiceConfirm()
+    listen(false, true)
+    setTimeout(() => {
+      // Nothing said: left to a tap.
+      if (!confirmingByVoice.current || request.current.trim()) return
+      endVoiceConfirm()
+      stopListening()
+      setStage('answered')
+    }, CONFIRM_LISTEN_MS)
+  }
+  const endVoiceConfirm = () => {
+    confirmingByVoice.current = false
+    setConfirmByVoice(false)
+  }
   /** Confirmed: done, and said so. */
-  const confirmAction = async () => {
-    if (pending?.prepared.kind !== 'ready') return
-    const { run, undo: takeBack } = pending.prepared
-    const more = !!pending.more
+  const confirmAction = async (shown = pending) => {
+    endVoiceConfirm()
+    if (shown?.prepared.kind !== 'ready') return
+    const { run, undo: takeBack } = shown.prepared
+    const more = !!shown.more
     unlockSpeech()
     setPending(null)
     setStage('thinking')
@@ -954,6 +1013,7 @@ export function MiriamButton() {
     }
   }
   const cancelAction = () => {
+    endVoiceConfirm()
     setPending(null)
     useMiriamStore.getState().setAwaiting(false)
     setAnswer('Okay — nothing was changed.')
@@ -1053,7 +1113,7 @@ export function MiriamButton() {
     loadAliases().then((m) => (songAliases.current = m))
     setChoices([])
     setSongGuesses([])
-    setPending(null)
+    if (!keepQuestion) setPending(null)
     setLink(null)
     setUnderstood('')
     setBriefing(null)
@@ -1170,6 +1230,11 @@ export function MiriamButton() {
     listeningCue('stop')
     // Stopped by the recogniser itself: what it has is the request.
     if (!sent.current && request.current.trim()) send(request.current)
+    else if (confirmingByVoice.current) {
+      // Nothing heard for the change on screen: left to a tap.
+      endVoiceConfirm()
+      setStage('answered')
+    }
   })
   useSpeechRecognitionEvent('error', (e) => {
     if (!ownsSpeech(SPEECH_ID)) return
@@ -1179,6 +1244,12 @@ export function MiriamButton() {
     setListening(false)
     if (e.error === 'aborted' || !was) return
     listeningCue('stop')
+    if (confirmingByVoice.current) {
+      // Nothing heard for the change on screen: left to a tap, as it was.
+      endVoiceConfirm()
+      setStage('answered')
+      return
+    }
     if (e.error === 'no-speech' || e.error === 'speech-timeout') {
       setAnswer('Didn’t hear anything. Try again, or type it.')
     } else if (e.error === 'not-allowed') {
@@ -1303,6 +1374,7 @@ export function MiriamButton() {
   }
 
   const close = () => {
+    endVoiceConfirm()
     sent.current = true
     stopListening()
     stopSpeaking()
@@ -1315,6 +1387,9 @@ export function MiriamButton() {
   useEffect(() => {
     openRef.current = open
   }, [open])
+  useEffect(() => {
+    pendingRef.current = pending
+  }, [pending])
   useEffect(() => {
     if (stage !== 'answered' || !answer || !asked.current) return
     const shown = shownNote.current ? ` (${shownNote.current})` : ''
@@ -1515,7 +1590,7 @@ export function MiriamButton() {
                     </Text>
                   </Pressable>
                 ) : null}
-                {stage === 'answered' && pending?.prepared.kind === 'ready' ? (
+                {(stage === 'answered' || confirmByVoice) && pending?.prepared.kind === 'ready' ? (
                   <YStack gap="$1.5" paddingTop="$1.5">
                     {pending.prepared.details.length ? (
                       <YStack style={[styles.choice, { borderColor: colors.border }]} gap="$1">
@@ -1528,7 +1603,7 @@ export function MiriamButton() {
                     ) : null}
                     <XStack gap="$2">
                       <Pressable
-                        onPress={confirmAction}
+                        onPress={() => confirmAction()}
                         accessibilityRole="button"
                         style={[
                           styles.small,

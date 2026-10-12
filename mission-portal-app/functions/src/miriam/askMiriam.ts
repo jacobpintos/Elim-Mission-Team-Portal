@@ -128,7 +128,7 @@ type Open =
   | {
       kind: 'event'
       key: string
-      section: 'dress_code' | 'availability' | 'weather' | 'details' | null
+      section: 'dress_code' | 'availability' | 'weather' | 'food' | 'details' | null
     }
   | { kind: 'task'; id: string }
   | { kind: 'availability' }
@@ -487,7 +487,7 @@ interface AnswerInput {
   spoken: string
   open: 'event' | 'task' | 'availability' | 'screen' | 'video' | 'reorder' | 'tour' | 'none'
   target: string
-  section: 'dress_code' | 'availability' | 'weather' | 'details' | 'none'
+  section: 'dress_code' | 'availability' | 'weather' | 'food' | 'details' | 'none'
   choices?: string[]
   heard_name?: string
   follow_up?: boolean
@@ -500,8 +500,10 @@ async function finish(input: AnswerInput, lookups: Lookups, viewer: Viewer) {
   const text = String(input.spoken ?? '').trim() || 'Sorry, I couldn’t find that.'
   let open: Open | null = null
   if (input.open === 'event' && (await lookups.event(String(input.target)))) {
-    const section = ['dress_code', 'availability', 'weather', 'details'].includes(input.section)
-      ? (input.section as 'dress_code' | 'availability' | 'weather' | 'details')
+    const section = ['dress_code', 'availability', 'weather', 'food', 'details'].includes(
+      input.section
+    )
+      ? (input.section as 'dress_code' | 'availability' | 'weather' | 'food' | 'details')
       : null
     open = { kind: 'event', key: String(input.target), section }
   } else if (input.open === 'task' && (await lookups.task(String(input.target)))) {

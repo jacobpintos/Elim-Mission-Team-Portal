@@ -337,7 +337,7 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
           },
           section: {
             type: 'string',
-            enum: ['dress_code', 'availability', 'weather', 'details', 'none'],
+            enum: ['dress_code', 'availability', 'weather', 'food', 'details', 'none'],
             description: 'On an event’s page, the part the answer is about.',
           },
           choices: {

@@ -395,7 +395,9 @@ export default function EventDetailScreen() {
 
           {/* Food — members only */}
           {isMember && event.food ? (
-            <FoodPanel event={event} uid={uid} myDisplayName={myDisplayName} />
+            <Spot lit={lit === 'food'} color={colors.primary} name="food" onPlaced={placed}>
+              <FoodPanel event={event} uid={uid} myDisplayName={myDisplayName} />
+            </Spot>
           ) : null}
 
           {/* Carpool — members only */}
