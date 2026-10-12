@@ -76,6 +76,18 @@ export interface BriefingInput {
   attention: AttentionItem[]
   /** Today's forecast for an event, by its key: "68°, clear". */
   weather?: Record<string, { high: number; label: string }>
+  /** Their events coming up with food still unclaimed, that they haven't signed up for (features/miriam/briefingData). */
+  food?: FoodNudge[]
+}
+
+/** An event of theirs with open food items, and one of them suggested. */
+export interface FoodNudge {
+  eventKey: string
+  title: string
+  date: string
+  open: string[]
+  /** One open item, picked at random. */
+  suggestion: string
 }
 
 export interface BriefEvent {
@@ -100,6 +112,8 @@ export interface Briefing {
   reminders: BriefReminder[]
   news: { kind: 'announcement' | 'messages'; title: string; sub: string; href: string }[]
   attention: AttentionItem[]
+  /** Food still open on their events: a suggestion each. */
+  food: FoodNudge[]
   spoken: string
 }
 
@@ -243,7 +257,9 @@ export function buildBriefing(input: BriefingInput): Briefing {
   }
 
   const attention = input.attention.slice(0, 5)
-  const needs = tasks.filter((t) => t.due !== 'week').length + attention.length + reminders.length
+  const food = (input.food ?? []).slice(0, 2)
+  const needs =
+    tasks.filter((t) => t.due !== 'week').length + attention.length + reminders.length + food.length
 
   // Said aloud: in the same order, a sentence or two for each.
   const parts: string[] = [`${greeting}. Today is ${longDate(today)}.`]
@@ -301,6 +317,12 @@ export function buildBriefing(input: BriefingInput): Briefing {
       `${announcements.length === 1 ? 'A new announcement' : `${announcements.length} new announcements`}: ${listed(announcements.map((a) => a.title))}.`
     )
   if (unreadTotal) parts.push(`You have ${plural(unreadTotal, 'unread message')}.`)
+  for (const f of food) {
+    const when = f.date === today ? 'today' : weekday(f.date)
+    parts.push(
+      `${f.title} ${when} still has ${f.open.length === 1 ? 'an open food item' : 'open food items'}. How about bringing ${lowerFirst(f.suggestion)}?`
+    )
+  }
   if (attention.length)
     parts.push(`Needs your attention: ${attention.map((a) => a.spoken).join('; ')}.`)
 
@@ -314,6 +336,7 @@ export function buildBriefing(input: BriefingInput): Briefing {
     reminders,
     news,
     attention,
+    food,
     spoken: parts.join(' '),
   }
 }

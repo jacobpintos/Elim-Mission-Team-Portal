@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 import { XStack, YStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { miriamHref } from '@/lib/miriam'
-import type { AttentionItem, Briefing } from '@/lib/briefing'
+import type { AttentionItem, Briefing, FoodNudge } from '@/lib/briefing'
 import type { Reminder } from '@/stores/remindersStore'
 
 type Colors = ReturnType<typeof useThemeColors>
@@ -22,6 +22,7 @@ export function BriefingView({
   onTaskDone,
   onReminderDone,
   onRemind,
+  onBringFood,
 }: {
   briefing: Briefing
   speaking: boolean
@@ -30,6 +31,8 @@ export function BriefingView({
   onTaskDone: (id: string) => Promise<void>
   onReminderDone: (r: Reminder) => Promise<void>
   onRemind: (item: NonNullable<AttentionItem['remind']>) => Promise<void>
+  /** Signed up for the item suggested; false if that couldn't be done. */
+  onBringFood: (food: FoodNudge) => Promise<boolean>
 }) {
   const colors = useThemeColors()
   // Ticked off, or reminded, here: shown so at once.
@@ -179,6 +182,46 @@ export function BriefingView({
         </Section>
       ) : null}
 
+      {b.food.length ? (
+        <Section title="BRING FOOD" colors={colors}>
+          <YStack
+            style={[
+              styles.list,
+              { borderColor: colors.border, backgroundColor: colors.background },
+            ]}
+          >
+            {b.food.map((f, i) => {
+              const id = `food${f.eventKey}`
+              return (
+                <Row
+                  key={id}
+                  colors={colors}
+                  dot="#f0a070"
+                  title={`${f.title} still has open food items`}
+                  sub={`How about ${f.suggestion}? · ${f.open.length} open`}
+                  last={i === b.food.length - 1}
+                  onPress={() =>
+                    onOpen(miriamHref({ kind: 'event', key: f.eventKey, section: 'food' }))
+                  }
+                  action={
+                    done.has(id)
+                      ? { label: `✓ ${f.suggestion}`, disabled: true }
+                      : {
+                          label: `Bring ${f.suggestion}`,
+                          filled: true,
+                          run: () =>
+                            onBringFood(f).then((ok) => {
+                              if (ok) mark(id)
+                            }),
+                        }
+                  }
+                />
+              )
+            })}
+          </YStack>
+        </Section>
+      ) : null}
+
       {b.news.length ? (
         <Section title="NEW SINCE YESTERDAY" colors={colors}>
           <YStack
@@ -251,6 +294,7 @@ export function BriefingView({
       !b.tasks.length &&
       !b.reminders.length &&
       !b.news.length &&
+      !b.food.length &&
       !b.attention.length ? (
         <Text color={colors.textMuted} fontSize="$3">
           Nothing on today, and nothing waiting on you.

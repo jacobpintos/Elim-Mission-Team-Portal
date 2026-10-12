@@ -1734,6 +1734,23 @@ export function MiriamButton() {
                   }}
                   onTaskDone={(id) => useTasksStore.getState().setStatus(id, 'done')}
                   onReminderDone={(r) => useRemindersStore.getState().setDone(r, true)}
+                  onBringFood={async (food) => {
+                    // Signed up as asking for it would: checked, and taken only if still open.
+                    const prepared = await prepareAction('sign_up_food', {
+                      event_key: food.eventKey,
+                      item: food.suggestion,
+                    })
+                    const said =
+                      prepared.kind === 'ready'
+                        ? await prepared
+                            .run()
+                            .catch(() => 'That didn’t go through. Try it on the event’s page.')
+                        : prepared.kind === 'cannot'
+                          ? prepared.message
+                          : 'Pick one on the event’s page.'
+                    speak(said)
+                    return said.startsWith('You’re signed up')
+                  }}
                   onRemind={async (item) => {
                     await remindToAnswer(item)
                     const said = `Okay — I’ve asked ${item.uids.length === 1 ? 'them' : `all ${item.uids.length}`} to answer for ${item.eventTitle}.`

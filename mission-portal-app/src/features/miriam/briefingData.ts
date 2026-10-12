@@ -2,9 +2,9 @@ import { collection, doc, limit, orderBy, query, where } from 'firebase/firestor
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
-import { isAdmin, isWorship } from '@/lib/roles'
+import { isAdmin, isGuest, isWorship } from '@/lib/roles'
 import { announcementsShown, roomName } from '@/lib/miriamAppData'
-import { buildBriefing, type AttentionItem, type Briefing } from '@/lib/briefing'
+import { buildBriefing, type AttentionItem, type Briefing, type FoodNudge } from '@/lib/briefing'
 import { fetchWeather } from '@/lib/weather'
 import { miriamHref } from '@/lib/miriam'
 import { useAuthStore } from '@/stores/authStore'
@@ -91,7 +91,9 @@ export async function gatherBriefing(): Promise<Briefing | null> {
   const events = templates as unknown as EventTemplate[]
   const evOverrides = overrides as unknown as Record<string, Partial<EventTemplate>>
 
-  const [announcements, unread, attention, weather] = await Promise.all([
+  // Guests are along for the trip, not asked to bring food (firestore.rules).
+  const asked = !(isGuest(profile) && !isAdmin(profile))
+  const [announcements, unread, attention, weather, food] = await Promise.all([
     quietly(async () => {
       const all = (await getDocs(collection(db, 'announcements'))).docs.map(
         (d) => ({ ...(d.data() as Announcement), id: d.id }) as Announcement
@@ -115,6 +117,7 @@ export async function gatherBriefing(): Promise<Briefing | null> {
       []
     ),
     quietly(() => forecasts(events, evOverrides, groups, viewer, day), {}),
+    asked ? quietly(() => foodOpen(events, evOverrides, groups, uid, day), []) : [],
   ])
 
   return buildBriefing({
@@ -137,6 +140,7 @@ export async function gatherBriefing(): Promise<Briefing | null> {
     unread,
     attention,
     weather,
+    food,
   })
 }
 
@@ -329,4 +333,49 @@ export async function remindToAnswer(item: NonNullable<AttentionItem['remind']>)
       }).catch(() => {})
     )
   )
+}
+
+/** Food sign-ups looked at, a week ahead. */
+const FOOD_DAYS = 7
+
+/**
+ * Their events this week with a food sign-up still open, where they haven't
+ * signed up for anything: each with what is open, and one of those picked at
+ * random to suggest.
+ */
+async function foodOpen(
+  templates: EventTemplate[],
+  overrides: Record<string, Partial<EventTemplate>>,
+  groups: Group[],
+  uid: string,
+  day: string
+): Promise<FoodNudge[]> {
+  const theirs = templates
+    .flatMap((t) => instancesOf(t, day, shiftDate(day, FOOD_DAYS), overrides))
+    .filter((ev) => ev.food && (ev.foodItems ?? []).length > 0 && assignedTo(ev, groups).has(uid))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 4)
+  const found = await Promise.all(
+    theirs.map(async (ev): Promise<FoodNudge | null> => {
+      // One that can't be read is left out: never suggested to someone who may have signed up.
+      const signups = await quietly(
+        async () =>
+          ((await getDoc(doc(db, 'foodSignups', `${ev.templateId}_${ev.date}`))).data()?.signups ??
+            {}) as Record<string, { uid?: string }>,
+        null
+      )
+      if (!signups) return null
+      if (Object.values(signups).some((s) => String(s?.uid) === uid)) return null
+      const open = (ev.foodItems ?? []).filter((item, i) => item && !signups[String(i)])
+      if (open.length === 0) return null
+      return {
+        eventKey: ev.instanceKey,
+        title: ev.title,
+        date: ev.date,
+        open,
+        suggestion: open[Math.floor(Math.random() * open.length)],
+      }
+    })
+  )
+  return found.filter((f): f is FoodNudge => !!f)
 }

@@ -130,3 +130,26 @@ describe('asking for it', () => {
     expect(briefingAsked('good morning sunshine')).toBe(false)
   })
 })
+
+describe('food still open', () => {
+  it('names the event and suggests an item', () => {
+    const b = buildBriefing(
+      input({
+        food: [
+          {
+            eventKey: 'ret_2026-10-23',
+            title: 'Youth Retreat',
+            date: '2026-10-23',
+            open: ['Chips', 'Cups'],
+            suggestion: 'Chips',
+          },
+        ],
+      })
+    )
+    expect(b.food.map((f) => f.suggestion)).toEqual(['Chips'])
+    expect(b.needs).toBe(4)
+    expect(b.spoken).toContain(
+      'Youth Retreat Friday still has open food items. How about bringing chips?'
+    )
+  })
+})
