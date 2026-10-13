@@ -95,6 +95,8 @@ interface Setup {
   answers?: Record<string, { status: 'yes' | 'no' | 'partial' | 'tbd'; note: string; ts: number }>
   /** An answer that won't save. */
   failAnswers?: boolean
+  /** Events of its own, in place of those above. */
+  events?: Record<string, unknown>[]
 }
 
 /** A person talking to her: each line said, and what came of it. */
@@ -119,9 +121,21 @@ function conversation(setup: Setup = {}) {
         `remind ${JSON.stringify({ text, at: at.toString().slice(0, 21), spoken, ...(extra ?? {}) })}`
       )
     },
+    directions: (ev) => log.push(`directions ${ev.instanceKey}`),
+    remindBeforeEach: async (text, spoken, before, relation, first) => {
+      log.push(
+        `before each ${JSON.stringify({
+          text,
+          spoken,
+          before,
+          relation,
+          first: first && { key: first.ev.instanceKey, at: first.at.toString().slice(0, 21) },
+        })}`
+      )
+    },
   }
   const data: QuickData = {
-    templates: templates as never,
+    templates: (setup.events ?? templates) as never,
     overrides: {},
     groups: [],
     viewer: { uid: 'me', roles: ['regular'] },
@@ -904,5 +918,121 @@ describe('reminders from an event, or asked when', () => {
 
   it('without reminders on their screens: left to Claude', async () => {
     expect(await conversation()('Remind me an hour before youth night')).toEqual(['(to Claude)'])
+  })
+})
+
+describe('directions', () => {
+  // Today is Tuesday the 13th.
+  const placed = [
+    {
+      id: 'svc',
+      title: 'Sunday Service',
+      date: '2026-10-18',
+      startTime: '10:00 AM',
+      users: ['me'],
+      location: 'The Midnight Gem',
+      address: '2613 Ders Drive NW',
+      city: 'Swisher',
+      state: 'IA',
+    },
+    {
+      id: 'yn',
+      title: 'Youth Night',
+      date: '2026-10-13',
+      startTime: '7:00 PM',
+      users: ['me'],
+      location: 'Church Hall',
+      city: 'Iowa City',
+      state: 'IA',
+    },
+    {
+      id: 'call',
+      title: 'Prayer Call',
+      date: '2026-10-15',
+      users: ['me'],
+      isVirtual: true,
+      virtualLink: 'https://meet.example',
+    },
+    { id: 'plan', title: 'Planning Night', date: '2026-10-16', users: ['me'] },
+  ]
+
+  it('opens maps to the event meant, by day or by name', async () => {
+    const say = conversation({ events: placed })
+    expect(await say('Give me directions to the event on Sunday')).toEqual([
+      'directions svc_2026-10-18',
+    ])
+    expect(await say('Take me to youth night')).toEqual(['directions yn_2026-10-13'])
+  })
+
+  it('"take me there": theirs today — else their next, asked about', async () => {
+    expect(await conversation({ events: placed })('Take me there')).toEqual([
+      'directions yn_2026-10-13',
+    ])
+    const say = conversation({ events: placed.filter((e) => e.id !== 'yn') })
+    expect(await say('How do I get there?')).toEqual([
+      'ask: Directions to Prayer Call on Thursday?',
+    ])
+    expect(await say('no, sunday service')).toEqual(['directions svc_2026-10-18'])
+  })
+
+  it('says why, when there is nowhere to open maps to', async () => {
+    const say = conversation({ events: placed })
+    expect(await say('Navigate to the prayer call')).toEqual([
+      'say: Prayer Call is virtual — the link is on its page.',
+    ])
+    expect(await say('directions to planning night')).toEqual([
+      'say: Planning Night has no place set yet.',
+    ])
+  })
+
+  it('an event not among theirs is left to Claude', async () => {
+    expect(await conversation({ events: placed })('Take me to the zoo')).toEqual(['(to Claude)'])
+  })
+})
+
+describe('a reminder before every event', () => {
+  const each = (text: string, spoken: string, before: unknown, relation: string, first: unknown) =>
+    `before each ${JSON.stringify({ text, spoken, before, relation, first })}`
+  // Youth Night (Oct 25, 7 PM) is the first of theirs with a start time.
+  const youthNight = (h: number, m = 0) => ({
+    key: 'yth_2026-10-25',
+    at: new Date(2026, 9, 25, h, m).toString().slice(0, 21),
+  })
+  const tools = [...ALL_TOOLS, 'create_reminder']
+
+  it('one, for all of them, with the first said', async () => {
+    const say = conversation({ tools })
+    expect(await say('Remind me to pray 1 hour before any event starts')).toEqual([
+      each('Pray', 'to pray', { minutes: 60 }, '1 hour before', youthNight(18)),
+    ])
+    expect(await say('remind me 15 minutes before all my events')).toEqual([
+      each('', '', { minutes: 15 }, '15 minutes before', youthNight(18, 45)),
+    ])
+  })
+
+  it('a day before, or the morning of — for events with no time too', async () => {
+    const say = conversation({ tools })
+    expect(await say('Remind me the morning of every event to pack')).toEqual([
+      each('Pack', 'to pack', { days: 0, hour: 8 }, 'the morning of', {
+        key: 'prac_2026-10-18',
+        at: new Date(2026, 9, 18, 8).toString().slice(0, 21),
+      }),
+    ])
+  })
+
+  it('asks how long before, when it wasn’t said', async () => {
+    const say = conversation({ tools })
+    expect(await say('Remind me to pray before every event')).toEqual([
+      'ask: How long before each event should I remind you to pray? An hour before, say.',
+    ])
+    expect(await say('30 minutes')).toEqual([
+      each('Pray', 'to pray', { minutes: 30 }, '30 minutes before', youthNight(18, 30)),
+    ])
+  })
+
+  it('one event named is still that event alone', async () => {
+    const say = conversation({ tools })
+    const said = await say('Remind me an hour before youth night')
+    expect(said[0]).toMatch(/^remind /)
   })
 })

@@ -133,7 +133,7 @@ const names = () =>
 const day = (date: string) => FD(date, { weekday: true })
 
 /** An event by its key, as its page shows it — read fresh, not from what is loaded. */
-async function eventByKey(key: string): Promise<EventInstance | null> {
+export async function eventByKey(key: string): Promise<EventInstance | null> {
   const at = key.indexOf('_')
   if (at < 0) return null
   const snap = await getDoc(doc(db, 'events', key.slice(0, at)))
@@ -291,7 +291,7 @@ async function setAvailability(profile: UserProfile, input: Record<string, unkno
       `${day(ev.date)}${ev.isRec ? ' — this date only' : ''}`,
       ...(note ? [`Note: ${note}`] : []),
     ],
-    confirm: 'Answer',
+    confirm: 'Confirm',
     run: async () => {
       await useEventsStore.getState().setAvail(ev, String(profile.uid), status, note)
       return 'Done — your availability is in.'
@@ -1502,7 +1502,7 @@ async function setAvailabilityRange(profile: UserProfile, input: Record<string, 
       ...events.map((ev) => `${ev.title} — ${day(ev.date)}`),
       ...(note ? [`Note: ${note}`] : []),
     ],
-    confirm: 'Answer',
+    confirm: 'Confirm',
     run: async () => {
       for (const ev of events) await useEventsStore.getState().setAvail(ev, uid, status, note)
       return events.length === 1

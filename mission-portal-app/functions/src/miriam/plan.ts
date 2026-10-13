@@ -326,15 +326,25 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
           },
           open: {
             type: 'string',
-            enum: ['event', 'task', 'availability', 'screen', 'video', 'reorder', 'tour', 'none'],
+            enum: [
+              'event',
+              'task',
+              'availability',
+              'screen',
+              'video',
+              'reorder',
+              'tour',
+              'directions',
+              'none',
+            ],
             description:
               'event: the event’s page; task: the task; availability: the admin availability page; ' +
-              'screen: one of the screens they can open, from the list they are sent; video: a video from Content, to play; reorder: a reorder list item’s link, to buy it; tour: the app’s guided tour, going to each screen and showing its features; none: nothing to show.',
+              'screen: one of the screens they can open, from the list they are sent; video: a video from Content, to play; reorder: a reorder list item’s link, to buy it; tour: the app’s guided tour, going to each screen and showing its features; directions: maps with the way to the event, opened on their phone or in the browser; none: nothing to show.',
           },
           target: {
             type: 'string',
             description:
-              'The event’s key, the task’s id, the screen’s id, the Content item’s id (from find_content), the reorder item’s id (from read_operations), or for a tour the part of the app as app_guide names it ("events", "worship"; "" for the whole app); "" when open is availability or none.',
+              'The event’s key (for event or directions), the task’s id, the screen’s id, the Content item’s id (from find_content), the reorder item’s id (from read_operations), or for a tour the part of the app as app_guide names it ("events", "worship"; "" for the whole app); "" when open is availability or none.',
           },
           section: {
             type: 'string',
@@ -976,7 +986,8 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
       name: 'create_reminder',
       description:
         'Set a reminder for them, sent to their phone at the time ("remind me to go to Costco at 5 pm tomorrow") and shown in their tasks. ' +
-        'It can repeat ("every Sunday at 8": when is the first, repeat weekly), or be tied to an event ("an hour before Revival": its event_key and minutes_before, and it moves with the event). ' +
+        'It can repeat ("every Sunday at 8": when is the first, repeat weekly), or be tied to an event ("an hour before Revival": its event_key and minutes_before, and it moves with the event), ' +
+        'or come before every event of theirs from now on ("remind me to pray an hour before every event": every_event, with minutes_before; it keeps going for events added later). ' +
         'No time said: ask when, with follow_up. A day without a time: 9 AM. Set at once — they can take it back.',
       strict: true,
       input_schema: objectOf({
@@ -1001,6 +1012,11 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
           type: 'integer',
           description:
             'How long before the event’s start: 60 for "an hour before"; 0 if not tied to one.',
+        },
+        every_event: {
+          type: 'boolean',
+          description:
+            'True for one before each of their events, from now on: minutes_before set, event_key and when "".',
         },
       }),
     },

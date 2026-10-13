@@ -145,7 +145,14 @@ export async function gatherBriefing(): Promise<
       dueDate: t.projectedDate || t.dueDate,
       assignees: t.assignees,
     })),
-    reminders: useRemindersStore.getState().reminders,
+    // One before every event, said with the event it is next before: "pray before Youth Night".
+    reminders: useRemindersStore
+      .getState()
+      .reminders.map((r) =>
+        r.everyEvent
+          ? { ...r, text: `${r.text || 'Your reminder'} before ${r.eventTitle ?? 'your event'}` }
+          : r
+      ),
     announcements,
     unread,
     attention,

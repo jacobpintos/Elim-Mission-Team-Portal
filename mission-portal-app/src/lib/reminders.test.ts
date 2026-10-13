@@ -45,6 +45,24 @@ describe('reminders, as asked', () => {
     })
     expect(when('remind me on 10/20 to order shirts')?.at).toBe(at(20, 9))
   })
+  it('takes a clock time after "for", and "set reminder", "new reminder", "o’clock"', () => {
+    // As typed to her: the next 3:50 is this afternoon's.
+    expect(when('Set a reminder for 3:50 to start Claude')).toEqual({
+      text: 'Start Claude',
+      spoken: 'to start Claude',
+      at: at(12, 15, 50),
+    })
+    expect(when('set reminder for 4pm to call Sam')?.at).toBe(at(12, 16))
+    expect(when('Can you set a reminder for 9:15 tomorrow to send the slides')?.at).toBe(
+      at(13, 9, 15)
+    )
+    expect(when('reminder at 5 to pray')?.at).toBe(at(12, 17))
+    expect(when('new reminder for 6:30 pm to start dinner')?.at).toBe(at(12, 18, 30))
+    expect(when('remind me at 4 o’clock to leave')?.at).toBe(at(12, 16))
+    expect(when('create a reminder for 8 o’clock tonight to lock up')?.at).toBe(at(12, 20))
+    // "For" five of anything is not a time.
+    expect(when('remind me to buy chairs for 5')).toBeNull()
+  })
   it('leaves it to Claude without a time, or when it isn’t a reminder', () => {
     expect(when('remind me to go to Costco')).toBeNull()
     expect(when('remind me at 5')).toBeNull()

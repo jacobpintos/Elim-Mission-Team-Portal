@@ -64,7 +64,7 @@ A question: look it up with the tools — never answer from memory or guess — 
 
 Announcements, their messages, the Operations tab (issues, kaizen, planning, inventory), videos in Content, and their own profile and settings each have a lookup, where this person has that screen. To take them to a screen — "go to the admin users page", "open Kaizen" — answer with open "screen" and its id from the list they are sent; to show where an answer is, you may do the same.
 
-Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new task's form (open_task_form) or an event's form — a new one (open_event_form), or an existing one changed (edit_event: find the event first) — is only filled in for them to check and save, so fill in what they said and leave the rest out. To play a video from Content, find it, then answer with open "video" and its id. To buy something ("buy triple A batteries"), find it in the reorder list (read_operations, inventory) and answer with open "reorder" and its id, saying what you're opening; if it isn't on the list, or has no link, say so. A reminder for themselves ("remind me to call Sam on Friday"): create_reminder, with the time in their own day — if they gave no time, ask when. To change something — send a message, post an announcement, mark a task, answer their availability, sign up for food, turn a notification on or off, report an issue, submit or vote for a kaizen idea, report a concern to security, answer availability for a stretch of dates, add songs to a set list, make one, change one (take out, move, key) or tell the worship team about it, answer a meeting request sent to them, change their own name; and for admins assign several tasks, change or delete a task, make or delete a task template, set an event's cars, cancel an event or one date of it, start a chat, put up or take down the livestream, post an announcement to everyone or to people and groups, and change people's accounts, groups and common teams — use its tool once you have what it needs (an event's key, a task's id, a person's or group's id from people_and_groups); they confirm it in the app before anything is done, so don't ask them first. Anything else that changes something you can't do yet: say so in one sentence.
+Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new task's form (open_task_form) or an event's form — a new one (open_event_form), or an existing one changed (edit_event: find the event first) — is only filled in for them to check and save, so fill in what they said and leave the rest out. To play a video from Content, find it, then answer with open "video" and its id. To take them to an event, or give them the way there ("take me to the retreat", "directions to Sunday's service"), find it, then answer with open "directions" and its key, saying where it is: maps opens with the way. Asked where an event is on the day it happens, say where and offer to open maps, with follow_up true; if they say yes, answer with open "directions". To buy something ("buy triple A batteries"), find it in the reorder list (read_operations, inventory) and answer with open "reorder" and its id, saying what you're opening; if it isn't on the list, or has no link, say so. A reminder for themselves ("remind me to call Sam on Friday"): create_reminder, with the time in their own day — if they gave no time, ask when. To change something — send a message, post an announcement, mark a task, answer their availability, sign up for food, turn a notification on or off, report an issue, submit or vote for a kaizen idea, report a concern to security, answer availability for a stretch of dates, add songs to a set list, make one, change one (take out, move, key) or tell the worship team about it, answer a meeting request sent to them, change their own name; and for admins assign several tasks, change or delete a task, make or delete a task template, set an event's cars, cancel an event or one date of it, start a chat, put up or take down the livestream, post an announcement to everyone or to people and groups, and change people's accounts, groups and common teams — use its tool once you have what it needs (an event's key, a task's id, a person's or group's id from people_and_groups); they confirm it in the app before anything is done, so don't ask them first. Anything else that changes something you can't do yet: say so in one sentence.
 
 How to use the app. Asked for a tour or a walkthrough ("give me a tour", "show me around", "walk me through Worship", "show me how Events works"): answer with open "tour" and target the part asked for ("" for the whole app) — the app's guided tour goes to each screen and shows its features, as their role has them — and one sentence to start it ("Here's a tour of Events."). A "how do I…" or "what can I do in…" question: use app_guide for that part and answer from what it returns, in plain words and short steps; then offer to show them with the tour. Only what app_guide returns: it is what their role lets them do, so never describe anything it doesn't list. Something it doesn't list: say it isn't something they can do in the app (an admin does it), without explaining how. If app_guide says there is no such part for them, say so and name what you can show them.
 
@@ -125,6 +125,8 @@ type Open =
   | { kind: 'tour'; id: string }
   | { kind: 'video'; id: string }
   | { kind: 'reorder'; id: string }
+  /** The way to an event, opened in maps. */
+  | { kind: 'directions'; key: string }
   | {
       kind: 'event'
       key: string
@@ -485,7 +487,16 @@ export const askMiriam = onCall(
 
 interface AnswerInput {
   spoken: string
-  open: 'event' | 'task' | 'availability' | 'screen' | 'video' | 'reorder' | 'tour' | 'none'
+  open:
+    | 'event'
+    | 'task'
+    | 'availability'
+    | 'screen'
+    | 'video'
+    | 'reorder'
+    | 'tour'
+    | 'directions'
+    | 'none'
   target: string
   section: 'dress_code' | 'availability' | 'weather' | 'food' | 'details' | 'none'
   choices?: string[]
@@ -506,6 +517,9 @@ async function finish(input: AnswerInput, lookups: Lookups, viewer: Viewer) {
       ? (input.section as 'dress_code' | 'availability' | 'weather' | 'food' | 'details')
       : null
     open = { kind: 'event', key: String(input.target), section }
+  } else if (input.open === 'directions' && (await lookups.event(String(input.target)))) {
+    // Only an event this person may see: the app opens maps to its place.
+    open = { kind: 'directions', key: String(input.target) }
   } else if (input.open === 'task' && (await lookups.task(String(input.target)))) {
     open = { kind: 'task', id: String(input.target) }
   } else if (input.open === 'availability' && isAdminViewer(viewer)) {

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { XStack, YStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useRemindersStore, type Reminder } from '@/stores/remindersStore'
-import { reminderWhen, repeatWhen } from '@/lib/reminders'
+import { minutesBeforeSaid as before, reminderWhen, repeatWhen } from '@/lib/reminders'
 
 /** Done ones stay in the list this long, ticked, then drop out of it. */
 const KEEP_DONE_MS = 24 * 60 * 60 * 1000
@@ -30,7 +30,8 @@ export function RemindersSection({ uid }: { uid: string }) {
     }
   }, [uid])
 
-  const shown = reminders.filter((r) => !r.done || now - r.remindAt < KEEP_DONE_MS)
+  // One before every event stays, whatever its next: it is for all of them.
+  const shown = reminders.filter((r) => r.everyEvent || !r.done || now - r.remindAt < KEEP_DONE_MS)
   const open = shown.filter((r) => !r.done).length
 
   return (
@@ -75,15 +76,19 @@ function ReminderRow({
 }) {
   const colors = useThemeColors()
   const at = new Date(r.remindAt)
-  const past = r.remindAt <= now
+  // One before every event with none coming up has no time (0): not past.
+  const past = r.remindAt > 0 && r.remindAt <= now
   const clock = `${at.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}, ${at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
-  const when = r.repeat
-    ? `${repeatWhen(at, r.repeat).replace(/^./, (c) => c.toUpperCase())} · next ${reminderWhen(at, new Date(now))}`
-    : r.eventTitle && typeof r.minutesBefore === 'number'
-      ? `${before(r.minutesBefore)} ${r.eventTitle} · ${past ? clock : reminderWhen(at, new Date(now))}`
-      : past
-        ? clock
-        : reminderWhen(at, new Date(now))
+  const each = `${(r.relation || (typeof r.minutesBefore === 'number' ? before(r.minutesBefore) : 'before')).replace(/^./, (c) => c.toUpperCase())} each of your events`
+  const when = r.everyEvent
+    ? `${each} · ${r.eventTitle && r.remindAt > 0 ? `next: ${r.eventTitle}, ${reminderWhen(at, new Date(now))}` : 'none coming up'}`
+    : r.repeat
+      ? `${repeatWhen(at, r.repeat).replace(/^./, (c) => c.toUpperCase())} · next ${reminderWhen(at, new Date(now))}`
+      : r.eventTitle && typeof r.minutesBefore === 'number'
+        ? `${before(r.minutesBefore)} ${r.eventTitle} · ${past ? clock : reminderWhen(at, new Date(now))}`
+        : past
+          ? clock
+          : reminderWhen(at, new Date(now))
   return (
     <XStack
       backgroundColor={colors.surface}
@@ -95,38 +100,45 @@ function ReminderRow({
       alignItems="center"
       gap="$2"
     >
-      <Pressable
-        onPress={onToggle}
-        accessibilityRole="checkbox"
-        aria-checked={r.done}
-        accessibilityLabel={r.done ? `Not done: ${r.text}` : `Done: ${r.text}`}
-        style={styles.hit}
-      >
-        <XStack
-          width={22}
-          height={22}
-          borderRadius={11}
-          borderWidth={2}
-          borderColor={r.done ? '#27ae60' : colors.textMuted}
-          backgroundColor={r.done ? '#27ae60' : 'transparent'}
-          alignItems="center"
-          justifyContent="center"
+      {r.everyEvent ? (
+        // For every event, so never ticked off: taken away with ✕.
+        <View style={styles.hit} accessibilityLabel="Before each of your events">
+          <Text fontSize={18}>🔁</Text>
+        </View>
+      ) : (
+        <Pressable
+          onPress={onToggle}
+          accessibilityRole="checkbox"
+          aria-checked={r.done}
+          accessibilityLabel={r.done ? `Not done: ${r.text}` : `Done: ${r.text}`}
+          style={styles.hit}
         >
-          {r.done ? (
-            <Text color="white" fontSize={12} fontWeight="800">
-              ✓
-            </Text>
-          ) : null}
-        </XStack>
-      </Pressable>
+          <XStack
+            width={22}
+            height={22}
+            borderRadius={11}
+            borderWidth={2}
+            borderColor={r.done ? '#27ae60' : colors.textMuted}
+            backgroundColor={r.done ? '#27ae60' : 'transparent'}
+            alignItems="center"
+            justifyContent="center"
+          >
+            {r.done ? (
+              <Text color="white" fontSize={12} fontWeight="800">
+                ✓
+              </Text>
+            ) : null}
+          </XStack>
+        </Pressable>
+      )}
       <YStack flex={1} paddingVertical="$2" gap="$0.5">
         <Text
           color={r.done ? colors.textMuted : colors.text}
           fontSize="$4"
           fontWeight="600"
-          textDecorationLine={r.done ? 'line-through' : 'none'}
+          textDecorationLine={r.done && !r.everyEvent ? 'line-through' : 'none'}
         >
-          {r.text}
+          {r.text || 'Event reminder'}
         </Text>
         <Text
           color={past && !r.done ? colors.primary : colors.textMuted}
@@ -160,19 +172,6 @@ function ReminderRow({
       </Pressable>
     </XStack>
   )
-}
-
-/** "1 hour before", "30 minutes before", "1 day before". */
-function before(minutes: number): string {
-  if (minutes >= 1440 && minutes % 1440 === 0) {
-    const d = minutes / 1440
-    return `${d} ${d === 1 ? 'day' : 'days'} before`
-  }
-  if (minutes >= 60 && minutes % 60 === 0) {
-    const h = minutes / 60
-    return `${h} ${h === 1 ? 'hour' : 'hours'} before`
-  }
-  return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} before`
 }
 
 const styles = StyleSheet.create({

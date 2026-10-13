@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -89,6 +90,8 @@ export function CarpoolBuilder({
 }: CarpoolBuilderProps) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
+  // A phone's width: the cars' tabs smaller, so more of them fit on a line.
+  const compact = useWindowDimensions().width < 520
 
   const [cars, setCars] = useState<CarpoolCarData[]>(initialCars)
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -103,6 +106,8 @@ export function CarpoolBuilder({
   const [search, setSearch] = useState('')
   // What should take the cursor when it appears: a new car's name, a new child's.
   const [focus, setFocus] = useState<string | null>(null)
+  // The car's name being typed: its box outlined in the theme's colour.
+  const [naming, setNaming] = useState(false)
 
   const rootRef = useRef<View>(null)
   const tabsRef = useRef<View>(null)
@@ -148,6 +153,21 @@ export function CarpoolBuilder({
         .filter((m) => matchesSearch(m.person.name, search))
         .slice(0, 5)
     : []
+
+  // Who a name typed into a seat can be: everyone on the event, those not in
+  // a car first — and where each is now, said beside them.
+  const poolUids = new Set(pool.map((p) => p.uid))
+  const typeable = [...people].sort(
+    (a, b) =>
+      Number(!poolUids.has(a.uid)) - Number(!poolUids.has(b.uid)) || a.name.localeCompare(b.name)
+  )
+  const whereIs = (uid: string) => {
+    const at = spotOf(cars, uid)
+    if (at.kind === 'pool') return ''
+    const index = cars.findIndex((c) => c.id === at.carId)
+    const name = index >= 0 ? carName(cars[index], index) : 'a car'
+    return at.kind === 'driver' ? `driving ${name}` : `in ${name}`
+  }
 
   const dirty = JSON.stringify(tidyCars(cars)) !== JSON.stringify(tidyCars(initialCars))
 
@@ -410,76 +430,74 @@ export function CarpoolBuilder({
                 </Pressable>
               </XStack>
 
-              {/* The cars */}
-              <View ref={tabsRef} collapsable={false}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  scrollEnabled={Platform.OS === 'web' || !dragging}
-                  contentContainerStyle={styles.tabs}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {cars.map((car, i) => {
-                    const on = car.id === selectedId
-                    const over = hover === `car:${car.id}`
-                    return (
-                      <Pressable
-                        key={car.id}
-                        ref={(v) => {
-                          if (v) tabRefs.current.set(car.id, v)
-                          else tabRefs.current.delete(car.id)
-                        }}
-                        collapsable={false}
-                        onPress={() => setSelectedId(on ? null : car.id)}
-                        accessibilityRole="tab"
-                        accessibilityState={{ selected: on }}
+              {/* The cars: as many lines as they take, so every one, and
+                  "+ Add car" after them, is always in sight. */}
+              <View ref={tabsRef} collapsable={false} style={styles.tabs}>
+                {cars.map((car, i) => {
+                  const on = car.id === selectedId
+                  const over = hover === `car:${car.id}`
+                  return (
+                    <Pressable
+                      key={car.id}
+                      ref={(v) => {
+                        if (v) tabRefs.current.set(car.id, v)
+                        else tabRefs.current.delete(car.id)
+                      }}
+                      collapsable={false}
+                      onPress={() => setSelectedId(on ? null : car.id)}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: on }}
+                      style={[
+                        styles.tab,
+                        compact && styles.tabCompact,
+                        {
+                          borderColor: on || over ? colors.primary : colors.border,
+                          backgroundColor: on ? colors.primary : colors.background,
+                        },
+                        over && styles.zoneHover,
+                      ]}
+                    >
+                      <Text
+                        color={on ? colors.onPrimary : colors.text}
+                        fontSize={compact ? '$2' : '$3'}
+                        fontWeight="700"
+                        numberOfLines={1}
+                        maxWidth={compact ? 120 : 150}
+                      >
+                        🚗 {carName(car, i)}
+                      </Text>
+                      {/* How many are in it. */}
+                      <View
                         style={[
-                          styles.tab,
-                          {
-                            borderColor: on || over ? colors.primary : colors.border,
-                            backgroundColor: on ? colors.primary : colors.background,
-                          },
-                          over && styles.zoneHover,
+                          styles.count,
+                          { backgroundColor: on ? 'rgba(255,255,255,0.28)' : colors.surface },
                         ]}
+                        accessibilityLabel={`${headCount(car)} in this car`}
                       >
                         <Text
                           color={on ? colors.onPrimary : colors.text}
-                          fontSize="$3"
+                          fontSize="$2"
                           fontWeight="700"
-                          numberOfLines={1}
-                          maxWidth={150}
                         >
-                          🚗 {carName(car, i)}
+                          {headCount(car)}
                         </Text>
-                        {/* How many are in it. */}
-                        <View
-                          style={[
-                            styles.count,
-                            { backgroundColor: on ? 'rgba(255,255,255,0.28)' : colors.surface },
-                          ]}
-                          accessibilityLabel={`${headCount(car)} in this car`}
-                        >
-                          <Text
-                            color={on ? colors.onPrimary : colors.text}
-                            fontSize="$2"
-                            fontWeight="700"
-                          >
-                            {headCount(car)}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    )
-                  })}
-                  <Pressable
-                    onPress={addCar}
-                    accessibilityRole="button"
-                    style={[styles.tab, { borderColor: colors.primary, borderStyle: 'dashed' }]}
-                  >
-                    <Text color={colors.primary} fontSize="$3" fontWeight="700">
-                      + Add car
-                    </Text>
-                  </Pressable>
-                </ScrollView>
+                      </View>
+                    </Pressable>
+                  )
+                })}
+                <Pressable
+                  onPress={addCar}
+                  accessibilityRole="button"
+                  style={[
+                    styles.tab,
+                    compact && styles.tabCompact,
+                    { borderColor: colors.primary, borderStyle: 'dashed' },
+                  ]}
+                >
+                  <Text color={colors.primary} fontSize={compact ? '$2' : '$3'} fontWeight="700">
+                    + Add car
+                  </Text>
+                </Pressable>
               </View>
 
               {selected ? (
@@ -536,9 +554,12 @@ export function CarpoolBuilder({
                       keyboardShouldPersistTaps="handled"
                       contentContainerStyle={{ gap: 8 }}
                     >
+                      {label('CAR NAME')}
                       <XStack alignItems="center" gap="$2">
                         {/* One per car, so a new car's opens with the cursor in it:
-                            autoFocus only acts as the box first appears. */}
+                            autoFocus only acts as the box first appears. Drawn
+                            darker than the window, with a border that shows on
+                            it, in either theme. */}
                         <TextInput
                           key={selected.id}
                           value={selected.label}
@@ -546,12 +567,18 @@ export function CarpoolBuilder({
                           placeholder="Name this car — e.g. Andy’s van"
                           placeholderTextColor={colors.textMuted}
                           autoFocus={focus === `car:${selected.id}`}
-                          onFocus={() => setFocus(null)}
+                          onFocus={() => {
+                            setFocus(null)
+                            setNaming(true)
+                          }}
+                          onBlur={() => setNaming(false)}
                           style={[
                             styles.input,
+                            styles.carName,
                             {
                               color: colors.text,
-                              borderColor: colors.border,
+                              backgroundColor: colors.background,
+                              borderColor: naming ? colors.primary : colors.textMuted,
                               flex: 1,
                               minWidth: 0,
                             },
@@ -583,6 +610,17 @@ export function CarpoolBuilder({
                             Drag the driver here
                           </Text>
                         )}
+                        <NameTyper
+                          key={`driver:${selected.id}`}
+                          placeholder={
+                            selected.driver
+                              ? 'Type a name to change the driver'
+                              : 'Or type their name'
+                          }
+                          candidates={typeable.filter((p) => p.uid !== selected.driver)}
+                          where={whereIs}
+                          onPick={(uid) => put(uid, { kind: 'driver', carId: selected.id })}
+                        />
                       </View>
 
                       <XStack alignItems="center" justifyContent="space-between">
@@ -645,6 +683,19 @@ export function CarpoolBuilder({
                             Drag passengers here
                           </Text>
                         ) : null}
+                        <NameTyper
+                          key={`riders:${selected.id}`}
+                          placeholder="Or type a name"
+                          candidates={typeable.filter((p) => !selected.riders.includes(p.uid))}
+                          where={whereIs}
+                          onPick={(uid) => put(uid, { kind: 'passenger', carId: selected.id })}
+                          onChild={(name) => {
+                            const child = { ...newChild(selected), name }
+                            updateCar(selected.id, {
+                              children: [...(selected.children ?? []), child],
+                            })
+                          }}
+                        />
                       </View>
                     </ScrollView>
                   </View>
@@ -853,6 +904,113 @@ function DraggablePerson({
   )
 }
 
+/**
+ * A name typed into a seat, for anyone who would rather type than drag: the
+ * people it could be, as it is typed, to put there with a tap — or Enter,
+ * when it is plainly one of them. In the passengers', a name that is no one
+ * on the event can be added as a child.
+ */
+function NameTyper({
+  placeholder,
+  candidates,
+  where,
+  onPick,
+  onChild,
+}: {
+  placeholder: string
+  candidates: CarpoolPerson[]
+  /** Where someone is now ("in Car 2", "driving Andy’s van"), or '' if not in a car. */
+  where: (uid: string) => string
+  onPick: (uid: string) => void
+  onChild?: (name: string) => void
+}) {
+  const colors = useThemeColors()
+  const [text, setText] = useState('')
+  const typed = text.trim()
+  const found = typed ? candidates.filter((p) => matchesSearch(p.name, typed)).slice(0, 5) : []
+  const pick = (uid: string) => {
+    onPick(uid)
+    setText('')
+  }
+  const addChild = () => {
+    onChild?.(typed)
+    setText('')
+  }
+  // Enter: the one it fits, or the one it names in full — never a guess among several.
+  const enter = () => {
+    const exact = found.filter((p) => p.name.trim().toLowerCase() === typed.toLowerCase())
+    if (found.length === 1) pick(found[0].uid)
+    else if (exact.length === 1) pick(exact[0].uid)
+    else if (found.length === 0 && typed && onChild) addChild()
+  }
+  return (
+    <View style={styles.typer}>
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        onSubmitEditing={enter}
+        // Kept open for the next name.
+        blurOnSubmit={false}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        autoCorrect={false}
+        autoCapitalize="words"
+        returnKeyType="done"
+        style={[
+          styles.typerInput,
+          { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
+        ]}
+        accessibilityLabel={placeholder}
+      />
+      {typed ? (
+        <YStack gap="$1">
+          {found.map((p) => (
+            <Pressable
+              key={p.uid}
+              onPress={() => pick(p.uid)}
+              accessibilityRole="button"
+              accessibilityLabel={`Put ${p.name} here`}
+              style={[styles.suggestion, { borderColor: colors.border }]}
+            >
+              <Text
+                color={colors.text}
+                fontSize="$3"
+                fontWeight="600"
+                numberOfLines={1}
+                flexShrink={1}
+              >
+                {p.name}
+              </Text>
+              {where(p.uid) ? (
+                <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                  {where(p.uid)}
+                </Text>
+              ) : null}
+            </Pressable>
+          ))}
+          {found.length === 0 ? (
+            onChild ? (
+              <Pressable
+                onPress={addChild}
+                accessibilityRole="button"
+                style={[styles.suggestion, { borderColor: CARD_COLORS.child.border }]}
+              >
+                <Text color={colors.primary} fontSize="$3" fontWeight="600" numberOfLines={1}>
+                  + Add “{typed}” as a child
+                </Text>
+              </Pressable>
+            ) : (
+              <Text color={colors.textMuted} fontSize="$2">
+                No one on this event matches “{typed}”.
+              </Text>
+            )
+          ) : null}
+        </YStack>
+      ) : null}
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -864,6 +1022,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     paddingVertical: 2,
   },
@@ -875,6 +1035,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 20,
     borderWidth: 1.5,
+  },
+  tabCompact: {
+    gap: 6,
+    minHeight: 34,
+    paddingHorizontal: 10,
   },
   // Half the window at most, so the pool below always has room to drag from.
   panel: {
@@ -950,6 +1115,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     fontSize: 15,
   },
+  carName: {
+    minHeight: 44,
+    borderWidth: 2,
+    fontSize: 16,
+    fontWeight: '600',
+  },
   search: {
     flex: 1,
     // Free to shrink (see the car name's): a text box on the web otherwise keeps its default width.
@@ -960,6 +1131,31 @@ const styles = StyleSheet.create({
   },
   fullWidth: {
     width: '100%',
+  },
+  // A whole line of its seat, under whoever is in it.
+  typer: {
+    width: '100%',
+    marginTop: 4,
+    gap: 6,
+  },
+  typerInput: {
+    minHeight: 36,
+    minWidth: 0,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 15,
+  },
+  suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    minHeight: 36,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
   },
   count: {
     minWidth: 22,

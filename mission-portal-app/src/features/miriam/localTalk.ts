@@ -12,14 +12,19 @@ import {
 } from '@/lib/miriamAvailability'
 import { eventCalled, eventDay, eventPick } from '@/lib/miriamEvents'
 import { carpoolAsked, type CarpoolMove } from '@/lib/miriamCarpool'
+import { directionsAsked } from '@/lib/miriamDirections'
+import { placeOf } from '@/lib/directions'
 import { carName } from '@/features/events/carpoolCards'
 import {
+  beforeEachWithoutSpan,
   eventReminderAsked,
+  everyEventSaid,
   reminderAsked,
   reminderWithoutWhen,
   type EventReminderAsk,
 } from '@/lib/reminders'
 import { clockMinutes } from '@/lib/eventSchedule'
+import { clockOf } from '../../../functions/src/push/reminderTime'
 import type { ReminderExtra } from '@/stores/remindersStore'
 import { assignedTo, canSeeEvent, instancesOf, shiftDate } from '../../../functions/src/miriam/data'
 import {
@@ -103,6 +108,22 @@ export interface Talk {
   thinking: () => void
   /** Sets them a reminder, and says when — with a tap to take it back (MiriamButton: setReminder). */
   remind: (text: string, at: Date, spoken: string, extra?: ReminderExtra) => Promise<void>
+  /**
+   * Opens maps with the way to an event — the phone's own, or Google Maps in a
+   * browser; where a browser won't open it unasked, a button to (MiriamButton).
+   */
+  directions: (ev: EventInstance) => void
+  /**
+   * Sets them one reminder before every event of theirs, from now on — and
+   * says so, with the first of them (MiriamButton). `first`: none coming up yet.
+   */
+  remindBeforeEach: (
+    text: string,
+    spoken: string,
+    before: EventReminderAsk['before'],
+    relation: string,
+    first: { ev: EventInstance; at: Date } | null
+  ) => Promise<void>
 }
 
 /** What she can see, as this person: loaded, or read on asking. */
@@ -141,20 +162,141 @@ export interface Here {
 /** Worked out here, when it plainly can be: false to leave it to Claude. */
 export async function talkHere(said: string, here: Here, talk: Talk): Promise<boolean> {
   // Notifications first: "turn off message notifications" names messages too.
+  // Directions before food: "take me to the potluck" brings nothing. A
+  // reminder asked for, before what it names: "remind me before all my events"
+  // is no list of them.
   return (
     (await notificationsHere(said, here, talk)) ||
+    (await directionsHere(said, here, talk)) ||
+    (await remindersHere(said, here, talk)) ||
     (await taskStatusHere(said, here, talk)) ||
     (await foodHere(said, here, talk)) ||
     (await availabilityHere(said, here, talk)) ||
     (await agendaHere(said, here, talk)) ||
     (await carpoolHere(said, here, talk)) ||
-    (await remindersHere(said, here, talk)) ||
     (await announcementsHere(said, here, talk)) ||
     (await messagesHere(said, here, talk))
   )
 }
 
 const dayOf = (ev: EventInstance) => FD(ev.date, { weekday: true })
+
+// --- Directions -------------------------------------------------------------------
+
+/**
+ * "Take me to the retreat", "directions to the event on Sunday", "how do I
+ * get there?": maps opened with the way to it. Plainly one event, at once;
+ * probably one, asked about; several, asked which. None said ("take me
+ * there"): theirs today, else their next, asked about. One not found among
+ * theirs is left to Claude, which looks further.
+ */
+async function directionsHere(said: string, here: Here, talk: Talk): Promise<boolean> {
+  const { data } = here
+  if (!data) return false
+  const ask = directionsAsked(said, data.today)
+  if (!ask) return false
+  if (!ask.date && !ask.name) {
+    const soon = theirEvents(data, data.today, shiftDate(data.today, DIRECTIONS_DAYS))
+    const todays = soon.filter((ev) => ev.date === data.today)
+    if (todays.length === 1) return goTo(todays[0], talk)
+    if (todays.length > 1) return whichTo(todays, data.today, talk)
+    const next = soon[0]
+    if (!next) {
+      talk.say('You don’t have an event coming up to take you to.')
+      return true
+    }
+    return directionsTo(next, [], here, talk)
+  }
+  const picked = eventPick(ask, data, { ahead: DIRECTIONS_DAYS })
+  if (picked.kind === 'none') return false
+  if (picked.kind === 'sure') return goTo(picked.item, talk)
+  if (picked.kind === 'likely') return directionsTo(picked.item, picked.others, here, talk)
+  return whichTo(picked.items, data.today, talk)
+}
+
+/** How far ahead an event is looked for, to be taken to. */
+const DIRECTIONS_DAYS = 60
+
+/**
+ * "Directions to Youth Night on Friday?" — yes opens maps; another of them
+ * named, that one; "no, the retreat", the way to that instead.
+ */
+function directionsTo(ev: EventInstance, others: EventInstance[], here: Here, talk: Talk): boolean {
+  const today = here.data?.today ?? ev.date
+  talk.ask(`Directions to ${eventCalled(ev, today)}?`, async (r, t) => {
+    if (neverMind(r, t)) return true
+    if (saidYes(r)) return goTo(ev, t)
+    const i = others.length
+      ? choicePicked(
+          r,
+          others.map((o) => o.title)
+        )
+      : -1
+    if (i >= 0) return goTo(others[i], t)
+    const no = saidNo(r)
+    if (no && !no.rest) {
+      t.say('Okay — tell me which event, and I’ll open maps for it.')
+      return true
+    }
+    if (!no && looksLikeNewRequest(r)) return false
+    // The event they meant instead.
+    if (await directionsHere(`directions to ${no ? no.rest : r}`, here, t)) return true
+    t.say('I couldn’t find that among your events.')
+    return true
+  })
+  return true
+}
+
+function whichTo(events: EventInstance[], today: string, talk: Talk): boolean {
+  talk.ask(
+    `Which one: ${listed(
+      events.map((ev) => eventCalled(ev, today)),
+      'or'
+    )}?`,
+    async (r, t) => {
+      if (neverMind(r, t)) return true
+      const i = choicePicked(
+        r,
+        events.map((ev) => ev.title)
+      )
+      return i >= 0 ? goTo(events[i], t) : false
+    }
+  )
+  return true
+}
+
+/** Maps opened to the event — or why there is nowhere to open them to. */
+function goTo(ev: EventInstance, talk: Talk): boolean {
+  if (ev.isVirtual) {
+    talk.say(`${ev.title} is virtual${ev.virtualLink ? ' — the link is on its page' : ''}.`)
+  } else if (!placeOf(ev)) talk.say(`${ev.title} has no place set yet.`)
+  else talk.directions(ev)
+  return true
+}
+
+/** Words that, said back to her offer, mean "open them". */
+const OPEN_THEM =
+  /^(?:open(?:\s+(?:it|them|maps?|the\s+maps?|directions))?|maps?|directions|take\s+me(?:\s+there)?|let'?s\s+go|go)$/
+
+/**
+ * Where an event is, said on the day it happens — with maps offered for it:
+ * a yes opens them (MiriamButton, for a plain "where is it?" answered here).
+ */
+export function offerDirections(ev: EventInstance, said: string, talk: Talk): void {
+  talk.ask(`${said} Want me to open maps for it?`, async (r, t) => {
+    if (saidNeverMind(r)) {
+      t.say('Okay.')
+      return true
+    }
+    if (saidYes(r) || OPEN_THEM.test(plain(r))) return goTo(ev, t)
+    const no = saidNo(r)
+    if (no && !no.rest) {
+      t.say('Okay.')
+      return true
+    }
+    return false
+  })
+}
 
 /** "Never mind": nothing more asked. */
 function neverMind(reply: string, talk: Talk): boolean {
@@ -1293,7 +1435,18 @@ async function carpoolPerson(
 async function remindersHere(said: string, here: Here, talk: Talk): Promise<boolean> {
   if (!here.data || !here.tools.includes('create_reminder')) return false
   const fromEvent = eventReminderAsked(said)
+  // "An hour before every event": one reminder for all of theirs.
+  if (fromEvent && everyEventSaid(fromEvent.event)) return remindBeforeEach(fromEvent, here, talk)
   if (fromEvent) return reminderFromEvent(fromEvent, here, talk)
+  // "Before every event", and nothing of how long: asked.
+  const each = beforeEachWithoutSpan(said)
+  if (each) {
+    talk.ask(
+      `How long before each event should I remind you${each.spoken ? ` ${each.spoken}` : ''}? An hour before, say.`,
+      (r, t) => beforeEachWhenSaid(r, each, here, t)
+    )
+    return true
+  }
   const what = reminderWithoutWhen(said)
   if (!what) return false
   talk.ask(`When should I remind you ${what.spoken}?`, (r, t) => reminderWhenSaid(r, what, here, t))
@@ -1321,6 +1474,68 @@ async function reminderWhenSaid(
     'I couldn’t tell when. Try something like “tomorrow at 9” or “an hour before the potluck.”'
   )
   return true
+}
+
+/** "How long before each event?", answered: "an hour", "30 minutes before", "the morning of". */
+async function beforeEachWhenSaid(
+  reply: string,
+  what: { text: string; spoken: string },
+  here: Here,
+  talk: Talk
+): Promise<boolean> {
+  if (neverMind(reply, talk)) return true
+  const r = reply.trim().replace(/[.!?]+$/, '')
+  const asked = `remind me ${what.spoken} ${/\b(?:before|of)$/i.test(r) ? r : `${r} before`} every event`
+  const fromEvent = eventReminderAsked(asked)
+  if (fromEvent && everyEventSaid(fromEvent.event)) {
+    return remindBeforeEach({ ...fromEvent, text: what.text, spoken: what.spoken }, here, talk)
+  }
+  if (looksLikeNewRequest(reply)) return false
+  talk.say('I couldn’t tell how long before. Try “an hour before every event.”')
+  return true
+}
+
+/**
+ * One reminder before every event of theirs, from now on — the server keeps
+ * it on the next (functions/src/push/everyEvent) — with the first of them
+ * found here, to be said: the soonest whose time is still to come.
+ */
+export async function remindBeforeEach(
+  ask: Omit<EventReminderAsk, 'event'>,
+  here: Here,
+  talk: Talk
+): Promise<boolean> {
+  const { data } = here
+  if (!data) return false
+  const now = here.now()
+  let first: { ev: EventInstance; at: Date } | null = null
+  for (const ev of theirEvents(data, data.today, shiftDate(data.today, EACH_DAYS))) {
+    // A later day of a multi-day event is the same event.
+    if (ev.unpublished === true || /_d\d+$/.test(ev.instanceKey)) continue
+    const at = beforeEventAt(ev, ask.before)
+    if (at && at.getTime() > now && (!first || at < first.at)) first = { ev, at }
+  }
+  await talk.remindBeforeEach(ask.text, ask.spoken, ask.before, ask.relation, first)
+  return true
+}
+
+/** How far ahead the first event of a reminder before each is looked for. */
+const EACH_DAYS = 120
+
+/**
+ * When a reminder comes before this event: so long before its start, or a day
+ * before it at an hour. Its start read as the server reads it (clockOf), which
+ * keeps the reminder on from here, so the two agree.
+ */
+function beforeEventAt(ev: EventInstance, before: EventReminderAsk['before']): Date | null {
+  if ('minutes' in before) {
+    const clock = clockOf(ev.startTime)
+    if (!clock) return null
+    const [y, m, d] = ev.date.split('-').map(Number)
+    return new Date(new Date(y, m - 1, d, clock.h, clock.min).getTime() - before.minutes * 60_000)
+  }
+  const [y, m, d] = ev.date.split('-').map(Number)
+  return new Date(y, m - 1, d - before.days, before.hour, 0)
 }
 
 /** The event a reminder is set from: found, or asked about — then the reminder set from its time. */

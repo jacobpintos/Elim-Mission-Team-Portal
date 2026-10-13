@@ -37,7 +37,7 @@ import { rememberName, rememberWords } from '@/lib/miriamMemory'
 import { FD } from '@/lib/format'
 import { speak as speakAloud, stopSpeaking, unlockSpeech, whenSpoken } from './speak'
 import { askMiriam, miriamError, type Heard } from './askMiriam'
-import { prepareAction, type Prepared } from './actions'
+import { eventByKey, prepareAction, type Prepared } from './actions'
 import { useMiriamStore, WAKE_KEY } from '@/stores/miriamStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
@@ -60,7 +60,17 @@ import {
 } from '@/lib/miriamQuick'
 import { fetchWeather } from '@/lib/weather'
 import { announcementsShown } from '@/lib/miriamAppData'
-import { askAvailability, talkHere, type Here, type Reply, type Talk } from './localTalk'
+import {
+  askAvailability,
+  offerDirections,
+  remindBeforeEach,
+  talkHere,
+  type Here,
+  type Reply,
+  type Talk,
+} from './localTalk'
+import { directionsUrl, googleDirectionsUrl, placeOf } from '@/lib/directions'
+import { openDirections } from '@/lib/location'
 import { shownAlready } from '@/lib/miriamReplies'
 import {
   allAnnouncements,
@@ -72,9 +82,15 @@ import {
 } from './localData'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useRemindersStore } from '@/stores/remindersStore'
-import { reminderAsked, reminderWhen, repeatWhen, type Repeat } from '@/lib/reminders'
+import {
+  minutesBeforeSaid,
+  reminderAsked,
+  reminderWhen,
+  repeatWhen,
+  type Repeat,
+} from '@/lib/reminders'
 import { clockOf } from '../../../functions/src/push/reminderTime'
-import type { ReminderExtra } from '@/stores/remindersStore'
+import type { BeforeEach, ReminderExtra } from '@/stores/remindersStore'
 import { briefingAsked, type Briefing, type FoodNudge } from '@/lib/briefing'
 import { gatherBriefing, remindToAnswer } from './briefingData'
 import { BriefingView } from './BriefingView'
@@ -90,7 +106,8 @@ import { KEY_HINTS } from '@/lib/songRequest'
 import { loadAliases, rememberAlias } from '@/lib/songAliases'
 import type { ChordSheet } from '@/types/chordSheet'
 import { VideoPlayerModal } from '@/components/ui/VideoPlayerModal'
-import { useMusicStore, type MusicItem } from '@/stores/musicStore'
+import { extractYouTubeId, useMusicStore, type MusicItem } from '@/stores/musicStore'
+import { useMediaPlaybackStore } from '@/stores/mediaPlaybackStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { screensFor } from '@/lib/miriamScreens'
@@ -110,6 +127,8 @@ const PAUSE_MS = 1800
 const LISTEN_MS = 60_000
 /** How often listening for "Hey Miriam" is started again when it has stopped. */
 const WAKE_RETRY_MS = 3000
+/** What is playing (stores/mediaPlaybackStore) is a video: a YouTube player is up. */
+const isVideo = (url: string | null) => !!url && !!extractYouTubeId(url)
 /**
  * A song named in full, with a song screen up: no need to wait out a pause
  * for the rest — a beat for a key to follow, none once one has.
@@ -321,7 +340,8 @@ export function MiriamButton() {
   const shownNote = useRef('')
   const openRef = useRef(false)
   // A link to buy something, for a tap to open (in a browser).
-  const [link, setLink] = useState<{ url: string; name: string } | null>(null)
+  // `label`: what its button says, when not "Open the link" (directions: "Open in Google Maps").
+  const [link, setLink] = useState<{ url: string; name: string; label?: string } | null>(null)
   // The daily briefing, shown in place of an answer; and whether it is being read out.
   const [briefing, setBriefing] = useState<Briefing | null>(null)
   // The first time the app is opened in a morning: the briefing offered.
@@ -653,9 +673,22 @@ export function MiriamButton() {
       return
     }
     if (quick) {
-      setAnswer(quick.text)
-      speak(quick.text)
-      setStage('answered')
+      if (quick.directions) {
+        // Where it is, asked on its day: maps offered — a yes, or the button, opens them.
+        const ev = quick.directions
+        offerDirections(ev, quick.text, talkFor(typing))
+        const place = placeOf(ev)
+        setLink({
+          url:
+            Platform.OS === 'web' ? googleDirectionsUrl(place) : directionsUrl(place, Platform.OS),
+          name: ev.title,
+          label: Platform.OS === 'web' ? 'Open in Google Maps' : 'Open in Maps',
+        })
+      } else {
+        setAnswer(quick.text)
+        speak(quick.text)
+        setStage('answered')
+      }
       if (quick.open && !anyOverlayOpen()) {
         router.push(miriamHref({ kind: 'event', ...quick.open }) as never)
       }
@@ -714,6 +747,22 @@ export function MiriamButton() {
       // A reminder: theirs alone, set at once, with a tap to take it back.
       if (result.kind === 'confirm' && result.name === 'create_reminder') {
         const text = String(result.input.text ?? '').trim()
+        // Before every one of their events, from now on: one reminder, kept on the next.
+        if (result.input.every_event === true) {
+          const minutes = Math.max(0, Math.round(Number(result.input.minutes_before) || 0)) || 60
+          const lead = text ? `to ${text.charAt(0).toLowerCase()}${text.slice(1)}` : ''
+          const ask = {
+            text,
+            spoken: lead,
+            before: { minutes },
+            relation: minutesBeforeSaid(minutes),
+          }
+          // Events not loaded here: set all the same, its first worked out by the server.
+          if (!(await remindBeforeEach(ask, hereNow(), talkFor(typing)))) {
+            await setReminderBeforeEach(text, lead, ask.before, ask.relation, null)
+          }
+          return
+        }
         const repeats = ['daily', 'weekdays', 'weekly', 'monthly']
         const repeat = repeats.includes(String(result.input.repeat))
           ? (String(result.input.repeat) as Repeat)
@@ -804,6 +853,23 @@ export function MiriamButton() {
         const found = await reorderLink(open.id)
         if (found && Platform.OS === 'web') setLink(found)
         else if (found) Linking.openURL(found.url).catch(() => setLink(found))
+      } else if (open?.kind === 'directions') {
+        // The way to an event: opened in maps, after what she said of it.
+        const ev = await eventByKey(open.key).catch(() => null)
+        if (ev && placeOf(ev)) {
+          const place = placeOf(ev)
+          const opened = await openDirections(place)
+          if (!opened) {
+            setLink({
+              url:
+                Platform.OS === 'web'
+                  ? googleDirectionsUrl(place)
+                  : directionsUrl(place, Platform.OS),
+              name: ev.title,
+              label: Platform.OS === 'web' ? 'Open in Google Maps' : 'Open in Maps',
+            })
+          }
+        }
       } else if (open && open.kind !== 'video' && open.kind !== 'tour' && !anyOverlayOpen()) {
         if (open.kind === 'screen') {
           // Only a screen this person has: checked again here.
@@ -909,6 +975,58 @@ export function MiriamButton() {
     setStage('answered')
   }
 
+  /**
+   * One reminder before every event of theirs, from now on (stores/
+   * remindersStore: addBeforeEach): set at once, with a tap to take it back.
+   */
+  const setReminderBeforeEach = async (
+    text: string,
+    spoken: string,
+    before: BeforeEach,
+    relation: string,
+    first: { ev: { instanceKey: string; templateId: unknown; title: string }; at: Date } | null
+  ) => {
+    const uid = useAuthStore.getState().profile?.uid
+    if (!uid) return
+    setStage('thinking')
+    try {
+      const id = await useRemindersStore.getState().addBeforeEach(
+        String(uid),
+        text,
+        before,
+        relation,
+        first
+          ? {
+              at: first.at,
+              eventKey: first.ev.instanceKey,
+              eventTemplateId: String(first.ev.templateId),
+              eventTitle: first.ev.title,
+            }
+          : null
+      )
+      const said = `Okay — I’ll remind you${spoken ? ` ${spoken}` : ''} ${relation} each of your events, from now on${
+        first
+          ? ` — first ${reminderWhen(first.at, new Date())}, before ${first.ev.title}`
+          : ', starting with the next one you’re on'
+      }. It’s in your tasks.`
+      useMiriamStore.getState().remember(asked.current, said)
+      setAnswer(said)
+      speak(said)
+      setUndo({
+        label: 'Undo',
+        run: async () => {
+          await useRemindersStore.getState().remove(id)
+          return 'Okay — that reminder is gone.'
+        },
+      })
+    } catch {
+      const no = 'That reminder didn’t save. Try again in a moment.'
+      setAnswer(no)
+      speak(no)
+    }
+    setStage('answered')
+  }
+
   /** Said aloud, and written out in her bar. */
   const speak = (text: string) => {
     speakAloud(text)
@@ -972,7 +1090,45 @@ export function MiriamButton() {
       useMiriamStore.getState().setAwaiting(false)
       return setReminder(text, at, spoken, extra)
     },
+    directions: (ev) => {
+      useMiriamStore.getState().setAwaiting(false)
+      showDirections(ev).catch(() => {})
+    },
+    remindBeforeEach: (text, spoken, before, relation, first) => {
+      useMiriamStore.getState().setAwaiting(false)
+      return setReminderBeforeEach(text, spoken, before, relation, first)
+    },
   })
+
+  /**
+   * The way to an event, opened in maps — the phone's own, or Google Maps in a
+   * new tab. A browser opens a tab only straight after a tap or a key: when it
+   * won't, the way there is a button to tap instead (as a reorder link is).
+   */
+  const showDirections = async (ev: {
+    title: string
+    location?: string
+    address?: string
+    city?: string
+    state?: string
+  }) => {
+    const place = placeOf(ev)
+    const opened = await openDirections(place)
+    const text = opened
+      ? `Opening directions to ${ev.title}${Platform.OS === 'web' ? ' in Google Maps' : ''}.`
+      : `Here’s the way to ${ev.title}, at ${place} — tap to open it.`
+    if (!opened) {
+      setLink({
+        url: Platform.OS === 'web' ? googleDirectionsUrl(place) : directionsUrl(place, Platform.OS),
+        name: ev.title,
+        label: Platform.OS === 'web' ? 'Open in Google Maps' : 'Open in Maps',
+      })
+    }
+    noteDone(text)
+    setAnswer(text)
+    speak(text)
+    setStage('answered')
+  }
 
   /** What the conversations worked out here can see, as this person. */
   const hereNow = (): Here => {
@@ -1434,17 +1590,24 @@ export function MiriamButton() {
 
   // Listening for "Hey Miriam": while switched on, the app on screen, the
   // panel closed and the microphone free — started again whenever it stops.
+  // Never while a video is up: the microphone opening under a YouTube player
+  // (as it did the moment "play" closed the panel) can switch the audio
+  // device beneath it — a Bluetooth headset to its call mode — and the
+  // player stops with "Audio renderer error".
   const listenRef = useRef(listen)
   useEffect(() => {
     listenRef.current = listen
   })
+  const videoUp = useMediaPlaybackStore((s) => isVideo(s.activeUrl)) || !!video
   useEffect(() => {
-    if (!wakeEngine || !wakeOn || !appActive || open) return
+    if (!wakeEngine || !wakeOn || !appActive || open || videoUp) return
     const engine = wakeEngine
     let starting = false
     let gaveUp = false
     const tryWake = () => {
       if (starting || gaveUp || ownsSpeech(WAKE_ID) || !speechFree()) return
+      // Opened since this started: the player's own effect claims it first.
+      if (isVideo(useMediaPlaybackStore.getState().activeUrl)) return
       starting = true
       claimSpeechInBackground(WAKE_ID, stopWake)
       engine
@@ -1485,7 +1648,7 @@ export function MiriamButton() {
       clearInterval(every)
       if (ownsSpeech(WAKE_ID)) stopWake()
     }
-  }, [wakeOn, appActive, open])
+  }, [wakeOn, appActive, open, videoUp])
 
   // Not left listening past a minute; never behind a closed panel. Cut off
   // mid-request, it is not sent half-said: what was heard is put in the box,
@@ -1763,11 +1926,11 @@ export function MiriamButton() {
                   <Pressable
                     onPress={() => Linking.openURL(link.url).catch(() => {})}
                     accessibilityRole="link"
-                    accessibilityLabel={`Open the link for ${link.name}`}
+                    accessibilityLabel={`${link.label ?? 'Open the link'} for ${link.name}`}
                     style={[styles.choice, { borderColor: colors.primary, marginTop: 6 }]}
                   >
                     <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
-                      Open the link — {link.name}
+                      {link.label ?? 'Open the link'} — {link.name}
                     </Text>
                   </Pressable>
                 ) : null}

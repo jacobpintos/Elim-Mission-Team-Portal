@@ -1,4 +1,5 @@
 import type { ExtraDay } from '@/types/events'
+import { tidyTime } from './eventSchedule'
 
 /**
  * Dates as the event form shows them, and as they are stored.
@@ -63,7 +64,7 @@ export function fromExtraDayRows(rows: ExtraDayRow[]): ExtraDay[] {
   return rows
     .map((row) => ({
       date: displayToIso(row.date),
-      ...(row.startTime.trim() ? { startTime: row.startTime.trim() } : {}),
+      ...(row.startTime.trim() ? { startTime: tidyTime(row.startTime) } : {}),
       ...(row.location.trim() ? { location: row.location.trim() } : {}),
     }))
     .filter((d) => !!d.date)

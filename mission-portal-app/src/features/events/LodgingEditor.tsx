@@ -25,7 +25,7 @@ interface LodgingEditorProps {
 
 function getName(uid: string, allUsers: UserProfile[]) {
   const u = allUsers.find((u) => sameId(u.uid, uid))
-  return u?.displayName || u?.email || uid
+  return u?.displayName || u?.email || 'Unnamed account'
 }
 
 export function LodgingEditor({
@@ -356,7 +356,7 @@ export function LodgingEditor({
                         gap="$2"
                       >
                         <Text flex={1} fontSize="$3" color={colors.text}>
-                          {u.displayName || u.email || uid}
+                          {u.displayName || u.email || 'Unnamed account'}
                         </Text>
                         {isSel && (
                           <Text color={colors.primary} fontSize="$3">

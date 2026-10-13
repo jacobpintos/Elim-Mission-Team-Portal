@@ -25,7 +25,7 @@ import { CarpoolBuilder } from './CarpoolBuilder'
 import { CarpoolSummary, carpoolPerson } from './CarpoolSummary'
 import { unplaced } from './carpoolCards'
 import { ScheduleBuilder } from './ScheduleBuilder'
-import { dayNames, scheduleByDay, tidySchedule, whenShown } from '@/lib/eventSchedule'
+import { dayNames, scheduleByDay, tidySchedule, tidyTime, whenShown } from '@/lib/eventSchedule'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import { taskDueDate } from '@/lib/events'
 import {
@@ -184,7 +184,7 @@ function withDraft(form: FormData, draft: EventDraft): FormData {
   if (draft.address) next.address = draft.address
   if (draft.city) next.city = draft.city
   if (draft.state) next.state = draft.state
-  if (draft.startTime) next.startTime = draft.startTime
+  if (draft.startTime) next.startTime = tidyTime(draft.startTime)
   if (draft.users) next.users = draft.users
   if (draft.groups) next.groups = draft.groups
   if (draft.repeat === null) next.isRec = false
@@ -279,6 +279,16 @@ export function EventFormModal({
   const { commonTeams, subscribe: subConfig, unsubscribe: unsubConfig } = useConfigStore()
 
   const allUsers = allStoreUsers.filter((u) => !isPublic(u) && !!u.displayName)
+  /**
+   * A person's name wherever the form shows one — from everyone known, not
+   * only those it lists to pick from: someone on the event through a group or
+   * a team who is left out of that list (a public account, or one with no name
+   * yet) was shown as their raw id.
+   */
+  const nameOf = (uid: string) => {
+    const u = allStoreUsers.find((x) => sameId(x.uid, uid))
+    return u?.displayName || u?.email || 'Unnamed account'
+  }
 
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([])
   const [allGroups, setAllGroups] = useState<GroupDoc[]>([])
@@ -482,7 +492,7 @@ export function EventFormModal({
         address: form.address,
         city: form.city,
         state: form.state,
-        startTime: form.startTime,
+        startTime: tidyTime(form.startTime),
         isRec: form.isRec,
         // A recurring event repeats by rule, so extra dates would fight with
         // it — the editor is hidden in that case and the stored ones go too.
@@ -516,7 +526,7 @@ export function EventFormModal({
           address: form.address,
           city: form.city,
           state: form.state,
-          startTime: form.startTime,
+          startTime: tidyTime(form.startTime),
           isPublic: form.isPublic,
           isVirtual: form.isVirtual,
           virtualLink: form.isVirtual ? form.virtualLink : '',
@@ -681,14 +691,7 @@ export function EventFormModal({
     const unassignedTeamMembers = teamMemberUids.filter((uid) => !assignedUids.has(uid))
 
     if (unassignedTeamMembers.length > 0) {
-      const names = unassignedTeamMembers
-        .map(
-          (uid) =>
-            allUsers.find((u) => sameId(u.uid, uid))?.displayName ??
-            allUsers.find((u) => sameId(u.uid, uid))?.email ??
-            uid
-        )
-        .join(', ')
+      const names = unassignedTeamMembers.map(nameOf).join(', ')
       const label = unassignedTeamMembers.length > 1 ? 'These people are' : 'This person is'
       const msg = `${names}\n\n${label} on a team but not directly assigned to this event. Add them?`
       const ok = await confirmAsync(msg, {
@@ -705,14 +708,7 @@ export function EventFormModal({
       const placed = new Set(lodgingEntries.flatMap((e) => e.assignees))
       const unassignedLodging = [...assignedUids].filter((uid) => !placed.has(uid))
       if (unassignedLodging.length > 0) {
-        const names = unassignedLodging
-          .map(
-            (uid) =>
-              allUsers.find((u) => sameId(u.uid, uid))?.displayName ??
-              allUsers.find((u) => sameId(u.uid, uid))?.email ??
-              uid
-          )
-          .join(', ')
+        const names = unassignedLodging.map(nameOf).join(', ')
         const lodgingLabel = unassignedLodging.length > 1 ? 'These people are' : 'This person is'
         const lodgingMsg = `${names}\n\n${lodgingLabel} not assigned to any lodging. Save anyway?`
         const ok = await confirmAsync(lodgingMsg, {
@@ -982,6 +978,7 @@ export function EventFormModal({
                     <Input
                       value={day.startTime}
                       onChangeText={(v) => updateExtraDay(day.id, { startTime: v })}
+                      onBlur={() => updateExtraDay(day.id, { startTime: tidyTime(day.startTime) })}
                       placeholder="Start time (blank = same as Day 1)"
                       backgroundColor={colors.background}
                       color={colors.text}
@@ -1082,10 +1079,12 @@ export function EventFormModal({
           <Text color={colors.text} fontSize="$3">
             Start Time *
           </Text>
+          {/* Written however is easiest ("7pm"), and tidied as it is left ("7:00 PM"), as the schedule's are. */}
           <Input
             value={form.startTime}
             onChangeText={field('startTime')}
-            placeholder=""
+            onBlur={() => setForm((f) => ({ ...f, startTime: tidyTime(f.startTime) }))}
+            placeholder="e.g. 7:00 PM"
             backgroundColor={colors.surface}
             color={colors.text}
             borderColor={colors.border}
@@ -1497,10 +1496,7 @@ export function EventFormModal({
                       borderColor={colors.border}
                     >
                       <Text color={colors.text} fontSize="$2">
-                        {foodAssignees[i]
-                          ? (allUsers.find((u) => sameId(u.uid, foodAssignees[i]))?.displayName ??
-                            'Assigned')
-                          : 'Assign'}
+                        {foodAssignees[i] ? nameOf(foodAssignees[i]) : 'Assign'}
                       </Text>
                     </XStack>
                   </Pressable>
@@ -1654,7 +1650,7 @@ export function EventFormModal({
             entries={lodgingEntries}
             onChange={setLodgingEntries}
             assignedUids={assignedUids}
-            allUsers={allUsers}
+            allUsers={allStoreUsers}
             teams={teams}
             assignedGroups={allGroups.filter((g) => form.groups.includes(g.id))}
           />

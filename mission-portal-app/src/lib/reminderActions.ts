@@ -31,13 +31,13 @@ export function registerReminderButtons(): void {
 export async function reminderButton(action: string, reminderId: string): Promise<void> {
   const ref = doc(db, 'reminders', reminderId)
   const r = (await getDoc(ref)).data() as
-    | { uid: string; text: string; repeat?: string; tz?: string }
+    | { uid: string; text: string; repeat?: string; tz?: string; everyEvent?: boolean }
     | undefined
   if (!r) return
   if (action === REMINDER_SNOOZE) {
     const remindAt = Date.now() + SNOOZE_MS
-    if (r.repeat) {
-      // A repeating one keeps its own times: snoozed as a one-off copy.
+    if (r.repeat || r.everyEvent) {
+      // A repeating one, or one before every event, keeps its own times: snoozed as a one-off copy.
       await setDoc(doc(collection(db, 'reminders')), {
         uid: r.uid,
         text: r.text,
@@ -50,7 +50,7 @@ export async function reminderButton(action: string, reminderId: string): Promis
     } else {
       await updateDoc(ref, { remindAt, done: false, pending: true })
     }
-  } else if (action === REMINDER_DONE && !r.repeat) {
+  } else if (action === REMINDER_DONE && !r.repeat && !r.everyEvent) {
     await updateDoc(ref, { done: true, pending: false })
   }
 }

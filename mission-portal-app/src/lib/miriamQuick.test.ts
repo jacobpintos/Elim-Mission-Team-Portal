@@ -98,6 +98,23 @@ describe('event questions answered on the device', () => {
     )
   })
 
+  it('where it is, asked on its day: maps offered for it', () => {
+    expect(quickAnswer('Where is revival in the heartland', data())?.directions?.instanceKey).toBe(
+      'rev_2026-10-11'
+    )
+    // The day before: just where.
+    const before = quickAnswer('Where is revival in the heartland', {
+      ...data(),
+      today: '2026-10-10',
+    })
+    expect(before?.text).toBe('Revival in the Heartland is at Xtreme Arena, Wichita, KS.')
+    expect(before?.directions).toBeUndefined()
+    // Nowhere set: nothing to open maps to.
+    expect(quickAnswer('Where is the youth retreat', data())?.directions).toBeUndefined()
+    // Not asked where.
+    expect(quickAnswer('When is Revival', data())?.directions).toBeUndefined()
+  })
+
   it('never answers about an event the person can’t see', () => {
     expect(quickAnswer('dress code for secret planning', data())).toBeNull()
   })

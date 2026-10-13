@@ -53,10 +53,14 @@ describe('extra day rows', () => {
     expect(toExtraDayRows([])).toEqual([])
   })
 
-  it('saves what was typed, back in stored form', () => {
+  it('saves what was typed, back in stored form — its time tidied as the schedule’s are', () => {
     expect(
-      fromExtraDayRows([{ id: 'a', date: '10/02/26', startTime: ' 9 AM ', location: ' Chapel ' }])
-    ).toEqual([{ date: '2026-10-02', startTime: '9 AM', location: 'Chapel' }])
+      fromExtraDayRows([{ id: 'a', date: '10/02/26', startTime: ' 9 am ', location: ' Chapel ' }])
+    ).toEqual([{ date: '2026-10-02', startTime: '9:00 AM', location: 'Chapel' }])
+    // Not a time a clock reads: kept as typed.
+    expect(
+      fromExtraDayRows([{ id: 'a', date: '10/02/26', startTime: 'After lunch', location: '' }])
+    ).toEqual([{ date: '2026-10-02', startTime: 'After lunch' }])
   })
 
   it('leaves out a time and venue nobody filled in, so the day inherits Day 1', () => {
@@ -77,7 +81,7 @@ describe('extra day rows', () => {
   })
 
   it('round-trips a day without losing anything', () => {
-    const stored = [{ date: '2026-10-02', startTime: '9 AM', location: 'Chapel' }]
+    const stored = [{ date: '2026-10-02', startTime: '9:00 AM', location: 'Chapel' }]
     expect(fromExtraDayRows(toExtraDayRows(stored))).toEqual(stored)
   })
 })

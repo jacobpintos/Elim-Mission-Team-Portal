@@ -1,5 +1,38 @@
 import { Linking, Platform } from 'react-native'
 import type { EventTemplate, LodgingEntry } from '@/types/events'
+import { directionsUrl, googleDirectionsUrl } from './directions'
+
+/**
+ * Directions to a place opened at once — in the phone's own maps (lib/
+ * directions: directionsUrl), or Google Maps in a new tab — true when they
+ * were. A browser lets a page open a tab only straight after a tap or a key,
+ * so there it is false when it can't, for a link to be tapped instead.
+ */
+export async function openDirections(place: string): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined') return false
+    const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } })
+      .userActivation
+    if (activation && !activation.isActive) return false
+    const tab = window.open(googleDirectionsUrl(place), '_blank')
+    if (!tab) return false
+    try {
+      tab.opener = null
+    } catch {
+      // A tab it may not touch: opened all the same.
+    }
+    return true
+  }
+  try {
+    await Linking.openURL(directionsUrl(place, Platform.OS))
+    return true
+  } catch {
+    return Linking.openURL(googleDirectionsUrl(place)).then(
+      () => true,
+      () => false
+    )
+  }
+}
 
 export function eventMapQuery(
   ev: Pick<EventTemplate, 'location' | 'address' | 'city' | 'state'>

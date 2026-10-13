@@ -36,7 +36,21 @@ export interface Reminder {
   eventTemplateId?: string
   eventTitle?: string
   minutesBefore?: number
+  /**
+   * Before every one of their events, from now on ("an hour before every
+   * event"): one reminder, its time and event always the next of them
+   * (functions/src/push/everyEvent). With none coming up, `remindAt` is 0.
+   */
+  everyEvent?: boolean
+  /** One before every event by days: "the day before" 1, "the morning of" 0 — at `atHour`. */
+  daysBefore?: number
+  atHour?: number
+  /** As it was said: "1 hour before", "the morning of". */
+  relation?: string
 }
+
+/** How long before each event a reminder before every event comes. */
+export type BeforeEach = { minutes: number } | { days: number; hour: number }
 
 /** What else a reminder may carry. */
 export type ReminderExtra = Pick<
@@ -55,6 +69,14 @@ interface RemindersStore {
   subscribe: (uid: string) => void
   unsubscribe: () => void
   add: (uid: string, text: string, at: Date, extra?: ReminderExtra) => Promise<string>
+  /** One before every event of theirs, from now on; `first`, the next of them, if any. */
+  addBeforeEach: (
+    uid: string,
+    text: string,
+    before: BeforeEach,
+    relation: string,
+    first: { at: Date; eventKey: string; eventTemplateId: string; eventTitle: string } | null
+  ) => Promise<string>
   /** Again in a while: "snooze an hour". */
   snooze: (r: Reminder, minutes: number) => Promise<void>
   setDone: (r: Reminder, done: boolean) => Promise<void>
@@ -112,6 +134,35 @@ export const useRemindersStore = create<RemindersStore>((set, get) => ({
     return ref.id
   },
 
+  addBeforeEach: async (uid, text, before, relation, first) => {
+    const ref = doc(collection(db, 'reminders'))
+    const saved = setDoc(ref, {
+      uid,
+      text: text.slice(0, 300),
+      everyEvent: true,
+      ...('minutes' in before
+        ? { minutesBefore: before.minutes }
+        : { daysBefore: before.days, atHour: before.hour }),
+      relation: relation.slice(0, 60),
+      // The first of them, worked out here; kept to the next by the server from then on.
+      remindAt: first ? first.at.getTime() : 0,
+      pending: !!first,
+      ...(first
+        ? {
+            eventKey: first.eventKey,
+            eventTemplateId: first.eventTemplateId,
+            eventTitle: first.eventTitle,
+          }
+        : {}),
+      done: false,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      createdAt: serverTimestamp(),
+    })
+    await Promise.race([saved, new Promise((done) => setTimeout(done, SAVE_WAIT_MS))])
+    saved.catch(() => {})
+    return ref.id
+  },
+
   setDone: async (r, done) => {
     set((s) => ({ reminders: s.reminders.map((x) => (x.id === r.id ? { ...x, done } : x)) }))
     // Undone before its time: sent after all.
@@ -128,8 +179,9 @@ export const useRemindersStore = create<RemindersStore>((set, get) => ({
         x.id === r.id ? { ...x, remindAt, done: false, pending: true } : x
       ),
     }))
-    // A repeating one is snoozed as a one-off copy; it keeps its own times.
-    if (r.repeat) {
+    // A repeating one — or one before every event — is snoozed as a one-off
+    // copy; it keeps its own times.
+    if (r.repeat || r.everyEvent) {
       await setDoc(doc(collection(db, 'reminders')), {
         uid: r.uid,
         text: r.text,

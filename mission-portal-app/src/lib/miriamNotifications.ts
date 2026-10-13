@@ -197,6 +197,12 @@ const LOOSE_OFF =
   /\b(?:stop|pause|quit|cease|no\s+more|never|don'?t|do\s+not|get\s+rid\s+of|remove|block|too\s+many|fewer|less)\b/
 const LOOSE_ON =
   /\b(?:start|resume|notify\s+me|let\s+me\s+know|tell\s+me\s+when|alert\s+me|ping\s+me|remind\s+me|send\s+me|i\s+want|i'?d\s+like|keep\s+me\s+(?:posted|updated|informed|in\s+the\s+loop)|get\s+notified|be\s+notified|give\s+me|i\s+need|again)\b/
+/**
+ * A reminder of their own asked for — "set a reminder for 3:50 to…", "remind
+ * me to call Sam" — which names reminders but switches none (lib/reminders).
+ */
+const OWN_REMINDER =
+  /^(?:(?:set|add|make|create|schedule)\s+(?:up\s+)?(?:a\s+|me\s+a\s+|another\s+)?(?:new\s+)?reminder\b|(?:new\s+)?reminder\s+(?:for|at|to|on|in)\b|remind\s+me\s+(?:to|at|in|on|tomorrow|today|tonight|this|next|every)\b)/
 /** Asking to be told, which is a notification whatever word follows. */
 const TELL_ME =
   /\b(?:notify\s+me|let\s+me\s+know|tell\s+me\s+when|alert\s+me|ping\s+me|remind\s+me\s+(?:about|before|of)|keep\s+me\s+(?:posted|updated|informed|in\s+the\s+loop)|get\s+notified|be\s+notified|(?:i\s+want|i'?d\s+like|i\s+need)\s+to\s+(?:know|hear|be\s+told))\b/
@@ -217,7 +223,7 @@ export interface NotificationAsk {
 
 export function notificationAsked(text: string): NotificationAsk | null {
   const said = withoutEnding(withoutAsking(plain(text)))
-  if (!said) return null
+  if (!said || OWN_REMINDER.test(said)) return null
   // Exceptions, and a question about them, are Claude's.
   if (/\b(?:except|but\s+not|other\s+than|apart\s+from|besides|aside\s+from)\b/.test(said))
     return null

@@ -7,7 +7,7 @@ export { unsubscribe } from './unsubscribe'
 export { registerPushToken } from './push/registerPushToken'
 export { flushNotificationBatches } from './push/scheduledBatchFlush'
 export { taskDueReminders } from './push/taskReminders'
-export { sendDueReminders, moveEventReminders } from './push/reminders'
+export { sendDueReminders, moveEventReminders, refreshEveryEventReminders } from './push/reminders'
 export { onFlightWritten, flightReminderTask } from './push/flightReminders'
 export { foodSignupReminders } from './push/foodSignupReminders'
 export { eventHealthCheck } from './push/eventHealth'
@@ -15,7 +15,11 @@ export { onMessageCreated } from './push/messageNotifications'
 export { onSecurityReportUpdated } from './push/securityNotifications'
 export { onKaizenCreated, onIssueCreated } from './push/submissionNotifications'
 export { broadcastAnnouncement } from './push/sendBroadcast'
-export { onAnnouncementPublished, onPublicEventCreated, onContentUpdated } from './push/publicNotifications'
+export {
+  onAnnouncementPublished,
+  onPublicEventCreated,
+  onContentUpdated,
+} from './push/publicNotifications'
 export { onEventDeleted } from './onEventDeleted'
 export { onSetListDeleted } from './onSetListDeleted'
 export { textingListDigest } from './push/textingListDigest'

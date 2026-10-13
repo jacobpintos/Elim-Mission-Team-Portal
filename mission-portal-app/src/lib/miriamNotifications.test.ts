@@ -113,6 +113,11 @@ describe('notificationAsked: which, none, or not one', () => {
     'Turn off all notifications except messages',
     'I am getting too many messages',
     'Remind me to call Sam at 5',
+    // A reminder of their own names reminders, and switches none.
+    'set a reminder for 3:50 to start Claude',
+    'Set a reminder to start the reminders slide',
+    'add a reminder to stop at the store',
+    'reminder at 9 to turn on the projector',
     'Send Sarah a message',
     'Turn off messages and turn on announcements',
   ])('"%s" is not one', (text) => {

@@ -13,6 +13,7 @@ import {
   type Group,
   type Viewer,
 } from '../../functions/src/miriam/data'
+import { placeOf } from './directions'
 import { scheduleSaid } from './eventSchedule'
 
 /**
@@ -267,6 +268,8 @@ export interface QuickAnswer {
   open: { key: string; section: 'dress_code' | 'details' | 'weather' | 'schedule' } | null
   /** Asked the weather: the events to fetch a forecast for (lib/weather), and say with weatherLine. */
   weather?: EventInstance[]
+  /** Asked where it is on the day it happens: the event, for maps to be offered. */
+  directions?: EventInstance
 }
 
 /** The events asked about: on that day, or by that name (nearest first). */
@@ -391,7 +394,9 @@ export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
   }
   if (events.length === 1) {
     const ev = events[0]
+    const today = ask.field === 'place' && ev.date === data.today && !ev.isVirtual && !!placeOf(ev)
     return {
+      ...(today ? { directions: ev } : {}),
       text: answerFor(ask.field, ev, data, true),
       open: {
         key: ev.instanceKey,

@@ -20,7 +20,7 @@ export interface ReminderAsk {
 export type Repeat = 'daily' | 'weekdays' | 'weekly' | 'monthly'
 
 const ASKED =
-  /^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+)?(?:remind\s+me|set\s+(?:a|me\s+a)\s+reminder|add\s+a\s+reminder|make\s+a\s+reminder|create\s+a\s+reminder)(?:\s+for\s+me)?\s*(.*)$/i
+  /^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+)?(?:please\s+)?(?:remind\s+me|(?:set|add|make|create|schedule)\s+(?:up\s+)?(?:a\s+|me\s+a\s+|another\s+)?(?:new\s+)?reminder|(?:new\s+)?reminder(?=\s+(?:for|at|to|on|in|tomorrow|today|tonight|every)\b))(?:\s+for\s+me)?\s*(.*)$/i
 
 const NUMBERS: Record<string, number> = {
   a: 1,
@@ -191,9 +191,13 @@ export function reminderAsked(said: string, now: Date): ReminderAsk | null {
     let hour: number | null = null
     let minute = 0
     let meridiem: string | null = null
+    // "At 5", "for 3:50", "3pm", "for 4 o'clock": "for" only with a time
+    // that is plainly a clock's ("for 5" could be five of anything).
     const clock =
-      cut(/\s(?:at|by|around)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?=\s)/i) ??
-      cut(/\s(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?=\s)/i)
+      cut(/\s(?:at|by|around)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?:\s*o'clock)?(?=\s)/i) ??
+      cut(/\s(?:for\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?=\s)/i) ??
+      cut(/\s(?:for\s+)?(\d{1,2}):(\d{2})()(?=\s)/i) ??
+      cut(/\s(?:for\s+)?(\d{1,2})()()\s*o'clock(?=\s)/i)
     if (clock) {
       hour = Number(clock[1])
       minute = clock[2] ? Number(clock[2]) : 0
@@ -353,6 +357,45 @@ export function eventReminderAsked(said: string): EventReminderAsk | null {
   if (!event) return null
   const what = of ? whatOf(of) : null
   return { text: what?.text ?? '', spoken: what?.spoken ?? '', before, relation, event }
+}
+
+/** "1 hour before", "30 minutes before", "1 day before": so long before an event. */
+export function minutesBeforeSaid(minutes: number): string {
+  if (minutes >= 1440 && minutes % 1440 === 0) {
+    const d = minutes / 1440
+    return `${d} ${d === 1 ? 'day' : 'days'} before`
+  }
+  if (minutes >= 60 && minutes % 60 === 0) {
+    const h = minutes / 60
+    return `${h} ${h === 1 ? 'hour' : 'hours'} before`
+  }
+  return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} before`
+}
+
+/** Every one of their events, as said: "every event", "each of my events", "any event starts". */
+const EVERY_EVENT =
+  "(?:(?:every|each|any|all)(?:\\s+single)?(?:\\s+(?:one\\s+)?of)?(?:\\s+(?:my|our|the))?\\s+events?|(?:my|our)\\s+events|events)(?:\\s+(?:i'?m\\s+(?:on|in|at)|i\\s+(?:have|go\\s+to|attend)))?(?:\\s+(?:starts?|begins?))?"
+
+/**
+ * The event a reminder is set from is every one of theirs (eventReminderAsked's
+ * `event`): "every event", "all my events", "any event starts".
+ */
+export function everyEventSaid(event: string): boolean {
+  return new RegExp(`^${EVERY_EVENT}$`, 'i').test(event.trim())
+}
+
+/**
+ * "Remind me to pray before every event", with no time from it said: what of,
+ * so she can ask how long before. Null when a time was said, or it isn't one.
+ */
+export function beforeEachWithoutSpan(said: string): { text: string; spoken: string } | null {
+  const m = normalized(said).match(ASKED)
+  if (!m) return null
+  const s = ` ${m[1]} `
+  if (FROM_EVENT.test(s)) return null
+  const each = new RegExp(`\\s(?:right\\s+|just\\s+)?before\\s+${EVERY_EVENT}(?=\\s)`, 'i')
+  if (!each.test(s)) return null
+  return whatOf(s.replace(each, ' '))
 }
 
 /**

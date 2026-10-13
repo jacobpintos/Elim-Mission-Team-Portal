@@ -16,7 +16,7 @@ interface FlightEditorProps {
 
 function getName(uid: string, allUsers: UserProfile[]) {
   const u = allUsers.find((u) => sameId(u.uid, uid))
-  return u?.displayName || u?.email || uid
+  return u?.displayName || u?.email || 'Unnamed account'
 }
 
 function FlightSection({
@@ -404,7 +404,7 @@ export function FlightEditor({ entries, onChange, allUsers }: FlightEditorProps)
                 <Pressable key={uid} onPress={() => addEntry(uid)}>
                   <XStack padding="$2" borderRadius="$2" alignItems="center">
                     <Text flex={1} fontSize="$3" color={colors.text}>
-                      {u.displayName || u.email || uid}
+                      {u.displayName || u.email || 'Unnamed account'}
                     </Text>
                   </XStack>
                 </Pressable>
