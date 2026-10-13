@@ -302,7 +302,7 @@ async function attentionFor(
 }
 
 /** Their answer for an event's date — or, for a repeating one, for the series — if they gave one. */
-async function answered(ev: EventInstance, uid: string): Promise<AvailResponse | null> {
+export async function answered(ev: EventInstance, uid: string): Promise<AvailResponse | null> {
   const read = async (key: string) =>
     ((await getDoc(doc(db, 'avail', key))).data()?.responses ?? {}) as Record<string, AvailResponse>
   const [instance, series] = await Promise.all([

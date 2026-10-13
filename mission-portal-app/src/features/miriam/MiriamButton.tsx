@@ -49,6 +49,7 @@ import { tourAsked } from '@/lib/miriamTour'
 import {
   availabilityAsked,
   availabilityEvent,
+  eventRef,
   listAnswer,
   listAsked,
   playAsked,
@@ -61,6 +62,16 @@ import {
   type QuickData,
 } from '@/lib/miriamQuick'
 import { fetchWeather } from '@/lib/weather'
+import {
+  dateSaid,
+  eventPicked,
+  foodAsked,
+  foodEventsFor,
+  foodItemMatch,
+  listed,
+} from '@/lib/miriamFood'
+import { nextOpenFood, openFood } from './foodAsk'
+import type { EventInstance } from '../../../functions/src/miriam/data'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useRemindersStore } from '@/stores/remindersStore'
 import { reminderAsked, reminderWhen, repeatWhen, type Repeat } from '@/lib/reminders'
@@ -288,6 +299,14 @@ export function MiriamButton() {
   } | null>(null)
   // She asked something back, and is waiting to hear the reply: kept up meanwhile.
   const [askingBack, setAskingBack] = useState(false)
+  // A food sign-up being worked out here, not by Claude (lib/miriamFood): the
+  // event offered to confirm, the events to pick from, or the items left.
+  const foodFlow = useRef<
+    | { step: 'event'; item: string; ev: EventInstance; open: string[] }
+    | { step: 'which'; item: string; events: EventInstance[] }
+    | { step: 'item'; ev: EventInstance; open: string[] }
+    | null
+  >(null)
   // A change shown to confirm, and her listening for a spoken yes or no to it.
   const [confirmByVoice, setConfirmByVoice] = useState(false)
   const confirmingByVoice = useRef(false)
@@ -458,6 +477,13 @@ export function MiriamButton() {
       setStage('answered')
       return
     }
+    // Answering a question about a food sign-up she asked here: carried on
+    // here. Anything else asked meanwhile drops it.
+    if (!again && foodFlow.current && useMiriamStore.getState().awaiting) {
+      await continueFood(withoutHerName(said), typing)
+      return
+    }
+    foodFlow.current = null
     // Answering what she asked back: hers to work out with what came before,
     // not taken for a song or a screen on its own.
     const replying = !again && useMiriamStore.getState().awaiting
@@ -541,6 +567,8 @@ export function MiriamButton() {
         return
       }
     }
+    // "I'll make pot roast for Sunday": signed up here, asking back what isn't plain.
+    if (local && !play && (await foodHere(withoutHerName(said), typing))) return
     // A song, opened here from the sheets on this device: no need to ask.
     // With a song screen up (a sheet open, or the Chord Sheets page), that is
     // all that is asked of her, and it is never sent off to be worked out.
@@ -854,6 +882,193 @@ export function MiriamButton() {
 
   /** Done without a word shown (a video played, a form opened): remembered for what comes next. */
   const noteDone = (reply: string) => useMiriamStore.getState().remember(asked.current, reply)
+
+  // --- Food sign-ups, worked out here (lib/miriamFood) ---------------------
+
+  /** Asked back about a sign-up: the reply comes to continueFood. */
+  const foodAskBack = (
+    text: string,
+    flow: NonNullable<typeof foodFlow.current>,
+    typing: boolean
+  ) => {
+    foodFlow.current = flow
+    useMiriamStore.getState().setAwaiting(true)
+    useMiriamStore.getState().remember(asked.current, text)
+    setAnswer(text)
+    speak(text)
+    setStage('answered')
+    askBack(typing)
+    return true
+  }
+
+  /** The sign-up ended with something said: nothing more asked. */
+  const foodSay = (text: string, open: EventInstance | null = null) => {
+    foodFlow.current = null
+    useMiriamStore.getState().setAwaiting(false)
+    setAnswer(text)
+    speak(text)
+    setStage('answered')
+    if (open && !anyOverlayOpen()) {
+      router.push(miriamHref({ kind: 'event', key: open.instanceKey, section: 'food' }) as never)
+    }
+    return true
+  }
+
+  const dayOf = (ev: EventInstance) => FD(ev.date, { weekday: true })
+
+  /**
+   * The event settled: the dish said found on its sheet and offered to
+   * confirm — or, when it isn't there, what is still open asked about.
+   */
+  const foodOnEvent = async (
+    ev: EventInstance,
+    item: string,
+    typing: boolean,
+    known?: string[]
+  ): Promise<boolean> => {
+    const items = ev.foodItems ?? []
+    const index = item ? foodItemMatch(items, item) : -1
+    if (index >= 0) {
+      foodFlow.current = null
+      useMiriamStore.getState().setAwaiting(false)
+      // Checked again there: taken meanwhile, or already theirs, is said so.
+      await offerAction('sign_up_food', { event_key: ev.instanceKey, item: items[index] })
+      return true
+    }
+    setStage('thinking')
+    const open = known ?? (await openFood(ev))
+    if (open === null) {
+      return foodSay(`I couldn’t read the food sheet for ${ev.title} just now.`, ev)
+    }
+    if (open.length === 0) {
+      return foodSay(`Everything on the food sheet for ${ev.title} is already taken.`)
+    }
+    const missed = item ? `I didn’t see ${item} on the sheet. ` : ''
+    return foodAskBack(
+      `${missed}${ev.title} on ${dayOf(ev)} still needs ${listed(open)}. Which one will you bring?`,
+      { step: 'item', ev, open },
+      typing
+    )
+  }
+
+  /** "Which date or event?", answered: from the events offered, or any with a sheet. */
+  const foodWhich = async (
+    reply: string,
+    item: string,
+    offered: EventInstance[],
+    typing: boolean
+  ): Promise<boolean> => {
+    const data = appData()
+    if (!data) return foodSay('I can’t see your events just now. Try again in a moment.')
+    if (offered.length) {
+      const picked = eventPicked(reply, offered, data.today)
+      if (picked) return foodOnEvent(picked, item, typing)
+    }
+    const ref = eventRef(reply.toLowerCase(), data.today)
+    const date = dateSaid(reply, data.today) ?? ref?.date ?? null
+    const name = date && !ref?.date ? '' : (ref?.name ?? '')
+    const found = date || name ? foodEventsFor({ date, name }, data) : []
+    if (found.length === 1 || (found.length > 1 && !date)) {
+      return foodOnEvent(found[0], item, typing)
+    }
+    if (found.length > 1) {
+      return foodAskBack(
+        `There’s more than one then: ${listed(found.map((ev) => ev.title))}. Which one?`,
+        { step: 'which', item, events: found },
+        typing
+      )
+    }
+    return foodSay('I couldn’t find an event with a food sign-up for that.')
+  }
+
+  /**
+   * A food sign-up asked for, worked out here when it plainly is one: the
+   * event named, or else the next with food open offered to confirm. False
+   * when it isn't plain, for Claude to work out.
+   */
+  const foodHere = async (said: string, typing: boolean): Promise<boolean> => {
+    const data = appData()
+    if (!data) return false
+    const ask = foodAsked(said, data.today)
+    if (!ask) return false
+    if (!appToolsFor(useAuthStore.getState().profile).includes('sign_up_food')) return false
+
+    if (ask.date || ask.name) {
+      const found = foodEventsFor(ask, data)
+      // None with a sheet: perhaps not food at all ("bring my guitar to practice").
+      if (found.length === 0) return false
+      if (found.length === 1 || !ask.date) return foodOnEvent(found[0], ask.item, typing)
+      return foodAskBack(
+        `You have ${found.length} events with a food sign-up then: ${listed(found.map((ev) => ev.title))}. Which one?`,
+        { step: 'which', item: ask.item, events: found },
+        typing
+      )
+    }
+
+    // No day or event said: the next of theirs with food still open, asked about.
+    if (!ask.surelyFood && !ask.item) return false
+    setStage('thinking')
+    const next = await nextOpenFood(foodEventsFor({ date: null, name: '' }, data), data.viewer.uid)
+    if (!next) {
+      if (!ask.surelyFood) return false
+      return foodSay('None of your upcoming events has food still open.')
+    }
+    // "I'll bring chips": food only if chips are on that sheet.
+    if (!ask.surelyFood && foodItemMatch(next.ev.foodItems ?? [], ask.item) < 0) return false
+    return foodAskBack(
+      `Do you mean ${next.ev.title} on ${dayOf(next.ev)}?`,
+      { step: 'event', item: ask.item, ev: next.ev, open: next.open },
+      typing
+    )
+  }
+
+  /** A reply to what she asked about a sign-up. */
+  const continueFood = async (reply: string, typing: boolean) => {
+    const flow = foodFlow.current
+    if (!flow) return
+    const r = reply.trim()
+    if (/^(?:never\s*mind|cancel|forget\s+(?:it|that)|stop)\b/i.test(r)) {
+      foodSay('Okay.')
+      return
+    }
+    if (flow.step === 'event') {
+      if (SAID_YES.test(r)) {
+        await foodOnEvent(flow.ev, flow.item, typing, flow.open)
+        return
+      }
+      // "No, the one on the 25th": what follows the no taken as which.
+      const rest = r.replace(SAID_NO, '').replace(/^[\s,]+/, '')
+      if (SAID_NO.test(r) && !rest) {
+        foodAskBack(
+          'Which date or event do you mean?',
+          { step: 'which', item: flow.item, events: [] },
+          typing
+        )
+        return
+      }
+      await foodWhich(rest || r, flow.item, [], typing)
+      return
+    }
+    if (flow.step === 'which') {
+      await foodWhich(r, flow.item, flow.events, typing)
+      return
+    }
+    // Which item: "the dessert", "I'll bring drinks".
+    const today = appData()?.today ?? todayStr()
+    const said = foodAsked(r, today)?.item || r
+    const index = foodItemMatch(flow.open, said)
+    if (index >= 0) {
+      foodFlow.current = null
+      useMiriamStore.getState().setAwaiting(false)
+      await offerAction('sign_up_food', { event_key: flow.ev.instanceKey, item: flow.open[index] })
+      return
+    }
+    if (SAID_NO.test(r)) {
+      foodSay('Okay.')
+      return
+    }
+    foodSay(`I couldn’t tell which one you meant. Here’s the sheet for ${flow.ev.title}.`, flow.ev)
+  }
 
   /** Her question back, answered: listened for once she has said it, or typed. */
   const askBack = async (typing: boolean) => {
