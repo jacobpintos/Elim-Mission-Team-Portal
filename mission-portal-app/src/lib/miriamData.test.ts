@@ -170,6 +170,27 @@ describe('getting there and staying', () => {
     expect(carpoolFor(revival, guest, names)).toEqual([])
   })
 
+  it('names the children riding along, and one not named yet as a child', () => {
+    const withKids = {
+      ...revival,
+      carpoolCars: [
+        {
+          id: 'c1',
+          label: 'Van',
+          driver: 'boss',
+          riders: ['sarah'],
+          children: [
+            { id: 'k1', name: 'Joey' },
+            { id: 'k2', name: '' },
+          ],
+        },
+      ],
+    }
+    expect(carpoolFor(withKids, sarah, names)).toEqual([
+      'Van (your car): driven by Jacob Pintos, riding: Sarah Lee, Joey (child), a child',
+    ])
+  })
+
   it('tells you your flight and lodging, and no one else’s', () => {
     expect(flightsFor(revival, sarah, names)).toEqual([
       'Your flight. Going: on 2026-10-24, at 7:10 AM, from CID, Delta 1234',

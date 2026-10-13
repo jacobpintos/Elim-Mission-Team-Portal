@@ -2,6 +2,14 @@ import { useEffect } from 'react'
 import { Modal, type ModalProps } from 'react-native'
 import { overlayOpened } from '@/lib/overlays'
 
+export type FullScreenOverlayProps = ModalProps & {
+  /**
+   * The web only: open above a Tamagui sheet, for a window opened from inside
+   * a form (see FullScreenOverlay.web.tsx). A native Modal is above it anyway.
+   */
+  aboveSheets?: boolean
+}
+
 /**
  * A full-screen layer over the app, with the same props as react-native's
  * Modal so it can stand in for one.
@@ -10,7 +18,11 @@ import { overlayOpened } from '@/lib/overlays'
  * not — see FullScreenOverlay.web.tsx for why a fixed-position modal is the
  * wrong thing to put controls inside on a phone held sideways.
  */
-export function FullScreenOverlay({ visible = true, ...props }: ModalProps) {
+export function FullScreenOverlay({
+  visible = true,
+  aboveSheets: _aboveSheets,
+  ...props
+}: FullScreenOverlayProps) {
   // Counted while open (lib/overlays).
   useEffect(() => (visible ? overlayOpened() : undefined), [visible])
   return <Modal visible={visible} {...props} />

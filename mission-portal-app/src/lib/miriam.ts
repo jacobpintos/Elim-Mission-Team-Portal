@@ -54,7 +54,14 @@ export interface EventDraft {
   isVirtual?: boolean
   virtualLink?: string
   foodItems?: string[]
-  cars?: { label: string; seats?: number; driver: string; riders: string[] }[]
+  cars?: {
+    label: string
+    seats?: number
+    driver: string
+    riders: string[]
+    /** Children riding along, by name: they have no accounts. */
+    children?: string[]
+  }[]
   lodging?: {
     name: string
     address: string

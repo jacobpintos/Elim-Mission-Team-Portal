@@ -93,6 +93,8 @@ export interface Car {
   label: string
   driver: string
   riders: string[]
+  /** Children riding along, by name: they have no accounts. */
+  children?: { id: string; name: string }[]
 }
 export interface Lodging {
   name: string
@@ -355,9 +357,11 @@ export function carpoolFor(
   return shown.map((c, i) => {
     const label = c.label || `Car ${cars.indexOf(c) + 1 || i + 1}`
     const driver = c.driver ? `driven by ${nameOf(names, c.driver)}` : 'no driver yet'
-    const riders = c.riders.length
-      ? `, riding: ${c.riders.map((r) => nameOf(names, r)).join(', ')}`
-      : ''
+    const riding = [
+      ...c.riders.map((r) => nameOf(names, r)),
+      ...(c.children ?? []).map((k) => (k.name.trim() ? `${k.name.trim()} (child)` : 'a child')),
+    ]
+    const riders = riding.length ? `, riding: ${riding.join(', ')}` : ''
     return `${label}${mine(c) ? ' (your car)' : ''}: ${driver}${riders}`
   })
 }

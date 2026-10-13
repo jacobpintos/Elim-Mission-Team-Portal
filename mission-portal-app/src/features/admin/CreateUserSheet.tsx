@@ -3,6 +3,7 @@ import { ScrollView } from 'react-native'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
 import { RoleCheckboxes } from './RoleCheckboxes'
+import { SexPicker } from './SexPicker'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
@@ -10,6 +11,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions'
 import { collection, addDoc, query, where, updateDoc, doc } from 'firebase/firestore'
 import { getDocs } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
+import type { Sex } from '@/types/user'
 
 interface CreateUserSheetProps {
   open: boolean
@@ -27,6 +29,7 @@ export function CreateUserSheet({ open, onClose, initial }: CreateUserSheetProps
   const [recoveryEmail, setRecoveryEmail] = useState('')
   const [password, setPassword] = useState('')
   const [roles, setRoles] = useState<string[]>(['regular'])
+  const [sex, setSex] = useState<Sex | null>(null)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   // Filled in from what Miriam was asked, once each time she asks — as
@@ -63,6 +66,7 @@ export function CreateUserSheet({ open, onClose, initial }: CreateUserSheetProps
         password,
         recoveryEmail: recoveryEmail.trim() || email.trim(),
         roles,
+        ...(sex ? { sex } : {}),
       })
       const { uid } = result.data as { uid: string }
 
@@ -94,6 +98,7 @@ export function CreateUserSheet({ open, onClose, initial }: CreateUserSheetProps
       setRecoveryEmail('')
       setPassword('')
       setRoles(['regular'])
+      setSex(null)
       setErrors({})
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create user'
@@ -180,6 +185,13 @@ export function CreateUserSheet({ open, onClose, initial }: CreateUserSheetProps
                 {errors.roles}
               </Text>
             )}
+          </YStack>
+
+          <YStack gap="$1">
+            <Text fontSize="$3" fontWeight="600">
+              Male / Female
+            </Text>
+            <SexPicker value={sex} onChange={setSex} />
           </YStack>
 
           <XStack gap="$2" justifyContent="flex-end">

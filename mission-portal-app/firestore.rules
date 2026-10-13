@@ -45,14 +45,17 @@ service cloud.firestore {
       //
       // The owner still edits their own record — they hold admin too, so the
       // first clause has to let them through for themselves.
+      //
+      // `sex` is set by admins in user management, for one thing: the colour of
+      // a person's card when a carpool is arranged. Not theirs to change.
       allow update: if (isAdmin() && (!isOwnerUid(uid) || isSelf(uid)))
         || (isSelf(uid) &&
             !request.resource.data.diff(resource.data).affectedKeys()
-              .hasAny(['roles', 'createdAt']))
+              .hasAny(['roles', 'createdAt', 'sex']))
         || (isSelf(uid) &&
             resource.data.roles.hasOnly(['unverified']) &&
             request.resource.data.roles.hasOnly(['public']) &&
-            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt']));
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'sex']));
       allow delete: if isAdmin() && !isOwnerUid(uid);
     }
 

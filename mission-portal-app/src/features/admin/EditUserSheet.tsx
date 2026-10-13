@@ -2,15 +2,16 @@ import { useState } from 'react'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
 import { RoleCheckboxes } from './RoleCheckboxes'
+import { SexPicker } from './SexPicker'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
-import { doc, updateDoc } from 'firebase/firestore'
+import { deleteField, doc, updateDoc } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
 import { confirmAsync } from '@/lib/confirm'
 import { isOwner } from '@/lib/owner'
-import type { UserProfile } from '@/types/user'
+import type { Sex, UserProfile } from '@/types/user'
 
 interface EditUserSheetProps {
   open: boolean
@@ -25,6 +26,7 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
   const [roles, setRoles] = useState<string[]>(user?.roles ?? ['regular'])
+  const [sex, setSex] = useState<Sex | null>(user?.sex ?? null)
   const [saving, setSaving] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [loadedUid, setLoadedUid] = useState(user?.uid)
@@ -43,6 +45,7 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
     setDisplayName(user.displayName ?? '')
     setEmail(user.email ?? '')
     setRoles(user.roles ?? ['regular'])
+    setSex(user.sex ?? null)
   }
 
   const handleResetPassword = async () => {
@@ -91,6 +94,7 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
         displayName: displayName.trim(),
         email: email.trim(),
         roles,
+        sex: sex ?? deleteField(),
       })
       await audit(
         'user.updated',
@@ -152,6 +156,13 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
             Roles
           </Text>
           <RoleCheckboxes selected={roles} onChange={setRoles} />
+        </YStack>
+
+        <YStack gap="$1">
+          <Text fontSize="$3" fontWeight="600">
+            Male / Female
+          </Text>
+          <SexPicker value={sex} onChange={setSex} />
         </YStack>
 
         <XStack gap="$2" justifyContent="space-between" alignItems="center">

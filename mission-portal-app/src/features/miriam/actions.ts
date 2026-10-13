@@ -1010,11 +1010,22 @@ async function setCarpool(profile: UserProfile, input: Record<string, unknown>) 
   const cars = (Array.isArray(input.cars) ? input.cars : []).slice(0, 30).map((c, i) => {
     const car = (c ?? {}) as Record<string, unknown>
     const driver = String(car.driver_id ?? '')
+    // Children have no accounts: they are names, as the carpool builder keeps them.
+    const children = (Array.isArray(car.child_names) ? car.child_names : [])
+      .map((n) =>
+        String(n ?? '')
+          .trim()
+          .slice(0, 40)
+      )
+      .filter(Boolean)
+      .slice(0, 20)
+      .map((name, j) => ({ id: `${Date.now()}${i}_${j}`, name }))
     return {
       id: `${Date.now()}${i}`,
       label: String(car.label ?? '').trim(),
       driver,
       riders: idList(car.rider_ids).filter((r) => r !== driver),
+      ...(children.length ? { children } : {}),
     }
   })
   const ref = doc(db, 'carpool', `${ev.templateId}_${ev.date}`)
@@ -1028,7 +1039,7 @@ async function setCarpool(profile: UserProfile, input: Record<string, unknown>) 
       ...(cars.length
         ? cars.map(
             (c, i) =>
-              `${c.label || `Car ${i + 1}`}: ${c.driver ? `${listNames([c.driver])} driving` : 'no driver yet'}${c.riders.length ? `; ${listNames(c.riders)}` : ''}`
+              `${c.label || `Car ${i + 1}`}: ${c.driver ? `${listNames([c.driver])} driving` : 'no driver yet'}${c.riders.length ? `; ${listNames(c.riders)}` : ''}${c.children?.length ? `; ${c.children.map((k) => `${k.name} (child)`).join(', ')}` : ''}`
           )
         : ['No cars.']),
     ],

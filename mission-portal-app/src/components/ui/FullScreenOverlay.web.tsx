@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { View, type ModalProps } from 'react-native'
 import { overlayOpened } from '@/lib/overlays'
+import type { FullScreenOverlayProps } from './FullScreenOverlay'
 
 /**
  * A full-screen layer over the app — absolutely positioned, not fixed.
@@ -38,6 +39,19 @@ let nextId = 0
 
 const DURATION = 300
 
+/**
+ * Where an overlay sits, and where one opened from inside a form does.
+ *
+ * Opening last puts an overlay on top of the others, but not of a Tamagui
+ * sheet: that portals into the body at a z-index of a hundred thousand, and
+ * on a phone every form built on components/ui/Modal is one. So a window
+ * opened from inside a form — the carpool builder from the event form — would
+ * open behind the form that opened it. Those ask to be above sheets. The rest
+ * stay where they were, under the floating layer (FloatingLayer.web.tsx).
+ */
+const BASE_Z = 9999
+const ABOVE_SHEETS_Z = 200000
+
 /** The Web Animations API, which every browser this app supports has. */
 const CAN_ANIMATE =
   typeof document !== 'undefined' && typeof document.createElement('div').animate === 'function'
@@ -47,8 +61,9 @@ export function FullScreenOverlay({
   animationType = 'none',
   transparent = false,
   onRequestClose,
+  aboveSheets = false,
   children,
-}: ModalProps) {
+}: FullScreenOverlayProps) {
   // Still on screen while the exit animation runs, then gone. With nothing to
   // animate it simply follows visible, decided here rather than in an effect.
   const [rendered, setRendered] = useState(visible)
@@ -60,8 +75,7 @@ export function FullScreenOverlay({
   const [host] = useState(() => {
     if (typeof document === 'undefined') return null
     const el = document.createElement('div')
-    el.style.cssText =
-      'position:absolute;top:0;left:0;right:0;bottom:0;z-index:9999;display:flex;flex-direction:column'
+    el.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;z-index:${aboveSheets ? ABOVE_SHEETS_Z : BASE_Z};display:flex;flex-direction:column`
     el.setAttribute('role', 'dialog')
     el.setAttribute('aria-modal', 'true')
     return el

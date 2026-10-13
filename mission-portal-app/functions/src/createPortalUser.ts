@@ -8,12 +8,14 @@ export const createPortalUser = onCall(async (req) => {
   const callerSnap = await admin.firestore().collection('users').doc(req.auth.uid).get()
   const callerRoles: string[] = callerSnap.data()?.roles ?? []
   if (!callerRoles.includes('admin')) throw new HttpsError('permission-denied', 'Admins only')
-  const { name, email, password, recoveryEmail, roles } = req.data as {
+  const { name, email, password, recoveryEmail, roles, sex } = req.data as {
     name: string
     email: string
     password: string
     recoveryEmail?: string
     roles: string[]
+    /** Colours their card when a carpool is arranged (UserProfile.sex in the app). */
+    sex?: unknown
   }
   let userRecord: admin.auth.UserRecord
   try {
@@ -34,6 +36,8 @@ export const createPortalUser = onCall(async (req) => {
     displayName: name,
     recoveryEmail: recoveryEmail || email,
     roles,
+    // Only either of the two, and absent rather than blank when not given.
+    ...(sex === 'male' || sex === 'female' ? { sex } : {}),
     onboardingComplete: true,
     notificationPrefs: {
       newAssignment: { push: true, email: false },

@@ -1,5 +1,8 @@
 export type Role = 'admin' | 'security' | 'regular' | 'intern' | 'worship' | 'guest' | 'public'
 
+/** Male or female, as an admin set it (UserProfile.sex). */
+export type Sex = 'male' | 'female'
+
 /** Default hours before departure that a flight reminder is sent. */
 export const DEFAULT_FLIGHT_REMINDER_HOURS = 3
 
@@ -171,6 +174,13 @@ export interface UserProfile {
     lng?: number
   }
   lastLoginAt?: number
+  /**
+   * Male or female, for one thing only: the colour of this person's card when
+   * an admin arranges a carpool — blue for male, pink for female. Shown nowhere
+   * else. Set by admins in user management; firestore.rules keeps it out of a
+   * user's edits to their own record, and publicProfiles does not copy it.
+   */
+  sex?: Sex
   /** UIDs this user has blocked — their messages are hidden from this user. */
   blockedUsers?: string[]
   /** Message IDs this user reported — hidden from them immediately. */

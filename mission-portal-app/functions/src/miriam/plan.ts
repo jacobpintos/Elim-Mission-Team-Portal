@@ -110,6 +110,7 @@ function EVENT_FIELDS(edit = false) {
           seats: { type: 'integer' },
           driver_id: str(),
           rider_ids: idsOf('Who rides in it.'),
+          child_names: idsOf('Children riding in it, by name — they have no accounts.'),
         },
         'Carpool cars.'
       ),
@@ -885,6 +886,7 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
             label: { type: 'string', description: 'Its name: "Andy’s truck".' },
             driver_id: { type: 'string', description: '"" if no one yet.' },
             rider_ids: ids('Who rides in it.'),
+            child_names: ids('Children riding in it, by name — they have no accounts. [] if none.'),
           }),
         },
       }),
@@ -1272,7 +1274,7 @@ export interface EventDraft {
   isVirtual?: boolean
   virtualLink?: string
   foodItems?: string[]
-  cars?: { label: string; seats?: number; driver: string; riders: string[] }[]
+  cars?: { label: string; seats?: number; driver: string; riders: string[]; children?: string[] }[]
   lodging?: {
     name: string
     address: string
@@ -1322,6 +1324,14 @@ export function validTime(s: string): string {
 }
 
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
+/** A car's children, by name, when it has any: they have no accounts to check against. */
+const childrenOf = (v: unknown): { children?: string[] } => {
+  const names = list(v)
+    .map((n) => clean(n, 40))
+    .filter(Boolean)
+    .slice(0, 20)
+  return names.length ? { children: names } : {}
+}
 const obj = (v: unknown): Record<string, unknown> =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
 const said = (input: Record<string, unknown>, key: string) => key in input && input[key] !== null
@@ -1434,6 +1444,7 @@ export function draftFromInput(
         ...(Number.isInteger(seats) && seats > 0 && seats < 60 ? { seats } : {}),
         driver: people([car.driver_id])[0] ?? '',
         riders: people(car.rider_ids),
+        ...childrenOf(car.child_names),
       }
     })
   }

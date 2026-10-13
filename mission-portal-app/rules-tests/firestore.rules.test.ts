@@ -194,6 +194,17 @@ describe('users', () => {
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', MEMBER), { roles: ['worship'] }))
   })
 
+  it('leaves male / female to admins', async () => {
+    // It colours a person's carpool card and is set in user management.
+    await assertFails(updateDoc(doc(as(MEMBER), 'users', MEMBER), { sex: 'female' }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', MEMBER), { sex: 'female' }))
+    await assertFails(updateDoc(doc(as(MEMBER), 'users', MEMBER), { sex: deleteField() }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', MEMBER), { sex: deleteField() }))
+    // Their other edits are unaffected by it being there.
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', MEMBER), { sex: 'male' }))
+    await assertSucceeds(updateDoc(doc(as(MEMBER), 'users', MEMBER), { displayName: 'Still me' }))
+  })
+
   it('only admins may delete a user', async () => {
     await assertFails(deleteDoc(doc(as(MEMBER), 'users', MEMBER)))
     await assertSucceeds(deleteDoc(doc(as(ADMIN), 'users', MEMBER)))

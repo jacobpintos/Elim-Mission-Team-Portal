@@ -46,6 +46,13 @@ export interface CarpoolCarData {
   seats?: number
   driver: string
   riders: string[]
+  /** Children riding along. They have no accounts, so they are names, typed on their cards. */
+  children?: CarpoolChild[]
+}
+
+export interface CarpoolChild {
+  id: string
+  name: string
 }
 
 export interface EventTeam {
