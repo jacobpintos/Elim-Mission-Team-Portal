@@ -20,6 +20,7 @@ import {
 import { migrateRetiredRoles } from '@/lib/roles'
 import { forgetOfflineData } from '@/lib/offlineCache'
 import { defaultNotificationPrefs } from '@/types/user'
+import { SIGN_UP_ENABLED } from '@/lib/featureFlags'
 import type { UserProfile } from '@/types/user'
 
 interface AuthStore {
@@ -121,6 +122,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   signUp: async (email, password, displayName, termsVersion) => {
+    // Accounts are made by admins while sign-up is off (featureFlags), and
+    // firestore.rules would refuse the record this goes on to write.
+    if (!SIGN_UP_ENABLED) throw new Error('Accounts are made by an admin.')
     const cred = await createUserWithEmailAndPassword(auth, email.trim(), password)
     await setDoc(doc(db, 'users', cred.user.uid), {
       uid: cred.user.uid,

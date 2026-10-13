@@ -17,6 +17,13 @@ service cloud.firestore {
     // src/lib/owner.ts.
     function ownerUid() { return '0RUxDLC8QGQ6qBTLgBkoMSgYibJ2'; }
     function isOwnerUid(uid) { return ownerUid() != '' && uid == ownerUid(); }
+
+    // Whether people may make their own account. Off: accounts are made by
+    // admins, and a login made some other way — with the app's public key,
+    // say — can't give itself a user record, let alone a role. Must match
+    // SIGN_UP_ENABLED in src/lib/featureFlags.ts, which says what else goes
+    // with turning it on.
+    function signUpOpen() { return false; }
     function isOwner() { return isSignedIn() && isOwnerUid(request.auth.uid); }
     // A guest is along for one trip: they may read the worship material they
     // have been added to, and change nothing.
@@ -38,7 +45,16 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isSelf(uid) || isAdmin();
-      allow create: if isSelf(uid);
+      // Admins make accounts: createPortalUser writes with the Admin SDK, which
+      // these rules don't apply to, and Auth Audit gives a login with no
+      // record one here. This used to let anyone signed in write their own
+      // record, roles and all — so a login made with the app's public key
+      // could make itself an admin. With sign-up open, a new login may write
+      // its own record only as public, without what admins set.
+      allow create: if isAdmin()
+        || (signUpOpen() && isSelf(uid)
+            && request.resource.data.roles == ['public']
+            && !request.resource.data.keys().hasAny(['sex', 'title']));
       // An admin may act on anyone but the owner. Without this the owner-only
       // callables are decoration: an admin edits the owner's roles down to
       // nothing, or deletes the account outright, from the client.

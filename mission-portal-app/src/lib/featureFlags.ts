@@ -23,6 +23,24 @@
 export const EMAIL_FEATURES_ENABLED = false
 
 /**
+ * Whether people can make their own account.
+ *
+ * Off: every account is made by an admin, in user management (the
+ * createPortalUser function). The landing page's Create Account button is
+ * hidden, and going to the sign-up screen's address lands on the login screen.
+ *
+ * When it comes back it is for the public profile type only. Turning it on is
+ * three changes, made together:
+ * - this constant;
+ * - signUpOpen() in firestore.rules, which lets a new login write its own
+ *   user record, only as public (and refuses one until it is on);
+ * - in the Firebase console, Authentication → Settings → User actions →
+ *   "Enable create (sign-up)", which is what stops anyone making a login
+ *   with the app's public key while it is off.
+ */
+export const SIGN_UP_ENABLED = false
+
+/**
  * Which parts of the public-facing surface the app exposes.
  *
  * The Public Facing section — Posts, Connect, Giving, Our Story, Content,

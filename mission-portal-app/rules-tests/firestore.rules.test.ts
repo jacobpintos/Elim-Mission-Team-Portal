@@ -194,6 +194,21 @@ describe('users', () => {
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', MEMBER), { roles: ['worship'] }))
   })
 
+  it('lets no one make their own record while sign-up is off — an admin least of all', async () => {
+    // A login made outside the app, with its public key, writing itself in.
+    const newcomer = as('newcomer-uid')
+    await assertFails(setDoc(doc(newcomer, 'users', 'newcomer-uid'), { roles: ['admin'] }))
+    await assertFails(setDoc(doc(newcomer, 'users', 'newcomer-uid'), { roles: ['public'] }))
+    await assertFails(getDoc(doc(newcomer, 'users', MEMBER)))
+  })
+
+  it('lets an admin give a login with no record one (Auth Audit)', async () => {
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'users', 'orphan-uid'), { roles: ['public'], displayName: 'Orphan' })
+    )
+    await assertFails(setDoc(doc(as(MEMBER), 'users', 'orphan-uid'), { roles: ['public'] }))
+  })
+
   it('leaves male / female to admins', async () => {
     // It colours a person's carpool card and is set in user management.
     await assertFails(updateDoc(doc(as(MEMBER), 'users', MEMBER), { sex: 'female' }))
@@ -217,6 +232,47 @@ describe('users', () => {
     // why members saw raw uids wherever a name belonged.
     await assertFails(getDocs(collection(as(MEMBER), 'users')))
     await assertSucceeds(getDocs(collection(as(ADMIN), 'users')))
+  })
+})
+
+describe('users, with sign-up turned back on', () => {
+  // The same rules with signUpOpen() switched on, so what it allows is known
+  // before the day it is.
+  let open: RulesTestEnvironment
+  const SWITCH = 'function signUpOpen() { return false; }'
+  beforeAll(async () => {
+    const rules = readFileSync(resolve(__dirname, '../firestore.rules'), 'utf8')
+    expect(rules).toContain(SWITCH)
+    open = await initializeTestEnvironment({
+      projectId: 'mission-portal-rules-signup-open',
+      firestore: {
+        rules: rules.replace(SWITCH, 'function signUpOpen() { return true; }'),
+        host: '127.0.0.1',
+        port: 8080,
+      },
+    })
+  })
+  afterAll(async () => open?.cleanup())
+  beforeEach(async () => open.clearFirestore())
+
+  const self = () => open.authenticatedContext('newcomer-uid').firestore()
+  const mine = () => doc(self(), 'users', 'newcomer-uid')
+
+  it('lets a new login write its own record as public', async () => {
+    await assertSucceeds(setDoc(mine(), { roles: ['public'], displayName: 'New' }))
+  })
+
+  it('refuses any other role, alone or alongside public', async () => {
+    await assertFails(setDoc(mine(), { roles: ['admin'] }))
+    await assertFails(setDoc(mine(), { roles: ['public', 'admin'] }))
+    await assertFails(setDoc(mine(), { roles: ['regular'] }))
+    await assertFails(setDoc(mine(), { displayName: 'No roles' }))
+  })
+
+  it('refuses what admins set, and anyone else’s record', async () => {
+    await assertFails(setDoc(mine(), { roles: ['public'], sex: 'male' }))
+    await assertFails(setDoc(mine(), { roles: ['public'], title: 'Lead Pastor' }))
+    await assertFails(setDoc(doc(self(), 'users', 'someone-else'), { roles: ['public'] }))
   })
 })
 

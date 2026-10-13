@@ -2,6 +2,7 @@ import { Image } from 'react-native'
 import { useRouter } from 'expo-router'
 import { YStack, H1, Paragraph, Button } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { SIGN_UP_ENABLED } from '@/lib/featureFlags'
 
 export default function LandingScreen() {
   const router = useRouter()
@@ -31,9 +32,12 @@ export default function LandingScreen() {
           >
             Portal Login
           </Button>
-          <Button variant="outlined" size="$5" onPress={() => router.push('/(auth)/register')}>
-            Create Account
-          </Button>
+          {/* Hidden while people can't make their own account (featureFlags). */}
+          {SIGN_UP_ENABLED ? (
+            <Button variant="outlined" size="$5" onPress={() => router.push('/(auth)/register')}>
+              Create Account
+            </Button>
+          ) : null}
         </YStack>
       </YStack>
     </SafeAreaView>

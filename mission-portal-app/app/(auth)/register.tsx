@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
-import { useRouter, Link } from 'expo-router'
+import { useRouter, Link, Redirect } from 'expo-router'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -11,6 +11,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { passwordInputProps } from '@/lib/passwordInput'
 import { useLightModeScreen } from '@/theme/useLightModeScreen'
 import { TERMS_VERSION } from './terms'
+import { SIGN_UP_ENABLED } from '@/lib/featureFlags'
 
 const schema = z
   .object({
@@ -34,7 +35,15 @@ const schema = z
 
 type FormData = z.infer<typeof schema>
 
+/**
+ * Sign-up, while people can make their own account (featureFlags: it is off,
+ * and the address goes to the login screen instead).
+ */
 export default function RegisterScreen() {
+  return SIGN_UP_ENABLED ? <RegisterForm /> : <Redirect href="/(auth)/login" />
+}
+
+function RegisterForm() {
   useLightModeScreen()
   const router = useRouter()
   const signUp = useAuthStore((s) => s.signUp)
