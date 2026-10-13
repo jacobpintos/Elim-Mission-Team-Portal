@@ -494,6 +494,37 @@ describe('foodSignups — one item at a time, never over someone', () => {
   })
 })
 
+describe('carpool — arranged by admins, read by everyone on it', () => {
+  const KEY = 'ev1_2026-10-16'
+  const cars = { cars: [{ id: 'c1', driver: MEMBER, riders: [OUTSIDER] }] }
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'carpool', KEY), cars)
+    })
+  })
+
+  it('lets a member read the cars', async () => {
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'carpool', KEY)))
+  })
+
+  it('lets an admin arrange them', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'carpool', KEY), { cars: [] }))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'carpool', 'ev1_2026-10-23'), cars))
+  })
+
+  it('refuses a member changing them, or starting a date’s cars', async () => {
+    await assertFails(setDoc(doc(as(MEMBER), 'carpool', KEY), { cars: [] }))
+    await assertFails(setDoc(doc(as(MEMBER), 'carpool', 'ev1_2026-10-23'), cars))
+    await assertFails(deleteDoc(doc(as(MEMBER), 'carpool', KEY)))
+  })
+
+  it('refuses a guest, and anyone signed out', async () => {
+    await assertFails(setDoc(doc(as(GUEST), 'carpool', KEY), { cars: [] }))
+    await assertFails(getDoc(doc(anon(), 'carpool', KEY)))
+  })
+})
+
 describe('flagged conversations — the other half of the queue', () => {
   beforeEach(async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {

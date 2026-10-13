@@ -282,9 +282,13 @@ service cloud.firestore {
         && change.changedKeys().size() == 0;
     }
 
+    // A date's cars, for an event whose cars aren't set in its form. Arranged
+    // by admins — on the event's page, or through Miriam — and only read by
+    // anyone else, who is shown the car they are in. Was writable by anyone
+    // signed in, though nothing in the app let them.
     match /carpool/{docId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // Guests read set lists and chord sheets but never write them. Without the
