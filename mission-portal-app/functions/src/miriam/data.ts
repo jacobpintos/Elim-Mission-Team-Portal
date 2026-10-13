@@ -145,6 +145,8 @@ export type AvailStatus = 'yes' | 'no' | 'partial' | 'tbd'
 export interface AvailResponse {
   status: AvailStatus
   note?: string
+  /** When it was given, in ms (the app's eventsStore writes it). */
+  ts?: number
 }
 export interface Task {
   id: string

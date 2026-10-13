@@ -26,6 +26,7 @@ import {
 } from '../../../functions/src/miriam/data'
 import type { Announcement, Message, Room } from '@/types/events'
 import type { SetList } from '@/types/worship'
+import type { AvailabilityQuestion } from './localTalk'
 
 /**
  * The daily briefing's data, gathered on the device as the person signed in
@@ -41,6 +42,12 @@ const NEW_MS = 36 * 60 * 60 * 1000
 const LOAD_WAIT_MS = 3000
 /** A forecast waited for, at most. */
 const WEATHER_WAIT_MS = 2500
+/** How far ahead the briefing asks about events not yet answered for. */
+const ASK_AHEAD_DAYS = 14
+/** "Not sure yet", given longer ago than this, is asked about again: the next morning's briefing. */
+const ASK_AGAIN_MS = 18 * 60 * 60 * 1000
+/** At most this many asked about after one briefing. */
+const MAX_ASKS = 3
 
 const today = () => {
   const d = new Date()
@@ -72,7 +79,9 @@ async function loaded(ready: () => boolean) {
   while (!ready() && Date.now() < until) await new Promise((r) => setTimeout(r, 100))
 }
 
-export async function gatherBriefing(): Promise<Briefing | null> {
+export async function gatherBriefing(): Promise<
+  (Briefing & { asks: AvailabilityQuestion[] }) | null
+> {
   const profile = useAuthStore.getState().profile
   if (!profile) return null
   const uid = String(profile.uid)
@@ -93,7 +102,7 @@ export async function gatherBriefing(): Promise<Briefing | null> {
 
   // Guests are along for the trip, not asked to bring food (firestore.rules).
   const asked = !(isGuest(profile) && !isAdmin(profile))
-  const [announcements, unread, attention, weather, food] = await Promise.all([
+  const [announcements, unread, attention, weather, food, asks] = await Promise.all([
     quietly(async () => {
       const all = (await getDocs(collection(db, 'announcements'))).docs.map(
         (d) => ({ ...(d.data() as Announcement), id: d.id }) as Announcement
@@ -118,9 +127,10 @@ export async function gatherBriefing(): Promise<Briefing | null> {
     ),
     quietly(() => forecasts(events, evOverrides, groups, viewer, day), {}),
     asked ? quietly(() => foodOpen(events, evOverrides, groups, uid, day), []) : [],
+    quietly(() => availabilityAsks(events, evOverrides, groups, viewer, day, now.getTime()), []),
   ])
 
-  return buildBriefing({
+  const briefing = buildBriefing({
     now,
     firstName: (profile.displayName ?? '').split(' ')[0],
     viewer,
@@ -142,6 +152,40 @@ export async function gatherBriefing(): Promise<Briefing | null> {
     weather,
     food,
   })
+  return { ...briefing, asks }
+}
+
+/**
+ * Their events in the next fortnight with no answer yet — or "not sure yet"
+ * given a while ago — to ask about once the briefing has been read
+ * (localTalk: askAvailability), nearest first.
+ */
+async function availabilityAsks(
+  templates: EventTemplate[],
+  overrides: Record<string, Partial<EventTemplate>>,
+  groups: Group[],
+  viewer: { uid: string; roles: string[] },
+  day: string,
+  now: number
+): Promise<AvailabilityQuestion[]> {
+  const upcoming = templates
+    .filter((t) => canSeeEvent(t, viewer, groups))
+    .flatMap((t) => instancesOf(t, day, shiftDate(day, ASK_AHEAD_DAYS), overrides))
+    .filter(
+      (ev) =>
+        !ev.unpublished && canSeeEvent(ev, viewer, groups) && assignedTo(ev, groups).has(viewer.uid)
+    )
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 12)
+  const answers = await Promise.all(upcoming.map((ev) => answered(ev, viewer.uid)))
+  const asks: AvailabilityQuestion[] = []
+  upcoming.forEach((ev, i) => {
+    const r = answers[i]
+    if (!r) asks.push({ ev, wasUnsure: false })
+    else if (r.status === 'tbd' && now - (r.ts ?? 0) > ASK_AGAIN_MS)
+      asks.push({ ev, wasUnsure: true })
+  })
+  return asks.slice(0, MAX_ASKS)
 }
 
 /** Unread messages in their conversations active this past week: by conversation. */

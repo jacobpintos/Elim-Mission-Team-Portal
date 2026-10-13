@@ -217,6 +217,14 @@ describe('what’s coming up', () => {
     expect(listAnswer(listAsked('what do I have tomorrow', today)!, data()).text).toBe(
       'Nothing is on tomorrow.'
     )
+    // Their tasks, not their events.
+    expect(listAsked('what do I have to do this week', today)).toBeNull()
+    // "Have next" is the next event — unless it is next week.
+    expect(listAsked('what do I have next', today)?.next).toBe(true)
+    expect(listAsked('what do I have next week', today)).toMatchObject({
+      next: false,
+      from: '2026-10-18',
+    })
     expect(listAsked('what’s on next week', today)).toMatchObject({
       from: '2026-10-18',
       to: '2026-10-24',

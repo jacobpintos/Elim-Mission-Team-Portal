@@ -75,9 +75,9 @@ const atDay = (now: Date, days: number) => {
   return d
 }
 
-export function reminderAsked(said: string, now: Date): ReminderAsk | null {
-  // Case kept, for what is left ("Costco"); every pattern below ignores it.
-  let s = said
+/** As the parsers here read what was said — its case kept, for what it is about ("Costco"). */
+const normalized = (said: string) =>
+  said
     .replace(/[’]/g, "'")
     .replace(/\b(a)\.?\s?m\.?(?=\s|$)/gi, 'am')
     .replace(/\b(p)\.?\s?m\.?(?=\s|$)/gi, 'pm')
@@ -86,9 +86,27 @@ export function reminderAsked(said: string, now: Date): ReminderAsk | null {
     .trim()
     .replace(/^(?:hey|ok|okay)\s+/i, '')
     .replace(/^miriam\s+/i, '')
+
+const COUNT =
+  '(?:\\d+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|forty-five|fifty)'
+/**
+ * A time said from an event — "an hour before", "the day before", "the
+ * morning of" — and the event after it. Read by eventReminderAsked, and left
+ * alone by reminderAsked, which would take "the night before the retreat"
+ * for tonight.
+ */
+const FROM_EVENT = new RegExp(
+  `\\s(?:(half\\s+an?\\s+hour|${COUNT}\\s*(?:minutes?|mins?|hours?|hrs?|days?))\\s+before|the\\s+(day|night|evening|morning|afternoon)\\s+before|the\\s+(morning|afternoon|evening|night|day)\\s+of|on\\s+the\\s+day\\s+of)\\s+(?=\\S)`,
+  'i'
+)
+
+export function reminderAsked(said: string, now: Date): ReminderAsk | null {
+  let s = normalized(said)
   const m = s.match(ASKED)
   if (!m) return null
   s = ` ${m[1]} `
+  // "An hour before the retreat": from an event, worked out with it (eventReminderAsked).
+  if (FROM_EVENT.test(s)) return null
   // A part found, taken out of what is left — its words lowered, to read.
   const cut = (re: RegExp) => {
     const found = s.match(re)
@@ -234,8 +252,14 @@ export function reminderAsked(said: string, now: Date): ReminderAsk | null {
   }
   if (!at || at <= now) return null
 
-  // What is left names what to be reminded of: "to go to Costco", "about the meeting".
-  const left = s.replace(/\s+/g, ' ').trim()
+  const what = whatOf(s)
+  if (!what) return null
+  return { ...what, at, ...(repeat ? { repeat } : {}) }
+}
+
+/** What is left names what to be reminded of: "to go to Costco", "about the meeting". */
+function whatOf(said: string): { text: string; spoken: string } | null {
+  const left = said.replace(/\s+/g, ' ').trim()
   const lead = left.match(/^(to|that|about|of|for)\s+(?:(?:to|that)\s+)?/i)
   const rest = (lead ? left.slice(lead[0].length) : left)
     .replace(/\s+(?:at|on|by|in|for)$/i, '')
@@ -244,7 +268,110 @@ export function reminderAsked(said: string, now: Date): ReminderAsk | null {
   const text = rest.charAt(0).toUpperCase() + rest.slice(1)
   const yours = rest.replace(/\bmy\b/gi, 'your').replace(/\bme\b/gi, 'you')
   const about = /^(?:about|of)$/i.test(lead?.[1] ?? '')
-  return { text, spoken: `${about ? 'about' : 'to'} ${yours}`, at, ...(repeat ? { repeat } : {}) }
+  return { text, spoken: `${about ? 'about' : 'to'} ${yours}` }
+}
+
+/** A reminder set from an event: "an hour before the retreat", "the day before revival to pack". */
+export interface EventReminderAsk {
+  /** What of, as shown and said back — empty when nothing was said but the event. */
+  text: string
+  spoken: string
+  /** So long before it starts; or a day before it (0, the day itself) at an hour. */
+  before: { minutes: number } | { days: number; hour: number }
+  /** As it was said, to say back: "an hour before", "the day before", "the morning of". */
+  relation: string
+  /** The words naming the event, its day too if said: "youth night", "saturday's potluck". */
+  event: string
+}
+
+/** The hour a part of a day is taken to mean, for a day before an event or of it. */
+const BEFORE_HOURS: Record<string, number> = {
+  day: 9,
+  morning: 8,
+  afternoon: 14,
+  evening: 19,
+  night: 19,
+}
+const OF_HOURS: Record<string, number> = {
+  day: 8,
+  morning: 8,
+  afternoon: 13,
+  evening: 18,
+  night: 18,
+}
+
+/**
+ * "Remind me an hour before the retreat", "remind me the day before revival
+ * to pack", "remind me to bring chips the morning of the potluck" — the time
+ * from an event, and the event, worked out on the device with the events the
+ * app has (features/miriam/localTalk). Null when it isn't said that way.
+ */
+export function eventReminderAsked(said: string): EventReminderAsk | null {
+  const m = normalized(said).match(ASKED)
+  if (!m) return null
+  const s = ` ${m[1]} `
+  const found = FROM_EVENT.exec(s)
+  if (!found) return null
+  const [whole, span, dayBefore, partOf] = found
+  let before: EventReminderAsk['before']
+  if (span) {
+    const n = span.match(/^(half|\d+|[a-z-]+)\s*([a-z]*)/i)
+    const half = /^half/i.test(span)
+    const count = half
+      ? 0.5
+      : /^\d+$/.test(n?.[1] ?? '')
+        ? Number(n?.[1])
+        : NUMBERS[(n?.[1] ?? '').toLowerCase()]
+    const unit = half ? 'hour' : (n?.[2] ?? '').toLowerCase()
+    if (!count) return null
+    before = unit.startsWith('d')
+      ? { days: count, hour: 9 }
+      : { minutes: Math.round(count * (unit.startsWith('h') ? 60 : 1)) }
+  } else if (dayBefore) before = { days: 1, hour: BEFORE_HOURS[dayBefore.toLowerCase()] }
+  else before = { days: 0, hour: OF_HOURS[(partOf ?? 'day').toLowerCase()] }
+
+  const relation = whole
+    .trim()
+    .replace(/^on\s+/i, '')
+    .toLowerCase()
+  const ahead = s.slice(0, found.index).trim()
+  const after = s.slice(found.index + whole.length).trim()
+  // What of: said before the time ("to pack the day before…"), else after the event ("…the retreat to pack").
+  let event = after
+  let of = ahead
+  if (!of) {
+    const split = after.match(/^(.*?)\s+(to|that|about)\s+(.+)$/i)
+    if (split) {
+      event = split[1]
+      of = `${split[2]} ${split[3]}`
+    }
+  }
+  event = event
+    .replace(/^the\s+/i, '')
+    .trim()
+    .toLowerCase()
+  if (!event) return null
+  const what = of ? whatOf(of) : null
+  return { text: what?.text ?? '', spoken: what?.spoken ?? '', before, relation, event }
+}
+
+/**
+ * A reminder asked for without a time — "remind me to bring chips" — what
+ * of, so she can ask when. Null if a time was said (or tried), or it is no
+ * reminder at all.
+ */
+export function reminderWithoutWhen(said: string): { text: string; spoken: string } | null {
+  const m = normalized(said).match(ASKED)
+  if (!m) return null
+  const s = ` ${m[1]} `
+  if (FROM_EVENT.test(s)) return null
+  if (
+    /\s(?:at|in|on|by|after|around|every|each|daily|weekly|monthly|today|tonight|tomorrow|noon|midnight|morning|afternoon|evening|night|sunday|monday|tuesday|wednesday|thursday|friday|saturday|\d+(?::\d+)?\s*(?:am|pm)?)(?=\s)/i.test(
+      s
+    )
+  )
+    return null
+  return whatOf(s)
 }
 
 /** When, as said back: "today at 5 PM", "tomorrow at 9 AM", "on Friday at 6:30 PM", "in 20 minutes". */

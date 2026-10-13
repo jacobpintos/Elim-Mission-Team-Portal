@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { reminderAsked, reminderWhen, repeatWhen } from './reminders'
+import {
+  eventReminderAsked,
+  reminderAsked,
+  reminderWhen,
+  reminderWithoutWhen,
+  repeatWhen,
+} from './reminders'
 
 // Monday, October 12 2026, 3:00 PM on this device.
 const now = new Date(2026, 9, 12, 15, 0)
@@ -89,5 +95,82 @@ describe('repeating reminders', () => {
     expect(repeatWhen(new Date(2026, 10, 1, 9, 0), 'monthly')).toBe(
       'on the 1st of every month at 9 AM'
     )
+  })
+})
+
+describe('reminders set from an event', () => {
+  it('so long before it starts', () => {
+    expect(eventReminderAsked('Remind me an hour before youth night')).toEqual({
+      text: '',
+      spoken: '',
+      before: { minutes: 60 },
+      relation: 'an hour before',
+      event: 'youth night',
+    })
+    expect(
+      eventReminderAsked('remind me 30 minutes before the retreat to bring the speaker')
+    ).toMatchObject({
+      text: 'Bring the speaker',
+      spoken: 'to bring the speaker',
+      before: { minutes: 30 },
+      event: 'retreat',
+    })
+    expect(eventReminderAsked('remind me half an hour before band practice')?.before).toEqual({
+      minutes: 30,
+    })
+  })
+
+  it('a day before it, or the day itself, at the hour that part of the day means', () => {
+    expect(eventReminderAsked('remind me the day before Revival to pack')).toMatchObject({
+      text: 'Pack',
+      before: { days: 1, hour: 9 },
+      relation: 'the day before',
+      event: 'revival',
+    })
+    expect(eventReminderAsked('remind me to pack the night before the retreat')).toMatchObject({
+      text: 'Pack',
+      spoken: 'to pack',
+      before: { days: 1, hour: 19 },
+      event: 'retreat',
+    })
+    expect(
+      eventReminderAsked('remind me the morning of the potluck to make the roast')
+    ).toMatchObject({
+      text: 'Make the roast',
+      before: { days: 0, hour: 8 },
+      relation: 'the morning of',
+      event: 'potluck',
+    })
+    expect(eventReminderAsked('remind me 2 days before the retreat to buy snacks')?.before).toEqual(
+      {
+        days: 2,
+        hour: 9,
+      }
+    )
+  })
+
+  it('is left to the plain reader otherwise — and that one leaves these alone', () => {
+    expect(eventReminderAsked('remind me tomorrow at 5 to call Sam')).toBeNull()
+    // Not tonight at 8: the night before the retreat.
+    expect(reminderAsked('remind me the night before the retreat to pack', now)).toBeNull()
+  })
+})
+
+describe('a reminder with no time said', () => {
+  it('is what of, for her to ask when', () => {
+    expect(reminderWithoutWhen('Remind me to bring chips')).toEqual({
+      text: 'Bring chips',
+      spoken: 'to bring chips',
+    })
+    expect(reminderWithoutWhen('set a reminder about the potluck')).toEqual({
+      text: 'The potluck',
+      spoken: 'about the potluck',
+    })
+  })
+  it('isn’t one with a time, or from an event, or no reminder at all', () => {
+    expect(reminderWithoutWhen('remind me to bring chips tomorrow')).toBeNull()
+    expect(reminderWithoutWhen('remind me at 5')).toBeNull()
+    expect(reminderWithoutWhen('remind me an hour before youth night')).toBeNull()
+    expect(reminderWithoutWhen('what reminders do I have')).toBeNull()
   })
 })

@@ -508,14 +508,16 @@ export interface ListAsk {
 export function listAsked(text: string, today: string): ListAsk | null {
   const said = clean(text)
   if (
-    /\b(?:my\s+)?next\s+event\b|^what'?s\s+next\b|\bwhat(?:'s|\s+is)\s+coming\s+up\b|\bwhat\s+do\s+i\s+have\s+(?:coming\s+up|next)\b/.test(
+    // "What do I have next?" — but "what do I have next week" is the week.
+    /\b(?:my\s+)?next\s+event\b|^what'?s\s+next\b|\bwhat(?:'s|\s+is)\s+coming\s+up\b|\bwhat\s+do\s+i\s+have\s+(?:coming\s+up|next(?!\s+(?:week|month|weekend)))\b/.test(
       said
     )
   ) {
     return { next: true, from: today, to: shiftDate(today, 365), span: '' }
   }
   const asksEvents =
-    /\b(?:what'?s\s+on|what(?:'s|\s+is)\s+happening|what\s+do\s+i\s+have|what\s+events|any\s+events|my\s+events|my\s+schedule|what'?s\s+(?:going\s+on|planned))\b/.test(
+    // "What do I have" — not "what do I have to do", which is their tasks (tasksAsked).
+    /\b(?:what'?s\s+on|what(?:'s|\s+is)\s+happening|what\s+do\s+i\s+have(?!\s+to\b)|what\s+events|any\s+events|my\s+events|my\s+schedule|what'?s\s+(?:going\s+on|planned))\b/.test(
       said
     ) &&
     // "My schedule for the retreat" is that event's (quickAnswer), not their week.

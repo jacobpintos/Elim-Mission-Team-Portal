@@ -47,7 +47,16 @@ import {
 import { closestTitles, parseSongRequest } from '@/lib/songRequest'
 import { matchContentByTitle } from '@/lib/contentMatch'
 import { keyLabel } from '@/lib/nashvilleNumbers'
-import { notifyAssignees } from '@/lib/taskNotifications'
+import { notifyAssignees, notifyLogisticsAssigned } from '@/lib/taskNotifications'
+import { newLogisticsAssignments } from '@/lib/guestItinerary'
+import {
+  carName,
+  childNames,
+  moveTo,
+  newChild,
+  spotOf,
+  tidyCars,
+} from '@/features/events/carpoolCards'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { extractYouTubeId, useMusicStore } from '@/stores/musicStore'
@@ -77,6 +86,7 @@ import { useTasksStore } from '@/stores/tasksStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import type {
   AvailResponse,
+  CarpoolCarData,
   CommonTeam,
   EventInstance,
   EventTemplate,
@@ -997,6 +1007,108 @@ async function deleteTask(profile: UserProfile, input: Record<string, unknown>) 
   } satisfies Prepared
 }
 
+/**
+ * One change to an event's cars, as an admin says it to Miriam — "put Sam in
+ * Andy's truck", "make Beth the driver of van 1", "take Sam out of the van",
+ * "add a child named Joey to van 1" — made as the carpool builder makes it:
+ * where the event's cars are kept (its form's, or its page's for this date),
+ * with whoever is moved told, as the form tells them.
+ */
+async function moveInCarpool(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const ev = await eventByKey(String(input.event_key ?? ''))
+  if (!ev) return cannot('I couldn’t find that event.')
+  if (!ev.carpool) return cannot(`${ev.title} has no carpool.`)
+  // Its form's cars, for every date — or, when it has none, this date's, set on its page.
+  const inForm = !!ev.carpoolCars?.length
+  const ref = doc(db, 'carpool', `${ev.templateId}_${ev.date}`)
+  const before: CarpoolCarData[] = inForm
+    ? (ev.carpoolCars ?? [])
+    : (((await getDoc(ref)).data()?.cars ?? []) as Partial<CarpoolCarData>[]).map((c, i) => ({
+        ...c,
+        id: c.id ?? String(i),
+        label: c.label ?? '',
+        driver: c.driver ?? '',
+        riders: c.riders ?? [],
+      }))
+  const seat = String(input.seat ?? '')
+  const uid = String(input.uid ?? '')
+  const child = String(input.child ?? '').trim()
+  const now = spotOf(before, uid)
+  // The car named — or, taking someone out, the one they are in.
+  const carId = String(input.car_id ?? '') || (now.kind !== 'pool' ? now.carId : '')
+  const at = before.findIndex((c) => c.id === carId)
+  if (at < 0) return cannot(`I couldn’t find that car on ${ev.title}.`)
+  const car = before[at]
+  const called = carName(car, at)
+  const who = uid ? listNames([uid]) : ''
+  let after: CarpoolCarData[]
+  let title: string
+  if (seat === 'child') {
+    if (!child) return cannot('I didn’t catch the child’s name.')
+    after = before.map((c) =>
+      c.id === carId
+        ? { ...c, children: [...(c.children ?? []), { ...newChild(c), name: child }] }
+        : c
+    )
+    title = `Add ${child} (a child) to ${called}?`
+  } else if (seat === 'driver') {
+    after = moveTo(before, uid, { kind: 'driver', carId })
+    title = `Make ${who} the driver of ${called}?`
+  } else if (seat === 'passenger') {
+    after = moveTo(before, uid, { kind: 'passenger', carId })
+    title = `Put ${who} in ${called}?`
+  } else if (seat === 'out') {
+    if (now.kind === 'pool') return cannot(`${who} isn’t in a car for ${ev.title}.`)
+    after = moveTo(before, uid, { kind: 'pool' })
+    title = `Take ${who} out of ${called}?`
+  } else return cannot('That isn’t a change I can make to the cars.')
+  if (after === before) {
+    return cannot(
+      seat === 'driver' ? `${who} is already driving ${called}.` : `${who} is already in ${called}.`
+    )
+  }
+  const shown = after.find((c) => c.id === carId) ?? car
+  const passengers = [...shown.riders.map((r) => listNames([r])), ...childNames(shown)]
+  const write = async (cars: CarpoolCarData[]) => {
+    const tidy = tidyCars(cars)
+    if (!inForm) return setDoc(ref, { cars: tidy })
+    // A date's own cars, if this date was edited apart from the rest; else every date's.
+    const override = useEventsStore.getState().overrides[ev.instanceKey]
+    if (override?.carpoolCars)
+      await useEventsStore.getState().setOverride(ev.instanceKey, { carpoolCars: tidy })
+    else await useEventsStore.getState().updateEvent(ev.templateId, { carpoolCars: tidy })
+  }
+  return {
+    kind: 'ready',
+    title,
+    details: [
+      `${ev.title} — ${day(ev.date)}${inForm && ev.isRec ? ' — every date' : ''}`,
+      `${called}: ${shown.driver ? `${listNames([shown.driver])} driving` : 'no driver yet'}${
+        passengers.length ? `; ${passengers.join(', ')}` : ''
+      }`,
+    ],
+    confirm: 'Save',
+    run: async () => {
+      await write(after)
+      // Told of a seat, as the event form tells them — only those given one.
+      if (inForm) {
+        notifyLogisticsAssigned(
+          newLogisticsAssignments({ carpoolCars: before }, { carpoolCars: after }),
+          ev.title,
+          ev.instanceKey
+        )
+      }
+      return 'Done — the cars are updated.'
+    },
+    undo: async () => {
+      await write(before)
+      return 'The cars are back as they were.'
+    },
+  } satisfies Prepared
+}
+
 /** An event's cars for one date, set as its page sets them (EventDetailModal: CarpoolPanel). */
 async function setCarpool(profile: UserProfile, input: Record<string, unknown>) {
   const no = adminOnly(profile)
@@ -1693,6 +1805,7 @@ const ACTIONS: Record<
   update_task: updateTask,
   delete_task: deleteTask,
   set_carpool: setCarpool,
+  move_in_carpool: moveInCarpool,
   report_issue: reportIssue,
   submit_kaizen: submitKaizen,
   vote_kaizen: voteKaizen,

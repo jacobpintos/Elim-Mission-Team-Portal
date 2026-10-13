@@ -47,8 +47,6 @@ import { useSongQueue } from '@/features/worship/useSongQueue'
 import { tourFor, tourNames } from '@/features/tour/flows'
 import { tourAsked } from '@/lib/miriamTour'
 import {
-  availabilityAsked,
-  availabilityEvent,
   listAnswer,
   listAsked,
   playAsked,
@@ -62,7 +60,7 @@ import {
 } from '@/lib/miriamQuick'
 import { fetchWeather } from '@/lib/weather'
 import { announcementsShown } from '@/lib/miriamAppData'
-import { talkHere, type Here, type Reply, type Talk } from './localTalk'
+import { askAvailability, talkHere, type Here, type Reply, type Talk } from './localTalk'
 import { shownAlready } from '@/lib/miriamReplies'
 import {
   allAnnouncements,
@@ -100,6 +98,8 @@ import { isAdmin } from '@/lib/roles'
 import { doc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getDoc } from '@/lib/liveFirestore'
+import { effectiveAvail } from '@/lib/availability'
+import type { CarpoolCarData } from '@/types/events'
 
 /** Claims on the microphone (lib/speechOwner): the request, and the wake word. */
 const SPEECH_ID = 'miriam'
@@ -122,6 +122,8 @@ const TOUR_PAUSE_MS = 1000
 const KEY_DONE = /(?:flat|sharp|minor|major|[♭♯#])$/i
 /** How long a confirmed change is waited on before it is said to be waiting for a signal. */
 const SEND_WAIT_MS = 12_000
+/** How long an answer to her availability questions is waited on before it is taken as kept for a signal. */
+const ANSWER_WAIT_MS = 4000
 /** How long an answer stays up once given, unless she is spoken to again. */
 const ANSWER_MS = 20_000
 /** Said to her, answering a question she asked back: nothing more is wanted. */
@@ -515,7 +517,7 @@ export function MiriamButton() {
     }
     // "What do I need to know today?": the daily briefing, put together here.
     if (local && briefingAsked(withoutHerName(said))) {
-      await giveBriefing()
+      await giveBriefing(typing)
       return
     }
     // "Remind me to go to Costco at 5 pm tomorrow": set here, at once.
@@ -817,8 +819,8 @@ export function MiriamButton() {
     setStage('answered')
   }
 
-  /** The daily briefing (lib/briefing): shown to tap through, and read out. */
-  const giveBriefing = async () => {
+  /** The daily briefing (lib/briefing): shown to tap through, and read out. `typing`: asked for by typing, so its questions are answered so too. */
+  const giveBriefing = async (typing = false) => {
     setStage('thinking')
     const b = await gatherBriefing().catch(() => null)
     if (!b) {
@@ -834,7 +836,27 @@ export function MiriamButton() {
     noteDone(b.spoken)
     speak(b.spoken)
     setReading(true)
-    whenSpoken().then(() => setReading(false))
+    const briefedFor = asked.current
+    whenSpoken().then(() => {
+      setReading(false)
+      // Then their events still without an answer, asked about one at a time
+      // — unless they have closed her, asked something else, or have a change
+      // up to confirm, meanwhile.
+      const profile = useAuthStore.getState().profile
+      if (
+        b.asks.length &&
+        openRef.current &&
+        asked.current === briefedFor &&
+        !pendingRef.current &&
+        appToolsFor(profile).includes('set_availability')
+      ) {
+        const lead =
+          b.asks.length === 1
+            ? 'One of your events needs an answer. '
+            : `${b.asks.length} of your events need an answer. `
+        askAvailability(b.asks, hereNow(), talkFor(typing), lead)
+      }
+    })
     setStage('answered')
   }
 
@@ -946,6 +968,10 @@ export function MiriamButton() {
       }
     },
     thinking: () => setStage('thinking'),
+    remind: (text, at, spoken, extra) => {
+      useMiriamStore.getState().setAwaiting(false)
+      return setReminder(text, at, spoken, extra)
+    },
   })
 
   /** What the conversations worked out here can see, as this person. */
@@ -971,6 +997,40 @@ export function MiriamButton() {
       latest: latestMessages,
       now: () => Date.now(),
       briefedFood: () => (briefedFood.current?.day === todayStr() ? briefedFood.current.food : []),
+      answerOf: (ev) => {
+        const r = effectiveAvail(useEventsStore.getState().avail, ev as never, uid)
+        return r ? { status: r.status, note: r.note ?? '', ts: r.ts ?? 0 } : null
+      },
+      // As the event's page saves it. Not waited on past a moment: with no
+      // signal it is kept on the phone and sent when there is one.
+      answer: async (ev, status, note) => {
+        const saving = useEventsStore.getState().setAvail(ev as never, uid, status, note)
+        // Failing after the wait is past: nothing more to say about it then.
+        saving.catch(() => {})
+        try {
+          await Promise.race([saving, new Promise((done) => setTimeout(done, ANSWER_WAIT_MS))])
+          return true
+        } catch {
+          return false
+        }
+      },
+      carsFor: async (ev) => {
+        if (ev.carpoolCars?.length) return ev.carpoolCars as unknown as CarpoolCarData[]
+        if (!ev.carpool) return []
+        try {
+          const saved = ((await getDoc(doc(db, 'carpool', `${ev.templateId}_${ev.date}`))).data()
+            ?.cars ?? []) as Partial<CarpoolCarData>[]
+          return saved.map((c, i) => ({
+            ...c,
+            id: c.id ?? String(i),
+            label: c.label ?? '',
+            driver: c.driver ?? '',
+            riders: c.riders ?? [],
+          }))
+        } catch {
+          return null
+        }
+      },
     }
   }
 
@@ -1003,21 +1063,6 @@ export function MiriamButton() {
       return true
     }
     const data = appData()
-    // "I'm available for Revival": shown to be confirmed, as any change is.
-    const avail = data && availabilityAsked(said, data.today)
-    if (avail) {
-      const profile = useAuthStore.getState().profile
-      const ev = appToolsFor(profile).includes('set_availability')
-        ? availabilityEvent(avail, data)
-        : null
-      if (!ev) return false
-      await offerAction('set_availability', {
-        event_key: ev.instanceKey,
-        status: avail.status,
-        note: '',
-      })
-      return true
-    }
     // "What's my next event?", "what's on this week?"
     const list = data && listAsked(said, data.today)
     if (list) {

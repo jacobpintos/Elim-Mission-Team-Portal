@@ -1,9 +1,27 @@
-import type { Announcement, Message, Room, Task } from '@/types/events'
+import type { Announcement, CarpoolCarData, Message, Room, Task } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 import type { EventInstance } from '../../../functions/src/miriam/data'
 import { FD } from '@/lib/format'
 import { foodStillOpenSaid, foodTakenSaid, stillOpen } from '@/lib/miriamActions'
-import { eventRef, type QuickData } from '@/lib/miriamQuick'
+import { eventRef, listAsked, type QuickData } from '@/lib/miriamQuick'
+import {
+  availabilityReply,
+  availabilitySaid,
+  type AvailabilitySaid,
+  type AvailStatus,
+} from '@/lib/miriamAvailability'
+import { eventCalled, eventDay, eventPick } from '@/lib/miriamEvents'
+import { carpoolAsked, type CarpoolMove } from '@/lib/miriamCarpool'
+import { carName } from '@/features/events/carpoolCards'
+import {
+  eventReminderAsked,
+  reminderAsked,
+  reminderWithoutWhen,
+  type EventReminderAsk,
+} from '@/lib/reminders'
+import { clockMinutes } from '@/lib/eventSchedule'
+import type { ReminderExtra } from '@/stores/remindersStore'
+import { assignedTo, canSeeEvent, instancesOf, shiftDate } from '../../../functions/src/miriam/data'
 import {
   dateSaid,
   eventPicked,
@@ -16,6 +34,7 @@ import {
   choicePicked,
   listed,
   looksLikeNewRequest,
+  pickBest,
   plain,
   quoted,
   saidNeverMind,
@@ -82,6 +101,8 @@ export interface Talk {
   doNow: (name: string, input: Record<string, unknown>) => Promise<void>
   /** Shown while something is looked up. */
   thinking: () => void
+  /** Sets them a reminder, and says when — with a tap to take it back (MiriamButton: setReminder). */
+  remind: (text: string, at: Date, spoken: string, extra?: ReminderExtra) => Promise<void>
 }
 
 /** What she can see, as this person: loaded, or read on asking. */
@@ -109,6 +130,12 @@ export interface Here {
   now: () => number
   /** The food today's briefing showed open, by event, and the item it suggested. */
   briefedFood: () => { eventKey: string; suggestion: string; open: string[] }[]
+  /** Their availability answer for an event as it stands: the date's own, else a weekly event's for every date. */
+  answerOf: (ev: EventInstance) => { status: AvailStatus; note: string; ts: number } | null
+  /** Their answer saved, as the event's page saves it. False when it couldn't be. */
+  answer: (ev: EventInstance, status: AvailStatus, note: string) => Promise<boolean>
+  /** An event's cars: set in its form, else for its date on its page. Null when they can't be read. */
+  carsFor: (ev: EventInstance) => Promise<CarpoolCarData[] | null>
 }
 
 /** Worked out here, when it plainly can be: false to leave it to Claude. */
@@ -118,6 +145,10 @@ export async function talkHere(said: string, here: Here, talk: Talk): Promise<bo
     (await notificationsHere(said, here, talk)) ||
     (await taskStatusHere(said, here, talk)) ||
     (await foodHere(said, here, talk)) ||
+    (await availabilityHere(said, here, talk)) ||
+    (await agendaHere(said, here, talk)) ||
+    (await carpoolHere(said, here, talk)) ||
+    (await remindersHere(said, here, talk)) ||
     (await announcementsHere(said, here, talk)) ||
     (await messagesHere(said, here, talk))
   )
@@ -741,6 +772,651 @@ async function notificationNamed(
   }
   if (looksLikeNewRequest(reply)) return false
   talk.say('I couldn’t tell which notifications you meant. You can change them in Settings.')
+  return true
+}
+
+// --- Availability ----------------------------------------------------------------------
+
+/** How each answer is said back, in "I'll mark you …". */
+const MARKED: Record<AvailStatus, string> = {
+  yes: 'as available',
+  no: 'as not available',
+  partial: 'as partly available',
+  tbd: 'as not sure yet',
+}
+
+/** How far ahead "the next one they haven't answered" is looked for. */
+const NEXT_ANSWER_DAYS = 21
+
+/** Their events between two dates, nearest first: those they're on, as their calendar shows them. */
+function theirEvents(data: QuickData, from: string, to: string): EventInstance[] {
+  const { templates, overrides, groups, viewer } = data
+  return templates
+    .filter((t) => canSeeEvent(t, viewer, groups))
+    .flatMap((t) => instancesOf(t, from, to, overrides))
+    .filter((ev) => canSeeEvent(ev, viewer, groups) && assignedTo(ev, groups).has(viewer.uid))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title))
+}
+
+/** The next of theirs with no answer — else simply their next. */
+function nextToAnswer(here: Here, data: QuickData): EventInstance | null {
+  const ahead = theirEvents(data, data.today, shiftDate(data.today, NEXT_ANSWER_DAYS))
+  return ahead.find((ev) => !here.answerOf(ev)) ?? ahead[0] ?? null
+}
+
+/**
+ * "I can't make it Friday", "count me in for the retreat", "I'll be late to
+ * youth night": their answer for the event meant. Plainly one, it is shown to
+ * confirm; probably one, asked about; several, asked which. No event said —
+ * "I can't make it" — and the next of theirs they haven't answered is asked
+ * about. One not found among theirs is left to Claude, which looks further.
+ */
+async function availabilityHere(said: string, here: Here, talk: Talk): Promise<boolean> {
+  const { data } = here
+  if (!data || !here.tools.includes('set_availability')) return false
+  const ask = availabilitySaid(said, data.today)
+  if (!ask) return false
+  if (!ask.date && !ask.name) {
+    const next = nextToAnswer(here, data)
+    if (!next) {
+      talk.say('You don’t have any events coming up to answer for.')
+      return true
+    }
+    talk.ask(
+      `Do you mean ${eventCalled(next, data.today)}? If so, I’ll mark you ${MARKED[ask.status]}.`,
+      async (r, t) => {
+        if (neverMind(r, t)) return true
+        if (saidYes(r)) {
+          await t.doNow('set_availability', answerInput(next, ask))
+          return true
+        }
+        const no = saidNo(r)
+        if (no && !no.rest) {
+          t.ask('Which event do you mean?', (r2, t2) => availabilityWhich(r2, ask, [], here, t2))
+          return true
+        }
+        return availabilityWhich(no ? no.rest : r, ask, [], here, t)
+      }
+    )
+    return true
+  }
+  const picked = eventPick(ask, data)
+  if (picked.kind === 'none') return false
+  return availabilityPicked(picked, ask, here, talk)
+}
+
+const answerInput = (ev: EventInstance, ask: Pick<AvailabilitySaid, 'status' | 'note'>) => ({
+  event_key: ev.instanceKey,
+  status: ask.status,
+  note: ask.note,
+})
+
+/** The event settled on, or nearly: shown to confirm, asked about, or asked which. */
+async function availabilityPicked(
+  picked: Picked<EventInstance>,
+  ask: AvailabilitySaid,
+  here: Here,
+  talk: Talk
+): Promise<boolean> {
+  const today = here.data?.today ?? ''
+  if (picked.kind === 'none') return false
+  if (picked.kind === 'sure') {
+    await talk.offer('set_availability', answerInput(picked.item, ask))
+    return true
+  }
+  if (picked.kind === 'likely') {
+    const ev = picked.item
+    talk.ask(
+      `Did you mean ${eventCalled(ev, today)}? If so, I’ll mark you ${MARKED[ask.status]}.`,
+      async (r, t) => {
+        if (neverMind(r, t)) return true
+        if (saidYes(r)) {
+          await t.doNow('set_availability', answerInput(ev, ask))
+          return true
+        }
+        const no = saidNo(r)
+        if (no && !no.rest && picked.others.length === 0) {
+          t.ask('Which event do you mean?', (r2, t2) => availabilityWhich(r2, ask, [], here, t2))
+          return true
+        }
+        return availabilityWhich(no?.rest || r, ask, picked.others, here, t)
+      }
+    )
+    return true
+  }
+  const options = picked.items
+  talk.ask(
+    `Which one: ${listed(
+      options.map((ev) => eventCalled(ev, today)),
+      'or'
+    )}?`,
+    (r, t) => availabilityWhich(r, ask, options, here, t)
+  )
+  return true
+}
+
+/** "Which event?", answered: one of those offered, by order, name or day — or any of theirs named. */
+async function availabilityWhich(
+  reply: string,
+  ask: AvailabilitySaid,
+  offered: EventInstance[],
+  here: Here,
+  talk: Talk
+): Promise<boolean> {
+  if (neverMind(reply, talk)) return true
+  const { data } = here
+  if (!data) return false
+  if (offered.length) {
+    const i = choicePicked(
+      reply,
+      offered.map((ev) => `${ev.title} ${eventDay(ev, data.today)}`)
+    )
+    const ev = i >= 0 ? offered[i] : eventPicked(reply, offered, data.today)
+    if (ev) {
+      await talk.offer('set_availability', answerInput(ev, ask))
+      return true
+    }
+  }
+  const ref = eventRef(plain(reply), data.today)
+  if (ref) {
+    const picked = eventPick(ref, data)
+    // Named in a reply: taken as meant, and shown to confirm.
+    if (picked.kind === 'likely')
+      return availabilityPicked({ kind: 'sure', item: picked.item }, ask, here, talk)
+    if (picked.kind !== 'none') return availabilityPicked(picked, ask, here, talk)
+  }
+  if (looksLikeNewRequest(reply)) return false
+  talk.say('I couldn’t find that among your events. You can answer on the event’s page.')
+  return true
+}
+
+/** How each answer is taken, said back before the next question. */
+const NOTED: Record<AvailStatus, string> = {
+  yes: 'Great — you’re down as available.',
+  no: 'Okay — you’re down as not available.',
+  partial: 'Okay — partly available, noted.',
+  tbd: 'Okay — I’ll ask you again later.',
+}
+
+/** An event to ask about, and whether they answered "not sure yet" last time. */
+export interface AvailabilityQuestion {
+  ev: EventInstance
+  wasUnsure: boolean
+}
+
+/**
+ * Her questions about events they haven't answered for — after the daily
+ * briefing, or after telling them what they have this week — one at a time:
+ * "Can you make Youth Night on Friday?" Each reply is saved as their answer
+ * and the next asked: yes, no (with why, if said), late or leaving early
+ * (partly available, noted), or "I don't know yet" (TBD — asked again in a
+ * later briefing). "Skip" leaves that one for another time; "not now" ends
+ * the questions. `lead`: said before the first question.
+ */
+export function askAvailability(
+  questions: AvailabilityQuestion[],
+  here: Here,
+  talk: Talk,
+  lead = ''
+): void {
+  askOne(questions, 0, here, talk, lead, false)
+}
+
+function askOne(
+  questions: AvailabilityQuestion[],
+  at: number,
+  here: Here,
+  talk: Talk,
+  lead: string,
+  again: boolean
+): void {
+  const today = here.data?.today ?? ''
+  if (at >= questions.length) {
+    talk.say(`${lead}That’s all of them — thanks.`.trim())
+    return
+  }
+  const { ev, wasUnsure } = questions[at]
+  const called = eventCalled(ev, today)
+  const question = again
+    ? `Sorry — can you make ${ev.title}? You can say yes, no, not sure yet, or skip.`
+    : wasUnsure
+      ? `Last time you weren’t sure about ${called}. Can you make it now?`
+      : `Can you make ${called}?`
+  talk.ask(`${lead}${question}`, async (r, t) => {
+    const reply = availabilityReply(r)
+    if (!reply) {
+      if (looksLikeNewRequest(r)) return false
+      // Asked once more; then left for another time.
+      if (!again) askOne(questions, at, here, t, '', true)
+      else askOne(questions, at + 1, here, t, 'I’ll ask about that one another time. ', false)
+      return true
+    }
+    if (reply.kind === 'stop') {
+      t.say(at + 1 < questions.length ? 'Okay — I’ll ask about the rest another time.' : 'Okay.')
+      return true
+    }
+    if (reply.kind === 'skip') {
+      askOne(questions, at + 1, here, t, 'Okay. ', false)
+      return true
+    }
+    const saved = await here.answer(ev, reply.status, reply.note)
+    const said = saved
+      ? NOTED[reply.status]
+      : `That didn’t save — you can answer on ${ev.title}’s page.`
+    askOne(questions, at + 1, here, t, `${said} `, false)
+    return true
+  })
+}
+
+// --- What they have coming up ---------------------------------------------------------
+
+/**
+ * "What do I have this week?", "what's my schedule this weekend?": their own
+ * events then, each with what is theirs at it — their team, what they're
+ * bringing, their car, and whether they've answered. Any they haven't
+ * answered for are asked about after. ("What's on this week?" — not theirs —
+ * is the plain list, lib/miriamQuick.)
+ */
+async function agendaHere(said: string, here: Here, talk: Talk): Promise<boolean> {
+  const { data } = here
+  if (!data || !here.profile) return false
+  const ask = listAsked(said, data.today)
+  if (!ask || ask.next) return false
+  if (!/\b(?:i|my|me|i'm|am\s+i|i\s+have)\b/.test(plain(said))) return false
+  const events = theirEvents(data, ask.from, ask.to)
+  if (events.length === 0) {
+    talk.say(`You have nothing on ${ask.span}.`)
+    return true
+  }
+  talk.thinking()
+  const shown = events.slice(0, 5)
+  const lines = await Promise.all(shown.map((ev) => agendaLine(ev, here, data)))
+  const count = events.length === 1 ? 'one event' : `${events.length} events`
+  const more = events.length > shown.length ? ` And ${events.length - shown.length} more.` : ''
+  const text = `${ask.span.charAt(0).toUpperCase()}${ask.span.slice(1)} you have ${count}. ${lines.join(' ')}${more}`
+  const unanswered = here.tools.includes('set_availability')
+    ? shown.filter((ev) => !here.answerOf(ev)).slice(0, 3)
+    : []
+  if (unanswered.length) {
+    askAvailability(
+      unanswered.map((ev) => ({ ev, wasUnsure: false })),
+      here,
+      talk,
+      `${text} `
+    )
+  } else talk.say(text)
+  return true
+}
+
+/** One of their events, with what is theirs at it: "Youth Night, Friday at 7 PM — you're on Worship, bringing Chips." */
+async function agendaLine(ev: EventInstance, here: Here, data: QuickData): Promise<string> {
+  const uid = data.viewer.uid
+  const parts: string[] = []
+  const team = (ev.teams ?? []).find((t) =>
+    [...t.leaders, ...t.members].some((m) => String(m) === uid)
+  )
+  if (team) parts.push(`you’re on ${team.name}`)
+  if (ev.food && ev.foodItems?.length) {
+    const sheet = await here.foodSheet(ev).catch(() => null)
+    const mine = Object.entries(sheet ?? {})
+      .filter(([, who]) => String(who.uid) === uid)
+      .map(([i]) => ev.foodItems?.[Number(i)])
+      .filter((x): x is string => !!x)
+    if (mine.length) parts.push(`bringing ${listed(mine)}`)
+  }
+  if (ev.carpool) {
+    const cars = await here.carsFor(ev).catch(() => null)
+    const i = (cars ?? []).findIndex((c) => c.driver === uid || c.riders.includes(uid))
+    if (cars && i >= 0) {
+      const car = cars[i]
+      const name = car.label.trim() || `Car ${i + 1}`
+      parts.push(car.driver === uid ? `driving ${name}` : `riding in ${name}`)
+    }
+  }
+  const answer = here.answerOf(ev)
+  if (!answer) parts.push('you haven’t said if you can make it')
+  else if (answer.status === 'no') parts.push('you said you can’t make it')
+  else if (answer.status === 'tbd') parts.push('you weren’t sure yet')
+  else if (answer.status === 'partial') parts.push('you’ll be there for part of it')
+  const when = `${eventDay(ev, data.today)}${ev.startTime ? ` at ${ev.startTime}` : ''}`
+  return `${ev.title}, ${when}${parts.length ? ` — ${parts.join(', ')}` : ''}.`
+}
+
+// --- An event's cars, arranged by an admin ------------------------------------------
+
+/** How far ahead an event with a carpool is looked for, when none is said. */
+const CARPOOL_AHEAD_DAYS = 45
+
+/** A name as heard, written as a name: "sam lee" — "Sam Lee". */
+const titled = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase())
+
+/** An event, its cars, and the car said among them. */
+interface CarsOf {
+  ev: EventInstance
+  cars: CarpoolCarData[]
+  car: Picked<number>
+}
+
+/** The car said, among an event's: by its name, or its place ("car 2"). */
+function carPicked(cars: CarpoolCarData[], said: string): Picked<number> {
+  const picked = pickBest(
+    cars.map((car, i) => ({ car, i })),
+    (x) => plain(carName(x.car, x.i)),
+    plain(said)
+  )
+  if (picked.kind === 'none') return picked
+  if (picked.kind === 'which') return { kind: 'which', items: picked.items.map((x) => x.i) }
+  if (picked.kind === 'likely')
+    return { kind: 'likely', item: picked.item.i, others: picked.others.map((x) => x.i) }
+  return { kind: 'sure', item: picked.item.i }
+}
+
+/**
+ * "Put Sam in Andy's truck", "make Beth the driver of van 1", "take Sam out of
+ * the van", "add a child named Joey to van 1" — for an admin, the change shown
+ * to confirm (actions: move_in_carpool). The event is the one said, else the
+ * one coming up whose cars include the car named; the car and the person are
+ * asked about when it isn't plain which. A car not found on any event coming
+ * up is no carpool change at all — "put chips on the list" — and is left alone.
+ */
+async function carpoolHere(said: string, here: Here, talk: Talk): Promise<boolean> {
+  const { data } = here
+  if (!data || !here.tools.includes('set_carpool')) return false
+  const move = carpoolAsked(said, data.today)
+  if (!move) return false
+  let events: EventInstance[]
+  if (move.event.date || move.event.name) {
+    const picked = eventPick(move.event, data, { only: (ev) => !!ev.carpool })
+    if (picked.kind === 'none') return false
+    events = picked.kind === 'which' ? picked.items : [picked.item]
+  } else {
+    const { templates, overrides, groups, viewer, today } = data
+    const seen = new Set<string>()
+    events = templates
+      .filter((t) => t.carpool && canSeeEvent(t, viewer, groups))
+      .flatMap((t) => instancesOf(t, today, shiftDate(today, CARPOOL_AHEAD_DAYS), overrides))
+      .filter((ev) => ev.carpool && !ev.unpublished)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .filter((ev) => {
+        const id = String(ev.templateId)
+        if (seen.has(id)) return false
+        seen.add(id)
+        return true
+      })
+      .slice(0, 6)
+  }
+  if (events.length === 0) return false
+  talk.thinking()
+  const found: CarsOf[] = []
+  for (const ev of events) {
+    const cars = (await here.carsFor(ev)) ?? []
+    if (!cars.length) continue
+    found.push({ ev, cars, car: move.car ? carPicked(cars, move.car) : { kind: 'none' } })
+  }
+  // With a car named, the events that have one like it: none, and it was no carpool change.
+  const fits = move.car ? found.filter((f) => f.car.kind !== 'none') : found
+  if (fits.length === 0) return false
+  if (fits.length === 1) return carpoolOn(fits[0], move, here, talk)
+  const today = data.today
+  talk.ask(
+    `Which event: ${listed(
+      fits.map((f) => eventCalled(f.ev, today)),
+      'or'
+    )}?`,
+    async (r, t) => {
+      if (neverMind(r, t)) return true
+      const i = choicePicked(
+        r,
+        fits.map((f) => `${f.ev.title} ${eventDay(f.ev, today)}`)
+      )
+      const ev =
+        i >= 0
+          ? fits[i].ev
+          : eventPicked(
+              r,
+              fits.map((f) => f.ev),
+              today
+            )
+      const fit = fits.find((f) => f.ev === ev)
+      if (fit) return carpoolOn(fit, move, here, t)
+      if (looksLikeNewRequest(r)) return false
+      t.say('I couldn’t tell which event you meant. You can arrange the cars on its page.')
+      return true
+    }
+  )
+  return true
+}
+
+/** The event settled: the car, then the person — each asked about if need be — then the change shown. */
+async function carpoolOn(fit: CarsOf, move: CarpoolMove, here: Here, talk: Talk): Promise<boolean> {
+  const { ev, cars } = fit
+  const name = (i: number) => carName(cars[i], i)
+  const withCar = async (carAt: number | null, t: Talk): Promise<boolean> => {
+    if (move.kind === 'child') {
+      if (carAt === null) return false
+      await t.offer('move_in_carpool', {
+        event_key: ev.instanceKey,
+        car_id: cars[carAt].id,
+        seat: 'child',
+        child: titled(move.child),
+      })
+      return true
+    }
+    return carpoolPerson(fit, move, carAt, here, t)
+  }
+  // Taking someone out of "the carpool": whichever car they're in.
+  if (!move.car) return withCar(null, talk)
+  const car = fit.car
+  if (car.kind === 'sure' || car.kind === 'likely') return withCar(car.item, talk)
+  if (car.kind === 'which') {
+    const options = car.items
+    talk.ask(`Which car: ${listed(options.map(name), 'or')}?`, async (r, t) => {
+      if (neverMind(r, t)) return true
+      const i = choicePicked(r, options.map(name))
+      if (i >= 0) return withCar(options[i], t)
+      if (looksLikeNewRequest(r)) return false
+      t.say(
+        `I couldn’t tell which car you meant. ${ev.title}’s cars are ${listed(cars.map((_, j) => name(j)))}.`
+      )
+      return true
+    })
+    return true
+  }
+  talk.say(
+    `${ev.title} doesn’t have a car called ${quoted(titled(move.car))}. Its cars are ${listed(cars.map((_, j) => name(j)))}.`
+  )
+  return true
+}
+
+/** Who was said, among the people the app knows — those in its cars or on the event first. */
+async function carpoolPerson(
+  fit: CarsOf,
+  move: Extract<CarpoolMove, { who: string }>,
+  carAt: number | null,
+  here: Here,
+  talk: Talk
+): Promise<boolean> {
+  const { ev, cars } = fit
+  const groups = here.data?.groups ?? []
+  const names = here.names()
+  const inCars = new Set(cars.flatMap((c) => [c.driver, ...c.riders].filter(Boolean)))
+  const near = new Set([...inCars, ...assignedTo(ev, groups)])
+  const people = [...names.entries()].map(([uid, name]) => ({ uid, name }))
+  const among = (pool: { uid: string; name: string }[]) =>
+    pickBest(pool, (p) => p.name, move.who, 3, 0.8)
+  let picked = among(people.filter((p) => near.has(p.uid)))
+  if (picked.kind === 'none') picked = among(people)
+  const offer = async (uid: string, t: Talk) => {
+    await t.offer('move_in_carpool', {
+      event_key: ev.instanceKey,
+      car_id: carAt === null ? '' : cars[carAt].id,
+      seat: move.kind,
+      uid,
+    })
+    return true
+  }
+  if (picked.kind === 'sure' || picked.kind === 'likely') return offer(picked.item.uid, talk)
+  if (picked.kind === 'which') {
+    const options = picked.items
+    talk.ask(
+      `Which one: ${listed(
+        options.map((p) => p.name),
+        'or'
+      )}?`,
+      async (r, t) => {
+        if (neverMind(r, t)) return true
+        const i = choicePicked(
+          r,
+          options.map((p) => p.name)
+        )
+        if (i >= 0) return offer(options[i].uid, t)
+        if (looksLikeNewRequest(r)) return false
+        t.say('I couldn’t tell who you meant. You can arrange the cars on the event’s page.')
+        return true
+      }
+    )
+    return true
+  }
+  talk.say(`I couldn’t find anyone called ${quoted(titled(move.who))}.`)
+  return true
+}
+
+// --- Reminders: from an event, or asked when ------------------------------------------
+
+/**
+ * "Remind me an hour before youth night", "the day before the retreat to
+ * pack": set from the event's own time, and tied to it, so it moves if the
+ * event does (functions: moveEventReminders). "Remind me to bring chips",
+ * with no time: she asks when. (A time said outright — "at 5 tomorrow" — is
+ * set before any of this, in MiriamButton.)
+ */
+async function remindersHere(said: string, here: Here, talk: Talk): Promise<boolean> {
+  if (!here.data || !here.tools.includes('create_reminder')) return false
+  const fromEvent = eventReminderAsked(said)
+  if (fromEvent) return reminderFromEvent(fromEvent, here, talk)
+  const what = reminderWithoutWhen(said)
+  if (!what) return false
+  talk.ask(`When should I remind you ${what.spoken}?`, (r, t) => reminderWhenSaid(r, what, here, t))
+  return true
+}
+
+/** "When should I remind you?", answered: a time, or one from an event. */
+async function reminderWhenSaid(
+  reply: string,
+  what: { text: string; spoken: string },
+  here: Here,
+  talk: Talk
+): Promise<boolean> {
+  if (neverMind(reply, talk)) return true
+  const asked = `remind me ${what.spoken} ${reply}`
+  const fromEvent = eventReminderAsked(asked)
+  if (fromEvent) return reminderFromEvent({ ...fromEvent, ...what }, here, talk)
+  const at = reminderAsked(asked, new Date(here.now()))
+  if (at) {
+    await talk.remind(at.text, at.at, at.spoken, at.repeat ? { repeat: at.repeat } : {})
+    return true
+  }
+  if (looksLikeNewRequest(reply)) return false
+  talk.say(
+    'I couldn’t tell when. Try something like “tomorrow at 9” or “an hour before the potluck.”'
+  )
+  return true
+}
+
+/** The event a reminder is set from: found, or asked about — then the reminder set from its time. */
+async function reminderFromEvent(ask: EventReminderAsk, here: Here, talk: Talk): Promise<boolean> {
+  const { data } = here
+  if (!data) return false
+  const ref = eventRef(ask.event, data.today) ?? { date: null, name: ask.event }
+  const picked = eventPick(ref, data)
+  if (picked.kind === 'none') return false
+  if (picked.kind === 'sure') return remindFrom(picked.item, ask, here, talk)
+  if (picked.kind === 'likely') {
+    const ev = picked.item
+    talk.ask(`Did you mean ${eventCalled(ev, data.today)}?`, async (r, t) => {
+      if (neverMind(r, t)) return true
+      if (saidYes(r)) return remindFrom(ev, ask, here, t)
+      const others = picked.others
+      const i = others.length
+        ? choicePicked(
+            r,
+            others.map((o) => o.title)
+          )
+        : -1
+      if (i >= 0) return remindFrom(others[i], ask, here, t)
+      if (looksLikeNewRequest(r)) return false
+      t.say('Okay — no reminder was set.')
+      return true
+    })
+    return true
+  }
+  const options = picked.items
+  talk.ask(
+    `Which one: ${listed(
+      options.map((ev) => eventCalled(ev, data.today)),
+      'or'
+    )}?`,
+    async (r, t) => {
+      if (neverMind(r, t)) return true
+      const i = choicePicked(
+        r,
+        options.map((ev) => `${ev.title} ${eventDay(ev, data.today)}`)
+      )
+      const ev = i >= 0 ? options[i] : eventPicked(r, options, data.today)
+      if (ev) return remindFrom(ev, ask, here, t)
+      if (looksLikeNewRequest(r)) return false
+      t.say('I couldn’t tell which you meant — no reminder was set.')
+      return true
+    }
+  )
+  return true
+}
+
+/** When an event starts, on this device: its date and time. Null with no time set. */
+function startOf(ev: EventInstance): Date | null {
+  const minutes = clockMinutes(ev.startTime ?? '')
+  if (minutes === null) return null
+  const [y, m, d] = ev.date.split('-').map(Number)
+  return new Date(y, m - 1, d, Math.floor(minutes / 60), minutes % 60)
+}
+
+/** The reminder set from the event's time, tied to it, and said back. */
+async function remindFrom(
+  ev: EventInstance,
+  ask: EventReminderAsk,
+  here: Here,
+  talk: Talk
+): Promise<boolean> {
+  const start = startOf(ev)
+  let at: Date
+  if ('minutes' in ask.before) {
+    if (!start) {
+      talk.say(
+        `${ev.title} has no start time set, so I can’t time a reminder from it. Try a time instead — like “${eventDay(ev, here.data?.today ?? '')} at 6 PM.”`
+      )
+      return true
+    }
+    at = new Date(start.getTime() - ask.before.minutes * 60_000)
+  } else {
+    const [y, m, d] = ev.date.split('-').map(Number)
+    at = new Date(y, m - 1, d - ask.before.days, ask.before.hour, 0)
+  }
+  if (at.getTime() <= here.now()) {
+    talk.say(`That time has already passed — ${ask.relation} ${ev.title} was earlier.`)
+    return true
+  }
+  // "to pack — the day before Youth Retreat"; nothing said but the event: "about Youth Night — an hour before it".
+  const text = ask.text || ev.title
+  const spoken = ask.spoken
+    ? `${ask.spoken} — ${ask.relation} ${ev.title}`
+    : `about ${ev.title} — ${ask.relation} it`
+  await talk.remind(text, at, spoken, {
+    eventKey: ev.instanceKey,
+    eventTemplateId: String(ev.templateId),
+    eventTitle: ev.title,
+    // From its start, so it moves with it; with no time set, it stays where it is.
+    ...(start ? { minutesBefore: Math.round((start.getTime() - at.getTime()) / 60_000) } : {}),
+  })
   return true
 }
 
