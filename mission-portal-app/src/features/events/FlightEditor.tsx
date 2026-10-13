@@ -1,8 +1,11 @@
 import { useState } from 'react'
-import { Pressable, TextInput, StyleSheet } from 'react-native'
+import { Pressable, TextInput, StyleSheet, ActivityIndicator } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
+import { Image } from '@/components/ui/Image'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { useUIStore } from '@/stores/uiStore'
 import { sameId } from '@/lib/ids'
+import { pickAndUploadFlightImage } from '@/lib/flightImageUpload'
 import type { FlightEntry } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 
@@ -15,6 +18,67 @@ interface FlightEditorProps {
 function getName(uid: string, allUsers: UserProfile[]) {
   const u = allUsers.find((u) => sameId(u.uid, uid))
   return u?.displayName || u?.email || uid
+}
+
+function FlightImageField({
+  entryId,
+  url,
+  onChange,
+}: {
+  entryId: string
+  url?: string
+  onChange: (url: string | undefined) => void
+}) {
+  const colors = useThemeColors()
+  const toast = useUIStore((s) => s.toast)
+  const [uploading, setUploading] = useState(false)
+
+  const pick = async () => {
+    setUploading(true)
+    try {
+      const next = await pickAndUploadFlightImage(entryId)
+      if (next) onChange(next)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not upload that picture', 'error')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <XStack gap="$2" alignItems="center">
+      {url ? (
+        <Image
+          source={{ uri: url }}
+          style={{ width: 64, height: 64, borderRadius: 8 }}
+          contentFit="cover"
+        />
+      ) : null}
+      <Pressable onPress={pick} disabled={uploading}>
+        <XStack
+          borderWidth={1}
+          borderColor={colors.primary}
+          borderRadius="$2"
+          paddingHorizontal="$3"
+          paddingVertical="$2"
+          alignItems="center"
+          gap="$2"
+        >
+          {uploading ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+          <Text color={colors.primary} fontSize="$2">
+            {uploading ? 'Uploading…' : url ? 'Replace image' : '📎 Attach image'}
+          </Text>
+        </XStack>
+      </Pressable>
+      {url && !uploading ? (
+        <Pressable onPress={() => onChange(undefined)}>
+          <Text color="$red10" fontSize="$2">
+            Remove
+          </Text>
+        </Pressable>
+      ) : null}
+    </XStack>
+  )
 }
 
 function FlightSection({
@@ -196,6 +260,12 @@ function FlightSection({
           <YStack flex={1} />
         )}
       </XStack>
+
+      <FlightImageField
+        entryId={entry.id}
+        url={entry[`${prefix}ImageUrl`]}
+        onChange={(url) => onUpdate({ [`${prefix}ImageUrl`]: url })}
+      />
     </YStack>
   )
 }

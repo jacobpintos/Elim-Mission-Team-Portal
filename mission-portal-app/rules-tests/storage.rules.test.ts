@@ -155,6 +155,26 @@ describe('announcement photos', () => {
   })
 })
 
+describe('flight images', () => {
+  const path = 'eventFlights/entry-1/1700000000_pass.jpg'
+
+  it('lets a signed-in user upload one', async () => {
+    await assertSucceeds(uploadBytes(ref(as(OWNER), path), blob(1024), IMAGE))
+  })
+
+  it('refuses an anonymous upload', async () => {
+    await assertFails(uploadBytes(ref(anon(), path), blob(1024), IMAGE))
+  })
+
+  it('refuses a non-image content type', async () => {
+    await assertFails(
+      uploadBytes(ref(as(OWNER), path), blob(1024, 'application/pdf'), {
+        contentType: 'application/pdf',
+      })
+    )
+  })
+})
+
 describe('logos', () => {
   it('is readable without signing in, since the login screen shows it', async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {

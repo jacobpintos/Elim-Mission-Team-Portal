@@ -22,6 +22,8 @@ export interface FlightEntry {
   outConfirmation?: string
   outArrival?: string
   outContact?: string
+  /** Boarding pass, itinerary screenshot or similar, in Storage. */
+  outImageUrl?: string
 
   // Return
   retDate?: string
@@ -33,6 +35,7 @@ export interface FlightEntry {
   retTicket?: string
   retConfirmation?: string
   retArrival?: string
+  retImageUrl?: string
 }
 
 export interface CarpoolCarData {

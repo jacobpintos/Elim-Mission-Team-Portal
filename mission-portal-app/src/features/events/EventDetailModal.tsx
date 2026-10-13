@@ -18,6 +18,8 @@ import { usePlanningStore } from '@/stores/planningStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { sameId } from '@/lib/ids'
 import { PlanningBoardCanvas } from '@/features/planning/PlanningBoardCanvas'
+import { Image } from '@/components/ui/Image'
+import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import type { EventInstance, FlightEntry } from '@/types/events'
 import {
   fetchWeather,
@@ -240,6 +242,7 @@ function FlightBlock({
   confirmation,
   arrival,
   contact,
+  imageUrl,
 }: {
   colors: ThemeColors
   title: string
@@ -253,9 +256,20 @@ function FlightBlock({
   confirmation?: string
   arrival?: string
   contact?: string
+  imageUrl?: string
 }) {
+  const [viewing, setViewing] = useState<string | null>(null)
   const hasAny =
-    date || time || airport || airline || flight || ticket || confirmation || arrival || contact
+    date ||
+    time ||
+    airport ||
+    airline ||
+    flight ||
+    ticket ||
+    confirmation ||
+    arrival ||
+    contact ||
+    imageUrl
   if (!hasAny) return null
   return (
     <YStack gap="$1">
@@ -322,6 +336,17 @@ function FlightBlock({
           Contact: {contact}
         </Text>
       ) : null}
+      {imageUrl ? (
+        <Pressable onPress={() => setViewing(imageUrl)} style={{ alignSelf: 'flex-start' }}>
+          <Image
+            source={{ uri: imageUrl }}
+            style={{ width: 120, height: 120, borderRadius: 8, marginTop: 4 }}
+            contentFit="cover"
+          />
+        </Pressable>
+      ) : null}
+      {/* key={viewing}: a new picture mounts a fresh viewer at default zoom. */}
+      <ImageLightbox key={viewing ?? 'none'} uri={viewing} onClose={() => setViewing(null)} />
     </YStack>
   )
 }
@@ -366,6 +391,7 @@ function FlightEntryCard({
         confirmation={entry.outConfirmation}
         arrival={entry.outArrival}
         contact={entry.outContact}
+        imageUrl={entry.outImageUrl}
       />
       <FlightBlock
         colors={colors}
@@ -379,6 +405,7 @@ function FlightEntryCard({
         ticket={entry.retTicket}
         confirmation={entry.retConfirmation}
         arrival={entry.retArrival}
+        imageUrl={entry.retImageUrl}
       />
     </YStack>
   )
