@@ -20,6 +20,7 @@ import {
   saidNeverMind,
   saidNo,
   saidYes,
+  squash,
   type Picked,
 } from '@/lib/miriamReplies'
 import {
@@ -101,6 +102,8 @@ export interface Here {
   rooms: () => Promise<Room[]>
   latest: (room: Room, n: number) => Promise<Message[]>
   now: () => number
+  /** The food today's briefing showed open, by event, and the item it suggested. */
+  briefedFood: () => { eventKey: string; suggestion: string; open: string[] }[]
 }
 
 /** Worked out here, when it plainly can be: false to leave it to Claude. */
@@ -144,6 +147,32 @@ async function foodHere(said: string, here: Here, talk: Talk): Promise<boolean> 
   // Neither a dish nor food said: "put me down for Sunday" is as likely availability.
   if (!ask.surelyFood && !ask.item) return false
 
+  // What today's briefing suggested: "I'll bring chips as suggested" is that
+  // event, with nothing to ask.
+  const briefed = ask.date || ask.name ? null : briefedEvent(ask, here, data)
+  if (briefed && 'choose' in briefed) {
+    const { options } = briefed
+    talk.ask(
+      `Which did you mean: ${listed(
+        options.map((o) => `${o.item} for ${o.ev.title}`),
+        'or'
+      )}?`,
+      async (r, t) => {
+        if (neverMind(r, t)) return true
+        const i = choicePicked(
+          r,
+          options.map((o) => `${o.item} ${o.ev.title}`)
+        )
+        if (i < 0) return looksLikeNewRequest(r) ? false : foodWhich(r, ask, [], here, t)
+        return foodOnEvent(options[i].ev, { ...ask, item: options[i].item }, here, t)
+      }
+    )
+    return true
+  }
+  if (briefed && ask.suggested) {
+    return foodOnEvent(briefed.ev, { ...ask, item: ask.item || briefed.item }, here, talk)
+  }
+
   if (ask.date || ask.name) {
     const found = foodEventsFor(ask, data)
     // None with a sheet: perhaps not food at all ("bring my guitar to practice").
@@ -170,12 +199,12 @@ async function foodHere(said: string, here: Here, talk: Talk): Promise<boolean> 
     return true
   }
 
-  // No day or event said: the next of theirs with food still open, asked about.
+  // No day or event said: the event her briefing showed it open on, else the
+  // next of theirs with food still open — asked about.
   talk.thinking()
-  const next = await here.nextOpenFood(
-    foodEventsFor({ date: null, name: '' }, data),
-    data.viewer.uid
-  )
+  const next: { ev: EventInstance; open?: string[] } | null = briefed
+    ? { ev: briefed.ev }
+    : await here.nextOpenFood(foodEventsFor({ date: null, name: '' }, data), data.viewer.uid)
   if (!next) {
     if (!ask.surelyFood) return false
     talk.say('None of your upcoming events has food still open.')
@@ -199,6 +228,50 @@ async function foodHere(said: string, here: Here, talk: Talk): Promise<boolean> 
 }
 
 /**
+ * The event today's briefing meant: the one it showed the dish open on, or —
+ * said "as suggested" — the one it suggested. Two suggested and no dish said
+ * ("I'll bring what you suggested"): which, to choose.
+ */
+function briefedEvent(
+  ask: FoodAsk,
+  here: Here,
+  data: QuickData
+):
+  | { ev: EventInstance; item: string }
+  | { choose: true; options: { ev: EventInstance; item: string }[] }
+  | null {
+  const events = foodEventsFor({ date: null, name: '' }, data)
+  const briefed = here
+    .briefedFood()
+    .map((n) => ({ n, ev: events.find((e) => e.instanceKey === n.eventKey) }))
+    .filter((b): b is { n: (typeof b)['n']; ev: EventInstance } => !!b.ev)
+  if (briefed.length === 0) return null
+  if (ask.item) {
+    const onIt = briefed.filter((b) => {
+      const p = foodItemPicked(b.n.open, ask.item)
+      return p.kind === 'sure' || p.kind === 'likely'
+    })
+    if (onIt.length === 1) return { ev: onIt[0].ev, item: ask.item }
+    if (onIt.length > 1 || !ask.suggested) return null
+  }
+  if (!ask.suggested) return null
+  if (briefed.length === 1 || ask.item)
+    return { ev: briefed[0].ev, item: ask.item || briefed[0].n.suggestion }
+  return { choose: true, options: briefed.map((b) => ({ ev: b.ev, item: b.n.suggestion })) }
+}
+
+/**
+ * Whether they were shown an item open on this event's sheet — by today's
+ * briefing, or read or listed by Miriam just now (`also`). Taken since, it is
+ * "just signed up for"; never shown open, "already bringing".
+ */
+function shownOpen(ev: EventInstance, here: Here, also: string[] = []): (item: string) => boolean {
+  const briefed = here.briefedFood().find((n) => n.eventKey === ev.instanceKey)?.open ?? []
+  const open = new Set([...also, ...briefed].map(squash))
+  return (item) => open.has(squash(item))
+}
+
+/**
  * The event settled: the dish found on its sheet and shown to confirm; close,
  * and asked about; or what is still open asked about.
  */
@@ -210,7 +283,8 @@ async function foodOnEvent(
   known?: string[]
 ): Promise<boolean> {
   const items = ev.foodItems ?? []
-  const signUp = (item: string) => ({ event_key: ev.instanceKey, item })
+  const shown = shownOpen(ev, here, known)
+  const signUp = (item: string) => ({ event_key: ev.instanceKey, item, shown_open: shown(item) })
   const picked: Picked<number> = ask.item ? foodItemPicked(items, ask.item) : { kind: 'none' }
 
   if (picked.kind === 'sure') {
@@ -238,7 +312,7 @@ async function foodOnEvent(
   if (picked.kind === 'which') {
     const options = picked.items.map((i) => items[i])
     talk.ask(`Which did you mean: ${listed(options, 'or')}?`, (r, t) =>
-      foodChoice(r, ev, options, here, t)
+      foodChoice(r, ev, options, here, t, shown)
     )
     return true
   }
@@ -266,7 +340,8 @@ async function foodOpenAsked(
   const lead = missed ? `I didn’t see ${missed} on the sheet. ` : ''
   talk.ask(
     `${lead}${ev.title} on ${dayOf(ev)} still needs ${listed(open)}. Which one will you bring?`,
-    (r, t) => foodChoice(r, ev, open, here, t)
+    // Listed as open just now: taken since is "just signed up for".
+    (r, t) => foodChoice(r, ev, open, here, t, () => true)
   )
   return true
 }
@@ -285,7 +360,12 @@ async function foodItemNamed(
   const items = ev.foodItems ?? []
   const picked = foodItemPicked(items, dish)
   if (picked.kind === 'sure' || picked.kind === 'likely') {
-    await talk.offer('sign_up_food', { event_key: ev.instanceKey, item: items[picked.item] })
+    const item = items[picked.item]
+    await talk.offer('sign_up_food', {
+      event_key: ev.instanceKey,
+      item,
+      shown_open: shownOpen(ev, here)(item),
+    })
     return true
   }
   if (!wasNo && looksLikeNewRequest(said)) return false
@@ -298,7 +378,8 @@ async function foodChoice(
   ev: EventInstance,
   options: string[],
   here: Here,
-  talk: Talk
+  talk: Talk,
+  shown: (item: string) => boolean
 ): Promise<boolean> {
   if (neverMind(reply, talk)) return true
   const today = here.data?.today ?? ''
@@ -309,7 +390,8 @@ async function foodChoice(
     if (picked.kind === 'sure' || picked.kind === 'likely') index = picked.item
   }
   if (index >= 0) {
-    await talk.offer('sign_up_food', { event_key: ev.instanceKey, item: options[index] })
+    const item = options[index]
+    await talk.offer('sign_up_food', { event_key: ev.instanceKey, item, shown_open: shown(item) })
     return true
   }
   if (saidNo(reply)) {

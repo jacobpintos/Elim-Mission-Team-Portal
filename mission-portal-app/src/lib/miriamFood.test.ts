@@ -53,6 +53,7 @@ describe('foodAsked', () => {
       date: '2026-10-18',
       name: '',
       surelyFood: true,
+      suggested: false,
     })
   })
 
@@ -69,6 +70,33 @@ describe('foodAsked', () => {
       item: 'chips',
       date: '2026-10-25',
     })
+  })
+
+  it.each([
+    ["I'll bring chips as suggested", 'chips'],
+    ["Sure, I'll bring the chips you suggested", 'chips'],
+    ["Okay I'll bring chips like you said", 'chips'],
+    ["I'll bring what you suggested", ''],
+    ["I'll take the suggested chips", 'chips'],
+  ])('"%s" is what was suggested', (said, item) => {
+    expect(foodAsked(said, today)).toMatchObject({ item, suggested: true, surelyFood: true })
+  })
+
+  it.each([
+    ["I'll take the chips", 'chips'],
+    ["I'll do dessert", 'dessert'],
+    ["I'll handle the drinks for Sunday", 'drinks'],
+    ["Yes, I'll bring the salsa", 'salsa'],
+  ])('"%s" is a sign-up too', (said, item) => {
+    expect(foodAsked(said, today)?.item).toBe(item)
+  })
+
+  it('someone else’s suggestion is not hers', () => {
+    expect(foodAsked("I'll bring the dish Sarah suggested", today)?.suggested).toBe(false)
+  })
+
+  it('"I\'ll take care of the drinks"', () => {
+    expect(foodAsked("I'll take care of the drinks", today)?.item).toBe('drinks')
   })
 
   it('takes a sign-up with no day', () => {

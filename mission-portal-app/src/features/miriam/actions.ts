@@ -31,6 +31,7 @@ import { assignedTo, type Group } from '../../../functions/src/miriam/data'
 import { roomName, roomsFor } from '@/lib/miriamAppData'
 import {
   foodItemFor,
+  foodTakenSaid,
   membersAfter,
   notificationSwitch,
   rolesAfter,
@@ -304,23 +305,20 @@ async function signUpFood(profile: UserProfile, input: Record<string, unknown>) 
       string,
       { uid: string; displayName: string }
     >
+  // Shown it open — in their briefing, or by Miriam just before: taken since.
+  const shownOpen = input.shown_open === true
   const now = (await taken())[String(index)]
-  if (now) {
-    return cannot(
-      now.uid === uid
-        ? `You’re already bringing ${items[index]}.`
-        : `${now.displayName} is already bringing ${items[index]}.`
-    )
-  }
+  if (now) return cannot(foodTakenSaid(now, items[index], uid, shownOpen))
   return {
     kind: 'ready',
     title: `Sign you up to bring ${items[index]}?`,
     details: [`${ev.title} — ${day(ev.date)}`],
     confirm: 'Sign up',
     run: async () => {
-      // Read again just before: someone may have taken it since.
+      // Read again just before: someone may have taken it since it was shown.
       const signups = await taken()
-      if (signups[String(index)]) return `Someone just signed up for ${items[index]}.`
+      const since = signups[String(index)]
+      if (since) return foodTakenSaid(since, items[index], uid, true)
       await setDoc(doc(db, 'foodSignups', key), {
         signups: { ...signups, [String(index)]: { uid, displayName: profile.displayName } },
       })

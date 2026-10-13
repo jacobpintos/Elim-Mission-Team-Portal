@@ -72,6 +72,8 @@ const ALL_TOOLS = [
 
 interface Setup {
   tools?: string[]
+  /** What today's briefing showed open, and suggested. */
+  briefed?: { eventKey: string; suggestion: string; open: string[] }[]
   tasksReady?: boolean
   rooms?: Room[]
   messages?: Record<string, Message[]>
@@ -136,6 +138,7 @@ function conversation(setup: Setup = {}) {
     rooms: async () => rooms,
     latest: async (r) => setup.messages?.[String(r.id)] ?? [],
     now: () => NOW,
+    briefedFood: () => setup.briefed ?? [],
   }
   return async (said: string): Promise<string[]> => {
     log.length = 0
@@ -150,8 +153,9 @@ function conversation(setup: Setup = {}) {
   }
 }
 
-const signUp = (event_key: string, item: string) =>
-  `sign_up_food ${JSON.stringify({ event_key, item })}`
+/** A sign-up as offered; `shown_open`: they were shown it open, so taken since is "just signed up". */
+const signUp = (event_key: string, item: string, shown_open = false) =>
+  `sign_up_food ${JSON.stringify({ event_key, item, shown_open })}`
 const status = (task_id: number, s: string) =>
   `set_task_status ${JSON.stringify({ task_id: String(task_id), status: s })}`
 const notifs = (keys: string[], on = false) =>
@@ -191,7 +195,8 @@ describe('food sign-ups', () => {
     expect(await say('No, youth night')).toEqual([
       'ask: I didn’t see cookies on the sheet. Youth Night on Sun, Oct 25 still needs Pizza and Chips. Which one will you bring?',
     ])
-    expect(await say('chips')).toEqual([`offer ${signUp('yth_2026-10-25', 'Chips')}`])
+    // Listed as open just now.
+    expect(await say('chips')).toEqual([`offer ${signUp('yth_2026-10-25', 'Chips', true)}`])
   })
 
   it('a no, then the date asked for', async () => {
@@ -237,7 +242,7 @@ describe('food sign-ups', () => {
     expect(await say('Sign me up for the potluck')).toEqual([
       'ask: Fall Potluck on Sun, Oct 18 still needs Drinks and Dessert. Which one will you bring?',
     ])
-    expect(await say('dessert')).toEqual([`offer ${signUp('pot_2026-10-18', 'Dessert')}`])
+    expect(await say('dessert')).toEqual([`offer ${signUp('pot_2026-10-18', 'Dessert', true)}`])
   })
 
   it('"I mean yes" is a yes', async () => {
@@ -251,6 +256,65 @@ describe('food sign-ups', () => {
     expect(await say("I'll bring lasagna to youth night")).toEqual([
       'say: Everything on the food sheet for Youth Night is already taken.',
     ])
+  })
+})
+
+describe('after the briefing suggested a dish', () => {
+  // The briefing showed Fall Potluck with these open, and suggested Drinks;
+  // since then someone has taken Drinks.
+  const briefed = [
+    {
+      eventKey: 'pot_2026-10-18',
+      suggestion: 'Drinks',
+      open: ['Roast vegetables', 'Drinks', 'Dessert'],
+    },
+  ]
+  const open = { pot: ['Roast vegetables', 'Dessert'] }
+
+  it.each([
+    "I'll bring drinks as suggested",
+    "Sure, I'll bring the drinks you suggested",
+    'Okay I can bring drinks like you said',
+    "I'll bring what you suggested",
+    "I'll take the drinks, as suggested",
+  ])('"%s": the briefing’s event and dish, with nothing to ask', async (said) => {
+    const say = conversation({ briefed, open })
+    // Shown open in the briefing: taken since is "just signed up for".
+    expect(await say(said)).toEqual([`offer ${signUp('pot_2026-10-18', 'Drinks', true)}`])
+  })
+
+  it('a dish it showed open, without "as suggested": its event asked about', async () => {
+    const say = conversation({ briefed, open })
+    expect(await say("I'll bring the dessert")).toEqual([
+      'ask: Do you mean Fall Potluck on Sun, Oct 18?',
+    ])
+    expect(await say('yes')).toEqual([`offer ${signUp('pot_2026-10-18', 'Dessert', true)}`])
+  })
+
+  it('a dish it never showed open — taken before — is "already bringing"', async () => {
+    const say = conversation({ briefed, open })
+    expect(await say("I'll bring the pot roast to the potluck")).toEqual([
+      `offer ${signUp('pot_2026-10-18', 'Pot roast', false)}`,
+    ])
+  })
+
+  it('two suggested, and no dish said: which', async () => {
+    const say = conversation({
+      briefed: [
+        ...briefed,
+        { eventKey: 'yth_2026-10-25', suggestion: 'Pizza', open: ['Pizza', 'Chips'] },
+      ],
+    })
+    expect(await say("I'll bring what you suggested")).toEqual([
+      'ask: Which did you mean: Drinks for Fall Potluck or Pizza for Youth Night?',
+    ])
+    expect(await say('the pizza')).toEqual([`offer ${signUp('yth_2026-10-25', 'Pizza', true)}`])
+  })
+
+  it('no briefing: a dish already taken is "already bringing"', async () => {
+    const say = conversation({ open })
+    await say("I'll bring drinks")
+    expect(await say('yes')).toEqual([`offer ${signUp('pot_2026-10-18', 'Drinks', false)}`])
   })
 })
 

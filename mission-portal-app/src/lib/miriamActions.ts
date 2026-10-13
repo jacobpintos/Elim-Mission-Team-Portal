@@ -24,6 +24,23 @@ export function foodItemFor(items: string[], asked: string): number {
   return close.length === 1 ? close[0].index : -1
 }
 
+/**
+ * Said when the item asked for is already someone's. "Just signed up" only
+ * when they were shown it open — in their briefing, or by Miriam moments
+ * before — so it must have been taken since; otherwise "already bringing",
+ * since it may have been theirs for weeks.
+ */
+export function foodTakenSaid(
+  by: { uid: string | number; displayName?: string },
+  item: string,
+  uid: string,
+  shownOpen: boolean
+): string {
+  if (String(by.uid) === uid) return `You’re already bringing ${item}.`
+  const who = by.displayName?.trim() || 'Someone'
+  return shownOpen ? `${who} just signed up for ${item}.` : `${who} is already bringing ${item}.`
+}
+
 /** Settings' switches that are a single on-or-off, not push and email. */
 const SINGLE = {
   weeklyDigest: 'Weekly digest email',

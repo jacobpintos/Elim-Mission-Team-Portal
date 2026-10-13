@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   foodItemFor,
+  foodTakenSaid,
   membersAfter,
   notificationSwitch,
   rolesAfter,
@@ -14,6 +15,24 @@ import {
   MAX_STRICT_TOOLS,
   toolsFor,
 } from '../../functions/src/miriam/plan'
+
+describe('a food item already taken', () => {
+  const sam = { uid: 'sam', displayName: 'Sam' }
+  it('"just signed up" when they were shown it open, so it was taken since', () => {
+    expect(foodTakenSaid(sam, 'Chips', 'rachel', true)).toBe('Sam just signed up for Chips.')
+  })
+  it('"already bringing" when it may have been theirs for weeks', () => {
+    expect(foodTakenSaid(sam, 'Chips', 'rachel', false)).toBe('Sam is already bringing Chips.')
+  })
+  it('their own, or someone unnamed', () => {
+    expect(foodTakenSaid({ uid: 'rachel' }, 'Chips', 'rachel', true)).toBe(
+      'You’re already bringing Chips.'
+    )
+    expect(foodTakenSaid({ uid: 'x', displayName: '' }, 'Chips', 'rachel', true)).toBe(
+      'Someone just signed up for Chips.'
+    )
+  })
+})
 
 describe('which food item was meant', () => {
   const items = ['Paper plates', 'Chips & salsa', 'Brownies', 'Bottled water']

@@ -31,6 +31,11 @@ export interface FoodAsk {
    * before it is taken for one.
    */
   surelyFood: boolean
+  /**
+   * "As suggested", "the one you suggested": what her briefing suggested.
+   * With no dish said ("I'll bring what you suggested"), the suggestion is the dish.
+   */
+  suggested: boolean
 }
 
 /** Cooking, as nothing but food is: "make" is not, said as often of slides. */
@@ -43,9 +48,22 @@ const COOKING =
 const FOODISH =
   /\b(?:food|dish|dishes|snacks?|desserts?|drinks?|potluck|meal|side|sides|main|entree|appetizers?|plates?|cups?|napkins?|utensils?|ice)\b|(?:roast|casserole|salad|cookie|brownie|cake|cupcake|pie|chili|soup|stew|lasagna|pasta|spaghetti|pizza|chips|dip|salsa|guacamole|sandwich|sandwiche|rolls|bread|biscuit|muffin|donut|doughnut|bagel|lemonade|tea|coffee|punch|soda|juice|water|fruit|veggies|vegetables|chicken|ham|turkey|beef|pork|brisket|meatball|burger|hot\s*dog|potato|potatoe|beans|rice|mac\s+and\s+cheese|cheese|crackers|ice\s+cream|tacos?|burritos?|enchilada|wings|ribs|pancake|waffle|eggs|bacon|sausage|cornbread|coleslaw|slaw|deviled\s+eggs)s?\b/
 
-/** Before the dish: "I'll make", "I can bring", "sign me up to bring". */
+/**
+ * Before the dish: "I'll make", "I can bring", "I'll take", "sign me up to
+ * bring". "Take", "do" and "handle" are as often said of other things ("I'll
+ * take the van"), so with them it is a sign-up only if the dish is food or on
+ * the sheet (features/miriam/localTalk).
+ */
 const OFFER =
-  /^(?:(?:i'?ll|i\s+will|i\s+can|i\s+could|i'?d\s+like\s+to|i\s+want\s+to|let\s+me|i'?m\s+going\s+to|im\s+going\s+to|i'?m\s+gonna|i\s+am\s+going\s+to|i\s+am\s+gonna)\s+(?:sign\s+up\s+to\s+)?(make|bring|cook|bake|grill|fry|fix|prepare|provide)|(?:sign|put)\s+me\s+(?:up|down)\s+(?:to\s+(?:bring|make|cook|bake)|for)|i'?ll\s+sign\s+up\s+(?:to\s+(?:bring|make)|for))\b\s*(.*)$/
+  /^(?:(?:i'?ll|i\s+will|i\s+can|i\s+could|i'?d\s+like\s+to|i\s+want\s+to|let\s+me|i'?m\s+going\s+to|im\s+going\s+to|i'?m\s+gonna|i\s+am\s+going\s+to|i\s+am\s+gonna)\s+(?:sign\s+up\s+to\s+)?(make|bring|cook|bake|grill|fry|fix|prepare|provide|take\s+care\s+of|take|do|handle|cover)|(?:sign|put)\s+me\s+(?:up|down)\s+(?:to\s+(?:bring|make|cook|bake)|for)|i'?ll\s+sign\s+up\s+(?:to\s+(?:bring|make)|for))\b\s*(.*)$/
+
+/** Said of what her briefing suggested: "as suggested", "the chips you suggested". */
+const SUGGESTED =
+  /\s(?:as\s+(?:you\s+)?(?:suggested|said|recommended|mentioned)|like\s+you\s+(?:said|suggested|mentioned)|(?:that\s+|which\s+)?you\s+(?:suggested|mentioned|recommended)|from\s+(?:my|the)\s+briefing)\b|\sthe\s+suggested\b/
+
+/** A yes said first, in reply to a suggestion: "Sure, I'll bring the chips". */
+const AGREEING =
+  /^(?:(?:yes|yeah|yep|sure|ok|okay|great|perfect|sounds\s+good|alright|all\s+right|of\s+course|good\s+idea)\s+)+/
 
 /** Where the dish ends and the event begins: "for Sunday", "to the potluck". */
 const EVENT_START =
@@ -60,24 +78,29 @@ export function foodAsked(text: string, today: string): FoodAsk | null {
     .replace(/[.?!,]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+    .replace(AGREEING, '')
   const m = OFFER.exec(said)
   if (!m) return null
   const verb = m[1] ?? ''
-  const rest = ` ${m[2] ?? ''}`
+  // "As suggested" taken off, and kept: "chips as suggested" is chips.
+  const suggested = SUGGESTED.test(` ${m[2] ?? ''}`)
+  const rest = ` ${m[2] ?? ''}`.replace(new RegExp(SUGGESTED.source, 'g'), ' ').replace(/\s+/g, ' ')
   const cut = EVENT_START.exec(rest)
   let item = (cut ? rest.slice(0, cut.index) : rest).trim()
   while (LEAD.test(item)) item = item.replace(LEAD, '')
   const about = cut ? rest.slice(cut.index).replace(/'s\b/g, '') : ''
-  // A date said as one ("October 25", "10/25", "the 25th"), else a day or name.
   // "I'll make it to the potluck", "I'll bring that": coming, or something
-  // already spoken of — not a dish.
+  // already spoken of — not a dish. Unless it is what was suggested: "I'll
+  // bring what you suggested", "that, as you said".
   if (
-    /^(?:it|that|this|them|those|these|one|some|something|anything|everything|myself|me)$/.test(
+    /^(?:it|that|this|them|those|these|one|the\s+one|some|something|anything|everything|myself|me|what)$/.test(
       item
     )
   ) {
-    return null
+    if (!suggested) return null
+    item = ''
   }
+  // A date said as one ("October 25", "10/25", "the 25th"), else a day or name.
   const date = dateSaid(about, today)
   const ref = about.trim() ? eventRef(about.trim(), today) : null
   return {
@@ -89,7 +112,10 @@ export function foodAsked(text: string, today: string): FoodAsk | null {
       COOKING.test(verb) ||
       COOKING.test(item) ||
       FOODISH.test(item) ||
-      (!item && FOODISH.test(said)),
+      (!item && FOODISH.test(said)) ||
+      // What the briefing suggested is from a food sheet.
+      suggested,
+    suggested,
   }
 }
 

@@ -69,7 +69,7 @@ import { useRemindersStore } from '@/stores/remindersStore'
 import { reminderAsked, reminderWhen, repeatWhen, type Repeat } from '@/lib/reminders'
 import { clockOf } from '../../../functions/src/push/reminderTime'
 import type { ReminderExtra } from '@/stores/remindersStore'
-import { briefingAsked, type Briefing } from '@/lib/briefing'
+import { briefingAsked, type Briefing, type FoodNudge } from '@/lib/briefing'
 import { gatherBriefing, remindToAnswer } from './briefingData'
 import { BriefingView } from './BriefingView'
 import { appToolsFor } from './appTools'
@@ -293,6 +293,9 @@ export function MiriamButton() {
   const [askingBack, setAskingBack] = useState(false)
   // A question she asked here, not of Claude (./localTalk): its reply comes back to it.
   const askedHere = useRef<Reply | null>(null)
+  // The food her briefing showed open today, and suggested: "I'll bring chips
+  // as suggested" is that event; one taken since is "just signed up for".
+  const briefedFood = useRef<{ day: string; food: FoodNudge[] } | null>(null)
   // A change shown to confirm, and her listening for a spoken yes or no to it.
   const [confirmByVoice, setConfirmByVoice] = useState(false)
   const confirmingByVoice = useRef(false)
@@ -813,6 +816,7 @@ export function MiriamButton() {
     }
     setAnswer(null)
     setBriefing(b)
+    briefedFood.current = { day: todayStr(), food: b.food }
     noteDone(b.spoken)
     speak(b.spoken)
     setReading(true)
@@ -940,6 +944,7 @@ export function MiriamButton() {
       rooms: () => myRooms(uid),
       latest: latestMessages,
       now: () => Date.now(),
+      briefedFood: () => (briefedFood.current?.day === todayStr() ? briefedFood.current.food : []),
     }
   }
 
@@ -1827,6 +1832,8 @@ export function MiriamButton() {
                     const prepared = await prepareAction('sign_up_food', {
                       event_key: food.eventKey,
                       item: food.suggestion,
+                      // The briefing showed it open: taken since is "just signed up".
+                      shown_open: true,
                     })
                     const said =
                       prepared.kind === 'ready'
