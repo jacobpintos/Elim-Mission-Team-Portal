@@ -13,6 +13,10 @@ on:
         description: 'Deploy Firestore Rules'
         type: boolean
         default: false
+      deploy_storage_rules:
+        description: 'Deploy Storage Rules'
+        type: boolean
+        default: false
 
   # Auto-deploy when the relevant source files land on main.
   push:
@@ -20,6 +24,7 @@ on:
     paths:
       - 'mission-portal-app/functions/**'
       - 'mission-portal-app/firestore.rules'
+      - 'mission-portal-app/storage.rules'
       - '.github/workflows/deploy-firebase.yml'
 
 jobs:
@@ -55,11 +60,22 @@ jobs:
             echo "Cannot resolve ${BEFORE:-<empty>} — deploying everything."
             echo "functions=1" >> "$GITHUB_OUTPUT"
             echo "rules=1" >> "$GITHUB_OUTPUT"
+            echo "storage=1" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git diff --name-only "$BEFORE" '${{ github.sha }}' > /tmp/changed.txt
+          # A change to this workflow deploys everything once, so a step added
+          # here runs straight away instead of waiting for its files to change.
+          if grep -q '.github/workflows/deploy-firebase.yml' /tmp/changed.txt; then
+            echo "Workflow changed — deploying everything."
+            echo "functions=1" >> "$GITHUB_OUTPUT"
+            echo "rules=1" >> "$GITHUB_OUTPUT"
+            echo "storage=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "functions=$(grep -c 'mission-portal-app/functions/' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
           echo "rules=$(grep -c 'mission-portal-app/firestore.rules' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
+          echo "storage=$(grep -c 'mission-portal-app/storage.rules' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
 
       # Authenticate with Firebase using the service account JSON stored
       # as a GitHub secret. Sets GOOGLE_APPLICATION_CREDENTIALS automatically.
@@ -108,3 +124,14 @@ jobs:
             (github.event_name == 'push' && steps.changed.outputs.rules != '0')
           )
         run: npx firebase-tools deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }}
+
+      # Storage rules, on the same terms as the Firestore rules above. Without
+      # this step a new upload folder (eventFlights/, eventLodging/) stayed
+      # denied until someone remembered to deploy the rules by hand.
+      - name: Deploy Storage Rules
+        if: |
+          !cancelled() && (
+            (github.event_name == 'workflow_dispatch' && inputs.deploy_storage_rules == true) ||
+            (github.event_name == 'push' && steps.changed.outputs.storage != '0')
+          )
+        run: npx firebase-tools deploy --only storage --project ${{ secrets.FIREBASE_PROJECT_ID }}
