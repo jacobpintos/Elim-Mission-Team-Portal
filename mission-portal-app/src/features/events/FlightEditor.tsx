@@ -1,11 +1,10 @@
-import { useState } from 'react'
-import { Pressable, TextInput, StyleSheet, ActivityIndicator } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { Pressable, TextInput, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Image } from '@/components/ui/Image'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { useUIStore } from '@/stores/uiStore'
 import { sameId } from '@/lib/ids'
-import { pickAndUploadFlightImage } from '@/lib/flightImageUpload'
+import { flightPatchFromRead, readFlightImage } from '@/lib/travelImageRead'
+import { TravelImageField } from './TravelImage'
 import type { FlightEntry } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 
@@ -20,77 +19,19 @@ function getName(uid: string, allUsers: UserProfile[]) {
   return u?.displayName || u?.email || uid
 }
 
-function FlightImageField({
-  entryId,
-  url,
-  onChange,
-}: {
-  entryId: string
-  url?: string
-  onChange: (url: string | undefined) => void
-}) {
-  const colors = useThemeColors()
-  const toast = useUIStore((s) => s.toast)
-  const [uploading, setUploading] = useState(false)
-
-  const pick = async () => {
-    setUploading(true)
-    try {
-      const next = await pickAndUploadFlightImage(entryId)
-      if (next) onChange(next)
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not upload that picture', 'error')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  return (
-    <XStack gap="$2" alignItems="center">
-      {url ? (
-        <Image
-          source={{ uri: url }}
-          style={{ width: 64, height: 64, borderRadius: 8 }}
-          contentFit="cover"
-        />
-      ) : null}
-      <Pressable onPress={pick} disabled={uploading}>
-        <XStack
-          borderWidth={1}
-          borderColor={colors.primary}
-          borderRadius="$2"
-          paddingHorizontal="$3"
-          paddingVertical="$2"
-          alignItems="center"
-          gap="$2"
-        >
-          {uploading ? <ActivityIndicator size="small" color={colors.primary} /> : null}
-          <Text color={colors.primary} fontSize="$2">
-            {uploading ? 'Uploading…' : url ? 'Replace image' : '📎 Attach image'}
-          </Text>
-        </XStack>
-      </Pressable>
-      {url && !uploading ? (
-        <Pressable onPress={() => onChange(undefined)}>
-          <Text color="$red10" fontSize="$2">
-            Remove
-          </Text>
-        </Pressable>
-      ) : null}
-    </XStack>
-  )
-}
-
 function FlightSection({
   label,
   prefix,
   entry,
   onUpdate,
+  onRead,
 }: {
   label: string
   prefix: 'out' | 'ret'
   entry: FlightEntry
   onUpdate: (patch: Partial<FlightEntry>) => void
+  /** Fill the entry in from a picture just attached; resolves to how many fields. */
+  onRead: (path: string) => Promise<number>
 }) {
   const colors = useThemeColors()
   const f = (key: keyof FlightEntry) => (entry[key] as string) ?? ''
@@ -261,10 +202,13 @@ function FlightSection({
         )}
       </XStack>
 
-      <FlightImageField
+      <TravelImageField
+        label={`${prefix === 'out' ? 'Outbound' : 'Return'} boarding pass or itinerary — details are filled in from it`}
+        folder="eventFlights"
         entryId={entry.id}
         url={entry[`${prefix}ImageUrl`]}
         onChange={(url) => onUpdate({ [`${prefix}ImageUrl`]: url })}
+        read={onRead}
       />
     </YStack>
   )
@@ -275,6 +219,14 @@ export function FlightEditor({ entries, onChange, allUsers }: FlightEditorProps)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showPicker, setShowPicker] = useState(false)
   const [search, setSearch] = useState('')
+
+  // The latest entries, for updates that land after an upload or a read: the
+  // `entries` a callback closed over may be seconds old by then, and writing
+  // from it would undo whatever was typed in the meantime.
+  const latest = useRef(entries)
+  useEffect(() => {
+    latest.current = entries
+  }, [entries])
 
   const usedUids = new Set(entries.map((e) => e.uid))
   const availableUsers = allUsers.filter((u) => !usedUids.has(String(u.uid)))
@@ -290,19 +242,32 @@ export function FlightEditor({ entries, onChange, allUsers }: FlightEditorProps)
 
   const addEntry = (uid: string) => {
     const newEntry: FlightEntry = { id: Date.now().toString(), uid }
-    onChange([...entries, newEntry])
+    latest.current = [...latest.current, newEntry]
+    onChange(latest.current)
     setExpandedId(newEntry.id)
     setShowPicker(false)
     setSearch('')
   }
 
   const removeEntry = (id: string) => {
-    onChange(entries.filter((e) => e.id !== id))
+    latest.current = latest.current.filter((e) => e.id !== id)
+    onChange(latest.current)
     if (expandedId === id) setExpandedId(null)
   }
 
-  const updateEntry = (id: string, patch: Partial<FlightEntry>) =>
-    onChange(entries.map((e) => (e.id === id ? { ...e, ...patch } : e)))
+  const updateEntry = (id: string, patch: Partial<FlightEntry>) => {
+    latest.current = latest.current.map((e) => (e.id === id ? { ...e, ...patch } : e))
+    onChange(latest.current)
+  }
+
+  const readInto = async (id: string, path: string, leg: 'out' | 'ret') => {
+    const read = await readFlightImage(path, leg)
+    const entry = latest.current.find((e) => e.id === id)
+    if (!entry) return 0
+    const patch = flightPatchFromRead(entry, read)
+    updateEntry(id, patch)
+    return Object.keys(patch).length
+  }
 
   return (
     <YStack gap="$3">
@@ -354,12 +319,14 @@ export function FlightEditor({ entries, onChange, allUsers }: FlightEditorProps)
                   prefix="out"
                   entry={entry}
                   onUpdate={(patch) => updateEntry(entry.id, patch)}
+                  onRead={(path) => readInto(entry.id, path, 'out')}
                 />
                 <FlightSection
                   label="RETURN FLIGHT"
                   prefix="ret"
                   entry={entry}
                   onUpdate={(patch) => updateEntry(entry.id, patch)}
+                  onRead={(path) => readInto(entry.id, path, 'ret')}
                 />
               </YStack>
             )}

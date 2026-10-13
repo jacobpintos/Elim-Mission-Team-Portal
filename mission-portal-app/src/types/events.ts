@@ -4,6 +4,8 @@ export interface LodgingEntry {
   address?: string
   room?: string
   confirmation?: string
+  /** Booking confirmation or similar, in Storage. */
+  imageUrl?: string
   assignees: string[]
 }
 

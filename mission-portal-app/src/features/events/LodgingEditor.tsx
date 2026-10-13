@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pressable, TextInput, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { sameId } from '@/lib/ids'
+import { lodgingPatchFromRead, readHotelImage } from '@/lib/travelImageRead'
 import type { LodgingEntry, EventTeam } from '@/types/events'
+import { TravelImageField } from './TravelImage'
 import type { UserProfile } from '@/types/user'
 
 interface GroupDoc {
@@ -46,17 +48,43 @@ export function LodgingEditor({
   // UIDs in the event but not placed anywhere
   const unassigned = allAssignedArr.filter((uid) => !placedAll.has(uid))
 
-  const updateEntry = (idx: number, patch: Partial<LodgingEntry>) =>
-    onChange(entries.map((e, i) => (i === idx ? { ...e, ...patch } : e)))
+  // The latest entries, for updates that land after an upload or a read: the
+  // `entries` a callback closed over may be seconds old by then, and writing
+  // from it would undo whatever was typed in the meantime.
+  const latest = useRef(entries)
+  useEffect(() => {
+    latest.current = entries
+  }, [entries])
+
+  const updateEntry = (idx: number, patch: Partial<LodgingEntry>) => {
+    latest.current = latest.current.map((e, i) => (i === idx ? { ...e, ...patch } : e))
+    onChange(latest.current)
+  }
+
+  /** By id rather than index: an entry above may be removed while a picture is read. */
+  const updateById = (id: string, patch: Partial<LodgingEntry>) => {
+    latest.current = latest.current.map((e) => (e.id === id ? { ...e, ...patch } : e))
+    onChange(latest.current)
+  }
+
+  const readInto = async (id: string, path: string) => {
+    const read = await readHotelImage(path)
+    const entry = latest.current.find((e) => e.id === id)
+    if (!entry) return 0
+    const patch = lodgingPatchFromRead(entry, read)
+    updateById(id, patch)
+    return Object.keys(patch).length
+  }
 
   const removeEntry = (idx: number) => {
-    onChange(entries.filter((_, i) => i !== idx))
+    latest.current = latest.current.filter((_, i) => i !== idx)
+    onChange(latest.current)
     if (expandedIdx === idx) setExpandedIdx(null)
   }
 
   const addEntry = () => {
-    onChange([
-      ...entries,
+    latest.current = [
+      ...latest.current,
       {
         id: Date.now().toString(),
         name: '',
@@ -65,8 +93,9 @@ export function LodgingEditor({
         confirmation: '',
         assignees: [],
       },
-    ])
-    setExpandedIdx(entries.length)
+    ]
+    onChange(latest.current)
+    setExpandedIdx(latest.current.length - 1)
   }
 
   const toggleAssignee = (idx: number, uid: string) => {
@@ -189,6 +218,15 @@ export function LodgingEditor({
                 autoCapitalize="characters"
               />
             </XStack>
+
+            <TravelImageField
+              label="Hotel confirmation — details are filled in from it"
+              folder="eventLodging"
+              entryId={entry.id}
+              url={entry.imageUrl}
+              onChange={(url) => updateById(entry.id, { imageUrl: url })}
+              read={(path) => readInto(entry.id, path)}
+            />
 
             {/* Assigned chips */}
             {entry.assignees.length > 0 && (

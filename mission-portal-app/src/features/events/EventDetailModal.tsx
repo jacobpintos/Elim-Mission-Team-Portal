@@ -18,8 +18,6 @@ import { usePlanningStore } from '@/stores/planningStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { sameId } from '@/lib/ids'
 import { PlanningBoardCanvas } from '@/features/planning/PlanningBoardCanvas'
-import { Image } from '@/components/ui/Image'
-import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import type { EventInstance, FlightEntry } from '@/types/events'
 import {
   fetchWeather,
@@ -29,6 +27,7 @@ import {
   type NWSAlert,
 } from '@/lib/weather'
 import { WeatherDetailSheet } from './WeatherDetailSheet'
+import { TravelImageThumb } from './TravelImage'
 
 import { openExternalUrl } from '@/lib/externalUrl'
 
@@ -168,6 +167,7 @@ export function LodgingDisplay({
               Confirmation #: {myEntry.confirmation}
             </Text>
           ) : null}
+          {myEntry.imageUrl ? <TravelImageThumb url={myEntry.imageUrl} /> : null}
           <Text color={colors.textMuted} fontSize="$2">
             With:{' '}
             {myEntry.assignees
@@ -219,6 +219,7 @@ export function LodgingDisplay({
                 <Text color={colors.textMuted} fontSize="$2">
                   {entry.assignees.map(getName).join(', ') || 'No one assigned'}
                 </Text>
+                {entry.imageUrl ? <TravelImageThumb url={entry.imageUrl} size={64} /> : null}
               </YStack>
             )
           })
@@ -258,7 +259,6 @@ function FlightBlock({
   contact?: string
   imageUrl?: string
 }) {
-  const [viewing, setViewing] = useState<string | null>(null)
   const hasAny =
     date ||
     time ||
@@ -336,17 +336,7 @@ function FlightBlock({
           Contact: {contact}
         </Text>
       ) : null}
-      {imageUrl ? (
-        <Pressable onPress={() => setViewing(imageUrl)} style={{ alignSelf: 'flex-start' }}>
-          <Image
-            source={{ uri: imageUrl }}
-            style={{ width: 120, height: 120, borderRadius: 8, marginTop: 4 }}
-            contentFit="cover"
-          />
-        </Pressable>
-      ) : null}
-      {/* key={viewing}: a new picture mounts a fresh viewer at default zoom. */}
-      <ImageLightbox key={viewing ?? 'none'} uri={viewing} onClose={() => setViewing(null)} />
+      {imageUrl ? <TravelImageThumb url={imageUrl} /> : null}
     </YStack>
   )
 }

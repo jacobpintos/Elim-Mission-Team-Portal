@@ -155,8 +155,8 @@ describe('announcement photos', () => {
   })
 })
 
-describe('flight images', () => {
-  const path = 'eventFlights/entry-1/1700000000_pass.jpg'
+describe.each(['eventFlights', 'eventLodging'])('%s images', (folder) => {
+  const path = `${folder}/entry-1/1700000000_pass.jpg`
 
   it('lets a signed-in user upload one', async () => {
     await assertSucceeds(uploadBytes(ref(as(OWNER), path), blob(1024), IMAGE))

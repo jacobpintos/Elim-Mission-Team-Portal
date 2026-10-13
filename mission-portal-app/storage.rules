@@ -87,14 +87,22 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
-    // Pictures attached to a flight leg — boarding passes, itinerary
-    // screenshots — written by the event form's flight editor. Keyed by the
-    // flight entry's id, because a new event has no id until it is saved and
-    // the picture is chosen before that.
+    // Pictures attached to a flight leg or a hotel — boarding passes,
+    // itineraries, booking confirmations — written by the event form's flight
+    // and lodging editors, and read by readTravelImage to fill the form in.
+    // Keyed by the entry's id, because a new event has no id until it is saved
+    // and the picture is chosen before that.
     //
     // Read is any signed-in user, matching the rules above; the Firestore rule
     // on events is what decides who sees the entry holding the address.
     match /eventFlights/{entryId}/{file} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+    match /eventLodging/{entryId}/{file} {
       allow read: if request.auth != null;
       allow write: if request.auth != null
         && request.resource.size < 10 * 1024 * 1024

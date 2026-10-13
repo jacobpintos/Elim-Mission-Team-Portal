@@ -44,3 +44,4 @@ export {
   disconnectFbPage,
 } from './facebook/admin'
 export { askMiriam } from './miriam/askMiriam'
+export { readTravelImage } from './readTravelImage'

@@ -3,21 +3,34 @@ import { storage } from '@/lib/firebase'
 import { uriToBlob } from '@/lib/uriToBlob'
 import { shrinkImage } from '@/lib/imageShrink'
 
-/** The Storage rule for eventFlights/ rejects anything larger. */
+/** The Storage rules for these folders reject anything larger. */
 const MAX_BYTES = 10 * 1024 * 1024
 
+/** eventFlights/ for boarding passes and itineraries, eventLodging/ for hotels. */
+export type TravelImageFolder = 'eventFlights' | 'eventLodging'
+
+export interface UploadedTravelImage {
+  url: string
+  /** The Storage path, which is what readTravelImage is given to read. */
+  path: string
+}
+
 /**
- * Choose a picture for a flight leg — a boarding pass, an itinerary
- * screenshot — and put it in Storage, returning the address to store on the
- * entry. Resolves to null when the picker is cancelled.
+ * Choose a picture for a flight leg or a hotel — a boarding pass, an
+ * itinerary, a booking confirmation — and put it in Storage. Resolves to null
+ * when the picker is cancelled.
  *
- * Files are keyed by the flight entry's id rather than the event's, because a
- * new event has no id until it is saved and the picture is chosen before that.
+ * Files are keyed by the flight or lodging entry's id rather than the event's,
+ * because a new event has no id until it is saved and the picture is chosen
+ * before that.
  *
  * Nothing is deleted on replace or remove: the form can still be cancelled,
  * and a file deleted then would leave the saved event pointing at nothing.
  */
-export async function pickAndUploadFlightImage(entryId: string): Promise<string | null> {
+export async function pickAndUploadTravelImage(
+  folder: TravelImageFolder,
+  entryId: string
+): Promise<UploadedTravelImage | null> {
   const ImagePicker = await import('expo-image-picker')
 
   // Granted automatically on web; on native this is the photo library prompt.
@@ -38,12 +51,14 @@ export async function pickAndUploadFlightImage(entryId: string): Promise<string 
   if (picked.size > MAX_BYTES) {
     throw new Error('That picture is larger than 10 MB. Please choose a smaller one.')
   }
+  // The text on a boarding pass stays legible at the size this shrinks to.
   const { blob, contentType } = await shrinkImage(picked, asset.mimeType ?? 'image/jpeg')
 
-  const name = (asset.fileName ?? 'flight.jpg').replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
-  const sRef = storageRef(storage, `eventFlights/${entryId}/${Date.now()}_${name}`)
+  const name = (asset.fileName ?? 'travel.jpg').replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
+  const path = `${folder}/${entryId.replace(/[^A-Za-z0-9_-]/g, '_')}/${Date.now()}_${name}`
+  const sRef = storageRef(storage, path)
   // The rule requires an image/* content type, which a Blob read off a
   // file:// URI does not reliably carry.
   await uploadBytes(sRef, blob, { contentType })
-  return getDownloadURL(sRef)
+  return { url: await getDownloadURL(sRef), path }
 }
