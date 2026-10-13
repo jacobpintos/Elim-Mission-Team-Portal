@@ -84,10 +84,13 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Setup Node 20
+      # The functions' runtime is the one in functions/package.json's
+      # "engines" (Node 24); the CLI loads them on this one to read what to
+      # deploy, so the two are kept the same.
+      - name: Setup Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       # Install the functions' npm deps so the predeploy TypeScript build works.
       # Only needed when functions are being deployed.
@@ -105,6 +108,20 @@ jobs:
         run: |
           echo "MAIL_FROM=${{ secrets.MAIL_FROM || 'Mission Portal <noreply@yourdomain.com>' }}" >> mission-portal-app/functions/.env
           echo "MAIL_ADMIN_TO=${{ secrets.MAIL_ADMIN_TO || 'admin@yourdomain.com' }}" >> mission-portal-app/functions/.env
+
+      # One-time — remove once it has run. onUserDeleted was the one 1st-gen
+      # function, and 1st gen has no Node 24, so it left the source. A deploy
+      # with nobody to confirm won't delete a live function (it stops the whole
+      # deploy instead), so it is deleted here first, by name and region.
+      # Already gone, on a re-run, is fine; anything else, the deploy below
+      # stops and says so.
+      - name: Delete the retired onUserDeleted function
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.deploy_functions == true) ||
+          (github.event_name == 'push' && steps.changed.outputs.functions != '0')
+        run: |
+          npx firebase-tools functions:delete onUserDeleted --region us-east1 --force --project ${{ secrets.FIREBASE_PROJECT_ID }} \
+            || echo "::warning::onUserDeleted was not deleted: already gone, or see the error above."
 
       # Deploy Cloud Functions only when functions source changed (or manually requested).
       - name: Deploy Cloud Functions

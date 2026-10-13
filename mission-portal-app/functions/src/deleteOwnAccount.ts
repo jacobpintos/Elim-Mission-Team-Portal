@@ -68,14 +68,18 @@ export const deleteOwnAccount = onCall(async (req) => {
   }
 
   // 4. Audit trail — written before the Auth record goes away so the actor is
-  //    still resolvable.
+  //    still resolvable. In the shape the app writes (its src/lib/audit.ts):
+  //    the Audit page sorts by `ts` and the daily cleanup prunes by it, so an
+  //    entry stamped `timestamp` instead was never shown, nor ever removed.
   try {
     await db.collection('auditLog').add({
       action: 'user.selfDeleted',
+      detail: `Deleted their own account${email ? ` (${email})` : ''}`,
+      name: displayName ?? email ?? '',
+      ts: admin.firestore.FieldValue.serverTimestamp(),
       actorUid: uid,
       targetUid: uid,
       targetEmail: email,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
       metadata: { displayName, source: 'in-app account deletion' },
     })
   } catch (err) {

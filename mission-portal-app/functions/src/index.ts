@@ -1,6 +1,5 @@
 export { sendNotification } from './notify'
 export { sendContactForm } from './email/sendContactForm'
-export { onUserDeleted } from './audit/onUserDeleted'
 export { createPortalUser } from './createPortalUser'
 export { weeklyDigest, monthlyDigest, sendDigestManual } from './digest'
 export { resendWebhook } from './webhooks'
