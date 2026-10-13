@@ -5,6 +5,7 @@ import {
   type EventInstance,
 } from '../../functions/src/miriam/data'
 import { eventRef, type QuickData } from './miriamQuick'
+import { pickBest, type Picked } from './miriamReplies'
 
 /**
  * "I'll make pot roast for Sunday", "sign me up to bring drinks to the
@@ -32,9 +33,15 @@ export interface FoodAsk {
   surelyFood: boolean
 }
 
-const COOKING = /\b(?:make|makes|making|cook|bake|grill|fry|fix|prepare|provide)\b/
+/** Cooking, as nothing but food is: "make" is not, said as often of slides. */
+const COOKING =
+  /\b(?:cook|cooks|cooking|bake|bakes|baking|grill|grilling|fry|frying|barbecue|bbq|smoke|smoking)\b/
+/**
+ * Food, by its name: words for it, and the dishes most often brought. Matched
+ * at a word's end, so "potroast" is a roast.
+ */
 const FOODISH =
-  /\b(?:food|dish|dishes|snacks?|desserts?|drinks?|potluck|meal|side|sides|main|appetizers?|casserole|salad|plates?|cups?|napkins?|utensils?|ice)\b/
+  /\b(?:food|dish|dishes|snacks?|desserts?|drinks?|potluck|meal|side|sides|main|entree|appetizers?|plates?|cups?|napkins?|utensils?|ice)\b|(?:roast|casserole|salad|cookie|brownie|cake|cupcake|pie|chili|soup|stew|lasagna|pasta|spaghetti|pizza|chips|dip|salsa|guacamole|sandwich|sandwiche|rolls|bread|biscuit|muffin|donut|doughnut|bagel|lemonade|tea|coffee|punch|soda|juice|water|fruit|veggies|vegetables|chicken|ham|turkey|beef|pork|brisket|meatball|burger|hot\s*dog|potato|potatoe|beans|rice|mac\s+and\s+cheese|cheese|crackers|ice\s+cream|tacos?|burritos?|enchilada|wings|ribs|pancake|waffle|eggs|bacon|sausage|cornbread|coleslaw|slaw|deviled\s+eggs)s?\b/
 
 /** Before the dish: "I'll make", "I can bring", "sign me up to bring". */
 const OFFER =
@@ -62,18 +69,31 @@ export function foodAsked(text: string, today: string): FoodAsk | null {
   while (LEAD.test(item)) item = item.replace(LEAD, '')
   const about = cut ? rest.slice(cut.index).replace(/'s\b/g, '') : ''
   // A date said as one ("October 25", "10/25", "the 25th"), else a day or name.
+  // "I'll make it to the potluck", "I'll bring that": coming, or something
+  // already spoken of — not a dish.
+  if (
+    /^(?:it|that|this|them|those|these|one|some|something|anything|everything|myself|me)$/.test(
+      item
+    )
+  ) {
+    return null
+  }
   const date = dateSaid(about, today)
   const ref = about.trim() ? eventRef(about.trim(), today) : null
   return {
     item,
     date: date ?? ref?.date ?? null,
     name: date ? '' : (ref?.name ?? '').replace(/\b(?:food|sign\s*up|sheet)\b/g, '').trim(),
-    surelyFood: COOKING.test(verb) || COOKING.test(said) || FOODISH.test(said),
+    // Food by the dish, not the event: "a friend to the potluck" is not.
+    surelyFood:
+      COOKING.test(verb) ||
+      COOKING.test(item) ||
+      FOODISH.test(item) ||
+      (!item && FOODISH.test(said)),
   }
 }
 
-/** Squashed for comparing: "Pot-roast" and "potroast" alike. */
-const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+/** The words that carry a name, for matching an event by what was said. */
 const wordsOf = (s: string) =>
   s
     .toLowerCase()
@@ -81,32 +101,29 @@ const wordsOf = (s: string) =>
     .filter((w) => w.length > 1 && !['the', 'and', 'of', 'a', 'an', 'some'].includes(w))
 
 /**
- * Which item on a sheet was meant, by its index; -1 when none, or more than
- * one, fits. The same name first; then one with the same letters
- * ("potroast" for "Pot roast"); then the one item every word said fits.
- * Never a near miss: "pot roast" is not "Roast vegetables".
+ * Which item on a sheet was meant, by its index, and how sure that is
+ * (lib/miriamReplies: pickBest): the same name, or every word said found in
+ * one, is sure; "pot rose" for "Pot roast" is likely, to be asked about; "roast"
+ * with "Pot roast" and "Roast vegetables" both on the sheet is which.
  */
-export function foodItemMatch(items: string[], asked: string): number {
-  const said = squash(asked)
-  if (!said) return -1
-  const same = items.findIndex((i) => squash(i) === said)
-  if (same >= 0) return same
-  const one = (hits: number[]) => (hits.length === 1 ? hits[0] : -1)
-  const inside = items
-    .map((item, i) => ({ s: squash(item), i }))
-    .filter(({ s }) => s.length > 2 && (s.includes(said) || said.includes(s)))
-    .map(({ i }) => i)
-  if (inside.length) return one(inside)
-  const want = wordsOf(asked)
-  if (!want.length) return -1
-  return one(
-    items
-      .map((item, i) => ({ have: wordsOf(item), i }))
-      .filter(({ have }) =>
-        want.every((w) => have.some((h) => h === w || h === `${w}s` || w === `${h}s`))
-      )
-      .map(({ i }) => i)
+export function foodItemPicked(items: string[], asked: string): Picked<number> {
+  const picked = pickBest(
+    items.map((label, i) => ({ label, i })).filter((o) => o.label.trim()),
+    (o) => o.label,
+    asked
   )
+  if (picked.kind === 'sure') return { kind: 'sure', item: picked.item.i }
+  if (picked.kind === 'likely') {
+    return { kind: 'likely', item: picked.item.i, others: picked.others.map((o) => o.i) }
+  }
+  if (picked.kind === 'which') return { kind: 'which', items: picked.items.map((o) => o.i) }
+  return { kind: 'none' }
+}
+
+/** The item plainly meant, by its index; -1 when none is plainly it. */
+export function foodItemMatch(items: string[], asked: string): number {
+  const picked = foodItemPicked(items, asked)
+  return picked.kind === 'sure' ? picked.item : -1
 }
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
@@ -207,8 +224,4 @@ export function eventPicked(
   return pool.length === 1 ? pool[0] : null
 }
 
-/** "Pot roast, Drinks and Dessert". */
-export function listed(items: string[]): string {
-  if (items.length <= 1) return items.join('')
-  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
-}
+export { listed } from './miriamReplies'

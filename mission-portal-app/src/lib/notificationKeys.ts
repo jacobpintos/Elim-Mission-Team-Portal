@@ -81,3 +81,14 @@ export const PUBLIC_NOTIF_LABELS: Record<PublicNotifKey, string> = {
   contentFeatured: 'New & featured content',
   livestream: 'A service goes live',
 }
+
+/**
+ * What a toggle shows for a preference never written.
+ *
+ * The public rows default on; the member rows already default off. Stream
+ * alerts have to read as off in both, because there an unset value means the
+ * prompt has not been answered — and showing it on would promise a
+ * notification that nothing is going to send.
+ */
+const PUSH_DEFAULT_OFF = new Set<string>(['livestream'])
+export const pushDefaultFor = (key: string) => !PUSH_DEFAULT_OFF.has(key)

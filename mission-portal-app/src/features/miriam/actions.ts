@@ -19,7 +19,13 @@ import { useMiriamStore } from '@/stores/miriamStore'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
 import { allInstances } from '@/lib/events'
 import { AVAIL_LABELS } from '@/lib/availability'
-import { isAdmin, isGuest, isSecurity, isWorship, visibleTabs } from '@/lib/roles'
+import { isAdmin, isGuest, isPublic, isSecurity, isWorship, visibleTabs } from '@/lib/roles'
+import {
+  notificationKeysFor,
+  notificationLabel,
+  pushIsOn,
+  switchesSaid,
+} from '@/lib/miriamNotifications'
 import { useSecurityStore } from '@/stores/securityStore'
 import { assignedTo, type Group } from '../../../functions/src/miriam/data'
 import { roomName, roomsFor } from '@/lib/miriamAppData'
@@ -344,6 +350,61 @@ async function changeNotification(profile: UserProfile, input: Record<string, un
         Object.fromEntries(target.paths.map((p) => [p, on]))
       )
       return `Turned ${on ? 'on' : 'off'}.`
+    },
+  } satisfies Prepared
+}
+
+/**
+ * Several switches at once — "all of them", or both food ones — worked out on
+ * the device (lib/miriamNotifications). Push only, as Settings shows them.
+ * Those already as asked are left alone, and Undo puts back only what changed.
+ */
+async function changeNotifications(profile: UserProfile, input: Record<string, unknown>) {
+  const on = input.on === true
+  const has = new Set(notificationKeysFor(profile))
+  const asked = (Array.isArray(input.notifications) ? input.notifications : [])
+    .map(String)
+    .filter((k) => has.has(k))
+  if (asked.length === 0) return cannot('Those aren’t notifications you have.')
+  const prefs = profile.notificationPrefs as unknown as Parameters<typeof pushIsOn>[0]
+  const changing = asked.filter((k) => pushIsOn(prefs, k, isPublic(profile)) !== on)
+  const state = on ? 'on' : 'off'
+  if (changing.length === 0) {
+    return cannot(
+      asked.length === 1
+        ? `“${notificationLabel(asked[0])}” is already ${state}.`
+        : `Those are already ${state}.`
+    )
+  }
+  const write = (value: boolean) =>
+    updateDoc(
+      doc(db, 'users', String(profile.uid)),
+      Object.fromEntries(changing.map((k) => [`notificationPrefs.${k}.push`, value]))
+    )
+  return {
+    kind: 'ready',
+    title:
+      changing.length === 1
+        ? `Turn ${state} “${notificationLabel(changing[0])}” notifications?`
+        : `Turn ${state} ${changing.length} notifications?`,
+    details:
+      changing.length === 1
+        ? []
+        : [
+            changing.length === has.size
+              ? `All of yours, by push.`
+              : `${switchesSaid(changing)}, by push.`,
+          ],
+    confirm: on ? 'Turn on' : 'Turn off',
+    run: async () => {
+      await write(on)
+      return changing.length === 1
+        ? `Turned ${state}.`
+        : `Turned ${state} — ${changing.length} of them.`
+    },
+    undo: async () => {
+      await write(!on)
+      return changing.length === 1 ? 'It’s back as it was.' : 'They’re back as they were.'
     },
   } satisfies Prepared
 }
@@ -1582,6 +1643,7 @@ const ACTIONS: Record<
   set_availability: setAvailability,
   sign_up_food: signUpFood,
   change_notification: changeNotification,
+  change_notifications: changeNotifications,
   create_user: createUser,
   update_user: updateUser,
   reset_user_password: resetPassword,

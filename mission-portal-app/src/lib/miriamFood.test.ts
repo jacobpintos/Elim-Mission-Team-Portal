@@ -84,6 +84,13 @@ describe('foodAsked', () => {
     expect(foodAsked("I'll bring my guitar", today)?.surelyFood).toBe(false)
   })
 
+  it('is not sure "make" is food, unless a dish is said', () => {
+    expect(foodAsked("I'll make the slides", today)?.surelyFood).toBe(false)
+    expect(foodAsked("I'll make lasagna", today)?.surelyFood).toBe(true)
+    expect(foodAsked("I'll make potroast", today)?.surelyFood).toBe(true)
+    expect(foodAsked("I'll bring brownies", today)?.surelyFood).toBe(true)
+  })
+
   it('leaves anything else alone', () => {
     expect(foodAsked('What should I bring Sunday?', today)).toBeNull()
     expect(foodAsked("What's the dress code today?", today)).toBeNull()
