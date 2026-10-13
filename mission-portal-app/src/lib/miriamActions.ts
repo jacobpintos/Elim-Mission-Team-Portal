@@ -41,6 +41,18 @@ export function foodTakenSaid(
   return shownOpen ? `${who} just signed up for ${item}.` : `${who} is already bringing ${item}.`
 }
 
+/** What is still open on a sheet, by name, in the list's order. `signups`: keyed by the item's place. */
+export function stillOpen(items: string[], signups: Record<string, unknown>): string[] {
+  return items.filter((item, i) => item && !signups[String(i)])
+}
+
+/** What is left on the sheet, said after an item taken: "Salsa and Drinks are still open." */
+export function foodStillOpenSaid(open: string[]): string {
+  if (open.length === 0) return 'Nothing else on the sheet is open.'
+  if (open.length === 1) return `${open[0]} is still open.`
+  return `${open.slice(0, -1).join(', ')} and ${open[open.length - 1]} are still open.`
+}
+
 /** Settings' switches that are a single on-or-off, not push and email. */
 const SINGLE = {
   weeklyDigest: 'Weekly digest email',

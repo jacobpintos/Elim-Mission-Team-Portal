@@ -35,7 +35,7 @@ import { MAX_REQUEST, miriamHref } from '@/lib/miriam'
 import { anyOverlayOpen } from '@/lib/overlays'
 import { rememberName, rememberWords } from '@/lib/miriamMemory'
 import { FD } from '@/lib/format'
-import { speak, stopSpeaking, unlockSpeech, whenSpoken } from './speak'
+import { speak as speakAloud, stopSpeaking, unlockSpeech, whenSpoken } from './speak'
 import { askMiriam, miriamError, type Heard } from './askMiriam'
 import { prepareAction, type Prepared } from './actions'
 import { useMiriamStore, WAKE_KEY } from '@/stores/miriamStore'
@@ -63,7 +63,15 @@ import {
 import { fetchWeather } from '@/lib/weather'
 import { announcementsShown } from '@/lib/miriamAppData'
 import { talkHere, type Here, type Reply, type Talk } from './localTalk'
-import { allAnnouncements, latestMessages, myRooms, nextOpenFood, openFood } from './localData'
+import { shownAlready } from '@/lib/miriamReplies'
+import {
+  allAnnouncements,
+  foodSheet,
+  latestMessages,
+  myRooms,
+  nextOpenFood,
+  openFood,
+} from './localData'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useRemindersStore } from '@/stores/remindersStore'
 import { reminderAsked, reminderWhen, repeatWhen, type Repeat } from '@/lib/reminders'
@@ -86,6 +94,7 @@ import type { ChordSheet } from '@/types/chordSheet'
 import { VideoPlayerModal } from '@/components/ui/VideoPlayerModal'
 import { useMusicStore, type MusicItem } from '@/stores/musicStore'
 import { useAuthStore } from '@/stores/authStore'
+import { useUIStore } from '@/stores/uiStore'
 import { screensFor } from '@/lib/miriamScreens'
 import { isAdmin } from '@/lib/roles'
 import { doc } from 'firebase/firestore'
@@ -293,6 +302,10 @@ export function MiriamButton() {
   const [askingBack, setAskingBack] = useState(false)
   // A question she asked here, not of Claude (./localTalk): its reply comes back to it.
   const askedHere = useRef<Reply | null>(null)
+  // What she said, written out as well as said aloud — for a phone on silent,
+  // a loud room, or someone who would rather read: shown with her answer when
+  // it isn't the same words (her briefing read out, a briefing button's result).
+  const [said, setSaid] = useState<string | null>(null)
   // The food her briefing showed open today, and suggested: "I'll bring chips
   // as suggested" is that event; one taken since is "just signed up for".
   const briefedFood = useRef<{ day: string; food: FoodNudge[] } | null>(null)
@@ -446,6 +459,7 @@ export function MiriamButton() {
     setLink(null)
     setUndo(null)
     setBriefing(null)
+    setSaid(null)
     setUnderstood('')
     setAskingBack(false)
     shownNote.current = ''
@@ -517,7 +531,7 @@ export function MiriamButton() {
       const tour = tourFor(tourAsk.part, profile)
       if (tour) {
         const text = tourAsk.part ? `Here’s a tour of ${tour.title}.` : 'Here’s a tour of the app.'
-        speak(text)
+        speakAside(text)
         noteDone(text)
         setOpen(false)
         useTourStore.getState().start(tour)
@@ -746,7 +760,7 @@ export function MiriamButton() {
       if (wanted?.kind === 'tour') {
         const tour = tourFor(wanted.id, useAuthStore.getState().profile)
         if (tour) {
-          speak(result.text)
+          speakAside(result.text)
           noteDone(result.text)
           setOpen(false)
           useTourStore.getState().start(tour)
@@ -873,6 +887,17 @@ export function MiriamButton() {
     setStage('answered')
   }
 
+  /** Said aloud, and written out in her bar. */
+  const speak = (text: string) => {
+    speakAloud(text)
+    setSaid(text)
+  }
+  /** Said as her bar closes (a tour starting): written out as a notice instead, to be read. */
+  const speakAside = (text: string) => {
+    speakAloud(text)
+    useUIStore.getState().toast(`Miriam: ${text}`, 'info')
+  }
+
   /** Done without a word shown (a video played, a form opened): remembered for what comes next. */
   const noteDone = (reply: string) => useMiriamStore.getState().remember(asked.current, reply)
 
@@ -936,6 +961,7 @@ export function MiriamButton() {
         return { ready: tasks._refCount > 0 && !tasks.loading, mine: uid ? tasks.myTasks(uid) : [] }
       },
       openFood,
+      foodSheet,
       nextOpenFood,
       announcements: async () =>
         profile ? announcementsShown(await allAnnouncements(), profile, todayStr()) : [],
@@ -1180,6 +1206,7 @@ export function MiriamButton() {
       setRanOut(false)
       sent.current = false
       setAnswer(null)
+      setSaid(null)
       setOpen(true)
       send(text)
     }
@@ -1222,6 +1249,7 @@ export function MiriamButton() {
     setHeard('')
     if (!keepQuestion) {
       setAnswer(null)
+      setSaid(null)
       setAskingBack(false)
       asked.current = ''
     }
@@ -1473,6 +1501,7 @@ export function MiriamButton() {
     stopSpeaking()
     setAskingBack(false)
     setBriefing(null)
+    setSaid(null)
     useMiriamStore.getState().setAwaiting(false)
     setOpen(false)
   }
@@ -1618,6 +1647,20 @@ export function MiriamButton() {
                   <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled>
                     <Text color={ink} fontSize="$3" fontWeight="600">
                       {answer}
+                    </Text>
+                  </ScrollView>
+                ) : null}
+                {said && !shownAlready(said, answer) ? (
+                  // What she said that isn't on screen in so many words — her
+                  // briefing read out, a briefing button's result — written out.
+                  <ScrollView style={{ maxHeight: briefing ? 150 : 220 }} nestedScrollEnabled>
+                    <Text
+                      color={ink}
+                      fontSize="$3"
+                      fontWeight="600"
+                      accessibilityLiveRegion="polite"
+                    >
+                      {said}
                     </Text>
                   </ScrollView>
                 ) : null}
@@ -1835,16 +1878,32 @@ export function MiriamButton() {
                       // The briefing showed it open: taken since is "just signed up".
                       shown_open: true,
                     })
-                    const said =
-                      prepared.kind === 'ready'
-                        ? await prepared
-                            .run()
-                            .catch(() => 'That didn’t go through. Try it on the event’s page.')
-                        : prepared.kind === 'cannot'
-                          ? prepared.message
-                          : 'Pick one on the event’s page.'
-                    speak(said)
-                    return said.startsWith('You’re signed up')
+                    if (prepared.kind === 'ready') {
+                      const done = await prepared
+                        .run()
+                        .catch(() => 'That didn’t go through. Try it on the event’s page.')
+                      speak(done)
+                      return { signedUp: done.startsWith('You’re signed up') }
+                    }
+                    speak(
+                      prepared.kind === 'cannot'
+                        ? prepared.message
+                        : 'Pick one on the event’s page.'
+                    )
+                    // Taken: the sheet as it is now, offered in the row — and
+                    // what "as suggested" means from here on.
+                    const open = prepared.kind === 'cannot' ? prepared.open : undefined
+                    if (open && briefedFood.current) {
+                      briefedFood.current = {
+                        ...briefedFood.current,
+                        food: briefedFood.current.food.map((n) =>
+                          n.eventKey === food.eventKey
+                            ? { ...n, open, suggestion: open[0] ?? n.suggestion }
+                            : n
+                        ),
+                      }
+                    }
+                    return { signedUp: false, open }
                   }}
                   onRemind={async (item) => {
                     await remindToAnswer(item)

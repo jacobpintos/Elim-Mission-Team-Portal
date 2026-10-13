@@ -117,6 +117,17 @@ function conversation(setup: Setup = {}) {
     tools: setup.tools ?? ALL_TOOLS,
     tasks: () => ({ ready: setup.tasksReady ?? true, mine: tasks }),
     openFood: async (ev) => setup.open?.[ev.templateId as string] ?? ev.foodItems ?? [],
+    // What isn't open has been taken by Sam.
+    foodSheet: async (ev) => {
+      const open = setup.open?.[ev.templateId as string]
+      if (!open) return {}
+      return Object.fromEntries(
+        (ev.foodItems ?? [])
+          .map((item, i) => [String(i), item] as const)
+          .filter(([, item]) => !open.includes(item))
+          .map(([i]) => [i, { uid: 'sam', displayName: 'Sam' }])
+      )
+    },
     nextOpenFood: async (events) => {
       const ev = events[0] as EventInstance | undefined
       return ev ? { ev, open: setup.open?.[ev.templateId as string] ?? ev.foodItems ?? [] } : null
@@ -271,16 +282,32 @@ describe('after the briefing suggested a dish', () => {
   ]
   const open = { pot: ['Roast vegetables', 'Dessert'] }
 
+  const takenSince =
+    'ask: Sam just signed up for Drinks. Roast vegetables and Dessert are still open. Which one will you bring instead?'
+
   it.each([
     "I'll bring drinks as suggested",
     "Sure, I'll bring the drinks you suggested",
     'Okay I can bring drinks like you said',
     "I'll bring what you suggested",
     "I'll take the drinks, as suggested",
-  ])('"%s": the briefing’s event and dish, with nothing to ask', async (said) => {
+  ])('"%s": the briefing’s dish, taken since — who by, and what is left', async (said) => {
     const say = conversation({ briefed, open })
-    // Shown open in the briefing: taken since is "just signed up for".
-    expect(await say(said)).toEqual([`offer ${signUp('pot_2026-10-18', 'Drinks', true)}`])
+    expect(await say(said)).toEqual([takenSince])
+  })
+
+  it('and one of what is left, taken up', async () => {
+    const say = conversation({ briefed, open })
+    await say("I'll bring drinks as suggested")
+    // Just read as open.
+    expect(await say('the dessert')).toEqual([`offer ${signUp('pot_2026-10-18', 'Dessert', true)}`])
+  })
+
+  it('the briefing’s dish still open: shown to confirm, with nothing to ask', async () => {
+    const say = conversation({ briefed })
+    expect(await say("I'll bring drinks as suggested")).toEqual([
+      `offer ${signUp('pot_2026-10-18', 'Drinks', true)}`,
+    ])
   })
 
   it('a dish it showed open, without "as suggested": its event asked about', async () => {
@@ -294,7 +321,22 @@ describe('after the briefing suggested a dish', () => {
   it('a dish it never showed open — taken before — is "already bringing"', async () => {
     const say = conversation({ briefed, open })
     expect(await say("I'll bring the pot roast to the potluck")).toEqual([
-      `offer ${signUp('pot_2026-10-18', 'Pot roast', false)}`,
+      'ask: Sam is already bringing Pot roast. Roast vegetables and Dessert are still open. Which one will you bring instead?',
+    ])
+  })
+
+  it('one left: asked about, and a yes to it shown to confirm', async () => {
+    const say = conversation({ briefed, open: { pot: ['Dessert'] } })
+    expect(await say("I'll bring drinks as suggested")).toEqual([
+      'ask: Sam just signed up for Drinks. Dessert is still open. Want to bring it instead?',
+    ])
+    expect(await say('sure')).toEqual([`offer ${signUp('pot_2026-10-18', 'Dessert', true)}`])
+  })
+
+  it('none left: said so', async () => {
+    const say = conversation({ briefed, open: { pot: [] } })
+    expect(await say("I'll bring drinks as suggested")).toEqual([
+      'say: Sam just signed up for Drinks. Nothing else on the sheet is open.',
     ])
   })
 
@@ -314,7 +356,9 @@ describe('after the briefing suggested a dish', () => {
   it('no briefing: a dish already taken is "already bringing"', async () => {
     const say = conversation({ open })
     await say("I'll bring drinks")
-    expect(await say('yes')).toEqual([`offer ${signUp('pot_2026-10-18', 'Drinks', false)}`])
+    expect(await say('yes')).toEqual([
+      'ask: Sam is already bringing Drinks. Roast vegetables and Dessert are still open. Which one will you bring instead?',
+    ])
   })
 })
 

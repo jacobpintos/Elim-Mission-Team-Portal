@@ -11,6 +11,9 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
+  runTransaction,
+  FieldPath,
   collection,
   getDocs,
   query,
@@ -397,6 +400,97 @@ describe('what a deleted event takes with it', () => {
     const snap = await keyed(as(ADMIN), 'foodSignups', '999')
 
     expect(snap.docs).toHaveLength(0)
+  })
+})
+
+describe('foodSignups — one item at a time, never over someone', () => {
+  const KEY = 'ev1_2026-10-16'
+  const mine = { uid: MEMBER, displayName: 'Member' }
+  const theirs = { uid: OUTSIDER, displayName: 'Outsider' }
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      // Item 0 already taken; 1 and 2 open.
+      await setDoc(doc(ctx.firestore(), 'foodSignups', KEY), { signups: { '0': theirs } })
+    })
+  })
+
+  it('lets a member take an open item, as the app does it', async () => {
+    const db = as(MEMBER)
+    await assertSucceeds(
+      runTransaction(db, async (tx) => {
+        const ref = doc(db, 'foodSignups', KEY)
+        await tx.get(ref)
+        tx.update(ref, new FieldPath('signups', '1'), mine)
+      })
+    )
+  })
+
+  it('lets a member start a sheet with their own sign-up', async () => {
+    await assertSucceeds(
+      setDoc(doc(as(MEMBER), 'foodSignups', 'ev1_2026-10-23'), { signups: { '2': mine } })
+    )
+  })
+
+  it('lets a member give up an item', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'foodSignups', KEY), {
+        signups: { '0': theirs, '1': mine },
+      })
+    })
+    await assertSucceeds(
+      updateDoc(doc(as(MEMBER), 'foodSignups', KEY), new FieldPath('signups', '1'), deleteField())
+    )
+  })
+
+  it('still takes one sign-up written the old way, the whole sheet sent back', async () => {
+    // An app not yet updated: the sheet as it is, plus one item.
+    await assertSucceeds(
+      setDoc(doc(as(MEMBER), 'foodSignups', KEY), { signups: { '0': theirs, '1': mine } })
+    )
+  })
+
+  it('refuses writing over someone else’s sign-up for the same item', async () => {
+    await assertFails(
+      updateDoc(doc(as(MEMBER), 'foodSignups', KEY), new FieldPath('signups', '0'), mine)
+    )
+  })
+
+  it('refuses an old copy of the sheet that would erase a sign-up made since', async () => {
+    // A screen that last saw an empty sheet, writing it back with its own item.
+    await assertFails(setDoc(doc(as(MEMBER), 'foodSignups', KEY), { signups: { '1': mine } }))
+  })
+
+  it('refuses taking two items in one write, or touching anything else', async () => {
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'foodSignups', KEY), {
+        signups: { '0': theirs, '1': mine, '2': mine },
+      })
+    )
+    await assertFails(updateDoc(doc(as(MEMBER), 'foodSignups', KEY), { note: 'hi' }))
+  })
+
+  it('refuses a member deleting the sheet', async () => {
+    await assertFails(deleteDoc(doc(as(MEMBER), 'foodSignups', KEY)))
+  })
+
+  it('lets an admin assign several at once, over anyone', async () => {
+    await assertSucceeds(
+      setDoc(
+        doc(as(ADMIN), 'foodSignups', KEY),
+        { signups: { '0': mine, '1': theirs, '2': mine } },
+        { merge: true }
+      )
+    )
+  })
+
+  it('refuses a guest, who is not asked to bring food', async () => {
+    await assertFails(
+      updateDoc(doc(as(GUEST), 'foodSignups', KEY), new FieldPath('signups', '1'), {
+        uid: GUEST,
+        displayName: 'Guest',
+      })
+    )
   })
 })
 

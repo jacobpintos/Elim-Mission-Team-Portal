@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   foodItemFor,
+  foodStillOpenSaid,
   foodTakenSaid,
+  stillOpen,
   membersAfter,
   notificationSwitch,
   rolesAfter,
@@ -31,6 +33,23 @@ describe('a food item already taken', () => {
     expect(foodTakenSaid({ uid: 'x', displayName: '' }, 'Chips', 'rachel', true)).toBe(
       'Someone just signed up for Chips.'
     )
+  })
+})
+
+describe('what is still open on a sheet', () => {
+  it('by name, in the list’s order', () => {
+    expect(stillOpen(['Chips', 'Salsa', 'Drinks'], { '0': { uid: 'sam' } })).toEqual([
+      'Salsa',
+      'Drinks',
+    ])
+  })
+  it('said after an item taken', () => {
+    expect(foodStillOpenSaid(['Salsa', 'Drinks'])).toBe('Salsa and Drinks are still open.')
+    expect(foodStillOpenSaid(['Salsa', 'Drinks', 'Ice'])).toBe(
+      'Salsa, Drinks and Ice are still open.'
+    )
+    expect(foodStillOpenSaid(['Salsa'])).toBe('Salsa is still open.')
+    expect(foodStillOpenSaid([])).toBe('Nothing else on the sheet is open.')
   })
 })
 

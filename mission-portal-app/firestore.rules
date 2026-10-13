@@ -258,9 +258,28 @@ service cloud.firestore {
     // Food sign-ups. There was no rule here at all, so every write was
     // default-denied and signing up for a dish silently did nothing.
     // Guests are along for the trip and are not asked to bring food.
+    //
+    // Admins assign anyone, any way (the event form). Anyone else takes one
+    // open item or gives one up per write — never changing a sign-up that is
+    // there. The app writes one item at a time (lib/foodSignups); this holds
+    // any copy of it to the same, so a screen writing back an old copy of the
+    // sheet can't erase what was signed up since. A single sign-up or removal
+    // written the old way is still let through, for apps not yet updated.
     match /foodSignups/{key} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && !isGuest();
+      allow create: if isSignedIn() && !isGuest()
+        && (isAdmin() || request.resource.data.get('signups', {}).size() <= 1);
+      allow update: if isSignedIn() && !isGuest() && (isAdmin() || oneFoodChange());
+      allow delete: if isAdmin();
+    }
+
+    // One item taken or given up, and nothing else on the sheet touched.
+    function oneFoodChange() {
+      let change = request.resource.data.get('signups', {})
+        .diff(resource.data.get('signups', {}));
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signups'])
+        && change.affectedKeys().size() <= 1
+        && change.changedKeys().size() == 0;
     }
 
     match /carpool/{docId} {

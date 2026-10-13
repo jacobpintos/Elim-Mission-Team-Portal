@@ -31,13 +31,18 @@ export function BriefingView({
   onTaskDone: (id: string) => Promise<void>
   onReminderDone: (r: Reminder) => Promise<void>
   onRemind: (item: NonNullable<AttentionItem['remind']>) => Promise<void>
-  /** Signed up for the item suggested; false if that couldn't be done. */
-  onBringFood: (food: FoodNudge) => Promise<boolean>
+  /**
+   * Sign up for the item suggested. `open`: when it was taken, what is still
+   * open on the sheet now — offered in its place.
+   */
+  onBringFood: (food: FoodNudge) => Promise<{ signedUp: boolean; open?: string[] }>
 }) {
   const colors = useThemeColors()
   // Ticked off, or reminded, here: shown so at once.
   const [done, setDone] = useState<Set<string>>(new Set())
   const mark = (id: string) => setDone((d) => new Set(d).add(id))
+  // A suggestion someone took first: the sheet as it is now, by event.
+  const [left, setLeft] = useState<Record<string, string[]>>({})
 
   return (
     <YStack gap="$3" paddingBottom="$1">
@@ -190,15 +195,22 @@ export function BriefingView({
               { borderColor: colors.border, backgroundColor: colors.background },
             ]}
           >
-            {b.food.map((f, i) => {
-              const id = `food${f.eventKey}`
+            {b.food.map((briefed, i) => {
+              const id = `food${briefed.eventKey}`
+              // Taken since it was suggested: the next still open, offered instead.
+              const now = left[briefed.eventKey]
+              const f = now ? { ...briefed, open: now, suggestion: now[0] ?? '' } : briefed
               return (
                 <Row
                   key={id}
                   colors={colors}
                   dot="#f0a070"
                   title={`${f.title} still has open food items`}
-                  sub={`How about ${f.suggestion}? · ${f.open.length} open`}
+                  sub={
+                    f.open.length
+                      ? `How about ${f.suggestion}? · ${f.open.length} open`
+                      : 'Everything on the sheet is taken now'
+                  }
                   last={i === b.food.length - 1}
                   onPress={() =>
                     onOpen(miriamHref({ kind: 'event', key: f.eventKey, section: 'food' }))
@@ -206,14 +218,20 @@ export function BriefingView({
                   action={
                     done.has(id)
                       ? { label: `✓ ${f.suggestion}`, disabled: true }
-                      : {
-                          label: `Bring ${f.suggestion}`,
-                          filled: true,
-                          run: () =>
-                            onBringFood(f).then((ok) => {
-                              if (ok) mark(id)
-                            }),
-                        }
+                      : f.open.length === 0
+                        ? { label: 'All taken', disabled: true }
+                        : {
+                            label: `Bring ${f.suggestion}`,
+                            filled: true,
+                            run: () =>
+                              onBringFood(f).then((result) => {
+                                if (result.signedUp) mark(id)
+                                else if (result.open) {
+                                  const open = result.open
+                                  setLeft((l) => ({ ...l, [briefed.eventKey]: open }))
+                                }
+                              }),
+                          }
                   }
                 />
               )

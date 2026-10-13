@@ -29,9 +29,12 @@ import {
 import { useSecurityStore } from '@/stores/securityStore'
 import { assignedTo, type Group } from '../../../functions/src/miriam/data'
 import { roomName, roomsFor } from '@/lib/miriamAppData'
+import { claimFoodItem, type FoodSignups } from '@/lib/foodSignups'
 import {
   foodItemFor,
+  foodStillOpenSaid,
   foodTakenSaid,
+  stillOpen,
   membersAfter,
   notificationSwitch,
   rolesAfter,
@@ -107,9 +110,14 @@ export type Prepared =
   | { kind: 'open'; run: () => Promise<string> }
   /** More than one fits: each to pick from, worked out in full. */
   | { kind: 'choose'; title: string; options: { label: string; input: Record<string, unknown> }[] }
-  | { kind: 'cannot'; message: string }
+  /** `open`: for a food item taken, what is still open on its sheet. */
+  | { kind: 'cannot'; message: string; open?: string[] }
 
-const cannot = (message: string): Prepared => ({ kind: 'cannot', message })
+const cannot = (message: string, open?: string[]): Prepared => ({
+  kind: 'cannot',
+  message,
+  ...(open ? { open } : {}),
+})
 const names = () =>
   new Map(useUsersStore.getState().users.map((u) => [String(u.uid), u.displayName]))
 const day = (date: string) => FD(date, { weekday: true })
@@ -287,6 +295,13 @@ async function setAvailability(profile: UserProfile, input: Record<string, unkno
   } satisfies Prepared
 }
 
+/**
+ * How long a food sign-up waits on the sheet before saying there's no signal.
+ * Under confirmAction's own wait, whose "it will go through" would not be
+ * true of a sign-up, which needs the sheet as it is now to be taken.
+ */
+const CLAIM_WAIT_MS = 8000
+
 async function signUpFood(profile: UserProfile, input: Record<string, unknown>) {
   // Guests are along for the trip, not asked to bring food (firestore.rules).
   if (isGuest(profile) && !isAdmin(profile)) return cannot('Guests aren’t asked to bring food.')
@@ -300,29 +315,38 @@ async function signUpFood(profile: UserProfile, input: Record<string, unknown>) 
   }
   const uid = String(profile.uid)
   const key = `${ev.templateId}_${ev.date}`
-  const taken = async () =>
-    ((await getDoc(doc(db, 'foodSignups', key))).data()?.signups ?? {}) as Record<
-      string,
-      { uid: string; displayName: string }
-    >
+  const item = items[index]
+  /** Someone has it: who, and what is still open. Their own: said so, nothing more. */
+  const takenSaid = (
+    by: { uid: string; displayName: string },
+    signups: FoodSignups,
+    since: boolean
+  ) =>
+    String(by.uid) === uid
+      ? foodTakenSaid(by, item, uid, since)
+      : `${foodTakenSaid(by, item, uid, since)} ${foodStillOpenSaid(stillOpen(items, signups))}`
   // Shown it open — in their briefing, or by Miriam just before: taken since.
   const shownOpen = input.shown_open === true
-  const now = (await taken())[String(index)]
-  if (now) return cannot(foodTakenSaid(now, items[index], uid, shownOpen))
+  const signups = ((await getDoc(doc(db, 'foodSignups', key))).data()?.signups ?? {}) as FoodSignups
+  const now = signups[String(index)]
+  if (now) return cannot(takenSaid(now, signups, shownOpen), stillOpen(items, signups))
   return {
     kind: 'ready',
     title: `Sign you up to bring ${items[index]}?`,
     details: [`${ev.title} — ${day(ev.date)}`],
     confirm: 'Sign up',
     run: async () => {
-      // Read again just before: someone may have taken it since it was shown.
-      const signups = await taken()
-      const since = signups[String(index)]
-      if (since) return foodTakenSaid(since, items[index], uid, true)
-      await setDoc(doc(db, 'foodSignups', key), {
-        signups: { ...signups, [String(index)]: { uid, displayName: profile.displayName } },
-      })
-      return `You’re signed up to bring ${items[index]}.`
+      // Taken only if still open — read and written together, this item
+      // alone (lib/foodSignups) — so it can't be written over anyone's.
+      const claimed = await Promise.race([
+        claimFoodItem(key, index, { uid, displayName: profile.displayName }),
+        new Promise<'slow'>((done) => setTimeout(() => done('slow'), CLAIM_WAIT_MS)),
+      ])
+      if (claimed === 'slow') {
+        return 'No signal yet, so I couldn’t check the sheet. See the event’s page once you’re connected.'
+      }
+      if (!claimed.ok) return takenSaid(claimed.by, claimed.signups, true)
+      return `You’re signed up to bring ${item}.`
     },
   } satisfies Prepared
 }

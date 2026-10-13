@@ -22,6 +22,18 @@ export async function openFood(ev: EventInstance): Promise<string[] | null> {
   }
 }
 
+/** An event's sheet as it is now: who has what, keyed by the item's place. Null when it can't be read. */
+export async function foodSheet(
+  ev: EventInstance
+): Promise<Record<string, { uid: string; displayName: string }> | null> {
+  try {
+    return ((await getDoc(doc(db, 'foodSignups', `${ev.templateId}_${ev.date}`))).data()?.signups ??
+      {}) as Record<string, { uid: string; displayName: string }>
+  } catch {
+    return null
+  }
+}
+
 /**
  * The next of these events with food still open — leaving out any they have
  * said they can't come to, as the briefing does. Null when there is none.

@@ -2,6 +2,7 @@ import type { Announcement, Message, Room, Task } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 import type { EventInstance } from '../../../functions/src/miriam/data'
 import { FD } from '@/lib/format'
+import { foodStillOpenSaid, foodTakenSaid, stillOpen } from '@/lib/miriamActions'
 import { eventRef, type QuickData } from '@/lib/miriamQuick'
 import {
   dateSaid,
@@ -91,6 +92,10 @@ export interface Here {
   tools: readonly string[]
   tasks: () => { ready: boolean; mine: Task[] }
   openFood: (ev: EventInstance) => Promise<string[] | null>
+  /** The sheet as it is now: who has what, keyed by the item's place. Null when it can't be read. */
+  foodSheet: (
+    ev: EventInstance
+  ) => Promise<Record<string, { uid: string; displayName: string }> | null>
   nextOpenFood: (
     events: EventInstance[],
     uid: string
@@ -272,6 +277,48 @@ function shownOpen(ev: EventInstance, here: Here, also: string[] = []): (item: s
 }
 
 /**
+ * An item offered to confirm — or, if the sheet as it is now has it taken,
+ * who has it said, with what is still open asked about instead: "Sam just
+ * signed up for Chips. Salsa and Drinks are still open. Which one will you
+ * bring instead?" `now`: agreed to in so many words ("Did you mean…? — Yes"),
+ * so done at once rather than shown to confirm. The sign-up itself still
+ * checks again, and can't be written over anyone's (lib/foodSignups).
+ */
+async function offerFood(
+  ev: EventInstance,
+  item: string,
+  shown: boolean,
+  here: Here,
+  talk: Talk,
+  now = false
+): Promise<boolean> {
+  const input = { event_key: ev.instanceKey, item, shown_open: shown }
+  const items = ev.foodItems ?? []
+  const sheet = await here.foodSheet(ev)
+  const at = items.findIndex((x) => squash(x) === squash(item))
+  const by = sheet && at >= 0 ? sheet[String(at)] : undefined
+  if (sheet && by) {
+    const uid = String(here.profile?.uid ?? '')
+    const taken = foodTakenSaid(by, item, uid, shown)
+    const open = stillOpen(items, sheet)
+    if (String(by.uid) === uid || open.length === 0) {
+      talk.say(String(by.uid) === uid ? taken : `${taken} ${foodStillOpenSaid(open)}`)
+      return true
+    }
+    const instead =
+      open.length === 1 ? 'Want to bring it instead?' : 'Which one will you bring instead?'
+    talk.ask(`${taken} ${foodStillOpenSaid(open)} ${instead}`, (r, t) =>
+      // Just read as open: taken since is "just signed up for" too.
+      foodChoice(r, ev, open, here, t, () => true)
+    )
+    return true
+  }
+  if (now) await talk.doNow('sign_up_food', input)
+  else await talk.offer('sign_up_food', input)
+  return true
+}
+
+/**
  * The event settled: the dish found on its sheet and shown to confirm; close,
  * and asked about; or what is still open asked about.
  */
@@ -284,13 +331,11 @@ async function foodOnEvent(
 ): Promise<boolean> {
   const items = ev.foodItems ?? []
   const shown = shownOpen(ev, here, known)
-  const signUp = (item: string) => ({ event_key: ev.instanceKey, item, shown_open: shown(item) })
   const picked: Picked<number> = ask.item ? foodItemPicked(items, ask.item) : { kind: 'none' }
 
   if (picked.kind === 'sure') {
-    // Checked again there: taken meanwhile, or already theirs, is said so.
-    await talk.offer('sign_up_food', signUp(items[picked.item]))
-    return true
+    const item = items[picked.item]
+    return offerFood(ev, item, shown(item), here, talk)
   }
   if (picked.kind === 'likely') {
     const item = items[picked.item]
@@ -298,10 +343,7 @@ async function foodOnEvent(
       `Did you mean ${item}? If so, I’ll sign you up to bring it to ${ev.title} on ${dayOf(ev)}.`,
       async (r, t) => {
         if (neverMind(r, t)) return true
-        if (saidYes(r)) {
-          await t.doNow('sign_up_food', signUp(item))
-          return true
-        }
+        if (saidYes(r)) return offerFood(ev, item, shown(item), here, t, true)
         const no = saidNo(r)
         // "No, the dessert": the one they meant; "no" alone: what is open.
         return foodItemNamed(no ? no.rest : r, ev, here, t, !!no)
@@ -361,12 +403,7 @@ async function foodItemNamed(
   const picked = foodItemPicked(items, dish)
   if (picked.kind === 'sure' || picked.kind === 'likely') {
     const item = items[picked.item]
-    await talk.offer('sign_up_food', {
-      event_key: ev.instanceKey,
-      item,
-      shown_open: shownOpen(ev, here)(item),
-    })
-    return true
+    return offerFood(ev, item, shownOpen(ev, here)(item), here, talk)
   }
   if (!wasNo && looksLikeNewRequest(said)) return false
   return foodOpenAsked(ev, dish, here, talk)
@@ -391,8 +428,7 @@ async function foodChoice(
   }
   if (index >= 0) {
     const item = options[index]
-    await talk.offer('sign_up_food', { event_key: ev.instanceKey, item, shown_open: shown(item) })
-    return true
+    return offerFood(ev, item, shown(item), here, talk)
   }
   if (saidNo(reply)) {
     talk.say('Okay — nothing was changed.')

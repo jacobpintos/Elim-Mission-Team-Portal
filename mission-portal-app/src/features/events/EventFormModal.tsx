@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Pressable } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
 import { collection, doc, setDoc } from 'firebase/firestore'
-import { onSnapshot, getDoc } from '@/lib/liveFirestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { Modal } from '@/components/ui/Modal'
 import { db } from '@/lib/firebase'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -407,22 +407,24 @@ export function EventFormModal({
   /**
    * Write the admin's food assignments into foodSignups.
    *
-   * Merged rather than replaced: someone may have signed themselves up while
-   * the event was being edited, and an admin who touched nothing should not
-   * wipe that.
+   * Only the items assigned are written, merged in: someone may have signed
+   * themselves up for another dish while the event was being edited, and the
+   * sheet is never written back from a copy read earlier, which could erase
+   * that (lib/foodSignups).
    */
   async function persistFoodAssignments(templateId: string, isoDate: string) {
     const entries = Object.entries(foodAssignees)
     if (entries.length === 0 || !isoDate) return
-    const key = `${templateId}_${isoDate}`
-    const ref = doc(db, 'foodSignups', key)
-    const existing = ((await getDoc(ref)).data()?.signups ?? {}) as Record<string, unknown>
-    const merged = { ...existing }
+    const assigned: Record<string, { uid: string; displayName: string }> = {}
     for (const [index, assigneeUid] of entries) {
       const person = allStoreUsers.find((u) => sameId(u.uid, assigneeUid))
-      merged[index] = { uid: String(assigneeUid), displayName: person?.displayName ?? '' }
+      assigned[index] = { uid: String(assigneeUid), displayName: person?.displayName ?? '' }
     }
-    await setDoc(ref, { signups: merged }, { merge: true })
+    await setDoc(
+      doc(db, 'foodSignups', `${templateId}_${isoDate}`),
+      { signups: assigned },
+      { merge: true }
+    )
   }
 
   const toggleUser = (uid: string) => {

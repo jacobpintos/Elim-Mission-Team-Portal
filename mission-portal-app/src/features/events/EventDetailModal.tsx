@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Pressable, Linking } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { doc, setDoc } from 'firebase/firestore'
+import { claimFoodItem, releaseFoodItem, type FoodSignupEntry } from '@/lib/foodSignups'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import { Modal } from '@/components/ui/Modal'
@@ -512,11 +513,6 @@ export function DressCodeDisplay({ event, uid }: { event: EventInstance; uid: st
   )
 }
 
-interface FoodSignupEntry {
-  uid: string
-  displayName: string
-}
-
 export function FoodPanel({
   event,
   uid,
@@ -539,6 +535,14 @@ export function FoodPanel({
     return () => unsub()
   }, [foodKey])
 
+  // Each change is this one item alone, read and written together
+  // (lib/foodSignups): never the sheet written back from what this screen last
+  // saw, which could erase a sign-up made while "Sign up to bring…?" was up.
+  const failed = (e: unknown) =>
+    (e as { code?: string })?.code === 'unavailable'
+      ? 'No connection — try again when you’re online.'
+      : 'That didn’t go through. Try again.'
+
   const handleToggle = async (itemIndex: number, itemName: string) => {
     const existing = signups[String(itemIndex)]
     if (existing) {
@@ -546,29 +550,29 @@ export function FoodPanel({
         toast(`${existing.displayName} is already signed up for "${itemName}"`, 'error')
         return
       }
-      const updated = { ...signups }
-      delete updated[String(itemIndex)]
       try {
-        await setDoc(doc(db, 'foodSignups', foodKey), { signups: updated })
-      } catch {
-        toast('Failed to update sign-up', 'error')
+        if (!(await releaseFoodItem(foodKey, itemIndex, uid))) {
+          toast(`You’re no longer down for "${itemName}"`, 'info')
+        }
+      } catch (e) {
+        toast(failed(e), 'error')
       }
       return
-    }
-    const doSignup = async () => {
-      try {
-        await setDoc(doc(db, 'foodSignups', foodKey), {
-          signups: { ...signups, [String(itemIndex)]: { uid, displayName: myDisplayName } },
-        })
-      } catch {
-        toast('Failed to sign up', 'error')
-      }
     }
     const ok = await confirmAsync(`Sign up to bring "${itemName}"?`, {
       title: 'Food Sign-up',
       confirmLabel: 'Sign Up',
     })
-    if (ok) await doSignup()
+    if (!ok) return
+    try {
+      const claimed = await claimFoodItem(foodKey, itemIndex, { uid, displayName: myDisplayName })
+      // Taken while the question was up: who by, rather than written over.
+      if (!claimed.ok && String(claimed.by.uid) !== uid) {
+        toast(`${claimed.by.displayName || 'Someone'} just signed up for "${itemName}"`, 'error')
+      }
+    } catch (e) {
+      toast(failed(e), 'error')
+    }
   }
 
   const items = event.foodItems ?? []

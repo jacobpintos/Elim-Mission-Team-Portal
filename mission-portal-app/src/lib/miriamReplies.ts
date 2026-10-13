@@ -317,3 +317,18 @@ export function looksLikeNewRequest(reply: string): boolean {
     ) || s.split(' ').length >= 7
   )
 }
+
+/**
+ * Whether what she said is on screen already, in so many words: "Okay." within
+ * "Okay — nothing was changed." If not, it is written out as well (MiriamButton).
+ */
+export function shownAlready(said: string, shown: string | null): boolean {
+  if (!shown) return false
+  const words = (t: string) =>
+    t
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+  const s = words(said)
+  return !!s && words(shown).includes(s)
+}

@@ -3,6 +3,7 @@ import {
   choicePicked,
   listed,
   looksLikeNewRequest,
+  shownAlready,
   pickBest,
   saidNeverMind,
   saidNo,
@@ -178,5 +179,18 @@ describe('fitScore', () => {
     const { fitScore } = await import('./miriamReplies')
     expect(fitScore('Pot roast', 'potluck')).toBe(0)
     expect(fitScore('Potluck', 'pots')).toBe(0)
+  })
+})
+
+describe('shownAlready', () => {
+  it('what she said, on screen in so many words', () => {
+    expect(shownAlready('Okay.', 'Okay — nothing was changed.')).toBe(true)
+    expect(shownAlready('Sign you up to bring Chips?', 'Sign you up to bring Chips?')).toBe(true)
+  })
+  it('not, so it is written out too', () => {
+    expect(shownAlready('Sam just signed up for Chips.', null)).toBe(false)
+    expect(
+      shownAlready('Good morning, Rachel. You have two events today.', 'Ask me anything')
+    ).toBe(false)
   })
 })
