@@ -13,6 +13,7 @@ import {
   type Group,
   type Viewer,
 } from '../../functions/src/miriam/data'
+import { scheduleSaid } from './eventSchedule'
 
 /**
  * Questions about an event that the app can answer from what it already has
@@ -35,6 +36,7 @@ export type QuickField =
   | 'lodging'
   | 'flight'
   | 'weather'
+  | 'schedule'
 
 export interface QuickAsk {
   field: QuickField
@@ -45,6 +47,12 @@ export interface QuickAsk {
 }
 
 const FIELDS: [QuickField, RegExp][] = [
+  // An event's own schedule — "what's the schedule for the retreat?" — not
+  // theirs for the week ("what's my schedule this week?": listAsked).
+  [
+    'schedule',
+    /\b(?:schedule|itinerary|agenda|run\s+of\s+show|order\s+of\s+(?:service|events)|what's\s+the\s+plan)\b/,
+  ],
   ['weather', /\b(?:weather|rain|raining|forecast|temperature|how\s+(?:hot|cold|warm))\b/],
   [
     'lodging',
@@ -74,6 +82,10 @@ const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'frida
 const ASKING = new Set([
   'what',
   'whats',
+  'schedule',
+  'itinerary',
+  'agenda',
+  'plan',
   'what’s',
   'is',
   'the',
@@ -252,7 +264,7 @@ export interface QuickData {
 export interface QuickAnswer {
   text: string
   /** The one event answered about, to open at what was asked. */
-  open: { key: string; section: 'dress_code' | 'details' | 'weather' } | null
+  open: { key: string; section: 'dress_code' | 'details' | 'weather' | 'schedule' } | null
   /** Asked the weather: the events to fetch a forecast for (lib/weather), and say with weatherLine. */
   weather?: EventInstance[]
 }
@@ -328,6 +340,26 @@ function answerFor(field: QuickField, ev: EventInstance, data: QuickData, alone:
     case 'weather':
       // Fetched, then said by weatherLine.
       return ''
+    case 'schedule': {
+      const items = ev.schedule ?? []
+      if (!items.length) return `${title} has no schedule yet.`
+      // Its days by name for a multi-day event: a later day's instance carries its own date.
+      const first = /_d\d+$/.test(ev.instanceKey)
+        ? data.templates.find((t) => sameId(t.id, ev.templateId))?.date
+        : ev.date
+      const dates = [first, ...(ev.isRec ? [] : (ev.extraDays ?? []).map((d) => d.date))]
+      const dayName =
+        dates.length > 1
+          ? (day: number) => {
+              const date = dates[Math.min(day, dates.length - 1)]
+              return date
+                ? new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' })
+                : `Day ${day + 1}`
+            }
+          : null
+      const said = scheduleSaid(items, dayName)
+      return alone ? `The schedule for ${title} — ${said}` : `${title} — ${said}`
+    }
     case 'flight': {
       if (!ev.flights) return `${title} has no flights.`
       const flights = flightsFor(ev, viewer, names)
@@ -361,7 +393,11 @@ export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
     const ev = events[0]
     return {
       text: answerFor(ask.field, ev, data, true),
-      open: { key: ev.instanceKey, section: ask.field === 'dress' ? 'dress_code' : 'details' },
+      open: {
+        key: ev.instanceKey,
+        section:
+          ask.field === 'dress' ? 'dress_code' : ask.field === 'schedule' ? 'schedule' : 'details',
+      },
     }
   }
   return {
@@ -480,6 +516,10 @@ export function listAsked(text: string, today: string): ListAsk | null {
   }
   const asksEvents =
     /\b(?:what'?s\s+on|what(?:'s|\s+is)\s+happening|what\s+do\s+i\s+have|what\s+events|any\s+events|my\s+events|my\s+schedule|what'?s\s+(?:going\s+on|planned))\b/.test(
+      said
+    ) &&
+    // "My schedule for the retreat" is that event's (quickAnswer), not their week.
+    !/\bschedule\s+(?:for|of|at)\s+(?!(?:today|tonight|tomorrow|this|next|the\s+week|the\s+weekend)\b)/.test(
       said
     )
   if (!asksEvents) return null

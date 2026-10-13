@@ -23,6 +23,7 @@ import {
   type Group,
   type Task,
   type Viewer,
+  scheduleFor,
 } from './data'
 import { FORECAST_DAYS, forecastFor } from './weather'
 
@@ -213,6 +214,10 @@ export class Lookups {
         ? (((await this.db.doc(`carpool/${ev.templateId}_${ev.date}`).get()).data()?.cars ??
             []) as Car[])
         : null
+    // A later day of a multi-day event carries its own date: its schedule names the first.
+    const firstDay = /_d\d+$/.test(ev.instanceKey)
+      ? (await this.eventData()).templates.find((t) => String(t.id) === String(ev.templateId))?.date
+      : ev.date
     const myTeam = (ev.teams ?? []).find((t) =>
       [...t.leaders, ...t.members].some((m) => String(m) === this.viewer.uid)
     )
@@ -231,6 +236,7 @@ export class Lookups {
       signUpLink: ev.signUpLink || undefined,
       yourTeam: myTeam?.name,
       dressCode: dressCodeFor(ev, this.viewer),
+      schedule: ev.schedule?.length ? scheduleFor(ev, firstDay) : undefined,
       food: food ?? undefined,
       carpool: ev.carpool
         ? {

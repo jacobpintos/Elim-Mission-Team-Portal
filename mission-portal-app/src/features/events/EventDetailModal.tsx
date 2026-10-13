@@ -33,6 +33,7 @@ import { TravelImageThumb } from './TravelImage'
 import { CarpoolBuilder } from './CarpoolBuilder'
 import { CarpoolSummary, carpoolPerson } from './CarpoolSummary'
 import { carName, childNames, unplaced } from './carpoolCards'
+import { ScheduleDisplay } from './ScheduleDisplay'
 
 import { openExternalUrl } from '@/lib/externalUrl'
 
@@ -1038,6 +1039,9 @@ export function EventDetailModal({
               ) : null}
             </YStack>
           ) : null}
+
+          {/* Schedule — for anyone who can see the event */}
+          <ScheduleDisplay event={event} />
 
           {/* Dress Code — members only */}
           {isMember ? <DressCodeDisplay event={event} uid={uid} /> : null}

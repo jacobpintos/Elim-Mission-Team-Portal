@@ -24,6 +24,8 @@ import { FlightEditor } from './FlightEditor'
 import { CarpoolBuilder } from './CarpoolBuilder'
 import { CarpoolSummary, carpoolPerson } from './CarpoolSummary'
 import { unplaced } from './carpoolCards'
+import { ScheduleBuilder } from './ScheduleBuilder'
+import { dayNames, scheduleByDay, tidySchedule, whenShown } from '@/lib/eventSchedule'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import { taskDueDate } from '@/lib/events'
 import {
@@ -48,6 +50,7 @@ import type {
   DressCodeEntry,
   LodgingEntry,
   FlightEntry,
+  ScheduleItem,
 } from '@/types/events'
 
 interface GroupDoc {
@@ -254,6 +257,7 @@ function listsFor(event: EventTemplate | null | undefined, draft?: EventDraft) {
         }))
       : (event?.flightEntries ?? []),
     extraDays: toExtraDayRows(draft?.extraDays ?? event?.extraDays),
+    schedule: event?.schedule ?? [],
   }
 }
 
@@ -319,6 +323,9 @@ export function EventFormModal({
   const [lodgingEntries, setLodgingEntries] = useState<LodgingEntry[]>(lists.lodgingEntries)
   const [flightEntries, setFlightEntries] = useState<FlightEntry[]>(lists.flightEntries)
   const [extraDays, setExtraDays] = useState<ExtraDayRow[]>(lists.extraDays)
+  const [schedule, setSchedule] = useState<ScheduleItem[]>(lists.schedule)
+  // The schedule builder, open in its own window.
+  const [buildingSchedule, setBuildingSchedule] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editScope, setEditScope] = useState<'instance' | 'all'>(instanceKey ? 'instance' : 'all')
 
@@ -350,6 +357,7 @@ export function EventFormModal({
     setLodgingEntries(next.lodgingEntries)
     setFlightEntries(next.flightEntries)
     setExtraDays(next.extraDays)
+    setSchedule(next.schedule)
     setEditScope(instanceKey ? 'instance' : 'all')
   }
 
@@ -433,6 +441,11 @@ export function EventFormModal({
     const u = allStoreUsers.find((x) => sameId(x.uid, uid))
     return u ? carpoolPerson(u) : { uid, name: 'Someone' }
   }
+  // The event's days, as its schedule names them: its date, then any extra
+  // days in the order the form lists them. A recurring event has the one.
+  const scheduleDays = dayNames(
+    form.isRec ? [null] : [displayToIso(form.date), ...extraDays.map((d) => displayToIso(d.date))]
+  )
   // Who can be put in a car: everyone on the event, its teams included — as
   // the event's page counts them (resolveAssignedUids).
   const carpoolUids = [
@@ -481,6 +494,7 @@ export function EventFormModal({
         foodItems: form.food ? form.foodItems.filter((s) => s.trim()) : [],
         carpool: form.carpool,
         carpoolCars: form.carpool ? form.carpoolCars : [],
+        schedule: tidySchedule(schedule, scheduleDays.length),
         lodging: form.lodging,
         lodgingEntries: form.lodging ? lodgingEntries : [],
         flights: form.flights,
@@ -510,6 +524,7 @@ export function EventFormModal({
           foodItems: form.food ? form.foodItems.filter((s) => s.trim()) : [],
           carpool: form.carpool,
           carpoolCars: form.carpool ? form.carpoolCars : [],
+          schedule: tidySchedule(schedule, scheduleDays.length),
           lodging: form.lodging,
           lodgingEntries: form.lodging ? lodgingEntries : [],
           flights: form.flights,
@@ -1076,6 +1091,65 @@ export function EventFormModal({
             borderColor={colors.border}
           />
         </YStack>
+
+        {/* Schedule — optional, built in its own window */}
+        <YStack gap="$2">
+          <Text color={colors.text} fontSize="$3">
+            Schedule (optional)
+          </Text>
+          {schedule.length ? (
+            <YStack
+              gap="$1"
+              backgroundColor={colors.surface}
+              borderRadius="$2"
+              borderWidth={1}
+              borderColor={colors.border}
+              padding="$3"
+            >
+              {scheduleByDay(schedule).map(({ day, items }) => (
+                <YStack key={day} gap="$1">
+                  {scheduleDays.length > 1 ? (
+                    <Text color={colors.textMuted} fontSize="$2" fontWeight="700">
+                      {scheduleDays[Math.min(day, scheduleDays.length - 1)]}
+                    </Text>
+                  ) : null}
+                  {items.map((it) => (
+                    <Text key={it.id} color={colors.text} fontSize="$3" numberOfLines={1}>
+                      {whenShown(it) ? `${whenShown(it)} · ` : ''}
+                      {it.title}
+                    </Text>
+                  ))}
+                </YStack>
+              ))}
+            </YStack>
+          ) : null}
+          <Pressable onPress={() => setBuildingSchedule(true)} accessibilityRole="button">
+            <XStack
+              borderWidth={1}
+              borderColor={colors.primary}
+              borderRadius="$2"
+              paddingHorizontal="$3"
+              paddingVertical="$2"
+              alignSelf="flex-start"
+            >
+              <Text color={colors.primary} fontSize="$3" fontWeight="600">
+                {schedule.length ? 'Edit schedule' : '+ Add a schedule'}
+              </Text>
+            </XStack>
+          </Pressable>
+        </YStack>
+        {buildingSchedule ? (
+          <ScheduleBuilder
+            subtitle={form.title.trim() || undefined}
+            schedule={schedule}
+            days={scheduleDays}
+            onSave={(next) => {
+              setSchedule(next)
+              setBuildingSchedule(false)
+            }}
+            onClose={() => setBuildingSchedule(false)}
+          />
+        ) : null}
 
         {/* ── Assignments ── */}
 

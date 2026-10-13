@@ -13,6 +13,7 @@ import { AvailModal } from '@/features/events/AvailModal'
 import { EventFormModal } from '@/features/events/EventFormModal'
 import { WeatherDetailSheet } from '@/features/events/WeatherDetailSheet'
 import { PlanningBoardCanvas } from '@/features/planning/PlanningBoardCanvas'
+import { ScheduleDisplay } from '@/features/events/ScheduleDisplay'
 import {
   TeamsDisplay,
   LodgingDisplay,
@@ -379,6 +380,13 @@ export default function EventDetailScreen() {
                 <EmptyField label="Meeting link" />
               ) : null}
             </YStack>
+          ) : null}
+
+          {/* Schedule — for anyone who can see the event */}
+          {event.schedule?.length ? (
+            <Spot lit={lit === 'schedule'} color={colors.primary} name="schedule" onPlaced={placed}>
+              <ScheduleDisplay event={event} />
+            </Spot>
           ) : null}
 
           {/* Dress Code — members only */}

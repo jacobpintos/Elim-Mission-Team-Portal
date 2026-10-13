@@ -549,7 +549,12 @@ export function CarpoolBuilder({
                           onFocus={() => setFocus(null)}
                           style={[
                             styles.input,
-                            { color: colors.text, borderColor: colors.border, flex: 1 },
+                            {
+                              color: colors.text,
+                              borderColor: colors.border,
+                              flex: 1,
+                              minWidth: 0,
+                            },
                           ]}
                           accessibilityLabel="Car name"
                         />
@@ -947,6 +952,8 @@ const styles = StyleSheet.create({
   },
   search: {
     flex: 1,
+    // Free to shrink (see the car name's): a text box on the web otherwise keeps its default width.
+    minWidth: 0,
     minHeight: 40,
     paddingHorizontal: 8,
     fontSize: 15,

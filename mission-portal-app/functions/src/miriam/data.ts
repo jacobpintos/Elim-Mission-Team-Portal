@@ -80,6 +80,8 @@ export interface EventTemplate {
   foodItems?: string[]
   carpoolCars?: Car[]
   carpoolLoc?: string
+  /** What happens when (the app's ScheduleItem): built by an admin in the event form. */
+  schedule?: ScheduleLine[]
   lodging?: boolean
   lodgingEntries?: Lodging[]
   flights?: boolean
@@ -87,6 +89,15 @@ export interface EventTemplate {
   /** Where the city is, found when the event was saved: for its forecast. */
   _geocodeLat?: number
   _geocodeLng?: number
+}
+export interface ScheduleLine {
+  id: string
+  time: string
+  endTime?: string
+  title: string
+  notes?: string
+  /** Which day of a multi-day event: 1 its second. Absent, its first or only. */
+  day?: number
 }
 export interface Car {
   id: string
@@ -364,6 +375,32 @@ export function carpoolFor(
     const riders = riding.length ? `, riding: ${riding.join(', ')}` : ''
     return `${label}${mine(c) ? ' (your car)' : ''}: ${driver}${riders}`
   })
+}
+
+/**
+ * An event's schedule, a line each: "7:00–8:30 PM: Worship (Main hall)", the
+ * day first for a multi-day event ("Saturday, Oct 24 — 9:00 AM: Hike").
+ * `firstDate`: the event's first day, which a later day's instance doesn't carry.
+ */
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+/** "Friday, 2026-09-25", as lookups' withWeekday says it (it can't be imported from there). */
+const withWeekday = (d: string) => `${DAY_NAMES[new Date(`${d}T12:00:00Z`).getUTCDay()]}, ${d}`
+
+export function scheduleFor(ev: EventTemplate, firstDate: string | undefined): string[] {
+  const items = ev.schedule ?? []
+  const dates = [firstDate, ...(ev.isRec ? [] : (ev.extraDays ?? []).map((d) => d.date))]
+  const multi = dates.length > 1
+  const dayOf = (day: number) => {
+    const date = dates[Math.min(day, dates.length - 1)]
+    return date ? withWeekday(date) : `Day ${day + 1}`
+  }
+  return [...items]
+    .sort((a, b) => (a.day ?? 0) - (b.day ?? 0))
+    .map((it) => {
+      const when = it.endTime ? `${it.time || 'until'}–${it.endTime}` : it.time
+      const what = `${it.title || 'something'}${it.notes ? ` (${it.notes})` : ''}`
+      return `${multi ? `${dayOf(it.day ?? 0)} — ` : ''}${when ? `${when}: ` : ''}${what}`
+    })
 }
 
 const flightLine = (f: Flight, way: 'out' | 'ret') => {

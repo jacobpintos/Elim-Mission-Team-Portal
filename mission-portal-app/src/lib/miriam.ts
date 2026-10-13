@@ -92,7 +92,7 @@ export type MiriamOpen =
   | {
       kind: 'event'
       key: string
-      section: 'dress_code' | 'availability' | 'weather' | 'food' | 'details' | null
+      section: 'dress_code' | 'availability' | 'weather' | 'food' | 'details' | 'schedule' | null
     }
   | { kind: 'task'; id: string }
   | { kind: 'availability' }

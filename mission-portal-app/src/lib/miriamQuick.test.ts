@@ -121,6 +121,41 @@ describe('event questions answered on the device', () => {
   })
 })
 
+describe('an event’s schedule', () => {
+  const camp = {
+    id: 'camp',
+    title: 'Family Camp',
+    date: '2026-10-16',
+    extraDays: [{ date: '2026-10-17' }],
+    users: ['me'],
+    schedule: [
+      { id: 'a', time: '7:00 PM', title: 'Worship', notes: 'Main hall' },
+      { id: 'b', time: '9:00 AM', endTime: '11:00 AM', title: 'Hike', day: 1 },
+    ],
+  }
+  const withCamp = (): QuickData => ({ ...data(), templates: [...templates, camp] as never })
+
+  it('reads it out, by day for a multi-day event, and opens the event at it', () => {
+    expect(quickAnswer('What’s the schedule for family camp?', withCamp())).toEqual({
+      text: 'The schedule for Family Camp — Friday: 7:00 PM, Worship (Main hall). Saturday: 9:00–11:00 AM, Hike.',
+      open: { key: 'camp_2026-10-16', section: 'schedule' },
+    })
+    expect(quickAnswer('itinerary for family camp', withCamp())?.text).toContain('Saturday:')
+  })
+
+  it('says so when an event has none', () => {
+    expect(quickAnswer('what’s the schedule for revival', data())?.text).toBe(
+      'Revival in the Heartland has no schedule yet.'
+    )
+  })
+
+  it('keeps “my schedule this week” for their week, and “my schedule for camp” for the event', () => {
+    expect(listAsked('what’s my schedule this week', today)).not.toBeNull()
+    expect(listAsked('what’s my schedule for family camp', today)).toBeNull()
+    expect(quickAnswer('what’s my schedule for family camp', withCamp())?.text).toContain('Worship')
+  })
+})
+
 describe('screens asked for by name', () => {
   const screens = [
     { id: 'events', label: 'Events' },

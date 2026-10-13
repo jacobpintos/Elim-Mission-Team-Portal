@@ -55,6 +55,20 @@ export interface CarpoolChild {
   name: string
 }
 
+/** One thing on an event's schedule: "7:00 PM — Worship". */
+export interface ScheduleItem {
+  id: string
+  /** When it starts, as written: "7:00 PM". Blank for one with no set time. */
+  time: string
+  /** When it ends, if given. */
+  endTime?: string
+  title: string
+  /** Where, who, or anything else: "Main hall", "Pastor Jim". */
+  notes?: string
+  /** Which day of a multi-day event: 1 is its second day. Absent is its first, or its only. */
+  day?: number
+}
+
 export interface EventTeam {
   name: string
   leaders: (string | number)[]
@@ -99,6 +113,8 @@ export interface EventTemplate {
   foodItems?: string[]
   carpoolLoc?: string
   carpoolCars?: CarpoolCarData[]
+  /** What happens when, built by an admin in the event form (ScheduleBuilder). Optional. */
+  schedule?: ScheduleItem[]
   vehicles?: unknown[]
   teams?: EventTeam[]
   dressCode?: DressCodeEntry[]
