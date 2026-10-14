@@ -14,6 +14,18 @@ export interface SubmitReimbursementInput {
   note: string
 }
 
+export interface ExternalExpenseInput {
+  payee: string
+  eventId: string
+  eventDate: string | null
+  items: ReimbursementItem[]
+  /** Storage paths of invoices already uploaded to the Accountant's own folder. */
+  invoices: string[]
+  /** YYYY-MM-DD */
+  payBy: string
+  note: string
+}
+
 export interface DecisionInput {
   id: string
   decision: 'approve' | 'partial' | 'deny'
@@ -32,6 +44,8 @@ interface ReimbursementsStore {
   unsubscribe: () => void
   byId: (id?: string) => Reimbursement | undefined
   submit: (input: SubmitReimbursementInput) => Promise<{ id: string; taskId: number }>
+  /** The Accountant logging a bill owed to someone outside the app. */
+  createExternal: (input: ExternalExpenseInput) => Promise<{ id: string; taskId: number }>
   decide: (input: DecisionInput) => Promise<void>
   requestPayDateChange: (id: string, proposed: string, reason: string) => Promise<void>
   answerPayDateChange: (id: string, accept: boolean) => Promise<void>
@@ -102,6 +116,7 @@ export const useReimbursementsStore = create<ReimbursementsStore>((set, get) => 
     byId: (id) => (id ? get().requests.find((r) => r.id === id) : undefined),
 
     submit: (input) => call('submitReimbursement', input),
+    createExternal: (input) => call('createExternalExpense', input),
     decide: async (input) => {
       await call('decideReimbursement', input)
     },

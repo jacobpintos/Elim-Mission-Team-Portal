@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Image, Pressable, StyleSheet } from 'react-native'
+import { Image, Linking, Pressable, StyleSheet } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useAuthStore } from '@/stores/authStore'
 import { useReimbursementsStore } from '@/stores/reimbursementsStore'
@@ -7,7 +7,8 @@ import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import { formatCents, parseDollars } from '@/lib/money'
-import { receiptUrl } from '@/lib/receiptUpload'
+import { receiptUrl, isPdf } from '@/lib/receiptUpload'
+import { KIND_COLORS, kindOf } from '@/lib/reimbursementTally'
 import { displayToIso } from '@/lib/eventDates'
 import { FD } from '@/lib/format'
 import type { Task } from '@/types/events'
@@ -93,6 +94,8 @@ function Details({
   }, [r.receipts])
 
   const status = STATUS[r.status]
+  // An outside bill: owed to someone with no account, so nobody to ask or tell.
+  const external = kindOf(r) === 'external'
   const awaitingPayment = r.status === 'approved' || r.status === 'partial'
 
   const startForm = (f: Form) => {
@@ -147,7 +150,7 @@ function Details({
     if (form === 'move') {
       return run(
         () => store.requestPayDateChange(r.id, iso, reason.trim()),
-        `Asked ${r.submitterName}`
+        external ? 'Due date moved' : `Asked ${r.submitterName}`
       )
     }
     if (form === 'paid') {
@@ -168,7 +171,7 @@ function Details({
     if (form === 'deny') return reason.trim() ? null : 'Why it was denied'
     if (form === 'move') {
       if (!iso) return 'New date'
-      return reason.trim() ? null : 'Why it needs to move'
+      return external || reason.trim() ? null : 'Why it needs to move'
     }
     return null
   })()
@@ -215,8 +218,23 @@ function Details({
             {status.label}
           </Text>
         </XStack>
+        <XStack
+          borderRadius={99}
+          paddingHorizontal="$2"
+          paddingVertical={2}
+          borderWidth={1}
+          borderColor={KIND_COLORS[kindOf(r)]}
+        >
+          <Text color={KIND_COLORS[kindOf(r)]} fontSize={11} fontWeight="700">
+            {external ? 'External' : 'Internal'}
+          </Text>
+        </XStack>
         <Text color={colors.textMuted} fontSize="$2">
-          {isSubmitter ? `Sent to ${r.accountantName}` : `From ${r.submitterName}`}
+          {external
+            ? `Owed to ${r.payee ?? r.submitterName}`
+            : isSubmitter
+              ? `Sent to ${r.accountantName}`
+              : `From ${r.submitterName}`}
         </Text>
       </XStack>
 
@@ -243,7 +261,7 @@ function Details({
           paddingTop="$1"
         >
           <Text color={colors.text} fontSize="$3" fontWeight="700">
-            Total asked
+            {external ? 'Total owed' : 'Total asked'}
           </Text>
           <Text color={colors.text} fontSize="$3" fontWeight="700">
             {formatCents(r.total)}
@@ -251,7 +269,7 @@ function Details({
         </XStack>
       </YStack>
 
-      {r.approvedAmount !== null && r.status !== 'denied'
+      {r.approvedAmount !== null && r.status !== 'denied' && !external
         ? row('Approved', formatCents(r.approvedAmount), STATUS[r.status].color)
         : null}
       {r.reason
@@ -264,23 +282,39 @@ function Details({
             r.reason
           )
         : null}
-      {r.payBy && r.status !== 'paid' ? row('To be paid by', FD(r.payBy)) : null}
+      {r.payBy && r.status !== 'paid'
+        ? row(external ? 'Due by' : 'To be paid by', FD(r.payBy))
+        : null}
       {r.note ? row('Note', r.note) : null}
 
       {r.receipts.length > 0 ? (
         <YStack gap="$1">
           <Text color={colors.textMuted} fontSize="$1" textTransform="uppercase">
-            Receipts
+            {external ? 'Invoice' : 'Receipts'}
           </Text>
           <XStack gap="$2" flexWrap="wrap">
             {r.receipts.map((p, i) =>
               urls[i] ? (
                 <Pressable
                   key={p}
-                  onPress={() => setOpen(urls[i])}
-                  accessibilityLabel={`Receipt ${i + 1}`}
+                  // A PDF opens in the browser or a viewer; a photo in the lightbox.
+                  onPress={() => (isPdf(p) ? void Linking.openURL(urls[i]) : setOpen(urls[i]))}
+                  accessibilityLabel={`${external ? 'Invoice' : 'Receipt'} ${i + 1}`}
                 >
-                  <Image source={{ uri: urls[i] }} style={styles.thumb} resizeMode="cover" />
+                  {isPdf(p) ? (
+                    <YStack
+                      style={styles.thumb}
+                      backgroundColor={colors.background}
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                        PDF
+                      </Text>
+                    </YStack>
+                  ) : (
+                    <Image source={{ uri: urls[i] }} style={styles.thumb} resizeMode="cover" />
+                  )}
                 </Pressable>
               ) : (
                 <YStack key={p} style={styles.thumb} backgroundColor={colors.background} />
@@ -329,7 +363,12 @@ function Details({
         <XStack gap="$2" flexWrap="wrap">
           {button('Mark paid', () => startForm('paid'), STATUS.paid.color)}
           {!r.dateChange
-            ? button('Ask to move pay date', () => startForm('move'), colors.primary, true)
+            ? button(
+                external ? 'Change due date' : 'Ask to move pay date',
+                () => startForm('move'),
+                colors.primary,
+                true
+              )
             : null}
         </XStack>
       ) : null}
@@ -354,8 +393,12 @@ function Details({
                   : form === 'deny'
                     ? 'WHY IT WAS DENIED'
                     : form === 'move'
-                      ? 'WHY THE DATE NEEDS TO MOVE'
-                      : 'NOTE FOR ' + r.submitterName.toUpperCase() + ' (optional)'
+                      ? external
+                        ? 'WHY (optional)'
+                        : 'WHY THE DATE NEEDS TO MOVE'
+                      : external
+                        ? 'NOTE (optional)'
+                        : 'NOTE FOR ' + r.submitterName.toUpperCase() + ' (optional)'
               }
               value={reason}
               onChangeText={setReason}
@@ -366,7 +409,13 @@ function Details({
           ) : null}
           {form === 'approve' || form === 'partial' || form === 'move' ? (
             <Field
-              label={form === 'move' ? 'NEW PAY-BY DATE (MM/DD/YY)' : 'PAY BY (MM/DD/YY)'}
+              label={
+                form === 'move'
+                  ? external
+                    ? 'NEW DUE DATE (MM/DD/YY)'
+                    : 'NEW PAY-BY DATE (MM/DD/YY)'
+                  : 'PAY BY (MM/DD/YY)'
+              }
               value={date}
               onChangeText={(v) => setDate(maskDate(v))}
               placeholder="MM/DD/YY"
@@ -376,7 +425,9 @@ function Details({
           ) : null}
           {form === 'paid' ? (
             <Text color={colors.textMuted} fontSize="$2">
-              {`Completes the task and tells ${r.submitterName} that ${formatCents(r.approvedAmount ?? r.total)} was paid, with a message.`}
+              {external
+                ? `Records ${formatCents(r.approvedAmount ?? r.total)} paid to ${r.payee ?? r.submitterName} and completes the task.`
+                : `Completes the task and tells ${r.submitterName} that ${formatCents(r.approvedAmount ?? r.total)} was paid, with a message.`}
             </Text>
           ) : null}
           <XStack gap="$2" alignItems="center">
@@ -390,7 +441,9 @@ function Details({
                     : form === 'deny'
                       ? 'Deny'
                       : form === 'move'
-                        ? `Ask ${r.submitterName}`
+                        ? external
+                          ? 'Move due date'
+                          : `Ask ${r.submitterName}`
                         : 'Mark paid',
               () => {
                 if (!formMissing) void submitForm()

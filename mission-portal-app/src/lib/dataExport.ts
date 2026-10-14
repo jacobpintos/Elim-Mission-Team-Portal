@@ -153,7 +153,8 @@ export function reimbursementsCsv(requests: Reimbursement[]): string {
   return toCsv(
     [
       'Asked',
-      'Person',
+      'Kind',
+      'Owed to',
       'Event',
       'Items',
       'Total asked',
@@ -167,7 +168,8 @@ export function reimbursementsCsv(requests: Reimbursement[]): string {
       .sort((a, b) => a.createdAt - b.createdAt)
       .map((r) => [
         new Date(r.createdAt).toISOString().slice(0, 10),
-        r.submitterName,
+        r.kind === 'external' ? 'Outside bill' : 'Team member',
+        r.payee ?? r.submitterName,
         r.eventTitle,
         r.items.map((i) => `${i.description} ${formatCents(i.amount)}`).join('; '),
         formatCents(r.total),

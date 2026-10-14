@@ -27,6 +27,13 @@ export interface ReimbursementHistoryEntry {
 
 export interface Reimbursement {
   id: string
+  /**
+   * internal: someone on the team asking to be paid back. external: a bill
+   * the Accountant logged for someone outside the app. Absent means internal.
+   */
+  kind?: 'internal' | 'external'
+  /** Who an external bill is owed to. */
+  payee?: string
   submitterUid: string
   submitterName: string
   accountantUid: string

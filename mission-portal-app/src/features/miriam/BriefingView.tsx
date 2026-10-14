@@ -306,7 +306,9 @@ export function BriefingView({
                       ? '#f0a070'
                       : a.kind === 'setlist'
                         ? '#a77bdb'
-                        : colors.primary
+                        : a.kind === 'reimbursement'
+                          ? '#e67e22'
+                          : colors.primary
                   }
                   title={a.title}
                   sub={a.sub}

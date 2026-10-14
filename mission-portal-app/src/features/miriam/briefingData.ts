@@ -7,6 +7,8 @@ import { announcementsShown, roomName } from '@/lib/miriamAppData'
 import { buildBriefing, type AttentionItem, type Briefing, type FoodNudge } from '@/lib/briefing'
 import { fetchWeather } from '@/lib/weather'
 import { miriamHref } from '@/lib/miriam'
+import { accountantAttention } from '@/lib/reimbursementTally'
+import type { Reimbursement } from '@/types/reimbursement'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useGroupsStore } from '@/stores/groupsStore'
@@ -106,7 +108,7 @@ export async function gatherBriefing(): Promise<
 
   // Guests are along for the trip, not asked to bring food (firestore.rules).
   const asked = !(isGuest(profile) && !isAdmin(profile))
-  const [announcements, unread, attention, weather, food, asks] = await Promise.all([
+  const [announcements, unread, attention, weather, food, asks, money] = await Promise.all([
     quietly(async () => {
       const all = (await getDocs(collection(db, 'announcements'))).docs.map(
         (d) => ({ ...(d.data() as Announcement), id: d.id }) as Announcement
@@ -132,6 +134,7 @@ export async function gatherBriefing(): Promise<
     quietly(() => forecasts(events, evOverrides, groups, viewer, day), {}),
     asked ? quietly(() => foodOpen(events, evOverrides, groups, uid, day), []) : [],
     quietly(() => availabilityAsks(events, evOverrides, groups, viewer, day, now.getTime()), []),
+    quietly(() => moneyFor(uid, day), [] as AttentionItem[]),
   ])
 
   const briefing = buildBriefing({
@@ -159,7 +162,8 @@ export async function gatherBriefing(): Promise<
       ),
     announcements,
     unread,
-    attention,
+    // Money first: a payment due is a date someone outside is counting on.
+    attention: [...money, ...attention],
     weather,
     food,
     notes: keepsNotes ? useDateNotesStore.getState().notes : [],
@@ -252,6 +256,25 @@ async function forecasts(
 }
 
 /** What needs an admin, or the worship team, this week. */
+/**
+ * For the Accountant: requests to decide, payments overdue and payments due
+ * this week. Asks only for requests sent to them, which nobody else may read,
+ * so for anyone else this is simply empty.
+ */
+async function moneyFor(uid: string, day: string): Promise<AttentionItem[]> {
+  const snap = await getDocs(
+    query(collection(db, 'reimbursements'), where('accountantUid', '==', uid))
+  )
+  const requests = snap.docs.map((d) => ({ ...(d.data() as Reimbursement), id: d.id }))
+  return accountantAttention(requests, day, shiftDate(day, 7)).map((a) => ({
+    kind: 'reimbursement' as const,
+    title: a.title,
+    sub: a.sub,
+    href: '/assignments',
+    spoken: a.spoken,
+  }))
+}
+
 async function attentionFor(
   admin: boolean,
   worship: boolean,

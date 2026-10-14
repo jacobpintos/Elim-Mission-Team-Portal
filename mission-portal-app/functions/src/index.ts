@@ -56,5 +56,6 @@ export {
   requestPayDateChange,
   answerPayDateChange,
   markReimbursementPaid,
+  createExternalExpense,
 } from './reimbursements'
 export { nightlyBackup } from './backups'

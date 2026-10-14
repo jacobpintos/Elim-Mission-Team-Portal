@@ -18,9 +18,17 @@ import { useReimbursementsStore } from '@/stores/reimbursementsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { EventPickerModal } from '@/features/worship/EventPickerModal'
 import { parseDollars, formatCents } from '@/lib/money'
-import { pickReceipts, uploadReceipt, type PickedReceipt } from '@/lib/receiptUpload'
+import {
+  pickReceipts,
+  pickInvoices,
+  uploadReceipt,
+  isPdf,
+  type PickedReceipt,
+} from '@/lib/receiptUpload'
+import { displayToIso } from '@/lib/eventDates'
+import { KIND_COLORS } from '@/lib/reimbursementTally'
 import { FD } from '@/lib/format'
-import { Field, Label } from './fields'
+import { Field, Label, maskDate } from './fields'
 
 /** Matches MAX_RECEIPTS in functions/src/reimbursements/logic.ts. */
 const MAX_RECEIPTS = 10
@@ -51,6 +59,13 @@ interface Props {
   event?: ReimbursementEvent | null
   /** Told the task that tracks the new request, to show it. */
   onSubmitted?: (taskId: number) => void
+  /**
+   * internal: someone asking to be paid back (the default).
+   * external: the Accountant logging a bill owed to someone outside the app —
+   * who it is owed to and when it is due, with an invoice if there is one.
+   * It is approved as it is logged.
+   */
+  mode?: 'internal' | 'external'
 }
 
 /**
@@ -61,12 +76,20 @@ interface Props {
  * to the Accountant as a task; the person who asked follows it from their own
  * task list.
  */
-export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }: Props) {
+export function ReimbursementFormModal({
+  visible,
+  onClose,
+  event,
+  onSubmitted,
+  mode = 'internal',
+}: Props) {
+  const external = mode === 'external'
   const colors = useThemeColors()
   const { profile } = useAuthStore()
   const accountant = useConfigStore((s) => s.accountant)
   const { users } = useUsersStore()
   const submit = useReimbursementsStore((s) => s.submit)
+  const createExternal = useReimbursementsStore((s) => s.createExternal)
   const toast = useUIStore((s) => s.toast)
 
   const [chosen, setChosen] = useState<ReimbursementEvent | null>(event ?? null)
@@ -74,6 +97,8 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
   const [rows, setRows] = useState<Row[]>([blankRow()])
   const [receipts, setReceipts] = useState<PickedReceipt[]>([])
   const [note, setNote] = useState('')
+  const [payee, setPayee] = useState('')
+  const [due, setDue] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
 
@@ -87,14 +112,19 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
   const total = filled.reduce((sum, r) => sum + (r.amount ?? 0), 0)
 
   /** What still stands between the form and sending it, or null. */
+  const dueIso = displayToIso(due)
   const missing = (() => {
+    if (external && !payee.trim()) return 'Say who this is owed to.'
     if (!chosen) return 'Choose the event this was for.'
     if (filled.length === 0) return 'Add what you bought and what it cost.'
     for (const r of filled) {
       if (!r.description) return 'Every item needs a description.'
       if (r.amount === null || r.amount <= 0) return `Enter a cost for “${r.description}”.`
     }
-    if (receipts.length === 0) return 'Add a photo of the receipt.'
+    // An outside bill may arrive with no invoice, by phone; a team member's
+    // request always needs its receipt.
+    if (!external && receipts.length === 0) return 'Add a photo of the receipt.'
+    if (external && !dueIso) return 'Enter the date it is due.'
     return null
   })()
 
@@ -103,6 +133,8 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
     setRows([blankRow()])
     setReceipts([])
     setNote('')
+    setPayee('')
+    setDue('')
     setError(null)
   }
 
@@ -117,7 +149,8 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
 
   const addReceipts = async () => {
     try {
-      const picked = await pickReceipts(MAX_RECEIPTS - receipts.length)
+      const left = MAX_RECEIPTS - receipts.length
+      const picked = external ? await pickInvoices(left) : await pickReceipts(left)
       setReceipts((rs) => [...rs, ...picked].slice(0, MAX_RECEIPTS))
       setError(null)
     } catch (err) {
@@ -134,14 +167,30 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
       // fails all of them rather than most.
       const paths: string[] = []
       for (const r of receipts) paths.push(await uploadReceipt(profile.uid, r))
-      const res = await submit({
-        eventId: chosen.id,
-        eventDate: chosen.date,
-        items: filled.map((r) => ({ description: r.description, amount: r.amount ?? 0 })),
-        receipts: paths,
-        note: note.trim(),
-      })
-      toast(`Sent to ${accountantName ?? 'the Accountant'}`, 'success')
+      const items = filled.map((r) => ({ description: r.description, amount: r.amount ?? 0 }))
+      const res = external
+        ? await createExternal({
+            payee: payee.trim(),
+            eventId: chosen.id,
+            eventDate: chosen.date,
+            items,
+            invoices: paths,
+            payBy: dueIso,
+            note: note.trim(),
+          })
+        : await submit({
+            eventId: chosen.id,
+            eventDate: chosen.date,
+            items,
+            receipts: paths,
+            note: note.trim(),
+          })
+      toast(
+        external
+          ? `Logged: ${formatCents(total)} owed to ${payee.trim()}`
+          : `Sent to ${accountantName ?? 'the Accountant'}`,
+        'success'
+      )
       reset()
       onClose()
       onSubmitted?.(res.taskId)
@@ -169,9 +218,17 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
             maxHeight="92%"
           >
             <XStack justifyContent="space-between" alignItems="center">
-              <Text color={colors.text} fontSize="$5" fontWeight="700">
-                Request reimbursement
-              </Text>
+              <XStack alignItems="center" gap="$2" flex={1}>
+                <XStack
+                  width={10}
+                  height={10}
+                  borderRadius={99}
+                  backgroundColor={KIND_COLORS[mode]}
+                />
+                <Text color={colors.text} fontSize="$5" fontWeight="700">
+                  {external ? 'Log an outside bill' : 'Request reimbursement'}
+                </Text>
+              </XStack>
               <Pressable onPress={close} accessibilityLabel="Close">
                 <Text color={colors.textMuted} fontSize="$4">
                   ✕
@@ -181,6 +238,15 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <YStack gap="$3">
+                {external ? (
+                  <Field
+                    label="OWED TO *"
+                    value={payee}
+                    onChangeText={setPayee}
+                    placeholder="e.g. Enterprise Rent-A-Car"
+                    maxLength={200}
+                  />
+                ) : null}
                 <YStack gap="$1">
                   <Label>EVENT *</Label>
                   <Pressable onPress={() => setPicking(true)}>
@@ -201,7 +267,7 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
                 </YStack>
 
                 <YStack gap="$2">
-                  <Label>WHAT YOU BOUGHT *</Label>
+                  <Label>{external ? 'WHAT IT IS FOR *' : 'WHAT YOU BOUGHT *'}</Label>
                   {rows.map((r) => (
                     <XStack key={r.key} gap="$2" alignItems="center">
                       <YStack flex={3}>
@@ -246,11 +312,28 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
                 </YStack>
 
                 <YStack gap="$2">
-                  <Label>{`RECEIPTS * (${receipts.length}/${MAX_RECEIPTS})`}</Label>
+                  <Label>
+                    {external
+                      ? `INVOICE (optional, ${receipts.length}/${MAX_RECEIPTS})`
+                      : `RECEIPTS * (${receipts.length}/${MAX_RECEIPTS})`}
+                  </Label>
                   <XStack gap="$2" flexWrap="wrap">
                     {receipts.map((r, i) => (
                       <YStack key={`${r.uri}_${i}`} gap="$1" alignItems="center">
-                        <Image source={{ uri: r.uri }} style={styles.thumb} resizeMode="cover" />
+                        {isPdf(r.mimeType) ? (
+                          <YStack
+                            style={styles.thumb}
+                            backgroundColor={colors.background}
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            <Text color={colors.textMuted} fontSize="$2">
+                              PDF
+                            </Text>
+                          </YStack>
+                        ) : (
+                          <Image source={{ uri: r.uri }} style={styles.thumb} resizeMode="cover" />
+                        )}
                         <Pressable
                           onPress={() => setReceipts((rs) => rs.filter((_, j) => j !== i))}
                         >
@@ -271,7 +354,7 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
                           justifyContent="center"
                         >
                           <Text color={colors.textMuted} fontSize="$2" textAlign="center">
-                            📷{'\n'}Add photo
+                            {external ? '📄\nAdd file' : '📷\nAdd photo'}
                           </Text>
                         </YStack>
                       </Pressable>
@@ -279,19 +362,34 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
                   </XStack>
                 </YStack>
 
+                {external ? (
+                  <Field
+                    label="DUE BY * (MM/DD/YY)"
+                    value={due}
+                    onChangeText={(v) => setDue(maskDate(v))}
+                    placeholder="MM/DD/YY"
+                    keyboardType="number-pad"
+                    maxLength={8}
+                  />
+                ) : null}
+
                 <Field
                   label="NOTE (optional)"
                   value={note}
                   onChangeText={setNote}
-                  placeholder="Anything the Accountant should know"
+                  placeholder={
+                    external ? 'Invoice number, how to pay…' : 'Anything the Accountant should know'
+                  }
                   multiline
                   maxLength={1000}
                 />
 
                 <Text color={colors.textMuted} fontSize="$2">
-                  {accountantName
-                    ? `This goes to ${accountantName}, the Accountant. You can follow it on your Assignments.`
-                    : 'This goes to the Accountant. You can follow it on your Assignments.'}
+                  {external
+                    ? 'Logged as approved and added to your reimbursements, with a task due on that date.'
+                    : accountantName
+                      ? `This goes to ${accountantName}, the Accountant. You can follow it on your Assignments.`
+                      : 'This goes to the Accountant. You can follow it on your Assignments.'}
                 </Text>
 
                 {error ? (
@@ -309,7 +407,11 @@ export function ReimbursementFormModal({ visible, onClose, event, onSubmitted }:
                     opacity={missing || sending ? 0.5 : 1}
                   >
                     <Text color="white" fontWeight="700" fontSize="$3">
-                      {sending ? 'Sending…' : `Send request for ${formatCents(total)}`}
+                      {sending
+                        ? 'Sending…'
+                        : external
+                          ? `Log ${formatCents(total)} owed`
+                          : `Send request for ${formatCents(total)}`}
                     </Text>
                   </XStack>
                 </Pressable>

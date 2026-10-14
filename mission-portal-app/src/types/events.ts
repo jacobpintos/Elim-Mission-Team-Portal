@@ -185,6 +185,8 @@ export interface Task {
   meetingRequestId?: string
   /** The reimbursements document this task tracks. */
   reimbursementId?: string
+  /** Whether that reimbursement is a team member's or an outside bill; absent means internal. */
+  reimbursementKind?: 'internal' | 'external'
   /**
    * Who the task is being done for, when that is not one of its assignees.
    *

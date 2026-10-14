@@ -5,6 +5,7 @@ import { FD } from '@/lib/format'
 import { isOverdue } from '@/lib/availability'
 import { MeetingRequestPanel } from '@/features/meetings/MeetingRequestPanel'
 import { ReimbursementPanel } from '@/features/reimbursements/ReimbursementPanel'
+import { KIND_COLORS } from '@/lib/reimbursementTally'
 import type { Task } from '@/types/events'
 
 interface TaskCardProps {
@@ -32,6 +33,12 @@ const STATUS_LABELS: Record<Task['status'], string> = {
 export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames }: TaskCardProps) {
   const colors = useThemeColors()
   const overdue = isOverdue(task)
+  // A reimbursement's colour says whose it is at a glance: a team member's, or
+  // an outside bill.
+  const kindColor =
+    task.taskType === 'reimbursement'
+      ? KIND_COLORS[task.reimbursementKind === 'external' ? 'external' : 'internal']
+      : null
 
   return (
     <Pressable onPress={onPress}>
@@ -43,6 +50,8 @@ export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames 
         borderRadius="$3"
         borderWidth={1}
         borderColor={overdue ? '#c0392b' : colors.border}
+        borderLeftWidth={kindColor ? 5 : 1}
+        borderLeftColor={kindColor ?? (overdue ? '#c0392b' : colors.border)}
         overflow="hidden"
       >
         <XStack padding="$3" gap="$2" alignItems="center">

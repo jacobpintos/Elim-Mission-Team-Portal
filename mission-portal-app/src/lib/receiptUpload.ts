@@ -43,6 +43,31 @@ export async function pickReceipts(limit: number): Promise<PickedReceipt[]> {
 }
 
 /**
+ * Choose invoices: photos or PDFs, which is how a rental company or a venue
+ * usually sends one. Resolves to [] when the picker is cancelled.
+ */
+export async function pickInvoices(limit: number): Promise<PickedReceipt[]> {
+  const DocumentPicker = await import('expo-document-picker')
+  const result = await DocumentPicker.getDocumentAsync({
+    type: ['image/*', 'application/pdf'],
+    multiple: true,
+    copyToCacheDirectory: true,
+  })
+  if (result.canceled) return []
+  return (result.assets ?? [])
+    .filter((a) => !!a.uri)
+    .slice(0, limit)
+    .map((a) => ({
+      uri: a.uri,
+      mimeType:
+        a.mimeType ?? (a.name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
+      fileName: a.name ?? 'invoice',
+    }))
+}
+
+export const isPdf = (pathOrMime: string) => /pdf$/i.test(pathOrMime)
+
+/**
  * Put a receipt in the person's own folder and return its Storage path.
  *
  * The path, not a download URL, is what the request keeps: a download URL
@@ -52,11 +77,12 @@ export async function pickReceipts(limit: number): Promise<PickedReceipt[]> {
 export async function uploadReceipt(uid: string, receipt: PickedReceipt): Promise<string> {
   const picked = await uriToBlob(receipt.uri)
   if (picked.size > MAX_BYTES) {
-    throw new Error('A receipt photo is larger than 10 MB. Please choose a smaller one.')
+    throw new Error('A file is larger than 10 MB. Please choose a smaller one.')
   }
-  const { blob, contentType } = await shrinkImage(picked, receipt.mimeType, {
-    maxEdge: RECEIPT_EDGE,
-  })
+  // A PDF goes up as it is; a photo is made a sensible size first.
+  const { blob, contentType } = isPdf(receipt.mimeType)
+    ? { blob: picked, contentType: 'application/pdf' }
+    : await shrinkImage(picked, receipt.mimeType, { maxEdge: RECEIPT_EDGE })
   const name = receipt.fileName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-60)
   const unique = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
   const path = `reimbursements/${uid}/${unique}_${name}`

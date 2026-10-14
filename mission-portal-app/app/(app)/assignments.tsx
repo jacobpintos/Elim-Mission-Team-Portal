@@ -36,6 +36,7 @@ import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { WithDictation } from '@/components/ui/Dictation'
 import { RemindersSection } from '@/features/reminders/RemindersSection'
 import { ReimbursementFormModal } from '@/features/reimbursements/ReimbursementFormModal'
+import { ReimbursementsSection } from '@/features/reimbursements/ReimbursementsSection'
 
 interface GroupDoc {
   id: string
@@ -1279,7 +1280,19 @@ export default function Assignments() {
     ? tasksStore.tasks.find((t) => String(t.id) === String(focusTaskId))
     : undefined
 
+  // Reimbursements have a section of their own, below; the lists here are
+  // everything else.
+  const matchesSearch = (t: Task) => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return t.title.toLowerCase().includes(q) || (getEventTitle(t) ?? '').toLowerCase().includes(q)
+  }
+  const reimbursementTasks = baseTasks.filter(
+    (t) => t.taskType === 'reimbursement' && matchesSearch(t)
+  )
+
   const filtered = baseTasks.filter((t) => {
+    if (t.taskType === 'reimbursement') return false
     if (search) {
       const q = search.toLowerCase()
       const titleMatch = t.title.toLowerCase().includes(q)
@@ -1412,7 +1425,10 @@ export default function Assignments() {
     }
   }
 
-  const getEventTitle = (t: Task): string | undefined => {
+  // A declaration, so it is hoisted: the search above calls it while the list
+  // is filtered, before this line runs. As a const it threw the moment anyone
+  // typed in the search box.
+  function getEventTitle(t: Task): string | undefined {
     if (!t.evId && !t.evTemplateId) return undefined
     const id = t.evId ?? t.evTemplateId
     const ev = templates.find((e) => sameId(e.id, id) || sameId(e.taskTemplateId, id))
@@ -1723,6 +1739,13 @@ export default function Assignments() {
             {/* Their own reminders, set by asking Miriam: on their own list, not everyone's. */}
             {adminView === 'mine' && uid && (filter === 'all' || filter === 'pending') ? (
               <RemindersSection uid={String(uid)} />
+            ) : null}
+            {/* Their reimbursements — and, for the Accountant, the tally and outside bills. */}
+            {adminView === 'mine' && uid ? (
+              <ReimbursementsSection
+                tasks={reimbursementTasks}
+                onSubmitted={(taskId) => router.setParams({ taskId: String(taskId) })}
+              />
             ) : null}
             {focusedTask ? (
               <TaskGroup

@@ -52,7 +52,7 @@ export interface BriefReminder {
 
 /** Something needing an admin's (or the worship team's) attention, found by the app (features/miriam/briefingData). */
 export interface AttentionItem {
-  kind: 'availability' | 'issue' | 'kaizen' | 'setlist'
+  kind: 'availability' | 'issue' | 'kaizen' | 'setlist' | 'reimbursement'
   title: string
   sub: string
   href: string

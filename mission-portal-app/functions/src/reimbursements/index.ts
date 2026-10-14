@@ -119,6 +119,15 @@ async function nextTaskId(db: FirebaseFirestore.Firestore): Promise<number> {
 
 interface StoredRequest {
   id: string
+  /**
+   * internal: someone on the team asking to be paid back.
+   * external: a bill the Accountant logged for someone outside the app — a
+   * rental, a venue, a supplier. Approved as it is made; nobody to notify.
+   * Absent on requests made before there were two kinds, which are internal.
+   */
+  kind?: 'internal' | 'external'
+  /** Who an external bill is owed to. */
+  payee?: string
   submitterUid: string
   submitterName: string
   accountantUid: string
@@ -190,6 +199,32 @@ async function loadFor(
   return { ref, r: { ...r, id: snap.id } }
 }
 
+/**
+ * Uploaded files from the caller's own folder, which the Storage rules let
+ * only them write. A path anywhere else would be someone else's file.
+ */
+function ownPaths(uid: string, raw: unknown): string[] {
+  const prefix = `reimbursements/${uid}/`
+  return Array.isArray(raw)
+    ? [...new Set(raw.map((p: unknown) => clean(p, 400)))].filter(
+        (p): p is string => typeof p === 'string' && p.startsWith(prefix) && !p.includes('..')
+      )
+    : []
+}
+
+/** The event a request is for, read from the event rather than taken from the form. */
+async function eventFor(db: FirebaseFirestore.Firestore, rawId: unknown, rawDate: unknown) {
+  const eventId = clean(rawId, 128)
+  if (!eventId) throw new HttpsError('invalid-argument', 'Choose the event this was for.')
+  const event = (await db.doc(`events/${eventId}`).get()).data()
+  if (!event || event.deleted) throw new HttpsError('not-found', 'That event no longer exists.')
+  return {
+    eventId,
+    eventTitle: clean(event.title, 200) || 'an event',
+    eventDate: isIsoDate(rawDate) ? rawDate : ((event.date as string | undefined) ?? null),
+  }
+}
+
 // ─── Asking ──────────────────────────────────────────────────────────────────
 
 export const submitReimbursement = onCall(CALL_OPTS, async (req) => {
@@ -208,24 +243,17 @@ export const submitReimbursement = onCall(CALL_OPTS, async (req) => {
   // Receipts are uploaded before the request is sent, into the person's own
   // folder — which the Storage rules let only them write. A path anywhere else
   // would be someone else's receipt.
-  const prefix = `reimbursements/${uid}/`
-  const receipts: string[] = Array.isArray(req.data?.receipts)
-    ? [...new Set(req.data.receipts.map((p: unknown) => clean(p, 400)))].filter(
-        (p): p is string => typeof p === 'string' && p.startsWith(prefix) && !p.includes('..')
-      )
-    : []
+  const receipts = ownPaths(uid, req.data?.receipts)
   if (receipts.length === 0) throw new HttpsError('invalid-argument', 'Add a photo of the receipt.')
   if (receipts.length > MAX_RECEIPTS) {
     throw new HttpsError('invalid-argument', `No more than ${MAX_RECEIPTS} receipt photos.`)
   }
 
-  // The event's name from the event, not the form.
-  const eventId = clean(req.data?.eventId, 128)
-  if (!eventId) throw new HttpsError('invalid-argument', 'Choose the event this was for.')
-  const event = (await db.doc(`events/${eventId}`).get()).data()
-  if (!event || event.deleted) throw new HttpsError('not-found', 'That event no longer exists.')
-  const eventTitle = clean(event.title, 200) || 'an event'
-  const eventDate = isIsoDate(req.data?.eventDate) ? req.data.eventDate : (event.date ?? null)
+  const { eventId, eventTitle, eventDate } = await eventFor(
+    db,
+    req.data?.eventId,
+    req.data?.eventDate
+  )
 
   const accountantUid = await resolveAccountant(db)
   if (!accountantUid) {
@@ -243,6 +271,7 @@ export const submitReimbursement = onCall(CALL_OPTS, async (req) => {
 
   const request: StoredRequest = {
     id: ref.id,
+    kind: 'internal',
     submitterUid: uid,
     submitterName,
     accountantUid,
@@ -277,6 +306,7 @@ export const submitReimbursement = onCall(CALL_OPTS, async (req) => {
     by: uid,
     status: 'pending',
     taskType: 'reimbursement',
+    reimbursementKind: 'internal',
     reimbursementId: ref.id,
     _updatedAt: FieldValue.serverTimestamp(),
   })
@@ -362,6 +392,30 @@ export const requestPayDateChange = onCall(CALL_OPTS, async (req) => {
     throw new HttpsError('invalid-argument', 'That is already the pay-by date.')
   }
   const reason = clean(req.data?.reason, MAX_REASON)
+
+  // An outside bill has nobody to ask: the Accountant moves its due date.
+  if (r.kind === 'external') {
+    await db.runTransaction(async (tx) => {
+      tx.update(ref, {
+        payBy: proposed,
+        history: FieldValue.arrayUnion(
+          historyEntry(
+            uid,
+            `Moved the due date from ${r.payBy} to ${proposed}${reason ? `: ${reason}` : ''}`
+          )
+        ),
+      })
+      tx.update(db.doc(`tasks/${r.taskId}`), {
+        dueDate: proposed,
+        notifiedDueWeekAt: null,
+        notifiedDueTodayAt: null,
+        overdueNotified: false,
+        _updatedAt: FieldValue.serverTimestamp(),
+      })
+    })
+    return { ok: true, moved: true }
+  }
+
   if (!reason) throw new HttpsError('invalid-argument', 'Say why the date needs to move.')
 
   const change: PayDateChange = { proposed, reason, requestedAt: Date.now() }
@@ -478,6 +532,9 @@ export const markReimbursementPaid = onCall(CALL_OPTS, async (req) => {
     })
   })
 
+  // An outside bill is paid outside the app; there is nobody here to tell.
+  if (r.kind === 'external') return { ok: true }
+
   const message = paidMessage({ ...r, approvedAmount })
   await tell(r.submitterUid, message, r)
 
@@ -505,4 +562,96 @@ export const markReimbursementPaid = onCall(CALL_OPTS, async (req) => {
   }
 
   return { ok: true }
+})
+
+// ─── Outside bills ───────────────────────────────────────────────────────────
+
+/**
+ * Log a bill owed to someone outside the app — a van rental, a venue, a
+ * supplier — so it is tracked with the event's other costs and its due date
+ * is a reminder like any task's.
+ *
+ * Only the Accountant makes these, and they are approved as they are made:
+ * the Accountant is the one who would approve them. The task goes on their
+ * list with the due date; there is no one else to notify.
+ */
+export const createExternalExpense = onCall(CALL_OPTS, async (req) => {
+  const uid = requireUid(req)
+  const db = admin.firestore()
+
+  const accountantUid = await resolveAccountant(db)
+  if (!accountantUid || accountantUid !== uid) {
+    throw new HttpsError('permission-denied', 'Only the Accountant can log an outside bill.')
+  }
+
+  const payee = clean(req.data?.payee, 200)
+  if (!payee) throw new HttpsError('invalid-argument', 'Say who this is owed to.')
+  const items = cleanItems(req.data?.items)
+  if (typeof items === 'string') throw new HttpsError('invalid-argument', items)
+  const payBy = req.data?.payBy
+  if (!isIsoDate(payBy)) throw new HttpsError('invalid-argument', 'Choose the date it is due.')
+  // An invoice is optional: some bills arrive by phone.
+  const invoices = ownPaths(uid, req.data?.invoices)
+  if (invoices.length > MAX_RECEIPTS) {
+    throw new HttpsError('invalid-argument', `No more than ${MAX_RECEIPTS} invoice files.`)
+  }
+  const { eventId, eventTitle, eventDate } = await eventFor(
+    db,
+    req.data?.eventId,
+    req.data?.eventDate
+  )
+
+  const accountantName = await nameOf(db, uid)
+  const total = totalOf(items)
+  const taskId = await nextTaskId(db)
+  const ref = db.collection(COLLECTION).doc()
+
+  const request: StoredRequest = {
+    id: ref.id,
+    kind: 'external',
+    payee,
+    // Nobody in the app asked: an outside bill belongs to whoever is the
+    // Accountant, and moves with the role (Admin → Leadership).
+    submitterUid: '',
+    submitterName: payee,
+    accountantUid: uid,
+    accountantName,
+    eventId,
+    eventTitle,
+    eventDate,
+    items,
+    total,
+    receipts: invoices,
+    note: clean(req.data?.note, MAX_NOTE),
+    status: 'approved',
+    approvedAmount: total,
+    reason: '',
+    payBy,
+    dateChange: null,
+    taskId,
+  }
+
+  await ref.set({
+    ...request,
+    createdAt: Date.now(),
+    decidedAt: Date.now(),
+    history: [historyEntry(uid, `Logged ${formatCents(total)} owed to ${payee}, due ${payBy}`)],
+  })
+
+  await db.doc(`tasks/${taskId}`).set({
+    id: taskId,
+    title: `Pay ${payee} · ${eventTitle}`,
+    assignees: [uid],
+    lead: uid,
+    by: uid,
+    status: 'in_progress',
+    dueDate: payBy,
+    taskType: 'reimbursement',
+    reimbursementKind: 'external',
+    reimbursementId: ref.id,
+    _updatedAt: FieldValue.serverTimestamp(),
+  })
+
+  logger.info('[createExternalExpense] stored', { id: ref.id, taskId })
+  return { id: ref.id, taskId }
 })

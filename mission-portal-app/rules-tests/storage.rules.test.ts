@@ -187,10 +187,22 @@ describe('reimbursement receipts', () => {
     await assertFails(uploadBytes(ref(as(OTHER), path), blob(2048), IMAGE))
   })
 
-  it('refuses a non-image, and anything at or over 10MB', async () => {
+  it('takes an invoice as a PDF', async () => {
+    await assertSucceeds(
+      uploadBytes(
+        ref(as(OWNER), `reimbursements/${OWNER}/invoice.pdf`),
+        blob(2048, 'application/pdf'),
+        {
+          contentType: 'application/pdf',
+        }
+      )
+    )
+  })
+
+  it('refuses anything else, and anything at or over 10MB', async () => {
     await assertFails(
-      uploadBytes(ref(as(OWNER), path), blob(2048, 'application/pdf'), {
-        contentType: 'application/pdf',
+      uploadBytes(ref(as(OWNER), path), blob(2048, 'text/html'), {
+        contentType: 'text/html',
       })
     )
     await assertFails(uploadBytes(ref(as(OWNER), path), blob(10 * 1024 * 1024), IMAGE))
