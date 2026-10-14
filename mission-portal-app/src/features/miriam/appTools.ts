@@ -1,7 +1,14 @@
 import { collection, limit, orderBy, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getDocs } from '@/lib/liveFirestore'
-import { canUseMessages, isAdmin, isGuest, isWorship, visibleTabs } from '@/lib/roles'
+import {
+  canUseMessages,
+  isAdmin,
+  isGuest,
+  isPublicFollower,
+  isWorship,
+  visibleTabs,
+} from '@/lib/roles'
 import { localToday, todayStr } from '@/lib/events'
 import { canKeepDateNotes, isDay, notesBetween } from '@/lib/dateNotes'
 import { useDateNotesStore } from '@/stores/dateNotesStore'
@@ -120,6 +127,9 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   const tools: AppToolName[] = ['read_settings', 'app_guide']
   if (tabs.includes('music')) tools.push('find_content')
   if (tabs.includes('announce')) tools.push('read_announcements')
+  // A public follower looks things up — and changes nothing (the meeting form
+  // is filled in for them to send themselves: MiriamButton).
+  if (isPublicFollower(profile)) return tools
   if (canUseMessages(profile)) tools.push('read_messages')
   if (tabs.includes('issues')) tools.push('read_operations')
   // The same people the screens let make each change.

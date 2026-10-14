@@ -1126,3 +1126,46 @@ describe('the names Elim and Miriam', () => {
     expect(own.result).toMatchObject({ text: LEADERSHIP })
   })
 })
+
+describe('a public follower', () => {
+  beforeEach(() => forgetCaches())
+  const visitor = { uid: 'pub', roles: ['public'] }
+  const db = fakeDb({
+    ...CHURCH,
+    events: {
+      ...CHURCH.events,
+      fest: {
+        title: 'Fall Festival',
+        date: '2026-10-24',
+        startTime: '4:00 PM',
+        location: 'Greenwood Park',
+        isPublic: true,
+      },
+    },
+  })
+  const asked = (text: string) =>
+    ownAnswer(
+      input(text, {
+        viewer: visitor,
+        lookups: new Lookups(db, visitor, TODAY),
+        appTools: [],
+      })
+    )
+
+  it('is answered about public events, by her alone', async () => {
+    const own = await asked('when is the fall festival')
+    expect((own.result as { text: string }).text).toMatch(
+      /^Fall Festival is on Saturday, October 24/
+    )
+  })
+
+  it('never about the team’s own', async () => {
+    const own = await asked('when is youth night')
+    expect((own.result as { text: string } | null)?.text ?? '').not.toMatch(/Youth Night/)
+  })
+
+  it('and changes nothing — not even their availability', async () => {
+    const own = await asked("I can't make the fall festival")
+    expect(own.result).toBeNull()
+  })
+})

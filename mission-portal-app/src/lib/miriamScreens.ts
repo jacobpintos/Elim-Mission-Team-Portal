@@ -65,6 +65,15 @@ export function screensFor(profile: UserProfile | null): MiriamScreen[] {
   if (tabs.includes('settings')) {
     screens.push({ id: 'blocked', label: 'Settings — Blocked people', path: '/blocked' })
   }
+  // A member's Public Facing section: its pages, as a public follower has them as tabs.
+  if (tabs.includes('public')) {
+    screens.push(
+      { id: 'posts', label: 'Posts', path: '/public/posts' },
+      { id: 'connect', label: 'Connect — meet with our leadership', path: '/public/connect' },
+      { id: 'giving', label: 'Giving', path: '/public/giving' },
+      { id: 'story', label: 'Our Story', path: '/public/story' }
+    )
+  }
   // One of each: messages can come from the menu and from canUseMessages.
   return screens.filter((s, i) => screens.findIndex((x) => x.id === s.id) === i)
 }

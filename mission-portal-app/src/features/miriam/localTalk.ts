@@ -1,4 +1,6 @@
-import type { Announcement, CarpoolCarData, Message, Room, Task } from '@/types/events'
+import type { Announcement, CarpoolCarData, Message, PostPage, Room, Task } from '@/types/events'
+import { visibleTabs } from '@/lib/roles'
+import { postsAsked, postsFor, postsSaid } from '@/lib/miriamPosts'
 import type { UserProfile } from '@/types/user'
 import type { EventInstance } from '../../../functions/src/miriam/data'
 import { FD } from '@/lib/format'
@@ -173,6 +175,8 @@ export interface Here {
   carsFor: (ev: EventInstance) => Promise<CarpoolCarData[] | null>
   /** Their notes on days of their calendar (lib/dateNotes), once loaded; not ready if they can't be read. */
   notes: () => Promise<{ ready: boolean; all: DateNote[] }>
+  /** The church's post pages, as the Posts screen has them; null when they can't be read. */
+  posts: () => Promise<PostPage[] | null>
 }
 
 /** Worked out here, when it plainly can be: false to leave it to Claude. */
@@ -191,6 +195,7 @@ export async function talkHere(said: string, here: Here, talk: Talk): Promise<bo
     (await availabilityHere(said, here, talk)) ||
     (await agendaHere(said, here, talk)) ||
     (await carpoolHere(said, here, talk)) ||
+    (await postsHere(said, here, talk)) ||
     (await announcementsHere(said, here, talk)) ||
     (await messagesHere(said, here, talk))
   )
@@ -1347,6 +1352,29 @@ async function noteWith(
 
 /** Said once a note is added, for MiriamButton. */
 export const noteAdded = noteAddedSaid
+
+// --- Posts ---------------------------------------------------------------------------
+
+/**
+ * "What's the latest post?", "read me the newest post from Missions": the
+ * church's posts (lib/miriamPosts), for anyone whose screens show them — a
+ * public follower's Posts, a member's Public Facing.
+ */
+async function postsHere(said: string, here: Here, talk: Talk): Promise<boolean> {
+  if (!here.profile) return false
+  const tabs = visibleTabs(here.profile)
+  if (!tabs.includes('posts') && !tabs.includes('public')) return false
+  const ask = postsAsked(said)
+  if (!ask) return false
+  talk.thinking()
+  const pages = await here.posts().catch(() => null)
+  if (!pages) {
+    talk.say('I can’t read the posts just now. Try again in a moment.')
+    return true
+  }
+  talk.say(postsSaid(postsFor(pages, ask.page), ask.page, here.now()))
+  return true
+}
 
 // --- An event's cars, arranged by an admin ------------------------------------------
 

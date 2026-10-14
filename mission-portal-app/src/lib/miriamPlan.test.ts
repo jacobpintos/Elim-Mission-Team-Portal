@@ -3,6 +3,9 @@ import {
   COMMANDS,
   commandsFor,
   draftFromInput,
+  isPublicFollower,
+  PUBLIC_APP_TOOLS,
+  publicReply,
   taskDraftFromInput,
   validDate,
   validTime,
@@ -63,11 +66,37 @@ describe('who may use what', () => {
     expect(commandsFor(undefined)).toEqual([])
   })
 
-  it('shows the button to exactly those who have a command', () => {
-    for (const roles of [['admin'], ['regular'], ['worship'], ['guest'], ['public'], []]) {
+  it('shows the button to exactly those who have a command — and public followers, answered by her alone', () => {
+    for (const roles of [
+      ['admin'],
+      ['regular'],
+      ['worship'],
+      ['guest'],
+      ['public'],
+      ['unverified'],
+      [],
+    ]) {
       const profile = { roles } as unknown as UserProfile
-      expect(canUseMiriam(profile)).toBe(commandsFor(roles).length > 0)
+      expect(canUseMiriam(profile), roles.join()).toBe(
+        commandsFor(roles).length > 0 || isPublicFollower(roles)
+      )
     }
+    expect(isPublicFollower(['public'])).toBe(true)
+    expect(isPublicFollower(['public', 'regular'])).toBe(false)
+    expect(isPublicFollower(['guest'])).toBe(false)
+    expect(isPublicFollower(['unverified'])).toBe(false)
+  })
+
+  it('a public follower: her own answers only — looking things up, changing nothing', () => {
+    expect([...PUBLIC_APP_TOOLS].sort()).toEqual([
+      'app_guide',
+      'find_content',
+      'read_announcements',
+      'read_settings',
+    ])
+    expect(publicReply('thanks so much')).toBe('You’re welcome!')
+    expect(publicReply('hi there')).toMatch(/^Hi!/)
+    expect(publicReply('can you write me a poem')).toMatch(/^I can’t help with that one yet/)
   })
 
   it('names roles for every command, and a closed schema — strict ones with every field required', () => {

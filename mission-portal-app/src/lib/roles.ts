@@ -66,6 +66,16 @@ export type Tab =
 const MEMBER_ROLES: Role[] = ['admin', 'security', 'regular', 'intern', 'worship']
 
 /**
+ * A public follower: a public account, with no member's or guest's role
+ * besides. Miriam answers one from her own knowing only, and changes nothing
+ * for it (functions/src/miriam/plan.ts: isPublicFollower).
+ */
+export function isPublicFollower(u: UserProfile | null): boolean {
+  const roles = u?.roles ?? []
+  return roles.includes('public') && !roles.some((r) => MEMBER_ROLES.includes(r) || r === 'guest')
+}
+
+/**
  * Can this user reach direct messages?
  *
  * Announcements and messages share one tab for people who have both, so

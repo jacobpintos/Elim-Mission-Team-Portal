@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { EventDraft, TaskDraft } from '@/lib/miriam'
 import { withExchange, type Exchange } from '@/lib/miriamConversation'
+import type { MeetingAsk } from '@/lib/miriamMeeting'
 
 /**
  * What Miriam has filled in, waiting for the screen it belongs on to open it.
@@ -51,6 +52,13 @@ interface MiriamStore {
   clearTaskForm: () => void
   offerUserForm: (form: Omit<PendingUserForm, 'id'>) => void
   clearUserForm: () => void
+  /**
+   * The Connect page's meeting form, filled in from what was said, for its
+   * form to take (page-builder MeetingBlock) — and for them to send themselves.
+   */
+  meetingForm: (MeetingAsk & { id: number }) | null
+  offerMeetingForm: (form: MeetingAsk) => void
+  clearMeetingForm: () => void
   /** What was said and answered lately (lib/miriamConversation). */
   conversation: Exchange[]
   remember: (said: string, reply: string) => void
@@ -81,6 +89,9 @@ export const useMiriamStore = create<MiriamStore>((set) => ({
   clearTaskForm: () => set({ taskForm: null }),
   offerUserForm: (form) => set({ userForm: { ...form, id: Date.now() } }),
   clearUserForm: () => set({ userForm: null }),
+  meetingForm: null,
+  offerMeetingForm: (form) => set({ meetingForm: { ...form, id: Date.now() } }),
+  clearMeetingForm: () => set({ meetingForm: null }),
   conversation: [],
   remember: (said, reply) =>
     set((s) =>

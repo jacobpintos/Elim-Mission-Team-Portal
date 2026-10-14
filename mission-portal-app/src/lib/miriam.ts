@@ -12,9 +12,12 @@ import type { UserProfile } from '@/types/user'
  * offered one. Add a command there, and widen this to match.
  */
 export function canUseMiriam(profile: UserProfile | null): boolean {
-  // Questions are for every member and guest (what each may see is decided
-  // there); a new event's form, for admins.
-  return (profile?.roles ?? []).some((r) => r !== 'public')
+  // Questions are for every account — members, guests and public followers
+  // (what each may see is decided there; a public follower is answered by
+  // her alone, never Claude) — but not one still to be verified. A new
+  // event's form, for admins.
+  // ('unverified' is stored for a new login, though no Role names it.)
+  return (profile?.roles ?? []).some((r) => (r as string) !== 'unverified')
 }
 
 /** The longest request Miriam takes, typed or said (askMiriam's MAX_TEXT). */

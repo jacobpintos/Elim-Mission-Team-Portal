@@ -8,6 +8,9 @@ import {
   toolsFor,
   appToolsFrom,
   commandsFor,
+  isPublicFollower,
+  PUBLIC_APP_TOOLS,
+  publicReply,
   type AppToolName,
   draftFromInput,
   taskDraftFromInput,
@@ -22,6 +25,7 @@ import { ownAnswer, webOrFaith, type OwnInput, type OwnRead } from './own'
 import { learn, type OwnDb } from './own/learn'
 import { OWN_SKILLS, type Skill } from './own/skills'
 import { heardRight } from './hearing'
+import { said } from './own/answers'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -210,8 +214,14 @@ export const askMiriam = onCall(
     const db = admin.firestore()
     const me = await db.doc(`users/${uid}`).get()
     const roles: string[] = Array.isArray(me.data()?.roles) ? me.data()!.roles : []
+    // A public follower: answered from her own knowing only, never sent on to
+    // Claude (./plan: isPublicFollower) — and so never carried on with one.
+    const ownOnly = isPublicFollower(roles)
+    if (ownOnly && req.data?.resume) {
+      throw new HttpsError('failed-precondition', 'Ask again.')
+    }
     const commands = commandsFor(roles)
-    if (commands.length === 0) {
+    if (commands.length === 0 && !ownOnly) {
       return { kind: 'reply', text: 'There’s nothing I can do for you in the app yet.' }
     }
     const viewer = { uid, roles }
@@ -297,6 +307,8 @@ export const askMiriam = onCall(
           ? `\nIt was ${confidence < 0.6 ? 'unsure of it' : 'fairly sure of it'} (${confidence.toFixed(2)}).`
           : '')
       appTools = appToolsFrom(req.data?.appTools)
+      // A public follower's look things up, and change nothing — whatever an app says it has.
+      if (ownOnly) appTools = appTools.filter((t) => PUBLIC_APP_TOOLS.includes(t))
 
       // Miriam first, on her own: answered here if she can, nothing sent to Claude.
       ownInput = {
@@ -333,6 +345,11 @@ export const askMiriam = onCall(
             : own.result
         }
         ownRead = own.read
+      }
+      // Not hers to answer, for a public follower: said so — nothing is sent to Claude.
+      if (ownOnly) {
+        const reply = said(publicReply(text))
+        return heardAsText ? { ...reply, understood: heardAsText } : reply
       }
 
       messages = [

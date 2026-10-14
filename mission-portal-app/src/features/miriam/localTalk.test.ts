@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { askAvailability, talkHere, type Here, type Reply, type Talk } from './localTalk'
 import { notificationKeysFor } from '@/lib/miriamNotifications'
 import type { QuickData } from '@/lib/miriamQuick'
-import type { Announcement, Message, Room, Task } from '@/types/events'
+import type { Announcement, Message, PostPage, Room, Task } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 import type { EventInstance } from '../../../functions/src/miriam/data'
 import type { DateNote } from '@/lib/dateNotes'
@@ -100,6 +100,8 @@ interface Setup {
   events?: Record<string, unknown>[]
   /** Their notes on days of their calendar. */
   notes?: DateNote[]
+  /** The church's post pages. */
+  posts?: PostPage[]
 }
 
 /** A person talking to her: each line said, and what came of it. */
@@ -199,6 +201,7 @@ function conversation(setup: Setup = {}) {
     },
     carsFor: async (ev) => (ev.carpoolCars ?? []) as never,
     notes: async () => ({ ready: true, all: setup.notes ?? [] }),
+    posts: async () => setup.posts ?? [],
   }
   const say = async (said: string): Promise<string[]> => {
     log.length = 0
@@ -857,6 +860,34 @@ describe('notes on days of their calendar', () => {
   it('not for someone who can’t keep them', async () => {
     const say = conversation()
     expect(await say('add a note to Friday: bring the projector')).toEqual(['(to Claude)'])
+  })
+})
+
+describe('posts, read out', () => {
+  const posts: PostPage[] = [
+    {
+      id: 'youth',
+      label: 'Youth',
+      posts: [{ id: 'y1', ts: NOW - 86_400_000, author: 'b', body: 'Pizza night Friday at 7' }],
+    },
+  ]
+
+  it('to a public follower, from their Posts', async () => {
+    const say = conversation({
+      profile: { uid: 'me', roles: ['public'] } as unknown as UserProfile,
+      tools: [],
+      posts,
+    })
+    expect(await say('what’s the latest post?')).toEqual([
+      'say: The latest post, from Youth yesterday: Pizza night Friday at 7.',
+    ])
+  })
+
+  it('to a member, from their Public Facing', async () => {
+    const say = conversation({ posts })
+    expect(await say('read me the newest post from youth')).toEqual([
+      'say: The latest post, from Youth yesterday: Pizza night Friday at 7.',
+    ])
   })
 })
 

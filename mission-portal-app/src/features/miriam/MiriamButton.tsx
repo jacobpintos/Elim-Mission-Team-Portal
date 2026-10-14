@@ -36,6 +36,8 @@ import { anyOverlayOpen } from '@/lib/overlays'
 import { rememberName, rememberWords } from '@/lib/miriamMemory'
 import { heardRight, refreshHearing } from '@/lib/miriamHearing'
 import { recordAsked } from './recordAsked'
+import { meetingAsked } from '@/lib/miriamMeeting'
+import { usePostsStore } from '@/stores/postsStore'
 import { FD } from '@/lib/format'
 import { speak as speakAloud, stopSpeaking, unlockSpeech, whenSpoken } from './speak'
 import { askMiriam, miriamError, type Heard } from './askMiriam'
@@ -596,6 +598,26 @@ export function MiriamButton() {
         setOpen(false)
         return
       }
+    }
+    // "I'd like to meet with Pastor Sam next Tuesday": the Connect page's
+    // meeting form, filled in from what was said (lib/miriamMeeting), for them
+    // to check and send themselves — nothing is sent for them.
+    const meeting = local && !play && !anyOverlayOpen() ? meetingAsked(withoutHerName(said)) : null
+    const connect = meeting
+      ? screensFor(useAuthStore.getState().profile).find((x) => x.id === 'connect')
+      : undefined
+    if (meeting && connect) {
+      useMiriamStore.getState().offerMeetingForm(meeting)
+      const text =
+        meeting.names.length || meeting.availability || meeting.message
+          ? 'Here’s the meeting form, filled in with what you said — check it, then press Submit Request.'
+          : 'Here’s the meeting form — choose who you’d like to meet with, say when you’re free, then press Submit Request.'
+      noteDone(text)
+      setAnswer(text)
+      speak(text)
+      setStage('answered')
+      router.push(connect.path as never)
+      return
     }
     // A screen asked for by name ("open settings"): gone to from here.
     if (local && !play && !anyOverlayOpen()) {
@@ -1246,6 +1268,15 @@ export function MiriamButton() {
           return true
         } catch {
           return false
+        }
+      },
+      // The church's post pages, read fresh, as the Posts screen reads them.
+      posts: async () => {
+        try {
+          await usePostsStore.getState().refreshConfig()
+          return usePostsStore.getState().config.pages
+        } catch {
+          return null
         }
       },
       // Loaded while her panel is open (above): waited for a moment if not yet.

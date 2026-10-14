@@ -134,8 +134,7 @@ export function MostAsked({ call = callServer }: { call?: Api }) {
           </Text>
           {audience === 'public' ? (
             <Text fontSize="$2" color="$gray10">
-              Miriam is open to members and guests; public accounts don’t see her yet, so their
-              questions start once she is.{' '}
+              Public accounts can ask Miriam questions now, on the web app and the newest phone app.{' '}
               <Text fontSize="$2" color="$blue10" onPress={() => setAudience('all')}>
                 See everyone’s
               </Text>

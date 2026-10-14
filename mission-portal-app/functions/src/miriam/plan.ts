@@ -31,6 +31,44 @@ export type CommandName =
 /** Every role but a public follower's: members, and guests. */
 const ANYONE_SIGNED_IN = ['admin', 'security', 'regular', 'intern', 'worship', 'guest']
 
+/**
+ * A public follower's account — public, and nothing more: Miriam answers it
+ * from her own knowing only (./own), and never sends it on to Claude.
+ */
+export function isPublicFollower(roles: readonly string[] | undefined): boolean {
+  const held = roles ?? []
+  return held.includes('public') && !held.some((r) => ANYONE_SIGNED_IN.includes(r))
+}
+
+/**
+ * All a public follower's app may do through Miriam: look things up — what
+ * their screens show — and change nothing (src/features/miriam/appTools.ts
+ * offers no more; this holds whatever an app says it has).
+ */
+export const PUBLIC_APP_TOOLS: readonly AppToolName[] = [
+  'read_settings',
+  'app_guide',
+  'find_content',
+  'read_announcements',
+]
+
+/** Said to a public follower when her own knowing has no answer: nothing is sent on. */
+export const PUBLIC_NOT_HERS =
+  'I can’t help with that one yet. I can tell you about events and The Well, take you around the app, or help you ask to meet with our leadership.'
+
+/** What she says to a public follower that her own knowing has no answer for: a thanks or a hello answered in kind. */
+export function publicReply(text: string): string {
+  const s = text.trim().toLowerCase().replace(/[’]/g, "'")
+  if (/^(?:thanks|thank you|thx|ty|appreciate it)\b/.test(s)) return 'You’re welcome!'
+  if (
+    /^(?:hi|hello|hey|good (?:morning|afternoon|evening))\b/.test(s) &&
+    s.split(/\s+/).length <= 4
+  ) {
+    return 'Hi! Ask me about events or The Well, or I can take you around the app.'
+  }
+  return PUBLIC_NOT_HERS
+}
+
 /** A tool definition, in the shape the Messages API takes. */
 export interface ToolDefinition {
   name: CommandName

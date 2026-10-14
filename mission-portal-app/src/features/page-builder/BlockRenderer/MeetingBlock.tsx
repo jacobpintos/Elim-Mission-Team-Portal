@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useWindowDimensions } from 'react-native'
 import { YStack, XStack, Text, Input, Button, TextArea, Spinner } from 'tamagui'
 import { doc, updateDoc } from 'firebase/firestore'
@@ -9,6 +9,8 @@ import { useUsersStore } from '@/stores/usersStore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { Avatar } from '@/components/ui/Avatar'
 import { chunkIntoRows } from '@/lib/gridRows'
+import { leadersNamed } from '@/lib/miriamMeeting'
+import { useMiriamStore } from '@/stores/miriamStore'
 import type { MeetingData } from '@/types/pages'
 import type { UserProfile } from '@/types/user'
 
@@ -53,6 +55,34 @@ export function MeetingBlock({ data }: MeetingBlockProps) {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
+
+  // Filled in by Miriam from what they asked (lib/miriamMeeting): when and
+  // what about at once, the leaders named once they are known — for them to
+  // check and send.
+  const fromMiriam = useMiriamStore((s) => s.meetingForm)
+  const tookFromMiriam = useRef(0)
+  useEffect(() => {
+    if (!fromMiriam || submitted) return
+    // Filled in a while ago and never opened: not for this visit.
+    if (Date.now() - fromMiriam.id > 10 * 60_000) {
+      useMiriamStore.getState().clearMeetingForm()
+      return
+    }
+    if (tookFromMiriam.current !== fromMiriam.id) {
+      tookFromMiriam.current = fromMiriam.id
+      setAvailability(fromMiriam.availability)
+      setMessage(fromMiriam.message)
+      setError('')
+    }
+    const named = leadersNamed(fromMiriam.names, leaders)
+    // Taken from Miriam, who filled it in elsewhere: not this form's own state changing.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (named.length) setSelectedLeaders(named.map((l) => l.uid))
+    // Done once those named are found, none were named, or none of the leaders are them.
+    if (named.length || !fromMiriam.names.length || leaders.length) {
+      useMiriamStore.getState().clearMeetingForm()
+    }
+  }, [fromMiriam, leaders, submitted])
 
   const toggleLeader = (uid: string) => {
     if (selectedLeaders.includes(uid)) {
