@@ -9,6 +9,7 @@ import { learnedExamples, taughtAnswers, WEB_DOC, type OwnDb } from './learn'
 import type { Skill } from './skills'
 import { read, seedExamples, type Reading } from './understand'
 import { webAnswer } from './web'
+import { faithAnswer } from './faith'
 
 /**
  * Miriam, on her own: a request she understands and can answer herself, she
@@ -107,30 +108,15 @@ function fromWeb(
   return said(`${found.text} (from ${found.source})`, link)
 }
 
-/**
- * Known to be a question of faith: a taught answer said if its question is
- * this near — less near than for any question (TAUGHT_NEAR), as the subject
- * is already plain, but not so loose as to answer communion with baptism.
- */
-export const FAITH_TAUGHT_NEAR = 0.7
-
-/** A question of faith: what she was taught, or a pastor. */
-const PASTOR =
-  'That’s a good question for one of our pastors — I’d rather they answer it than me. They’d be glad to talk it through with you.'
-
-/** A question of faith: the nearest answer taught, if near enough; otherwise a pastor. */
-async function faithAnswer(text: string, db: OwnDb, v?: Float32Array): Promise<OwnResult> {
-  const taught = await taughtAnswers(db).catch(() => [])
-  if (taught.length) {
-    const q = v ?? embed(text)
-    let best: { a: string; sim: number } | null = null
-    for (const t of taught) {
-      const sim = similarity(q, t.vec)
-      if (!best || sim > best.sim) best = { a: t.a, sim }
-    }
-    if (best && best.sim >= FAITH_TAUGHT_NEAR) return said(best.a)
-  }
-  return said(PASTOR)
+/** A question of faith answered (./faith), as the app can show it. */
+async function fromFaith(
+  text: string,
+  db: OwnDb,
+  can: readonly string[],
+  v?: Float32Array
+): Promise<OwnResult> {
+  const f = await faithAnswer(text, db, v)
+  return said(f.text, f.link && can.includes('link') ? { kind: 'link', ...f.link } : null)
 }
 
 export async function ownAnswer(input: OwnInput): Promise<Own> {
@@ -238,7 +224,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
 
   // 3. Her answer.
   if (reading.skill === 'faith') {
-    return { result: await faithAnswer(text, db, rawV()), read: own, why: 'faith' }
+    return { result: await fromFaith(text, db, input.can, rawV()), read: own, why: 'faith' }
   }
   if (reading.skill === 'web') {
     const key = await braveKeyOf(db).catch(() => null)
@@ -265,7 +251,7 @@ export async function webOrFaith(
   text: string,
   input: Pick<OwnInput, 'db' | 'today' | 'can' | 'web'>
 ): Promise<OwnResult | null> {
-  if (skill === 'faith') return faithAnswer(text, input.db)
+  if (skill === 'faith') return fromFaith(text, input.db, input.can)
   if (skill !== 'web') return null
   const key = await braveKeyOf(input.db).catch(() => null)
   const found = input.web

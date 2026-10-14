@@ -3,18 +3,22 @@ import * as admin from 'firebase-admin'
 import { embed } from './own/encoder'
 import { forgetBraveKey } from './own'
 import { forget, listLearned, listTaught, teach, untaught, WEB_DOC, type OwnDb } from './own/learn'
+import { CHURCH_SITE, readSite, SITE_DOC, storeSite } from './own/site'
+import { CORE } from './own/faith'
 
 if (!admin.apps.length) admin.initializeApp()
 
 /**
  * Admin → Miriam: what she has learned from Claude (to see, and to forget
  * one learned wrong), the answers she has been taught (to add and take
- * away), and her web search key. All of it is kept where no device can read
+ * away), the church's website she answers faith from (to read again now),
+ * and her web search key. All of it is kept where no device can read
  * it (firestore.rules: miriamOwn); this is the only way in, for admins only.
  * The key is never sent back — only whether one is set.
  */
 export const miriamOwnAdmin = onCall(
-  { memory: '1GiB', cpu: 1, timeoutSeconds: 60 },
+  // Reading the church's site, when asked, takes a minute or two.
+  { memory: '1GiB', cpu: 1, timeoutSeconds: 540 },
   async (req) => {
     const uid = req.auth?.uid
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in first.')
@@ -29,12 +33,14 @@ export const miriamOwnAdmin = onCall(
     const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
     if (action === 'list') {
-      const [learned, taught, web] = await Promise.all([
+      const [learned, taught, web, site] = await Promise.all([
         listLearned(ownDb),
         listTaught(ownDb),
         db.doc(WEB_DOC).get(),
+        db.doc(SITE_DOC).get(),
       ])
       const w = web.data() ?? {}
+      const st = site.data() ?? {}
       return {
         learned: learned.slice(0, 300),
         learnedCount: learned.length,
@@ -43,7 +49,19 @@ export const miriamOwnAdmin = onCall(
           brave: typeof w.braveKey === 'string' && !!w.braveKey,
           setAt: typeof w.setAt === 'number' ? w.setAt : null,
         },
+        site: {
+          url: CHURCH_SITE,
+          readAt: typeof st.readAt === 'number' ? st.readAt : null,
+          pages: Array.isArray(st.pages) ? st.pages.length : 0,
+          passages: Array.isArray(st.passages) ? st.passages.length : 0,
+        },
+        core: CORE.map((c) => ({ q: c.asked[0], a: c.answer })),
       }
+    }
+    if (action === 'readSite') {
+      const read = await readSite()
+      const kept = await storeSite(ownDb, read)
+      return { ok: true, kept, pages: read.pages.length, passages: read.passages.length }
     }
     if (action === 'forget') {
       const t = text(req.data?.text, 300)

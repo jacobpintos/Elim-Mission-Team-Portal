@@ -402,7 +402,8 @@ service cloud.firestore {
     }
 
     // Miriam's own: what she has learned from Claude's answers, the answers
-    // admins have taught her, and her web search key. Read and written only
+    // admins have taught her, what she read of the church's website, and her
+    // web search key. Read and written only
     // by the server (functions/src/miriam/own); admins see and change them
     // through the miriamOwnAdmin callable, which never returns the key.
     match /miriamOwn/{docId} {

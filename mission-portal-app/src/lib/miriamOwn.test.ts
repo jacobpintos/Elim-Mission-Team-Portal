@@ -28,6 +28,15 @@ import {
   wikipediaSearch,
 } from '../../functions/src/miriam/own/web'
 import requests from './__fixtures__/miriamRequests.json'
+import { CORE, faithAnswer } from '../../functions/src/miriam/own/faith'
+import {
+  forgetSite,
+  linksOf,
+  pageKey,
+  readSite,
+  sitemapUrls,
+  storeSite,
+} from '../../functions/src/miriam/own/site'
 
 /**
  * Miriam on her own (functions/src/miriam/own): what she understands, and
@@ -73,9 +82,9 @@ describe('her examples', () => {
     const stored = JSON.parse(
       readFileSync(join(__dirname, '../../functions/models/minilm/seedVectors.json'), 'utf8')
     ) as Record<string, string>
-    const missing = Object.values(SEEDS)
-      .flat()
-      .filter((t) => !stored[t])
+    const missing = [...Object.values(SEEDS).flat(), ...CORE.flatMap((c) => c.asked)].filter(
+      (t) => !stored[t]
+    )
     expect(missing).toEqual([])
   })
 })
@@ -479,7 +488,7 @@ describe('her answers', () => {
           can: [],
         })) as { text: string }
       ).text
-    ).toMatch(/pastors/)
+    ).toMatch(/^Jesus died in our place/)
     expect(
       await webOrFaith('event_time', 'x', { db: memoryOwnDb(), today: TODAY, can: [] })
     ).toBeNull()
@@ -653,5 +662,148 @@ describe('the web', () => {
     expect(weatherPlace("what's the weather in Chicago tomorrow")).toBe('Chicago')
     expect(weatherPlace('is it going to rain in Des Moines this weekend')).toBe('Des Moines')
     expect(weatherPlace('who won the game')).toBeNull()
+  })
+})
+
+// --- Questions of faith ----------------------------------------------------------
+
+/** A sample church site, written for tests — not The Well's own words. */
+const BELIEFS = readFileSync(join(__dirname, '__fixtures__/sampleBeliefsPage.html'), 'utf8')
+const FRAME =
+  '<nav><a href="/">Home</a> <a href="/about">About Us</a> <a href="/beliefs">What We Believe</a> <a href="/give">Give Online Today</a></nav>' +
+  '<div>Join us Sunday mornings at 9:00 and 10:45 am at 123 Main Street</div>'
+const SITE: Record<string, { type: string; body: string }> = {
+  'https://example.org/': {
+    type: 'text/html',
+    body: `<html><head><title>Home | Sample</title></head><body>${FRAME}<p>Welcome home to a church family that loves God and loves our neighbors.</p><a href="https://elsewhere.com/x">Elsewhere</a><a href="/files/bulletin.pdf">Bulletin</a></body></html>`,
+  },
+  'https://example.org/sitemap.xml': {
+    type: 'application/xml',
+    body: '<urlset><url><loc>https://example.org/beliefs</loc></url><url><loc>https://www.example.org/give</loc></url></urlset>',
+  },
+  'https://example.org/beliefs': {
+    type: 'text/html; charset=utf-8',
+    body: BELIEFS.replace('<nav>', FRAME + '<nav>'),
+  },
+  'https://example.org/about': {
+    type: 'text/html',
+    body: `<html><head><title>About Us</title></head><body>${FRAME}<p>We started meeting in a living room in 2009 and have grown into a family of many ages.</p></body></html>`,
+  },
+  'https://www.example.org/give': {
+    type: 'text/html',
+    body: `<html><head><title>Give</title></head><body>${FRAME}<p>Your generosity helps us serve our neighbors and support missions around the world.</p></body></html>`,
+  },
+}
+const siteFetch = (async (url: string) => {
+  const page = SITE[url] ?? SITE[url.replace(/\/$/, '')] ?? SITE[`${url}/`]
+  return page
+    ? ({
+        ok: true,
+        headers: { get: () => page.type },
+        text: async () => page.body,
+      } as unknown as Response)
+    : ({ ok: false, headers: { get: () => '' }, text: async () => '' } as unknown as Response)
+}) as typeof fetch
+
+describe('the church’s website', () => {
+  it('finds its pages by its links and its sitemap, not files or other sites', () => {
+    expect(
+      linksOf(SITE['https://example.org/'].body, 'https://example.org/', 'https://example.org')
+    ).toEqual([
+      'https://example.org/',
+      'https://example.org/about',
+      'https://example.org/beliefs',
+      'https://example.org/give',
+    ])
+    expect(sitemapUrls(SITE['https://example.org/sitemap.xml'].body)).toEqual([
+      'https://example.org/beliefs',
+      'https://www.example.org/give',
+    ])
+    expect(pageKey('https://www.example.org/give/?a=1#x')).toBe('https://example.org/give')
+  })
+
+  it('is read for what it says, without what every page repeats', async () => {
+    const read = await readSite(siteFetch, embed, 'https://example.org', 7)
+    expect(read.pages.map((p) => p.title).sort()).toEqual([
+      'About Us',
+      'Give',
+      'Home | Sample',
+      'What We Believe | Sample Church',
+    ])
+    const said = read.passages.map((p) => p.t)
+    expect(said).toContain(
+      'We practice baptism by immersion as a public declaration of faith for those who have trusted Christ.'
+    )
+    expect(said.some((t) => /Join us Sunday mornings/.test(t))).toBe(false) // on every page
+    expect(said.some((t) => /scripts/.test(t))).toBe(false)
+    // What it says it believes, first.
+    expect(read.passages[0].u).toBe('https://example.org/beliefs')
+  })
+})
+
+describe('a question of faith', () => {
+  beforeEach(() => {
+    forgetCaches()
+    forgetSite()
+  })
+
+  const withSite = async () => {
+    const db = memoryOwnDb()
+    await storeSite(db, await readSite(siteFetch, embed, 'https://example.org'))
+    return db
+  }
+
+  it('the church’s own words first, with the page to read it on', async () => {
+    const f = await faithAnswer('what do we believe about baptism', await withSite())
+    expect(f).toEqual({
+      text: 'We practice baptism by immersion as a public declaration of faith for those who have trusted Christ. (from example.org)',
+      link: { url: 'https://example.org/beliefs', label: 'example.org' },
+      from: 'site',
+    })
+  })
+
+  it('then what virtually all Christians agree on', async () => {
+    const f = await faithAnswer('is God good', await withSite())
+    expect(f.from).toBe('core')
+    expect(f.text).toMatch(/^Yes\. Scripture says God is good/)
+    expect((await faithAnswer('did Jesus really rise from the dead', memoryOwnDb())).from).toBe(
+      'core'
+    )
+  })
+
+  it('what Christians differ on, or the site doesn’t say: a pastor’s, and the website', async () => {
+    const db = await withSite()
+    for (const q of [
+      'is it a sin to drink alcohol',
+      'can you lose your salvation',
+      'should babies be baptized',
+      'is God good even when bad things happen',
+      'will my dog go to heaven',
+      'do you have to be baptized to be saved',
+    ]) {
+      const f = await faithAnswer(q, db)
+      expect(f.from, q).toBe('pastor')
+      expect(f.link).toEqual({ url: 'https://thewellofiowa.com', label: 'thewellofiowa.com' })
+    }
+  })
+
+  it('an admin’s answer above all', async () => {
+    const db = await withSite()
+    await teach(db, {
+      q: 'What do we believe about baptism?',
+      a: 'Talk with Pastor Sam about being baptized — we would love to celebrate with you.',
+      v: embed('What do we believe about baptism?'),
+      by: 'boss',
+    })
+    expect((await faithAnswer('what do we believe about baptism', db)).from).toBe('taught')
+  })
+
+  it('comes to her as a question of faith, with the page to open', async () => {
+    const db = await withSite()
+    const own = await ownAnswer(input('what do we believe about baptism', { db }))
+    expect(own.result).toMatchObject({
+      kind: 'answer',
+      open: { kind: 'link', url: 'https://example.org/beliefs', label: 'example.org' },
+    })
   })
 })

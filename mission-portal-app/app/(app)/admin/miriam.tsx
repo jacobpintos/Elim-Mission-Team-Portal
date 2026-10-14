@@ -31,6 +31,10 @@ interface Listing {
   learnedCount: number
   taught: Taught[]
   web: { brave: boolean; setAt: number | null }
+  /** The church's website, as she last read it, for questions of faith. */
+  site?: { url: string; readAt: number | null; pages: number; passages: number }
+  /** What virtually all Christians agree on: built in. */
+  core?: { q: string; a: string }[]
 }
 
 /** Her skills, as an admin reads them. */
@@ -55,10 +59,10 @@ const SKILL_NAMES: Record<string, string> = {
 type Api = (data: Record<string, unknown>) => Promise<unknown>
 
 const callServer: Api = (data) =>
-  httpsCallable<Record<string, unknown>, unknown>(
-    functions,
-    'miriamOwnAdmin'
-  )(data).then((r) => r.data)
+  httpsCallable<Record<string, unknown>, unknown>(functions, 'miriamOwnAdmin', {
+    // Reading the church's website takes a minute or two.
+    timeout: 540_000,
+  })(data).then((r) => r.data)
 
 const card = {
   backgroundColor: '$background',
@@ -143,6 +147,10 @@ export function MiriamAdmin({ call }: { call: Api }) {
     }
   }
 
+  const readSite = async () => {
+    await run({ action: 'readSite' }, 'Read. She answers from what it says now.')
+  }
+
   const saveKey = async (clear = false) => {
     if (
       await run(
@@ -179,7 +187,7 @@ export function MiriamAdmin({ call }: { call: Api }) {
             <Text fontSize="$2" color="$gray10">
               When someone asks something that means the same as one of these questions, however
               they word it, she says your answer just as you wrote it — what the church believes,
-              where to park, what to bring. Faith questions she hasn’t been taught go to a pastor.
+              where to park, what to bring. Your answers come before anything else she knows.
             </Text>
             <Input
               placeholder="A question people ask — “What do we believe about baptism?”"
@@ -225,6 +233,54 @@ export function MiriamAdmin({ call }: { call: Api }) {
                 </XStack>
               </YStack>
             ))}
+          </YStack>
+
+          <YStack {...card}>
+            <Text fontSize="$5" fontWeight="700">
+              Questions of faith
+            </Text>
+            <Text fontSize="$2" color="$gray10">
+              She answers a question of faith with an answer you’ve taught her; then with what
+              thewellofiowa.com says, in its words and with a link to the page; then with what
+              virtually all Christians agree on, below. Anything else she sends to one of your
+              pastors, and to the website.
+            </Text>
+            <Text fontSize="$3" fontWeight="600">
+              {data.site?.readAt
+                ? `thewellofiowa.com, read ${new Date(data.site.readAt).toLocaleString()}: ${data.site.pages} pages, ${data.site.passages} passages`
+                : 'thewellofiowa.com: not read yet — she reads it every night'}
+            </Text>
+            <XStack>
+              <Button size="$3" onPress={readSite} disabled={busy}>
+                {busy ? <Spinner size="small" /> : 'Read it now'}
+              </Button>
+            </XStack>
+            {data.core?.length ? (
+              <YStack gap="$2" paddingTop="$1">
+                <Text fontSize="$3" fontWeight="600">
+                  What virtually all Christians agree on (built in)
+                </Text>
+                <Text fontSize="$2" color="$gray10">
+                  To say one differently, teach her your own answer to the same question — yours
+                  comes first.
+                </Text>
+                {data.core.map((c) => (
+                  <YStack
+                    key={c.q}
+                    borderTopWidth={1}
+                    borderTopColor="$borderColor"
+                    paddingTop="$2"
+                  >
+                    <Text fontSize="$3" fontWeight="600">
+                      {c.q}
+                    </Text>
+                    <Text fontSize="$2" color="$gray11">
+                      {c.a}
+                    </Text>
+                  </YStack>
+                ))}
+              </YStack>
+            ) : null}
           </YStack>
 
           <YStack {...card}>

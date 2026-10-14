@@ -33,17 +33,24 @@ export interface Reading {
 /** Each skill scored by the mean of this many of its nearest examples. */
 const NEAREST = 3
 
+let stored: Record<string, string> | null = null
+/** A meaning worked out ahead of time (scripts/miriam-model/seeds.js), by its text, or null. */
+export function storedMeaning(text: string): Float32Array | null {
+  stored ??= JSON.parse(
+    readFileSync(join(__dirname, '..', '..', '..', 'models', 'minilm', 'seedVectors.json'), 'utf8')
+  ) as Record<string, string>
+  return stored[text] ? unpackVector(stored[text]) : null
+}
+
 let seeds: Example[] | null = null
-/** Her starting examples, with their meanings as worked out ahead of time (scripts/miriam-model/seeds.js). */
+/** Her starting examples, with their meanings as worked out ahead of time. */
 export function seedExamples(): Example[] {
   if (seeds) return seeds
-  const file = join(__dirname, '..', '..', '..', 'models', 'minilm', 'seedVectors.json')
-  const stored = JSON.parse(readFileSync(file, 'utf8')) as Record<string, string>
   seeds = []
   for (const [skill, texts] of Object.entries(SEEDS) as [Skill, string[]][]) {
     for (const text of texts) {
       // One not worked out yet (the script not run since it was added): worked out now.
-      const v = (stored[text] && unpackVector(stored[text])) || embed(asRead(text))
+      const v = storedMeaning(text) ?? embed(asRead(text))
       seeds.push({ text: asShown(text), skill, v })
     }
   }
