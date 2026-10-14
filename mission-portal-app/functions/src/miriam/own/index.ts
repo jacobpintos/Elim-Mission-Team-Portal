@@ -1,23 +1,25 @@
 import { shiftDate, type Viewer } from '../data'
 import type { Lookups } from '../lookups'
-import type { AppToolName } from '../plan'
+import { publicReply, PUBLIC_NOT_HERS, type AppToolName } from '../plan'
 import { answerFor, said, type OwnResult } from './answers'
-import { embed, similarity } from './encoder'
+import { embed } from './encoder'
 import { mentionsIn } from './events'
 import { notHers } from './guards'
-import { learnedExamples, taughtAnswers, WEB_DOC, type OwnDb } from './learn'
+import { learnedExamples, WEB_DOC, type OwnDb } from './learn'
 import type { Skill } from './skills'
 import { read, seedExamples, type Reading } from './understand'
 import { webAnswer } from './web'
 import { aboutScripture, faithAnswer, isFaithReply, LEADERSHIP } from './faith'
 import { CHURCH_SITE, siteKnowledge } from './site'
 import { nameAnswer, nameAsked } from './names'
+import { taughtFor } from './taught'
 
 /**
  * Miriam, on her own: a request she understands and can answer herself, she
  * does — no Claude, no cost — and anything else goes on to Claude as before.
  *
- *  1. An answer an admin has taught her, if the question means the same.
+ *  1. An answer an admin has taught her, if the question means the same,
+ *     however it is worded (./taught).
  *  2. Otherwise what it is (./understand), read with each event's name as
  *     "the event" (./events) — and, if that isn't plain, as said.
  *  3. Hers only when she is sure (SURE, CLEAR), the words agree (./guards),
@@ -30,9 +32,6 @@ import { nameAnswer, nameAsked } from './names'
 /** Near enough its examples, and nearer than the next skill by enough — or nearly, by a lot. */
 export const sure = (r: Pick<Reading, 'score' | 'margin'>) =>
   (r.score >= 0.6 && r.margin >= 0.05) || (r.score >= 0.4 && r.margin >= 0.1)
-
-/** A taught answer is said when the question is this near the one it was taught for. */
-export const TAUGHT_NEAR = 0.8
 
 export interface OwnInput {
   text: string
@@ -119,6 +118,9 @@ const FOLLOWS_ON =
   /^(?:why|how so|how come|what do you mean|tell me more|explain|can you explain|could you explain|more|really|are you sure|but|so|what about|and|then|ok but|okay but|wait|huh|is that|does that|what does that)\b/i
 const followsOn = (text: string) =>
   FOLLOWS_ON.test(text.trim()) || LEANS_BACK.test(text) || text.trim().split(/\s+/).length <= 3
+/** Whether an answer is the one just given (kept in the conversation cut at 600 characters: their starts compared). */
+const justSaid = (answer: string, reply: string) =>
+  answer.trim().slice(0, 500) === reply.trim().slice(0, 500)
 /** Only said back — "thanks", "amen", "ok", "bye": not more asked. */
 const SAID_BACK =
   /^(?:(?:ok(?:ay)?|oh|ah|wow|great|cool|awesome|nice|perfect|good|amen|so true|got it|i see|makes sense|that(?:'|’)?s (?:helpful|good|great|nice|cool|beautiful|true)|that helps|thanks|thank you|thx|ty|appreciate it|so much|very much|a lot|miriam|no|nope|nah|no thanks|hi|hello|hey|bye|goodbye|good night|see you|see ya|later|have a good (?:day|night|one))[\s,.!]*)+$/i
@@ -220,25 +222,12 @@ async function onFaith(input: OwnInput, last: { said: string; reply: string }): 
   return reading.skill === 'faith' && sure(reading)
 }
 
-/** An answer an admin taught her to a question that means the same as this one, if there is one. */
-async function taughtFor(v: () => Float32Array, db: OwnDb): Promise<string | null> {
-  const taught = await taughtAnswers(db).catch(() => [])
-  if (taught.length === 0) return null
-  const q = v()
-  let best: { a: string; sim: number } | null = null
-  for (const t of taught) {
-    const sim = similarity(q, t.vec)
-    if (!best || sim > best.sim) best = { a: t.a, sim }
-  }
-  return best && best.sim >= TAUGHT_NEAR ? best.a : null
-}
-
 export async function ownAnswer(input: OwnInput): Promise<Own> {
   const { text, today, history, lookups, db } = input
   // Where the names Elim and Miriam come from, as the church gave them
   // (./names) — whatever came before it, and unless an admin taught her otherwise.
   if (nameAsked(text)) {
-    const taught = await taughtFor(() => embed(text), db)
+    const taught = await taughtFor(text, () => embed(text), db)
     if (taught) return { result: said(taught), read: null, why: 'taught' }
     const named = nameAnswer(text, await siteKnowledge(db).catch(() => []))
     if (named) {
@@ -286,12 +275,19 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
       }
       return { result: null, read: null, why: 'maps: which event' }
     }
-    // More asked about an answer on faith — another question of faith, or
-    // "why?", "what about…" — she doesn't discuss beliefs. Something else
-    // asked ("who's driving?") is answered as ever; "thanks" isn't more asked.
-    if (!SAID_BACK.test(text.trim()) && (await onFaith(input, last))) {
-      const { reading } = await whatItIs()
-      if (reading.skill === 'faith' || (reading.skill === 'other' && followsOn(text))) {
+    // More asked about an answer on faith — "why?", "what about…", leaning
+    // on what was said — she doesn't discuss beliefs: an answer she was taught
+    // for just that (not the one she gave), else the church's leadership. A
+    // question of faith of its own is answered as any is, below, however it
+    // is worded; something else asked ("who's driving?") as ever; and
+    // "thanks" isn't more asked.
+    if (!SAID_BACK.test(text.trim()) && followsOn(text) && (await onFaith(input, last))) {
+      const { reading, rawV } = await whatItIs()
+      if (reading.skill === 'faith' || reading.skill === 'other' || aboutScripture(text)) {
+        const taught = await taughtFor(text, rawV, db, { strict: true })
+        if (taught && !justSaid(taught, last.reply)) {
+          return { result: said(taught), read: null, why: 'taught' }
+        }
         return { result: fromLeadership(input.can), read: null, why: 'faith: more asked' }
       }
     }
@@ -308,7 +304,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
   const { mentions, rawV, reading, own } = await whatItIs()
 
   // 1. Taught: said as an admin wrote it.
-  const taught = await taughtFor(rawV, db)
+  const taught = await taughtFor(text, rawV, db)
   if (taught) return { result: said(taught), read: null, why: 'taught' }
 
   // 2. What it is (understand, above).
@@ -353,9 +349,13 @@ export async function webOrFaith(
 ): Promise<OwnResult | null> {
   // On God or the Bible, only the church's own (./faith) — never the web's.
   if (skill === 'faith' || (skill === 'web' && aboutScripture(text))) {
-    // More asked after an answer about faith: the church's leadership, not her.
+    // More asked after an answer about faith — "why?", "what about…": an
+    // answer she was taught for just that, else the church's leadership, not her.
     const last = input.history?.[input.history.length - 1]
-    if (last && isFaithReply(last.reply)) return fromLeadership(input.can)
+    if (last && isFaithReply(last.reply) && followsOn(text)) {
+      const taught = await taughtFor(text, () => embed(text), input.db, { strict: true })
+      return taught && !justSaid(taught, last.reply) ? said(taught) : fromLeadership(input.can)
+    }
     return fromFaith(text, input.db, input.can)
   }
   if (skill !== 'web') return null
@@ -364,4 +364,25 @@ export async function webOrFaith(
     ? await input.web(text, key)
     : await webAnswer(text, { braveKey: key, today: input.today }).catch(() => null)
   return fromWeb(found, input.can)
+}
+
+/** Asking something: "what…", "is…", "do you…", or a question mark. */
+const ASKS =
+  /\?$|^(?:(?:hey|ok|okay|so|and|but)[,\s]+)?(?:miriam[,\s]+)?(?:what|what's|whats|why|how|who|whom|whose|which|where|when|is|are|was|were|do|does|did|can|could|will|would|should|may|might|tell me|explain)\b/i
+
+/**
+ * For a public follower, what she couldn't answer herself — nothing goes to
+ * Claude: a question of faith is still the church's to answer, or its
+ * leadership's (./faith); anything else, said so (../plan: publicReply).
+ */
+export async function publicAnswer(
+  text: string,
+  input: Pick<OwnInput, 'db' | 'today' | 'can' | 'web'> & Partial<Pick<OwnInput, 'history'>>
+): Promise<OwnResult> {
+  const back = publicReply(text)
+  if (back === PUBLIC_NOT_HERS && aboutScripture(text) && ASKS.test(text.trim())) {
+    const faith = await webOrFaith('faith', text, input).catch(() => null)
+    if (faith) return faith
+  }
+  return said(back)
 }

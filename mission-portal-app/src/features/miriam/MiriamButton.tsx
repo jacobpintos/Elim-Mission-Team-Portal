@@ -54,12 +54,14 @@ import {
   listAnswer,
   listAsked,
   playAsked,
+  playCandidates,
   playPick,
   quickAnswer,
   screenAsked,
   tasksAnswer,
   tasksAsked,
   weatherLine,
+  type PlayAsk,
   type QuickData,
 } from '@/lib/miriamQuick'
 import { fetchWeather } from '@/lib/weather'
@@ -117,7 +119,7 @@ import { useMediaPlaybackStore } from '@/stores/mediaPlaybackStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { screensFor } from '@/lib/miriamScreens'
-import { isAdmin } from '@/lib/roles'
+import { isAdmin, isPublicFollower } from '@/lib/roles'
 import { doc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getDoc } from '@/lib/liveFirestore'
@@ -359,6 +361,7 @@ export function MiriamButton() {
   // A video from Content asked for, playing over the page.
   const [video, setVideo] = useState<MusicItem | null>(null)
   const [songGuesses, setSongGuesses] = useState<ChordSheet[]>([])
+  const [videoGuesses, setVideoGuesses] = useState<MusicItem[]>([])
   const songAsk = useRef<{ name: string; key: { key: string; minor: boolean } | null }>({
     name: '',
     key: null,
@@ -491,6 +494,7 @@ export function MiriamButton() {
     if (!again) asked.current = said
     setChoices([])
     setSongGuesses([])
+    setVideoGuesses([])
     setPending(null)
     setLink(null)
     setUndo(null)
@@ -591,11 +595,16 @@ export function MiriamButton() {
     if (play) {
       const music = useMusicStore.getState()
       if (music.items.length === 0) await music.load()
-      const item = playPick(play, useMusicStore.getState().items)
+      const items = useMusicStore.getState().items
+      const item = playPick(play, items)
       if (item) {
-        noteDone(`Playing “${item.title}” from Content.`)
-        setVideo(item)
-        setOpen(false)
+        playVideo(item)
+        return
+      }
+      // A public follower's isn't sent on to be looked for further: the
+      // likely ones offered, or Content to look through.
+      if (isPublicFollower(useAuthStore.getState().profile)) {
+        offerVideos(play, items)
         return
       }
     }
@@ -630,6 +639,21 @@ export function MiriamButton() {
         speak(text)
         setStage('answered')
         router.push(screen.path as never)
+        return
+      }
+    }
+    // "Open Revive Me", for a public follower — who has no chord sheets for
+    // "open" to mean: a video from Content, by its whole title.
+    const opened =
+      local && !play && isPublicFollower(useAuthStore.getState().profile)
+        ? playAsked(withoutHerName(said), { openAny: true })
+        : null
+    if (opened) {
+      const music = useMusicStore.getState()
+      if (music.items.length === 0) await music.load()
+      const item = playPick(opened, useMusicStore.getState().items, { exact: true })
+      if (item) {
+        playVideo(item)
         return
       }
     }
@@ -1002,6 +1026,7 @@ export function MiriamButton() {
     setAnswer(null)
     setChoices([])
     setSongGuesses([])
+    setVideoGuesses([])
     setPending(null)
     setUndo(null)
     setUnderstood('')
@@ -1476,6 +1501,7 @@ export function MiriamButton() {
   const openSong = (sheet: ChordSheet, key: { key: string; minor: boolean } | null) => {
     noteDone(`Opened the chord sheet “${sheet.title}”.`)
     setSongGuesses([])
+    setVideoGuesses([])
     setOpen(false)
     // Where a song screen is up, there — an open sheet's own place — rather
     // than another sheet on top of it.
@@ -1486,6 +1512,36 @@ export function MiriamButton() {
     }
     sheetQueue.reset()
     setSong({ sheet, key })
+  }
+  /** A video from Content, played over the page; the bar goes, to leave it in view. */
+  const playVideo = (item: MusicItem) => {
+    noteDone(`Playing “${item.title}” from Content.`)
+    setVideoGuesses([])
+    setVideo(item)
+    setOpen(false)
+  }
+  /** A video asked for that isn't plainly one: the likely ones to choose from, or Content to look through. */
+  const offerVideos = (ask: PlayAsk, items: MusicItem[]) => {
+    const likely = playCandidates(ask, items)
+    if (likely.length) {
+      setVideoGuesses(likely)
+      const text =
+        likely.length === 1
+          ? 'I couldn’t find that exactly. Did you mean this one?'
+          : 'I couldn’t find that exactly. Did you mean one of these?'
+      setAnswer(text)
+      speak(text)
+      setStage('answered')
+      return
+    }
+    const content = screensFor(useAuthStore.getState().profile).find((x) => x.id === 'music')
+    const text = content
+      ? 'I couldn’t find that in Content — here’s everything to look through.'
+      : 'I couldn’t find that video.'
+    setAnswer(text)
+    speak(text)
+    setStage('answered')
+    if (content && !anyOverlayOpen()) router.push(content.path as never)
   }
   /** One of the songs she offered: opened, and learned as what was meant. */
   const pickSong = (sheet: ChordSheet) => {
@@ -1521,6 +1577,7 @@ export function MiriamButton() {
       stopListening()
       setChoices([])
       setSongGuesses([])
+      setVideoGuesses([])
       setPending(null)
       setLink(null)
       setRanOut(false)
@@ -1553,6 +1610,7 @@ export function MiriamButton() {
     loadAliases().then((m) => (songAliases.current = m))
     setChoices([])
     setSongGuesses([])
+    setVideoGuesses([])
     if (!keepQuestion) setPending(null)
     setLink(null)
     setUnderstood('')
@@ -1859,13 +1917,25 @@ export function MiriamButton() {
       briefing ||
       choices.length ||
       songGuesses.length ||
+      videoGuesses.length ||
       pending ||
       link
     )
       return
     const t = setTimeout(() => closeRef.current(), ANSWER_MS)
     return () => clearTimeout(t)
-  }, [stage, open, answer, askingBack, briefing, choices.length, songGuesses.length, pending, link])
+  }, [
+    stage,
+    open,
+    answer,
+    askingBack,
+    briefing,
+    choices.length,
+    songGuesses.length,
+    videoGuesses.length,
+    pending,
+    link,
+  ])
   /** One of the events she offered: learned as what was meant, and asked about. */
   const pick = async (choice: { key: string; title: string; date: string }) => {
     unlockSpeech()
@@ -2135,6 +2205,33 @@ export function MiriamButton() {
                         {sheet.artist ? (
                           <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
                             {sheet.artist}
+                          </Text>
+                        ) : null}
+                      </Pressable>
+                    ))}
+                  </YStack>
+                ) : null}
+                {stage === 'answered' && videoGuesses.length ? (
+                  <YStack gap="$1.5" paddingTop="$1.5">
+                    {videoGuesses.map((item) => (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => playVideo(item)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Play ${item.title}`}
+                        style={[styles.choice, { borderColor: colors.primary }]}
+                      >
+                        <Text
+                          color={colors.primary}
+                          fontWeight="700"
+                          fontSize="$3"
+                          numberOfLines={1}
+                        >
+                          {item.title}
+                        </Text>
+                        {item.preacher || item.host || item.album ? (
+                          <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                            {item.preacher || item.host || item.album}
                           </Text>
                         ) : null}
                       </Pressable>

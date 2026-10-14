@@ -255,6 +255,19 @@ const SAME: [RegExp, string][] = [
   [/^trinit|^triune/, 'trinity'],
   [/^marri|^marry|^wedding/, 'marriage'],
   [/^christ$|^jesus$/, 'jesus'],
+  [/^spirit/, 'spirit'],
+  [/^inspir/, 'inspir'],
+  [/^infallib|^inerran|^errors?$|^errant$/, 'error'],
+  [/^authorit/, 'authority'],
+  [/^trust/, 'trust'],
+  [/^relevan/, 'relevant'],
+  [/^die[ds]?$|^dying$|^death|^dead$/, 'death'],
+  [/^heaven/, 'heaven'],
+  [/^sins?$|^sinful|^sinn/, 'sin'],
+  [/^pastor/, 'pastor'],
+  [/^wom[ae]n$/, 'women'],
+  [/^worship/, 'worship'],
+  [/^child|^kids?$/, 'child'],
 ]
 
 /** A text's words, as compared: the plain ones dropped, endings off, faith's words made one. */

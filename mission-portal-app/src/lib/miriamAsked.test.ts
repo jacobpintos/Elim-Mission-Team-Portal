@@ -79,5 +79,9 @@ describe('the most asked, grouped by meaning', () => {
     expect(askKind('where does the name Elim come from')).toBe('other')
     expect(askKind('who is driving')).toBe('who')
     expect(askKind('why are you called Miriam')).toBe('why')
+    // Not when, nor where, however it starts.
+    expect(askKind('what happens when we die')).toBe('other')
+    expect(askKind('how do I get saved')).toBe('other')
+    expect(askKind('how do I get there')).toBe('place')
   })
 })

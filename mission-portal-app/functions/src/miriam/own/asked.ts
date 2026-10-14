@@ -39,9 +39,16 @@ export const plainAsked = (text: string) =>
  */
 export function askKind(text: string): 'time' | 'place' | 'who' | 'why' | 'other' {
   const s = plainAsked(text)
+  // "What happens when we die?" asks what, not when.
+  if (
+    /\bwhat\s+(?:happens|happened|will happen|should (?:i|we) do|do (?:i|we) do)\s+(?:when|if|after)\b/.test(
+      s
+    )
+  )
+    return 'other'
   if (/\b(?:when|what time|how long until|how soon)\b/.test(s)) return 'time'
   if (
-    /\bwhere(?:'s|\s+(?:is|are|was|were|will|do|can|should|does\s+\w+\s+(?:meet|start|happen)))\b|\baddress\b|\bdirections\b|\bhow do (?:i|we) get\b/.test(
+    /\bwhere(?:'s|\s+(?:is|are|was|were|will|do|can|should|does\s+\w+\s+(?:meet|start|happen)))\b|\baddress\b|\bdirections\b|\bhow do (?:i|we) get (?:to|there|here|back)\b/.test(
       s
     )
   )

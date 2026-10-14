@@ -1,14 +1,15 @@
-import { embed, similarity } from './encoder'
+import { embed } from './encoder'
 import { taughtAnswers, type OwnDb } from './learn'
 import { CHURCH_SITE, siteAnswer, siteKnowledge } from './site'
 import { ELIM_ANSWER, MIRIAM_ANSWER, nameAnswer } from './names'
+import { taughtFound } from './taught'
 
 /**
  * Questions of faith, as the church asked Miriam to answer them — only in
  * the church's own words:
  *
  *  1. An answer an admin has taught her (Admin → Miriam), if the question
- *     means the same.
+ *     means the same, however it is worded (./taught).
  *  2. Where the names Elim and Miriam come from, as the church gave them
  *     (./names).
  *  3. What the church's website says (./site: any page of
@@ -19,9 +20,6 @@ import { ELIM_ANSWER, MIRIAM_ANSWER, nameAnswer } from './names'
  * Never from anywhere else — not the web, not Claude, not anything she was
  * built knowing. Scripture is the church's to interpret, not hers.
  */
-
-/** A taught answer, known to be about faith: near enough, but not so loose as to answer communion with baptism. */
-export const FAITH_TAUGHT_NEAR = 0.7
 
 export interface FaithAnswer {
   text: string
@@ -57,13 +55,8 @@ export async function faithAnswer(
   v: Float32Array = embed(text)
 ): Promise<FaithAnswer> {
   // 1. Taught.
-  const taught = await taughtAnswers(db).catch(() => [])
-  let best: { a: string; sim: number } | null = null
-  for (const t of taught) {
-    const sim = similarity(v, t.vec)
-    if (!best || sim > best.sim) best = { a: t.a, sim }
-  }
-  if (best && best.sim >= FAITH_TAUGHT_NEAR) return { text: best.a, link: null, from: 'taught' }
+  const taught = taughtFound(text, v, await taughtAnswers(db).catch(() => []))
+  if (taught) return { text: taught.a, link: null, from: 'taught' }
 
   // 2. The names Elim and Miriam, as the church gave them.
   const passages = await siteKnowledge(db).catch(() => [])

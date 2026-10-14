@@ -742,7 +742,11 @@ const PLAY_WORDS = new Set([
  * always for Content; a chord sheet is opened ("open Revive Me"), and "play
  * Above All next" queues one on an open sheet (lib/sheetCommands).
  */
-export function playAsked(text: string): PlayAsk | null {
+export function playAsked(
+  text: string,
+  /** "Open Revive Me" a video too, where no chord sheet could be meant (MiriamButton). */
+  { openAny = false }: { openAny?: boolean } = {}
+): PlayAsk | null {
   const said = clean(text)
   let rest = said.match(/^(?:play|watch|listen\s+to|put\s+on)\s+(.+)$/)?.[1]
   if (!rest) {
@@ -750,7 +754,7 @@ export function playAsked(text: string): PlayAsk | null {
     const m = said.match(
       /^(?:open|show(?:\s+me)?|pull\s+up|bring\s+up|put\s+up|start|load|find|get)\s+(.+)$/
     )
-    if (m && /\b(?:videos?|sermon|podcast|episode)\b/.test(m[1])) rest = m[1]
+    if (m && (openAny || /\b(?:videos?|sermon|podcast|episode)\b/.test(m[1]))) rest = m[1]
   }
   if (!rest) return null
   // "Play next Above All", "play Above All next": queued on an open sheet.
@@ -790,15 +794,25 @@ export interface PlayItem {
   month?: number
 }
 
-/** The one item asked for, or null when it isn't plain which. */
-export function playPick<T extends PlayItem>(ask: PlayAsk, items: T[]): T | null {
+/**
+ * The one item asked for, or null when it isn't plain which. `exact`: by its
+ * whole title only ("open Revive Me", where "open" could mean much else).
+ */
+export function playPick<T extends PlayItem>(
+  ask: PlayAsk,
+  items: T[],
+  { exact: exactOnly = false }: { exact?: boolean } = {}
+): T | null {
   const newest = (a: T, b: T) => (b.year ?? 0) - (a.year ?? 0) || (b.month ?? 0) - (a.month ?? 0)
   let pool = items.filter((m) => !ask.kind || m.type === ask.kind)
   if (ask.title) {
-    // Its title, as said: "Revive Me" — not "Revive Us Again".
+    // Its title, as said: "Revive Me" — not "Revive Us Again"; "The Good
+    // Shepherd" as "good shepherd", as said without its "the".
     const said = titleWords(ask.title)
-    const exact = pool.filter((m) => titleWords(m.title) === said)
+    const bare = (t: string) => titleWords(t).replace(/^(?:the|a|an)\s+/, '')
+    const exact = pool.filter((m) => titleWords(m.title) === said || bare(m.title) === bare(said))
     if (exact.length) return [...exact].sort(newest)[0]
+    if (exactOnly) return null
     // Every word said, in one title only: "Revive Me" for "Revive Me (Live)".
     const words = said.split(' ')
     const within = pool.filter((m) => {
@@ -818,6 +832,59 @@ export function playPick<T extends PlayItem>(ask: PlayAsk, items: T[]): T | null
   if (pool.length === 0) return null
   if (ask.latest || pool.length === 1) return [...pool].sort(newest)[0]
   return null
+}
+
+const NOT_TELLING = new Set([
+  'one',
+  'ones',
+  'that',
+  'this',
+  'the',
+  'and',
+  'for',
+  'called',
+  'named',
+  'thing',
+  'something',
+  'video',
+  'videos',
+])
+
+/**
+ * The items nearest what was asked, when none is plainly it — for "which did
+ * you mean?": of the kind asked, sharing the most of its words, newest first;
+ * the newest of the kind, if only a kind was asked for ("play a sermon").
+ */
+export function playCandidates<T extends PlayItem>(ask: PlayAsk, items: T[], max = 4): T[] {
+  const newest = (a: T, b: T) => (b.year ?? 0) - (a.year ?? 0) || (b.month ?? 0) - (a.month ?? 0)
+  const pool = items.filter((m) => !ask.kind || m.type === ask.kind)
+  // Words that say something: not "a", "of", "the one", "something called".
+  const telling = (w: string) => w.length > 2 && !NOT_TELLING.has(w)
+  const words = ask.query.split(' ').filter(telling)
+  if (words.length === 0) return ask.kind ? [...pool].sort(newest).slice(0, max) : []
+  const about = (m: T) =>
+    [m.title, m.album, m.preacher, m.host, m.guest]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(telling)
+  return (
+    pool
+      .map((m) => {
+        const have = about(m)
+        return {
+          m,
+          hits: words.filter((w) => have.some((h) => h.startsWith(w) || w.startsWith(h))).length,
+        }
+      })
+      .filter((x) => x.hits > 0)
+      .sort((a, b) => b.hits - a.hits || newest(a.m, b.m))
+      // Those with the most of its words: "Pastor Amy's", not every pastor's.
+      .filter((x, _, all) => x.hits === all[0].hits)
+      .slice(0, max)
+      .map((x) => x.m)
+  )
 }
 
 /** A title's words, lowered, without punctuation: "10,000 Reasons" as "10000 reasons". */

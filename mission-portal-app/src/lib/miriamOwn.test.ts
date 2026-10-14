@@ -6,7 +6,14 @@ import { embed } from '../../functions/src/miriam/own/encoder'
 import { packVector } from '../../functions/src/miriam/own/vectors'
 import { mentionsIn } from '../../functions/src/miriam/own/events'
 import { notHers } from '../../functions/src/miriam/own/guards'
-import { ownAnswer, sure, webOrFaith, type OwnInput } from '../../functions/src/miriam/own'
+import {
+  ownAnswer,
+  publicAnswer,
+  sure,
+  webOrFaith,
+  type OwnInput,
+} from '../../functions/src/miriam/own'
+import { PUBLIC_NOT_HERS } from '../../functions/src/miriam/plan'
 import {
   forget,
   forgetCaches,
@@ -960,6 +967,117 @@ describe('more asked about an answer on faith', () => {
       })
     )
     expect(parking.why).not.toBe('faith: more asked')
+  })
+})
+
+describe('a question taught, asked in other words', () => {
+  beforeEach(() => forgetCaches())
+  // As an admin taught it (Admin → Miriam).
+  const BIBLE_Q = 'What is your view on the scriptures or the bible'
+  const BIBLE_A =
+    'We believe the Bible is the written Word of God, inspired by the Holy Spirit. It is infallible in its original manuscripts, and it is trustworthy pertaining to all matters on which it teaches. It is unrivaled in its authority over life and faith, and the sovereign director of our worldview. Because it was inspired by God, the Bible is truth without any mixture of error and is completely relevant to our daily lives (2 Tim. 3:16-17, 2 Peter 1:21).'
+  const GOD_A = 'We believe in one God, eternally existing in three persons.'
+  const YOUTH_A = 'Youth group meets Wednesdays at 7pm.'
+  const taught = async (more: { q: string; a: string }[] = []) => {
+    const db = memoryOwnDb()
+    for (const t of [{ q: BIBLE_Q, a: BIBLE_A }, ...more]) {
+      await teach(db, { ...t, v: embed(t.q), by: 'boss' })
+    }
+    return db
+  }
+  const said = (own: { result: unknown }) => (own.result as { text: string } | null)?.text
+
+  it('is answered as taught, however it is worded', async () => {
+    const db = await taught()
+    for (const q of [
+      'What is your viewpoint on the authority of the bible',
+      'what do you believe about the bible',
+      'Is the Bible true?',
+      'is the bible inerrant',
+      'can I trust the bible',
+      'is the bible the word of god',
+      'what does the well believe about scripture',
+    ]) {
+      expect(said(await ownAnswer(input(q, { db }))), q).toBe(BIBLE_A)
+    }
+  })
+
+  it('just after it was asked, or after another answer on faith, too', async () => {
+    const db = await taught()
+    for (const history of [
+      [{ said: BIBLE_Q, reply: BIBLE_A }],
+      [{ said: 'is God good', reply: DEFER }],
+      [
+        {
+          said: 'what do we believe about baptism',
+          reply: 'We baptize believers by immersion. (from thewellofiowa.com)',
+        },
+      ],
+    ]) {
+      const own = await ownAnswer(
+        input('What is your viewpoint on the authority of the bible', { db, history })
+      )
+      expect(said(own), history[0].said).toBe(BIBLE_A)
+    }
+    // And handed back by Claude as a question of faith.
+    const fromClaude = await webOrFaith(
+      'faith',
+      'What is your viewpoint on the authority of the bible',
+      { db, today: TODAY, can: [], history: [{ said: 'is God good', reply: DEFER }] }
+    )
+    expect(fromClaude).toMatchObject({ text: BIBLE_A })
+  })
+
+  it('but more asked about it is still the leadership’s', async () => {
+    const db = await taught()
+    for (const q of [
+      'why is it infallible?',
+      'what do you mean by that',
+      'but what about the contradictions in it',
+    ]) {
+      const own = await ownAnswer(input(q, { db, history: [{ said: BIBLE_Q, reply: BIBLE_A }] }))
+      expect(said(own), q).toBe(LEADERSHIP)
+    }
+  })
+
+  it('never for what only sounds like it', async () => {
+    const db = await taught([
+      { q: 'What do you believe about God?', a: GOD_A },
+      { q: 'When is youth group?', a: YOUTH_A },
+    ])
+    for (const q of [
+      'do you take the bible literally',
+      'what bible translation do you use',
+      'what does the bible say about divorce',
+      'what do you believe about faith',
+      'what do you believe about Jesus',
+      'where is youth group',
+      'what is youth group',
+    ]) {
+      expect([BIBLE_A, GOD_A, YOUTH_A], q).not.toContain(said(await ownAnswer(input(q, { db }))))
+    }
+    // The same question, though, however it is asked.
+    expect(said(await ownAnswer(input('what time does youth group start', { db })))).toBe(YOUTH_A)
+    expect(said(await ownAnswer(input('is God real', { db })))).toBe(GOD_A)
+  })
+
+  it('for a public follower, too — and a question of faith she can’t read plainly is still the church’s', async () => {
+    const db = await taught()
+    const visitor = { db, today: TODAY, can: ['link'] }
+    expect(await publicAnswer('is the bible without error?', visitor)).toMatchObject({
+      text: BIBLE_A,
+    })
+    expect(await publicAnswer('do y’all think the bible has mistakes?', visitor)).toMatchObject({
+      text: DEFER,
+    })
+    // Not asked: said back as ever.
+    expect(await publicAnswer('thanks, God bless', visitor)).toMatchObject({
+      text: 'You’re welcome!',
+    })
+    expect(await publicAnswer('God is so good', visitor)).toMatchObject({ text: PUBLIC_NOT_HERS })
+    expect(await publicAnswer('what’s the wifi password', visitor)).toMatchObject({
+      text: PUBLIC_NOT_HERS,
+    })
   })
 })
 

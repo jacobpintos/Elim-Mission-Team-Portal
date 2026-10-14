@@ -10,7 +10,6 @@ import {
   commandsFor,
   isPublicFollower,
   PUBLIC_APP_TOOLS,
-  publicReply,
   type AppToolName,
   draftFromInput,
   taskDraftFromInput,
@@ -21,11 +20,10 @@ import {
 import { isAdminViewer, type Viewer } from './data'
 import { Lookups, withWeekday } from './lookups'
 import { PAUSE_MS, MAX_RESULT, seal, unseal } from './pause'
-import { ownAnswer, webOrFaith, type OwnInput, type OwnRead } from './own'
+import { ownAnswer, publicAnswer, webOrFaith, type OwnInput, type OwnRead } from './own'
 import { learn, type OwnDb } from './own/learn'
 import { OWN_SKILLS, type Skill } from './own/skills'
 import { heardRight } from './hearing'
-import { said } from './own/answers'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -346,9 +344,9 @@ export const askMiriam = onCall(
         }
         ownRead = own.read
       }
-      // Not hers to answer, for a public follower: said so — nothing is sent to Claude.
+      // Not hers to answer, for a public follower: nothing is sent to Claude (./own: publicAnswer).
       if (ownOnly) {
-        const reply = said(publicReply(text))
+        const reply = await publicAnswer(text, ownInput)
         return heardAsText ? { ...reply, understood: heardAsText } : reply
       }
 

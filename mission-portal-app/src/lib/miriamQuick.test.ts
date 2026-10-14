@@ -5,6 +5,7 @@ import {
   listAnswer,
   listAsked,
   playAsked,
+  playCandidates,
   playPick,
   quickAnswer,
   quickAsked,
@@ -337,6 +338,33 @@ describe('playing from Content', () => {
     expect(playAsked('open above all in E')).toBeNull()
     expect(playAsked('play Above All next')).toBeNull()
     expect(playAsked('play next Above All')).toBeNull()
+  })
+  const videos = [
+    ...items,
+    { id: 'r1', type: 'music', title: 'Revive Me', year: 2024 },
+    { id: 'r2', type: 'music', title: 'Revive Us Again', year: 2026 },
+    { id: 'm', type: 'music', title: 'A Mighty Fortress', year: 2022 },
+  ]
+  it('"open" a video, where no chord sheet could be meant — by its whole title only', () => {
+    const opened = (text: string) => playAsked(text, { openAny: true })
+    expect(playPick(opened('open Revive Me')!, videos, { exact: true })?.id).toBe('r1')
+    expect(playPick(opened('pull up revive us again')!, videos, { exact: true })?.id).toBe('r2')
+    expect(playPick(opened('show me the good shepherd')!, videos, { exact: true })?.id).toBe('b')
+    // "Open" means much else: nothing near enough is a video.
+    expect(playPick(opened('open revive')!, videos, { exact: true })).toBeNull()
+    expect(playPick(opened('open settings')!, videos, { exact: true })).toBeNull()
+    expect(playPick(opened('show me what’s on this week')!, videos, { exact: true })).toBeNull()
+  })
+  it('offers the likely ones, when none is plainly it', () => {
+    const ids = (text: string, list = videos) =>
+      playCandidates(playAsked(text)!, list).map((v) => v.id)
+    expect(ids('play revive')).toEqual(['r2', 'r1'])
+    expect(ids('play a sermon')).toEqual(['b', 'a'])
+    expect(ids('play the kenya one')).toEqual(['c'])
+    expect(ids('play pastor amy')).toEqual(['b'])
+    // Nothing like it: none — not "A Mighty Fortress" for "amazing".
+    expect(ids('play amazing grace')).toEqual([])
+    expect(ids('play something by nobody')).toEqual([])
   })
 })
 
