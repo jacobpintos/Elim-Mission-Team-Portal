@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { backupFolder, dayOfBackupFile, oldestKept } from '../../functions/src/backups'
+import { backupFolder, dayOfBackupFile, oldestKept } from '../../functions/src/backupDays'
 
 describe('nightly backup retention', () => {
   it('names a day folder and reads the day back from a file in it', () => {
