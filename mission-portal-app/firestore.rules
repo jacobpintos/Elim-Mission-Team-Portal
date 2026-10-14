@@ -253,6 +253,13 @@ service cloud.firestore {
           .hasOnly(['accountantUid', 'accountantName']);
     }
 
+    // How last night's backup went, written by nightlyBackup and shown on
+    // Admin → Data. Nothing in it is for anyone but admins.
+    match /backupStatus/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /issues/{id} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();

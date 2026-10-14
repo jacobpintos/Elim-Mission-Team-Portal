@@ -38,6 +38,7 @@ const SECTIONS: AdminSection[] = [
     icon: '📊',
   },
   { key: 'audit', label: 'Audit Trail', path: '/(app)/admin/audit', icon: '🔍' },
+  { key: 'data', label: 'Data & Backups', tabLabel: 'Data', path: '/(app)/admin/data', icon: '💾' },
   { key: 'miriam', label: 'Miriam', path: '/(app)/admin/miriam', icon: '💬' },
   { key: 'theme', label: 'Theme', path: '/(app)/admin/theme', icon: '🎨' },
   { key: 'digests', label: 'Digests', path: '/(app)/admin/digests', icon: '📰' },

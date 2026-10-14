@@ -1117,9 +1117,7 @@ describe('reimbursements', () => {
   it('refuses the Accountant approving it directly', () => {
     // Every step goes through a callable, which also moves the task and tells
     // the person who asked.
-    return assertFails(
-      updateDoc(doc(as(WORSHIP), 'reimbursements/rb1'), { status: 'approved' })
-    )
+    return assertFails(updateDoc(doc(as(WORSHIP), 'reimbursements/rb1'), { status: 'approved' }))
   })
 
   it('refuses the person who asked changing their own request', () => {
@@ -1145,5 +1143,16 @@ describe('reimbursements', () => {
       })
     )
     await assertFails(updateDoc(doc(as(ADMIN), 'reimbursements/rb1'), { status: 'paid' }))
+  })
+})
+
+describe('backupStatus', () => {
+  it('lets an admin read how the nightly backup went', () => {
+    return assertSucceeds(getDoc(doc(as(ADMIN), 'backupStatus/latest')))
+  })
+
+  it('keeps it from members, and lets no client write it', async () => {
+    await assertFails(getDoc(doc(as(MEMBER), 'backupStatus/latest')))
+    await assertFails(setDoc(doc(as(ADMIN), 'backupStatus/latest'), { lastOk: '2026-01-01' }))
   })
 })

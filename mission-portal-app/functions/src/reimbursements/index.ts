@@ -333,9 +333,7 @@ export const decideReimbursement = onCall(CALL_OPTS, async (req) => {
     tx.update(db.doc(`tasks/${r.taskId}`), {
       status: taskStatusFor(decision.status),
       dueDate: decision.payBy,
-      ...(decision.status === 'denied'
-        ? { doneAt: FieldValue.serverTimestamp() }
-        : {}),
+      ...(decision.status === 'denied' ? { doneAt: FieldValue.serverTimestamp() } : {}),
       _updatedAt: FieldValue.serverTimestamp(),
     })
   })

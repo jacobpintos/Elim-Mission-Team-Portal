@@ -50,5 +50,7 @@ export interface Reimbursement {
   dateChange: PayDateChange | null
   taskId: number
   createdAt: number
+  /** When it was marked paid. */
+  paidAt?: number
   history?: ReimbursementHistoryEntry[]
 }
