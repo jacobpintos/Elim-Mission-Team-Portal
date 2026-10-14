@@ -150,6 +150,25 @@ export class Lookups {
       )
   }
 
+  /**
+   * Their own notes on days of their calendar between two days, by day then
+   * as written (src/lib/dateNotes, kept in dateNotes/{uid}): theirs alone.
+   */
+  async notesBetween(from: string, to: string): Promise<{ date: string; text: string }[]> {
+    const data = (await this.db.doc(`dateNotes/${this.viewer.uid}`).get()).data() ?? {}
+    return Object.values(data)
+      .filter(
+        (n): n is { date: string; text: string; at?: number } =>
+          !!n &&
+          typeof n.date === 'string' &&
+          typeof n.text === 'string' &&
+          n.date >= from &&
+          n.date <= to
+      )
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.at ?? 0) - (b.at ?? 0))
+      .map((n) => ({ date: n.date, text: n.text }))
+  }
+
   /** Whether this person is on an event: named on it, or in one of its groups. */
   async isOn(ev: EventInstance): Promise<boolean> {
     return assignedTo(ev, await this.groups()).has(this.viewer.uid)

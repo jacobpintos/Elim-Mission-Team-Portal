@@ -97,6 +97,20 @@ function whenShort(ev: EventInstance, today: string): string {
   return ev.startTime ? `${day} at ${ev.startTime}` : day
 }
 
+/** Their notes, after what is on: "Your note: bring the projector." / "Your notes: Friday — …; Saturday — …". As the app says them (src/features/miriam/localTalk). */
+function notesSaid(notes: { date: string; text: string }[], oneDay: boolean, today: string) {
+  const lead = notes.length === 1 ? 'Your note' : 'Your notes'
+  const plain = (t: string) => t.replace(/[.!?]+$/, '')
+  if (oneDay) return `${lead}: ${notes.map((n) => plain(n.text)).join('; ')}.`
+  const days = [...new Set(notes.map((n) => n.date))]
+  const said = days.map((d) => {
+    const day = whenShort({ date: d } as EventInstance, today)
+    const texts = notes.filter((n) => n.date === d).map((n) => plain(n.text))
+    return `${day.charAt(0).toUpperCase()}${day.slice(1)} — ${texts.join('; ')}`
+  })
+  return `${lead}: ${said.join('. ')}.`
+}
+
 /** What a skill needs an event to have, to be the one meant when none is named. */
 const HAS: Partial<Record<Skill, (ev: EventInstance, viewer: Viewer) => boolean>> = {
   event_car: (ev) => !!ev.carpool,
@@ -291,10 +305,13 @@ export async function answerFor(skill: Skill, ctx: AnswerContext): Promise<OwnRe
         ? said(`Your next event is ${ev.title}, ${whenShort(ev, today)}.`, onPage(ev))
         : said('You have nothing coming up.')
     }
-    if (all.length === 0) return said(`Nothing is on ${span.said}.`)
+    // Their own notes on those days, said after (src/lib/dateNotes).
+    const notes = await lookups.notesBetween(span.from, span.to).catch(() => [])
+    const noted = notes.length ? ` ${notesSaid(notes, span.from === span.to, today)}` : ''
+    if (all.length === 0) return said(`Nothing is on ${span.said}.${noted}`)
     const shown = all.slice(0, 5).map((ev) => `${ev.title}, ${whenShort(ev, today)}`)
     const more = all.length > 5 ? `; and ${all.length - 5} more` : ''
-    return said(`On ${span.said}: ${shown.join('; ')}${more}.`)
+    return said(`On ${span.said}: ${shown.join('; ')}${more}.${noted}`)
   }
   if (skill === 'availability') {
     if (!ctx.appTools.includes('set_availability')) return null

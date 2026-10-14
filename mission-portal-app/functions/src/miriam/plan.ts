@@ -423,6 +423,7 @@ export type AppToolName =
   | 'app_guide'
   | 'read_set_lists'
   | 'read_meeting_requests'
+  | 'read_date_notes'
   | ActionName
 
 /**
@@ -467,6 +468,8 @@ export type ActionName =
   | 'set_availability_range'
   | 'meeting_request'
   | 'change_my_name'
+  | 'add_date_note'
+  | 'remove_date_note'
   // Admins'
   | 'delete_event'
   | 'start_chat'
@@ -503,6 +506,8 @@ export const ACTIONS: readonly ActionName[] = [
   'set_availability_range',
   'meeting_request',
   'change_my_name',
+  'add_date_note',
+  'remove_date_note',
   'delete_event',
   'start_chat',
   'post_livestream',
@@ -1071,6 +1076,37 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
       strict: true,
       input_schema: objectOf({ name: { type: 'string' } }),
     },
+    add_date_note: {
+      name: 'add_date_note',
+      description:
+        'Add a note on a day of their own calendar ("add a note to Friday: bring the projector", "put the dentist on my calendar for the 20th"): only they ever see it, on the Events calendar and in their briefing. ' +
+        'Not a reminder (nothing is sent at a time) and not an event. No day said: ask which, with follow_up. Added at once — they can take it back.',
+      strict: true,
+      input_schema: objectOf({
+        date: {
+          type: 'string',
+          description: 'The day, YYYY-MM-DD, worked out from today’s date.',
+        },
+        text: {
+          type: 'string',
+          description: 'What the note says, as they said it: "Bring the projector".',
+        },
+      }),
+    },
+    remove_date_note: {
+      name: 'remove_date_note',
+      description:
+        'Delete notes of theirs on their calendar: those on a day, or the one with these words. Find them first with read_date_notes.' +
+        ACTS,
+      strict: true,
+      input_schema: objectOf({
+        date: { type: 'string', description: 'YYYY-MM-DD; "" for any day.' },
+        text: {
+          type: 'string',
+          description: 'Words from the note, to pick one; "" for every note on that day.',
+        },
+      }),
+    },
     delete_event: {
       name: 'delete_event',
       description:
@@ -1154,6 +1190,22 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
         ACTS,
       strict: true,
       input_schema: objectOf({ set_list_id: { type: 'string' } }),
+    },
+    read_date_notes: {
+      name: 'read_date_notes',
+      description:
+        'Their own notes on days of their calendar between two days, each with its day and words. ' +
+        'For "what are my notes this week?", and with what they have on ("what do I have Friday?": their events and their notes).',
+      strict: true,
+      input_schema: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', description: 'YYYY-MM-DD, the first day.' },
+          to: { type: 'string', description: 'YYYY-MM-DD, the last day; the same for one day.' },
+        },
+        required: ['from', 'to'],
+        additionalProperties: false,
+      },
     },
     read_meeting_requests: {
       name: 'read_meeting_requests',

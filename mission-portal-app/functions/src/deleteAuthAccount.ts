@@ -15,16 +15,18 @@ export const deleteAuthAccount = onCall(async (req) => {
 
   const result = await admin.auth().deleteUsers(uids)
 
-  // Their private chord-sheet notes go with the accounts: nobody else can
-  // read them, so left behind they would be kept for no one.
+  // Their private notes — on chord sheets, and on days of their calendar —
+  // go with the accounts: nobody else can read them, so left behind they
+  // would be kept for no one.
   const failed = new Set(result.errors.map((e) => uids[e.index]))
   const db = admin.firestore()
   await Promise.all(
     uids
       .filter((uid) => !failed.has(uid))
-      .map((uid) =>
+      .flatMap((uid) => [`sheetNotes/${uid}`, `dateNotes/${uid}`])
+      .map((path) =>
         db
-          .doc(`sheetNotes/${uid}`)
+          .doc(path)
           .delete()
           .catch(() => {})
       )

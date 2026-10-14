@@ -10,7 +10,7 @@ type Colors = ReturnType<typeof useThemeColors>
 
 /**
  * The daily briefing in Miriam's panel (lib/briefing): today's events, your
- * tasks and reminders, what's new, and what needs you — each a tap to where
+ * tasks, reminders and notes, what's new, and what needs you — each a tap to where
  * it is, tasks and reminders ticked off here, and those who haven't
  * answered reminded at a tap.
  */
@@ -187,6 +187,29 @@ export function BriefingView({
         </Section>
       ) : null}
 
+      {b.notes.length ? (
+        <Section title="YOUR NOTES FOR TODAY" colors={colors}>
+          <YStack
+            style={[
+              styles.list,
+              { borderColor: colors.border, backgroundColor: colors.background },
+            ]}
+          >
+            {b.notes.map((n, i) => (
+              <Row
+                key={n.id}
+                colors={colors}
+                dot="#c9a227"
+                title={n.text}
+                sub="Your note · only you see it"
+                last={i === b.notes.length - 1}
+                onPress={() => onOpen(`/events?date=${b.date}`)}
+              />
+            ))}
+          </YStack>
+        </Section>
+      ) : null}
+
       {b.food.length ? (
         <Section title="BRING FOOD" colors={colors}>
           <YStack
@@ -311,6 +334,7 @@ export function BriefingView({
       !b.next &&
       !b.tasks.length &&
       !b.reminders.length &&
+      !b.notes.length &&
       !b.news.length &&
       !b.food.length &&
       !b.attention.length ? (

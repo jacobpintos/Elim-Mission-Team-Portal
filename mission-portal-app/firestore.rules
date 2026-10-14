@@ -1,5 +1,5 @@
 rules_version = '2';
-// Last updated: 2026-10-14 — added miriamOwn (server only)
+// Last updated: 2026-10-14 — added dateNotes (each person's own)
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -31,6 +31,12 @@ service cloud.firestore {
       return isSignedIn() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
           .hasAny(['guest']);
+    }
+    // Any account but a public one: what may keep notes on its own calendar.
+    function keepsNotes() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+          .hasAny(['admin', 'security', 'regular', 'intern', 'worship', 'guest']);
     }
     function isWorshipOrAdmin() {
       return isSignedIn() &&
@@ -334,6 +340,16 @@ service cloud.firestore {
     // account (deleteOwnAccount).
     match /sheetNotes/{uid} {
       allow read, write: if isSelf(uid);
+    }
+
+    // Each person's notes on days of their own calendar (src/stores/
+    // dateNotesStore): theirs alone — nobody else reads them, an admin
+    // included. Kept by anyone with more than a public account, at most a
+    // thousand; read and cleared by their owner whatever their account is now.
+    match /dateNotes/{uid} {
+      allow read, delete: if isSelf(uid);
+      allow create, update: if isSelf(uid) && keepsNotes()
+        && request.resource.data.size() <= 1000;
     }
 
     match /chordSheets/{id} {

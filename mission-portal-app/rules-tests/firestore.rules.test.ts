@@ -716,6 +716,44 @@ describe('chord sheet notes', () => {
   })
 })
 
+describe('notes on days of their calendar', () => {
+  const note = { n1: { date: '2026-10-16', text: 'Bring the projector', at: 1 } }
+
+  it('are kept by anyone but a public account, and read only by them', async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER), 'dateNotes', MEMBER), note, { merge: true }))
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'dateNotes', MEMBER)))
+    await assertSucceeds(setDoc(doc(as(GUEST), 'dateNotes', GUEST), note))
+    await assertSucceeds(
+      setDoc(doc(as(MEMBER), 'dateNotes', MEMBER), { n1: deleteField() }, { merge: true })
+    )
+    await assertSucceeds(deleteDoc(doc(as(MEMBER), 'dateNotes', MEMBER)))
+  })
+
+  it('are nobody else’s to read or write — an admin’s included', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'dateNotes', MEMBER), note)
+    })
+    await assertFails(getDoc(doc(as(ADMIN), 'dateNotes', MEMBER)))
+    await assertFails(getDoc(doc(as(OUTSIDER), 'dateNotes', MEMBER)))
+    await assertFails(setDoc(doc(as(ADMIN), 'dateNotes', MEMBER), note))
+    await assertFails(deleteDoc(doc(as(OUTSIDER), 'dateNotes', MEMBER)))
+  })
+
+  it('are not for a public account', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'public-uid'), { roles: ['public'] })
+    })
+    await assertFails(setDoc(doc(as('public-uid'), 'dateNotes', 'public-uid'), note))
+  })
+
+  it('are a thousand at most', async () => {
+    const many = Object.fromEntries(
+      Array.from({ length: 1001 }, (_, i) => [`n${i}`, { date: '2026-10-16', text: 'x', at: i }])
+    )
+    await assertFails(setDoc(doc(as(MEMBER), 'dateNotes', MEMBER), many))
+  })
+})
+
 describe('guests', () => {
   it('reads set lists and chord sheets', () => {
     // The worship tab they were given would render nothing without this.

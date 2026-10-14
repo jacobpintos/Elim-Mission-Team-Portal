@@ -17,7 +17,7 @@ import { isOwner } from '@/lib/owner'
 import { ALL_ROLES } from '@/features/admin/RoleCheckboxes'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
-import { allInstances } from '@/lib/events'
+import { allInstances, localToday } from '@/lib/events'
 import { AVAIL_LABELS } from '@/lib/availability'
 import { isAdmin, isGuest, isPublic, isSecurity, isWorship, visibleTabs } from '@/lib/roles'
 import {
@@ -84,6 +84,14 @@ import type { MeetingRequest } from '@/types/meeting'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useEventsStore } from '@/stores/eventsStore'
+import { useDateNotesStore } from '@/stores/dateNotesStore'
+import {
+  canKeepDateNotes,
+  isDay as isRealDay,
+  notesMeant,
+  noteText,
+  type DateNote,
+} from '@/lib/dateNotes'
 import type {
   AvailResponse,
   CarpoolCarData,
@@ -1778,6 +1786,70 @@ async function changeMyName(profile: UserProfile, input: Record<string, unknown>
   } satisfies Prepared
 }
 
+/**
+ * A note on a day of their own calendar (lib/dateNotes). Asked for alone, it
+ * is added at once (MiriamButton); as one of several things asked, confirmed
+ * like the rest.
+ */
+async function addDateNote(profile: UserProfile, input: Record<string, unknown>) {
+  if (!canKeepDateNotes(profile)) return cannot('Notes on your calendar are for team accounts.')
+  const date = String(input.date ?? '')
+  const text = noteText(String(input.text ?? ''))
+  if (!isRealDay(date) || !text) return cannot('Which day, and what should the note say?')
+  let id = ''
+  return {
+    kind: 'ready',
+    title: `Add a note to ${FD(date, { weekday: true })}?`,
+    details: [text],
+    confirm: 'Add',
+    run: async () => {
+      id = await useDateNotesStore.getState().add(date, text)
+      return 'Added.'
+    },
+    undo: async () => {
+      if (id) await useDateNotesStore.getState().remove([id])
+      return 'Okay — that note is gone.'
+    },
+  } satisfies Prepared
+}
+
+/** Their notes taken away: by id (asked on the phone, localTalk), or by day and words (Claude). */
+async function removeDateNote(profile: UserProfile, input: Record<string, unknown>) {
+  if (!canKeepDateNotes(profile)) return cannot('Notes on your calendar are for team accounts.')
+  const all = useDateNotesStore.getState().notes
+  const ids = Array.isArray(input.ids) ? input.ids.map(String) : []
+  const notes: DateNote[] = ids.length
+    ? all.filter((n) => ids.includes(n.id))
+    : notesMeant(
+        all,
+        { date: isRealDay(input.date) ? input.date : null, words: String(input.text ?? '') },
+        localToday()
+      )
+  if (notes.length === 0) return cannot('I couldn’t find that note.')
+  const days = new Set(notes.map((n) => n.date))
+  const day = FD(notes[0].date, { weekday: true })
+  return {
+    kind: 'ready',
+    title:
+      notes.length === 1
+        ? `Delete your note for ${day}?`
+        : days.size === 1
+          ? `Delete your ${notes.length} notes for ${day}?`
+          : `Delete ${notes.length} of your notes?`,
+    details: notes.map((n) => (days.size === 1 ? n.text : `${FD(n.date)}: ${n.text}`)),
+    confirm: 'Delete',
+    destructive: true,
+    run: async () => {
+      await useDateNotesStore.getState().remove(notes.map((n) => n.id))
+      return 'Deleted.'
+    },
+    undo: async () => {
+      await useDateNotesStore.getState().restore(notes)
+      return notes.length === 1 ? 'Okay — that note is back.' : 'Okay — those notes are back.'
+    },
+  } satisfies Prepared
+}
+
 const ACTIONS: Record<
   string,
   (profile: UserProfile, input: Record<string, unknown>) => Promise<Prepared>
@@ -1821,6 +1893,8 @@ const ACTIONS: Record<
   take_down_livestream: takeDownLivestream,
   meeting_request: meetingRequest,
   change_my_name: changeMyName,
+  add_date_note: addDateNote,
+  remove_date_note: removeDateNote,
 }
 
 /** A change asked for, worked out into exactly what will be done. Never throws. */

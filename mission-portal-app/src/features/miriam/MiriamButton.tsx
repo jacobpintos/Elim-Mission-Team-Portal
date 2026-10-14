@@ -83,6 +83,8 @@ import {
 } from './localData'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useRemindersStore } from '@/stores/remindersStore'
+import { useDateNotesStore } from '@/stores/dateNotesStore'
+import { canKeepDateNotes, isDay, noteAddedSaid, noteText } from '@/lib/dateNotes'
 import {
   minutesBeforeSaid,
   reminderAsked,
@@ -97,7 +99,7 @@ import { gatherBriefing, remindToAnswer } from './briefingData'
 import { BriefingView } from './BriefingView'
 import { appToolsFor } from './appTools'
 import { useEventsStore } from '@/stores/eventsStore'
-import { todayStr } from '@/lib/events'
+import { localToday, todayStr } from '@/lib/events'
 import { useTourStore } from '@/features/tour/tourStore'
 import { asksAQuestion, songAsked } from '@/lib/miriamSongs'
 import { songHost, songQueue } from '@/lib/songHost'
@@ -271,7 +273,8 @@ function appData(): QuickData | null {
     groups: useGroupsStore.getState().groups,
     viewer: { uid: String(profile.uid), roles: profile.roles ?? [] },
     names: new Map(useUsersStore.getState().users.map((u) => [String(u.uid), u.displayName])),
-    today: todayStr(),
+    // Their own day, as the server is told it (./askMiriam: localToday).
+    today: localToday(),
   }
 }
 
@@ -393,8 +396,8 @@ export function MiriamButton() {
     let cancelled = false
     Promise.all([AsyncStorage.getItem(BRIEFING_DAY_KEY), AsyncStorage.getItem(BRIEFING_OFF_KEY)])
       .then(([day, off]) => {
-        if (cancelled || off === '1' || day === todayStr()) return
-        AsyncStorage.setItem(BRIEFING_DAY_KEY, todayStr()).catch(() => {})
+        if (cancelled || off === '1' || day === localToday()) return
+        AsyncStorage.setItem(BRIEFING_DAY_KEY, localToday()).catch(() => {})
         setOfferBriefing(true)
       })
       .catch(() => {})
@@ -415,11 +418,16 @@ export function MiriamButton() {
     const uid = useAuthStore.getState().profile?.uid
     const reminders = useRemindersStore.getState()
     if (uid) reminders.subscribe(String(uid))
+    // Their notes on days of their calendar, for the briefing and "what do I have?".
+    const notes = useDateNotesStore.getState()
+    const keepsNotes = !!uid && canKeepDateNotes(useAuthStore.getState().profile)
+    if (keepsNotes) notes.subscribe(String(uid))
     return () => {
       unsubGroups()
       events.unsubscribe()
       tasks.unsubscribe()
       if (uid) reminders.unsubscribe()
+      if (keepsNotes) notes.unsubscribe()
     }
   }, [open, subGroups, unsubGroups])
 
@@ -658,7 +666,7 @@ export function MiriamButton() {
     if (quick?.weather) {
       // Its forecast, fetched as the event's page does.
       setStage('thinking')
-      const today = todayStr()
+      const today = localToday()
       const lines = await Promise.all(
         quick.weather.map(async (ev) => {
           const at =
@@ -811,6 +819,21 @@ export function MiriamButton() {
         await setReminder(text, at, `to ${text.charAt(0).toLowerCase()}${text.slice(1)}`, extra)
         return
       }
+      // A note on a day of their calendar: theirs alone, added at once, with a tap to take it back.
+      if (result.kind === 'confirm' && result.name === 'add_date_note') {
+        const date = String(result.input.date ?? '')
+        const text = noteText(String(result.input.text ?? ''))
+        if (!isDay(date) || !text) {
+          const no =
+            'I couldn’t tell which day, or what the note should say — try “add a note to Friday: bring the projector.”'
+          setAnswer(no)
+          speak(no)
+          setStage('answered')
+          return
+        }
+        await addNote(date, text)
+        return
+      }
       if (result.kind === 'confirm') {
         await offerAction(result.name, result.input, result.more)
         return
@@ -914,7 +937,7 @@ export function MiriamButton() {
     }
     setAnswer(null)
     setBriefing(b)
-    briefedFood.current = { day: todayStr(), food: b.food }
+    briefedFood.current = { day: localToday(), food: b.food }
     noteDone(b.spoken)
     speak(b.spoken)
     setReading(true)
@@ -1043,6 +1066,36 @@ export function MiriamButton() {
     setStage('answered')
   }
 
+  /**
+   * A note on a day of their calendar (stores/dateNotesStore): theirs alone,
+   * added at once, with a tap to take it back.
+   */
+  const addNote = async (date: string, text: string) => {
+    setStage('thinking')
+    try {
+      const id = await useDateNotesStore.getState().add(date, text)
+      const said = noteAddedSaid(date, noteText(text), localToday())
+      noteDone(said)
+      setAnswer(said)
+      speak(said)
+      setUndo({
+        label: 'Undo',
+        run: async () => {
+          await useDateNotesStore.getState().remove([id])
+          return 'Okay — that note is gone.'
+        },
+      })
+    } catch (err) {
+      const no =
+        err instanceof Error && err.message === 'full'
+          ? 'You have as many notes as can be kept — delete some old ones on the Events calendar first.'
+          : 'That note didn’t save. Try again in a moment.'
+      setAnswer(no)
+      speak(no)
+    }
+    setStage('answered')
+  }
+
   /** Said aloud, and written out in her bar. */
   const speak = (text: string) => {
     speakAloud(text)
@@ -1114,6 +1167,10 @@ export function MiriamButton() {
       useMiriamStore.getState().setAwaiting(false)
       return setReminderBeforeEach(text, spoken, before, relation, first)
     },
+    note: (date, text) => {
+      useMiriamStore.getState().setAwaiting(false)
+      return addNote(date, text)
+    },
   })
 
   /**
@@ -1168,7 +1225,8 @@ export function MiriamButton() {
       rooms: () => myRooms(uid),
       latest: latestMessages,
       now: () => Date.now(),
-      briefedFood: () => (briefedFood.current?.day === todayStr() ? briefedFood.current.food : []),
+      briefedFood: () =>
+        briefedFood.current?.day === localToday() ? briefedFood.current.food : [],
       answerOf: (ev) => {
         const r = effectiveAvail(useEventsStore.getState().avail, ev as never, uid)
         return r ? { status: r.status, note: r.note ?? '', ts: r.ts ?? 0 } : null
@@ -1185,6 +1243,15 @@ export function MiriamButton() {
         } catch {
           return false
         }
+      },
+      // Loaded while her panel is open (above): waited for a moment if not yet.
+      notes: async () => {
+        const until = Date.now() + 3000
+        while (!useDateNotesStore.getState().loaded && Date.now() < until) {
+          await new Promise((r) => setTimeout(r, 100))
+        }
+        const store = useDateNotesStore.getState()
+        return { ready: store.loaded, all: store.notes }
       },
       carsFor: async (ev) => {
         if (ev.carpoolCars?.length) return ev.carpoolCars as unknown as CarpoolCarData[]

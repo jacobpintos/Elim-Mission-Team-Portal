@@ -2,7 +2,9 @@ import { collection, limit, orderBy, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getDocs } from '@/lib/liveFirestore'
 import { canUseMessages, isAdmin, isGuest, isWorship, visibleTabs } from '@/lib/roles'
-import { todayStr } from '@/lib/events'
+import { localToday, todayStr } from '@/lib/events'
+import { canKeepDateNotes, isDay, notesBetween } from '@/lib/dateNotes'
+import { useDateNotesStore } from '@/stores/dateNotesStore'
 import {
   announcementsFound,
   announcementsShown,
@@ -44,6 +46,7 @@ export type AppToolName =
   | 'app_guide'
   | 'read_set_lists'
   | 'read_meeting_requests'
+  | 'read_date_notes'
   // Changes: offered as these are, made only once confirmed (./actions.ts).
   | 'send_message'
   | 'post_announcement'
@@ -83,6 +86,8 @@ export type AppToolName =
   | 'take_down_livestream'
   | 'meeting_request'
   | 'change_my_name'
+  | 'add_date_note'
+  | 'remove_date_note'
 
 /** Admins' changes: offered to admins only (./actions.ts checks again). */
 const ADMIN_ACTIONS: AppToolName[] = [
@@ -140,6 +145,8 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   // Meeting requests are sent to leaders by name; anyone but a guest may be one.
   if (!guest) tools.push('read_meeting_requests', 'meeting_request')
   if (tabs.includes('settings')) tools.push('change_my_name')
+  // Notes on days of their own calendar: anyone but a public account (lib/dateNotes).
+  if (canKeepDateNotes(profile)) tools.push('read_date_notes', 'add_date_note', 'remove_date_note')
   return tools
 }
 
@@ -285,6 +292,25 @@ export async function runAppTool(name: string, input: Record<string, unknown>): 
       result = requests.length
         ? { requests }
         : { requests: [], note: 'No open meeting requests for them.' }
+    } else if (name === 'read_date_notes') {
+      // Their own, as loaded with her panel open (MiriamButton); else read now.
+      const store = useDateNotesStore.getState()
+      const reading = !store.loaded
+      if (reading) {
+        store.subscribe(String(profile.uid))
+        const until = Date.now() + 3000
+        while (!useDateNotesStore.getState().loaded && Date.now() < until) {
+          await new Promise((r) => setTimeout(r, 100))
+        }
+      }
+      const today = localToday()
+      const from = isDay(input.from) ? input.from : today
+      const to = isDay(input.to) ? input.to : from
+      const notes = notesBetween(useDateNotesStore.getState().notes, from, to)
+        .slice(0, 50)
+        .map((n) => ({ id: n.id, date: n.date, text: n.text }))
+      if (reading) store.unsubscribe()
+      result = notes.length ? { notes } : { notes: [], note: 'No notes of theirs on those days.' }
     } else if (name === 'read_set_lists') {
       const lists = await all<SetList>('setLists')
       const templates = useEventsStore.getState().templates

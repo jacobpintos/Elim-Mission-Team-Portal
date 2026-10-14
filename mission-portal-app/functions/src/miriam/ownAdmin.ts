@@ -4,7 +4,6 @@ import { embed } from './own/encoder'
 import { forgetBraveKey } from './own'
 import { forget, listLearned, listTaught, teach, untaught, WEB_DOC, type OwnDb } from './own/learn'
 import { CHURCH_SITE, readSite, SITE_DOC, storeSite } from './own/site'
-import { CORE } from './own/faith'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -55,7 +54,6 @@ export const miriamOwnAdmin = onCall(
           pages: Array.isArray(st.pages) ? st.pages.length : 0,
           passages: Array.isArray(st.passages) ? st.passages.length : 0,
         },
-        core: CORE.map((c) => ({ q: c.asked[0], a: c.answer })),
       }
     }
     if (action === 'readSite') {

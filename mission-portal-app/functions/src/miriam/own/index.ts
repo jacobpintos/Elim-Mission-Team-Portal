@@ -9,7 +9,7 @@ import { learnedExamples, taughtAnswers, WEB_DOC, type OwnDb } from './learn'
 import type { Skill } from './skills'
 import { read, seedExamples, type Reading } from './understand'
 import { webAnswer } from './web'
-import { faithAnswer, isFaithReply, LEADERSHIP } from './faith'
+import { aboutScripture, faithAnswer, isFaithReply, LEADERSHIP } from './faith'
 import { CHURCH_SITE } from './site'
 
 /**
@@ -76,6 +76,10 @@ const NO = /^(?:no|nope|nah|no thanks|not now|never mind|that's ok(?:ay)?)\b/i
 /** Asked plainly to look something up: the web, when no event of theirs is named. */
 const LOOK_IT_UP =
   /^(?:(?:hey|ok|okay)\s+)?(?:miriam[,\s]+)?(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:look\s+up|google|search\s+(?:the\s+)?(?:web|internet|online)\b|search\s+(?:online\s+)?for|look\s+online\s+for|check\s+(?:the\s+)?(?:internet|web)\s+for)\b/i
+
+/** The app's own things: "look up my tasks", "look up the set list" are the app's to find, not the web's. */
+const THE_APPS =
+  /\b(?:my|our|mine|the church|the well|set ?lists?|tasks?|to-?dos?|sermons?|songs?|chords?|chord sheets?|announcements?|messages?|events?|calendar|notes?|reminders?|availability|carpools?|teams?|schedule|content|videos?)\b/i
 
 /** Words that lean on what was said before. */
 const LEANS_BACK =
@@ -150,8 +154,8 @@ interface Understood {
  * What it is (./understand), read with each event's name as "the event"
  * (./events) — and, if that isn't plain, as said.
  */
-async function understand(input: OwnInput): Promise<Understood> {
-  const { text, today, lookups, db } = input
+async function understand(input: OwnInput, text = input.text): Promise<Understood> {
+  const { today, lookups, db } = input
   const events = await lookups.eventsBetween(shiftDate(today, -1), shiftDate(today, 365))
   const { masked, mentions } = mentionsIn(
     text,
@@ -163,8 +167,14 @@ async function understand(input: OwnInput): Promise<Understood> {
 
   const examples = [...seedExamples(), ...(await learnedExamples(db).catch(() => []))]
   let reading = read(v, examples)
-  // Asked to look it up: the web — but a question of faith is still one (./faith).
-  if (mentions.length === 0 && LOOK_IT_UP.test(text.trim()) && reading.skill !== 'faith') {
+  // Asked to look it up: the web — but a question of faith is still one
+  // (./faith), and the app's own things are the app's.
+  if (
+    mentions.length === 0 &&
+    LOOK_IT_UP.test(text.trim()) &&
+    reading.skill !== 'faith' &&
+    !THE_APPS.test(text)
+  ) {
     reading = {
       ...reading,
       skill: 'web',
@@ -195,6 +205,18 @@ async function understand(input: OwnInput): Promise<Understood> {
       margin: reading.margin,
     },
   }
+}
+
+/**
+ * Whether what came before was about faith: one of her answers on it, or a
+ * question of faith (answered with one she was taught, as Admin → Miriam
+ * has it, which reads like any other answer).
+ */
+async function onFaith(input: OwnInput, last: { said: string; reply: string }): Promise<boolean> {
+  if (isFaithReply(last.reply)) return true
+  if (!last.said.trim()) return false
+  const { reading } = await understand(input, last.said)
+  return reading.skill === 'faith' && sure(reading)
 }
 
 export async function ownAnswer(input: OwnInput): Promise<Own> {
@@ -234,7 +256,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
     // More asked about an answer on faith — another question of faith, or
     // "why?", "what about…" — she doesn't discuss beliefs. Something else
     // asked ("who's driving?") is answered as ever; "thanks" isn't more asked.
-    if (isFaithReply(last.reply) && !SAID_BACK.test(text.trim())) {
+    if (!SAID_BACK.test(text.trim()) && (await onFaith(input, last))) {
       const { reading } = await whatItIs()
       if (reading.skill === 'faith' || (reading.skill === 'other' && followsOn(text))) {
         return { result: fromLeadership(input.can), read: null, why: 'faith: more asked' }
@@ -277,8 +299,8 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
   const guarded = notHers(text, reading.skill)
   if (guarded) return { result: null, read: own, why: `${reading.skill}, but ${guarded}` }
 
-  // 3. Her answer.
-  if (reading.skill === 'faith') {
+  // 3. Her answer. On God or the Bible, only the church's own (./faith) — never the web's.
+  if (reading.skill === 'faith' || (reading.skill === 'web' && aboutScripture(text))) {
     return { result: await fromFaith(text, db, input.can, rawV()), read: own, why: 'faith' }
   }
   if (reading.skill === 'web') {
@@ -306,7 +328,8 @@ export async function webOrFaith(
   text: string,
   input: Pick<OwnInput, 'db' | 'today' | 'can' | 'web'> & Partial<Pick<OwnInput, 'history'>>
 ): Promise<OwnResult | null> {
-  if (skill === 'faith') {
+  // On God or the Bible, only the church's own (./faith) — never the web's.
+  if (skill === 'faith' || (skill === 'web' && aboutScripture(text))) {
     // More asked after an answer about faith: the church's leadership, not her.
     const last = input.history?.[input.history.length - 1]
     if (last && isFaithReply(last.reply)) return fromLeadership(input.can)

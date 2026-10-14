@@ -9,16 +9,18 @@ import type { OwnDb } from './learn'
  * saying where. Read every night and whenever an admin asks (../ownAdmin),
  * kept on the server (miriamOwn/site) with each passage's meaning.
  *
- * Only the church's own site is read — its pages, by its own links and its
- * sitemap, the ones about what it believes first; text that is on every page
- * (menus, footers) is left out.
+ * Only the church's own site is read — any page of it, by its own links and
+ * its sitemap, the ones about what it believes first; text that is on every
+ * page (menus, footers) is left out.
  */
 
 export const CHURCH_SITE = 'https://thewellofiowa.com'
 export const SITE_DOC = 'miriamOwn/site'
 
-const MAX_PAGES = 30
-const MAX_PASSAGES = 220
+const MAX_PAGES = 150
+const MAX_PASSAGES = 600
+/** What is kept must fit in one document (Firestore's limit is 1 MiB). */
+const MAX_KEPT_BYTES = 900_000
 const PAGE_MS = 8000
 const AGENT = 'MissionPortalMiriam/1.0 (+https://mission-team-portal.web.app)'
 
@@ -58,11 +60,12 @@ export function pageKey(url: string): string | null {
   }
 }
 
+/** The church's site, or a part of it: "thewellofiowa.com", "www.…", "media.thewellofiowa.com". */
 const sameSite = (url: string, base: string) => {
   try {
-    return (
-      new URL(url).hostname.replace(/^www\./, '') === new URL(base).hostname.replace(/^www\./, '')
-    )
+    const host = new URL(url).hostname.replace(/^www\./, '')
+    const home = new URL(base).hostname.replace(/^www\./, '')
+    return host === home || host.endsWith(`.${home}`)
   } catch {
     return false
   }
@@ -192,7 +195,13 @@ export async function readSite(
 /** Kept, unless nothing was read: then what was read before stays. */
 export async function storeSite(db: OwnDb, read: SiteRead): Promise<boolean> {
   if (read.passages.length === 0) return false
-  await db.doc(SITE_DOC).set({ ...read })
+  // As much as fits, the pages about what it believes being first.
+  const passages = [...read.passages]
+  const size = () => Buffer.byteLength(JSON.stringify({ ...read, passages }), 'utf8')
+  while (passages.length > 1 && size() > MAX_KEPT_BYTES) {
+    passages.splice(passages.length - Math.min(25, passages.length - 1))
+  }
+  await db.doc(SITE_DOC).set({ ...read, passages })
   siteCache = null
   return true
 }
@@ -242,7 +251,7 @@ const SAME: [RegExp, string][] = [
   [/^scriptur|^bible|^biblical/, 'bible'],
   [/^forgiv/, 'forgive'],
   [/^pray/, 'prayer'],
-  [/^resurrect|^risen$|^rose$/, 'resurrection'],
+  [/^resurrect|^ris(?:e|es|en|ing)$|^rose$/, 'resurrection'],
   [/^trinit|^triune/, 'trinity'],
   [/^marri|^marry|^wedding/, 'marriage'],
   [/^christ$|^jesus$/, 'jesus'],

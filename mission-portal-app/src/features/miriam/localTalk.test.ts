@@ -5,6 +5,7 @@ import type { QuickData } from '@/lib/miriamQuick'
 import type { Announcement, Message, Room, Task } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 import type { EventInstance } from '../../../functions/src/miriam/data'
+import type { DateNote } from '@/lib/dateNotes'
 
 /**
  * Miriam's on-device conversations, played through: what is said to her, and
@@ -97,6 +98,8 @@ interface Setup {
   failAnswers?: boolean
   /** Events of its own, in place of those above. */
   events?: Record<string, unknown>[]
+  /** Their notes on days of their calendar. */
+  notes?: DateNote[]
 }
 
 /** A person talking to her: each line said, and what came of it. */
@@ -122,6 +125,9 @@ function conversation(setup: Setup = {}) {
       )
     },
     directions: (ev) => log.push(`directions ${ev.instanceKey}`),
+    note: async (date, text) => {
+      log.push(`note ${date}: ${text}`)
+    },
     remindBeforeEach: async (text, spoken, before, relation, first) => {
       log.push(
         `before each ${JSON.stringify({
@@ -192,6 +198,7 @@ function conversation(setup: Setup = {}) {
       return true
     },
     carsFor: async (ev) => (ev.carpoolCars ?? []) as never,
+    notes: async () => ({ ready: true, all: setup.notes ?? [] }),
   }
   const say = async (said: string): Promise<string[]> => {
     log.length = 0
@@ -792,6 +799,64 @@ describe('what they have coming up', () => {
   it('not theirs — what’s on — is left to the plain list', async () => {
     const say = conversation({ tools: AVAIL_TOOLS })
     expect(await say("What's on next week?")).toEqual(['(to Claude)'])
+  })
+})
+
+describe('notes on days of their calendar', () => {
+  const NOTE_TOOLS = [...ALL_TOOLS, 'add_date_note']
+  const notes: DateNote[] = [
+    { id: 'n1', date: '2026-10-16', text: 'Bring the projector', at: 1 },
+    { id: 'n2', date: '2026-10-16', text: 'Call Sam', at: 2 },
+    { id: 'n3', date: '2026-10-20', text: 'Order shirts', at: 3 },
+  ]
+
+  it('one asked for: added at once', async () => {
+    const say = conversation({ tools: NOTE_TOOLS })
+    expect(await say('Add a note to Friday: bring the projector')).toEqual([
+      'note 2026-10-16: Bring the projector',
+    ])
+  })
+
+  it('no day said: asked which', async () => {
+    const say = conversation({ tools: NOTE_TOOLS })
+    expect(await say('make a note: call the venue')).toEqual(['ask: Which day should I put it on?'])
+    expect(await say('Thursday')).toEqual(['note 2026-10-15: Call the venue'])
+  })
+
+  it('nothing said for it: asked what', async () => {
+    const say = conversation({ tools: NOTE_TOOLS })
+    expect(await say('add a note to Friday')).toEqual(['ask: What should the note on Friday say?'])
+    expect(await say('pick up donuts')).toEqual(['note 2026-10-16: Pick up donuts'])
+  })
+
+  it('read out', async () => {
+    const say = conversation({ tools: NOTE_TOOLS, notes })
+    expect(await say('what are my notes for Friday?')).toEqual([
+      'say: On Friday you have 2 notes: Bring the projector; Call Sam.',
+    ])
+    expect(await say('any notes tomorrow?')).toEqual(['say: You don’t have any notes tomorrow.'])
+  })
+
+  it('taken away once confirmed', async () => {
+    const say = conversation({ tools: NOTE_TOOLS, notes })
+    expect(await say('delete my note for the 20th')).toEqual([
+      `offer remove_date_note ${JSON.stringify({ ids: ['n3'] })}`,
+    ])
+    expect(await say('remove the projector note')).toEqual([
+      `offer remove_date_note ${JSON.stringify({ ids: ['n1'] })}`,
+    ])
+  })
+
+  it('said with what they have on', async () => {
+    const say = conversation({ tools: [...AVAIL_TOOLS, 'add_date_note'], notes })
+    expect(await say("What's my schedule this week?")).toEqual([
+      'say: You have nothing on this week. Your notes: Friday — Bring the projector; Call Sam.',
+    ])
+  })
+
+  it('not for someone who can’t keep them', async () => {
+    const say = conversation()
+    expect(await say('add a note to Friday: bring the projector')).toEqual(['(to Claude)'])
   })
 })
 

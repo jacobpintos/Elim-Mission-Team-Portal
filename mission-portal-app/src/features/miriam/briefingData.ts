@@ -13,6 +13,8 @@ import { useGroupsStore } from '@/stores/groupsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useRemindersStore } from '@/stores/remindersStore'
+import { useDateNotesStore } from '@/stores/dateNotesStore'
+import { canKeepDateNotes } from '@/lib/dateNotes'
 import {
   assignedTo,
   canSeeEvent,
@@ -89,10 +91,12 @@ export async function gatherBriefing(): Promise<
   const now = new Date()
   const day = today()
 
+  const keepsNotes = canKeepDateNotes(profile)
   await Promise.all([
     loaded(() => useEventsStore.getState().templates.length > 0),
     loaded(() => !useTasksStore.getState().loading),
     loaded(() => useRemindersStore.getState().loaded),
+    keepsNotes ? loaded(() => useDateNotesStore.getState().loaded) : null,
   ])
   const { templates, overrides } = useEventsStore.getState()
   const groups = useGroupsStore.getState().groups as unknown as Group[]
@@ -158,6 +162,7 @@ export async function gatherBriefing(): Promise<
     attention,
     weather,
     food,
+    notes: keepsNotes ? useDateNotesStore.getState().notes : [],
   })
   return { ...briefing, asks }
 }

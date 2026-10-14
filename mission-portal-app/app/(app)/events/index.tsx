@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, Pressable, Linking, Platform } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack, useRouter } from 'expo-router'
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useConfigStore } from '@/stores/configStore'
@@ -13,7 +13,19 @@ import { isAdmin, isPublic, isGuest } from '@/lib/roles'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { FD } from '@/lib/format'
-import type { EventInstance, EventTemplate } from '@/types/events'
+import { isOverdue } from '@/lib/availability'
+import { canKeepDateNotes, isDay, notesBetween, type DateNote } from '@/lib/dateNotes'
+import { useTasksStore } from '@/stores/tasksStore'
+import { useDateNotesStore } from '@/stores/dateNotesStore'
+import { DayNotes, NOTE_COLOR } from '@/features/events/DayNotes'
+import {
+  DayTasks,
+  OVERDUE_COLOR,
+  TASK_COLOR,
+  taskStanding,
+  tasksDueBetween,
+} from '@/features/events/DayTasks'
+import type { EventInstance, EventTemplate, Task } from '@/types/events'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 const VIRTUAL_COLOR = '#8e44ad'
@@ -34,6 +46,39 @@ const MONTH_NAMES = [
   'December',
 ]
 
+/** On the list, a day's events first, then the tasks due, then your notes. */
+const ROW_ORDER = { event: 0, task: 1, note: 2 } as const
+type Row =
+  | { kind: 'event'; date: string; key: string; ev: EventInstance }
+  | { kind: 'task'; date: string; key: string; task: Task }
+  | { kind: 'note'; date: string; key: string; note: DateNote }
+
+/** A key to the calendar's marks: only those this person has. */
+function Legend({
+  marks,
+}: {
+  marks: { label: string; color: string; shape: 'dot' | 'square' | 'bar' }[]
+}) {
+  const colors = useThemeColors()
+  return (
+    <XStack gap="$3" justifyContent="center" flexWrap="wrap" marginTop="$2">
+      {marks.map((m) => (
+        <XStack key={m.label} gap="$1.5" alignItems="center">
+          <YStack
+            width={m.shape === 'bar' ? 9 : 7}
+            height={m.shape === 'bar' ? 3 : 7}
+            borderRadius={m.shape === 'dot' ? 4 : 1}
+            backgroundColor={m.color}
+          />
+          <Text color={colors.textMuted} fontSize={11}>
+            {m.label}
+          </Text>
+        </XStack>
+      ))}
+    </XStack>
+  )
+}
+
 // Build a range string for a given month (1-indexed)
 function monthRange(y: number, m: number) {
   const from = `${y}-${String(m).padStart(2, '0')}-01`
@@ -50,6 +95,10 @@ export default function EventsScreen() {
   const admin = isAdmin(profile)
   const publicUser = isPublic(profile)
   const isMember = !publicUser
+  // Your own on the calendar: the tasks you're due, and your notes (not a public account's).
+  const keepsNotes = canKeepDateNotes(profile)
+  const allTasks = useTasksStore((s) => s.tasks)
+  const allNotes = useDateNotesStore((s) => s.notes)
 
   const { instances, templates } = useEventsStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
@@ -113,6 +162,34 @@ export default function EventsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Opened to a day ("/events?date=2026-10-16"): from the briefing, or Miriam.
+  const { date: askedDay } = useLocalSearchParams<{ date?: string }>()
+  useEffect(() => {
+    if (!isDay(askedDay)) return
+    const [y, m] = askedDay.split('-').map(Number)
+    if (admin) useConfigStore.getState().setCalMonth(y, m)
+    else {
+      // Brought here by a link, not a change of this screen's own state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLocalY(y)
+      setLocalM(m)
+    }
+    setSelectedDay(askedDay)
+    setView('calendar')
+  }, [askedDay, admin])
+
+  useEffect(() => {
+    if (publicUser || !uid) return
+    const tasks = useTasksStore.getState()
+    const notes = useDateNotesStore.getState()
+    tasks.subscribe()
+    if (keepsNotes) notes.subscribe(uid)
+    return () => {
+      tasks.unsubscribe()
+      if (keepsNotes) notes.unsubscribe()
+    }
+  }, [uid, publicUser, keepsNotes])
+
   const { from, to } = monthRange(calY, calM)
   const allMonthInstances = instances(from, to)
   // Unpublished drafts: pulled from all templates (not month-scoped) so dateless drafts appear
@@ -141,6 +218,36 @@ export default function EventsScreen() {
     if (!byDate[ev.date]) byDate[ev.date] = []
     byDate[ev.date].push(ev)
   })
+  // Your tasks still to do, on the day each is due; your notes, on theirs.
+  const monthTasks = publicUser ? [] : tasksDueBetween(allTasks, uid, from, to)
+  const tasksByDate: Record<string, Task[]> = {}
+  monthTasks.forEach((t) => (tasksByDate[t.dueDate as string] ??= []).push(t))
+  const monthNotes = keepsNotes ? notesBetween(allNotes, from, to) : []
+  const notesByDate: Record<string, DateNote[]> = {}
+  monthNotes.forEach((n) => (notesByDate[n.date] ??= []).push(n))
+  const openTask = (t: Task) =>
+    router.push(`/assignments?taskId=${encodeURIComponent(String(t.id))}` as never)
+  // The list: the month's events, tasks due and notes, by day.
+  const rows: Row[] = [
+    ...monthEvents.map((ev) => ({
+      kind: 'event' as const,
+      date: ev.date,
+      key: ev.instanceKey,
+      ev,
+    })),
+    ...monthTasks.map((task) => ({
+      kind: 'task' as const,
+      date: task.dueDate as string,
+      key: `task-${task.id}`,
+      task,
+    })),
+    ...monthNotes.map((note) => ({
+      kind: 'note' as const,
+      date: note.date,
+      key: `note-${note.id}`,
+      note,
+    })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || ROW_ORDER[a.kind] - ROW_ORDER[b.kind])
 
   // Calendar grid helpers
   const firstDayOfMonth = new Date(calY, calM - 1, 1).getDay()
@@ -334,6 +441,8 @@ export default function EventsScreen() {
                   }
                   const ds = dayStr(day)
                   const evs = byDate[ds] ?? []
+                  const dayTasks = tasksByDate[ds] ?? []
+                  const dayNotes = notesByDate[ds] ?? []
                   const isSelected = selectedDay === ds
                   const isToday = ds === new Date().toISOString().split('T')[0]
 
@@ -385,6 +494,33 @@ export default function EventsScreen() {
                             ))}
                           </XStack>
                         ) : null}
+                        {dayTasks.length || dayNotes.length ? (
+                          // Your tasks due (squares) and your notes (a bar): marks, as the dots are.
+                          <XStack
+                            gap={2}
+                            justifyContent="center"
+                            alignItems="center"
+                            pointerEvents="none"
+                          >
+                            {dayTasks.slice(0, 2).map((t) => (
+                              <YStack
+                                key={String(t.id)}
+                                width={6}
+                                height={6}
+                                borderRadius={1}
+                                backgroundColor={isOverdue(t) ? OVERDUE_COLOR : TASK_COLOR}
+                              />
+                            ))}
+                            {dayNotes.length ? (
+                              <YStack
+                                width={8}
+                                height={3}
+                                borderRadius={1}
+                                backgroundColor={NOTE_COLOR}
+                              />
+                            ) : null}
+                          </XStack>
+                        ) : null}
                       </YStack>
                     </Pressable>
                   )
@@ -392,12 +528,29 @@ export default function EventsScreen() {
               </XStack>
             ))}
 
-            {/* Selected day events */}
-            {selectedDay && selectedEvents.length > 0 ? (
+            {!publicUser ? (
+              <Legend
+                marks={[
+                  { label: 'Event', color: colors.primary, shape: 'dot' },
+                  { label: 'Task due', color: TASK_COLOR, shape: 'square' },
+                  ...(keepsNotes
+                    ? [{ label: 'My note', color: NOTE_COLOR, shape: 'bar' as const }]
+                    : []),
+                ]}
+              />
+            ) : null}
+
+            {/* The day picked: its events, your tasks due, and your notes */}
+            {selectedDay ? (
               <YStack marginTop="$3" gap="$2">
                 <Text color={colors.text} fontWeight="700" fontSize="$3">
                   {FD(selectedDay, { weekday: true })}
                 </Text>
+                {selectedEvents.length === 0 ? (
+                  <Text color={colors.textMuted} fontSize="$2">
+                    No events on {FD(selectedDay)}.
+                  </Text>
+                ) : null}
                 {selectedEvents.map((ev) => (
                   <Pressable key={ev.instanceKey} onPress={() => openDetail(ev)}>
                     <XStack
@@ -438,22 +591,74 @@ export default function EventsScreen() {
                     </XStack>
                   </Pressable>
                 ))}
+                <DayTasks tasks={tasksByDate[selectedDay] ?? []} onOpen={openTask} />
+                {keepsNotes ? <DayNotes date={selectedDay} /> : null}
               </YStack>
-            ) : selectedDay ? (
-              <Text color={colors.textMuted} marginTop="$3" textAlign="center">
-                No events on {FD(selectedDay)}.
-              </Text>
             ) : null}
           </YStack>
         ) : (
           /* List view */
           <YStack padding="$3" gap="$2">
-            {monthEvents.length === 0 ? (
+            {rows.length === 0 ? (
               <Text color={colors.textMuted} textAlign="center">
                 No events this month.
               </Text>
             ) : (
-              monthEvents.map((ev) => {
+              rows.map((row) => {
+                if (row.kind !== 'event') {
+                  const color =
+                    row.kind === 'note'
+                      ? NOTE_COLOR
+                      : isOverdue(row.task)
+                        ? OVERDUE_COLOR
+                        : TASK_COLOR
+                  return (
+                    <Pressable
+                      key={row.key}
+                      onPress={() => {
+                        if (row.kind === 'task') return openTask(row.task)
+                        // A note: its day on the calendar, to read or change it.
+                        setSelectedDay(row.date)
+                        setView('calendar')
+                      }}
+                    >
+                      <XStack
+                        backgroundColor={colors.surface}
+                        borderRadius="$3"
+                        padding="$3"
+                        borderWidth={1}
+                        borderColor={colors.border}
+                        gap="$2"
+                        alignItems="center"
+                      >
+                        <YStack
+                          width={44}
+                          height={44}
+                          borderRadius="$2"
+                          backgroundColor={color + '22'}
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          <Text color={color} fontWeight="700" fontSize={15}>
+                            {row.date.split('-')[2]}
+                          </Text>
+                        </YStack>
+                        <YStack flex={1}>
+                          <Text color={colors.text} fontWeight="600" numberOfLines={3}>
+                            {row.kind === 'task' ? row.task.title : row.note.text}
+                          </Text>
+                          <Text color={colors.textMuted} fontSize="$2">
+                            {FD(row.date, { weekday: true })}
+                            {row.kind === 'task'
+                              ? ` · Task due · ${taskStanding(row.task)}`
+                              : ' · My note'}
+                          </Text>
+                        </YStack>
+                      </XStack>
+                    </Pressable>
+                  )
+                }
+                const ev = row.ev
                 const evColor = ev.isVirtual ? VIRTUAL_COLOR : colors.primary
                 return (
                   <Pressable key={ev.instanceKey} onPress={() => openDetail(ev)}>

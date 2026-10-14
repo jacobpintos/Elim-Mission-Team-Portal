@@ -13,9 +13,10 @@ import {
 
 /**
  * Miriam's daily briefing — "what do I need to know today?" — put together
- * on the device from what the app has: today's events, your tasks and
- * reminders, what's new, and, for admins and the worship team, what needs
- * their attention. Shown as a list to tap through, and said aloud.
+ * on the device from what the app has: today's events, your tasks, reminders
+ * and notes on today (lib/dateNotes), what's new, and, for admins and the
+ * worship team, what needs their attention. Shown as a list to tap through,
+ * and said aloud.
  *
  * Nothing here is sent anywhere: the same rules decide what each person
  * sees as the screens do (functions/src/miriam/data).
@@ -78,6 +79,8 @@ export interface BriefingInput {
   weather?: Record<string, { high: number; label: string }>
   /** Their events coming up with food still unclaimed, that they haven't signed up for (features/miriam/briefingData). */
   food?: FoodNudge[]
+  /** Their own notes on days of their calendar (lib/dateNotes): today's are said. */
+  notes?: { id: string; date: string; text: string; at: number }[]
 }
 
 /** An event of theirs with open food items, and one of them suggested. */
@@ -102,6 +105,8 @@ export interface BriefEvent {
 
 export interface Briefing {
   greeting: string
+  /** The day it is for: YYYY-MM-DD. */
+  date: string
   dateLine: string
   /** How many things need them: overdue and today's tasks, and attention items. */
   needs: number
@@ -110,6 +115,8 @@ export interface Briefing {
   next: BriefEvent | null
   tasks: (BriefTask & { due: 'overdue' | 'today' | 'week'; label: string })[]
   reminders: BriefReminder[]
+  /** Their notes on today, as written. */
+  notes: { id: string; text: string }[]
   news: { kind: 'announcement' | 'messages'; title: string; sub: string; href: string }[]
   attention: AttentionItem[]
   /** Food still open on their events: a suggestion each. */
@@ -258,8 +265,16 @@ export function buildBriefing(input: BriefingInput): Briefing {
 
   const attention = input.attention.slice(0, 5)
   const food = (input.food ?? []).slice(0, 2)
+  const notes = (input.notes ?? [])
+    .filter((n) => n.date === today)
+    .sort((a, b) => a.at - b.at)
+    .map((n) => ({ id: n.id, text: n.text }))
   const needs =
-    tasks.filter((t) => t.due !== 'week').length + attention.length + reminders.length + food.length
+    tasks.filter((t) => t.due !== 'week').length +
+    attention.length +
+    reminders.length +
+    food.length +
+    notes.length
 
   // Said aloud: in the same order, a sentence or two for each.
   const parts: string[] = [`${greeting}. Today is ${longDate(today)}.`]
@@ -311,6 +326,12 @@ export function buildBriefing(input: BriefingInput): Briefing {
         )
       )}.`
     )
+  if (notes.length) {
+    const said = notes.map((n) => n.text.replace(/[.!?]+$/, ''))
+    parts.push(
+      `${notes.length === 1 ? 'Your note for today' : 'Your notes for today'}: ${said.join('; ')}.`
+    )
+  }
   const announcements = news.filter((n) => n.kind === 'announcement')
   if (announcements.length)
     parts.push(
@@ -328,12 +349,14 @@ export function buildBriefing(input: BriefingInput): Briefing {
 
   return {
     greeting,
+    date: today,
     dateLine: `${longDate(today)}${needs ? ` · ${plural(needs, 'thing')} ${needs === 1 ? 'needs' : 'need'} you` : ' · You’re caught up'}`,
     needs,
     today: today_,
     next,
     tasks,
     reminders,
+    notes,
     news,
     attention,
     food,

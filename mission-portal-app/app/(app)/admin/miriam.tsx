@@ -33,8 +33,6 @@ interface Listing {
   web: { brave: boolean; setAt: number | null }
   /** The church's website, as she last read it, for questions of faith. */
   site?: { url: string; readAt: number | null; pages: number; passages: number }
-  /** What virtually all Christians agree on: built in. */
-  core?: { q: string; a: string }[]
 }
 
 /** Her skills, as an admin reads them. */
@@ -52,7 +50,7 @@ const SKILL_NAMES: Record<string, string> = {
   availability: 'Answering availability',
   reminder: 'A reminder',
   web: 'The web',
-  faith: 'Faith (to a pastor)',
+  faith: 'Faith (the church’s own answers)',
   other: 'Not hers — Claude’s',
 }
 
@@ -240,10 +238,11 @@ export function MiriamAdmin({ call }: { call: Api }) {
               Questions of faith
             </Text>
             <Text fontSize="$2" color="$gray10">
-              She answers a question of faith with an answer you’ve taught her; then with what
-              thewellofiowa.com says, in its words and with a link to the page; then with what
-              virtually all Christians agree on, below. Anything else she sends to one of your
-              pastors, and to the website.
+              She answers a question of faith only from an answer you’ve taught her, or from what
+              thewellofiowa.com says on any of its pages — in its words, with a link to the page.
+              Nothing else: not the web, not Claude, nothing built in. If neither says enough to
+              answer confidently, she asks them to reach out to church leadership, and anything more
+              asked about it goes there too.
             </Text>
             <Text fontSize="$3" fontWeight="600">
               {data.site?.readAt
@@ -255,32 +254,6 @@ export function MiriamAdmin({ call }: { call: Api }) {
                 {busy ? <Spinner size="small" /> : 'Read it now'}
               </Button>
             </XStack>
-            {data.core?.length ? (
-              <YStack gap="$2" paddingTop="$1">
-                <Text fontSize="$3" fontWeight="600">
-                  What virtually all Christians agree on (built in)
-                </Text>
-                <Text fontSize="$2" color="$gray10">
-                  To say one differently, teach her your own answer to the same question — yours
-                  comes first.
-                </Text>
-                {data.core.map((c) => (
-                  <YStack
-                    key={c.q}
-                    borderTopWidth={1}
-                    borderTopColor="$borderColor"
-                    paddingTop="$2"
-                  >
-                    <Text fontSize="$3" fontWeight="600">
-                      {c.q}
-                    </Text>
-                    <Text fontSize="$2" color="$gray11">
-                      {c.a}
-                    </Text>
-                  </YStack>
-                ))}
-              </YStack>
-            ) : null}
           </YStack>
 
           <YStack {...card}>

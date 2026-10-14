@@ -28,6 +28,8 @@ const EVENTS: Skill[] = [
 ]
 
 const NOT_HERS: [RegExp, Skill[]][] = [
+  // Their notes on days of their calendar (src/lib/dateNotes): read and kept in the app.
+  [/\bnotes?\b|\bmy\s+calendar\b/i, [...EVENTS, 'reminder', 'web', 'faith']],
   // Their tasks, and anyone's answers or numbers: Claude looks them up.
   [/\b(?:tasks?|assignments?|due|overdue|to-?dos?)\b/i, [...EVENTS, 'reminder']],
   [

@@ -65,6 +65,18 @@ import {
   type NotificationPlan,
 } from '@/lib/miriamNotifications'
 import {
+  daySaid,
+  daySaidIn,
+  noteAddedSaid,
+  noteAsked,
+  notesBetween,
+  notesMeant,
+  notesOn,
+  notesReadSaid,
+  noteText,
+  type DateNote,
+} from '@/lib/dateNotes'
+import {
   agoSaid,
   announcementsAsked,
   announcementsSaid,
@@ -124,6 +136,8 @@ export interface Talk {
     relation: string,
     first: { ev: EventInstance; at: Date } | null
   ) => Promise<void>
+  /** Adds a note on a day of their calendar, and says so — with a tap to take it back (MiriamButton). */
+  note: (date: string, text: string) => Promise<void>
 }
 
 /** What she can see, as this person: loaded, or read on asking. */
@@ -157,6 +171,8 @@ export interface Here {
   answer: (ev: EventInstance, status: AvailStatus, note: string) => Promise<boolean>
   /** An event's cars: set in its form, else for its date on its page. Null when they can't be read. */
   carsFor: (ev: EventInstance) => Promise<CarpoolCarData[] | null>
+  /** Their notes on days of their calendar (lib/dateNotes), once loaded; not ready if they can't be read. */
+  notes: () => Promise<{ ready: boolean; all: DateNote[] }>
 }
 
 /** Worked out here, when it plainly can be: false to leave it to Claude. */
@@ -167,6 +183,7 @@ export async function talkHere(said: string, here: Here, talk: Talk): Promise<bo
   // is no list of them.
   return (
     (await notificationsHere(said, here, talk)) ||
+    (await notesHere(said, here, talk)) ||
     (await directionsHere(said, here, talk)) ||
     (await remindersHere(said, here, talk)) ||
     (await taskStatusHere(said, here, talk)) ||
@@ -1166,8 +1183,13 @@ async function agendaHere(said: string, here: Here, talk: Talk): Promise<boolean
   if (!ask || ask.next) return false
   if (!/\b(?:i|my|me|i'm|am\s+i|i\s+have)\b/.test(plain(said))) return false
   const events = theirEvents(data, ask.from, ask.to)
+  // Their own notes on those days, said after.
+  const notes = here.tools.includes('add_date_note')
+    ? notesBetween((await here.notes()).all, ask.from, ask.to)
+    : []
+  const noted = notes.length ? ` ${notesTooSaid(notes, ask.from === ask.to, data.today)}` : ''
   if (events.length === 0) {
-    talk.say(`You have nothing on ${ask.span}.`)
+    talk.say(`You have nothing on ${ask.span}.${noted}`)
     return true
   }
   talk.thinking()
@@ -1175,7 +1197,7 @@ async function agendaHere(said: string, here: Here, talk: Talk): Promise<boolean
   const lines = await Promise.all(shown.map((ev) => agendaLine(ev, here, data)))
   const count = events.length === 1 ? 'one event' : `${events.length} events`
   const more = events.length > shown.length ? ` And ${events.length - shown.length} more.` : ''
-  const text = `${ask.span.charAt(0).toUpperCase()}${ask.span.slice(1)} you have ${count}. ${lines.join(' ')}${more}`
+  const text = `${ask.span.charAt(0).toUpperCase()}${ask.span.slice(1)} you have ${count}. ${lines.join(' ')}${more}${noted}`
   const unanswered = here.tools.includes('set_availability')
     ? shown.filter((ev) => !here.answerOf(ev)).slice(0, 3)
     : []
@@ -1223,6 +1245,108 @@ async function agendaLine(ev: EventInstance, here: Here, data: QuickData): Promi
   const when = `${eventDay(ev, data.today)}${ev.startTime ? ` at ${ev.startTime}` : ''}`
   return `${ev.title}, ${when}${parts.length ? ` — ${parts.join(', ')}` : ''}.`
 }
+
+/** Their notes, after what they have on: "Your note: bring the projector." / "Your notes: Friday — …". */
+function notesTooSaid(notes: DateNote[], oneDay: boolean, today: string): string {
+  const lead = notes.length === 1 ? 'Your note' : 'Your notes'
+  if (oneDay) return `${lead}: ${notes.map((n) => n.text.replace(/[.!?]+$/, '')).join('; ')}.`
+  const days = [...new Set(notes.map((n) => n.date))]
+  const said = days
+    .map((d) => {
+      const day = daySaid(d, today)
+      const texts = notesOn(notes, d).map((n) => n.text.replace(/[.!?]+$/, ''))
+      return `${day.charAt(0).toUpperCase()}${day.slice(1)} — ${texts.join('; ')}`
+    })
+    .join('. ')
+  return `${lead}: ${said}.`
+}
+
+// --- Notes on days of their calendar -----------------------------------------------------
+
+/**
+ * "Add a note to Friday: bring the projector", "what are my notes this
+ * week?", "delete my note for Friday": their own notes on days of their
+ * calendar (lib/dateNotes). Made at once, with a tap to take it back — the
+ * day, or what it says, asked for if not said; read out; and taken away once
+ * confirmed, as any change is.
+ */
+async function notesHere(said: string, here: Here, talk: Talk): Promise<boolean> {
+  if (!here.data || !here.tools.includes('add_date_note')) return false
+  const { today } = here.data
+  const ask = noteAsked(said, today)
+  if (!ask) return false
+  if (ask.kind === 'add') return noteWith(ask.date, ask.text, here, talk)
+  const notes = await here.notes()
+  if (!notes.ready) {
+    talk.say('I can’t read your notes just now. Try again in a moment.')
+    return true
+  }
+  if (ask.kind === 'read') {
+    talk.say(notesReadSaid(notesBetween(notes.all, ask.from, ask.to), ask.span, today))
+    return true
+  }
+  const meant = notesMeant(notes.all, ask, today)
+  if (meant.length === 0) {
+    talk.say(
+      ask.date
+        ? `You don’t have a note ${onTheDay(ask.date, today)}.`
+        : ask.words
+          ? 'I couldn’t find a note like that.'
+          : 'Which day’s note? Try “delete my note for Friday.”'
+    )
+    return true
+  }
+  await talk.offer('remove_date_note', { ids: meant.map((n) => n.id) })
+  return true
+}
+
+/** "On Friday", "today": a day, for a sentence. */
+const onTheDay = (date: string, today: string) => {
+  const d = daySaid(date, today)
+  return /^(?:today|tomorrow|yesterday)$/.test(d) ? d : `on ${d}`
+}
+
+/** A note with what is known of it: added, or what is missing asked for. */
+async function noteWith(
+  date: string | null,
+  text: string,
+  here: Here,
+  talk: Talk
+): Promise<boolean> {
+  const today = here.data?.today ?? ''
+  if (!text) {
+    talk.ask(
+      date ? `What should the note ${onTheDay(date, today)} say?` : 'What should the note say?',
+      async (reply, t) => {
+        if (neverMind(reply, t)) return true
+        // A question back is a new request; anything else is the note.
+        if (/\?\s*$/.test(reply) || /^(?:what|when|where|who|why|how)\b/i.test(plain(reply))) {
+          return false
+        }
+        const words = noteText(reply)
+        if (!words) return false
+        return noteWith(date, words.charAt(0).toUpperCase() + words.slice(1), here, t)
+      }
+    )
+    return true
+  }
+  if (!date) {
+    talk.ask('Which day should I put it on?', async (reply, t) => {
+      if (neverMind(reply, t)) return true
+      const day = daySaidIn(reply, today)
+      if (day) return noteWith(day, text, here, t)
+      if (looksLikeNewRequest(reply)) return false
+      t.say('I couldn’t tell which day. Try “Friday” or “October 20th.”')
+      return true
+    })
+    return true
+  }
+  await talk.note(date, text)
+  return true
+}
+
+/** Said once a note is added, for MiriamButton. */
+export const noteAdded = noteAddedSaid
 
 // --- An event's cars, arranged by an admin ------------------------------------------
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { Lookups } from '../../functions/src/miriam/lookups'
@@ -28,7 +28,12 @@ import {
   wikipediaSearch,
 } from '../../functions/src/miriam/own/web'
 import requests from './__fixtures__/miriamRequests.json'
-import { CORE, faithAnswer, LEADERSHIP } from '../../functions/src/miriam/own/faith'
+import {
+  aboutScripture,
+  DEFER,
+  faithAnswer,
+  LEADERSHIP,
+} from '../../functions/src/miriam/own/faith'
 import {
   forgetSite,
   linksOf,
@@ -77,14 +82,18 @@ function taken(text: string): Skill | null {
   return r.skill
 }
 
+// Her model runs here in plain JavaScript, as on the server: reading a site, or
+// a conversation, is seconds of it — more on a busy machine than the default allows.
+vi.setConfig({ testTimeout: 30_000 })
+
 describe('her examples', () => {
   it('each has its meaning worked out (else run scripts/miriam-model/seeds.js)', () => {
     const stored = JSON.parse(
       readFileSync(join(__dirname, '../../functions/models/minilm/seedVectors.json'), 'utf8')
     ) as Record<string, string>
-    const missing = [...Object.values(SEEDS).flat(), ...CORE.flatMap((c) => c.asked)].filter(
-      (t) => !stored[t]
-    )
+    const missing = Object.values(SEEDS)
+      .flat()
+      .filter((t) => !stored[t])
     expect(missing).toEqual([])
   })
 })
@@ -93,11 +102,13 @@ describe('what she takes as hers, of requests she has never seen', () => {
   const all = Object.entries(requests as Record<string, string[]>).flatMap(([want, list]) =>
     list.map((text) => ({ text, want }))
   )
-  it('is never wrong, and is most of what is hers', () => {
+  it('is never wrong, and is most of what is hers', async () => {
     const wrong: string[] = []
     let hers = 0
     let answered = 0
-    for (const { text, want } of all) {
+    for (const [i, { text, want }] of all.entries()) {
+      // A breath now and then: a long run without one leaves the test runner unanswered.
+      if (i % 20 === 0) await new Promise((done) => setImmediate(done))
       const got = taken(text)
       if (want !== 'other') hers++
       if (got === null) continue
@@ -150,6 +161,10 @@ describe('the guards', () => {
     expect(notHers('remind me at 4 to call mom', 'reminder')).toBeNull()
     expect(notHers('how many people live in Iowa', 'web')).toBeNull()
     expect(notHers('where is the picnic', 'event_place')).toBeNull()
+    // Notes on days of their calendar are the app's (src/lib/dateNotes).
+    expect(notHers('what are my notes for Friday', 'my_events')).toBeTruthy()
+    expect(notHers('add a note to Friday to bring chairs', 'reminder')).toBeTruthy()
+    expect(notHers("what's on my calendar this week", 'my_events')).toBeTruthy()
   })
 })
 
@@ -260,7 +275,8 @@ function memoryOwnDb(): OwnDb & { docs: Map<string, Record<string, unknown>> } {
   }
 }
 
-const church = fakeDb({
+/** The church's database, as her tests read it. */
+const CHURCH: Record<string, Record<string, Record<string, unknown>>> = {
   users: {
     sarah: { displayName: 'Sarah Lee', roles: ['regular'] },
     boss: { displayName: 'Jacob Pintos', roles: ['admin'] },
@@ -308,7 +324,8 @@ const church = fakeDb({
       carpoolLoc: 'the church lot',
     },
   },
-})
+}
+const church = fakeDb(CHURCH)
 
 const sarah = { uid: 'sarah', roles: ['regular'] }
 function input(text: string, extra: Partial<OwnInput> = {}): OwnInput {
@@ -374,6 +391,26 @@ describe('her answers', () => {
     })
   })
 
+  it('what they have on, with their own notes on those days', async () => {
+    const db = fakeDb({
+      ...CHURCH,
+      dateNotes: {
+        sarah: {
+          n1: { date: '2026-10-17', text: 'Bring the blanket', at: 1 },
+          n2: { date: '2026-10-18', text: 'Call Mom.', at: 2 },
+          n3: { date: '2026-10-30', text: 'Not this weekend', at: 3 },
+        },
+        boss: { n4: { date: '2026-10-17', text: 'Someone else’s', at: 4 } },
+      },
+    })
+    const own = await ownAnswer(
+      input('what have I got going on this weekend', { lookups: new Lookups(db, sarah, TODAY) })
+    )
+    expect(own.result).toMatchObject({
+      text: 'On this weekend: Church Picnic, Saturday at 12:00 PM. Your notes: Saturday — Bring the blanket. Sunday — Call Mom.',
+    })
+  })
+
   it('their answer for an event, to confirm', async () => {
     const own = await ownAnswer(input("I won't be able to make the picnic"))
     expect(own.result).toEqual({
@@ -431,15 +468,15 @@ describe('her answers', () => {
     expect(own.result).toMatchObject({
       text: 'We baptize believers by immersion, as a public step of faith.',
     })
-    // Another subject altogether: still a pastor's.
+    // Another subject altogether: the church's leadership's.
     forgetCaches()
     const other = await ownAnswer(input('what do we believe about communion', { db }))
-    expect((other.result as { text: string }).text).toMatch(/pastors/)
+    expect((other.result as { text: string }).text).toBe(DEFER)
   })
 
-  it('a question of faith not taught: a pastor', async () => {
+  it('a question of faith not taught, nor on the church’s site: its leadership', async () => {
     const own = await ownAnswer(input('what does the Bible say about worry'))
-    expect((own.result as { text: string }).text).toMatch(/pastors/)
+    expect((own.result as { text: string }).text).toBe(DEFER)
   })
 
   it('the web, saying where from, with its page to open', async () => {
@@ -488,7 +525,7 @@ describe('her answers', () => {
           can: [],
         })) as { text: string }
       ).text
-    ).toMatch(/^Jesus died in our place/)
+    ).toBe(DEFER)
     expect(
       await webOrFaith('event_time', 'x', { db: memoryOwnDb(), today: TODAY, can: [] })
     ).toBeNull()
@@ -762,16 +799,21 @@ describe('a question of faith', () => {
     })
   })
 
-  it('then what virtually all Christians agree on', async () => {
-    const f = await faithAnswer('is God good', await withSite())
-    expect(f.from).toBe('core')
-    expect(f.text).toMatch(/^Yes\. Scripture says God is good/)
-    expect((await faithAnswer('did Jesus really rise from the dead', memoryOwnDb())).from).toBe(
-      'core'
-    )
+  it('and nothing else: nothing built in, nothing from elsewhere', async () => {
+    // What the site says, it says…
+    const rose = await faithAnswer('did Jesus rise from the dead', await withSite())
+    expect(rose.from).toBe('site')
+    expect(rose.text).toMatch(/rose bodily from the dead/)
+    // …and without it, however plain the question, she doesn't answer it.
+    forgetSite()
+    for (const q of ['did Jesus rise from the dead', 'is God good', 'who is Jesus']) {
+      const f = await faithAnswer(q, memoryOwnDb())
+      expect(f.from, q).toBe('leadership')
+      expect(f.text).toBe(DEFER)
+    }
   })
 
-  it('what Christians differ on, or the site doesn’t say: a pastor’s, and the website', async () => {
+  it('what the site doesn’t say, or not plainly enough: the church’s leadership, and the website', async () => {
     const db = await withSite()
     for (const q of [
       'is it a sin to drink alcohol',
@@ -782,7 +824,7 @@ describe('a question of faith', () => {
       'do you have to be baptized to be saved',
     ]) {
       const f = await faithAnswer(q, db)
-      expect(f.from, q).toBe('pastor')
+      expect(f.from, q).toBe('leadership')
       expect(f.link).toEqual({ url: 'https://thewellofiowa.com', label: 'thewellofiowa.com' })
     }
   })
@@ -810,7 +852,8 @@ describe('a question of faith', () => {
 
 describe('more asked about an answer on faith', () => {
   beforeEach(() => forgetCaches())
-  const godIsGood = CORE.find((c) => c.id === 'god-good')!.answer
+  // Her answer to "is God good", with nothing taught nor on the site.
+  const godIsGood = DEFER
 
   it('is never discussed: the church’s leadership', async () => {
     for (const text of [
@@ -838,7 +881,10 @@ describe('more asked about an answer on faith', () => {
       today: TODAY,
       can: [],
       history: [
-        { said: 'will Jesus come back', reply: CORE.find((c) => c.id === 'return')!.answer },
+        {
+          said: 'will Jesus come back',
+          reply: 'We believe Jesus will return. (from thewellofiowa.com)',
+        },
       ],
     })
     expect(f).toMatchObject({ text: LEADERSHIP, open: null })
@@ -880,6 +926,80 @@ describe('more asked about an answer on faith', () => {
       })
     )
     expect(own.why).toBe('faith')
-    expect((own.result as { text: string }).text).toMatch(/pastors/)
+    expect((own.result as { text: string }).text).toBe(DEFER)
+  })
+
+  it('after an answer she was taught on faith, too', async () => {
+    const db = memoryOwnDb()
+    const a = 'We baptize believers by immersion, as a public step of faith.'
+    await teach(db, {
+      q: 'What do we believe about baptism?',
+      a,
+      v: embed('What do we believe about baptism?'),
+      by: 'boss',
+    })
+    const own = await ownAnswer(
+      input('why by immersion', {
+        db,
+        history: [{ said: 'what do we believe about baptism', reply: a }],
+      })
+    )
+    expect(own.result).toMatchObject({ text: LEADERSHIP })
+    // But an answer taught on something else is talked about as ever.
+    forgetCaches()
+    const parking = await ownAnswer(
+      input('why is that', {
+        history: [{ said: 'where do I park', reply: 'Park in the north lot.' }],
+      })
+    )
+    expect(parking.why).not.toBe('faith: more asked')
+  })
+})
+
+describe('scripture, never from the web', () => {
+  beforeEach(() => forgetCaches())
+  const noWeb = async () => {
+    throw new Error('not the web')
+  }
+
+  it('knows it by its words', () => {
+    for (const t of [
+      'look up John 3:16',
+      'who wrote the book of Romans',
+      'what does Psalm 23 say',
+      'what is 1 Corinthians 13:4 about',
+      'google what the Bible says about money',
+      'search online for who Jesus was',
+    ]) {
+      expect(aboutScripture(t), t).toBe(true)
+    }
+    for (const t of [
+      'look up the weather at 10:30',
+      'look up Costco hours',
+      'when does the Mark 2 come out',
+      'Godzilla showtimes',
+      'who invented the telephone',
+    ]) {
+      expect(aboutScripture(t), t).toBe(false)
+    }
+  })
+
+  it('asked of her, or of Claude, it is the church’s to answer', async () => {
+    const own = await ownAnswer(input('look up John 3:16', { web: noWeb }))
+    expect((own.result as { text: string }).text).toBe(DEFER)
+    const fromClaude = await webOrFaith('web', 'who wrote the book of Romans', {
+      db: memoryOwnDb(),
+      today: TODAY,
+      can: [],
+      web: noWeb,
+    })
+    expect(fromClaude).toMatchObject({ text: DEFER })
+  })
+
+  it('and the app’s own things are the app’s, not the web’s', async () => {
+    for (const text of ['look up my tasks', 'look up the set list for Sunday']) {
+      const own = await ownAnswer(input(text, { web: noWeb }))
+      expect(own.why, text).not.toBe('web')
+    }
   })
 })
