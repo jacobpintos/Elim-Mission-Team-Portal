@@ -16,12 +16,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
+      # The Node the Cloud Functions run on (functions/package.json), whose code
+      # the unit tests cover too.
+      - name: Setup Node 24
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: mission-portal-app/package-lock.json
 
@@ -40,7 +42,7 @@ jobs:
       # The Firestore and Storage emulators the rules tests run against are
       # Java processes.
       - name: Set up Java for the Firebase emulators
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -62,33 +64,7 @@ jobs:
       - name: Build service worker
         run: node scripts/build-service-worker.mjs dist
 
+      # What the web build sends, gzipped, against a budget a little above its
+      # size today, so it catches growth (scripts/check-bundle-size.mjs).
       - name: Bundle size budget check
-        run: |
-          echo "Checking bundle sizes..."
-          INITIAL_BUNDLE_SIZE=0
-          MAX_CHUNK_SIZE=256000  # 250 KB in bytes
-          MAX_INITIAL_SIZE=204800  # 200 KB in bytes
-          FAIL=0
-
-          if [ -d "dist/_expo/static/js" ]; then
-            for f in dist/_expo/static/js/*.js; do
-              SIZE=$(gzip -c "$f" | wc -c)
-              echo "  $(basename "$f"): ${SIZE} bytes compressed"
-              if [ "$SIZE" -gt "$MAX_CHUNK_SIZE" ]; then
-                echo "  ❌ EXCEEDS 250 KB limit!"
-                FAIL=1
-              fi
-              INITIAL_BUNDLE_SIZE=$((INITIAL_BUNDLE_SIZE + SIZE))
-            done
-          fi
-
-          echo "Total initial JS: ${INITIAL_BUNDLE_SIZE} bytes compressed"
-          if [ "$INITIAL_BUNDLE_SIZE" -gt "$MAX_INITIAL_SIZE" ]; then
-            echo "❌ Total initial bundle exceeds 200 KB compressed"
-            FAIL=1
-          fi
-
-          if [ "$FAIL" -eq 1 ]; then
-            exit 1
-          fi
-          echo "✅ Bundle size within budget"
+        run: node scripts/check-bundle-size.mjs dist
