@@ -11,6 +11,8 @@ import {
   payDateRequestMessage,
   canDecide,
   isAwaitingPayment,
+  receiptsKeptUntil,
+  receiptsDue,
 } from '../../functions/src/reimbursements/logic'
 
 const TODAY = '2026-10-14'
@@ -169,5 +171,28 @@ describe('messages', () => {
     expect(msg).toContain('Sunny Singh')
     expect(msg).toContain('Oct 30, 2026')
     expect(msg).toContain('Nov 6, 2026')
+  })
+})
+
+describe('keeping receipts for two years', () => {
+  const made = Date.UTC(2026, 9, 14, 12)
+
+  it('keeps them until two calendar years after the request', () => {
+    expect(new Date(receiptsKeptUntil(made)).toISOString().slice(0, 10)).toBe('2028-10-14')
+  })
+
+  it('removes a closed request’s files once that has passed, and not before', () => {
+    const r = { createdAt: made, status: 'paid' as const, receipts: ['a.jpg'] }
+    expect(receiptsDue(r, Date.UTC(2028, 9, 13))).toBe(false)
+    expect(receiptsDue(r, Date.UTC(2028, 9, 15))).toBe(true)
+    expect(receiptsDue({ ...r, status: 'denied' }, Date.UTC(2028, 9, 15))).toBe(true)
+  })
+
+  it('keeps an open request’s files, and has nothing to do with none left', () => {
+    const later = Date.UTC(2029, 0, 1)
+    expect(receiptsDue({ createdAt: made, status: 'approved', receipts: ['a.jpg'] }, later)).toBe(
+      false
+    )
+    expect(receiptsDue({ createdAt: made, status: 'paid', receipts: [] }, later)).toBe(false)
   })
 })

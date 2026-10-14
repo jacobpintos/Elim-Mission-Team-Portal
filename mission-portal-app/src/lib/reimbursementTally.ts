@@ -174,3 +174,32 @@ export function accountantAttention(
   }
   return items
 }
+
+/** The day a cost counts on: its event's date, or the day it was asked for. */
+export function costDate(r: Pick<Reimbursement, 'eventDate' | 'createdAt'>): string {
+  return r.eventDate ?? new Date(r.createdAt).toISOString().slice(0, 10)
+}
+
+export interface FinanceFilter {
+  /** Words from an event's name; empty matches every event. */
+  query: string
+  /** YYYY-MM-DD, inclusive; empty for no bound. */
+  from: string
+  to: string
+}
+
+/**
+ * The requests Finance reports on: those whose event's name holds every word
+ * searched for, dated within the range chosen.
+ */
+export function filterForFinance(requests: Reimbursement[], f: FinanceFilter): Reimbursement[] {
+  const words = f.query.toLowerCase().split(/\s+/).filter(Boolean)
+  return requests.filter((r) => {
+    const title = r.eventTitle.toLowerCase()
+    if (!words.every((w) => title.includes(w))) return false
+    const day = costDate(r)
+    if (f.from && day < f.from) return false
+    if (f.to && day > f.to) return false
+    return true
+  })
+}

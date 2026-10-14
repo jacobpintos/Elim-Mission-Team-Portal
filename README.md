@@ -90,7 +90,15 @@ Anyone on the team can ask to be paid back for something they bought for an even
 
 **Outside bills.** The Accountant can also log what is owed to someone outside the app, such as a van rental, a venue or a supplier. Use **+ Log an outside bill** in the Reimbursements section of Assignments. It records who is owed, the event, the items, the due date and, optionally, the invoice as a photo or PDF. It's approved as soon as it's logged, goes on the Accountant's task list with the due date as a reminder, and is closed by marking it paid. Its due date can be moved without asking anyone.
 
-**The Reimbursements section** of Assignments holds everyone's own requests. For the Accountant, it also tallies every cost by event: what's waiting for a decision, what's owed and what's been paid. Team members' requests are green and outside bills are purple. Only the Accountant sees the tally. The Accountant's briefing from Miriam lists requests to decide, overdue payments and payments due this week.
+**The Reimbursements section** of Assignments holds everyone's own requests. Team members' requests are green and outside bills are purple. The Accountant's briefing from Miriam lists requests to decide, overdue payments and payments due this week.
+
+**Admin → Finance** is the Accountant's alone, whether or not they're an admin. Nobody else sees the tab, and the screen refuses anyone else. A non-admin Accountant can open Finance and nothing else in the admin area, from their Reimbursements section.
+- Search events by name and choose a date range ("This year", "Last 12 months" and so on).
+- The matching events are reported together: total cost, what's to decide, owed and paid, and team members against outside bills.
+- Tap an event to see its own costs, each with the receipts or invoice it came with.
+- The list downloads as a spreadsheet.
+
+**Receipts and invoices are kept for two years** from when a request was made. After that, once the request is paid or denied, `purgeOldReceipts` removes the files each night. The request, its amounts and its history stay, and Finance notes when the files were removed.
 
 Every step sends a push notification to the other person. Amounts and receipts are visible only to the person who asked, the Accountant and admins. The rest of the team sees only that the task exists. All steps run through callables in `functions/src/reimbursements/`, and clients can't write the requests directly.
 

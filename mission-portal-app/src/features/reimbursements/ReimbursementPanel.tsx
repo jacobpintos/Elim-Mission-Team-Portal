@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Image, Linking, Pressable, StyleSheet } from 'react-native'
+import { Pressable } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useAuthStore } from '@/stores/authStore'
 import { useReimbursementsStore } from '@/stores/reimbursementsStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
-import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import { formatCents, parseDollars } from '@/lib/money'
-import { receiptUrl, isPdf } from '@/lib/receiptUpload'
 import { KIND_COLORS, kindOf } from '@/lib/reimbursementTally'
 import { displayToIso } from '@/lib/eventDates'
 import { FD } from '@/lib/format'
 import type { Task } from '@/types/events'
 import type { Reimbursement, ReimbursementStatus } from '@/types/reimbursement'
 import { Field, maskDate } from './fields'
+import { ReceiptThumbs } from './ReceiptThumbs'
 
 const STATUS: Record<ReimbursementStatus, { label: string; color: string }> = {
   submitted: { label: 'Waiting for a decision', color: '#7f8c8d' },
@@ -78,20 +77,7 @@ function Details({
   const [reason, setReason] = useState('')
   const [date, setDate] = useState('')
   const [busy, setBusy] = useState(false)
-  const [urls, setUrls] = useState<string[]>([])
-  const [open, setOpen] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
-
-  // Links are asked for when the panel is shown, not stored: see receiptUpload.
-  useEffect(() => {
-    let live = true
-    Promise.all(r.receipts.map((p) => receiptUrl(p).catch(() => '')))
-      .then((u) => live && setUrls(u))
-      .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [r.receipts])
 
   const status = STATUS[r.status]
   // An outside bill: owed to someone with no account, so nobody to ask or tell.
@@ -287,42 +273,11 @@ function Details({
         : null}
       {r.note ? row('Note', r.note) : null}
 
-      {r.receipts.length > 0 ? (
-        <YStack gap="$1">
-          <Text color={colors.textMuted} fontSize="$1" textTransform="uppercase">
-            {external ? 'Invoice' : 'Receipts'}
-          </Text>
-          <XStack gap="$2" flexWrap="wrap">
-            {r.receipts.map((p, i) =>
-              urls[i] ? (
-                <Pressable
-                  key={p}
-                  // A PDF opens in the browser or a viewer; a photo in the lightbox.
-                  onPress={() => (isPdf(p) ? void Linking.openURL(urls[i]) : setOpen(urls[i]))}
-                  accessibilityLabel={`${external ? 'Invoice' : 'Receipt'} ${i + 1}`}
-                >
-                  {isPdf(p) ? (
-                    <YStack
-                      style={styles.thumb}
-                      backgroundColor={colors.background}
-                      alignItems="center"
-                      justifyContent="center"
-                    >
-                      <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                        PDF
-                      </Text>
-                    </YStack>
-                  ) : (
-                    <Image source={{ uri: urls[i] }} style={styles.thumb} resizeMode="cover" />
-                  )}
-                </Pressable>
-              ) : (
-                <YStack key={p} style={styles.thumb} backgroundColor={colors.background} />
-              )
-            )}
-          </XStack>
-        </YStack>
-      ) : null}
+      <ReceiptThumbs
+        paths={r.receipts}
+        label={external ? 'Invoice' : 'Receipts'}
+        removedAt={r.receiptsRemovedAt}
+      />
 
       {/* A date change waiting on the person who asked. */}
       {r.dateChange ? (
@@ -476,18 +431,6 @@ function Details({
             : null}
         </YStack>
       ) : null}
-
-      {open ? (
-        <ImageLightbox key={open} uri={open} onClose={() => setOpen(null)} name="receipt" />
-      ) : null}
     </YStack>
   )
 }
-
-const styles = StyleSheet.create({
-  thumb: {
-    width: 64,
-    height: 64,
-    borderRadius: 6,
-  },
-})

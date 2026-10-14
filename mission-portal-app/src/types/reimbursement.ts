@@ -59,5 +59,7 @@ export interface Reimbursement {
   createdAt: number
   /** When it was marked paid. */
   paidAt?: number
+  /** When its receipts or invoices were removed, two years after it was made. */
+  receiptsRemovedAt?: number
   history?: ReimbursementHistoryEntry[]
 }

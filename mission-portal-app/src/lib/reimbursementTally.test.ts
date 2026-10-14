@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { tally, tallyByEvent, accountantAttention, kindOf } from './reimbursementTally'
+import {
+  tally,
+  tallyByEvent,
+  accountantAttention,
+  kindOf,
+  filterForFinance,
+} from './reimbursementTally'
 import type { Reimbursement } from '@/types/reimbursement'
 
 let n = 0
@@ -100,5 +106,29 @@ describe('accountantAttention', () => {
 
   it('says nothing when nothing needs them', () => {
     expect(accountantAttention([req({ status: 'paid' })], '2026-10-14', '2026-10-21')).toEqual([])
+  })
+})
+
+describe('filterForFinance', () => {
+  const rs = [
+    req({ eventTitle: 'Youth Retreat', eventDate: '2026-03-10' }),
+    req({ eventTitle: 'Mission Trip Haiti', eventDate: '2026-07-01' }),
+    req({ eventTitle: 'Youth Lock-in', eventDate: '2026-11-20' }),
+    req({ eventTitle: 'Supplies', eventDate: null, createdAt: Date.UTC(2026, 6, 4) }),
+  ]
+  const titles = (f: Parameters<typeof filterForFinance>[1]) =>
+    filterForFinance(rs, f).map((r) => r.eventTitle)
+
+  it('matches every word of the search in the event name, in any case', () => {
+    expect(titles({ query: 'youth', from: '', to: '' })).toEqual(['Youth Retreat', 'Youth Lock-in'])
+    expect(titles({ query: 'TRIP haiti', from: '', to: '' })).toEqual(['Mission Trip Haiti'])
+  })
+
+  it('keeps what falls in the range, inclusive, dating an undated cost by when it was asked', () => {
+    expect(titles({ query: '', from: '2026-07-01', to: '2026-07-31' })).toEqual([
+      'Mission Trip Haiti',
+      'Supplies',
+    ])
+    expect(titles({ query: 'youth', from: '2026-06-01', to: '' })).toEqual(['Youth Lock-in'])
   })
 })

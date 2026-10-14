@@ -59,3 +59,4 @@ export {
   createExternalExpense,
 } from './reimbursements'
 export { nightlyBackup } from './backups'
+export { purgeOldReceipts } from './reimbursements/retention'

@@ -204,3 +204,33 @@ export function payDateAnswerMessage(
 export function paidMessage(r: Named & { approvedAmount: number }): string {
   return `${r.accountantName} paid your ${formatCents(r.approvedAmount)} reimbursement for ${r.eventTitle}.`
 }
+
+// ─── Keeping receipts ─────────────────────────────────────────────────────────
+
+/** Receipts and invoices are kept this long from when the request was made. */
+export const RECEIPT_KEEP_YEARS = 2
+
+/** The moment a request's files may be removed: two calendar years after it was made. */
+export function receiptsKeptUntil(createdAt: number): number {
+  const d = new Date(createdAt)
+  d.setUTCFullYear(d.getUTCFullYear() + RECEIPT_KEEP_YEARS)
+  return d.getTime()
+}
+
+/**
+ * Whether a request's files are due to be removed.
+ *
+ * Only once it is closed — paid or denied. A request somehow still open after
+ * two years keeps its receipts until it is settled: they are the evidence for
+ * a payment not yet made.
+ */
+export function receiptsDue(
+  r: { createdAt: number; status: ReimbursementStatus; receipts: string[] },
+  now: number
+): boolean {
+  return (
+    r.receipts.length > 0 &&
+    (r.status === 'paid' || r.status === 'denied') &&
+    now >= receiptsKeptUntil(r.createdAt)
+  )
+}

@@ -30,6 +30,7 @@ const SECTIONS: AdminSection[] = [
   { key: 'teams', label: 'Common Teams', path: '/(app)/admin/teams', icon: '🤝' },
   { key: 'templates', label: 'Task Templates', path: '/(app)/admin/templates', icon: '📋' },
   { key: 'leadership', label: 'Leadership Team', path: '/(app)/admin/leadership', icon: '⭐' },
+  { key: 'finance', label: 'Finance', path: '/(app)/admin/finance', icon: '💵' },
   {
     key: 'analytics',
     label: 'Analytics',
@@ -50,7 +51,23 @@ const SECTIONS: AdminSection[] = [
  * public-facing surface goes. Digests are email, and follow that flag.
  */
 export const ADMIN_SECTIONS: AdminSection[] = SECTIONS.filter((s) => {
+  // Finance is the Accountant's, not every admin's: see adminSectionsFor.
+  if (s.key === 'finance') return false
   if (s.key === 'analytics') return PUBLIC_SURFACE_ENABLED
   if (s.key === 'digests') return EMAIL_FEATURES_ENABLED
   return true
 })
+
+/**
+ * The admin sections a given person sees.
+ *
+ * Finance is shown only to the Accountant, admin or not: it holds what
+ * everyone spent and was paid back, which the rules let only the Accountant
+ * read. Someone who is the Accountant without being an admin gets Finance
+ * and nothing else (admin/_layout.tsx).
+ */
+export function adminSectionsFor(opts: { admin: boolean; accountant: boolean }): AdminSection[] {
+  const finance = SECTIONS.find((s) => s.key === 'finance') as AdminSection
+  const base = opts.admin ? ADMIN_SECTIONS : []
+  return opts.accountant ? [...base, finance] : base
+}

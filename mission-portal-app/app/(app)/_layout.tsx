@@ -245,7 +245,10 @@ export default function AppLayout() {
   }
   const pathSeg = pathname.split('/').filter(Boolean)[0] ?? ''
   const owner = SUB_ROUTE_OWNERS[pathSeg]
-  const allowed = tabs.includes(pathSeg as Tab) || (!!owner && tabs.includes(owner))
+  // Finance belongs to the Accountant, who may not be an admin and so may not
+  // have the Admin tab. The admin layout and the screen check it is them.
+  const financeOnly = pathname.replace(/\/$/, '').endsWith('/admin/finance')
+  const allowed = tabs.includes(pathSeg as Tab) || (!!owner && tabs.includes(owner)) || financeOnly
   if (pathSeg && !allowed) {
     return <Redirect href={`/${tabs[0]}`} />
   }
