@@ -138,13 +138,23 @@ service cloud.firestore {
 
     match /tasks/{id} {
       allow read: if isSignedIn();
-      // Members may move a task's status — with when it was done, which the
-      // app writes alongside 'done' (tasksStore.setStatus) and cleanup reads;
-      // a guest may not, being read-only.
-      allow write: if isAdmin() ||
+      // Admins make, change and remove tasks.
+      allow create, delete: if isAdmin();
+      // Someone a task is assigned to may move its status — with when it was
+      // done, which the app writes alongside 'done' (tasksStore.setStatus) and
+      // cleanup reads, and the projected date it writes alongside 'behind'.
+      // Only their own: this used to let any member move anyone's task. A
+      // guest may not, being read-only.
+      //
+      // A reimbursement's task is moved by its callables alone, which change
+      // the request with it and tell the person who asked. Marked done here,
+      // it would close with the request still open and nobody told.
+      allow update: if isAdmin() ||
         (isSignedIn() && !isGuest() &&
+         resource.data.get('taskType', '') != 'reimbursement' &&
+         resource.data.get('assignees', []).hasAny([request.auth.uid]) &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['status', 'doneAt', 'overdueNotified', '_updatedAt']));
+           .hasOnly(['status', 'doneAt', 'projectedDate', 'overdueNotified', '_updatedAt']));
     }
 
     match /rooms/{id} {

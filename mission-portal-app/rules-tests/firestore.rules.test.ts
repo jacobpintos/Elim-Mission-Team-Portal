@@ -64,7 +64,11 @@ beforeEach(async () => {
     await setDoc(doc(db, 'setLists', 'sl1'), { title: 'Sunday' })
     await setDoc(doc(db, 'chordSheets', 'cs1'), { title: 'Song' })
     await setDoc(doc(db, 'inputList', 'main'), { rows: [] })
-    await setDoc(doc(db, 'tasks', 'gt1'), { title: 'Do', status: 'pending' })
+    await setDoc(doc(db, 'tasks', 'gt1'), {
+      title: 'Do',
+      status: 'pending',
+      assignees: [MEMBER, GUEST],
+    })
     await setDoc(doc(db, 'rooms', 'r1'), { name: 'Team', members: [MEMBER], reviewers: [] })
     await setDoc(doc(db, 'rooms', 'r1', 'messages', 'm1'), {
       uid: MEMBER,
@@ -663,11 +667,19 @@ describe('securityReports', () => {
 describe('tasks', () => {
   beforeEach(async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'tasks', 't1'), { title: 'Do', status: 'pending' })
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'tasks', 't1'), { title: 'Do', status: 'pending', assignees: [MEMBER] })
+      await setDoc(doc(db, 'tasks', 'rt1'), {
+        title: 'Reimbursement',
+        status: 'pending',
+        assignees: [WORSHIP],
+        owner: MEMBER,
+        taskType: 'reimbursement',
+      })
     })
   })
 
-  it('lets a member flip status but not retitle a task', async () => {
+  it('lets an assignee flip status but not retitle a task', async () => {
     await assertSucceeds(updateDoc(doc(as(MEMBER), 'tasks/t1'), { status: 'done' }))
     await assertFails(updateDoc(doc(as(MEMBER), 'tasks/t1'), { title: 'Changed' }))
   })
@@ -683,8 +695,50 @@ describe('tasks', () => {
     )
   })
 
+  it("refuses a member moving a task that isn't theirs", async () => {
+    // It used to be allowed for any member, on any task.
+    await assertFails(updateDoc(doc(as(OUTSIDER), 'tasks/t1'), { status: 'done' }))
+  })
+
+  it('lets an assignee say they are behind, with when they expect to finish', async () => {
+    // What the update sheet on Assignments writes.
+    await assertSucceeds(
+      updateDoc(doc(as(MEMBER), 'tasks/t1'), {
+        status: 'behind',
+        projectedDate: '2026-11-01',
+        _updatedAt: serverTimestamp(),
+      })
+    )
+  })
+
+  it("refuses moving a reimbursement's task directly, even for its assignee or owner", async () => {
+    // The callables move it, along with the request and a notification.
+    await assertFails(updateDoc(doc(as(WORSHIP), 'tasks/rt1'), { status: 'done' }))
+    await assertFails(updateDoc(doc(as(MEMBER), 'tasks/rt1'), { status: 'done' }))
+  })
+
+  it('lets only an admin create or delete a task', async () => {
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'tasks/new1'), {
+        title: 'Mine',
+        status: 'pending',
+        assignees: [MEMBER],
+      })
+    )
+    await assertFails(deleteDoc(doc(as(MEMBER), 'tasks/t1')))
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'tasks/new1'), {
+        title: 'Theirs',
+        status: 'pending',
+        assignees: [MEMBER],
+      })
+    )
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'tasks/t1')))
+  })
+
   it('lets an admin change anything', async () => {
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'tasks/t1'), { title: 'Changed' }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'tasks/rt1'), { status: 'done' }))
   })
 })
 
