@@ -3,7 +3,9 @@ import { Pressable } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { sameId } from '@/lib/ids'
-import type { EventTeam, CommonTeam } from '@/types/events'
+import { confirmAsync } from '@/lib/confirm'
+import { AVAIL_COLORS, AVAIL_LABELS, availPickRank } from '@/lib/availability'
+import type { EventTeam, CommonTeam, AvailResponse } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 
 interface TeamsEditorProps {
@@ -12,6 +14,13 @@ interface TeamsEditorProps {
   assignedUids: Set<string>
   allUsers: UserProfile[]
   commonTeams: CommonTeam[]
+  /**
+   * What each person said about this event's availability, or null when they
+   * have not answered. Leaders assign roles from people's answers, so the
+   * answer is shown where the assigning happens rather than on a screen of its
+   * own they would have to keep checking against.
+   */
+  availOf?: (uid: string) => AvailResponse['status'] | null
 }
 
 export function TeamsEditor({
@@ -20,6 +29,7 @@ export function TeamsEditor({
   assignedUids,
   allUsers,
   commonTeams,
+  availOf = () => null,
 }: TeamsEditorProps) {
   const colors = useThemeColors()
   const [pickerIdx, setPickerIdx] = useState<number | null>(null)
@@ -34,8 +44,17 @@ export function TeamsEditor({
       members: teams[teamIdx].members.filter((m) => !sameId(m, uid)),
     })
 
-  const addMember = (teamIdx: number, uid: string) => {
+  const addMember = async (teamIdx: number, uid: string) => {
     if (teams[teamIdx].members.some((m) => sameId(m, uid))) return
+    // Asked, not refused: a leader may know something the answer does not —
+    // that the person has since changed their plans, say.
+    if (availOf(uid) === 'no') {
+      const ok = await confirmAsync(`${getName(uid)} said they are not available for this event.`, {
+        title: 'Not available',
+        confirmLabel: 'Add anyway',
+      })
+      if (!ok) return
+    }
     updateTeam(teamIdx, { members: [...teams[teamIdx].members, uid] })
   }
 
@@ -65,6 +84,9 @@ export function TeamsEditor({
                 ? (u.displayName ?? '').toLowerCase().includes(pickerSearch.toLowerCase())
                 : true)
           )
+          // Available people first, those who said no last. A stable sort, so
+          // within an answer people keep the order the directory has them in.
+          .sort((a, b) => availPickRank(availOf(a.uid)) - availPickRank(availOf(b.uid)))
           .slice(0, 8)
 
         return (
@@ -99,6 +121,7 @@ export function TeamsEditor({
                 {team.members.map((m) => {
                   const uidStr = String(m)
                   const assigned = assignedUids.has(uidStr)
+                  const status = availOf(uidStr)
                   return (
                     <Pressable key={uidStr} onPress={() => removeMember(idx, uidStr)}>
                       <XStack
@@ -111,6 +134,9 @@ export function TeamsEditor({
                         gap="$1"
                         alignItems="center"
                       >
+                        {status ? (
+                          <AvailDot status={status} />
+                        ) : null}
                         <Text color={assigned ? colors.primary : '#d4a017'} fontSize="$2">
                           {getName(m)}
                         </Text>
@@ -142,21 +168,37 @@ export function TeamsEditor({
                   borderColor={colors.border}
                   size="$3"
                 />
-                {searchResults.map((u) => (
-                  <Pressable
-                    key={u.uid}
-                    onPress={() => {
-                      addMember(idx, u.uid)
-                      setPickerSearch('')
-                    }}
-                  >
-                    <XStack padding="$2" borderRadius="$1" backgroundColor={colors.surface}>
-                      <Text color={colors.text} fontSize="$3">
-                        {u.displayName ?? u.email ?? u.uid}
-                      </Text>
-                    </XStack>
-                  </Pressable>
-                ))}
+                {searchResults.map((u) => {
+                  const status = availOf(u.uid)
+                  return (
+                    <Pressable
+                      key={u.uid}
+                      onPress={() => {
+                        addMember(idx, u.uid)
+                        setPickerSearch('')
+                      }}
+                    >
+                      <XStack
+                        padding="$2"
+                        borderRadius="$1"
+                        backgroundColor={colors.surface}
+                        alignItems="center"
+                        gap="$2"
+                      >
+                        <Text color={colors.text} fontSize="$3" flex={1}>
+                          {u.displayName ?? u.email ?? u.uid}
+                        </Text>
+                        <Text
+                          color={status ? AVAIL_COLORS[status] : colors.textMuted}
+                          fontSize="$2"
+                          fontWeight={status ? '600' : '400'}
+                        >
+                          {status ? AVAIL_LABELS[status] : 'No answer'}
+                        </Text>
+                      </XStack>
+                    </Pressable>
+                  )
+                })}
                 <Pressable onPress={() => setPickerIdx(null)}>
                   <Text color={colors.textMuted} fontSize="$2" textAlign="right">
                     Done
@@ -263,5 +305,18 @@ export function TeamsEditor({
         </Text>
       )}
     </YStack>
+  )
+}
+
+/** A person's answer as a coloured dot, for the chips where a label won't fit. */
+function AvailDot({ status }: { status: AvailResponse['status'] }) {
+  return (
+    <XStack
+      width={8}
+      height={8}
+      borderRadius={99}
+      backgroundColor={AVAIL_COLORS[status]}
+      accessibilityLabel={AVAIL_LABELS[status]}
+    />
   )
 }

@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/Modal'
 import { db } from '@/lib/firebase'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useEventsStore, resolveAssignedUids } from '@/stores/eventsStore'
+import { teamAvailStatus } from '@/lib/availability'
 import { useUsersStore } from '@/stores/usersStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -271,7 +272,7 @@ export function EventFormModal({
   prefill,
 }: EventFormModalProps) {
   const colors = useThemeColors()
-  const { createEvent, updateEvent, deleteEvent, setOverride } = useEventsStore()
+  const { createEvent, updateEvent, deleteEvent, setOverride, avail } = useEventsStore()
   const { users: allStoreUsers } = useUsersStore()
   const { createTask } = useTasksStore()
   const { profile } = useAuthStore()
@@ -1299,6 +1300,14 @@ export function EventFormModal({
           assignedUids={assignedUids}
           allUsers={allUsers}
           commonTeams={commonTeams}
+          availOf={(uid) =>
+            teamAvailStatus(
+              avail,
+              event,
+              uid,
+              instanceKey && editScope === 'instance' ? instanceKey : undefined
+            )
+          }
         />
 
         {/* Dress Code */}

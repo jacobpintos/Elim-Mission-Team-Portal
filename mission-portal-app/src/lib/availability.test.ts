@@ -6,6 +6,8 @@ import {
   getSeriesAvail,
   effectiveAvail,
   isOverdue,
+  teamAvailStatus,
+  availPickRank,
 } from './availability'
 import type { EventInstance, AvailResponse } from '@/types/events'
 
@@ -121,5 +123,52 @@ describe('isOverdue', () => {
     at('2026-03-10')
     expect(isOverdue({ status: 'todo' })).toBe(false)
     expect(isOverdue({ dueDate: null, status: 'todo' })).toBe(false)
+  })
+})
+
+describe('teamAvailStatus', () => {
+  const oneTime = {
+    id: 'e9',
+    isRec: false,
+    date: '2026-06-05',
+    extraDays: [{ date: '2026-06-06' }],
+  } as Parameters<typeof teamAvailStatus>[1]
+
+  it('is null when there is no event yet, or no answer', () => {
+    expect(teamAvailStatus({}, null, 'u1')).toBeNull()
+    expect(teamAvailStatus({}, oneTime, 'u1')).toBeNull()
+  })
+
+  it('takes the worst answer across the days of a one-time event', () => {
+    const avail = table({
+      'e9_2026-06-05': { u1: resp('yes') },
+      'e9_2026-06-06_d2': { u1: resp('no') },
+    })
+    expect(teamAvailStatus(avail, oneTime, 'u1')).toBe('no')
+  })
+
+  it('reads the series answer for a recurring event', () => {
+    const rec = { id: 'r1', isRec: true } as Parameters<typeof teamAvailStatus>[1]
+    const avail = table({ r1_series: { u1: resp('partial') } })
+    expect(teamAvailStatus(avail, rec, 'u1')).toBe('partial')
+  })
+
+  it('prefers the occurrence being edited, then falls back to the series', () => {
+    const rec = { id: 'r1', isRec: true } as Parameters<typeof teamAvailStatus>[1]
+    const avail = table({
+      r1_series: { u1: resp('yes') },
+      'r1_2026-07-01': { u1: resp('no') },
+    })
+    expect(teamAvailStatus(avail, rec, 'u1', 'r1_2026-07-01')).toBe('no')
+    expect(teamAvailStatus(avail, rec, 'u1', 'r1_2026-07-08')).toBe('yes')
+  })
+})
+
+describe('availPickRank', () => {
+  it('puts available people first and those who said no last', () => {
+    const order = (['no', null, 'tbd', 'yes', 'partial'] as const)
+      .slice()
+      .sort((a, b) => availPickRank(a) - availPickRank(b))
+    expect(order).toEqual(['yes', 'partial', 'tbd', null, 'no'])
   })
 })
