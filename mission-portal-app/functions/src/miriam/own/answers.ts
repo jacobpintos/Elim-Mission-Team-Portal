@@ -404,9 +404,13 @@ export async function scheduleItemAnswer(
 const RESPONSIBILITIES =
   /\b(?:responsibilit\w*|my\s+(?:role|part|job|duties|assignments?)|what\s+am\s+i\s+(?:doing|supposed\s+to\s+(?:do|bring)|in\s+charge\s+of|responsible\s+for)|what\s+do\s+i\s+(?:need\s+to\s+|have\s+to\s+)?do)\b/i
 
-/** All that is theirs at an event, together — team, car, food, tasks, room, flight — or null. */
+/**
+ * All that is theirs at an event they name, together — team, car, food,
+ * tasks, room, flight — or null: "what am I doing this weekend?" is their
+ * week, not one event's.
+ */
 export async function yoursAnswer(ctx: AnswerContext): Promise<OwnResult | null> {
-  if (!RESPONSIBILITIES.test(ctx.text)) return null
+  if (!RESPONSIBILITIES.test(ctx.text) || ctx.mentions.length === 0) return null
   const ev = await theEvent('event_team', ctx)
   if (!ev) return null
   const details = await ctx.lookups.getEvent(ev.instanceKey)

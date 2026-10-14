@@ -1182,6 +1182,7 @@ describe('answered from the event itself', () => {
         startTime: '5:00 PM',
         location: 'Elim Church',
         users: ['jacob'],
+        teams: [{ name: 'Hospitality', leaders: [], members: ['jacob'] }],
         schedule: [
           { id: 'f1', time: '5:00 PM', title: 'Dinner' },
           { id: 'f2', time: '6:00 PM', title: 'Games' },
@@ -1280,6 +1281,9 @@ describe('answered from the event itself', () => {
       'when does Costco close',
       'what time is it',
       'when does Olivia leave for new years eve',
+      // Their week, not one event's.
+      'what am I doing this weekend',
+      'what do I have to do this week',
     ]) {
       const own = await jacob(q)
       expect(['schedule item', 'theirs at it', 'someone’s travel', 'what it is'], q).not.toContain(
