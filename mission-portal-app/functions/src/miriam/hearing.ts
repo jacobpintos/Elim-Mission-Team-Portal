@@ -64,6 +64,19 @@ const FIXES: Fix[] = [
     /\b((?:create|make|add|schedule|plan|set up|start)\b[^.?!]*?\bevents?)\s+(name|call|title)\s+(?=\S)(?!(?:is|was|to|of|for|in|on|at|and|so|be|should|that|this|the|a|an|it|with|field|box|shorter|longer|right|wrong)\b)/gi,
     (_, before, word) => `${before} ${NAMED[word.toLowerCase()]} `,
   ],
+  // Elim, said "LM" as The Well says it: heard as letters, or near it — in words about the name.
+  [
+    /\b((?:the\s+)?(?:name|word|phrase)\s+(?:the\s+)?)(?:l\.?\s?m\b\.?|elm|ellum|elum|eelum|elam|e\s?lim|ee\s?lim)(?=\s|$|[?.!,])/gi,
+    (_, lead) => `${lead}Elim`,
+  ],
+  [
+    /\b(?:l\.?\s?m\b\.?|ellum|elum|eelum)(?=\s+(?:mean|means|come|comes|stand|stands|arrival|missions?|team|church)\b)/gi,
+    'Elim',
+  ],
+  [
+    /\b(what\s+(?:does|is|was)|what's|whats|pronounce)\s+(?:l\.?\s?m\b\.?|ellum|elum|eelum)(?=\s|$|[?.!,])/gi,
+    (_, lead) => `${lead} Elim`,
+  ],
   // The worship team's words.
   [/\b(?:cord|court|core|cored|corps|chords)\s+(sheets?)\b/gi, (_, s) => `chord ${s}`],
   [/\b(?:sad|sat)\s+(lists?)\b/gi, (_, s) => `set ${s}`],

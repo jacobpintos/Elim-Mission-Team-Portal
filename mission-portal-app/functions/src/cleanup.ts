@@ -1,5 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
+import { ASKED, ASKED_KEEP_DAYS } from './miriam/own/asked'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -26,20 +27,12 @@ export const dailyCleanup = onSchedule('0 2 * * *', async () => {
   const sixMonthsAgo = new Date()
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
 
-  let auditSnap = await db
-    .collection('auditLog')
-    .where('ts', '<', sixMonthsAgo)
-    .limit(500)
-    .get()
+  let auditSnap = await db.collection('auditLog').where('ts', '<', sixMonthsAgo).limit(500).get()
   while (!auditSnap.empty) {
     const batch = db.batch()
     auditSnap.docs.forEach((d) => batch.delete(d.ref))
     await batch.commit()
-    auditSnap = await db
-      .collection('auditLog')
-      .where('ts', '<', sixMonthsAgo)
-      .limit(500)
-      .get()
+    auditSnap = await db.collection('auditLog').where('ts', '<', sixMonthsAgo).limit(500).get()
   }
 
   // ── Security reports: honour the 30-day retention the UI promises ──────────
@@ -81,6 +74,19 @@ export const dailyCleanup = onSchedule('0 2 * * *', async () => {
     dueSnap.docs.forEach((d) => batch.delete(d.ref))
     await batch.commit()
     if (dueSnap.size < 400) break
+  }
+
+  // ── What people asked Miriam: kept a little over a year (Admin → Analytics) ──
+  const askedBefore = admin.firestore.Timestamp.fromMillis(
+    Date.now() - ASKED_KEEP_DAYS * 24 * 60 * 60 * 1000
+  )
+  for (;;) {
+    const oldSnap = await db.collection(ASKED).where('at', '<', askedBefore).limit(400).get()
+    if (oldSnap.empty) break
+    const batch = db.batch()
+    oldSnap.docs.forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+    if (oldSnap.size < 400) break
   }
 
   // ── Tasks ───────────────────────────────────────────────────────────────────

@@ -35,6 +35,11 @@ describe('mishearings put right', () => {
     ['see you at warship', 'see you at worship'],
     ['is there a dress coat', 'is there a dress code'],
     ['cue Above All in see', 'queue Above All in C'],
+    ['what does LM mean', 'what does Elim mean'],
+    ['where does the name L M come from', 'where does the name Elim come from'],
+    ['what is the LM arrival', 'what is the Elim arrival'],
+    ['how do you pronounce ellum', 'how do you pronounce Elim'],
+    ['when does the LM mission team leave', 'when does the Elim mission team leave'],
   ])('%s', (heard, meant) => {
     expect(fix(heard)).toBe(meant)
   })
@@ -61,6 +66,8 @@ describe('mishearings put right', () => {
     'I will see you in see',
     'make the event name shorter',
     'add the event name to the list',
+    'the elm tree by the church',
+    'what does Elam mean in the Bible',
   ])('leaves “%s” as it is', (said) => {
     expect(fix(said)).toBe(said)
   })

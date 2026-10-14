@@ -5,6 +5,7 @@ import { collection } from 'firebase/firestore'
 import { getDocs } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { MostAsked } from '@/features/admin/MostAsked'
 import type { UserProfile } from '@/types/user'
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
@@ -60,42 +61,46 @@ export default function AdminAnalytics() {
   }, [])
 
   return (
-    <YStack flex={1} padding="$4" gap="$4">
-      <ScreenTitle options={{ title: 'Public Analytics', headerShown: false }} />
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>
+      <YStack flex={1} padding="$4" gap="$4">
+        <ScreenTitle options={{ title: 'Public Analytics', headerShown: false }} />
 
-      <Text fontSize="$6" fontWeight="700">
-        Public Analytics
-      </Text>
+        <Text fontSize="$6" fontWeight="700">
+          Public Analytics
+        </Text>
 
-      {loading ? (
-        <YStack alignItems="center" paddingVertical="$8">
-          <Spinner size="large" />
-        </YStack>
-      ) : (
-        <>
-          <XStack gap="$3">
-            <StatCard label="Total Public Users" value={totalPublic} />
-            <StatCard label="Active (7 days)" value={activeRecent} sub="by last login" />
-          </XStack>
-
-          <YStack
-            backgroundColor="$background"
-            borderWidth={1}
-            borderColor="$borderColor"
-            borderRadius="$3"
-            padding="$4"
-            gap="$2"
-          >
-            <Text fontSize="$4" fontWeight="700">
-              App Downloads
-            </Text>
-            <Text fontSize="$3" color="$gray10">
-              Download tracking will be available once mobile apps are published to the App Store
-              and Google Play.
-            </Text>
+        {loading ? (
+          <YStack alignItems="center" paddingVertical="$8">
+            <Spinner size="large" />
           </YStack>
-        </>
-      )}
-    </YStack>
+        ) : (
+          <>
+            <XStack gap="$3">
+              <StatCard label="Total Public Users" value={totalPublic} />
+              <StatCard label="Active (7 days)" value={activeRecent} sub="by last login" />
+            </XStack>
+
+            <YStack
+              backgroundColor="$background"
+              borderWidth={1}
+              borderColor="$borderColor"
+              borderRadius="$3"
+              padding="$4"
+              gap="$2"
+            >
+              <Text fontSize="$4" fontWeight="700">
+                App Downloads
+              </Text>
+              <Text fontSize="$3" color="$gray10">
+                Download tracking will be available once mobile apps are published to the App Store
+                and Google Play.
+              </Text>
+            </YStack>
+          </>
+        )}
+
+        <MostAsked />
+      </YStack>
+    </ScrollView>
   )
 }

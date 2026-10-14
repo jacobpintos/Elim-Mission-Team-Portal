@@ -754,6 +754,41 @@ describe('notes on days of their calendar', () => {
   })
 })
 
+describe('questions asked of Miriam', () => {
+  const asked = (extra: Record<string, unknown> = {}) => ({
+    text: 'when is youth night?',
+    audience: 'member',
+    at: serverTimestamp(),
+    ...extra,
+  })
+
+  it('are written by anyone signed in: the words and the kind of account, never who', async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER), 'miriamAsked', 'q1'), asked()))
+    await assertFails(setDoc(doc(as(MEMBER), 'miriamAsked', 'q2'), asked({ uid: MEMBER })))
+    await assertFails(setDoc(doc(as(MEMBER), 'miriamAsked', 'q3'), asked({ audience: 'admin' })))
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'miriamAsked', 'q4'), asked({ text: 'x'.repeat(201) }))
+    )
+    await assertFails(setDoc(doc(as(MEMBER), 'miriamAsked', 'q5'), asked({ at: 1 })))
+    await assertFails(
+      setDoc(doc(env.unauthenticatedContext().firestore(), 'miriamAsked', 'q6'), asked())
+    )
+  })
+
+  it('are read, changed or taken away by no device — an admin’s included', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'miriamAsked', 'q1'), {
+        text: 'hi?',
+        audience: 'member',
+        at: 1,
+      })
+    })
+    await assertFails(getDoc(doc(as(ADMIN), 'miriamAsked', 'q1')))
+    await assertFails(updateDoc(doc(as(ADMIN), 'miriamAsked', 'q1'), { text: 'changed?' }))
+    await assertFails(deleteDoc(doc(as(ADMIN), 'miriamAsked', 'q1')))
+  })
+})
+
 describe('guests', () => {
   it('reads set lists and chord sheets', () => {
     // The worship tab they were given would render nothing without this.

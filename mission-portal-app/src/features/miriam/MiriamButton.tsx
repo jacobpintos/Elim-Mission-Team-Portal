@@ -35,6 +35,7 @@ import { MAX_REQUEST, miriamHref } from '@/lib/miriam'
 import { anyOverlayOpen } from '@/lib/overlays'
 import { rememberName, rememberWords } from '@/lib/miriamMemory'
 import { heardRight, refreshHearing } from '@/lib/miriamHearing'
+import { recordAsked } from './recordAsked'
 import { FD } from '@/lib/format'
 import { speak as speakAloud, stopSpeaking, unlockSpeech, whenSpoken } from './speak'
 import { askMiriam, miriamError, type Heard } from './askMiriam'
@@ -527,6 +528,9 @@ export function MiriamButton() {
     // Answering what she asked back: hers to work out with what came before,
     // not taken for a song or a screen on its own.
     const replying = !again && useMiriamStore.getState().awaiting
+    // A question of its own, not an answer to hers: kept, without who asked,
+    // for Admin → Analytics (./recordAsked).
+    if (!again && !replying) recordAsked(withoutHerName(said), useAuthStore.getState().profile)
     if (replying && NEVER_MIND.test(withoutHerName(said))) {
       useMiriamStore.getState().setAwaiting(false)
       setAnswer('Okay.')

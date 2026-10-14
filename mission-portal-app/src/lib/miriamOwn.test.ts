@@ -3,6 +3,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { Lookups } from '../../functions/src/miriam/lookups'
 import { embed } from '../../functions/src/miriam/own/encoder'
+import { packVector } from '../../functions/src/miriam/own/vectors'
 import { mentionsIn } from '../../functions/src/miriam/own/events'
 import { notHers } from '../../functions/src/miriam/own/guards'
 import { ownAnswer, sure, webOrFaith, type OwnInput } from '../../functions/src/miriam/own'
@@ -34,6 +35,12 @@ import {
   faithAnswer,
   LEADERSHIP,
 } from '../../functions/src/miriam/own/faith'
+import {
+  ELIM_ANSWER,
+  elimAsked,
+  MIRIAM_ANSWER,
+  miriamNameAsked,
+} from '../../functions/src/miriam/own/names'
 import {
   forgetSite,
   linksOf,
@@ -1001,5 +1008,121 @@ describe('scripture, never from the web', () => {
       const own = await ownAnswer(input(text, { web: noWeb }))
       expect(own.why, text).not.toBe('web')
     }
+  })
+})
+
+describe('the names Elim and Miriam', () => {
+  beforeEach(() => {
+    forgetCaches()
+    forgetSite()
+  })
+
+  it('knows when either is asked about — and when only Elim, the place, is', () => {
+    for (const q of [
+      'where does the name Elim come from',
+      'what does Elim mean?',
+      'how do you pronounce Elim',
+      'why is the church called Elim',
+      'what is the Elim arrival',
+      "what's the meaning of Elim",
+      'tell me about the name Elim',
+    ]) {
+      expect(elimAsked(q), q).toBe(true)
+    }
+    for (const q of [
+      'where is Elim church',
+      'what time is the Elim arrival',
+      'when does the Elim mission team leave',
+      'what does the Bible say about worry',
+    ]) {
+      expect(elimAsked(q), q).toBe(false)
+    }
+    for (const q of [
+      'why are you called Miriam?',
+      'where does your name come from',
+      'who are you named after',
+      'what does your name mean',
+      'who was Miriam in the Bible',
+      'why Miriam',
+    ]) {
+      expect(miriamNameAsked(q), q).toBe(true)
+    }
+    for (const q of [
+      "what's your name",
+      'Miriam, what time is youth night',
+      'why, Miriam, is youth night cancelled',
+    ]) {
+      expect(miriamNameAsked(q), q).toBe(false)
+    }
+  })
+
+  it('Elim, in the church’s own words, with the page that tells it', async () => {
+    const own = await ownAnswer(input('where does the name Elim come from?'))
+    expect(own.result).toMatchObject({
+      text: ELIM_ANSWER,
+      open: { kind: 'link', url: 'https://thewellofiowa.com', label: 'thewellofiowa.com' },
+    })
+    expect(ELIM_ANSWER).toMatch(/Exodus 15:26–27/)
+    // Once she has read the site: the page itself.
+    const db = memoryOwnDb()
+    await storeSite(db, {
+      site: 'https://thewellofiowa.com',
+      readAt: 1,
+      pages: [{ url: 'https://thewellofiowa.com/elim', title: 'Elim' }],
+      passages: [
+        {
+          t: 'ELIM is synonymous with the phrase ‘a place of rest’ and comes from Exodus 15:26-27.',
+          u: 'https://thewellofiowa.com/elim',
+          v: packVector(embed('ELIM is a place of rest')),
+        },
+      ],
+    })
+    const read = await ownAnswer(input('what does Elim mean', { db }))
+    expect(read.result).toMatchObject({
+      text: ELIM_ANSWER,
+      open: { kind: 'link', url: 'https://thewellofiowa.com/elim' },
+    })
+  })
+
+  it('her own name: Exodus 15:20–21, on the way to Elim — whatever came before', async () => {
+    const own = await ownAnswer(
+      input('why are you called Miriam', {
+        history: [{ said: 'is God good', reply: DEFER }],
+      })
+    )
+    expect((own.result as { text: string }).text).toBe(MIRIAM_ANSWER)
+    expect(MIRIAM_ANSWER).toMatch(/Exodus 15:20–21/)
+    expect(MIRIAM_ANSWER).toMatch(/Elim/)
+    expect(MIRIAM_ANSWER).toMatch(/rest found in the name and presence of Jesus/)
+    // Claude, seeing it as a question of faith, hands it to her the same.
+    const fromClaude = await webOrFaith('faith', 'who was Miriam in the Bible', {
+      db: memoryOwnDb(),
+      today: TODAY,
+      can: [],
+    })
+    expect(fromClaude).toMatchObject({ text: MIRIAM_ANSWER })
+  })
+
+  it('an admin’s own answer instead, if they teach one', async () => {
+    const db = memoryOwnDb()
+    await teach(db, {
+      q: 'Where does the name Elim come from?',
+      a: 'Ask Pastor Sam — he loves telling that story.',
+      v: embed('Where does the name Elim come from?'),
+      by: 'boss',
+    })
+    const own = await ownAnswer(input('where does the name Elim come from', { db }))
+    expect((own.result as { text: string }).text).toBe(
+      'Ask Pastor Sam — he loves telling that story.'
+    )
+  })
+
+  it('more asked about them is the leadership’s', async () => {
+    const own = await ownAnswer(
+      input('why did she use a tambourine', {
+        history: [{ said: 'why are you called Miriam', reply: MIRIAM_ANSWER }],
+      })
+    )
+    expect(own.result).toMatchObject({ text: LEADERSHIP })
   })
 })

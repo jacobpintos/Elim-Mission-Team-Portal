@@ -1,6 +1,7 @@
 import { embed, similarity } from './encoder'
 import { taughtAnswers, type OwnDb } from './learn'
 import { CHURCH_SITE, siteAnswer, siteKnowledge } from './site'
+import { ELIM_ANSWER, MIRIAM_ANSWER, nameAnswer } from './names'
 
 /**
  * Questions of faith, as the church asked Miriam to answer them — only in
@@ -8,9 +9,11 @@ import { CHURCH_SITE, siteAnswer, siteKnowledge } from './site'
  *
  *  1. An answer an admin has taught her (Admin → Miriam), if the question
  *     means the same.
- *  2. What the church's website says (./site: any page of
+ *  2. Where the names Elim and Miriam come from, as the church gave them
+ *     (./names).
+ *  3. What the church's website says (./site: any page of
  *     thewellofiowa.com), in its words, saying where.
- *  3. If neither says enough to answer with confidence: the church's
+ *  4. If none says enough to answer with confidence: the church's
  *     leadership, and the website.
  *
  * Never from anywhere else — not the web, not Claude, not anything she was
@@ -25,7 +28,7 @@ export interface FaithAnswer {
   /** A page to read it on: the church's site. */
   link: { url: string; label: string } | null
   /** Where it came from, for the logs. */
-  from: 'taught' | 'site' | 'leadership'
+  from: 'taught' | 'names' | 'site' | 'leadership'
 }
 
 /**
@@ -62,8 +65,13 @@ export async function faithAnswer(
   }
   if (best && best.sim >= FAITH_TAUGHT_NEAR) return { text: best.a, link: null, from: 'taught' }
 
-  // 2. The church's website.
-  const site = siteAnswer(text, v, await siteKnowledge(db).catch(() => []))
+  // 2. The names Elim and Miriam, as the church gave them.
+  const passages = await siteKnowledge(db).catch(() => [])
+  const named = nameAnswer(text, passages)
+  if (named) return { text: named.text, link: named.link, from: 'names' }
+
+  // 3. The church's website.
+  const site = siteAnswer(text, v, passages)
   if (site) {
     return {
       text: `${site.text} (from ${siteLabel(site.url)})`,
@@ -72,7 +80,7 @@ export async function faithAnswer(
     }
   }
 
-  // 3. Not enough to answer with confidence: the church's leadership.
+  // 4. Not enough to answer with confidence: the church's leadership.
   return {
     text: DEFER,
     link: { url: CHURCH_SITE, label: 'thewellofiowa.com' },
@@ -83,7 +91,7 @@ export async function faithAnswer(
 /** Whether something she said was one of her answers about faith (as kept in the conversation). */
 export function isFaithReply(reply: string): boolean {
   const r = reply.trim()
-  if (r === DEFER || r === LEADERSHIP) return true
+  if (r === DEFER || r === LEADERSHIP || r === ELIM_ANSWER || r === MIRIAM_ANSWER) return true
   // From the church's site: "(from thewellofiowa.com)", or a part of it.
   const host = new URL(CHURCH_SITE).hostname.replace(/^www\./, '').replace(/\./g, '\\.')
   return new RegExp(`\\(from (?:[a-z0-9-]+\\.)*${host}\\)$`, 'i').test(r)

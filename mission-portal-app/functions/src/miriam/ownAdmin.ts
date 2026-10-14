@@ -4,6 +4,12 @@ import { embed } from './own/encoder'
 import { forgetBraveKey } from './own'
 import { forget, listLearned, listTaught, teach, untaught, WEB_DOC, type OwnDb } from './own/learn'
 import { CHURCH_SITE, readSite, SITE_DOC, storeSite } from './own/site'
+import { ASKED, groupAsked } from './own/asked'
+import { packVector, unpackVector } from './own/vectors'
+
+/** The questions read for one look at Analytics, at most: the latest. */
+const MAX_ASKED = 5000
+const DAY_MS = 24 * 60 * 60 * 1000
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -11,9 +17,10 @@ if (!admin.apps.length) admin.initializeApp()
  * Admin → Miriam: what she has learned from Claude (to see, and to forget
  * one learned wrong), the answers she has been taught (to add and take
  * away), the church's website she answers faith from (to read again now),
- * and her web search key. All of it is kept where no device can read
- * it (firestore.rules: miriamOwn); this is the only way in, for admins only.
- * The key is never sent back — only whether one is set.
+ * and her web search key. Admin → Analytics: the questions she is asked
+ * most (./own/asked). All of it is kept where no device can read it
+ * (firestore.rules: miriamOwn, miriamAsked); this is the only way in, for
+ * admins only. The key is never sent back — only whether one is set.
  */
 export const miriamOwnAdmin = onCall(
   // Reading the church's site, when asked, takes a minute or two.
@@ -54,6 +61,49 @@ export const miriamOwnAdmin = onCall(
           pages: Array.isArray(st.pages) ? st.pages.length : 0,
           passages: Array.isArray(st.passages) ? st.passages.length : 0,
         },
+      }
+    }
+    if (action === 'asked') {
+      // The questions asked in the last days, by what kind of account, grouped by what they mean.
+      const days = [7, 30, 90, 365].includes(Number(req.data?.days)) ? Number(req.data.days) : 30
+      const audience = ['public', 'member', 'guest'].includes(String(req.data?.audience))
+        ? String(req.data.audience)
+        : 'all'
+      const since = admin.firestore.Timestamp.fromMillis(Date.now() - days * DAY_MS)
+      const snap = await db
+        .collection(ASKED)
+        .where('at', '>=', since)
+        .orderBy('at', 'desc')
+        .limit(MAX_ASKED)
+        .get()
+      const asked: { text: string; v: Float32Array }[] = []
+      // Each one's meaning, worked out the first time it is looked at and kept with it.
+      let batch = db.batch()
+      let waiting = 0
+      for (const d of snap.docs) {
+        const q = d.data()
+        if (audience !== 'all' && q.audience !== audience) continue
+        const text = typeof q.text === 'string' ? q.text : ''
+        if (!text) continue
+        let v = typeof q.v === 'string' ? unpackVector(q.v) : null
+        if (!v) {
+          v = embed(text)
+          batch.update(d.ref, { v: packVector(v) })
+          if (++waiting === 400) {
+            await batch.commit().catch(() => {})
+            batch = db.batch()
+            waiting = 0
+          }
+        }
+        asked.push({ text, v })
+      }
+      if (waiting) await batch.commit().catch(() => {})
+      return {
+        days,
+        audience,
+        total: asked.length,
+        groups: groupAsked(asked).slice(0, 30),
+        more: snap.size === MAX_ASKED,
       }
     }
     if (action === 'readSite') {

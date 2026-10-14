@@ -240,9 +240,10 @@ export function MiriamAdmin({ call }: { call: Api }) {
             <Text fontSize="$2" color="$gray10">
               She answers a question of faith only from an answer you’ve taught her, or from what
               thewellofiowa.com says on any of its pages — in its words, with a link to the page.
-              Nothing else: not the web, not Claude, nothing built in. If neither says enough to
-              answer confidently, she asks them to reach out to church leadership, and anything more
-              asked about it goes there too.
+              Nothing else: not the web, not Claude. The one thing built in is where the names Elim
+              and Miriam come from, as the church gave them; teach her your own answer to either to
+              replace it. If none of these says enough to answer confidently, she asks them to reach
+              out to church leadership, and anything more asked about it goes there too.
             </Text>
             <Text fontSize="$3" fontWeight="600">
               {data.site?.readAt

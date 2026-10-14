@@ -1,5 +1,5 @@
 rules_version = '2';
-// Last updated: 2026-10-14 — added dateNotes (each person's own)
+// Last updated: 2026-10-14 — added miriamAsked (questions, without who asked)
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -340,6 +340,20 @@ service cloud.firestore {
     // account (deleteOwnAccount).
     match /sheetNotes/{uid} {
       allow read, write: if isSelf(uid);
+    }
+
+    // What people ask Miriam (src/lib/miriamAsked): written by the app as
+    // they ask — the words and what kind of account, never who — and read
+    // only by the server, for Admin → Analytics (functions: miriamOwnAdmin).
+    match /miriamAsked/{id} {
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['text', 'audience', 'at'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 200
+        && request.resource.data.audience in ['public', 'member', 'guest']
+        && request.resource.data.at == request.time;
+      allow read, update, delete: if false;
     }
 
     // Each person's notes on days of their own calendar (src/stores/

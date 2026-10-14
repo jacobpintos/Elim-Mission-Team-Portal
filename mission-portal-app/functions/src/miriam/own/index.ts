@@ -10,7 +10,8 @@ import type { Skill } from './skills'
 import { read, seedExamples, type Reading } from './understand'
 import { webAnswer } from './web'
 import { aboutScripture, faithAnswer, isFaithReply, LEADERSHIP } from './faith'
-import { CHURCH_SITE } from './site'
+import { CHURCH_SITE, siteKnowledge } from './site'
+import { nameAnswer, nameAsked } from './names'
 
 /**
  * Miriam, on her own: a request she understands and can answer herself, she
@@ -219,8 +220,40 @@ async function onFaith(input: OwnInput, last: { said: string; reply: string }): 
   return reading.skill === 'faith' && sure(reading)
 }
 
+/** An answer an admin taught her to a question that means the same as this one, if there is one. */
+async function taughtFor(v: () => Float32Array, db: OwnDb): Promise<string | null> {
+  const taught = await taughtAnswers(db).catch(() => [])
+  if (taught.length === 0) return null
+  const q = v()
+  let best: { a: string; sim: number } | null = null
+  for (const t of taught) {
+    const sim = similarity(q, t.vec)
+    if (!best || sim > best.sim) best = { a: t.a, sim }
+  }
+  return best && best.sim >= TAUGHT_NEAR ? best.a : null
+}
+
 export async function ownAnswer(input: OwnInput): Promise<Own> {
   const { text, today, history, lookups, db } = input
+  // Where the names Elim and Miriam come from, as the church gave them
+  // (./names) — whatever came before it, and unless an admin taught her otherwise.
+  if (nameAsked(text)) {
+    const taught = await taughtFor(() => embed(text), db)
+    if (taught) return { result: said(taught), read: null, why: 'taught' }
+    const named = nameAnswer(text, await siteKnowledge(db).catch(() => []))
+    if (named) {
+      return {
+        result: said(
+          named.text,
+          input.can.includes('link')
+            ? { kind: 'link', url: named.link.url, label: named.link.label }
+            : null
+        ),
+        read: null,
+        why: `names: ${named.which}`,
+      }
+    }
+  }
   const last = history[history.length - 1]
   // Read once, when first needed.
   let understood: Promise<Understood> | null = null
@@ -275,18 +308,8 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
   const { mentions, rawV, reading, own } = await whatItIs()
 
   // 1. Taught: said as an admin wrote it.
-  const taught = await taughtAnswers(db).catch(() => [])
-  if (taught.length) {
-    const q = rawV()
-    let best: { a: string; sim: number } | null = null
-    for (const t of taught) {
-      const sim = similarity(q, t.vec)
-      if (!best || sim > best.sim) best = { a: t.a, sim }
-    }
-    if (best && best.sim >= TAUGHT_NEAR) {
-      return { result: said(best.a), read: null, why: `taught (${best.sim.toFixed(2)})` }
-    }
-  }
+  const taught = await taughtFor(rawV, db)
+  if (taught) return { result: said(taught), read: null, why: 'taught' }
 
   // 2. What it is (understand, above).
   if (reading.skill === 'other') return { result: null, read: own, why: 'not hers' }
