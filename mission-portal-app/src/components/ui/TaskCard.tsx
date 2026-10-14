@@ -4,6 +4,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { FD } from '@/lib/format'
 import { isOverdue } from '@/lib/availability'
 import { MeetingRequestPanel } from '@/features/meetings/MeetingRequestPanel'
+import { ReimbursementPanel } from '@/features/reimbursements/ReimbursementPanel'
 import type { Task } from '@/types/events'
 
 interface TaskCardProps {
@@ -107,7 +108,9 @@ export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames 
               </Text>
             ) : null}
           </YStack>
-          {onComplete && task.status !== 'done' ? (
+          {/* A reimbursement is finished by paying it, inside its panel — a
+              tick here would close it without the person ever being told. */}
+          {onComplete && task.status !== 'done' && task.taskType !== 'reimbursement' ? (
             <Pressable onPress={onComplete}>
               <XStack
                 width={32}
@@ -131,6 +134,9 @@ export function TaskCard({ task, onComplete, onPress, eventTitle, assigneeNames 
           request sits unanswered. Renders nothing for every other task. */}
         {task.taskType === 'meeting_request' && task.meetingRequestId ? (
           <MeetingRequestPanel task={task} />
+        ) : null}
+        {task.taskType === 'reimbursement' && task.reimbursementId ? (
+          <ReimbursementPanel task={task} />
         ) : null}
       </YStack>
     </Pressable>

@@ -177,11 +177,22 @@ export interface Task {
     | 'issue_corrective'
     | 'worship_setlist_ack'
     | 'meeting_request'
+    | 'reimbursement'
   kaizenId?: string | number
   issueId?: string | number
   setListId?: string | number
   /** The meetingRequests document this task is asking someone to answer. */
   meetingRequestId?: string
+  /** The reimbursements document this task tracks. */
+  reimbursementId?: string
+  /**
+   * Who the task is being done for, when that is not one of its assignees.
+   *
+   * A reimbursement's task is the Accountant's to work, but the person who
+   * asked follows it: it is on their task list too, without them being
+   * someone who can complete it.
+   */
+  owner?: string
   isPostEvent?: boolean
   doneAt?: unknown
   _updatedAt?: unknown
@@ -333,6 +344,11 @@ export interface ConfigMain {
      * rather than dropping them.
      */
     connectionsCoordinator?: string
+    /**
+     * Who answers reimbursement requests. An identifier, like the
+     * coordinator: it routes a job and appears nowhere on a profile.
+     */
+    accountant?: string
   }
   publicPages: Record<string, unknown>
   postsConfig: PostsConfig

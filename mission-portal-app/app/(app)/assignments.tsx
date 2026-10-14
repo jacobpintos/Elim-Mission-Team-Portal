@@ -4,7 +4,7 @@ import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { RecipientPicker } from '@/components/ui/RecipientPicker'
 import { YStack, XStack, Text, Input } from 'tamagui'
-import { Stack, useLocalSearchParams } from 'expo-router'
+import { Stack, router, useLocalSearchParams } from 'expo-router'
 import { collection } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { db, functions } from '@/lib/firebase'
@@ -22,7 +22,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { TaskCard } from '@/components/ui/TaskCard'
 import { EventKanban } from '@/features/events/EventKanban'
 import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
-import { isAdmin } from '@/lib/roles'
+import { isAdmin, isPublic } from '@/lib/roles'
 import { notifyAssignees, notifyAdminsTaskBehind } from '@/lib/taskNotifications'
 import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
@@ -35,6 +35,7 @@ import type { UserProfile } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { WithDictation } from '@/components/ui/Dictation'
 import { RemindersSection } from '@/features/reminders/RemindersSection'
+import { ReimbursementFormModal } from '@/features/reimbursements/ReimbursementFormModal'
 
 interface GroupDoc {
   id: string
@@ -1208,6 +1209,7 @@ export default function Assignments() {
   const [editTaskItem, setEditTaskItem] = useState<Task | null>(null)
   const [setListAckTask, setSetListAckTask] = useState<Task | null>(null)
   const [showCreateTask, setShowCreateTask] = useState(false)
+  const [showReimbursement, setShowReimbursement] = useState(false)
   // A task Miriam was asked to fill in: its form opened with it, once.
   const miriamTask = useMiriamStore((s) => s.taskForm)
   const clearMiriamTask = useMiriamStore((s) => s.clearTaskForm)
@@ -1319,6 +1321,8 @@ export default function Assignments() {
 
   const handleTaskPress = (t: Task) => {
     if (
+      // Answered inside its own panel, which is where the steps are.
+      t.taskType === 'reimbursement' ||
       t.taskType === 'kaizen_verification' ||
       t.taskType === 'kaizen_action' ||
       t.taskType === 'issue_corrective'
@@ -1356,6 +1360,8 @@ export default function Assignments() {
   }
 
   const handleComplete = async (task: Task) => {
+    // Completed by marking it paid, which also tells the person who asked.
+    if (task.taskType === 'reimbursement') return
     if (task.taskType === 'kaizen_verification') {
       setVerifyTask(task)
       return
@@ -1713,7 +1719,7 @@ export default function Assignments() {
       ) : (
         /* Task list view */
         <ScrollView style={{ flex: 1 }}>
-          <YStack padding="$3" gap="$3">
+          <YStack padding="$3" gap="$3" paddingBottom={80}>
             {/* Their own reminders, set by asking Miriam: on their own list, not everyone's. */}
             {adminView === 'mine' && uid && (filter === 'all' || filter === 'pending') ? (
               <RemindersSection uid={String(uid)} />
@@ -1819,6 +1825,27 @@ export default function Assignments() {
           </YStack>
         </ScrollView>
       )}
+
+      {/* Anyone on the team can ask to be paid back for what they bought. */}
+      {!isPublic(profile) ? (
+        <Pressable
+          onPress={() => setShowReimbursement(true)}
+          style={[
+            fabStyle,
+            { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary },
+            { right: undefined, left: 16, bottom: insets.bottom + 16 },
+          ]}
+        >
+          <Text color={colors.primary} fontWeight="700" fontSize="$3">
+            $ Reimbursement
+          </Text>
+        </Pressable>
+      ) : null}
+      <ReimbursementFormModal
+        visible={showReimbursement}
+        onClose={() => setShowReimbursement(false)}
+        onSubmitted={(taskId) => router.setParams({ taskId: String(taskId) })}
+      />
 
       {/* Admin FAB to assign task */}
       {admin ? (

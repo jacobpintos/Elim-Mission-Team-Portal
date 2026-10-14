@@ -10,6 +10,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { FD } from '@/lib/format'
 import { openLocationInMaps, eventMapQuery, lodgingMapQuery } from '@/lib/location'
 import { downloadICS } from '@/lib/icsExport'
+import { ReimbursementFormModal } from '@/features/reimbursements/ReimbursementFormModal'
 import { availKey, effectiveAvail, getSeriesAvail } from '@/lib/availability'
 import { AvailBadge } from '@/components/ui/AvailBadge'
 import { useUIStore } from '@/stores/uiStore'
@@ -876,6 +877,7 @@ export function EventDetailModal({
   const [weatherEntry, setWeatherEntry] = useState<{ key: string; data: WeatherData } | null>(null)
   const [alertsEntry, setAlertsEntry] = useState<{ key: string; data: NWSAlert[] } | null>(null)
   const [showWeather, setShowWeather] = useState(false)
+  const [showReimbursement, setShowReimbursement] = useState(false)
   const eventWeatherKey = `${event?.templateId}_${event?.date}`
   const weather = weatherEntry?.key === eventWeatherKey ? weatherEntry.data : null
   const alerts = alertsEntry?.key === eventWeatherKey ? alertsEntry.data : []
@@ -1182,6 +1184,28 @@ export function EventDetailModal({
             </XStack>
           </Pressable>
 
+          {/* Paid for something for this event: ask for it back from here, with
+              the event already chosen. */}
+          {isMember ? (
+            <Pressable onPress={() => setShowReimbursement(true)}>
+              <XStack
+                backgroundColor={colors.surface}
+                borderWidth={1}
+                borderColor={colors.border}
+                borderRadius="$2"
+                paddingHorizontal="$3"
+                paddingVertical="$2"
+                alignSelf="flex-start"
+                gap="$2"
+              >
+                <Text>🧾</Text>
+                <Text color={colors.text} fontSize="$3">
+                  Request reimbursement
+                </Text>
+              </XStack>
+            </Pressable>
+          ) : null}
+
           {/* Admin Edit */}
           {onEdit ? (
             <Pressable onPress={onEdit}>
@@ -1214,6 +1238,21 @@ export function EventDetailModal({
           open={open && showWeather}
           onClose={() => setShowWeather(false)}
           event={event}
+        />
+      ) : null}
+
+      {event ? (
+        <ReimbursementFormModal
+          // Keyed by the event, so opening it from another event starts afresh
+          // with that one chosen.
+          key={String(event.templateId ?? event.id)}
+          visible={open && showReimbursement}
+          onClose={() => setShowReimbursement(false)}
+          event={{
+            id: String(event.templateId ?? event.id),
+            title: event.title,
+            date: event.date ?? null,
+          }}
         />
       ) : null}
     </>

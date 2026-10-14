@@ -3,8 +3,8 @@ import { TextInput as RNTextInput } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
-import { doc, updateDoc } from 'firebase/firestore'
-import { onSnapshot } from '@/lib/liveFirestore'
+import { collection, doc, query, updateDoc, where, writeBatch } from 'firebase/firestore'
+import { onSnapshot, getDocs } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import { useUsersStore } from '@/stores/usersStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -23,6 +23,7 @@ export default function AdminLeadership() {
 
   const [leadershipTeam, setLeadershipTeam] = useState<string[]>([])
   const [coordinator, setCoordinator] = useState('')
+  const [accountant, setAccountantState] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const titleDraft = useRef<Record<string, string>>({})
@@ -38,6 +39,7 @@ export default function AdminLeadership() {
       const team = data?.connectConfig?.leadershipTeam ?? []
       setLeadershipTeam(team.map((v: unknown) => String(v)))
       setCoordinator(String(data?.connectConfig?.connectionsCoordinator ?? ''))
+      setAccountantState(String(data?.connectConfig?.accountant ?? ''))
       setLoading(false)
     })
     return () => unsub()
@@ -108,6 +110,57 @@ export default function AdminLeadership() {
     }
   }
 
+  /**
+   * Hand the Accountant identifier to someone, or take it back.
+   *
+   * The Accountant answers reimbursement requests. Like the coordinator, it is
+   * a job the app routes to rather than a title, and one person holds it.
+   *
+   * Requests still open go with it: the new Accountant is the one who will
+   * pay them, so they move to their task list, and the old one stops being
+   * asked. Finished requests stay as they were, with who handled them.
+   */
+  const setAccountant = async (uid: string) => {
+    const previous = accountant
+    const next = previous === uid ? '' : uid
+    setAccountantState(next)
+    setSaving(true)
+    try {
+      await updateDoc(doc(db, 'config', 'main'), { 'connectConfig.accountant': next })
+      if (previous && next) {
+        const open = await getDocs(
+          query(collection(db, 'reimbursements'), where('accountantUid', '==', previous))
+        )
+        const nextName = users.find((u) => u.uid === next)?.displayName ?? ''
+        const batch = writeBatch(db)
+        let moved = 0
+        open.docs.forEach((d) => {
+          const r = d.data()
+          if (r.status === 'denied' || r.status === 'paid') return
+          batch.update(d.ref, { accountantUid: next, accountantName: nextName })
+          if (r.taskId != null) {
+            batch.update(doc(db, 'tasks', String(r.taskId)), { assignees: [next], lead: next })
+          }
+          moved++
+        })
+        if (moved > 0) await batch.commit()
+      }
+      await audit(
+        'leadership.accountant',
+        next
+          ? `Accountant set to ${users.find((u) => u.uid === next)?.displayName ?? next}`
+          : 'Accountant cleared',
+        profile?.displayName ?? ''
+      )
+    } catch (err: unknown) {
+      setAccountantState(previous)
+      const message = err instanceof Error ? err.message : 'Failed to save'
+      toast(message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const toggleMember = async (uid: string) => {
     let updated: string[]
     if (leadershipTeam.includes(uid)) {
@@ -122,6 +175,8 @@ export default function AdminLeadership() {
     if (!updated.includes(uid) && coordinator === uid) {
       await setConnectionsCoordinator(uid)
     }
+    // The Accountant stays when they leave the team: there may be money owed
+    // on requests only they know about. An admin hands it on deliberately.
   }
 
   if (loading) {
@@ -167,6 +222,24 @@ export default function AdminLeadership() {
           {coordinator
             ? `${users.find((u) => u.uid === coordinator)?.displayName ?? coordinator} receives the daily list of people asking to join the texting list.`
             : 'Nobody holds this yet. Requests to join the texting list are held until someone does. Use “Make Coordinator” on a leadership member below.'}
+        </Text>
+      </YStack>
+
+      <YStack
+        backgroundColor="$surface"
+        borderRadius="$3"
+        padding="$3"
+        gap="$1"
+        borderWidth={1}
+        borderColor="$borderColor"
+      >
+        <Text fontSize="$3" fontWeight="700">
+          Accountant
+        </Text>
+        <Text fontSize="$2" color="$gray10">
+          {accountant
+            ? `${users.find((u) => u.uid === accountant)?.displayName ?? accountant} answers reimbursement requests. Choosing someone else moves the open requests to them.`
+            : 'Nobody holds this yet. Until someone does, the first reimbursement request goes to Sunny Singh. Use “Make Accountant” on a leadership member below.'}
         </Text>
       </YStack>
 
@@ -246,6 +319,22 @@ export default function AdminLeadership() {
                       fontWeight="600"
                     >
                       {coordinator === item.uid ? 'Coordinator ✓' : 'Make Coordinator'}
+                    </Text>
+                  </Button>
+                ) : null}
+                {isLeader || accountant === item.uid ? (
+                  <Button
+                    size="$2"
+                    onPress={() => setAccountant(item.uid)}
+                    backgroundColor={accountant === item.uid ? theme.primary : undefined}
+                    theme={accountant === item.uid ? undefined : 'gray'}
+                  >
+                    <Text
+                      color={accountant === item.uid ? 'white' : '$color'}
+                      fontSize="$1"
+                      fontWeight="600"
+                    >
+                      {accountant === item.uid ? 'Accountant ✓' : 'Make Accountant'}
                     </Text>
                   </Button>
                 ) : null}

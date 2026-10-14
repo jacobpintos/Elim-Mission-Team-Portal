@@ -13,6 +13,8 @@ interface ConfigStore {
   ccliLicense: string
   /** Uid of the Connections Coordinator, or '' when nobody holds it. */
   connectionsCoordinator: string
+  /** Uid of the Accountant, who answers reimbursement requests, or ''. */
+  accountant: string
   loading: boolean
   _unsub: (() => void) | null
   _refCount: number
@@ -33,6 +35,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   lastSeenPosts: {},
   ccliLicense: '',
   connectionsCoordinator: '',
+  accountant: '',
   loading: false,
   _unsub: null,
   _refCount: 0,
@@ -65,6 +68,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           lastSeenPosts: data.lastSeenPosts ?? {},
           ccliLicense: data.ccliLicense ?? '',
           connectionsCoordinator: data.connectConfig?.connectionsCoordinator ?? '',
+          accountant: data.connectConfig?.accountant ?? '',
           loading: false,
         })
       },

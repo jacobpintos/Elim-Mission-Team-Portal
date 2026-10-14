@@ -84,8 +84,7 @@ export function teamAvailStatus(
 ): AvailResponse['status'] | null {
   if (!event) return null
   const key = (k: string) => k.replace(/\//g, '_')
-  const series = () =>
-    event.isRec ? (getSeriesAvail(avail, event.id, uid)?.status ?? null) : null
+  const series = () => (event.isRec ? (getSeriesAvail(avail, event.id, uid)?.status ?? null) : null)
 
   if (instanceKey) return avail[key(instanceKey)]?.[uid]?.status ?? series()
   if (event.isRec) return series()

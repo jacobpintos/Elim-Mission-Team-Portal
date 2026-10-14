@@ -14,6 +14,8 @@ const in7 = () => {
   return d.toISOString().split('T')[0]
 }
 
+const isAssigned = (t: Task, uid: string) => t.assignees.some((a) => sameId(a, uid))
+
 interface TasksStore {
   tasks: Task[]
   loading: boolean
@@ -44,7 +46,10 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   myTasks: (uid) => {
     const today = todayStr()
     return get().tasks.filter((t) => {
-      if (!t.assignees.some((a) => sameId(a, uid))) return false
+      // A task done for someone (a reimbursement they asked for) is on their
+      // list as well as its assignees', so they can follow it.
+      if (!t.assignees.some((a) => sameId(a, uid)) && !(t.owner && sameId(t.owner, uid)))
+        return false
       // Hide pre-event tasks for past events only if they're already done
       if (t.evDate && !t.isPostEvent && t.evDate < today && !!t.doneAt) return false
       return true
@@ -52,14 +57,17 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   },
   eventTasks: (templateId) =>
     get().tasks.filter((t) => sameId(t.evId ?? t.evTemplateId, templateId)),
+  // These three are work the person has to do, so a task they only follow
+  // (one done for them) is left out: someone waiting to be reimbursed has
+  // nothing overdue of their own when the payment is late.
   overdueTasks: (uid) =>
     get()
       .myTasks(uid)
-      .filter((t) => isOverdue(t)),
+      .filter((t) => isOverdue(t) && isAssigned(t, uid)),
   behindTasks: (uid) =>
     get()
       .myTasks(uid)
-      .filter((t) => t.status === 'behind'),
+      .filter((t) => t.status === 'behind' && isAssigned(t, uid)),
   dueThisWeekTasks: (uid) => {
     const today = todayStr()
     const end = in7()
@@ -67,6 +75,7 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
       .myTasks(uid)
       .filter(
         (t) =>
+          isAssigned(t, uid) &&
           (t.status === 'pending' || t.status === 'in_progress') &&
           t.dueDate != null &&
           t.dueDate >= today &&

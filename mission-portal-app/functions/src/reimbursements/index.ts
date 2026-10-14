@@ -1,5 +1,6 @@
 import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions'
 import { RESEND_API_KEY } from '../email/client'
 import { notifyUser } from '../push/notifyCore'
@@ -277,7 +278,7 @@ export const submitReimbursement = onCall(CALL_OPTS, async (req) => {
     status: 'pending',
     taskType: 'reimbursement',
     reimbursementId: ref.id,
-    _updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    _updatedAt: FieldValue.serverTimestamp(),
   })
 
   await tell(accountantUid, submittedMessage({ ...request, total }), request)
@@ -327,15 +328,15 @@ export const decideReimbursement = onCall(CALL_OPTS, async (req) => {
       reason: decision.reason,
       payBy: decision.payBy,
       decidedAt: Date.now(),
-      history: admin.firestore.FieldValue.arrayUnion(historyEntry(uid, summary)),
+      history: FieldValue.arrayUnion(historyEntry(uid, summary)),
     })
     tx.update(db.doc(`tasks/${r.taskId}`), {
       status: taskStatusFor(decision.status),
       dueDate: decision.payBy,
       ...(decision.status === 'denied'
-        ? { doneAt: admin.firestore.FieldValue.serverTimestamp() }
+        ? { doneAt: FieldValue.serverTimestamp() }
         : {}),
-      _updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      _updatedAt: FieldValue.serverTimestamp(),
     })
   })
 
@@ -368,7 +369,7 @@ export const requestPayDateChange = onCall(CALL_OPTS, async (req) => {
   const change: PayDateChange = { proposed, reason, requestedAt: Date.now() }
   await ref.update({
     dateChange: change,
-    history: admin.firestore.FieldValue.arrayUnion(
+    history: FieldValue.arrayUnion(
       historyEntry(uid, `Asked to move the pay-by date from ${r.payBy} to ${proposed}: ${reason}`)
     ),
   })
@@ -392,7 +393,7 @@ export const answerPayDateChange = onCall(CALL_OPTS, async (req) => {
     tx.update(ref, {
       dateChange: null,
       ...(accepted ? { payBy: change.proposed } : {}),
-      history: admin.firestore.FieldValue.arrayUnion(
+      history: FieldValue.arrayUnion(
         historyEntry(
           uid,
           accepted
@@ -409,7 +410,7 @@ export const answerPayDateChange = onCall(CALL_OPTS, async (req) => {
         notifiedDueWeekAt: null,
         notifiedDueTodayAt: null,
         overdueNotified: false,
-        _updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        _updatedAt: FieldValue.serverTimestamp(),
       })
     }
   })
@@ -441,7 +442,7 @@ async function roomFor(
       members: [a.uid, b.uid],
       call: false,
       reviewers: [],
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })
   }
   return id
@@ -468,14 +469,14 @@ export const markReimbursementPaid = onCall(CALL_OPTS, async (req) => {
       paidAt: Date.now(),
       // Paid is paid: a date change still waiting has nothing left to move.
       dateChange: null,
-      history: admin.firestore.FieldValue.arrayUnion(
+      history: FieldValue.arrayUnion(
         historyEntry(uid, `Paid ${formatCents(approvedAmount)}${note ? `: ${note}` : ''}`)
       ),
     })
     tx.update(db.doc(`tasks/${r.taskId}`), {
       status: 'done',
-      doneAt: admin.firestore.FieldValue.serverTimestamp(),
-      _updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      doneAt: FieldValue.serverTimestamp(),
+      _updatedAt: FieldValue.serverTimestamp(),
     })
   })
 
@@ -499,7 +500,7 @@ export const markReimbursementPaid = onCall(CALL_OPTS, async (req) => {
       readBy: { [uid]: true },
     })
     await db.doc(`rooms/${roomId}`).update({
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })
   } catch (err) {
     logger.error('[markReimbursementPaid] message failed', { id: r.id, err })

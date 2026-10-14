@@ -134,9 +134,7 @@ export function TeamsEditor({
                         gap="$1"
                         alignItems="center"
                       >
-                        {status ? (
-                          <AvailDot status={status} />
-                        ) : null}
+                        {status ? <AvailDot status={status} /> : null}
                         <Text color={assigned ? colors.primary : '#d4a017'} fontSize="$2">
                           {getName(m)}
                         </Text>

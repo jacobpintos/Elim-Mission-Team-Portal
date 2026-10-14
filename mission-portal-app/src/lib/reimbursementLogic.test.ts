@@ -14,7 +14,11 @@ import {
 } from '../../functions/src/reimbursements/logic'
 
 const TODAY = '2026-10-14'
-const named = { submitterName: 'Jane Doe', accountantName: 'Sunny Singh', eventTitle: 'Youth Retreat' }
+const named = {
+  submitterName: 'Jane Doe',
+  accountantName: 'Sunny Singh',
+  eventTitle: 'Youth Retreat',
+}
 
 describe('cleanItems', () => {
   it('keeps described, positive, whole-cent items', () => {
@@ -84,7 +88,12 @@ describe('cleanDecision', () => {
   it('partially approves less than the whole, with a reason', () => {
     expect(
       cleanDecision(
-        { decision: 'partial', approvedAmount: 3000, reason: 'Snacks are not covered', payBy: '2026-10-30' },
+        {
+          decision: 'partial',
+          approvedAmount: 3000,
+          reason: 'Snacks are not covered',
+          payBy: '2026-10-30',
+        },
         5000,
         TODAY
       )
@@ -140,7 +149,12 @@ describe('messages', () => {
   it('says how much of a partial approval, by when, and why not the rest', () => {
     const msg = decisionMessage(
       { ...named, total: 5000 },
-      { status: 'partial', approvedAmount: 3000, reason: 'Snacks are not covered.', payBy: '2026-10-30' }
+      {
+        status: 'partial',
+        approvedAmount: 3000,
+        reason: 'Snacks are not covered.',
+        payBy: '2026-10-30',
+      }
     )
     expect(msg).toContain('$30.00 of your $50.00')
     expect(msg).toContain('Oct 30, 2026')
