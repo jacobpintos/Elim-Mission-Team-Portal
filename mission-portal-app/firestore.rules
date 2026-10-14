@@ -1,5 +1,5 @@
 rules_version = '2';
-// Last updated: 2026-10-14 — added miriamAsked (questions, without who asked)
+// Last updated: 2026-10-14 — added reimbursements
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -229,6 +229,28 @@ service cloud.firestore {
       // The people it was sent to may close it off; only an admin may remove it.
       allow update: if isAdmin() || (isSignedIn() && request.auth.uid in resource.data.leaders);
       allow delete: if isAdmin();
+    }
+
+    // A request to be paid back for something bought for an event.
+    //
+    // Read by the person who asked, the Accountant it was sent to, and admins.
+    // Kept out of `tasks`, which every member can read, because what someone
+    // spent and their receipts are not everyone's business.
+    //
+    // Nothing is written from a client but one thing: every step — asking,
+    // deciding, moving the pay date, paying — goes through a callable in
+    // functions/src/reimbursements, which also moves the task and tells the
+    // other person. The exception is an admin handing open requests to a new
+    // Accountant from Admin → Leadership, which changes who it is sent to and
+    // nothing else.
+    match /reimbursements/{id} {
+      allow read: if isAdmin() || (isSignedIn() &&
+        (resource.data.submitterUid == request.auth.uid ||
+         resource.data.accountantUid == request.auth.uid));
+      allow create, delete: if false;
+      allow update: if isAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['accountantUid', 'accountantName']);
     }
 
     match /issues/{id} {

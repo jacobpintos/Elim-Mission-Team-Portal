@@ -80,6 +80,15 @@ beforeEach(async () => {
       createdAt: Date.now(),
       expiresAt: Date.now() + 6 * 60 * 60 * 1000,
     })
+    // MEMBER asked; WORSHIP is the Accountant it went to.
+    await setDoc(doc(db, 'reimbursements', 'rb1'), {
+      id: 'rb1',
+      submitterUid: MEMBER,
+      accountantUid: WORSHIP,
+      accountantName: 'Worship',
+      total: 4520,
+      status: 'submitted',
+    })
     await setDoc(doc(db, 'meetingRequests', 'mr1'), {
       id: 'mr1',
       fromUid: OUTSIDER,
@@ -1066,5 +1075,75 @@ describe('meetingRequests', () => {
   it('lets only an admin delete one', async () => {
     await assertFails(deleteDoc(doc(as(WORSHIP), 'meetingRequests/mr1')))
     await assertSucceeds(deleteDoc(doc(as(ADMIN), 'meetingRequests/mr1')))
+  })
+})
+
+describe('reimbursements', () => {
+  it('lets the person who asked read their request', () => {
+    return assertSucceeds(getDoc(doc(as(MEMBER), 'reimbursements/rb1')))
+  })
+
+  it('lets the Accountant it was sent to read it', () => {
+    return assertSucceeds(getDoc(doc(as(WORSHIP), 'reimbursements/rb1')))
+  })
+
+  it('lets an admin read it', () => {
+    return assertSucceeds(getDoc(doc(as(ADMIN), 'reimbursements/rb1')))
+  })
+
+  it('keeps it from every other member', () => {
+    // What someone spent, and their receipts, are why this is not a task.
+    return assertFails(getDoc(doc(as(OUTSIDER), 'reimbursements/rb1')))
+  })
+
+  it("answers a member's query for their own requests", () => {
+    return assertSucceeds(
+      getDocs(query(collection(as(MEMBER), 'reimbursements'), where('submitterUid', '==', MEMBER)))
+    )
+  })
+
+  it("answers the Accountant's query for requests sent to them", () => {
+    return assertSucceeds(
+      getDocs(
+        query(collection(as(WORSHIP), 'reimbursements'), where('accountantUid', '==', WORSHIP))
+      )
+    )
+  })
+
+  it('refuses an unfiltered listing to a member', () => {
+    return assertFails(getDocs(collection(as(MEMBER), 'reimbursements')))
+  })
+
+  it('refuses the Accountant approving it directly', () => {
+    // Every step goes through a callable, which also moves the task and tells
+    // the person who asked.
+    return assertFails(
+      updateDoc(doc(as(WORSHIP), 'reimbursements/rb1'), { status: 'approved' })
+    )
+  })
+
+  it('refuses the person who asked changing their own request', () => {
+    return assertFails(updateDoc(doc(as(MEMBER), 'reimbursements/rb1'), { status: 'paid' }))
+  })
+
+  it('refuses a create from any client, admin included', () => {
+    return assertFails(
+      setDoc(doc(as(ADMIN), 'reimbursements/forged'), {
+        submitterUid: ADMIN,
+        accountantUid: ADMIN,
+        total: 100,
+        status: 'approved',
+      })
+    )
+  })
+
+  it('lets an admin hand a request to a new Accountant, and change nothing else', async () => {
+    await assertSucceeds(
+      updateDoc(doc(as(ADMIN), 'reimbursements/rb1'), {
+        accountantUid: OUTSIDER,
+        accountantName: 'Outsider',
+      })
+    )
+    await assertFails(updateDoc(doc(as(ADMIN), 'reimbursements/rb1'), { status: 'paid' }))
   })
 })

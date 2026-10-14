@@ -50,3 +50,10 @@ export { askMiriam } from './miriam/askMiriam'
 export { miriamOwnAdmin } from './miriam/ownAdmin'
 export { readChurchSite } from './miriam/readChurchSite'
 export { readTravelImage } from './readTravelImage'
+export {
+  submitReimbursement,
+  decideReimbursement,
+  requestPayDateChange,
+  answerPayDateChange,
+  markReimbursementPaid,
+} from './reimbursements'

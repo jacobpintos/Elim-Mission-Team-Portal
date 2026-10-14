@@ -175,6 +175,36 @@ describe.each(['eventFlights', 'eventLodging'])('%s images', (folder) => {
   })
 })
 
+describe('reimbursement receipts', () => {
+  const path = `reimbursements/${OWNER}/receipt.jpg`
+
+  it('lets someone add a receipt to their own folder', async () => {
+    await assertSucceeds(uploadBytes(ref(as(OWNER), path), blob(2048), IMAGE))
+  })
+
+  it("refuses a receipt put in someone else's folder", async () => {
+    // submitReimbursement trusts a path in a person's folder to be theirs.
+    await assertFails(uploadBytes(ref(as(OTHER), path), blob(2048), IMAGE))
+  })
+
+  it('refuses a non-image, and anything at or over 10MB', async () => {
+    await assertFails(
+      uploadBytes(ref(as(OWNER), path), blob(2048, 'application/pdf'), {
+        contentType: 'application/pdf',
+      })
+    )
+    await assertFails(uploadBytes(ref(as(OWNER), path), blob(10 * 1024 * 1024), IMAGE))
+  })
+
+  it('lets a signed-in reader open a receipt, but not an anonymous one', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await uploadBytes(ref(ctx.storage(), path), blob(512), IMAGE)
+    })
+    await assertSucceeds(getDownloadURL(ref(as(OTHER), path)))
+    await assertFails(getDownloadURL(ref(anon(), path)))
+  })
+})
+
 describe('logos', () => {
   it('is readable without signing in, since the login screen shows it', async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {

@@ -33,6 +33,11 @@ export type NotificationType =
   | 'reminder'
   /** An admin asking those who haven't answered an event's availability to answer it. */
   | 'availabilityNudge'
+  /**
+   * A step in a reimbursement request: asked for, decided, a pay date moved,
+   * paid. Built by functions/src/reimbursements, which writes the whole line.
+   */
+  | 'reimbursement'
 
 /**
  * Notification types the user asked to be "bulk" (starred in their spec):
@@ -197,6 +202,8 @@ export function inAppMessage(type: NotificationType, data: Record<string, unknow
       return `Reminder: ${data.text ?? 'something you asked to be reminded of'}`
     case 'availabilityNudge':
       return `Are you available for ${data.eventTitle ?? 'an event'}${data.eventDate ? ` on ${data.eventDate}` : ''}? Please answer in the app.`
+    case 'reimbursement':
+      return String(data.message ?? 'A reimbursement request was updated')
     case 'textingListSignup':
       // Built by signupDigestMessage — names and numbers in full, so the
       // coordinator can act on it without opening anything.
@@ -233,6 +240,7 @@ function subjectFor(type: NotificationType, _data: Record<string, unknown>): str
     textingListSignup: 'Texting list sign-ups — Mission Portal',
     reminder: 'Reminder',
     availabilityNudge: 'Are you available? — Mission Portal',
+    reimbursement: 'Reimbursement — Mission Portal',
   }
   return subjects[type] ?? 'Mission Portal notification'
 }
