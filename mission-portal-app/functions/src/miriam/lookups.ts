@@ -1,5 +1,7 @@
 import {
+  assignedTo,
   availabilityReport,
+  canSeeEvent,
   canSeeTask,
   carpoolFor,
   closestEvents,
@@ -13,6 +15,7 @@ import {
   lodgingFor,
   TASK_STATUS,
   effectiveResponse,
+  instancesOf,
   AVAIL_LABELS,
   availKey,
   seriesAvailKey,
@@ -132,6 +135,24 @@ export class Lookups {
   async event(key: string): Promise<EventInstance | null> {
     const [{ templates, overrides }, groups] = await Promise.all([this.eventData(), this.groups()])
     return eventByKey(templates, overrides, groups, this.viewer, key)
+  }
+
+  /** The dates of events this person can see between two days, soonest first. */
+  async eventsBetween(from: string, to: string): Promise<EventInstance[]> {
+    const [{ templates, overrides }, groups] = await Promise.all([this.eventData(), this.groups()])
+    return templates
+      .filter((t) => canSeeEvent(t, this.viewer, groups))
+      .flatMap((t) => instancesOf(t, from, to, overrides))
+      .filter((ev) => canSeeEvent(ev, this.viewer, groups))
+      .sort(
+        (a, b) =>
+          a.date.localeCompare(b.date) || String(a.startTime ?? '').localeCompare(b.startTime ?? '')
+      )
+  }
+
+  /** Whether this person is on an event: named on it, or in one of its groups. */
+  async isOn(ev: EventInstance): Promise<boolean> {
+    return assignedTo(ev, await this.groups()).has(this.viewer.uid)
   }
 
   /** A task by id, if this person may see it. */

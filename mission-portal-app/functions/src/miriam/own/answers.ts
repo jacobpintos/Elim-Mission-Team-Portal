@@ -1,0 +1,335 @@
+import { dressCodeFor, shiftDate, type EventInstance, type Viewer } from '../data'
+import type { Lookups } from '../lookups'
+import type { AppToolName } from '../plan'
+import type { Mention } from './events'
+import type { Skill } from './skills'
+import { dayIn, reminderIn, spanIn, statusIn } from './when'
+
+/**
+ * Miriam's own answers to what she has understood (./understand): looked up
+ * with the same lookups Claude's answers use (../lookups), so they show only
+ * what this person may see, and come back in the same shapes — an answer to
+ * show and say, or a change to confirm — so the app needs nothing new for
+ * them. Worded as the app's own quick answers are (src/lib/miriamQuick).
+ *
+ * Whenever it isn't plain — no event she can tell, two that fit, a time she
+ * can't read — the answer is null, and the request goes on to Claude.
+ */
+
+export type EventSection = 'dress_code' | 'availability' | 'weather' | 'food' | 'details'
+
+export type OwnResult =
+  | {
+      kind: 'answer'
+      text: string
+      open:
+        | { kind: 'event'; key: string; section: EventSection | null }
+        | { kind: 'directions'; key: string }
+        | { kind: 'link'; url: string; label: string }
+        | null
+      choices: never[]
+      heardName: string
+      followUp: boolean
+      understood: string
+      misheard: never[]
+    }
+  | {
+      kind: 'confirm'
+      name: 'set_availability' | 'create_reminder'
+      input: Record<string, unknown>
+      more: false
+    }
+
+export interface AnswerContext {
+  text: string
+  today: string
+  /** Their clock, "HH:MM", when the app sends it. */
+  now: string | null
+  mentions: Mention[]
+  lookups: Lookups
+  viewer: Viewer
+  /** The app's lookups and changes this person has (plan.ts: APP_TOOLS). */
+  appTools: readonly AppToolName[]
+}
+
+export const said = (
+  text: string,
+  open: Extract<OwnResult, { kind: 'answer' }>['open'] = null,
+  followUp = false
+): OwnResult => ({
+  kind: 'answer',
+  text,
+  open,
+  choices: [],
+  heardName: '',
+  followUp,
+  understood: '',
+  misheard: [],
+})
+
+const onPage = (ev: EventInstance, section: EventSection | null = 'details') =>
+  ({ kind: 'event', key: ev.instanceKey, section }) as const
+
+/** When an event is, as said: "today", "tomorrow", "on Friday, October 16". */
+function whenSaid(date: string, today: string): string {
+  if (date === today) return 'today'
+  if (date === shiftDate(today, 1)) return 'tomorrow'
+  return `on ${new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })}`
+}
+
+/** When, short, in a list: "today at 5:00 PM", "Friday", "Sunday, Oct 25". */
+function whenShort(ev: EventInstance, today: string): string {
+  const day =
+    ev.date === today
+      ? 'today'
+      : ev.date === shiftDate(today, 1)
+        ? 'tomorrow'
+        : new Date(`${ev.date}T12:00:00Z`).toLocaleDateString('en-US', {
+            weekday: 'long',
+            timeZone: 'UTC',
+            ...(ev.date > shiftDate(today, 6) ? { month: 'short', day: 'numeric' } : {}),
+          })
+  return ev.startTime ? `${day} at ${ev.startTime}` : day
+}
+
+/** What a skill needs an event to have, to be the one meant when none is named. */
+const HAS: Partial<Record<Skill, (ev: EventInstance, viewer: Viewer) => boolean>> = {
+  event_car: (ev) => !!ev.carpool,
+  event_lodging: (ev) => !!ev.lodging,
+  event_flight: (ev) => !!ev.flights,
+  event_team: (ev, v) =>
+    (ev.teams ?? []).some((t) => [...t.leaders, ...t.members].some((m) => String(m) === v.uid)),
+}
+
+/**
+ * The one event meant: by its name (the titles it fits), on the day said,
+ * the next of it; or with no name, the one that day, or — for a car, a
+ * room, a flight or a team — their next that has one. Null if there is no
+ * one plainly.
+ */
+async function theEvent(skill: Skill, ctx: AnswerContext): Promise<EventInstance | null> {
+  const { mentions, today, lookups, viewer } = ctx
+  const day = dayIn(ctx.text, today)
+  const from = day ?? today
+  const to = day ?? shiftDate(today, 365)
+  // A later day of a multi-day event is the same event: only when that day is asked.
+  const all = (await lookups.eventsBetween(from, to)).filter(
+    (ev) => day || !/_d\d+$/.test(ev.instanceKey)
+  )
+  if (mentions.length > 0) {
+    const titles = mentions.flatMap((m) => m.titles)
+    const named = all.filter((ev) => titles.includes(ev.title))
+    // Two different events that fit what was said: Claude asks which.
+    const distinct = new Set(named.map((ev) => ev.title))
+    if (distinct.size !== 1) return null
+    return named[0] ?? null
+  }
+  if (day) {
+    const onDay = all.filter((ev) => ev.date === day)
+    const has = HAS[skill]
+    const fitting = has ? onDay.filter((ev) => has(ev, viewer)) : onDay
+    if (fitting.length === 1) return fitting[0]
+    const mine: EventInstance[] = []
+    for (const ev of fitting) if (await lookups.isOn(ev)) mine.push(ev)
+    return mine.length === 1 ? mine[0] : null
+  }
+  const has = HAS[skill]
+  if (!has) return null
+  // Their next with a car, a room, a flight or a team for them, within two months.
+  for (const ev of all) {
+    if (ev.date > shiftDate(today, 60)) break
+    if (has(ev, viewer) && (await lookups.isOn(ev))) return ev
+  }
+  return null
+}
+
+/** One event's answer, as the app words it. */
+async function aboutEvent(skill: Skill, ev: EventInstance, ctx: AnswerContext): Promise<OwnResult> {
+  const { lookups, viewer, today } = ctx
+  const title = ev.title
+  const when = whenSaid(ev.date, today)
+  switch (skill) {
+    case 'event_time': {
+      const details = await lookups.getEvent(ev.instanceKey)
+      const report =
+        'reportTimes' in details &&
+        details.reportTimes &&
+        /\b(?:be there|get there|arrive|show up|report|call time)\b/i.test(ctx.text)
+          ? ` Report time is ${[details.reportTimes.mission, details.reportTimes.production].filter(Boolean).join(', or ')}.`
+          : ''
+      return said(
+        ev.startTime
+          ? `${title} is ${when} at ${ev.startTime}.${report}`
+          : `${title} is ${when}; no time is set.`,
+        onPage(ev)
+      )
+    }
+    case 'event_place': {
+      if (ev.isVirtual) {
+        return said(
+          `${title} is virtual${ev.virtualLink ? ' — the link is on its page' : ''}.`,
+          onPage(ev)
+        )
+      }
+      const where = [ev.location, [ev.address, ev.city, ev.state].filter(Boolean).join(', ')]
+        .filter(Boolean)
+        .join(', ')
+      if (!where) return said(`${title} has no place set yet.`, onPage(ev))
+      // On the day: maps offered, as the app does (src/features/miriam/localTalk: offerDirections).
+      if (ev.date === today) {
+        return said(`${title} is at ${where}. Want me to open maps for it?`, onPage(ev), true)
+      }
+      return said(`${title} is ${when} at ${where}.`, onPage(ev))
+    }
+    case 'event_dress': {
+      const codes = dressCodeFor(ev, viewer)
+      return said(
+        codes.length
+          ? `The dress code for ${title} is ${codes.join('; ')}.`
+          : `${title} has no dress code set.`,
+        onPage(ev, 'dress_code')
+      )
+    }
+    case 'event_schedule': {
+      const details = await lookups.getEvent(ev.instanceKey)
+      const lines = 'schedule' in details ? details.schedule : undefined
+      return said(
+        lines?.length
+          ? `The schedule for ${title}: ${lines.join('; ')}.`
+          : `${title} has no schedule yet.`,
+        onPage(ev)
+      )
+    }
+    case 'event_team': {
+      const details = await lookups.getEvent(ev.instanceKey)
+      const team = 'yourTeam' in details ? details.yourTeam : undefined
+      return said(
+        team ? `You’re on the ${team} team for ${title}.` : `You’re not on a team for ${title}.`,
+        onPage(ev)
+      )
+    }
+    case 'event_car': {
+      if (!ev.carpool) return said(`${title} has no carpool.`, onPage(ev))
+      const details = await lookups.getEvent(ev.instanceKey)
+      const pool = 'carpool' in details ? details.carpool : undefined
+      const cars = pool?.cars ?? []
+      const meet = pool?.meetingPlace ? ` Cars meet at ${pool.meetingPlace}.` : ''
+      return said(
+        cars.length
+          ? `${title}: ${cars.join('. ')}.${meet}`
+          : `You haven’t been put in a car for ${title} yet.`,
+        onPage(ev)
+      )
+    }
+    case 'event_lodging': {
+      if (!ev.lodging) return said(`${title} has no lodging.`, onPage(ev))
+      const details = await lookups.getEvent(ev.instanceKey)
+      const rooms = ('lodging' in details ? details.lodging : undefined) ?? []
+      return said(
+        rooms.length
+          ? `${title}: ${rooms.join('. ')}.`
+          : `You haven’t been given a room for ${title} yet.`,
+        onPage(ev)
+      )
+    }
+    case 'event_flight': {
+      if (!ev.flights) return said(`${title} has no flights.`, onPage(ev))
+      const details = await lookups.getEvent(ev.instanceKey)
+      const flights = ('flights' in details ? details.flights : undefined) ?? []
+      return said(
+        flights.length ? `${title}: ${flights.join(' ')}` : `You have no flight for ${title} yet.`,
+        onPage(ev)
+      )
+    }
+    case 'event_weather': {
+      const w = await lookups.weather(ev.instanceKey)
+      if ('forecast' in w && w.forecast) {
+        const f = w.forecast
+        const rain = f.chanceOfRain >= 20 ? `, ${f.chanceOfRain}% chance of rain` : ''
+        return said(
+          `${title} ${when}: ${f.summary.toLowerCase()}, high ${Math.round(f.high)}°, low ${Math.round(f.low)}°${rain}.`,
+          onPage(ev, 'weather')
+        )
+      }
+      return said(
+        'note' in w && w.note
+          ? `${title} ${when}: ${w.note.charAt(0).toLowerCase()}${w.note.slice(1)}`
+          : `There’s no forecast for ${title} yet.`,
+        onPage(ev, 'weather')
+      )
+    }
+    default:
+      return said('')
+  }
+}
+
+/** Her answer to a request she has read as `skill`, or null to hand it to Claude. */
+export async function answerFor(skill: Skill, ctx: AnswerContext): Promise<OwnResult | null> {
+  const { text, today, lookups } = ctx
+  if (skill.startsWith('event_')) {
+    const ev = await theEvent(skill, ctx)
+    return ev ? aboutEvent(skill, ev, ctx) : null
+  }
+  if (skill === 'my_events') {
+    const span = spanIn(text, today)
+    const all = await lookups.eventsBetween(span.from, span.to)
+    if (span.next) {
+      let ev: EventInstance | undefined
+      for (const e of all) {
+        if (await lookups.isOn(e)) {
+          ev = e
+          break
+        }
+      }
+      ev ??= all[0]
+      return ev
+        ? said(`Your next event is ${ev.title}, ${whenShort(ev, today)}.`, onPage(ev))
+        : said('You have nothing coming up.')
+    }
+    if (all.length === 0) return said(`Nothing is on ${span.said}.`)
+    const shown = all.slice(0, 5).map((ev) => `${ev.title}, ${whenShort(ev, today)}`)
+    const more = all.length > 5 ? `; and ${all.length - 5} more` : ''
+    return said(`On ${span.said}: ${shown.join('; ')}${more}.`)
+  }
+  if (skill === 'availability') {
+    if (!ctx.appTools.includes('set_availability')) return null
+    const ev = await theEvent(skill, ctx)
+    if (!ev) return null
+    const status = statusIn(text)
+    return {
+      kind: 'confirm',
+      name: 'set_availability',
+      input: {
+        event_key: ev.instanceKey,
+        status,
+        // In their words, where it says more than yes or no.
+        note: status === 'partial' || status === 'tbd' ? text.trim().slice(0, 300) : '',
+      },
+      more: false,
+    }
+  }
+  if (skill === 'reminder') {
+    if (!ctx.appTools.includes('create_reminder')) return null
+    const r = reminderIn(text, today, ctx.now)
+    if (!r) return null
+    return {
+      kind: 'confirm',
+      name: 'create_reminder',
+      input: {
+        text: r.text,
+        when: r.when,
+        repeat: r.repeat,
+        event_key: '',
+        minutes_before: 0,
+        every_event: false,
+      },
+      more: false,
+    }
+  }
+  return null
+}

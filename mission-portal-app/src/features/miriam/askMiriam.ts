@@ -15,6 +15,15 @@ function localToday(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+/** The time on this device's clock, "HH:MM": for "in 20 minutes" and "at 4" (today or tomorrow). */
+function localClock(): string {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** What this version of the app can show of an answer, beyond what every version can. */
+const CAN = ['link']
+
 /** Lookups for the app to run, while the request waits (functions: APP_TOOLS). */
 interface Run {
   kind: 'run'
@@ -44,6 +53,8 @@ export async function askMiriam(text: string, heard?: Heard): Promise<MiriamResu
   let { data } = await call({
     text,
     today,
+    now: localClock(),
+    can: CAN,
     known: await loadNames(),
     // Words misheard before, and what was meant.
     words: await loadWords(),

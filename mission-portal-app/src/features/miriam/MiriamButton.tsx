@@ -870,6 +870,11 @@ export function MiriamButton() {
             })
           }
         }
+      } else if (open?.kind === 'link') {
+        // A page she found the answer on: a button to read it there.
+        if (/^https?:\/\//i.test(open.url)) {
+          setLink({ url: open.url, name: open.label, label: 'Open the page' })
+        }
       } else if (open && open.kind !== 'video' && open.kind !== 'tour' && !anyOverlayOpen()) {
         if (open.kind === 'screen') {
           // Only a screen this person has: checked again here.

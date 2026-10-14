@@ -1,0 +1,58 @@
+import type { Skill } from './skills'
+
+/**
+ * A second look at what she read, by the words themselves: a request that
+ * tells her to change or send something is never one of her questions —
+ * "change the picnic's location" is not "where is the picnic" — and a few
+ * things her questions are near (food, tasks, everyone's answers) are
+ * Claude's. Only ever a reason to hand a request on, never to take one.
+ */
+
+/** Opens with doing something to the app, not asking about it. */
+const COMMAND =
+  /^(?:(?:hey|ok|okay)\s+)?(?:miriam[,\s]+)?(?:please\s+|can\s+you\s+|could\s+you\s+|would\s+you\s+|go\s+ahead\s+and\s+)*(?:change|move|update|edit|rename|cancel|delete|remove|add|create|make|schedule|set\s+up|arrange|assign|send|tell|text|message|email|post|announce|invite|book|reschedule|put\s+\w+\s+in)\b/i
+
+/** Her questions about the app's events, and answering for one. */
+const EVENTS: Skill[] = [
+  'event_time',
+  'event_place',
+  'event_dress',
+  'event_schedule',
+  'event_team',
+  'event_car',
+  'event_lodging',
+  'event_flight',
+  'event_weather',
+  'my_events',
+  'availability',
+]
+
+const NOT_HERS: [RegExp, Skill[]][] = [
+  // Their tasks, and anyone's answers or numbers: Claude looks them up.
+  [/\b(?:tasks?|assignments?|due|overdue|to-?dos?)\b/i, [...EVENTS, 'reminder']],
+  [
+    /\b(?:who(?:'s|’s|\s+is|\s+are)?\s+(?:going|coming|attending|available|unavailable|signed\s+up)|how\s+many\s+(?:people|are|have)|hasn'?t\s+(?:said|answered))\b/i,
+    EVENTS,
+  ],
+  // Reminding someone else, or everyone, is a message.
+  [/\b(?:everyone|everybody|all\s+of\s+them)\b/i, ['reminder', 'availability', 'my_events']],
+  [/\bremind\s+(?!me\b)(?:the|them|him|her|us|our|my|all|every)\b/i, ['reminder']],
+  // Bringing something is the food sign-up, not coming.
+  [/\b(?:bring(?:ing)?|food|sign[-\s]?up\s+sheet|potluck\s+list)\b/i, ['availability']],
+  // A span of days ("all of November", "the whole week") is a range, not one event.
+  [
+    /\b(?:all\s+(?:of\s+)?(?:week|month|november|december|summer)|the\s+whole|every(?:thing)?\s+(?:in|next|this))\b/i,
+    ['availability'],
+  ],
+]
+
+/** Why a request she read as `skill` is Claude's after all, or null. */
+export function notHers(text: string, skill: Skill): string | null {
+  const said = text.trim()
+  // Asked of her, but to do something: her reminders do, and her web search finds.
+  if (COMMAND.test(said) && !['reminder', 'web'].includes(skill)) return 'a command'
+  for (const [re, skills] of NOT_HERS) {
+    if (re.test(said) && skills.includes(skill)) return 'about something else'
+  }
+  return null
+}

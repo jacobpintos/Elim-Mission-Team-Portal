@@ -1,5 +1,5 @@
 rules_version = '2';
-// Last updated: 2026-07-29 — added contentReports (UGC moderation queue)
+// Last updated: 2026-10-14 — added miriamOwn (server only)
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -398,6 +398,14 @@ service cloud.firestore {
     // ever needs the token. Admin screens read connection health through the
     // `listFbConnections` callable, which returns everything except the token.
     match /fbConnections/{pageId} {
+      allow read, write: if false;
+    }
+
+    // Miriam's own: what she has learned from Claude's answers, the answers
+    // admins have taught her, and her web search key. Read and written only
+    // by the server (functions/src/miriam/own); admins see and change them
+    // through the miriamOwnAdmin callable, which never returns the key.
+    match /miriamOwn/{docId} {
       allow read, write: if false;
     }
 

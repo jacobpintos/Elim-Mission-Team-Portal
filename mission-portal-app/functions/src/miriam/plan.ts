@@ -13,6 +13,7 @@
  * the Firestore rules like any other save; and what a question can look up
  * is filtered by what the person may see (./data.ts).
  */
+import { OWN_SKILLS } from './own/skills'
 
 /** A command Miriam can carry out. Mirrored in the app (src/lib/miriam.ts). */
 export type CommandName =
@@ -371,6 +372,12 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
             description:
               'When you read a word differently from how it was heard: the request as you understood it ("create an event named Test"); otherwise "".',
           },
+          skill: {
+            type: 'string',
+            enum: [...OWN_SKILLS, 'other'],
+            description:
+              'What the request was, for Miriam to learn from: event_time (when an event is), event_place (where), event_dress (what to wear), event_schedule (an event’s own schedule), event_team (their team for it), event_car (their ride or car), event_lodging (where they stay), event_flight (their flight), event_weather (an event’s forecast), my_events (what they have on, or their next event), availability (them saying whether they can come to one event), reminder (one for themselves at a time), web (the world outside the app: a business, a fact, the news, a place’s weather), faith (faith or the Bible); other for anything else.',
+          },
           misheard: {
             type: 'array',
             description:
@@ -393,6 +400,7 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
           'follow_up',
           'understood',
           'misheard',
+          'skill',
         ],
         additionalProperties: false,
       },

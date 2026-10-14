@@ -18,6 +18,9 @@ import {
 import { isAdminViewer, type Viewer } from './data'
 import { Lookups, withWeekday } from './lookups'
 import { PAUSE_MS, MAX_RESULT, seal, unseal } from './pause'
+import { ownAnswer, webOrFaith, type OwnInput, type OwnRead } from './own'
+import { learn, type OwnDb } from './own/learn'
+import { OWN_SKILLS, type Skill } from './own/skills'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -76,13 +79,17 @@ Asked to do something, but missing something you need for it that you can't look
 
 Several things asked at once: do them one at a time, in the order asked. Each change is shown to them to confirm; when more was asked after it, set more_to_do on it, and you'll be told once it's done, to carry on with the rest. A form opened for them to save (an event's, a task's) ends the request: say in its notes what is still to do.
 
+Questions about the world outside this app — a business's hours, a fact, the news, a place's weather — and questions of faith or the Bible are Miriam's own to answer: call \`answer\` at once with skill "web" or "faith", spoken "" and open "none" — look nothing up for them, and don't say you can't.
+
+Always set \`skill\` in \`answer\` to what the request was, as the tool lists them: Miriam learns from it to answer the next one like it herself.
+
 If no tool fits, call \`answer\` saying in one sentence that you can't do that yet.`
 
 /** What was said and answered before, carried into a follow-up: at most this many. Mirrored in the app (lib/miriamConversation). */
 const MAX_HISTORY = 6
 
 /** Earlier in the conversation, from the app: what was said and what she answered. */
-function historyFrom(list: unknown): string[] {
+function recentFrom(list: unknown): { said: string; reply: string }[] {
   return (Array.isArray(list) ? list : [])
     .filter(
       (h): h is { said: string; reply: string } =>
@@ -91,7 +98,11 @@ function historyFrom(list: unknown): string[] {
         typeof (h as { reply?: unknown }).reply === 'string'
     )
     .slice(-MAX_HISTORY)
-    .map((h) => `They said: “${h.said.slice(0, 400)}”\nYou answered: “${h.reply.slice(0, 600)}”`)
+    .map((h) => ({ said: h.said.slice(0, 400), reply: h.reply.slice(0, 600) }))
+}
+
+function historyFrom(list: unknown): string[] {
+  return recentFrom(list).map((h) => `They said: “${h.said}”\nYou answered: “${h.reply}”`)
 }
 
 /** The recognizer's other guesses for what was said, from the app. */
@@ -162,10 +173,16 @@ function screensFrom(list: unknown): string[] {
  * request pauses, the app is handed the calls with the request sealed, and
  * it carries on when the app sends back what it found (`resume`).
  *
- * Nothing said is stored or logged, only how much it cost.
+ * Miriam answers first, on her own (./own): what she understands and can
+ * answer herself never reaches Claude. What Claude handles, it says which of
+ * her skills it was, and she keeps it — as she read it, never who asked — to
+ * answer the next one like it herself (./own/learn).
+ *
+ * Nothing else said is stored, and only how much it cost is logged.
  */
 export const askMiriam = onCall(
-  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 90 },
+  // A whole processor: her own model runs here (./own/encoder).
+  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 90, memory: '1GiB', cpu: 1 },
   async (req) => {
     const uid = req.auth?.uid
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in to use Miriam.')
@@ -190,6 +207,10 @@ export const askMiriam = onCall(
     }
     const viewer = { uid, roles }
     const lookups = new Lookups(db, viewer, today)
+    const ownDb = db as unknown as OwnDb
+    // What she read, when she handed it to Claude: kept as what Claude says it was.
+    let ownRead: OwnRead | null = null
+    let ownInput: OwnInput | null = null
 
     let messages: Anthropic.Beta.BetaMessageParam[]
     let appTools: AppToolName[]
@@ -261,6 +282,40 @@ export const askMiriam = onCall(
           ? `\nIt was ${confidence < 0.6 ? 'unsure of it' : 'fairly sure of it'} (${confidence.toFixed(2)}).`
           : '')
       appTools = appToolsFrom(req.data?.appTools)
+
+      // Miriam first, on her own: answered here if she can, nothing sent to Claude.
+      ownInput = {
+        text,
+        today,
+        now:
+          typeof req.data?.now === 'string' && /^\d{2}:\d{2}$/.test(req.data.now)
+            ? req.data.now
+            : null,
+        history: recentFrom(req.data?.history),
+        appTools,
+        can: (Array.isArray(req.data?.can) ? req.data.can : []).filter(
+          (c: unknown): c is string => typeof c === 'string'
+        ),
+        viewer,
+        lookups,
+        db: ownDb,
+      }
+      const own = await ownAnswer(ownInput).catch((err: unknown) => {
+        logger.error('askMiriam: her own reading failed', err)
+        return null
+      })
+      if (own) {
+        logger.info('askMiriam: her own', {
+          uid,
+          why: own.why,
+          answered: !!own.result,
+          skill: own.read?.skill,
+          score: own.read ? Math.round(own.read.score * 1000) / 1000 : undefined,
+        })
+        if (own.result) return own.result
+        ownRead = own.read
+      }
+
       messages = [
         {
           role: 'user',
@@ -310,6 +365,27 @@ export const askMiriam = onCall(
         taskTemplates: templates.docs.map((d) => ({ id: d.id, name: String(d.data().name ?? '') })),
       }
       return roster
+    }
+
+    /**
+     * What Claude said a request she handed on was, kept for her to answer
+     * the next like it herself: one of her skills, or — where she thought it
+     * hers and it wasn't — "other", so she knows better. Kept as she read it,
+     * a reminder's own words taken out; once.
+     */
+    const learnFrom = async (skill: Skill | null, reminderText?: unknown) => {
+      const r = ownRead
+      ownRead = null
+      if (!r || !skill) return
+      if (skill === 'other' && (r.skill === 'other' || r.score < 0.5)) return
+      let text = r.masked
+      if (skill === 'reminder' && typeof reminderText === 'string' && reminderText.trim()) {
+        const words = reminderText.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        text = text.replace(new RegExp(words, 'i'), 'do something')
+      }
+      await learn(ownDb, text, skill, r.v).catch((err: unknown) =>
+        logger.error('askMiriam: not learned', err)
+      )
     }
 
     const client = new Anthropic({ apiKey: key })
@@ -418,10 +494,33 @@ export const askMiriam = onCall(
       if (action) {
         // More asked after it: once it is done, the app hands back to carry on.
         const { more_to_do: more, ...input } = action.input as Record<string, unknown>
+        // Hers to do next time: answering for one event, or a plain reminder.
+        await learnFrom(
+          action.name === 'set_availability'
+            ? 'availability'
+            : action.name === 'create_reminder' && !input.every_event && !input.event_key
+              ? 'reminder'
+              : null,
+          input.text
+        )
         return { kind: 'confirm', name: action.name, input, more: more === true }
       }
       const final = calls.find((c) => c.name === 'answer')
-      if (final) return finish(final.input as AnswerInput, lookups, viewer)
+      if (final) {
+        const input = final.input as AnswerInput
+        const skill = (OWN_SKILLS as readonly string[]).includes(String(input.skill))
+          ? (input.skill as Skill)
+          : 'other'
+        // Something she answers herself, seen by Claude: the web, or a question of faith.
+        if ((skill === 'web' || skill === 'faith') && ownInput) {
+          await learnFrom(skill)
+          const hers = await webOrFaith(skill, ownInput.text, ownInput).catch(() => null)
+          if (hers) return hers
+        }
+        // Its own question back isn't the answer: nothing learned from it.
+        if (input.follow_up !== true) await learnFrom(skill)
+        return finish(input, lookups, viewer)
+      }
 
       // Looked up, and handed back for the next round.
       const results: Anthropic.Beta.BetaToolResultBlockParam[] = []
@@ -504,6 +603,8 @@ interface AnswerInput {
   follow_up?: boolean
   understood?: string
   misheard?: { heard?: unknown; meant?: unknown }[]
+  /** Which of Miriam's own skills it was (./own/skills), for her to learn from. */
+  skill?: string
 }
 
 /** The answer, and where to show it — only somewhere this person may go. */

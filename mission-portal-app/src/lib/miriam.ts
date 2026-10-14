@@ -106,6 +106,8 @@ export type MiriamOpen =
   | { kind: 'tour'; id: string }
   /** The way to an event, by its key: opened in maps (lib/location: openDirections). */
   | { kind: 'directions'; key: string }
+  /** A page on the web Miriam found an answer on: a button to open it. */
+  | { kind: 'link'; url: string; label: string }
 
 export type MiriamResult =
   /** With `editKey`, an existing event's form (its instance key) with the changes made. */
@@ -139,7 +141,10 @@ export type MiriamResult =
 
 /** The app's address for where an answer is shown. */
 export function miriamHref(
-  open: Exclude<MiriamOpen, { kind: 'screen' | 'video' | 'reorder' | 'tour' | 'directions' }>
+  open: Exclude<
+    MiriamOpen,
+    { kind: 'screen' | 'video' | 'reorder' | 'tour' | 'directions' | 'link' }
+  >
 ): string {
   if (open.kind === 'task') return `/assignments?taskId=${encodeURIComponent(open.id)}`
   if (open.kind === 'availability') return '/admin/avail'

@@ -1,0 +1,657 @@
+import { describe, expect, it, beforeEach } from 'vitest'
+import { readFileSync } from 'fs'
+import { join } from 'path'
+import { Lookups } from '../../functions/src/miriam/lookups'
+import { embed } from '../../functions/src/miriam/own/encoder'
+import { mentionsIn } from '../../functions/src/miriam/own/events'
+import { notHers } from '../../functions/src/miriam/own/guards'
+import { ownAnswer, sure, webOrFaith, type OwnInput } from '../../functions/src/miriam/own'
+import {
+  forget,
+  forgetCaches,
+  learn,
+  learnedExamples,
+  listLearned,
+  teach,
+  type OwnDb,
+} from '../../functions/src/miriam/own/learn'
+import { SEEDS, type Skill } from '../../functions/src/miriam/own/skills'
+import { read, seedExamples } from '../../functions/src/miriam/own/understand'
+import { dayIn, reminderIn, spanIn, statusIn } from '../../functions/src/miriam/own/when'
+import {
+  bestPassage,
+  braveSearch,
+  passagesOf,
+  queryOf,
+  webAnswer,
+  weatherPlace,
+  wikipediaSearch,
+} from '../../functions/src/miriam/own/web'
+import requests from './__fixtures__/miriamRequests.json'
+
+/**
+ * Miriam on her own (functions/src/miriam/own): what she understands, and
+ * what she answers without Claude.
+ */
+
+// --- What she understands -----------------------------------------------------
+
+const TITLES = [
+  'Youth Night',
+  'Revival in the Heartland',
+  'Sunday Service',
+  'Church Picnic',
+  "Women's Retreat",
+  'Christmas Concert',
+  'Summer Camp',
+  'Community Outreach',
+  'Bible Study',
+  'Worship Practice',
+  'Fall Banquet',
+  "Men's Breakfast",
+  'Leadership Conference',
+  'Mission Trip',
+  'Thanksgiving Potluck',
+  'Gala',
+]
+
+/** As she reads one (functions/src/miriam/own/index): names masked, as said if that isn't plain, then her guards. */
+function taken(text: string): Skill | null {
+  const examples = seedExamples()
+  const { masked } = mentionsIn(text, TITLES)
+  let r = read(embed(masked), examples)
+  if (masked !== text && !sure(r)) {
+    const r2 = read(embed(text), examples)
+    if (sure(r2) || r2.score > r.score) r = r2
+  }
+  if (r.skill === 'other' || !sure(r) || notHers(text, r.skill)) return null
+  return r.skill
+}
+
+describe('her examples', () => {
+  it('each has its meaning worked out (else run scripts/miriam-model/seeds.js)', () => {
+    const stored = JSON.parse(
+      readFileSync(join(__dirname, '../../functions/models/minilm/seedVectors.json'), 'utf8')
+    ) as Record<string, string>
+    const missing = Object.values(SEEDS)
+      .flat()
+      .filter((t) => !stored[t])
+    expect(missing).toEqual([])
+  })
+})
+
+describe('what she takes as hers, of requests she has never seen', () => {
+  const all = Object.entries(requests as Record<string, string[]>).flatMap(([want, list]) =>
+    list.map((text) => ({ text, want }))
+  )
+  it('is never wrong, and is most of what is hers', () => {
+    const wrong: string[] = []
+    let hers = 0
+    let answered = 0
+    for (const { text, want } of all) {
+      const got = taken(text)
+      if (want !== 'other') hers++
+      if (got === null) continue
+      if (got === want) answered++
+      else wrong.push(`${text} → ${got} (is ${want})`)
+    }
+    expect(wrong).toEqual([])
+    // Handed to Claude when unsure: the rest. Most are hers.
+    expect(answered / hers).toBeGreaterThan(0.75)
+  }, 180_000)
+})
+
+describe('names in a request', () => {
+  it('are found, and read as "the event"', () => {
+    expect(mentionsIn('where are we having the picnic', TITLES).masked).toBe(
+      'where are we having the event'
+    )
+    expect(mentionsIn("what's the dress code for Sunday's service?", TITLES).masked).toBe(
+      "what's the dress code for the event?"
+    )
+    expect(mentionsIn('when is revival in the hard land', TITLES).mentions[0].titles).toEqual([
+      'Revival in the Heartland',
+    ])
+  })
+
+  it('never from an ordinary word, a pronoun, a day or a kind of event alone', () => {
+    for (const text of [
+      'who is picking me up',
+      'thanks so much',
+      'what can you help with',
+      'do I have anything Sunday',
+      'what does the bible say about worry',
+      'how do I become a christian',
+      'I might be able to come tonight',
+      "what's my next church thing",
+    ]) {
+      expect(mentionsIn(text, TITLES).mentions, text).toEqual([])
+    }
+  })
+})
+
+describe('the guards', () => {
+  it('hand on commands and others’ business, not her own', () => {
+    expect(notHers('change the picnic location to the park', 'event_place')).toBeTruthy()
+    expect(notHers('set up the cars for camp', 'event_car')).toBeTruthy()
+    expect(notHers("I'll bring cookies to the potluck", 'availability')).toBeTruthy()
+    expect(notHers("what's due this week", 'my_events')).toBeTruthy()
+    expect(notHers('remind everyone to bring a Bible', 'reminder')).toBeTruthy()
+    expect(notHers("who's coming to youth night", 'event_time')).toBeTruthy()
+    expect(notHers('remind me at 4 to call mom', 'reminder')).toBeNull()
+    expect(notHers('how many people live in Iowa', 'web')).toBeNull()
+    expect(notHers('where is the picnic', 'event_place')).toBeNull()
+  })
+})
+
+// --- Days and times --------------------------------------------------------------
+
+const TODAY = '2026-10-14' // a Wednesday
+
+describe('days said', () => {
+  it.each([
+    ['tonight', '2026-10-14'],
+    ['tomorrow', '2026-10-15'],
+    ["Friday's", '2026-10-16'],
+    ['next wednesday', '2026-10-21'],
+    ['October 20th', '2026-10-20'],
+    ['10/31', '2026-10-31'],
+    ['the 2nd', '2026-11-02'],
+    ['jan 5', '2027-01-05'],
+  ])('%s is %s', (said, date) => {
+    expect(dayIn(`what time is it ${said}`, TODAY)).toBe(date)
+  })
+
+  it('spans for "what do I have"', () => {
+    expect(spanIn('what do I have this weekend', TODAY)).toMatchObject({
+      from: '2026-10-17',
+      to: '2026-10-18',
+    })
+    expect(spanIn('what do I have next week', TODAY)).toMatchObject({
+      from: '2026-10-18',
+      to: '2026-10-24',
+    })
+    expect(spanIn("what's next", TODAY).next).toBe(true)
+    expect(spanIn('what do I have', TODAY)).toMatchObject({ from: TODAY, to: '2026-10-17' })
+  })
+})
+
+describe('reminders said', () => {
+  it.each([
+    ['remind me at 3:50 to start Claude', 'Start Claude', '2026-10-14T15:50', 'none'],
+    ['ping me tomorrow at 9 to send the email', 'Send the email', '2026-10-15T09:00', 'none'],
+    [
+      'can you remind me in 20 minutes to check the oven',
+      'Check the oven',
+      '2026-10-14T14:50',
+      'none',
+    ],
+    ['set a reminder for 5 to pick up the kids', 'Pick up the kids', '2026-10-14T17:00', 'none'],
+    ['remind me at 1 to eat lunch', 'Eat lunch', '2026-10-15T13:00', 'none'],
+    ['remind me every Sunday at 8 to set up chairs', 'Set up chairs', '2026-10-18T08:00', 'weekly'],
+    ['nudge me tonight at 9 to pack', 'Pack', '2026-10-14T21:00', 'none'],
+  ])('%s', (said, text, when, repeat) => {
+    expect(reminderIn(said, TODAY, '14:30')).toEqual({ text, when, repeat })
+  })
+
+  it('left to Claude when it can’t be told', () => {
+    expect(reminderIn('remind me at 2:15', TODAY, '14:30')).toBeNull() // what for?
+    expect(reminderIn('remind me to pray an hour before every event', TODAY, '14:30')).toBeNull()
+    expect(reminderIn('remind me in 10 minutes to stretch', TODAY, null)).toBeNull() // no clock
+  })
+})
+
+describe('availability said', () => {
+  it.each([
+    ["I can't make it to youth night", 'no'],
+    ['count me out for the retreat', 'no'],
+    ["I'm a maybe for the picnic", 'tbd'],
+    ["I'll be a little late to bible study", 'partial'],
+    ['I can come to the gala', 'yes'],
+    ["I'm going, no problem", 'yes'],
+  ])('%s → %s', (said, status) => {
+    expect(statusIn(said)).toBe(status)
+  })
+})
+
+// --- Her answers ---------------------------------------------------------------
+
+type Firestore = ConstructorParameters<typeof Lookups>[0]
+function fakeDb(data: Record<string, Record<string, Record<string, unknown>>>): Firestore {
+  const snap = (id: string, d: Record<string, unknown> | undefined) => ({
+    id,
+    exists: d !== undefined,
+    data: () => d,
+  })
+  return {
+    collection: (name: string) => ({
+      get: async () => ({ docs: Object.entries(data[name] ?? {}).map(([id, d]) => snap(id, d)) }),
+    }),
+    doc: (path: string) => {
+      const [name, id] = path.split('/')
+      return { get: async () => snap(id, data[name]?.[id]) }
+    },
+  } as unknown as Firestore
+}
+
+/** Her own store, in memory: one document per path. */
+function memoryOwnDb(): OwnDb & { docs: Map<string, Record<string, unknown>> } {
+  const docs = new Map<string, Record<string, unknown>>()
+  const ref = (path: string) => ({
+    get: async () => ({ data: () => docs.get(path) }),
+    set: async (d: Record<string, unknown>, opts?: { merge: boolean }) => {
+      docs.set(path, opts?.merge ? { ...(docs.get(path) ?? {}), ...d } : d)
+    },
+  })
+  return {
+    docs,
+    doc: ref,
+    runTransaction: async (fn) =>
+      fn({ get: (r) => r.get(), set: (r, d) => (r as ReturnType<typeof ref>).set(d) }),
+  }
+}
+
+const church = fakeDb({
+  users: {
+    sarah: { displayName: 'Sarah Lee', roles: ['regular'] },
+    boss: { displayName: 'Jacob Pintos', roles: ['admin'] },
+  },
+  groups: { gAll: { name: 'All', members: ['sarah', 'boss'] } },
+  events: {
+    yn: {
+      title: 'Youth Night',
+      isRec: true,
+      recur: 'weekly',
+      recDay: 5,
+      date: '2026-09-04',
+      startTime: '7:00 PM',
+      location: 'Elim Church',
+      address: '100 Main St',
+      city: 'Des Moines',
+      state: 'IA',
+      groups: ['gAll'],
+      dressCode: [{ group: '_remainder_', text: 'Casual — jeans are fine' }],
+    },
+    pic: {
+      title: 'Church Picnic',
+      date: '2026-10-17',
+      startTime: '12:00 PM',
+      location: 'Greenwood Park',
+      city: 'Des Moines',
+      state: 'IA',
+      groups: ['gAll'],
+    },
+    pray: {
+      title: 'Prayer Night',
+      date: '2026-10-14',
+      startTime: '8:00 PM',
+      location: 'The Chapel',
+      address: '5 Oak St',
+      groups: ['gAll'],
+    },
+    ret: {
+      title: "Women's Retreat",
+      date: '2026-10-23',
+      startTime: '5:00 PM',
+      groups: ['gAll'],
+      carpool: true,
+      carpoolCars: [{ id: 'c1', label: 'Van', driver: 'boss', riders: ['sarah'] }],
+      carpoolLoc: 'the church lot',
+    },
+  },
+})
+
+const sarah = { uid: 'sarah', roles: ['regular'] }
+function input(text: string, extra: Partial<OwnInput> = {}): OwnInput {
+  return {
+    text,
+    today: TODAY,
+    now: '14:30',
+    history: [],
+    appTools: ['set_availability', 'create_reminder'],
+    can: ['link'],
+    viewer: sarah,
+    lookups: new Lookups(church, sarah, TODAY),
+    db: memoryOwnDb(),
+    ...extra,
+  }
+}
+
+describe('her answers', () => {
+  beforeEach(() => forgetCaches())
+
+  it('when an event is, however it is asked', async () => {
+    const own = await ownAnswer(input('when does youth night kick off'))
+    expect(own.result).toMatchObject({
+      kind: 'answer',
+      text: 'Youth Night is on Friday, October 16 at 7:00 PM.',
+      open: { kind: 'event', key: 'yn_2026-10-16' },
+    })
+  })
+
+  it('where, with maps offered on its day — and opened when they say yes', async () => {
+    const own = await ownAnswer(input('where is prayer night'))
+    expect(own.result).toMatchObject({
+      text: 'Prayer Night is at The Chapel, 5 Oak St. Want me to open maps for it?',
+      followUp: true,
+    })
+    const yes = await ownAnswer(
+      input('yes', {
+        history: [{ said: 'where is prayer night', reply: (own.result as { text: string }).text }],
+      })
+    )
+    expect(yes.result).toMatchObject({ open: { kind: 'directions', key: 'pray_2026-10-14' } })
+  })
+
+  it('what to wear', async () => {
+    const own = await ownAnswer(input('what should I wear to youth night'))
+    expect(own.result).toMatchObject({
+      text: 'The dress code for Youth Night is Casual — jeans are fine.',
+      open: { section: 'dress_code' },
+    })
+  })
+
+  it('their car', async () => {
+    const own = await ownAnswer(input("who's driving me to the retreat"))
+    expect((own.result as { text: string }).text).toBe(
+      "Women's Retreat: Van (your car): driven by Jacob Pintos, riding: Sarah Lee. Cars meet at the church lot."
+    )
+  })
+
+  it('what they have on', async () => {
+    const own = await ownAnswer(input('what have I got going on this weekend'))
+    expect(own.result).toMatchObject({
+      text: 'On this weekend: Church Picnic, Saturday at 12:00 PM.',
+    })
+  })
+
+  it('their answer for an event, to confirm', async () => {
+    const own = await ownAnswer(input("I won't be able to make the picnic"))
+    expect(own.result).toEqual({
+      kind: 'confirm',
+      name: 'set_availability',
+      input: { event_key: 'pic_2026-10-17', status: 'no', note: '' },
+      more: false,
+    })
+  })
+
+  it('a reminder, set from their clock', async () => {
+    const own = await ownAnswer(input('could you ping me at 3:50 to start Claude'))
+    expect(own.result).toMatchObject({
+      kind: 'confirm',
+      name: 'create_reminder',
+      input: { text: 'Start Claude', when: '2026-10-14T15:50', repeat: 'none', every_event: false },
+    })
+  })
+
+  it('hands on what isn’t hers, or isn’t plain', async () => {
+    for (const text of [
+      'create an event called Game Night next Friday',
+      'change the picnic to 2 pm',
+      'who is coming to youth night',
+      'what time is it', // no event named
+    ]) {
+      const own = await ownAnswer(input(text))
+      expect(own.result, text).toBeNull()
+    }
+  })
+
+  it('an answer taught, said as written', async () => {
+    const db = memoryOwnDb()
+    await teach(db, {
+      q: 'Where do I park on Sunday?',
+      a: 'Park in the north lot — the south lot is for guests.',
+      v: embed('Where do I park on Sunday?'),
+      by: 'boss',
+    })
+    const own = await ownAnswer(input('where should I park on sundays', { db }))
+    expect(own.result).toMatchObject({
+      text: 'Park in the north lot — the south lot is for guests.',
+    })
+  })
+
+  it('a question of faith, taught in other words: her answer', async () => {
+    const db = memoryOwnDb()
+    await teach(db, {
+      q: 'What do we believe about baptism?',
+      a: 'We baptize believers by immersion, as a public step of faith.',
+      v: embed('What do we believe about baptism?'),
+      by: 'boss',
+    })
+    const own = await ownAnswer(input('how does the church do baptisms', { db }))
+    expect(own.result).toMatchObject({
+      text: 'We baptize believers by immersion, as a public step of faith.',
+    })
+    // Another subject altogether: still a pastor's.
+    forgetCaches()
+    const other = await ownAnswer(input('what do we believe about communion', { db }))
+    expect((other.result as { text: string }).text).toMatch(/pastors/)
+  })
+
+  it('a question of faith not taught: a pastor', async () => {
+    const own = await ownAnswer(input('what does the Bible say about worry'))
+    expect((own.result as { text: string }).text).toMatch(/pastors/)
+  })
+
+  it('the web, saying where from, with its page to open', async () => {
+    const own = await ownAnswer(
+      input('look up who invented the telephone', {
+        web: async () => ({
+          text: 'Alexander Graham Bell was granted the first US patent for the telephone in 1876.',
+          url: 'https://en.wikipedia.org/wiki/Telephone',
+          source: 'Wikipedia',
+        }),
+      })
+    )
+    expect(own.result).toMatchObject({
+      text: 'Alexander Graham Bell was granted the first US patent for the telephone in 1876. (from Wikipedia)',
+      open: { kind: 'link', url: 'https://en.wikipedia.org/wiki/Telephone', label: 'Wikipedia' },
+    })
+    // An older app, without the button: the words alone.
+    const older = await ownAnswer(
+      input('google who invented the telephone', {
+        can: [],
+        web: async () => ({ text: 'Bell.', url: 'https://x.org', source: 'x.org' }),
+      })
+    )
+    expect(older.result).toMatchObject({ text: 'Bell. (from x.org)', open: null })
+  })
+
+  it('what Claude saw was hers — the web, or faith — answered by her', async () => {
+    const web = async () => ({ text: 'Bell, in 1876.', url: null, source: 'Wikipedia' })
+    expect(
+      await webOrFaith('web', 'who invented the telephone', {
+        db: memoryOwnDb(),
+        today: TODAY,
+        can: ['link'],
+        web,
+      })
+    ).toMatchObject({
+      kind: 'answer',
+      text: 'Bell, in 1876. (from Wikipedia)',
+      open: null,
+    })
+    expect(
+      (
+        (await webOrFaith('faith', 'why did Jesus die', {
+          db: memoryOwnDb(),
+          today: TODAY,
+          can: [],
+        })) as { text: string }
+      ).text
+    ).toMatch(/pastors/)
+    expect(
+      await webOrFaith('event_time', 'x', { db: memoryOwnDb(), today: TODAY, can: [] })
+    ).toBeNull()
+  })
+
+  it('leaves a conversation under way to Claude', async () => {
+    const own = await ownAnswer(
+      input('at 5', {
+        history: [{ said: 'remind me to call Sam', reply: 'When should I remind you?' }],
+      })
+    )
+    expect(own.result).toBeNull()
+  })
+})
+
+// --- What she learns -------------------------------------------------------------
+
+describe('what she learns', () => {
+  beforeEach(() => forgetCaches())
+
+  it('is kept, once for the same words, and forgotten when asked', async () => {
+    const db = memoryOwnDb()
+    const v = embed('when does the event get rolling')
+    await learn(db, 'when does the event get rolling', 'event_time', v, 1)
+    await learn(db, 'When does the event get rolling?', 'event_time', v, 2)
+    expect(await listLearned(db)).toEqual([
+      { text: 'When does the event get rolling?', skill: 'event_time', at: 2 },
+    ])
+    forgetCaches()
+    expect((await learnedExamples(db)).map((e) => e.skill)).toEqual(['event_time'])
+    await forget(db, 'when does the event get rolling')
+    expect(await listLearned(db)).toEqual([])
+  })
+
+  it('makes the next one like it hers', async () => {
+    const db = memoryOwnDb()
+    const said = 'is the youth night thing still on for this friday'
+    const before = await ownAnswer(input(said, { db }))
+    // Learned from Claude's answer: it was when Youth Night is.
+    if (before.read) await learn(db, before.read.masked, 'event_time', before.read.v)
+    const after = await ownAnswer(input('is the youth night thing still on for friday', { db }))
+    expect(after.read?.skill).toBe('event_time')
+    expect(after.result).toMatchObject({ text: 'Youth Night is on Friday, October 16 at 7:00 PM.' })
+  })
+})
+
+// --- The web ----------------------------------------------------------------------
+
+/** A meaning for tests: the words a text has. */
+const words = (s: string) => {
+  const v = new Float32Array(64)
+  for (const w of s.toLowerCase().split(/\W+/).filter(Boolean)) {
+    let h = 0
+    for (const c of w) h = (h * 31 + c.charCodeAt(0)) % 64
+    v[h] += 1
+  }
+  const n = Math.hypot(...v) || 1
+  return v.map((x) => x / n)
+}
+
+const respond = (body: unknown, type = 'application/json') =>
+  ({
+    ok: true,
+    headers: { get: () => type },
+    json: async () => body,
+    text: async () => String(body),
+  }) as unknown as Response
+
+describe('the web', () => {
+  it('searches for the question, without the asking', () => {
+    expect(queryOf('hey Miriam, can you look up Costco hours please')).toBe('Costco hours')
+    expect(queryOf('google how to fix a leaky faucet')).toBe('how to fix a leaky faucet')
+    expect(queryOf('who invented the telephone?')).toBe('who invented the telephone')
+  })
+
+  it('reads a page’s text, not its scripts and menus', () => {
+    const html =
+      '<html><head><title>x</title><script>var a = "Mon-Fri 9am"</script></head><body><nav>Home About Contact Shop</nav>' +
+      '<p>Warehouse hours are Monday through Friday, 10:00 a.m. to 8:30 p.m. &amp; weekends 9:30 to 6.</p>' +
+      '<footer>Copyright 2026 all rights reserved here</footer></body></html>'
+    expect(passagesOf(html)).toEqual([
+      'Warehouse hours are Monday through Friday, 10:00 a.m. to 8:30 p.m. & weekends 9:30 to 6.',
+    ])
+  })
+
+  it('answers with the passage that answers best', () => {
+    const best = bestPassage(
+      'what are costco warehouse hours',
+      [
+        {
+          text: 'Costco Wholesale is a membership warehouse club.',
+          url: 'u1',
+          source: 'costco.com',
+        },
+        {
+          text: 'Costco warehouse hours are Monday through Friday, 10 a.m. to 8:30 p.m.',
+          url: 'u2',
+          source: 'costco.com',
+        },
+        { text: 'Unrelated text about something else entirely here.', url: 'u3', source: 'x.com' },
+      ],
+      words
+    )
+    expect(best).toMatchObject({ url: 'u2' })
+  })
+
+  it('reads Brave’s results and Wikipedia’s', async () => {
+    const brave = await braveSearch('costco hours', 'KEY', (async (
+      url: string,
+      init: RequestInit
+    ) => {
+      expect(url).toContain('q=costco+hours')
+      expect((init.headers as Record<string, string>)['X-Subscription-Token']).toBe('KEY')
+      return respond({
+        web: {
+          results: [
+            {
+              title: 'Costco <strong>Hours</strong>',
+              url: 'https://costco.com/hours',
+              description: 'Open <strong>10am</strong>',
+              extra_snippets: ['Closes 8:30pm'],
+            },
+            { title: 'Bad', url: 'javascript:alert(1)', description: 'no' },
+          ],
+        },
+      })
+    }) as typeof fetch)
+    expect(brave).toEqual([
+      { title: 'Costco Hours', url: 'https://costco.com/hours', text: 'Open 10am Closes 8:30pm' },
+    ])
+
+    const wiki = await wikipediaSearch('telephone', (async (url: string) =>
+      url.includes('list=search')
+        ? respond({ query: { search: [{ title: 'Telephone' }] } })
+        : respond({
+            extract: 'A telephone is a device. Bell patented it in 1876.',
+            content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Telephone' } },
+          })) as typeof fetch)
+    expect(wiki).toEqual([
+      {
+        title: 'Telephone',
+        url: 'https://en.wikipedia.org/wiki/Telephone',
+        text: 'A telephone is a device. Bell patented it in 1876.',
+      },
+    ])
+  })
+
+  it('answers from Wikipedia without a key', async () => {
+    const fetchFn = (async (url: string) =>
+      url.includes('list=search')
+        ? respond({ query: { search: [{ title: 'Telephone' }] } })
+        : respond({
+            extract:
+              'A telephone is a device for talking at a distance. Alexander Graham Bell patented the telephone in 1876.',
+            content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Telephone' } },
+          })) as typeof fetch
+    const found = await webAnswer('who patented the telephone', {
+      braveKey: null,
+      today: TODAY,
+      fetchFn,
+      meaning: words,
+    })
+    expect(found).toEqual({
+      text: 'Alexander Graham Bell patented the telephone in 1876.',
+      url: 'https://en.wikipedia.org/wiki/Telephone',
+      source: 'Wikipedia',
+    })
+  })
+
+  it('knows a place’s weather is asked', () => {
+    expect(weatherPlace("what's the weather in Chicago tomorrow")).toBe('Chicago')
+    expect(weatherPlace('is it going to rain in Des Moines this weekend')).toBe('Des Moines')
+    expect(weatherPlace('who won the game')).toBeNull()
+  })
+})
