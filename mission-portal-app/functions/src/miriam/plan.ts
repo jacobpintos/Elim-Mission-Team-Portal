@@ -310,7 +310,8 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
       name: 'get_event',
       description:
         'For an event other than the one find_events gave `details` for: everything about one event this person is shown: date, time, report times, venue and address, the meeting and sign-up links, dress code, ' +
-        'their food sign-up and the sheet, their car (every car for an admin), their flight and lodging (everyone’s for an admin), their own availability, and its tasks with status, due date and who has them (theirs, or all of them for an admin).',
+        'their food sign-up and the sheet, their car (every car for an admin), their flight and lodging (everyone’s for an admin), their own availability, and its tasks with status, due date and who has them (theirs, or all of them for an admin). ' +
+        '`yours` is everything theirs at it, together — their team, the car they drive or ride in, what they bring, their open tasks, where they stay, their flight: “what are my responsibilities / what am I doing for it?” is answered with all of it.',
       strict: true,
       input_schema: keyOnly('The event’s key, from find_events.'),
     },

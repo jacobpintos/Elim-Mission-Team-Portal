@@ -297,6 +297,8 @@ export function useAutoScroll(
     resume: run,
     /** Where the sheet is scrolled to now. */
     position: () => live.current.y,
+    /** Laid out: the sheet and its view have their heights — before then, there is nowhere to scroll. */
+    measured: () => live.current.contentHeight > 0 && live.current.viewHeight > 0,
     stop,
     toggle,
     changeSpeed,

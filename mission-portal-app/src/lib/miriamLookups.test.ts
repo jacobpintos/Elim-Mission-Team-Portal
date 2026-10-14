@@ -109,13 +109,33 @@ describe('what Miriam looks up, for whoever is asking', () => {
       address: '1 Main St, Coralville, IA',
       dressCode: ['Team shirt and jeans'],
       food: { mine: ['Salsa'], sheet: ['Chips: nobody yet', 'Salsa: you'] },
-      carpool: { cars: ['Van (your car): driven by Jacob Pintos, riding: Sarah Lee'] },
+      carpool: { cars: ['Van (your car): driven by Jacob Pintos, riding: you'] },
       yourAvailability: 'Partly available — “Leaving at 10”',
     })
     // Only her own task; Tom's is not hers to see.
     expect((ev as { tasks: { title: string }[] }).tasks.map((t) => t.title)).toEqual([
       'Print programs',
     ])
+  })
+
+  it('says all that is theirs at it, together — their car among it', async () => {
+    // "What are my responsibilities?": riding, bringing, a task...
+    expect(
+      (await as('sarah', ['regular']).getEvent('ev1_2026-10-25')) as { yours: string[] }
+    ).toMatchObject({
+      yours: [
+        'riding in Van, driven by Jacob Pintos',
+        'bringing Salsa for the food sign-up',
+        'the task “Print programs”',
+      ],
+    })
+    // ...driving, and leading a team.
+    expect(
+      ((await as('boss', ['admin']).getEvent('ev1_2026-10-25')) as { yours: string[] }).yours
+    ).toEqual(['driving Van, with Sarah Lee'])
+    expect(
+      ((await as('tom', ['regular']).getEvent('ev1_2026-10-25')) as { yours: string[] }).yours
+    ).toEqual(['on the Worship team, leading it', 'the task “Book sound tech”'])
   })
 
   it('gives an admin every task for the event, with who has it', async () => {

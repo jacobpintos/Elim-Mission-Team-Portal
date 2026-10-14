@@ -27,6 +27,7 @@ import {
   type Task,
   type Viewer,
   scheduleFor,
+  yoursAt,
 } from './data'
 import { FORECAST_DAYS, forecastFor } from './weather'
 
@@ -288,6 +289,12 @@ export class Lookups {
         : undefined,
       flights: ev.flights ? flightsFor(ev, this.viewer, names) : undefined,
       lodging: ev.lodging ? lodgingFor(ev, this.viewer, names) : undefined,
+      // Everything theirs at it, all together: "what are my responsibilities?".
+      yours: yoursAt(ev, this.viewer, names, {
+        cars: (perDate ?? ev.carpoolCars ?? []) as Car[],
+        bringing: food?.mine ?? [],
+        tasks: forThisEvent,
+      }),
       yourAvailability: own
         ? `${AVAIL_LABELS[own.status]}${own.note ? ` — “${own.note}”` : ''}`
         : 'not answered',

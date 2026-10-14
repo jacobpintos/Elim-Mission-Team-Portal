@@ -25,6 +25,10 @@ export const WEB_DOC = 'miriamOwn/web'
 /** One document holds a little under a megabyte: about 1,500 of these. */
 export const MAX_LEARNED = 1200
 export const MAX_TAUGHT = 200
+/** A taught answer, whole: a statement of belief runs to a few paragraphs. */
+export const MAX_TAUGHT_ANSWER = 6000
+/** All she is taught is kept in one document: this much of its megabyte, at most. */
+const MAX_TAUGHT_BYTES = 900_000
 
 export interface LearnedEntry {
   /** The request as she read it. */
@@ -182,19 +186,20 @@ export async function teach(
   await db.runTransaction(async (tx) => {
     const answers = taughtFrom((await tx.get(ref)).data())
     if (answers.length >= MAX_TAUGHT) throw new Error('full')
-    tx.set(ref, {
-      answers: [
-        ...answers,
-        {
-          id,
-          q: entry.q.slice(0, 300),
-          a: entry.a.slice(0, 1200),
-          v: packVector(entry.v),
-          at: now,
-          by: entry.by,
-        },
-      ],
-    })
+    const next = [
+      ...answers,
+      {
+        id,
+        q: entry.q.slice(0, 300),
+        a: entry.a.slice(0, MAX_TAUGHT_ANSWER),
+        v: packVector(entry.v),
+        at: now,
+        by: entry.by,
+      },
+    ]
+    // Kept whole, or not at all: never cut to fit.
+    if (Buffer.byteLength(JSON.stringify(next), 'utf8') > MAX_TAUGHT_BYTES) throw new Error('full')
+    tx.set(ref, { answers: next })
   })
   taughtCache = null
   return id

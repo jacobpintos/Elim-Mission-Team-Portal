@@ -39,6 +39,19 @@ const NOT_HERS: [RegExp, Skill[]][] = [
   // Reminding someone else, or everyone, is a message.
   [/\b(?:everyone|everybody|all\s+of\s+them)\b/i, ['reminder', 'availability', 'my_events']],
   [/\bremind\s+(?!me\b)(?:the|them|him|her|us|our|my|all|every)\b/i, ['reminder']],
+  // Someone else's flight, room, car or team — "Guest User's flight", "where
+  // is Guest User staying": Claude looks them up, and whose is whose.
+  [
+    /\b(?!my\b|our\b|your\b)[a-z]+(?:'|’)s\s+(?:flights?|rooms?|lodging|hotel|cars?|ride|team)\b|\b(?:is|are)\s+(?!i\b|we\b|you\b)[a-z]+(?:\s+[a-z]+)?\s+(?:staying|sleeping|flying|landing|arriving|driving|riding)\b/i,
+    EVENTS,
+  ],
+  // A flight's coming and going, or where someone stays, is not an event's
+  // time or place — "what time is the flight arriving", "where are they
+  // staying" — unless it is their own flight, hers to answer.
+  [
+    /^(?!.*\bmy\s+flights?\b).*\b(?:flights?|fly|flying|arriv\w*|land(?:s|ed|ing)?|depart\w*|airport|airline|staying|sleeping|lodging|hotel|motel|housing)\b/i,
+    ['event_time', 'event_place', 'event_schedule', 'event_dress', 'event_weather', 'my_events'],
+  ],
   // Bringing something is the food sign-up, not coming.
   [/\b(?:bring(?:ing)?|food|sign[-\s]?up\s+sheet|potluck\s+list)\b/i, ['availability']],
   // A span of days ("all of November", "the whole week") is a range, not one event.

@@ -163,8 +163,9 @@ describe('dress code', () => {
 
 describe('getting there and staying', () => {
   it('tells you your car; an admin every car', () => {
+    // The one asking is "you".
     expect(carpoolFor(revival, sarah, names)).toEqual([
-      'Van (your car): driven by Jacob Pintos, riding: Sarah Lee',
+      'Van (your car): driven by Jacob Pintos, riding: you',
     ])
     expect(carpoolFor(revival, admin, names)).toHaveLength(2)
     expect(carpoolFor(revival, guest, names)).toEqual([])
@@ -187,7 +188,7 @@ describe('getting there and staying', () => {
       ],
     }
     expect(carpoolFor(withKids, sarah, names)).toEqual([
-      'Van (your car): driven by Jacob Pintos, riding: Sarah Lee, Joey (child), a child',
+      'Van (your car): driven by Jacob Pintos, riding: you, Joey (child), a child',
     ])
   })
 

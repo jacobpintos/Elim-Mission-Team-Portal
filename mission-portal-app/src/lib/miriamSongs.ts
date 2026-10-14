@@ -5,6 +5,8 @@ import {
   splitSpokenKey,
   trailingKey,
 } from './songRequest'
+import { parseSheetCommand } from './sheetCommands'
+import { isOnceOpen, type OnceOpen } from './sheetAfterOpen'
 
 /**
  * A chord sheet asked of Miriam — "open Above All in E flat" — found on the
@@ -82,4 +84,48 @@ export function asksAQuestion(text: string): boolean {
   const said = text.trim()
   if (!said || FOR_A_SONG.test(said)) return false
   return said.includes('?') || QUESTION.test(said) || NOT_A_SONG.test(said)
+}
+
+/** Where a command for the sheet may start, after the song: "…start autoscroll 5", "…and chords only". */
+const STARTS_A_COMMAND =
+  /^(?:start|stop|pause|turn|set|scroll|scrolling|autoscroll|auto|speed|chords|lyrics|show|jump|go|numbers|nashville|from|top)$/i
+const LINK = /^(?:and|then)$/i
+
+/**
+ * A song asked for with what to do once it is open — "Open revive me in C.
+ * Start autoscroll 5.", "open Above All and start scrolling at four": the
+ * asking for the song, and the commands for its sheet after it
+ * (lib/sheetCommands) — or null when nothing after the song is one ("Show
+ * Me Your Glory" is a song, not "show").
+ */
+export function songThen<T extends { id: string | number; title: string }>(
+  text: string,
+  sheets: T[],
+  aliases: ReadonlyMap<string, string> = new Map()
+): { song: string; then: OnceOpen[] } | null {
+  const words = text.trim().split(/\s+/)
+  const bare = (w: string) => w.replace(/[^a-z0-9]/gi, '')
+  for (let i = 1; i < words.length; i++) {
+    if (!STARTS_A_COMMAND.test(bare(words[i]))) continue
+    // The song: up to the command, without "and"/"then", or the stop after it.
+    let head = words.slice(0, i)
+    while (head.length && LINK.test(bare(head[head.length - 1]))) head = head.slice(0, -1)
+    const song = head.join(' ').replace(/[.,;:!]+$/, '')
+    if (!song) continue
+    // What follows: one command or more ("start autoscroll 5 and chords only"), all to do to the sheet.
+    const then: OnceOpen[] = []
+    const parts = words
+      .slice(i)
+      .join(' ')
+      .split(/[.;!]\s+|,?\s+(?:and\s+then|and|then)\s+/i)
+      .map((p) => p.replace(/[.,;:!]+$/, '').trim())
+      .filter(Boolean)
+    for (const part of parts) {
+      const cmd = parseSheetCommand(part, sheets, aliases)
+      if (!isOnceOpen(cmd)) break
+      then.push(cmd)
+    }
+    if (then.length === parts.length) return { song, then }
+  }
+  return null
 }

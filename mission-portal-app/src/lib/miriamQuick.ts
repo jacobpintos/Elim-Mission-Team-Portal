@@ -77,6 +77,16 @@ const FIELDS: [QuickField, RegExp][] = [
 const NOT_QUICK =
   /\b(?:everyone|everybody|who\s+(?:is|isn't|is\s+not)\s+(?:available|coming|going)|availab|unavailable|report\s+time|call\s+time|food|bring|task|due|all\s+(?:the\s+)?events|this\s+week|next\s+week|this\s+month)\b/
 
+/**
+ * Someone else's flight, room, car or team — "Guest User's flight", "where
+ * is Guest User staying" — not the asker's, nor the event's time or place:
+ * left to Claude, which can see whose is whose.
+ */
+const SOMEONE_ELSES =
+  /\b(?!my\b|our\b|your\b)[a-z]+'s\s+(?:flights?|rooms?|lodging|hotel|cars?|ride|team)\b|\b(?:is|are)\s+(?!i\b|we\b|you\b)[a-z]+(?:\s+[a-z]+)?\s+(?:staying|sleeping|flying|landing|arriving|driving|riding)\b/
+/** A flight's coming and going, not an event's time — unless it is "my flight", answered here. */
+const FLYING = /\b(?:arriv\w*|land(?:s|ed|ing)?|depart\w*|airport|airline)\b/
+
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
 /** Words that are part of the asking, not the event's name. */
@@ -209,7 +219,8 @@ export function quickAsked(text: string, today: string): QuickAsk | null {
     .replace(/\s+/g, ' ')
     .trim()
   const plain = said.replace(/’/g, "'")
-  if (NOT_QUICK.test(plain)) return null
+  if (NOT_QUICK.test(plain) || SOMEONE_ELSES.test(plain)) return null
+  if (FLYING.test(plain) && !/\bmy\s+flights?\b/.test(plain)) return null
   const field = FIELDS.find(([, re]) => re.test(plain))?.[0]
   if (!field) return null
 

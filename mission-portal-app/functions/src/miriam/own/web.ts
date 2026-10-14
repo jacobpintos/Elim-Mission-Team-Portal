@@ -182,12 +182,21 @@ async function pageText(url: string, fetchFn: Fetch): Promise<string | null> {
   }
 }
 
-/** A page's readable text, in passages of a few sentences: no scripts, menus or markup. */
-export function passagesOf(html: string): string[] {
+/**
+ * A page's readable text, in passages of a few sentences: no scripts, menus
+ * or markup. `footers`: kept too — on the church's own site, where a section
+ * like "What we believe" can sit at the foot of every page (./site).
+ */
+export function passagesOf(
+  html: string,
+  { footers = false }: { footers?: boolean } = {}
+): string[] {
   const text = html
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(
-      /<(script|style|noscript|svg|head|nav|footer|form|iframe|template)\b[\s\S]*?<\/\1>/gi,
+      footers
+        ? /<(script|style|noscript|svg|head|nav|form|iframe|template)\b[\s\S]*?<\/\1>/gi
+        : /<(script|style|noscript|svg|head|nav|footer|form|iframe|template)\b[\s\S]*?<\/\1>/gi,
       ' '
     )
     .replace(

@@ -32,6 +32,8 @@ export type OwnResult =
       followUp: boolean
       understood: string
       misheard: never[]
+      /** Kept open until closed: an answer on faith, to read through (the app's MiriamButton). */
+      stay?: true
     }
   | {
       kind: 'confirm'
@@ -66,6 +68,9 @@ export const said = (
   understood: '',
   misheard: [],
 })
+
+/** An answer on faith, kept open until it is closed — not one sending them to the church's leadership. */
+export const toStay = (r: OwnResult): OwnResult => (r.kind === 'answer' ? { ...r, stay: true } : r)
 
 const onPage = (ev: EventInstance, section: EventSection | null = 'details') =>
   ({ kind: 'event', key: ev.instanceKey, section }) as const

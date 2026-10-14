@@ -2,7 +2,16 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
 import { embed } from './own/encoder'
 import { forgetBraveKey } from './own'
-import { forget, listLearned, listTaught, teach, untaught, WEB_DOC, type OwnDb } from './own/learn'
+import {
+  forget,
+  listLearned,
+  listTaught,
+  MAX_TAUGHT_ANSWER,
+  teach,
+  untaught,
+  WEB_DOC,
+  type OwnDb,
+} from './own/learn'
 import { CHURCH_SITE, readSite, SITE_DOC, storeSite } from './own/site'
 import { ASKED, groupAsked } from './own/asked'
 import { packVector, unpackVector } from './own/vectors'
@@ -119,7 +128,7 @@ export const miriamOwnAdmin = onCall(
     }
     if (action === 'teach') {
       const q = text(req.data?.question, 300)
-      const a = text(req.data?.answer, 1200)
+      const a = text(req.data?.answer, MAX_TAUGHT_ANSWER)
       if (!q || !a) throw new HttpsError('invalid-argument', 'A question and its answer, both.')
       try {
         // Its meaning, as she reads a question: what she matches questions to.

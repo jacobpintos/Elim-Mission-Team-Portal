@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ScrollView, Pressable, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack } from 'expo-router'
+import { Stack, useLocalSearchParams } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useWorshipStore } from '@/stores/worshipStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
@@ -46,7 +46,18 @@ export default function WorshipScreen() {
   // team and admins — the same rule Firestore enforces (isWorshipOrAdmin).
   // Anyone else here (a guest) reads only.
   const readOnly = !isWorship(profile)
-  const [activeTab, setActiveTab] = useState<'setlists' | 'chords' | 'inputs'>('setlists')
+  // A tab asked for by link — Miriam opening a song on Chord Sheets (?tab=chords),
+  // each time she does (&at=…), whichever tab was up.
+  const { tab, at } = useLocalSearchParams<{ tab?: string; at?: string }>()
+  const askedTab = tab === 'chords' || tab === 'setlists' || tab === 'inputs' ? tab : null
+  const [activeTab, setActiveTab] = useState<'setlists' | 'chords' | 'inputs'>(
+    askedTab ?? 'setlists'
+  )
+  const [tabAsked, setTabAsked] = useState(`${tab}:${at}`)
+  if (tabAsked !== `${tab}:${at}`) {
+    setTabAsked(`${tab}:${at}`)
+    if (askedTab) setActiveTab(askedTab)
+  }
   const [showForm, setShowForm] = useState(false)
   const [editSetList, setEditSetList] = useState<SetList | null>(null)
   const [detailSetList, setDetailSetList] = useState<SetList | null>(null)

@@ -20,6 +20,7 @@ import {
   learn,
   learnedExamples,
   listLearned,
+  taughtAnswers,
   teach,
   type OwnDb,
 } from '../../functions/src/miriam/own/learn'
@@ -169,6 +170,16 @@ describe('the guards', () => {
     expect(notHers('change the picnic location to the park', 'event_place')).toBeTruthy()
     expect(notHers('set up the cars for camp', 'event_car')).toBeTruthy()
     expect(notHers("I'll bring cookies to the potluck", 'availability')).toBeTruthy()
+    // Someone else's flight or lodging: not the event's time or place, nor theirs.
+    const flight = 'For the new years eve event, what time is Guest User’s flight arriving'
+    expect(notHers(flight, 'event_time')).toBeTruthy()
+    expect(notHers(flight, 'event_flight')).toBeTruthy()
+    expect(notHers('where is guest user staying for new years eve', 'event_place')).toBeTruthy()
+    expect(notHers('where is guest user staying for new years eve', 'event_lodging')).toBeTruthy()
+    // Their own still are.
+    expect(notHers('where am I staying for the retreat', 'event_lodging')).toBeNull()
+    expect(notHers('when does my flight land', 'event_flight')).toBeNull()
+    expect(notHers('where is the retreat', 'event_place')).toBeNull()
     expect(notHers("what's due this week", 'my_events')).toBeTruthy()
     expect(notHers('remind everyone to bring a Bible', 'reminder')).toBeTruthy()
     expect(notHers("who's coming to youth night", 'event_time')).toBeTruthy()
@@ -394,7 +405,7 @@ describe('her answers', () => {
   it('their car', async () => {
     const own = await ownAnswer(input("who's driving me to the retreat"))
     expect((own.result as { text: string }).text).toBe(
-      "Women's Retreat: Van (your car): driven by Jacob Pintos, riding: Sarah Lee. Cars meet at the church lot."
+      "Women's Retreat: Van (your car): driven by Jacob Pintos, riding: you. Cars meet at the church lot."
     )
   })
 
@@ -790,6 +801,33 @@ describe('the church’s website', () => {
     // What it says it believes, first.
     expect(read.passages[0].u).toBe('https://example.org/beliefs')
   })
+
+  it('reads what it believes from the foot of every page, once — but not its fine print', async () => {
+    // As a site builder's accordion has it, in the footer of every page.
+    const scriptures =
+      'We believe the Bible is the written Word of God, inspired by the Holy Spirit. It is infallible in its original manuscripts, and it is trustworthy pertaining to all matters on which it teaches.'
+    const footer = `<footer><h2>What We Believe</h2><ul class="accordion-items-container"><li class="accordion-item"><h3 class="accordion-item__title-wrapper"><button class="accordion-item__click-target" aria-expanded="false"><span class="accordion-item__title">Scriptures</span></button></h3><div class="accordion-item__dropdown" role="region"><div class="accordion-item__description"><p>${scriptures}</p></div></div></li></ul><p>© 2026 The Well Church. All rights reserved.</p></footer>`
+    const withFooters = (async (url: string) => {
+      const res = await siteFetch(url)
+      if (!res.ok) return res
+      const body = (await res.text()).replace('</body>', `${footer}</body>`)
+      return { ok: true, headers: res.headers, text: async () => body } as unknown as Response
+    }) as typeof fetch
+    const read = await readSite(withFooters, embed, 'https://example.org', 7)
+    const said = read.passages.map((p) => p.t)
+    expect(
+      said.filter((t) => t.startsWith('We believe the Bible is the written Word of God'))
+    ).toHaveLength(1)
+    // The fine print every page repeats is the site's frame.
+    expect(said.some((t) => /The Well Church\. All rights reserved/.test(t))).toBe(false)
+
+    forgetSite()
+    const db = memoryOwnDb()
+    await storeSite(db, read)
+    const f = await faithAnswer('What is your view on the scriptures?', db)
+    expect(f.from).toBe('site')
+    expect(f.text).toMatch(/^We believe the Bible is the written Word of God/)
+  })
 })
 
 describe('a question of faith', () => {
@@ -1078,6 +1116,89 @@ describe('a question taught, asked in other words', () => {
     expect(await publicAnswer('what’s the wifi password', visitor)).toMatchObject({
       text: PUBLIC_NOT_HERS,
     })
+  })
+})
+
+describe('the church’s beliefs, as taught, asked other ways', () => {
+  beforeEach(() => forgetCaches())
+  // As taught in Admin → Miriam, from the church's "What we believe".
+  const ABORTION =
+    'We believe that human life is sacred from conception to its natural end; and that we must have concern for the physical and spiritual needs of our fellow humans (Psalm 139:13; Isaiah 49:1; Jer. 1:5, Matt 22:37-39; Romans 12:20-21; Gal. 6:10).'
+  const GIFTS =
+    'The baptism of the Holy Spirit empowers the believer to exercise spiritual gifts, and the evidence of this baptism shall be followed with signs and wonders. The spiritual gifts are given by grace from the Holy Spirit, in accordance with the faith of each believer. The gifts of the Holy Spirit are for the edification of the church, to strengthen and embolden it for the work of God to the glory of God. Because Jesus Christ is the same yesterday, today, and forever, we believe all the gifts of the Spirit are still operational even today (Mark 16:17, 1 Cor. 12:12-13, 2 Cor. 3:17, Rom 8:9-11, 1 John 5:12, 2 Cor 3:18, 12:4-5, Heb. 13:8). We believe in the reality of spiritual gifts as imparted by the Resurrected Christ through His Holy Spirit to all those who have taken faith in Christ, and that those gifts are for the building up of the church unto holiness and grace. We believe in the continuing five-fold ministry given by Christ - apostles, prophets, evangelists, pastors and teachers - for the edification and equipping of the church for the ministry of God’s kingdom. For each individual church to be functionally complete and whole, it must compass all of the five-fold ministries (Romans 12:6-8, 1 Cor. 12:1-11, Eph. 4:11-16).'
+  const MARRIAGE =
+    'We believe God’s plan for legitimate marriage is the joining of one genetic man and one genetic woman. God has commanded us to have no sexual activity outside the boundaries of marriage. The best representation of marriage is the marriage of Jesus Christ to His bride - the body of Christ, the church (Genesis 2:24; Matthew 19:5-6; Mark 10:6-9; Romans 1:26-27; 1 Cor. 6:9).'
+  const JUDGMENT =
+    'Except God the Father, no one knows when Christ will return in all His glory. We believe in the ultimate judgment of God, when Christ will return to judge the both the living and the dead, and all will stand before God to give account for the life lived in the body (John 3:3, 18; Heb. 9:27; 2 Cor 5:10; Rev 20:12, 15).'
+  // How an answer on God might be taught.
+  const GOD =
+    'We believe in one God, eternally existing in three persons: the Father, the Son and the Holy Spirit (Deut. 6:4, Matt. 28:19, 2 Cor. 13:14).'
+  const taught = async () => {
+    const db = memoryOwnDb()
+    for (const [q, a] of [
+      ['What is your view on abortion?', ABORTION],
+      ['Gifts of the Spirit, Cessationism, Continuationism, Spiritual gifts', GIFTS],
+      ['What is biblical marriage? Is homosexual marriage sinful?', MARRIAGE],
+      ['Second coming of Christ and judgment. Heaven and Hell.', JUDGMENT],
+      ['What is the nature of God? The Trinity', GOD],
+      ['Where do I park on Sunday?', 'Park in the north lot.'],
+    ]) {
+      await teach(db, { q, a, v: embed(q), by: 'boss' })
+    }
+    return db
+  }
+  const answered = (own: { result: unknown }) =>
+    own.result as { text: string; stay?: boolean } | null
+
+  it('is answered as taught, asked yes or no, or by what it is about', async () => {
+    const db = await taught()
+    for (const [q, a] of [
+      ['Is abortion a sin', ABORTION],
+      ['are the gifts of the spirit active', GIFTS],
+      ['is The Well cessationist', GIFTS],
+      ['Is God good', GOD],
+      ['When will Jesus return', JUDGMENT],
+      ['is hell real', JUDGMENT],
+      ['is homosexuality a sin', MARRIAGE],
+    ]) {
+      expect(answered(await ownAnswer(input(q, { db })))?.text, q).toBe(a)
+    }
+  })
+
+  it('never for what it doesn’t say, nor what is theirs to talk over', async () => {
+    const db = await taught()
+    for (const q of [
+      'is divorce a sin',
+      'is it a sin to get a tattoo',
+      'can I lose my salvation',
+      'is god angry with me',
+    ]) {
+      const t = answered(await ownAnswer(input(q, { db })))?.text
+      expect([ABORTION, GIFTS, MARRIAGE, JUDGMENT, GOD], q).not.toContain(t)
+    }
+  })
+
+  it('stays open to be read — but not sending them to leadership, nor about parking', async () => {
+    const db = await taught()
+    expect(answered(await ownAnswer(input('is The Well cessationist', { db })))?.stay).toBe(true)
+    const deferred = answered(await ownAnswer(input('what does the Bible say about worry', { db })))
+    expect(deferred?.text).toBe(DEFER)
+    expect(deferred?.stay).toBeUndefined()
+    const parking = answered(await ownAnswer(input('where should I park on sundays', { db })))
+    expect(parking?.text).toBe('Park in the north lot.')
+    expect(parking?.stay).toBeUndefined()
+    const more = answered(
+      await ownAnswer(input('why?', { db, history: [{ said: 'is God good', reply: GOD }] }))
+    )
+    expect(more?.text).toBe(LEADERSHIP)
+    expect(more?.stay).toBeUndefined()
+  })
+
+  it('kept whole, however long', async () => {
+    const db = memoryOwnDb()
+    const long = `${GIFTS} ${GIFTS}`.slice(0, 2400)
+    await teach(db, { q: 'What or who is the Holy Spirit?', a: long, v: embed('x'), by: 'boss' })
+    expect(((await taughtAnswers(db))[0].a as string).length).toBe(2400)
   })
 })
 

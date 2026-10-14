@@ -55,7 +55,7 @@ export async function faithAnswer(
   v: Float32Array = embed(text)
 ): Promise<FaithAnswer> {
   // 1. Taught.
-  const taught = taughtFound(text, v, await taughtAnswers(db).catch(() => []))
+  const taught = taughtFound(text, v, await taughtAnswers(db).catch(() => []), { faith: true })
   if (taught) return { text: taught.a, link: null, from: 'taught' }
 
   // 2. The names Elim and Miriam, as the church gave them.

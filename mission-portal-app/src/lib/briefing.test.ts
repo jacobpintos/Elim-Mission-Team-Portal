@@ -71,7 +71,7 @@ describe('the daily briefing', () => {
     ])
     // Their own team and dress code, even as an admin; their car; the forecast.
     expect(b.today[0].chips).toEqual(['Worship team', 'Black jeans, white tee'])
-    expect(b.today[1].chips).toEqual(['Andy’s truck: driven by Jacob, riding: Sam', '68°, clear'])
+    expect(b.today[1].chips).toEqual(['Andy’s truck: driven by you, riding: Sam', '68°, clear'])
     expect(b.tasks.map((t) => [t.title, t.label])).toEqual([
       ['Book the bus', '2 days overdue'],
       ['Print flyers', 'Due today'],

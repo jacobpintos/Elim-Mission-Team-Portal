@@ -19,6 +19,8 @@ export const SITE_DOC = 'miriamOwn/site'
 
 const MAX_PAGES = 150
 const MAX_PASSAGES = 600
+/** Repeated on many pages, and shorter than this: the site's frame. */
+const FRAME_WORDS = 15
 /** What is kept must fit in one document (Firestore's limit is 1 MiB). */
 const MAX_KEPT_BYTES = 900_000
 const PAGE_MS = 8000
@@ -166,20 +168,24 @@ export async function readSite(
         url,
         title,
         likely: LIKELY.test(url) || LIKELY.test(title),
-        passages: passagesOf(html).filter((p) => p.split(' ').length >= 6),
+        passages: passagesOf(html, { footers: true }).filter((p) => p.split(' ').length >= 6),
       })
       for (const link of linksOf(html, url, base)) add(link)
     })
   }
 
-  // What three or more pages say alike is the site's frame, not its words.
+  // What three or more pages say alike is the site's frame — a menu, an
+  // address, "sign up for our newsletter" — not its words; but a statement
+  // there ("We believe the Bible is the written Word of God…", on every
+  // page's foot) is kept, once.
   const count = new Map<string, number>()
   for (const p of pages) for (const t of new Set(p.passages)) count.set(t, (count.get(t) ?? 0) + 1)
+  const frame = (t: string) => (count.get(t) ?? 0) >= 3 && t.split(' ').length < FRAME_WORDS
   const chosen: { t: string; u: string }[] = []
   const taken = new Set<string>()
   for (const p of [...pages.filter((p) => p.likely), ...pages.filter((p) => !p.likely)]) {
     for (const t of p.passages) {
-      if ((count.get(t) ?? 0) >= 3 || taken.has(t) || chosen.length >= MAX_PASSAGES) continue
+      if (frame(t) || taken.has(t) || chosen.length >= MAX_PASSAGES) continue
       taken.add(t)
       chosen.push({ t: kept(t), u: p.url })
     }
@@ -268,6 +274,12 @@ const SAME: [RegExp, string][] = [
   [/^wom[ae]n$/, 'women'],
   [/^worship/, 'worship'],
   [/^child|^kids?$/, 'child'],
+  [/^cessation/, 'cessation'],
+  [/^continuation/, 'continuation'],
+  [/^homosexual|^gays?$|^lesbian/, 'homosexual'],
+  [/^com(?:e|es|ing)$|^came$|^return/, 'come'],
+  [/^virgin/, 'virgin'],
+  [/^born$|^birth/, 'birth'],
 ]
 
 /** A text's words, as compared: the plain ones dropped, endings off, faith's words made one. */
@@ -279,6 +291,18 @@ export function faithWords(text: string): string[] {
     .filter((w) => w.length > 1 && !STOP.has(w))
     .map((w) => SAME.find(([re]) => re.test(w))?.[1] ?? w.replace(/(?:ing|ed|es|s)$/, ''))
 }
+
+/** Words any question of its kind has: "what is your view on…", "do you believe…", "is it true…". */
+const ASKING = new Set(
+  'view viewpoint point stance position opinion thought belief teach taught stand perspective approach understand mean official general christian believer yall guy folk exactly basically kind sort type still today nowadays currently ever real true'.split(
+    ' '
+  )
+)
+
+/** What a question asks about, as compared: its telling words, without those any question has. */
+export const topicWords = (text: string) => [
+  ...new Set(faithWords(text).filter((w) => !ASKING.has(w))),
+]
 
 /** How rare each word is among the site's passages: a word on every one says little. */
 export function rarity(passages: { text: string }[]): (word: string) => number {
@@ -295,7 +319,7 @@ export function sharedWords(
   passage: string,
   rare: (w: string) => number
 ): number {
-  const q = [...new Set(faithWords(question))]
+  const q = topicWords(question)
   if (q.length === 0) return 0
   const p = new Set(faithWords(passage))
   const total = q.reduce((a, w) => a + rare(w), 0)

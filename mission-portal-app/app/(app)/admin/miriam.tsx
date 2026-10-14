@@ -224,6 +224,13 @@ export function MiriamAdmin({ call }: { call: Api }) {
                 <Text fontSize="$3" color="$gray11">
                   {t.a}
                 </Text>
+                {t.a.length === 1200 ? (
+                  // Taught when answers were cut at 1,200 characters.
+                  <Text fontSize="$2" color="$orange10">
+                    This answer was cut short when it was taught. Take it away and teach it again to
+                    keep all of it.
+                  </Text>
+                ) : null}
                 <XStack>
                   <Button size="$2" theme="red" onPress={() => untaught(t)} disabled={busy}>
                     Take away

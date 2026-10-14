@@ -89,7 +89,7 @@ describe('event questions answered on the device', () => {
       'Revival in the Heartland is at Xtreme Arena, Wichita, KS.'
     )
     expect(quickAnswer('Who’s in my car for the youth retreat?', data())?.text).toBe(
-      'Youth Retreat: Van (your car): driven by Sam, riding: Jacob.'
+      'Youth Retreat: Van (your car): driven by Sam, riding: you.'
     )
     expect(quickAnswer('Where am I staying for the retreat', data())?.text).toBe(
       'Youth Retreat: Lakeside Inn (yours): 1 Lake Rd, room 12.'
@@ -286,6 +286,27 @@ describe('your tasks', () => {
       'You have 1 task due today: Print flyers (due today).'
     )
     expect(tasksAnswer('overdue', tasks, 'sam', today).text).toBe('Nothing of yours is overdue.')
+  })
+})
+
+describe('someone else’s flight or lodging', () => {
+  it('is never the event’s time or place — left to be looked up', () => {
+    for (const q of [
+      'For the new years eve event, what time is Guest User’s flight arriving',
+      'where is guest user staying for new years eve',
+      'when does Sam’s flight land',
+      'is jacob driving to the retreat',
+      'what time should I arrive at the retreat',
+    ]) {
+      expect(quickAsked(q, today), q).toBeNull()
+    }
+  })
+
+  it('but their own is answered here', () => {
+    expect(quickAsked('where am I staying for the retreat', today)?.field).toBe('lodging')
+    expect(quickAsked('when does my flight land for the retreat', today)?.field).toBe('flight')
+    expect(quickAsked('where is the retreat', today)?.field).toBe('place')
+    expect(quickAsked('what time is the retreat', today)?.field).toBe('time')
   })
 })
 

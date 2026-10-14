@@ -50,7 +50,8 @@ import { listeningCue } from '@/lib/listeningCue'
 import { loadAliases } from '@/lib/songAliases'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useMiriamStore } from '@/stores/miriamStore'
-import { asksAQuestion } from '@/lib/miriamSongs'
+import { asksAQuestion, songThen } from '@/lib/miriamSongs'
+import { onceOpen, takeOnceOpen } from '@/lib/sheetAfterOpen'
 import { heardRight } from '@/lib/miriamHearing'
 import { playAsked } from '@/lib/miriamQuick'
 
@@ -693,6 +694,28 @@ export function ChordSheetViewer({
         return STOP_LISTENING
     }
   }
+  // What was asked to be done with this song as it opened — "…start
+  // autoscroll 5" (lib/sheetAfterOpen) — done once the sheet is laid out, so
+  // autoscroll has somewhere to go.
+  const runLatest = useRef(runCommand)
+  useEffect(() => {
+    runLatest.current = runCommand
+  })
+  const openedId = sheet ? String(sheet.id) : null
+  useEffect(() => {
+    if (!openedId) return
+    const commands = takeOnceOpen(openedId)
+    if (commands.length === 0) return
+    let tries = 0
+    const timer = setInterval(() => {
+      if (!autoScroll.measured() && ++tries < 40) return
+      clearInterval(timer)
+      for (const cmd of commands) runLatest.current(cmd)
+    }, 150)
+    return () => clearInterval(timer)
+    // Once for each song opened; autoScroll is read as it is when the time comes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openedId])
   /**
    * "Hey Miriam" heard by voice control itself (it has the microphone, so
    * listening for her name is not running): what comes with it, or next, is
@@ -735,7 +758,10 @@ export function ChordSheetViewer({
       return 'Asking Miriam…'
     }
     for (const ask of asks) {
-      const cmd = parseSheetCommand(ask, allSheets, voiceAliases.current)
+      // "…open Revive Me in C, start autoscroll 5": the song, and what to do once it is open.
+      const both = songThen(ask, allSheets, voiceAliases.current)
+      const said = both?.song ?? ask
+      const cmd = parseSheetCommand(said, allSheets, voiceAliases.current)
       // "Hey Miriam, queue Above All": next, not now.
       if (cmd?.type === 'queue') {
         miriamUntil.current = 0
@@ -745,12 +771,19 @@ export function ChordSheetViewer({
       const request =
         cmd?.type === 'open'
           ? cmd.request
-          : (requestFromAliases(voiceAliases.current, allSheets, ask) ??
-            parseSongRequest(allSheets, ask))
+          : (requestFromAliases(voiceAliases.current, allSheets, said) ??
+            parseSongRequest(allSheets, said))
       if (request) {
         miriamUntil.current = 0
         setMiriamHere(false)
-        return openNow(request) ?? 'Can’t open another song here'
+        if (both) onceOpen(request.sheet.id, both.then)
+        const opened = openNow(request)
+        // This very song, already open: what was asked done here and now.
+        if (!opened && both && sheet && String(request.sheet.id) === String(sheet.id)) {
+          takeOnceOpen(sheet.id)
+          return both.then.map((c) => runCommand(c)).find(Boolean) ?? null
+        }
+        return opened ?? 'Can’t open another song here'
       }
     }
     // Waiting, and what came was not a song: perhaps a command ("chorus").

@@ -33,3 +33,16 @@ export function songHost(): OpenSong | null {
 export function songQueue(): OpenSong | null {
   return hosts.length ? (hosts[hosts.length - 1].queue ?? null) : null
 }
+
+/** The song screen just gone to, once it is up to open songs on — or null if it isn't, in time. */
+export async function songHostSoon(waitMs = 4000): Promise<OpenSong | null> {
+  for (let waited = 0; waited <= waitMs; waited += 100) {
+    const host = songHost()
+    if (host) return host
+    await new Promise((done) => setTimeout(done, 100))
+  }
+  return null
+}
+
+/** The Chord Sheets page, gone to afresh: on its tab, whichever of the Worship page's was up. */
+export const chordSheetsPage = () => `/worship?tab=chords&at=${Date.now()}`

@@ -1,7 +1,7 @@
 import { shiftDate, type Viewer } from '../data'
 import type { Lookups } from '../lookups'
 import { publicReply, PUBLIC_NOT_HERS, type AppToolName } from '../plan'
-import { answerFor, said, type OwnResult } from './answers'
+import { answerFor, said, toStay, type OwnResult } from './answers'
 import { embed } from './encoder'
 import { mentionsIn } from './events'
 import { notHers } from './guards'
@@ -141,7 +141,9 @@ async function fromFaith(
   v?: Float32Array
 ): Promise<OwnResult> {
   const f = await faithAnswer(text, db, v)
-  return said(f.text, f.link && can.includes('link') ? { kind: 'link', ...f.link } : null)
+  const r = said(f.text, f.link && can.includes('link') ? { kind: 'link', ...f.link } : null)
+  // The church's own answer stays to be read; "reach out to our leadership" goes as any answer does.
+  return f.from === 'leadership' ? r : toStay(r)
 }
 
 /** A request, read: its events' names, its meaning, and which of her skills it is. */
@@ -228,15 +230,17 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
   // (./names) — whatever came before it, and unless an admin taught her otherwise.
   if (nameAsked(text)) {
     const taught = await taughtFor(text, () => embed(text), db)
-    if (taught) return { result: said(taught), read: null, why: 'taught' }
+    if (taught) return { result: toStay(said(taught)), read: null, why: 'taught' }
     const named = nameAnswer(text, await siteKnowledge(db).catch(() => []))
     if (named) {
       return {
-        result: said(
-          named.text,
-          input.can.includes('link')
-            ? { kind: 'link', url: named.link.url, label: named.link.label }
-            : null
+        result: toStay(
+          said(
+            named.text,
+            input.can.includes('link')
+              ? { kind: 'link', url: named.link.url, label: named.link.label }
+              : null
+          )
         ),
         read: null,
         why: `names: ${named.which}`,
@@ -286,7 +290,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
       if (reading.skill === 'faith' || reading.skill === 'other' || aboutScripture(text)) {
         const taught = await taughtFor(text, rawV, db, { strict: true })
         if (taught && !justSaid(taught, last.reply)) {
-          return { result: said(taught), read: null, why: 'taught' }
+          return { result: toStay(said(taught)), read: null, why: 'taught' }
         }
         return { result: fromLeadership(input.can), read: null, why: 'faith: more asked' }
       }
@@ -303,9 +307,17 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
 
   const { mentions, rawV, reading, own } = await whatItIs()
 
-  // 1. Taught: said as an admin wrote it.
-  const taught = await taughtFor(text, rawV, db)
-  if (taught) return { result: said(taught), read: null, why: 'taught' }
+  // 1. Taught: said as an admin wrote it — on faith, kept open to be read.
+  const faith = reading.skill === 'faith' || aboutScripture(text)
+  const taught = await taughtFor(text, rawV, db, { faith })
+  if (taught) {
+    const answer = said(taught)
+    return {
+      result: faith || aboutScripture(taught) ? toStay(answer) : answer,
+      read: null,
+      why: 'taught',
+    }
+  }
 
   // 2. What it is (understand, above).
   if (reading.skill === 'other') return { result: null, read: own, why: 'not hers' }
@@ -354,7 +366,9 @@ export async function webOrFaith(
     const last = input.history?.[input.history.length - 1]
     if (last && isFaithReply(last.reply) && followsOn(text)) {
       const taught = await taughtFor(text, () => embed(text), input.db, { strict: true })
-      return taught && !justSaid(taught, last.reply) ? said(taught) : fromLeadership(input.can)
+      return taught && !justSaid(taught, last.reply)
+        ? toStay(said(taught))
+        : fromLeadership(input.can)
     }
     return fromFaith(text, input.db, input.can)
   }

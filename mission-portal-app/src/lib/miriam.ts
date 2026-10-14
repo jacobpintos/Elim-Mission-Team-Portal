@@ -129,6 +129,8 @@ export type MiriamResult =
       understood?: string
       /** Words misheard, and what was meant: remembered on the device. */
       misheard?: { heard: string; meant: string }[]
+      /** An answer on faith: kept open, to be read, until it is closed. */
+      stay?: boolean
     }
   | { kind: 'reply'; text: string }
   /** A new task's form, filled in, for an admin to check and save. */

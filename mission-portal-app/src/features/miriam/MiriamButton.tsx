@@ -106,8 +106,9 @@ import { appToolsFor } from './appTools'
 import { useEventsStore } from '@/stores/eventsStore'
 import { localToday, todayStr } from '@/lib/events'
 import { useTourStore } from '@/features/tour/tourStore'
-import { asksAQuestion, songAsked } from '@/lib/miriamSongs'
-import { songHost, songQueue } from '@/lib/songHost'
+import { asksAQuestion, songAsked, songThen } from '@/lib/miriamSongs'
+import { onceOpen, type OnceOpen } from '@/lib/sheetAfterOpen'
+import { chordSheetsPage, songHost, songHostSoon, songQueue } from '@/lib/songHost'
 import { parseSheetCommand } from '@/lib/sheetCommands'
 import { keyLabel } from '@/lib/nashvilleNumbers'
 import { KEY_HINTS } from '@/lib/songRequest'
@@ -362,9 +363,17 @@ export function MiriamButton() {
   const [video, setVideo] = useState<MusicItem | null>(null)
   const [songGuesses, setSongGuesses] = useState<ChordSheet[]>([])
   const [videoGuesses, setVideoGuesses] = useState<MusicItem[]>([])
-  const songAsk = useRef<{ name: string; key: { key: string; minor: boolean } | null }>({
+  // An answer on faith: left open, to be read, until it is closed.
+  const [stay, setStay] = useState(false)
+  const songAsk = useRef<{
+    name: string
+    key: { key: string; minor: boolean } | null
+    /** What to do once it is open: "…start autoscroll 5". */
+    then: OnceOpen[]
+  }>({
     name: '',
     key: null,
+    then: [],
   })
   // "Hey Miriam": wanted on this device, and listening for it right now.
   const wakeOn = useMiriamStore((s) => s.wakeOn)
@@ -495,6 +504,7 @@ export function MiriamButton() {
     setChoices([])
     setSongGuesses([])
     setVideoGuesses([])
+    setStay(false)
     setPending(null)
     setLink(null)
     setUndo(null)
@@ -686,13 +696,15 @@ export function MiriamButton() {
         setStage('answered')
         return
       }
-      const asking = songAsked(sheets, aliases, withoutHerName(said), songMode)
+      // "Open revive me in C. Start autoscroll 5.": the song, and what to do once it is open.
+      const both = songThen(withoutHerName(said), sheets, aliases)
+      const asking = songAsked(sheets, aliases, both?.song ?? withoutHerName(said), songMode)
       if (asking?.kind === 'open') {
-        openSong(asking.sheet, asking.key)
+        openSong(asking.sheet, asking.key, both?.then)
         return
       }
       if (asking?.kind === 'guess') {
-        songAsk.current = { name: asking.name, key: asking.key }
+        songAsk.current = { name: asking.name, key: asking.key, then: both?.then ?? [] }
         setSongGuesses(asking.sheets)
         const text = 'I couldn’t find that song. Did you mean one of these?'
         setAnswer(text)
@@ -790,6 +802,7 @@ export function MiriamButton() {
       }
       const followUp = result.kind === 'answer' && !!result.followUp
       useMiriamStore.getState().setAwaiting(followUp)
+      setStay(result.kind === 'answer' && !!result.stay)
       if (result.kind === 'eventForm') {
         noteDone(
           `Opened the ${result.editKey ? 'event’s' : 'new event'} form, filled in, to check and save.`
@@ -1027,6 +1040,7 @@ export function MiriamButton() {
     setChoices([])
     setSongGuesses([])
     setVideoGuesses([])
+    setStay(false)
     setPending(null)
     setUndo(null)
     setUnderstood('')
@@ -1337,6 +1351,8 @@ export function MiriamButton() {
   const askBack = async (typing: boolean) => {
     setAskingBack(true)
     if (typing) {
+      // A new request to send: what was sent before is done with.
+      sent.current = false
       setTyped('')
       setStage('typing')
       return
@@ -1497,18 +1513,38 @@ export function MiriamButton() {
     }
   }
 
-  /** A chord sheet, opened over the page; the bar goes, to leave it in view. */
-  const openSong = (sheet: ChordSheet, key: { key: string; minor: boolean } | null) => {
+  /**
+   * A chord sheet, opened; the bar goes, to leave it in view — and what was
+   * asked to be done with it ("…start autoscroll 5") done once it is open.
+   */
+  const openSong = async (
+    sheet: ChordSheet,
+    key: { key: string; minor: boolean } | null,
+    then: readonly OnceOpen[] = []
+  ) => {
     noteDone(`Opened the chord sheet “${sheet.title}”.`)
     setSongGuesses([])
     setVideoGuesses([])
+    setStay(false)
     setOpen(false)
+    onceOpen(sheet.id, then)
     // Where a song screen is up, there — an open sheet's own place — rather
     // than another sheet on top of it.
     const host = songHost()
     if (host && !song) {
       host(sheet, key)
       return
+    }
+    // Else on the Chord Sheets page, so closing it leaves them at the list to
+    // find another — when they have it, and nothing is open over the page.
+    const chords = screensFor(useAuthStore.getState().profile).some((x) => x.id === 'worship')
+    if (chords && !song && !anyOverlayOpen()) {
+      router.push(chordSheetsPage() as never)
+      const there = await songHostSoon()
+      if (there) {
+        there(sheet, key)
+        return
+      }
     }
     sheetQueue.reset()
     setSong({ sheet, key })
@@ -1517,6 +1553,7 @@ export function MiriamButton() {
   const playVideo = (item: MusicItem) => {
     noteDone(`Playing “${item.title}” from Content.`)
     setVideoGuesses([])
+    setStay(false)
     setVideo(item)
     setOpen(false)
   }
@@ -1546,7 +1583,7 @@ export function MiriamButton() {
   /** One of the songs she offered: opened, and learned as what was meant. */
   const pickSong = (sheet: ChordSheet) => {
     if (songAsk.current.name) rememberAlias(songAsk.current.name, String(sheet.id))
-    openSong(sheet, songAsk.current.key)
+    openSong(sheet, songAsk.current.key, songAsk.current.then)
   }
 
   // Words this device has learned for songs, ready for matching as they are heard.
@@ -1578,6 +1615,7 @@ export function MiriamButton() {
       setChoices([])
       setSongGuesses([])
       setVideoGuesses([])
+      setStay(false)
       setPending(null)
       setLink(null)
       setRanOut(false)
@@ -1611,6 +1649,7 @@ export function MiriamButton() {
     setChoices([])
     setSongGuesses([])
     setVideoGuesses([])
+    setStay(false)
     if (!keepQuestion) setPending(null)
     setLink(null)
     setUnderstood('')
@@ -1918,6 +1957,7 @@ export function MiriamButton() {
       choices.length ||
       songGuesses.length ||
       videoGuesses.length ||
+      stay ||
       pending ||
       link
     )
@@ -1933,6 +1973,7 @@ export function MiriamButton() {
     choices.length,
     songGuesses.length,
     videoGuesses.length,
+    stay,
     pending,
     link,
   ])
@@ -2040,8 +2081,9 @@ export function MiriamButton() {
                   </Text>
                 ) : null}
                 {answer ? (
-                  // A walkthrough runs long: scrolled within the bar rather than cut off.
-                  <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled>
+                  // A walkthrough runs long: scrolled within the bar rather than cut off —
+                  // and an answer on faith, left open to be read, given more room.
+                  <ScrollView style={{ maxHeight: stay ? 420 : 260 }} nestedScrollEnabled>
                     <Text color={ink} fontSize="$3" fontWeight="600">
                       {answer}
                     </Text>

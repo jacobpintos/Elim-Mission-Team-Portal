@@ -367,11 +367,13 @@ export function carpoolFor(
 ): string[] {
   const mine = (c: Car) => same(c.driver, viewer.uid) || c.riders.some((r) => same(r, viewer.uid))
   const shown = isAdminViewer(viewer) ? cars : cars.filter(mine)
+  // The one asking is "you": "driven by you", so their own driving is plain.
+  const who = (uid: string) => (same(uid, viewer.uid) ? 'you' : nameOf(names, uid))
   return shown.map((c, i) => {
     const label = c.label || `Car ${cars.indexOf(c) + 1 || i + 1}`
-    const driver = c.driver ? `driven by ${nameOf(names, c.driver)}` : 'no driver yet'
+    const driver = c.driver ? `driven by ${who(c.driver)}` : 'no driver yet'
     const riding = [
-      ...c.riders.map((r) => nameOf(names, r)),
+      ...c.riders.map(who),
       ...(c.children ?? []).map((k) => (k.name.trim() ? `${k.name.trim()} (child)` : 'a child')),
     ]
     const riders = riding.length ? `, riding: ${riding.join(', ')}` : ''
@@ -580,4 +582,53 @@ function dayNumber(d: string): number {
 }
 export function shiftDate(d: string, days: number): string {
   return new Date(Date.parse(`${d}T12:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+}
+
+/**
+ * Everything at an event that is theirs to do or have — "what are my
+ * responsibilities for New Year's Eve?": their team, the car they drive or
+ * ride in, what they're bringing, their tasks, where they stay, their flight.
+ */
+export function yoursAt(
+  ev: EventTemplate,
+  viewer: Viewer,
+  names: Map<string, string>,
+  their: {
+    cars: Car[]
+    bringing: string[]
+    tasks: { title: string; status: string; dueDate?: string | null; assignees: unknown[] }[]
+  }
+): string[] {
+  const me = (uid: unknown) => same(uid, viewer.uid)
+  const team = (ev.teams ?? []).find((t) => [...t.leaders, ...t.members].some(me))
+  const car = ev.carpool ? their.cars.find((c) => me(c.driver) || c.riders.some(me)) : undefined
+  const carSaid = (c: Car) => {
+    const label = c.label || `Car ${their.cars.indexOf(c) + 1}`
+    const others = c.riders.filter((r) => !me(r)).map((r) => nameOf(names, r))
+    const kids = (c.children ?? []).map((k) =>
+      k.name.trim() ? `${k.name.trim()} (child)` : 'a child'
+    )
+    const riding = [...others, ...kids]
+    return me(c.driver)
+      ? `driving ${label}${riding.length ? `, with ${riding.join(', ')}` : ''}`
+      : `riding in ${label}${c.driver ? `, driven by ${nameOf(names, c.driver)}` : ' (no driver yet)'}`
+  }
+  const lodging = (ev.lodgingEntries ?? []).filter((l) => l.assignees.some(me))
+  const flights = (ev.flightEntries ?? []).filter((f) => me(f.uid))
+  return [
+    team && `on the ${team.name} team${team.leaders.some(me) ? ', leading it' : ''}`,
+    car && carSaid(car),
+    their.bringing.length && `bringing ${their.bringing.join(', ')} for the food sign-up`,
+    ...their.tasks
+      .filter((t) => t.assignees.some(me) && t.status !== 'done')
+      .map((t) => `the task “${t.title}”${t.dueDate ? `, due ${t.dueDate}` : ''}`),
+    ...lodging.map(
+      (l) =>
+        `staying at ${l.name}${l.address ? `, ${l.address}` : ''}${l.room ? `, room ${l.room}` : ''}`
+    ),
+    ...flights.map(
+      (f) =>
+        `flying: ${[flightLine(f, 'out'), flightLine(f, 'ret')].filter(Boolean).join('. ') || 'no details yet'}`
+    ),
+  ].filter((x): x is string => typeof x === 'string' && x.length > 0)
 }
