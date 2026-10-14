@@ -16,12 +16,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
+      # The Node the Cloud Functions run on (functions/package.json), whose code
+      # the unit tests cover too.
+      - name: Setup Node 24
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: mission-portal-app/package-lock.json
 
@@ -40,7 +42,7 @@ jobs:
       # The Firestore and Storage emulators the rules tests run against are
       # Java processes.
       - name: Set up Java for the Firebase emulators
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
