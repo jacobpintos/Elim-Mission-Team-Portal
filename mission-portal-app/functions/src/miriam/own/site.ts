@@ -274,7 +274,7 @@ const SAME: [RegExp, string][] = [
   [/^wom[ae]n$/, 'women'],
   [/^worship/, 'worship'],
   [/^child|^kids?$/, 'child'],
-  [/^cessation/, 'cessation'],
+  [/^ces+a[st]+ion/, 'cessation'],
   [/^continuation/, 'continuation'],
   [/^homosexual|^gays?$|^lesbian/, 'homosexual'],
   [/^com(?:e|es|ing)$|^came$|^return/, 'come'],

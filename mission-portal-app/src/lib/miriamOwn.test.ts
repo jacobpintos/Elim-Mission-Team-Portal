@@ -100,6 +100,9 @@ function taken(text: string): Skill | null {
 // Her model runs here in plain JavaScript, as on the server: reading a site, or
 // a conversation, is seconds of it — more on a busy machine than the default allows.
 vi.setConfig({ testTimeout: 30_000 })
+// And a breath before each test: a minute of them run without one leaves the
+// test runner unanswered ("Timeout calling onTaskUpdate").
+beforeEach(() => new Promise<void>((done) => setImmediate(done)))
 
 describe('her examples', () => {
   it('each has its meaning worked out (else run scripts/miriam-model/seeds.js)', () => {
@@ -180,6 +183,9 @@ describe('the guards', () => {
     expect(notHers('where am I staying for the retreat', 'event_lodging')).toBeNull()
     expect(notHers('when does my flight land', 'event_flight')).toBeNull()
     expect(notHers('where is the retreat', 'event_place')).toBeNull()
+    // Where an event is, asked with a word for a place.
+    expect(notHers('what is family gathering', 'event_place')).toBeTruthy()
+    expect(notHers('what’s the address for revival', 'event_place')).toBeNull()
     expect(notHers("what's due this week", 'my_events')).toBeTruthy()
     expect(notHers('remind everyone to bring a Bible', 'reminder')).toBeTruthy()
     expect(notHers("who's coming to youth night", 'event_time')).toBeTruthy()
@@ -1119,6 +1125,170 @@ describe('a question taught, asked in other words', () => {
   })
 })
 
+describe('answered from the event itself', () => {
+  beforeEach(() => forgetCaches())
+  const db = fakeDb({
+    users: {
+      jacob: { displayName: 'Jacob Pintos', roles: ['admin'] },
+      mitch: { displayName: 'Mitch Moylan', roles: ['regular'] },
+      glenn: { displayName: 'Glenn Pettit', roles: ['regular'] },
+      guest: { displayName: 'Guest User', roles: ['guest'] },
+    },
+    groups: {},
+    events: {
+      nye: {
+        title: 'New Years Eve',
+        date: '2026-12-31',
+        startTime: '10:30 PM',
+        location: 'Elim Church',
+        users: ['jacob', 'mitch', 'glenn', 'guest'],
+        teams: [{ name: 'Production - Audio', leaders: [], members: ['jacob'] }],
+        carpool: true,
+        carpoolCars: [
+          { id: 'c1', label: 'Jacob’s Rouge', driver: 'jacob', riders: ['mitch', 'glenn'] },
+        ],
+        schedule: [
+          { id: 's1', time: '3:00 PM', title: 'Setup' },
+          { id: 's2', time: '4:00 PM', endTime: '6:00 PM', title: 'Sound check' },
+          { id: 's3', time: '5:00 PM', title: 'Courtney and Olivia arrive' },
+          { id: 's4', time: '10:30 PM', title: 'Worship' },
+          { id: 's5', time: '11:15 PM', title: 'Sermon' },
+          { id: 's6', time: '11:50 PM', title: 'Countdown & communion' },
+        ],
+        flights: true,
+        flightEntries: [
+          {
+            uid: 'guest',
+            outDate: '2026-12-30',
+            outTime: '5 PM',
+            outAirport: 'Nashville, TN',
+            outAirline: 'American Airlines',
+            outFlight: '1234',
+            outArrival: '7 PM',
+          },
+        ],
+        lodging: true,
+        lodgingEntries: [
+          {
+            name: 'Marmot House',
+            address: '55 Marmot Ct, North Liberty, IA',
+            assignees: ['guest'],
+          },
+        ],
+      },
+      fam: {
+        title: 'Family Gathering',
+        date: '2026-11-01',
+        startTime: '5:00 PM',
+        location: 'Elim Church',
+        users: ['jacob'],
+        schedule: [
+          { id: 'f1', time: '5:00 PM', title: 'Dinner' },
+          { id: 'f2', time: '6:00 PM', title: 'Games' },
+        ],
+      },
+    },
+  })
+  const as = (uid: string, roles: string[]) => {
+    const viewer = { uid, roles }
+    return (text: string) =>
+      ownAnswer(input(text, { viewer, lookups: new Lookups(db, viewer, TODAY) }))
+  }
+  const jacob = as('jacob', ['admin'])
+  const said = async (q: string, ask = jacob) =>
+    ((await ask(q)).result as { text: string } | null)?.text
+
+  it('something on its schedule, by any of its words', async () => {
+    // "Courtney and Olivia arrive", asked for Olivia alone.
+    expect(await said('When does Olivia arrive for New Years Eve')).toBe(
+      'On the New Years Eve schedule, “Courtney and Olivia arrive” is at 5:00 PM.'
+    )
+    expect(await said('when do courtney and olivia arrive for new years eve')).toMatch(
+      /“Courtney and Olivia arrive” is at 5:00 PM/
+    )
+    expect(await said('what time is the sermon on new years eve')).toBe(
+      'On the New Years Eve schedule, “Sermon” is at 11:15 PM.'
+    )
+    expect(await said('what comes after the sermon on new years eve')).toBe(
+      'After “Sermon” (11:15 PM) comes “Countdown & communion” at 11:50 PM, on the New Years Eve schedule.'
+    )
+    expect(await said('when is sound check on new years eve')).toBe(
+      'On the New Years Eve schedule, “Sound check” is 4:00–6:00 PM.'
+    )
+    // Words run together, or apart.
+    expect(await said('when is set up on new years eve')).toBe(
+      'On the New Years Eve schedule, “Setup” is at 3:00 PM.'
+    )
+    expect(await said('when’s soundcheck on new years eve')).toBe(
+      'On the New Years Eve schedule, “Sound check” is 4:00–6:00 PM.'
+    )
+    expect(await said('what time is Olivia getting here for new years eve')).toBe(
+      'On the New Years Eve schedule, “Courtney and Olivia arrive” is at 5:00 PM.'
+    )
+    expect(await said('what’s right before the sermon on new years eve')).toBe(
+      'Before “Sermon” (11:15 PM) comes “Worship” at 10:30 PM, on the New Years Eve schedule.'
+    )
+    expect(await said('what comes after setup on new years eve')).toBe(
+      'After “Setup” (3:00 PM) comes “Sound check” (4:00–6:00 PM), on the New Years Eve schedule.'
+    )
+    // Not named: the next of theirs whose schedule has it — months off, too.
+    expect(await said('when is dinner')).toBe(
+      'On the Family Gathering schedule, “Dinner” is at 5:00 PM.'
+    )
+    expect(await said('when does olivia arrive')).toBe(
+      'On the New Years Eve schedule, “Courtney and Olivia arrive” is at 5:00 PM.'
+    )
+  })
+
+  it('all that is theirs at it, their car among it', async () => {
+    expect(await said('what are my responsibilities for new years eve')).toBe(
+      'For New Years Eve, you’re on the Production - Audio team; and you’re driving Jacob’s Rouge, with Mitch Moylan, Glenn Pettit. It starts on Thursday, December 31 at 10:30 PM.'
+    )
+  })
+
+  it('someone’s flight or room, by name — for an admin', async () => {
+    expect(
+      await said('For the new years eve event, what time is Guest User’s flight arriving')
+    ).toBe(
+      'Guest User’s flight is expected to arrive at 7 PM on Wednesday, Dec 30 — leaving Wednesday, Dec 30 at 5 PM, from Nashville, TN, American Airlines 1234.'
+    )
+    expect(await said('where is guest user staying for new years eve')).toBe(
+      'Guest User is staying at Marmot House, 55 Marmot Ct, North Liberty, IA for New Years Eve.'
+    )
+    // Anyone else: their own only — and never whether someone else has one.
+    const mitch = as('mitch', ['regular'])
+    expect(await said('what time is Guest User’s flight arriving for new years eve', mitch)).toBe(
+      'Only admins can see others’ flights.'
+    )
+    expect(await said('where is glenn staying for new years eve', mitch)).toBe(
+      'Only admins can see where others are staying.'
+    )
+    const guest = as('guest', ['regular'])
+    expect(await said('where is guest user staying for new years eve', guest)).toBe(
+      'You’re staying at Marmot House, 55 Marmot Ct, North Liberty, IA for New Years Eve.'
+    )
+  })
+
+  it('what an event is', async () => {
+    expect(await said('what is family gathering')).toBe(
+      'Family Gathering is on Sunday, November 1 at 5:00 PM, at Elim Church. On its schedule: 5:00 PM Dinner; 6:00 PM Games.'
+    )
+  })
+
+  it('and nothing that isn’t on it', async () => {
+    for (const q of [
+      'when does Costco close',
+      'what time is it',
+      'when does Olivia leave for new years eve',
+    ]) {
+      const own = await jacob(q)
+      expect(['schedule item', 'theirs at it', 'someone’s travel', 'what it is'], q).not.toContain(
+        own.why
+      )
+    }
+  })
+})
+
 describe('the church’s beliefs, as taught, asked other ways', () => {
   beforeEach(() => forgetCaches())
   // As taught in Admin → Miriam, from the church's "What we believe".
@@ -1156,6 +1326,7 @@ describe('the church’s beliefs, as taught, asked other ways', () => {
       ['Is abortion a sin', ABORTION],
       ['are the gifts of the spirit active', GIFTS],
       ['is The Well cessationist', GIFTS],
+      ['Is the Well cessasionist', GIFTS],
       ['Is God good', GOD],
       ['When will Jesus return', JUDGMENT],
       ['is hell real', JUDGMENT],

@@ -167,6 +167,37 @@ describe('an event’s schedule', () => {
     )
   })
 
+  it('the time of something on it, not the event’s own — by its day, for a multi-day event', () => {
+    expect(quickAnswer('what time is worship at family camp', withCamp())).toEqual({
+      text: 'On the Family Camp schedule, “Worship” is on Friday at 7:00 PM.',
+      open: { key: 'camp_2026-10-16', section: 'schedule' },
+    })
+    expect(quickAnswer('when is the hike at family camp?', withCamp())?.text).toBe(
+      'On the Family Camp schedule, “Hike” is on Saturday, 9:00–11:00 AM.'
+    )
+    expect(quickAnswer('what’s the schedule for the hike at family camp', withCamp())?.text).toBe(
+      'On the Family Camp schedule, “Hike” is on Saturday, 9:00–11:00 AM.'
+    )
+    // The event itself, asked by its name alone.
+    expect(quickAnswer('when is family camp', withCamp())?.text).toBe(
+      'Family Camp is on Friday, Oct 16; no time is set.'
+    )
+  })
+
+  it('leaves to her what isn’t on it, and what comes before or after something', () => {
+    for (const said of [
+      'what time is dinner at family camp',
+      'what’s on the schedule after worship at family camp',
+      'what time is the hike before worship at family camp',
+    ]) {
+      expect(quickAnswer(said, withCamp()), said).toBeNull()
+    }
+    // Asked for the whole schedule, with something not on it: all of it.
+    expect(
+      quickAnswer('what’s the schedule for dinner at family camp', withCamp())?.text
+    ).toContain('The schedule for Family Camp')
+  })
+
   it('keeps “my schedule this week” for their week, and “my schedule for camp” for the event', () => {
     expect(listAsked('what’s my schedule this week', today)).not.toBeNull()
     expect(listAsked('what’s my schedule for family camp', today)).toBeNull()

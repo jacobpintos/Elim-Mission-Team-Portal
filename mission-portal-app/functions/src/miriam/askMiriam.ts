@@ -23,6 +23,7 @@ import { PAUSE_MS, MAX_RESULT, seal, unseal } from './pause'
 import { ownAnswer, publicAnswer, webOrFaith, type OwnInput, type OwnRead } from './own'
 import { learn, type OwnDb } from './own/learn'
 import { OWN_SKILLS, type Skill } from './own/skills'
+import { notHers } from './own/guards'
 import { heardRight } from './hearing'
 
 if (!admin.apps.length) admin.initializeApp()
@@ -413,6 +414,9 @@ export const askMiriam = onCall(
       ownRead = null
       if (!r || !skill) return
       if (skill === 'other' && (r.skill === 'other' || r.score < 0.5)) return
+      // Never as something it plainly isn't: "When does Olivia arrive?" as when
+      // an event is, "what is Family Gathering?" as where (./own/guards).
+      if (skill !== 'other' && notHers(r.masked, skill)) return
       let text = r.masked
       if (skill === 'reminder' && typeof reminderText === 'string' && reminderText.trim()) {
         const words = reminderText.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

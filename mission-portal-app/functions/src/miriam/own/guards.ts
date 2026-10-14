@@ -52,6 +52,12 @@ const NOT_HERS: [RegExp, Skill[]][] = [
     /^(?!.*\bmy\s+flights?\b).*\b(?:flights?|fly|flying|arriv\w*|land(?:s|ed|ing)?|depart\w*|airport|airline|staying|sleeping|lodging|hotel|motel|housing)\b/i,
     ['event_time', 'event_place', 'event_schedule', 'event_dress', 'event_weather', 'my_events'],
   ],
+  // Where an event is, asked without a word for a place, is something else:
+  // "what is Family Gathering?" asks what it is.
+  [
+    /^(?!.*\b(?:where|wheres|where's|address|location|located|venue|building|church|city|park|place|directions|map|get\s+to|held|going|meet)\b)/i,
+    ['event_place'],
+  ],
   // Bringing something is the food sign-up, not coming.
   [/\b(?:bring(?:ing)?|food|sign[-\s]?up\s+sheet|potluck\s+list)\b/i, ['availability']],
   // A span of days ("all of November", "the whole week") is a range, not one event.

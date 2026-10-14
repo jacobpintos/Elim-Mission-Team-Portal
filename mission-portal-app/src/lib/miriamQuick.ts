@@ -13,6 +13,8 @@ import {
   type Group,
   type Viewer,
 } from '../../functions/src/miriam/data'
+import { nameScore } from '../../functions/src/miriam/names'
+import { scheduleAnswer, scheduleWhat } from '../../functions/src/miriam/own/schedule'
 import { placeOf } from './directions'
 import { scheduleSaid } from './eventSchedule'
 
@@ -384,6 +386,31 @@ function answerFor(field: QuickField, ev: EventInstance, data: QuickData, alone:
   }
 }
 
+/**
+ * What was said besides the event's name — "sermon" in "what time is the
+ * sermon on New Year's Eve?" — asking for something on its schedule, not the
+ * event itself. Empty when it was all its name.
+ */
+function besidesItsName(ev: EventInstance, name: string): string[] {
+  const its = [ev.title, ev.city, ev.location].filter(Boolean).join(' ')
+  return scheduleWhat(name).filter((w) => nameScore(its, w) < 0.8)
+}
+
+/**
+ * Something on an event's schedule, asked by what it is (functions/src/miriam/
+ * own/schedule, as she finds it) — its time, from the one event that has it;
+ * null when none plainly does, for her to work out.
+ */
+function scheduleItemAt(ask: QuickAsk, events: EventInstance[]): QuickAnswer | null {
+  const found = events.flatMap((ev) => {
+    const what = besidesItsName(ev, ask.name)
+    const text = what.length ? scheduleAnswer({ then: 'at', what }, ev) : null
+    return text ? [{ ev, text }] : []
+  })
+  if (found.length !== 1) return null
+  return { text: found[0].text, open: { key: found[0].ev.instanceKey, section: 'schedule' } }
+}
+
 /** The answer, worked out here, or null to ask Claude. */
 export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
   if (!data.templates.length) return null
@@ -392,6 +419,16 @@ export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
   const events = eventsFor(ask, data)
   // Nothing found, or more than can be said in a breath: Claude works it out.
   if (events.length === 0 || events.length > 3) return null
+  // Something on its schedule — "what time is the sermon on New Year's Eve?",
+  // "the schedule for Olivia getting here" — not the event's own time, nor all
+  // of it; and what comes before or after something, worked out by her.
+  if (ask.field === 'time' || ask.field === 'schedule') {
+    if (/\b(?:after|before)\b/.test(text.toLowerCase())) return null
+    const asked = events.some((ev) => besidesItsName(ev, ask.name).length)
+    const item = asked ? scheduleItemAt(ask, events) : null
+    if (item) return item
+    if (asked && ask.field === 'time') return null
+  }
   // Cars set on an event's page, for its date, aren't loaded here: looked up there.
   if (ask.field === 'car' && events.some((ev) => ev.carpool && !ev.carpoolCars?.length)) {
     return null

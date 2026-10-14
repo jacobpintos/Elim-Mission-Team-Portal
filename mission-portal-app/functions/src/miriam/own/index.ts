@@ -1,7 +1,17 @@
 import { shiftDate, type Viewer } from '../data'
 import type { Lookups } from '../lookups'
 import { publicReply, PUBLIC_NOT_HERS, type AppToolName } from '../plan'
-import { answerFor, said, toStay, type OwnResult } from './answers'
+import {
+  answerFor,
+  overviewAnswer,
+  said,
+  scheduleItemAnswer,
+  toStay,
+  travelAnswer,
+  yoursAnswer,
+  type AnswerContext,
+  type OwnResult,
+} from './answers'
 import { embed } from './encoder'
 import { mentionsIn } from './events'
 import { notHers } from './guards'
@@ -20,9 +30,12 @@ import { taughtFor } from './taught'
  *
  *  1. An answer an admin has taught her, if the question means the same,
  *     however it is worded (./taught).
- *  2. Otherwise what it is (./understand), read with each event's name as
+ *  2. What the event itself says, asked plainly, however she would read it:
+ *     something on its schedule (./schedule), all that is theirs at it,
+ *     someone's flight or room by name (./people), or what it is.
+ *  3. Otherwise what it is (./understand), read with each event's name as
  *     "the event" (./events) — and, if that isn't plain, as said.
- *  3. Hers only when she is sure (SURE, CLEAR), the words agree (./guards),
+ *  4. Hers only when she is sure (SURE, CLEAR), the words agree (./guards),
  *     and the answer can be had plainly (./answers, ./web).
  *
  * What she read comes back either way, for Claude's answer to teach her
@@ -149,6 +162,8 @@ async function fromFaith(
 /** A request, read: its events' names, its meaning, and which of her skills it is. */
 interface Understood {
   mentions: ReturnType<typeof mentionsIn>['mentions']
+  /** As said, with each event's name read as "the event". */
+  masked: string
   /** Its meaning as said, not masked. */
   rawV: () => Float32Array
   reading: Reading
@@ -200,6 +215,7 @@ async function understand(input: OwnInput, text = input.text): Promise<Understoo
   }
   return {
     mentions,
+    masked,
     rawV,
     reading,
     own: {
@@ -305,7 +321,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
     }
   }
 
-  const { mentions, rawV, reading, own } = await whatItIs()
+  const { mentions, masked, rawV, reading, own } = await whatItIs()
 
   // 1. Taught: said as an admin wrote it — on faith, kept open to be read.
   const faith = reading.skill === 'faith' || aboutScripture(text)
@@ -319,7 +335,31 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
     }
   }
 
-  // 2. What it is (understand, above).
+  // 2. From the event itself, however she read it: something on its schedule
+  // ("When does Olivia arrive for New Year's Eve?" — “Courtney and Olivia
+  // arrive”, 5:00 PM), all that's theirs at it ("what are my responsibilities?"),
+  // someone's flight or room by name, or what it is ("what is Family
+  // Gathering?") — whatever the event's page has, never sent on for.
+  const ctx: AnswerContext = {
+    text,
+    today,
+    now: input.now,
+    mentions,
+    lookups,
+    viewer: input.viewer,
+    appTools: input.appTools,
+  }
+  for (const [why, answer] of [
+    ['schedule item', () => scheduleItemAnswer(masked, ctx)],
+    ['theirs at it', () => yoursAnswer(ctx)],
+    ['someone’s travel', () => travelAnswer(ctx)],
+    ['what it is', () => overviewAnswer(masked, ctx)],
+  ] as const) {
+    const result = await answer().catch(() => null)
+    if (result) return { result, read: own, why }
+  }
+
+  // 3. What it is (understand, above).
   if (reading.skill === 'other') return { result: null, read: own, why: 'not hers' }
   if (!sure(reading))
     return {
@@ -330,7 +370,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
   const guarded = notHers(text, reading.skill)
   if (guarded) return { result: null, read: own, why: `${reading.skill}, but ${guarded}` }
 
-  // 3. Her answer. On God or the Bible, only the church's own (./faith) — never the web's.
+  // 4. Her answer. On God or the Bible, only the church's own (./faith) — never the web's.
   if (reading.skill === 'faith' || (reading.skill === 'web' && aboutScripture(text))) {
     return { result: await fromFaith(text, db, input.can, rawV()), read: own, why: 'faith' }
   }

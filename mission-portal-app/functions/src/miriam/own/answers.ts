@@ -4,6 +4,15 @@ import type { AppToolName } from '../plan'
 import type { Mention } from './events'
 import type { Skill } from './skills'
 import { dayIn, reminderIn, spanIn, statusIn } from './when'
+import { personAnswer, personAsked } from './people'
+import {
+  plainly,
+  scheduleAnswer,
+  scheduleAsked,
+  scheduleItems,
+  timeOf,
+  type ScheduleAsk,
+} from './schedule'
 
 /**
  * Miriam's own answers to what she has understood (./understand): looked up
@@ -131,7 +140,7 @@ const HAS: Partial<Record<Skill, (ev: EventInstance, viewer: Viewer) => boolean>
  * room, a flight or a team — their next that has one. Null if there is no
  * one plainly.
  */
-async function theEvent(skill: Skill, ctx: AnswerContext): Promise<EventInstance | null> {
+export async function theEvent(skill: Skill, ctx: AnswerContext): Promise<EventInstance | null> {
   const { mentions, today, lookups, viewer } = ctx
   const day = dayIn(ctx.text, today)
   const from = day ?? today
@@ -354,4 +363,111 @@ export async function answerFor(skill: Skill, ctx: AnswerContext): Promise<OwnRe
     }
   }
   return null
+}
+
+// --- From the event itself, whatever she read it as ---------------------------
+
+/**
+ * The event a schedule question is about: the one named, or on the day said
+ * — or, named neither way, the next of theirs (within six months) whose
+ * schedule has it: "When does Olivia arrive?" in October, for New Year's
+ * Eve. Its answer names it.
+ */
+async function eventWithIt(ask: ScheduleAsk, ctx: AnswerContext): Promise<EventInstance | null> {
+  const named = await theEvent('event_schedule', ctx)
+  if (named) return named
+  if (ctx.mentions.length || dayIn(ctx.text, ctx.today)) return null
+  const soon = await ctx.lookups.eventsBetween(ctx.today, shiftDate(ctx.today, 182))
+  for (const ev of soon) {
+    if (scheduleItems(ev, ask.what).found.length && (await ctx.lookups.isOn(ev))) return ev
+  }
+  return null
+}
+
+/**
+ * Something on an event's schedule, asked by what it is (./schedule) — "When
+ * does Olivia arrive for the event?", "what comes after the sermon?" — from
+ * its own schedule, or null when it isn't on it.
+ */
+export async function scheduleItemAnswer(
+  masked: string,
+  ctx: AnswerContext
+): Promise<OwnResult | null> {
+  const ask = scheduleAsked(masked)
+  if (!ask) return null
+  const ev = await eventWithIt(ask, ctx)
+  const text = ev && scheduleAnswer(ask, ev)
+  return ev && text ? said(text, onPage(ev)) : null
+}
+
+/** Asking all that is theirs at an event: "what are my responsibilities?", "what am I doing for it?". */
+const RESPONSIBILITIES =
+  /\b(?:responsibilit\w*|my\s+(?:role|part|job|duties|assignments?)|what\s+am\s+i\s+(?:doing|supposed\s+to\s+(?:do|bring)|in\s+charge\s+of|responsible\s+for)|what\s+do\s+i\s+(?:need\s+to\s+|have\s+to\s+)?do)\b/i
+
+/** All that is theirs at an event, together — team, car, food, tasks, room, flight — or null. */
+export async function yoursAnswer(ctx: AnswerContext): Promise<OwnResult | null> {
+  if (!RESPONSIBILITIES.test(ctx.text)) return null
+  const ev = await theEvent('event_team', ctx)
+  if (!ev) return null
+  const details = await ctx.lookups.getEvent(ev.instanceKey)
+  const yours = ('yours' in details ? details.yours : undefined) ?? []
+  const when = ev.startTime ? ` It starts ${whenSaid(ev.date, ctx.today)} at ${ev.startTime}.` : ''
+  if (!yours.length) {
+    return said(`You don’t have anything assigned for ${ev.title}.${when}`, onPage(ev))
+  }
+  // "you're on the Audio team", "you're driving…", "you have the task…"
+  const parts = yours.map((y) =>
+    y.startsWith('the task ')
+      ? `you have ${y}`
+      : y.startsWith('flying:')
+        ? `your flight — ${y.slice(8)}`
+        : `you’re ${y}`
+  )
+  const list =
+    parts.length > 1 ? `${parts.slice(0, -1).join('; ')}; and ${parts[parts.length - 1]}` : parts[0]
+  return said(`For ${ev.title}, ${list}.${when}`, onPage(ev))
+}
+
+/** Asking what an event is: "what is Family Gathering?", "tell me about the retreat". */
+const WHAT_IT_IS =
+  /^(?:so\s+|and\s+|hey\s+)?(?:what(?:'s|s|\s+is)|tell\s+me\s+about|what\s+about)\s+the\s+event$/
+
+/** What an event is, as its page has it: when, where, and the first of its schedule. */
+export async function overviewAnswer(
+  masked: string,
+  ctx: AnswerContext
+): Promise<OwnResult | null> {
+  if (!WHAT_IT_IS.test(plainly(masked))) return null
+  const ev = await theEvent('event_schedule', ctx)
+  if (!ev) return null
+  const where = ev.isVirtual
+    ? 'online'
+    : [ev.location, [ev.address, ev.city, ev.state].filter(Boolean).join(', ')]
+        .filter(Boolean)
+        .join(', ')
+  const when = `${whenSaid(ev.date, ctx.today)}${ev.startTime ? ` at ${ev.startTime}` : ''}`
+  const schedule = [...(ev.schedule ?? [])]
+    .sort((a, b) => (a.day ?? 0) - (b.day ?? 0))
+    .slice(0, 4)
+    .map((it) => `${timeOf(it) ? `${timeOf(it)} ` : ''}${it.title}`)
+  const more = (ev.schedule?.length ?? 0) > 4 ? ', and more' : ''
+  return said(
+    `${ev.title} is ${when}${where ? (where === 'online' ? ', online' : `, at ${where}`) : ''}.` +
+      (schedule.length ? ` On its schedule: ${schedule.join('; ')}${more}.` : ''),
+    onPage(ev)
+  )
+}
+
+/**
+ * Someone's flight or room, asked by name — "what time is Guest User's
+ * flight arriving?", "where is Guest User staying?" (./people) — from the
+ * event's own lists, or null.
+ */
+export async function travelAnswer(ctx: AnswerContext): Promise<OwnResult | null> {
+  const ask = personAsked(ctx.text)
+  if (!ask) return null
+  const ev = await theEvent(ask.kind === 'lodging' ? 'event_lodging' : 'event_flight', ctx)
+  if (!ev) return null
+  const text = await personAnswer(ask, ev, ctx)
+  return text ? said(text, onPage(ev)) : null
 }
