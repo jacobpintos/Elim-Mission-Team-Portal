@@ -1,198 +1,114 @@
-[README.md](https://github.com/user-attachments/files/28160722/README.md)
 # The Well of Iowa — Mission Team Portal
-## Multi-Collection Firestore Migration
+
+The app the mission team uses to plan and run events and trips. It covers availability, teams, carpools, lodging and flights, food sign-ups, tasks, reimbursements, worship set lists and chord sheets, messaging, announcements and a public website. It also includes **Miriam**, a voice assistant that can do most of that by being asked.
+
+It is one [Expo](https://docs.expo.dev/versions/v56.0.0/) (React Native) codebase that runs on iPhone, Android and the web, backed by Firebase: Auth, Firestore, Storage, Cloud Functions and Hosting.
 
 ---
 
-### What changed
-
-| Before | After |
-|--------|-------|
-| Everything in `appState/main` (one ~25-field document) | ~20 Firestore collections, one doc per entity |
-| `appState/users` list doc | `users/{uid}` — one doc per Firebase UID |
-| `room.msgs[]` embedded in the room doc | `rooms/{id}/messages/{ts_uid}` subcollection |
-| Onboarding flag in `appState/onboarding_{uid}` | `onboarding/{uid}` collection |
-| Audit log embedded in `appState/main` | `auditLog/{autoId}` append-only collection |
-
----
-
-### File structure
+## Repository layout
 
 ```
-mission-portal/
-├── public/
-│   └── index.html          ← shell only; paste CSS + remaining UI scripts here
-├── src/
-│   ├── firebase-init.js    ← Firebase SDK init (unchanged config)
-│   ├── db.js               ← NEW: all Firestore read/write/listen logic
-│   ├── migrate.js          ← NEW: one-time migration from appState/main
-│   └── state.js            ← NEW: S{}, USERS, auth handler, room session patch
-├── firestore.rules         ← NEW: paste into Firebase Console → Firestore → Rules
-└── README.md
+.
+├── mission-portal-app/          The app
+│   ├── app/                     Screens (expo-router: one file per route)
+│   ├── src/
+│   │   ├── features/            Larger features: events, worship, miriam, reimbursements, …
+│   │   ├── components/ui/       Shared building blocks
+│   │   ├── stores/              Zustand stores, one per kind of data, listening to Firestore
+│   │   ├── lib/                 Pure logic and helpers (most of the unit tests live here)
+│   │   └── types/               Shared TypeScript types
+│   ├── functions/               Cloud Functions (separate TypeScript project, Node 24)
+│   ├── firestore.rules          Who may read and write what in Firestore
+│   ├── storage.rules            The same for uploaded files
+│   ├── rules-tests/             Tests for both rule files, run against the emulators
+│   └── modules/miriam-wake/     Native module for Miriam's on-device wake word
+├── docs/
+│   ├── migration/               History: how the original single-page app became this one
+│   └── facebook-page-*          Setting up Facebook Page sync
+├── firebase.json                Hosting, Functions, Firestore and Storage configuration
+└── .github/workflows/           CI and deploys (see below)
 ```
 
 ---
 
-### How to integrate with the existing single HTML file
-
-The original file is ~8,900 lines.  Only **four blocks** need to change.
-Everything else — all CSS, all UI render functions — stays exactly as-is.
-
-#### Step 1 — Replace the `<script>` block at the top
-
-Remove this section from the original file (lines ~290–825):
-```
-var firebaseConfig = { … };
-firebase.initializeApp(…);
-var auth = …; var db = …; var storage = …;
-…
-var DB_SAVING … var STATE_LOADED …
-function save() { … }
-function _doSave() { … }
-function saveUsers() { … }
-function loadState(callback) { … }
-function startRealtimeListener() { … }
-```
-
-Replace with script-tag references:
-```html
-<script src="js/firebase-init.js"></script>
-<script src="js/db.js"></script>
-<script src="js/migrate.js"></script>
-```
-
-#### Step 2 — Replace the `var USERS` / `var S = { … }` block
-
-Remove lines ~620–691 (the global state declaration).
-The new version is in `state.js`.
-
-#### Step 3 — Replace the `auth.onAuthStateChanged` block
-
-Remove lines ~8842–8991 (the boot block at the very bottom).
-The new version is in `state.js`.
-
-#### Step 4 — Add `state.js` last
-
-```html
-<script src="js/state.js"></script>
-```
-`state.js` must load **after** all UI/render scripts because it patches `render()`.
-
-#### Step 5 — Patch `send()` in `msgsView` (one line change)
-
-In the original `msgsView` function, find the `send()` closure (~line 5595):
-
-```js
-// BEFORE
-function send(){
-  if(!ti.value.trim()&&!pendingAtt) return;
-  room.msgs.push({uid:u.id, text:ti.value.trim(), attachment:pendingAtt||null, ts:Date.now()});
-  ti.value=''; pendingAtt=null; attPreviewArea.innerHTML='';
-  save(); render();
-}
-```
-
-Change to:
-```js
-// AFTER
-function send(){
-  if(!ti.value.trim()&&!pendingAtt) return;
-  var msg = {uid:u.id, text:ti.value.trim(), attachment:pendingAtt||null, ts:Date.now()};
-  ti.value=''; pendingAtt=null; attPreviewArea.innerHTML='';
-  sendRoomMessage(room, msg);   // ← writes to subcollection + re-renders
-}
-```
-
-#### Step 6 — Add "Load More" button to `msgsView` (optional but recommended)
-
-After the `var ml = D({cls:'msg-list card'});` line in `msgsView`, add:
-```js
-var loadMoreBtn = BTN({cls:'btn bo bsm', style:{width:'100%', marginBottom:'8px'}}, 'Load older messages');
-loadMoreBtn.addEventListener('click', function(){
-  loadMoreBtn.disabled = true;
-  loadMoreBtn.textContent = 'Loading…';
-  loadMoreMessages(room, function(){ loadMoreBtn.remove(); });
-});
-w.appendChild(loadMoreBtn);
-```
-
-#### Step 7 — Replace `checkAndShowOnboarding` in the original file
-
-Remove the old `checkAndShowOnboarding` function (~lines 602–618).
-The new version is in `state.js` and uses the `onboarding/{uid}` collection.
-
----
-
-### Deploying to GitHub Pages (jacobpintos/Elim-Mission-Team-Portal)
+## Working on it
 
 ```bash
-# Copy compiled js files into the repo's public directory
-cp src/firebase-init.js public/js/
-cp src/db.js             public/js/
-cp src/migrate.js        public/js/
-cp src/state.js          public/js/
-
-# Commit and push
-git add public/
-git commit -m "chore: migrate to multi-collection Firestore schema"
-git push origin main
+cd mission-portal-app
+npm ci --legacy-peer-deps
+npm run web            # or: npm run ios / npm run android
 ```
 
-Set GitHub Pages source to the `public/` directory (or root if `index.html` is at root).
+The app reads its Firebase settings from `EXPO_PUBLIC_FIREBASE_*` environment variables. The values for each build are in `eas.json`, and for the web deploy in the repository's GitHub secrets.
+
+### Checks
+
+These are the same checks CI runs on every push:
+
+```bash
+npm run typecheck
+npm run lint
+npm test               # unit tests (vitest)
+npm run test:rules     # Firestore and Storage rules, against the emulators (needs Java)
+npm run export:web     # the web build bundles
+```
+
+For the functions, run `cd functions && npm ci && npm run build`.
 
 ---
 
-### Firestore rules
+## Deploying
 
-1. Open Firebase Console → Firestore → Rules
-2. Replace the existing rules with the contents of `firestore.rules`
-3. Click **Publish**
-
----
-
-### Migration behaviour
-
-On first load after deployment:
-
-1. `runMigrationIfNeeded()` checks `config/migration` for the sentinel doc.
-2. If missing, it reads `appState/main` (legacy) and fans the data out to all
-   new collections.  This takes 2–8 seconds depending on data size.
-3. On success it writes `config/migration { version: "v2_multi_collection" }`.
-4. Every subsequent load skips migration entirely (sentinel check is one read).
-
-The legacy `appState/main` and `appState/users` docs are **not deleted** by the
-migration; they stay as a backup.  You can delete them manually from the
-Firebase Console after verifying the new data looks correct.
+| Workflow | When it runs | What it does |
+|---|---|---|
+| **CI** | Every push to `main` or `claude/**`, and on pull requests | Typecheck, lint, unit tests, rules tests, web build |
+| **Deploy Web App** | A push to `main` that changes the app | Builds the web app and deploys it to Firebase Hosting, along with the Storage rules |
+| **Deploy Firebase** | A push to `main` that changes `functions/` or the rules files (or by hand) | Deploys Cloud Functions, Firestore rules and Storage rules |
+| **EAS Build** | By hand | Builds the iPhone and Android apps, and can submit them to the stores |
 
 ---
 
-### Collection reference
+## Roles and who does what
 
-| Collection | Key field | Notes |
-|------------|-----------|-------|
-| `config/main` | — | Counters, COMMON_TEAMS, connectConfig |
-| `config/inputLists` | — | inputLists.sunday/event/wh2 |
-| `config/migration` | — | Sentinel; do not delete |
-| `users/{uid}` | uid | One doc per Firebase UID |
-| `events/{id}` | id | Template + embedded overrides map |
-| `tasks/{id}` | id | |
-| `groups/{id}` | id | |
-| `rooms/{id}` | id | Metadata only |
-| `rooms/{id}/messages/{ts_uid}` | ts | Subcollection, ordered by ts |
-| `reports/{id}` | id | |
-| `announcements/{id}` | id | |
-| `setlists/{id}` | id | |
-| `taskTemplates/{id}` | id | |
-| `issues/{id}` | id | |
-| `kaizen/{id}` | id | |
-| `planningBoards/{id}` | id | |
-| `meetingRequests/{id}` | id | |
-| `merch/inventory` | — | items[] + transactions[] |
-| `inventory/production` | — | productionItems[] |
-| `inventory/reorder` | — | reorderItems[] |
-| `music/db` | — | musicDb[] |
-| `avail/{instanceKey}` | — | { responses: { uid: {status,note,ts} } } |
-| `notifs/{uid}` | uid | { items: [...] } |
-| `onboarding/{uid}` | uid | { dismissed: bool } |
-| `auditLog/{autoId}` | — | Append-only single entries |
-| `appState/*` | — | **Legacy only** — safe to delete after verifying migration |
+- **Accounts are made by admins.** Nobody can sign up or make themselves an admin.
+- **Roles:** `admin`, `worship`, `security`, `regular`, `intern`, `guest` (read-only, for one trip) and `public`.
+- **Admin → Leadership** sets two jobs the app routes work to:
+  - **Connections Coordinator:** receives the daily list of people asking to join the texting list.
+  - **Accountant:** answers reimbursement requests. Until an admin chooses one, the first request goes to the account named **Sunny Singh**, who is then saved as the Accountant. Choosing someone else moves any open requests to them.
+
+---
+
+## Reimbursements
+
+Anyone on the team can ask to be paid back for something they bought for an event. Use **$ Reimbursement** on Assignments, or **Request reimbursement** on an event's details. The request lists each item with its cost, names the event, and includes photos of the receipts.
+
+1. The request becomes a task for the Accountant. The person who asked can follow the same task on their own list.
+2. The Accountant **approves**, **partly approves** (giving the approved amount and why the rest wasn't approved), or **denies** (giving why). For an approval, they also set a **pay-by date**.
+3. The Accountant can **ask to move the pay-by date**. The person who asked accepts the new date or keeps the current one.
+4. When it's paid, the Accountant **marks it paid**. That completes the task and sends the person a notification and a message.
+
+Every step sends a push notification to the other person. Amounts and receipts are visible only to the person who asked, the Accountant and admins. The rest of the team sees only that the task exists. All steps run through callables in `functions/src/reimbursements/`, and clients can't write the requests directly.
+
+---
+
+## Backups
+
+**Every night at 2:30 am Central**, `nightlyBackup` exports the whole Firestore database to the project's Storage bucket under `backups/firestore/YYYY-MM-DD/`. It keeps the last 30 nights. Older copies are removed only after a new one has succeeded. **Admin → Data** shows when the last backup ran, and shows it in red if it failed.
+
+- If a backup logs `PERMISSION_DENIED`, give the Cloud Functions service account the **Cloud Datastore Import Export Admin** role in Google Cloud → IAM.
+- To restore everything, or only some collections, use:
+  ```bash
+  gcloud firestore import gs://mission-team-portal.firebasestorage.app/backups/firestore/2026-10-14 \
+    --collection-ids=events,avail   # leave this off to restore everything
+  ```
+  An import overwrites documents that have the same id and leaves other documents alone.
+- Uploaded files (photos, receipts, audio) live in Storage and aren't part of the export. To protect them from accidental deletion, turn on Storage **soft delete** in the Google Cloud console.
+
+**Admin → Data** also downloads People, Events, Availability, Tasks and Reimbursements as CSV files for Excel or Google Sheets.
+
+---
+
+## History
+
+The portal started as a single 8,900-line `index.html`. It was rebuilt as this app in six phases, which are described in `docs/migration/`. The original files were removed from the repository once nothing used them, and they are still in git history if anyone needs them.
