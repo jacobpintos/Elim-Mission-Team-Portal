@@ -9,7 +9,8 @@ import { learnedExamples, taughtAnswers, WEB_DOC, type OwnDb } from './learn'
 import type { Skill } from './skills'
 import { read, seedExamples, type Reading } from './understand'
 import { webAnswer } from './web'
-import { faithAnswer } from './faith'
+import { faithAnswer, isFaithReply, LEADERSHIP } from './faith'
+import { CHURCH_SITE } from './site'
 
 /**
  * Miriam, on her own: a request she understands and can answer herself, she
@@ -108,6 +109,23 @@ function fromWeb(
   return said(`${found.text} (from ${found.source})`, link)
 }
 
+/** Asking more about what was just said: "why?", "what about…", "tell me more". */
+const FOLLOWS_ON =
+  /^(?:why|how so|how come|what do you mean|tell me more|explain|can you explain|could you explain|more|really|are you sure|but|so|what about|and|then|ok but|okay but|wait|huh|is that|does that|what does that)\b/i
+const followsOn = (text: string) =>
+  FOLLOWS_ON.test(text.trim()) || LEANS_BACK.test(text) || text.trim().split(/\s+/).length <= 3
+/** Only said back — "thanks", "amen", "ok", "bye": not more asked. */
+const SAID_BACK =
+  /^(?:(?:ok(?:ay)?|oh|ah|wow|great|cool|awesome|nice|perfect|good|amen|so true|got it|i see|makes sense|that(?:'|’)?s (?:helpful|good|great|nice|cool|beautiful|true)|that helps|thanks|thank you|thx|ty|appreciate it|so much|very much|a lot|miriam|no|nope|nah|no thanks|hi|hello|hey|bye|goodbye|good night|see you|see ya|later|have a good (?:day|night|one))[\s,.!]*)+$/i
+
+/** Beliefs aren't hers to discuss: the church's leadership, and its website. */
+function fromLeadership(can: readonly string[]): OwnResult {
+  return said(
+    LEADERSHIP,
+    can.includes('link') ? { kind: 'link', url: CHURCH_SITE, label: 'thewellofiowa.com' } : null
+  )
+}
+
 /** A question of faith answered (./faith), as the app can show it. */
 async function fromFaith(
   text: string,
@@ -119,9 +137,72 @@ async function fromFaith(
   return said(f.text, f.link && can.includes('link') ? { kind: 'link', ...f.link } : null)
 }
 
+/** A request, read: its events' names, its meaning, and which of her skills it is. */
+interface Understood {
+  mentions: ReturnType<typeof mentionsIn>['mentions']
+  /** Its meaning as said, not masked. */
+  rawV: () => Float32Array
+  reading: Reading
+  own: OwnRead
+}
+
+/**
+ * What it is (./understand), read with each event's name as "the event"
+ * (./events) — and, if that isn't plain, as said.
+ */
+async function understand(input: OwnInput): Promise<Understood> {
+  const { text, today, lookups, db } = input
+  const events = await lookups.eventsBetween(shiftDate(today, -1), shiftDate(today, 365))
+  const { masked, mentions } = mentionsIn(
+    text,
+    events.map((e) => e.title)
+  )
+  const v = embed(masked)
+  let raw: Float32Array | null = masked === text ? v : null
+  const rawV = () => (raw ??= embed(text))
+
+  const examples = [...seedExamples(), ...(await learnedExamples(db).catch(() => []))]
+  let reading = read(v, examples)
+  // Asked to look it up: the web — but a question of faith is still one (./faith).
+  if (mentions.length === 0 && LOOK_IT_UP.test(text.trim()) && reading.skill !== 'faith') {
+    reading = {
+      ...reading,
+      skill: 'web',
+      score: Math.max(reading.score, 0.6),
+      margin: Math.max(reading.margin, 0.1),
+    }
+  }
+  let readV = v
+  let readText = masked
+  if (!sure(reading) && masked !== text) {
+    // "What does the Bible say": not Bible Study after all, read as said.
+    const asSaid = read(rawV(), examples)
+    if (sure(asSaid) || asSaid.score > reading.score) {
+      reading = asSaid
+      readV = rawV()
+      readText = text
+    }
+  }
+  return {
+    mentions,
+    rawV,
+    reading,
+    own: {
+      masked: readText,
+      v: readV,
+      skill: reading.skill,
+      score: reading.score,
+      margin: reading.margin,
+    },
+  }
+}
+
 export async function ownAnswer(input: OwnInput): Promise<Own> {
   const { text, today, history, lookups, db } = input
   const last = history[history.length - 1]
+  // Read once, when first needed.
+  let understood: Promise<Understood> | null = null
+  const whatItIs = () => (understood ??= understand(input))
   if (last) {
     // Her own offer of maps, answered.
     if (MAPS_OFFER.test(last.reply.trim()) && (YES.test(text.trim()) || NO.test(text.trim()))) {
@@ -150,6 +231,15 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
       }
       return { result: null, read: null, why: 'maps: which event' }
     }
+    // More asked about an answer on faith — another question of faith, or
+    // "why?", "what about…" — she doesn't discuss beliefs. Something else
+    // asked ("who's driving?") is answered as ever; "thanks" isn't more asked.
+    if (isFaithReply(last.reply) && !SAID_BACK.test(text.trim())) {
+      const { reading } = await whatItIs()
+      if (reading.skill === 'faith' || (reading.skill === 'other' && followsOn(text))) {
+        return { result: fromLeadership(input.can), read: null, why: 'faith: more asked' }
+      }
+    }
     // An answer to a question asked, or leaning on what came before: Claude has the thread.
     if (
       /\?\s*$/.test(last.reply.trim()) ||
@@ -160,14 +250,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
     }
   }
 
-  const events = await lookups.eventsBetween(shiftDate(today, -1), shiftDate(today, 365))
-  const { masked, mentions } = mentionsIn(
-    text,
-    events.map((e) => e.title)
-  )
-  const v = embed(masked)
-  let raw: Float32Array | null = masked === text ? v : null
-  const rawV = () => (raw ??= embed(text))
+  const { mentions, rawV, reading, own } = await whatItIs()
 
   // 1. Taught: said as an admin wrote it.
   const taught = await taughtAnswers(db).catch(() => [])
@@ -183,35 +266,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
     }
   }
 
-  // 2. What it is.
-  const examples = [...seedExamples(), ...(await learnedExamples(db).catch(() => []))]
-  let reading = read(v, examples)
-  if (mentions.length === 0 && LOOK_IT_UP.test(text.trim())) {
-    reading = {
-      ...reading,
-      skill: 'web',
-      score: Math.max(reading.score, 0.6),
-      margin: Math.max(reading.margin, 0.1),
-    }
-  }
-  let readV = v
-  let readText = masked
-  if (!sure(reading) && masked !== text) {
-    // "What does the Bible say": not Bible Study after all, read as said.
-    const asSaid = read(rawV(), examples)
-    if (sure(asSaid) || asSaid.score > reading.score) {
-      reading = asSaid
-      readV = rawV()
-      readText = text
-    }
-  }
-  const own: OwnRead = {
-    masked: readText,
-    v: readV,
-    skill: reading.skill,
-    score: reading.score,
-    margin: reading.margin,
-  }
+  // 2. What it is (understand, above).
   if (reading.skill === 'other') return { result: null, read: own, why: 'not hers' }
   if (!sure(reading))
     return {
@@ -249,9 +304,14 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
 export async function webOrFaith(
   skill: Skill,
   text: string,
-  input: Pick<OwnInput, 'db' | 'today' | 'can' | 'web'>
+  input: Pick<OwnInput, 'db' | 'today' | 'can' | 'web'> & Partial<Pick<OwnInput, 'history'>>
 ): Promise<OwnResult | null> {
-  if (skill === 'faith') return fromFaith(text, input.db, input.can)
+  if (skill === 'faith') {
+    // More asked after an answer about faith: the church's leadership, not her.
+    const last = input.history?.[input.history.length - 1]
+    if (last && isFaithReply(last.reply)) return fromLeadership(input.can)
+    return fromFaith(text, input.db, input.can)
+  }
   if (skill !== 'web') return null
   const key = await braveKeyOf(input.db).catch(() => null)
   const found = input.web

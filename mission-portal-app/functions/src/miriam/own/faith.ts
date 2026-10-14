@@ -213,6 +213,13 @@ export interface FaithAnswer {
   from: 'taught' | 'site' | 'core' | 'pastor'
 }
 
+/**
+ * Said to anything more asked after an answer about faith — "why?", "what
+ * about…?": she doesn't discuss beliefs; the church's leadership does.
+ */
+export const LEADERSHIP =
+  'For more on that, please reach out to our church leadership directly — they’d be glad to talk with you.'
+
 export const PASTOR =
   'That’s a good question for one of our pastors — I’d rather they answer it than me. You can also read what The Well believes at thewellofiowa.com.'
 
@@ -259,4 +266,14 @@ export async function faithAnswer(
 
   // 4. A pastor's, and the website.
   return { text: PASTOR, link: { url: CHURCH_SITE, label: 'thewellofiowa.com' }, from: 'pastor' }
+}
+
+/** Whether something she said was one of her answers about faith (as kept in the conversation). */
+export function isFaithReply(reply: string): boolean {
+  const r = reply.trim()
+  if (r === PASTOR || r === LEADERSHIP) return true
+  if (CORE.some((c) => c.answer === r)) return true
+  // From the church's site: "(from thewellofiowa.com)".
+  const host = new URL(CHURCH_SITE).hostname.replace(/^www\./, '')
+  return r.endsWith(`(from ${host})`) || r.endsWith(`(from www.${host})`)
 }

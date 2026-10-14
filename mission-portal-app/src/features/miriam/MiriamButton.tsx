@@ -34,6 +34,7 @@ import { namesHer, stopListeningAsked, withoutHerName } from '@/lib/wakeWord'
 import { MAX_REQUEST, miriamHref } from '@/lib/miriam'
 import { anyOverlayOpen } from '@/lib/overlays'
 import { rememberName, rememberWords } from '@/lib/miriamMemory'
+import { heardRight, refreshHearing } from '@/lib/miriamHearing'
 import { FD } from '@/lib/format'
 import { speak as speakAloud, stopSpeaking, unlockSpeech, whenSpoken } from './speak'
 import { askMiriam, miriamError, type Heard } from './askMiriam'
@@ -446,8 +447,10 @@ export function MiriamButton() {
   }
 
   const send = async (text: string, again = false) => {
-    const said = text.trim()
-    if (!said || sent.current) return
+    const asHeard = text.trim()
+    if (!asHeard || sent.current) return
+    // Put right where it was plainly misheard: "an even named" → "an event named".
+    const said = heardRight(asHeard).text
     // Sent by a tap (the button, or a choice): lets a browser say the answer.
     unlockSpeech()
     sent.current = true
@@ -467,7 +470,7 @@ export function MiriamButton() {
         return
       }
       // Something else: the card stays, for a tap.
-      setHeard(said)
+      setHeard(asHeard)
       setStage('answered')
       return
     }
@@ -486,7 +489,9 @@ export function MiriamButton() {
     setAskingBack(false)
     shownNote.current = ''
     stopListening()
-    setHeard(said)
+    setHeard(asHeard)
+    // Taken as something other than heard: shown, as Claude's corrections are.
+    if (said !== asHeard) setUnderstood(said)
     // "Hey Miriam, stop listening": her name said, or her woken by it — never
     // the words alone, which are as likely sung or said to someone else.
     if (
@@ -706,10 +711,16 @@ export function MiriamButton() {
     setStage('thinking')
     try {
       // How it was heard, when it is what was just said (not typed, nor her carrying on).
-      const heard = !typing && said === request.current ? (heardAs.current ?? undefined) : undefined
+      // (What was just said, as heard or as put right: lib/miriamHearing.)
+      const justSaid = said === request.current || said === heardRight(request.current ?? '').text
+      const heard = !typing && justSaid ? (heardAs.current ?? undefined) : undefined
       const result = await askMiriam(said, heard)
       if (result.kind === 'answer') {
-        if (result.misheard?.length) rememberWords(result.misheard).catch(() => {})
+        if (result.misheard?.length) {
+          rememberWords(result.misheard)
+            .then(refreshHearing)
+            .catch(() => {})
+        }
         const plain = (t: string) =>
           t
             .toLowerCase()
@@ -1388,11 +1399,12 @@ export function MiriamButton() {
     if (tourAsked(text)?.part) return TOUR_PAUSE_MS
     if (!songHost()) return PAUSE_MS
     const sheets = useChordSheetsStore.getState().chordSheets
-    const cmd = parseSheetCommand(text, sheets, songAliases.current)
+    const meant = heardRight(text).text
+    const cmd = parseSheetCommand(meant, sheets, songAliases.current)
     const asked =
       cmd?.type === 'queue'
         ? { key: cmd.request.key }
-        : songAsked(sheets, songAliases.current, text, true)
+        : songAsked(sheets, songAliases.current, meant, true)
     if (!asked || ('kind' in asked && asked.kind !== 'open')) return PAUSE_MS
     // "in E" may yet become "in E flat" or "in E minor": only a key that can
     // say no more is acted on at once.

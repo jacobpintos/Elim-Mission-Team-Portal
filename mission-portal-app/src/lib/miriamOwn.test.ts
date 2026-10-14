@@ -28,7 +28,7 @@ import {
   wikipediaSearch,
 } from '../../functions/src/miriam/own/web'
 import requests from './__fixtures__/miriamRequests.json'
-import { CORE, faithAnswer } from '../../functions/src/miriam/own/faith'
+import { CORE, faithAnswer, LEADERSHIP } from '../../functions/src/miriam/own/faith'
 import {
   forgetSite,
   linksOf,
@@ -805,5 +805,81 @@ describe('a question of faith', () => {
       kind: 'answer',
       open: { kind: 'link', url: 'https://example.org/beliefs', label: 'example.org' },
     })
+  })
+})
+
+describe('more asked about an answer on faith', () => {
+  beforeEach(() => forgetCaches())
+  const godIsGood = CORE.find((c) => c.id === 'god-good')!.answer
+
+  it('is never discussed: the church’s leadership', async () => {
+    for (const text of [
+      'why?',
+      'what do you mean by that',
+      'but what about people who suffer',
+      'tell me more',
+      'is that true',
+      'and the trinity?',
+      'what about baptism',
+    ]) {
+      const own = await ownAnswer(
+        input(text, { history: [{ said: 'is God good', reply: godIsGood }] })
+      )
+      expect(own.result, text).toMatchObject({
+        text: LEADERSHIP,
+        open: { kind: 'link', url: 'https://thewellofiowa.com' },
+      })
+    }
+  })
+
+  it('nor when Claude sees it', async () => {
+    const f = await webOrFaith('faith', 'so what about the end times', {
+      db: memoryOwnDb(),
+      today: TODAY,
+      can: [],
+      history: [
+        { said: 'will Jesus come back', reply: CORE.find((c) => c.id === 'return')!.answer },
+      ],
+    })
+    expect(f).toMatchObject({ text: LEADERSHIP, open: null })
+  })
+
+  it('but something else asked is answered as ever', async () => {
+    const own = await ownAnswer(
+      input('what should I wear to youth night', {
+        history: [{ said: 'is God good', reply: godIsGood }],
+      })
+    )
+    expect(own.result).toMatchObject({
+      text: 'The dress code for Youth Night is Casual — jeans are fine.',
+    })
+    // However short, and "thanks" isn't more asked.
+    for (const text of [
+      'who’s driving',
+      'what’s my schedule',
+      'when is youth night',
+      'and Sunday?',
+      'thanks',
+      'thank you so much',
+      'amen',
+      'ok',
+    ]) {
+      const own = await ownAnswer(
+        input(text, { history: [{ said: 'is God good', reply: godIsGood }] })
+      )
+      expect(own.why, text).not.toBe('faith: more asked')
+    }
+  })
+
+  it('looked up, a question of faith is still one', async () => {
+    const own = await ownAnswer(
+      input('look up what the bible says about divorce', {
+        web: async () => {
+          throw new Error('not the web')
+        },
+      })
+    )
+    expect(own.why).toBe('faith')
+    expect((own.result as { text: string }).text).toMatch(/pastors/)
   })
 })

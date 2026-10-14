@@ -18,6 +18,7 @@ import { ownsSpeech, releaseSpeech, withSpeech } from '@/lib/speechOwner'
 import { orderForHints, upcomingSheetIds } from '@/lib/hintOrder'
 import { loadAliases, rememberAlias } from '@/lib/songAliases'
 import { withoutHerName } from '@/lib/wakeWord'
+import { heardRight } from '@/lib/miriamHearing'
 import { listeningCue } from '@/lib/listeningCue'
 import { canRecogniseOnDevice, isOffline } from '@/lib/speechSupport'
 import { keyLabel } from '@/lib/nashvilleNumbers'
@@ -214,7 +215,8 @@ export function SongListener({
   const hear = (said: string, heardAs: string[] = [said]) => {
     // "Hey Miriam, Above All in E": her name is not part of the song.
     const text = withoutHerName(said)
-    const candidates = heardAs.map(withoutHerName)
+    // Put right where it was plainly misheard (lib/miriamHearing).
+    const candidates = heardAs.map((h) => heardRight(withoutHerName(h)).text)
     // A song about to open: only listening for "cancel".
     if (pendingAct.current) {
       const last = text.trim().split(/\s+/).slice(-3).join(' ')

@@ -51,6 +51,7 @@ import { loadAliases } from '@/lib/songAliases'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { asksAQuestion } from '@/lib/miriamSongs'
+import { heardRight } from '@/lib/miriamHearing'
 import { playAsked } from '@/lib/miriamQuick'
 
 /** How long, after "Hey Miriam" alone, what is said next is taken as a song to open. */
@@ -776,12 +777,14 @@ export function ChordSheetViewer({
     onlyName: boolean
   ): string | null => {
     if (!sheet) return null
-    const forMiriam = askedOfMiriam([phrase, ...alternatives])
+    // Put right where it was plainly misheard: "trans pose", "cue Above All".
+    const heard = [phrase, ...alternatives].map((p) => heardRight(p).text)
+    const forMiriam = askedOfMiriam(heard)
     if (forMiriam !== undefined) return forMiriam
     // Listening only for her name: nothing else said (or sung) is a command.
     if (onlyName) return null
     let cmd = null
-    for (const said of [phrase, ...alternatives]) {
+    for (const said of heard) {
       cmd = parseSheetCommand(said, allSheets, voiceAliases.current)
       if (cmd) break
     }

@@ -21,6 +21,7 @@ import { PAUSE_MS, MAX_RESULT, seal, unseal } from './pause'
 import { ownAnswer, webOrFaith, type OwnInput, type OwnRead } from './own'
 import { learn, type OwnDb } from './own/learn'
 import { OWN_SKILLS, type Skill } from './own/skills'
+import { heardRight } from './hearing'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -81,6 +82,8 @@ Several things asked at once: do them one at a time, in the order asked. Each ch
 
 Questions about the world outside this app — a business's hours, a fact, the news, a place's weather — and questions of faith or the Bible are Miriam's own to answer: call \`answer\` at once with skill "web" or "faith", spoken "" and open "none" — look nothing up for them, and don't say you can't.
 
+Never discuss beliefs yourself, or carry a conversation about faith on: a question of faith, or anything more asked after an answer about faith, gets skill "faith" — Miriam answers it, or sends them to the church's leadership.
+
 Always set \`skill\` in \`answer\` to what the request was, as the tool lists them: Miriam learns from it to answer the next one like it herself.
 
 If no tool fits, call \`answer\` saying in one sentence that you can't do that yet.`
@@ -114,7 +117,7 @@ function alternativesFrom(list: unknown): string[] {
 }
 
 /** Words misheard for this person before, and what was meant. */
-function wordsFrom(list: unknown): string[] {
+function misheardFrom(list: unknown): { heard: string; meant: string }[] {
   return (Array.isArray(list) ? list : [])
     .filter(
       (w): w is { heard: string; meant: string } =>
@@ -123,7 +126,11 @@ function wordsFrom(list: unknown): string[] {
         typeof (w as { meant?: unknown }).meant === 'string'
     )
     .slice(0, 40)
-    .map((w) => `“${w.heard.slice(0, 40)}” meant “${w.meant.slice(0, 60)}”`)
+    .map((w) => ({ heard: w.heard.slice(0, 40), meant: w.meant.slice(0, 60) }))
+}
+
+function wordsFrom(list: unknown): string[] {
+  return misheardFrom(list).map((w) => `“${w.heard}” meant “${w.meant}”`)
 }
 
 /** How many rounds of looking things up before giving up on a question. */
@@ -211,6 +218,8 @@ export const askMiriam = onCall(
     // What she read, when she handed it to Claude: kept as what Claude says it was.
     let ownRead: OwnRead | null = null
     let ownInput: OwnInput | null = null
+    // The request as put right, when it was heard otherwise: shown in the app.
+    let heardAsText = ''
 
     let messages: Anthropic.Beta.BetaMessageParam[]
     let appTools: AppToolName[]
@@ -241,8 +250,12 @@ export const askMiriam = onCall(
       firstRound = paused.round + 1
       alone = paused.alone
     } else {
-      const text = typeof req.data?.text === 'string' ? req.data.text.trim() : ''
-      if (!text) throw new HttpsError('invalid-argument', 'Nothing was asked.')
+      const asHeard = typeof req.data?.text === 'string' ? req.data.text.trim() : ''
+      if (!asHeard) throw new HttpsError('invalid-argument', 'Nothing was asked.')
+      // Put right where it was plainly misheard (./hearing): the app does it
+      // too, but not one too old to.
+      const text = heardRight(asHeard, misheardFrom(req.data?.words)).text
+      if (text !== asHeard) heardAsText = text
       if (text.length > MAX_TEXT)
         throw new HttpsError('invalid-argument', 'That was too long — try it in two.')
       if (!allowed(uid)) {
@@ -312,7 +325,11 @@ export const askMiriam = onCall(
           skill: own.read?.skill,
           score: own.read ? Math.round(own.read.score * 1000) / 1000 : undefined,
         })
-        if (own.result) return own.result
+        if (own.result) {
+          return own.result.kind === 'answer' && heardAsText && !own.result.understood
+            ? { ...own.result, understood: heardAsText }
+            : own.result
+        }
         ownRead = own.read
       }
 
@@ -329,6 +346,7 @@ export const askMiriam = onCall(
             (history.length
               ? `Earlier in this conversation, oldest first:\n${history.join('\n')}\n\nNow they said: “${text}”`
               : `They said: “${text}”`) +
+            (text !== asHeard ? ` (as written down: “${asHeard}”)` : '') +
             hearing,
         },
       ]
@@ -519,7 +537,10 @@ export const askMiriam = onCall(
         }
         // Its own question back isn't the answer: nothing learned from it.
         if (input.follow_up !== true) await learnFrom(skill)
-        return finish(input, lookups, viewer)
+        const answered = await finish(input, lookups, viewer)
+        return heardAsText && !answered.understood
+          ? { ...answered, understood: heardAsText }
+          : answered
       }
 
       // Looked up, and handed back for the next round.
