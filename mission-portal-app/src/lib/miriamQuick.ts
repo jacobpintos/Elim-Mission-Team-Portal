@@ -782,6 +782,37 @@ const PLAY_WORDS = new Set([
   'some',
   'by',
   'of',
+  // How a video is described rather than named: "the Flip The Narrative
+  // podcast with Scott Reece", "the one featuring Amy", "about forgiveness".
+  // The words left are its series, host, guest or title.
+  'with',
+  'featuring',
+  'feat',
+  'ft',
+  'and',
+  'about',
+  'called',
+  'named',
+  'titled',
+  'hosted',
+  'host',
+  'guest',
+  'starring',
+  'one',
+  'show',
+  'series',
+  'talk',
+  'interview',
+  // A title before a name, often not part of the name as kept: "Pastor Dan"
+  // kept as "Dan Smith".
+  'pastor',
+  'pastors',
+  'pr',
+  'rev',
+  'reverend',
+  'dr',
+  'preached',
+  'preaching',
 ])
 
 /**
@@ -923,7 +954,7 @@ export function playCandidates<T extends PlayItem>(ask: PlayAsk, items: T[], max
         const have = about(m)
         return {
           m,
-          hits: words.filter((w) => have.some((h) => h.startsWith(w) || w.startsWith(h))).length,
+          hits: words.filter((w) => have.some((h) => nearWord(w, h))).length,
         }
       })
       .filter((x) => x.hits > 0)
@@ -951,8 +982,63 @@ const fitsWords = (text: string, query: string) => {
   return query
     .split(' ')
     .filter(Boolean)
-    .every((q) => have.some((w) => w.startsWith(q) || q.startsWith(w)))
+    .every((q) => have.some((w) => nearWord(q, w)))
 }
+
+/**
+ * Whether a word said is a word kept: the same, the start of it ("narr" for
+ * "narrative"), or — for a word of five letters or more — one letter off,
+ * which is how speech hears a name: "Reese" for "Reece", "Sheperd" for
+ * "Shepherd". Shorter words must match, or "pray" would be "play".
+ */
+export function nearWord(said: string, kept: string): boolean {
+  if (kept.startsWith(said) || said.startsWith(kept)) return true
+  if (said.length < 5 || kept.length < 5) return false
+  return oneEditApart(said, kept)
+}
+
+/** At most one letter added, dropped or changed. */
+function oneEditApart(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false
+  let i = 0
+  let j = 0
+  let edits = 0
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i++
+      j++
+      continue
+    }
+    if (++edits > 1) return false
+    if (a.length > b.length) i++
+    else if (b.length > a.length) j++
+    else {
+      i++
+      j++
+    }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1
+}
+
+/**
+ * Every item fitting everything said about it — its kind, and every word
+ * naming its title, series, host, guest or preacher. More than one, and none
+ * the newest asked for: hers to offer, not to pick.
+ */
+export function playFits<T extends PlayItem>(ask: PlayAsk, items: T[]): T[] {
+  if (!ask.query) return []
+  return items
+    .filter((m) => !ask.kind || m.type === ask.kind)
+    .filter((m) =>
+      fitsWords(
+        [m.title, m.album, m.preacher, m.host, m.guest].filter(Boolean).join(' '),
+        ask.query
+      )
+    )
+}
+
+/** What was asked for, as one key: remembered once it is known what it meant (lib/miriamMemory). */
+export const playKey = (ask: PlayAsk) => `${ask.kind ?? ''}|${ask.query}`
 
 // --- Answering availability ---------------------------------------------------
 

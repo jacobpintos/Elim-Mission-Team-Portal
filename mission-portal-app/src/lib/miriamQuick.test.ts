@@ -7,6 +7,9 @@ import {
   playAsked,
   playCandidates,
   playPick,
+  playFits,
+  playKey,
+  nearWord,
   quickAnswer,
   quickAsked,
   screenAsked,
@@ -440,5 +443,67 @@ describe('giving availability', () => {
     expect(availabilityAsked('am I available for revival?', today)).toBeNull()
     expect(availabilityAsked('I’m available', today)).toBeNull()
     expect(availabilityAsked('Who is available for revival', today)).toBeNull()
+  })
+})
+
+describe('playing what was described, not named', () => {
+  const flip = [
+    {
+      id: 'ou',
+      type: 'podcast',
+      title: 'Oneness Vs Unity',
+      album: 'Flip The Narrative',
+      guest: 'Pastor Scott Reece',
+      year: 2026,
+      month: 9,
+    },
+    {
+      id: 'fo',
+      type: 'podcast',
+      title: 'Forgiveness',
+      album: 'Flip The Narrative',
+      guest: 'Amy Lee',
+      year: 2026,
+      month: 10,
+    },
+    {
+      id: 'sr',
+      type: 'sermon',
+      title: 'Rest',
+      preacher: 'Scott Reece',
+      year: 2026,
+      month: 8,
+    },
+  ]
+  const pick = (text: string) => playPick(playAsked(text)!, flip)?.id ?? null
+
+  it('plays a podcast by its series and guest, as heard', () => {
+    expect(pick('Play the flip the narrative podcast with Scott Reese')).toBe('ou')
+    expect(pick('play the flip the narrative episode featuring pastor scott reece')).toBe('ou')
+    expect(pick('play the podcast with amy lee')).toBe('fo')
+  })
+
+  it('takes the kind asked for: Scott’s sermon, not his podcast', () => {
+    expect(pick('play the sermon by scott reese')).toBe('sr')
+  })
+
+  it('offers those that fit, when the description fits more than one', () => {
+    const ask = playAsked('play the flip the narrative podcast')!
+    expect(playPick(ask, flip)).toBeNull()
+    expect(playFits(ask, flip).map((m) => m.id)).toEqual(['ou', 'fo'])
+  })
+
+  it('hears a name one letter off, but not a short word', () => {
+    expect(nearWord('reese', 'reece')).toBe(true)
+    expect(nearWord('sheperd', 'shepherd')).toBe(true)
+    expect(nearWord('narr', 'narrative')).toBe(true)
+    expect(nearWord('pray', 'play')).toBe(false)
+    expect(nearWord('grace', 'peace')).toBe(false)
+  })
+
+  it('keeps one key for the same request, to remember what it meant', () => {
+    expect(playKey(playAsked('Play the flip the narrative podcast with Scott Reese')!)).toBe(
+      playKey(playAsked('play flip the narrative podcast with scott reese please')!)
+    )
   })
 })

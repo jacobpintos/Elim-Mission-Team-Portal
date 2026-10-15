@@ -87,3 +87,42 @@ export async function rememberWords(words: MisheardWord[]): Promise<void> {
     // Not remembered this time.
   }
 }
+
+/**
+ * Videos this device has taught Miriam: a way of asking for one ("the Flip
+ * The Narrative podcast with Scott Reece") and the one it meant — learned
+ * when Claude found it for her, or it was picked from those she offered. The
+ * next time it is asked for the same way, she plays it herself.
+ */
+const PLAYS_KEY = 'miriam_plays'
+
+export interface LearnedPlay {
+  /** lib/miriamQuick: playKey. */
+  key: string
+  id: string
+}
+
+export async function loadPlays(): Promise<LearnedPlay[]> {
+  try {
+    const raw = await AsyncStorage.getItem(PLAYS_KEY)
+    const list = raw ? (JSON.parse(raw) as unknown) : []
+    return Array.isArray(list)
+      ? list.filter(
+          (p): p is LearnedPlay => !!p && typeof p.key === 'string' && typeof p.id === 'string'
+        )
+      : []
+  } catch {
+    return []
+  }
+}
+
+/** Remember that asking `key` meant the video `id`; the newest of a way of asking wins. */
+export async function rememberPlay(key: string, id: string): Promise<void> {
+  if (!key.replace('|', '').trim() || !id) return
+  const kept = (await loadPlays()).filter((p) => p.key !== key)
+  try {
+    await AsyncStorage.setItem(PLAYS_KEY, JSON.stringify([{ key, id }, ...kept].slice(0, KEEP)))
+  } catch {
+    // Not remembered this time; asking again still works.
+  }
+}

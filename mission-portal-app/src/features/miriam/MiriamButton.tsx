@@ -33,7 +33,7 @@ import { wakeEngine } from '@/lib/wakeEngine'
 import { namesHer, stopListeningAsked, withoutHerName } from '@/lib/wakeWord'
 import { MAX_REQUEST, miriamHref } from '@/lib/miriam'
 import { anyOverlayOpen } from '@/lib/overlays'
-import { rememberName, rememberWords } from '@/lib/miriamMemory'
+import { loadPlays, rememberName, rememberPlay, rememberWords } from '@/lib/miriamMemory'
 import { heardRight, refreshHearing } from '@/lib/miriamHearing'
 import { recordAsked } from './recordAsked'
 import { meetingAsked } from '@/lib/miriamMeeting'
@@ -55,6 +55,8 @@ import {
   listAsked,
   playAsked,
   playCandidates,
+  playFits,
+  playKey,
   playPick,
   quickAnswer,
   screenAsked,
@@ -363,6 +365,8 @@ export function MiriamButton() {
   const [video, setVideo] = useState<MusicItem | null>(null)
   const [songGuesses, setSongGuesses] = useState<ChordSheet[]>([])
   const [videoGuesses, setVideoGuesses] = useState<MusicItem[]>([])
+  // How the videos on offer were asked for: the one picked is remembered as meant by it.
+  const guessedFor = useRef('')
   // An answer on faith: left open, to be read, until it is closed.
   const [stay, setStay] = useState(false)
   const songAsk = useRef<{
@@ -606,9 +610,20 @@ export function MiriamButton() {
       const music = useMusicStore.getState()
       if (music.items.length === 0) await music.load()
       const items = useMusicStore.getState().items
-      const item = playPick(play, items)
+      // Asked this way before, and it turned out to mean one: that one.
+      const key = playKey(play)
+      const learned = (await loadPlays()).find((p) => p.key === key)
+      const item =
+        (learned && items.find((m) => String(m.id) === learned.id)) || playPick(play, items)
       if (item) {
         playVideo(item)
+        return
+      }
+      // Described, and it fits a few — "the Flip The Narrative podcast": those
+      // offered to pick from, here, rather than sent on for Claude to guess.
+      const fits = playFits(play, items)
+      if (fits.length >= 2 && fits.length <= 4) {
+        offerVideos(play, items, 'A few fit that — which one?')
         return
       }
       // A public follower's isn't sent on to be looked for further: the
@@ -924,6 +939,10 @@ export function MiriamButton() {
         if (music.items.length === 0) await music.load()
         const item = useMusicStore.getState().items.find((m) => String(m.id) === String(wanted.id))
         if (item) {
+          // Asked for in a way she couldn't place, and Claude found which:
+          // remembered, so asked the same way again she plays it herself.
+          const asked = playAsked(withoutHerName(said))
+          if (asked) void rememberPlay(playKey(asked), String(item.id))
           noteDone(`Playing “${item.title}” from Content.`)
           setVideo(item)
           setOpen(false)
@@ -1571,14 +1590,16 @@ export function MiriamButton() {
     setOpen(false)
   }
   /** A video asked for that isn't plainly one: the likely ones to choose from, or Content to look through. */
-  const offerVideos = (ask: PlayAsk, items: MusicItem[]) => {
+  const offerVideos = (ask: PlayAsk, items: MusicItem[], fitting?: string) => {
     const likely = playCandidates(ask, items)
     if (likely.length) {
+      guessedFor.current = playKey(ask)
       setVideoGuesses(likely)
       const text =
-        likely.length === 1
+        fitting ??
+        (likely.length === 1
           ? 'I couldn’t find that exactly. Did you mean this one?'
-          : 'I couldn’t find that exactly. Did you mean one of these?'
+          : 'I couldn’t find that exactly. Did you mean one of these?')
       setAnswer(text)
       speak(text)
       setStage('answered')
@@ -2271,7 +2292,13 @@ export function MiriamButton() {
                     {videoGuesses.map((item) => (
                       <Pressable
                         key={item.id}
-                        onPress={() => playVideo(item)}
+                        onPress={() => {
+                          // The one meant: played straight away when asked this way again.
+                          if (guessedFor.current) {
+                            void rememberPlay(guessedFor.current, String(item.id))
+                          }
+                          playVideo(item)
+                        }}
                         accessibilityRole="button"
                         accessibilityLabel={`Play ${item.title}`}
                         style={[styles.choice, { borderColor: colors.primary }]}
