@@ -200,6 +200,10 @@
   "remind me in 10 minutes to switch the laundry",
   "hey miriam remind me friday at 3 to buy gas"
  ],
+ "food_signup": [
+  "sign me up to bring drinks",
+  "i'm bringing chips to the picnic"
+ ],
  "web": [
   "what time does target close",
   "look up the weather in chicago",
@@ -243,7 +247,6 @@
   "who is not available for the retreat",
   "send a message to the worship team",
   "post an announcement about parking",
-  "sign me up to bring drinks",
   "mark the setup task as done",
   "what tasks do i have",
   "play reckless love",
@@ -268,7 +271,6 @@
   "who's going to the gala",
   "who hasn't said if they're coming to youth night",
   "add snacks to the potluck sign up",
-  "i'll bring cookies to the potluck",
   "send everyone a reminder about the retreat",
   "tell the youth group the picnic is at noon",
   "mark my packing task complete",
@@ -288,7 +290,6 @@
   "what tasks are due",
   "message the leaders about the retreat",
   "add drinks to the picnic food list",
-  "i'm bringing chips to the picnic",
   "remind the team about the banquet",
   "change the gala to saturday",
   "play amazing grace",

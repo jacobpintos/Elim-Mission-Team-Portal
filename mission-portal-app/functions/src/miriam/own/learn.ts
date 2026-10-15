@@ -40,6 +40,9 @@ export interface LearnedEntry {
   at: number
 }
 
+/** As stored: its skill may be one a newer version of her knows. */
+type StoredEntry = Omit<LearnedEntry, 's'> & { s: string }
+
 export interface TaughtEntry {
   id: string
   q: string
@@ -80,15 +83,27 @@ export const sameKey = (text: string) =>
     .digest('hex')
     .slice(0, 16)
 
-function learnedFrom(data: Record<string, unknown> | undefined): LearnedEntry[] {
+/** What is stored, whatever its skill: kept as it is when the list is written again. */
+function storedFrom(data: Record<string, unknown> | undefined): StoredEntry[] {
   const list = Array.isArray(data?.examples) ? (data!.examples as unknown[]) : []
   return list.filter(
-    (e): e is LearnedEntry =>
+    (e): e is StoredEntry =>
       !!e &&
-      typeof (e as LearnedEntry).t === 'string' &&
-      typeof (e as LearnedEntry).v === 'string' &&
-      ((OWN_SKILLS as readonly string[]).includes((e as LearnedEntry).s) ||
-        (e as LearnedEntry).s === 'other')
+      typeof (e as StoredEntry).t === 'string' &&
+      typeof (e as StoredEntry).v === 'string' &&
+      typeof (e as StoredEntry).s === 'string'
+  )
+}
+
+/**
+ * What is stored, of the skills this version knows. One learned by a newer
+ * version — while both serve, in a deploy, or after a rollback — is passed
+ * over here but never dropped (storedFrom, above), so it is there again
+ * once the newer version is.
+ */
+function learnedFrom(data: Record<string, unknown> | undefined): LearnedEntry[] {
+  return storedFrom(data).filter(
+    (e): e is LearnedEntry => (OWN_SKILLS as readonly string[]).includes(e.s) || e.s === 'other'
   )
 }
 
@@ -127,7 +142,7 @@ export async function learn(
   const ref = db.doc(LEARNED_DOC)
   const key = sameKey(text)
   await db.runTransaction(async (tx) => {
-    const kept = learnedFrom((await tx.get(ref)).data()).filter((e) => sameKey(e.t) !== key)
+    const kept = storedFrom((await tx.get(ref)).data()).filter((e) => sameKey(e.t) !== key)
     const examples = [
       ...kept,
       { t: text.slice(0, 300), s: skill, v: packVector(v), at: now },
@@ -148,7 +163,7 @@ export async function forget(db: OwnDb, text: string): Promise<void> {
   const ref = db.doc(LEARNED_DOC)
   const key = sameKey(text)
   await db.runTransaction(async (tx) => {
-    const examples = learnedFrom((await tx.get(ref)).data()).filter((e) => sameKey(e.t) !== key)
+    const examples = storedFrom((await tx.get(ref)).data()).filter((e) => sameKey(e.t) !== key)
     tx.set(ref, { examples })
   })
   learnedCache = null

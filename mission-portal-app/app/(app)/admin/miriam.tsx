@@ -49,6 +49,7 @@ const SKILL_NAMES: Record<string, string> = {
   my_events: 'What they have on',
   availability: 'Answering availability',
   reminder: 'A reminder',
+  food_signup: 'Signing up to bring food',
   web: 'The web',
   faith: 'Faith (the church’s own answers)',
   other: 'Not hers — Claude’s',

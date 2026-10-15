@@ -23,6 +23,7 @@ import { PAUSE_MS, MAX_RESULT, seal, unseal } from './pause'
 import { ownAnswer, publicAnswer, webOrFaith, type OwnInput, type OwnRead } from './own'
 import { learn, type OwnDb } from './own/learn'
 import { OWN_SKILLS, type Skill } from './own/skills'
+import { skillOfAction } from './own/labels'
 import { notHers } from './own/guards'
 import { heardRight } from './hearing'
 
@@ -337,6 +338,7 @@ export const askMiriam = onCall(
           answered: !!own.result,
           skill: own.read?.skill,
           score: own.read ? Math.round(own.read.score * 1000) / 1000 : undefined,
+          margin: own.read ? Math.round(own.read.margin * 1000) / 1000 : undefined,
         })
         if (own.result) {
           return own.result.kind === 'answer' && heardAsText && !own.result.understood
@@ -413,6 +415,14 @@ export const askMiriam = onCall(
       const r = ownRead
       ownRead = null
       if (!r || !skill) return
+      // How she read it, beside what Claude said it was: never the words.
+      logger.info('askMiriam: Claude’s label', {
+        uid,
+        label: skill,
+        ownSkill: r.skill,
+        ownScore: Math.round(r.score * 1000) / 1000,
+        ownMargin: Math.round(r.margin * 1000) / 1000,
+      })
       if (skill === 'other' && (r.skill === 'other' || r.score < 0.5)) return
       // Never as something it plainly isn't: "When does Olivia arrive?" as when
       // an event is, "what is Family Gathering?" as where (./own/guards).
@@ -533,15 +543,8 @@ export const askMiriam = onCall(
       if (action) {
         // More asked after it: once it is done, the app hands back to carry on.
         const { more_to_do: more, ...input } = action.input as Record<string, unknown>
-        // Hers to do next time: answering for one event, or a plain reminder.
-        await learnFrom(
-          action.name === 'set_availability'
-            ? 'availability'
-            : action.name === 'create_reminder' && !input.every_event && !input.event_key
-              ? 'reminder'
-              : null,
-          input.text
-        )
+        // Hers to do next time (./own/labels).
+        await learnFrom(skillOfAction(action.name, input), input.text)
         return { kind: 'confirm', name: action.name, input, more: more === true }
       }
       const final = calls.find((c) => c.name === 'answer')

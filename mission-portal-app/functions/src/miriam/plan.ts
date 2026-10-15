@@ -415,7 +415,7 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
             type: 'string',
             enum: [...OWN_SKILLS, 'other'],
             description:
-              'What the request was, for Miriam to learn from: event_time (when an event is), event_place (where), event_dress (what to wear), event_schedule (an event’s own schedule), event_team (their team for it), event_car (their ride or car), event_lodging (where they stay), event_flight (their flight), event_weather (an event’s forecast), my_events (what they have on, or their next event), availability (them saying whether they can come to one event), reminder (one for themselves at a time), web (the world outside the app: a business, a fact, the news, a place’s weather), faith (faith or the Bible); other for anything else.',
+              'What the request was, for Miriam to learn from: event_time (when an event is), event_place (where), event_dress (what to wear), event_schedule (an event’s own schedule), event_team (their team for it), event_car (their ride or car), event_lodging (where they stay), event_flight (their flight), event_weather (an event’s forecast), my_events (what they have on, or their next event), availability (them saying whether they can come to one event), reminder (one for themselves at a time), food_signup (them offering to bring something on an event’s food sign-up — even when it is taken, or you ask which; never a question about the sheet), web (the world outside the app: a business, a fact, the news, a place’s weather), faith (faith or the Bible); other for anything else.',
           },
           misheard: {
             type: 'array',

@@ -18,6 +18,7 @@ import {
   forget,
   forgetCaches,
   learn,
+  LEARNED_DOC,
   learnedExamples,
   listLearned,
   taughtAnswers,
@@ -25,6 +26,7 @@ import {
   type OwnDb,
 } from '../../functions/src/miriam/own/learn'
 import { SEEDS, type Skill } from '../../functions/src/miriam/own/skills'
+import { skillOfAction } from '../../functions/src/miriam/own/labels'
 import { read, seedExamples } from '../../functions/src/miriam/own/understand'
 import { dayIn, reminderIn, spanIn, statusIn } from '../../functions/src/miriam/own/when'
 import {
@@ -121,8 +123,32 @@ describe('what she takes as hers, of requests she has never seen', () => {
   const all = Object.entries(requests as Record<string, string[]>).flatMap(([want, list]) =>
     list.map((text) => ({ text, want }))
   )
+  /**
+   * How many of each skill she answers. A new skill or example can take
+   * another's answers while the total still looks fine: each is held to what
+   * it answers now. Raise them as she gets better; lower one only on purpose.
+   */
+  const ANSWERS: Partial<Record<Skill, number>> = {
+    event_time: 28,
+    event_place: 20,
+    event_dress: 13,
+    event_schedule: 9,
+    event_team: 7,
+    event_car: 9,
+    event_lodging: 8,
+    event_flight: 7,
+    event_weather: 7,
+    my_events: 21,
+    availability: 22,
+    reminder: 10,
+    food_signup: 2,
+    web: 8,
+    faith: 9,
+  }
+
   it('is never wrong, and is most of what is hers', async () => {
     const wrong: string[] = []
+    const per: Partial<Record<string, number>> = {}
     let hers = 0
     let answered = 0
     for (const [i, { text, want }] of all.entries()) {
@@ -131,12 +157,18 @@ describe('what she takes as hers, of requests she has never seen', () => {
       const got = taken(text)
       if (want !== 'other') hers++
       if (got === null) continue
-      if (got === want) answered++
-      else wrong.push(`${text} → ${got} (is ${want})`)
+      if (got === want) {
+        answered++
+        per[want] = (per[want] ?? 0) + 1
+      } else wrong.push(`${text} → ${got} (is ${want})`)
     }
     expect(wrong).toEqual([])
     // Handed to Claude when unsure: the rest. Most are hers.
     expect(answered / hers).toBeGreaterThan(0.75)
+    const fewer = Object.entries(ANSWERS)
+      .filter(([skill, n]) => (per[skill] ?? 0) < n!)
+      .map(([skill, n]) => `${skill}: ${per[skill] ?? 0} of ${n}`)
+    expect(fewer).toEqual([])
   }, 180_000)
 })
 
@@ -197,6 +229,43 @@ describe('the guards', () => {
     expect(notHers('what are my notes for Friday', 'my_events')).toBeTruthy()
     expect(notHers('add a note to Friday to bring chairs', 'reminder')).toBeTruthy()
     expect(notHers("what's on my calendar this week", 'my_events')).toBeTruthy()
+  })
+
+  it('take a food sign-up only as their own offer, now', () => {
+    const offer = (t: string) => notHers(t, 'food_signup')
+    for (const t of [
+      "I'll bring chips to youth night",
+      'I’m bringing drinks',
+      'sign me up to bring napkins',
+      // Asked of her, or offered as a question: still an offer.
+      'Can I bring chips to youth night?',
+      'could we bring dessert',
+      'Hey Miriam, could you sign me up for chips?',
+      'can you put me down for drinks',
+    ]) {
+      expect([t, offer(t)]).toEqual([t, null])
+    }
+    for (const [t, why] of [
+      ['who is bringing drinks to the potluck', 'a question'],
+      ['what can I bring to the potluck', 'a question'],
+      ['should I bring chips', 'a question'],
+      ["I'll bring chips?", 'a question'],
+      ['remind me to bring chips', 'a reminder'],
+      ["I'll bring chips as you suggested", 'the briefing’s suggestion'],
+      ['is anyone bringing dessert', 'a question'],
+      ['Sarah is bringing chips to youth night', 'someone else’s'],
+      ["Bob's bringing the drinks", 'someone else’s'],
+      ["I can't bring the chips anymore", 'a change'],
+      ["I'll take the drinks off the list", 'a change'],
+      ['I brought chips last time', 'not an offer now'],
+      ["I'll bring chips if I have time", 'not an offer now'],
+      ['tell everyone to bring chips', 'a command'],
+      ['add drinks to the picnic food list', 'a command'],
+      ['add a note to bring chips', 'a command'],
+      ["I'll bring snacks for my task", 'about something else'],
+    ]) {
+      expect([t, offer(t)]).toEqual([t, why])
+    }
   })
 })
 
@@ -453,6 +522,28 @@ describe('her answers', () => {
     })
   })
 
+  it('not their answer, when “sign me up” names an event with a food sign-up', async () => {
+    const fed = fakeDb({
+      ...CHURCH,
+      events: { ...CHURCH.events, pic: { ...CHURCH.events.pic, food: true, foodItems: ['Chips'] } },
+    })
+    const at = (text: string) => ownAnswer(input(text, { lookups: new Lookups(fed, sarah, TODAY) }))
+    // Bringing something, as likely as coming: Claude asks.
+    expect((await at('sign me up for the picnic')).result).toBeNull()
+    expect((await at('put me down for the picnic')).result).toBeNull()
+    // Said plainly as coming, it is still their answer.
+    expect((await at('sign me up as available for the picnic')).result).toMatchObject({
+      kind: 'confirm',
+      name: 'set_availability',
+    })
+    // With no food sign-up, it is their answer.
+    expect((await ownAnswer(input('sign me up for the picnic'))).result).toMatchObject({
+      kind: 'confirm',
+      name: 'set_availability',
+      input: { event_key: 'pic_2026-10-17' },
+    })
+  })
+
   it('a reminder, set from their clock', async () => {
     const own = await ownAnswer(input('could you ping me at 3:50 to start Claude'))
     expect(own.result).toMatchObject({
@@ -590,6 +681,41 @@ describe('what she learns', () => {
     expect((await learnedExamples(db)).map((e) => e.skill)).toEqual(['event_time'])
     await forget(db, 'when does the event get rolling')
     expect(await listLearned(db)).toEqual([])
+  })
+
+  it('keeps what a newer version of her learned, though it can’t read it', async () => {
+    const db = memoryOwnDb()
+    const v = packVector(embed('I’ll bring the event'))
+    // Learned by a version with a skill this one doesn’t know (a deploy, a rollback).
+    db.docs.set(LEARNED_DOC, {
+      examples: [{ t: 'I’ll bring the event', s: 'a_newer_skill', v, at: 1 }],
+    })
+    expect(await learnedExamples(db)).toEqual([])
+    expect(await listLearned(db)).toEqual([])
+    await learn(
+      db,
+      'when does the event start',
+      'event_time',
+      embed('when does the event start'),
+      2
+    )
+    await forget(db, 'something never learned')
+    // Still kept, for the newer version to read.
+    expect((db.docs.get(LEARNED_DOC)?.examples as { s: string }[]).map((e) => e.s)).toEqual([
+      'a_newer_skill',
+      'event_time',
+    ])
+  })
+
+  it('learns from the changes Claude makes that are hers', () => {
+    expect(skillOfAction('set_availability', { event_key: 'k', status: 'yes' })).toBe(
+      'availability'
+    )
+    expect(skillOfAction('create_reminder', { text: 'call Sam', when: 'x' })).toBe('reminder')
+    // Before an event, or every event: Claude’s to set.
+    expect(skillOfAction('create_reminder', { text: 'x', event_key: 'k' })).toBeNull()
+    expect(skillOfAction('create_reminder', { text: 'x', every_event: true })).toBeNull()
+    expect(skillOfAction('send_message', {})).toBeNull()
   })
 
   it('makes the next one like it hers', async () => {

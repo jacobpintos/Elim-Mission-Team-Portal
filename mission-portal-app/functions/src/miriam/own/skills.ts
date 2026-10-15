@@ -30,6 +30,7 @@ export type Skill =
   | 'my_events'
   | 'availability'
   | 'reminder'
+  | 'food_signup'
   | 'web'
   | 'faith'
   | 'other'
@@ -50,6 +51,7 @@ export const OWN_SKILLS: readonly Exclude<Skill, 'other'>[] = [
   'reminder',
   'web',
   'faith',
+  'food_signup',
 ]
 
 /** An example as it is read: each event's name as "the event". */
@@ -296,6 +298,25 @@ export const SEEDS: Record<Skill, string[]> = {
     'remind me to grab the projector before 6',
     'don’t let me forget my keys tomorrow',
   ],
+  // Offering to bring something on an event's food sign-up. The dishes and
+  // events here are not those her tests ask with (src/lib/miriamFoodSignup.test.ts).
+  food_signup: [
+    'sign me up to bring chips to {the potluck}',
+    'I’ll bring drinks',
+    'I’ll bring cookies to {the potluck}',
+    'I can bring a salad to {the picnic}',
+    'put me down for plates at {the potluck}',
+    'I’ll make a casserole for {the potluck}',
+    'I can cook the chili for Sunday',
+    'I’ll bake a pie for {the dinner}',
+    'count me in for napkins and cups at {the picnic}',
+    'I want to sign up to bring a dessert',
+    'I’ll cover the ice for {the cookout}',
+    'let me bring the fruit tray',
+    'I’ll grab the paper plates for {the potluck}',
+    'I’ll provide the lemonade',
+    'I’ll take the side dish',
+  ],
   web: [
     'Look up Costco’s hours',
     'search the web for cheap flights to Kauai',
@@ -377,8 +398,6 @@ export const SEEDS: Record<Skill, string[]> = {
     'text Maria that I’ll be late',
     'post an announcement that service is cancelled',
     'tell everyone {the picnic} moved to Sunday',
-    'sign me up to bring chips to {the potluck}',
-    'I’ll bring drinks',
     'what’s still open on the food sign up for {the potluck}',
     'turn off event reminders',
     'stop sending me emails about announcements',
@@ -458,10 +477,12 @@ export const SEEDS: Record<Skill, string[]> = {
     'set up the cars for {camp}',
     'arrange the carpool for {the retreat}',
     'make cars for {the trip}',
-    'I’ll bring cookies to {the potluck}',
-    'I can bring a salad to {the picnic}',
-    'put me down for plates at {the potluck}',
     'add napkins to the food list for {the potluck}',
+    // Bringing, but not to a food sign-up; and asking about one.
+    'I’ll bring my laptop to {the meeting}',
+    'I’ll take the church bus',
+    'who is bringing dessert to {the cookout}',
+    'what should I bring to {the dinner}',
     'what’s due this week',
     'what do I need to get done this week',
     'what tasks are due tomorrow',

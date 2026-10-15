@@ -29,15 +29,18 @@ const EVENTS: Skill[] = [
 
 const NOT_HERS: [RegExp, Skill[]][] = [
   // Their notes on days of their calendar (src/lib/dateNotes): read and kept in the app.
-  [/\bnotes?\b|\bmy\s+calendar\b/i, [...EVENTS, 'reminder', 'web', 'faith']],
+  [/\bnotes?\b|\bmy\s+calendar\b/i, [...EVENTS, 'reminder', 'web', 'faith', 'food_signup']],
   // Their tasks, and anyone's answers or numbers: Claude looks them up.
-  [/\b(?:tasks?|assignments?|due|overdue|to-?dos?)\b/i, [...EVENTS, 'reminder']],
+  [/\b(?:tasks?|assignments?|due|overdue|to-?dos?)\b/i, [...EVENTS, 'reminder', 'food_signup']],
   [
     /\b(?:who(?:'s|’s|\s+is|\s+are)?\s+(?:going|coming|attending|available|unavailable|signed\s+up)|how\s+many\s+(?:people|are|have)|hasn'?t\s+(?:said|answered))\b/i,
     EVENTS,
   ],
   // Reminding someone else, or everyone, is a message.
-  [/\b(?:everyone|everybody|all\s+of\s+them)\b/i, ['reminder', 'availability', 'my_events']],
+  [
+    /\b(?:everyone|everybody|all\s+of\s+them)\b/i,
+    ['reminder', 'availability', 'my_events', 'food_signup'],
+  ],
   [/\bremind\s+(?!me\b)(?:the|them|him|her|us|our|my|all|every)\b/i, ['reminder']],
   // Someone else's flight, room, car or team — "Guest User's flight", "where
   // is Guest User staying": Claude looks them up, and whose is whose.
@@ -75,5 +78,56 @@ export function notHers(text: string, skill: Skill): string | null {
   for (const [re, skills] of NOT_HERS) {
     if (re.test(said) && skills.includes(skill)) return 'about something else'
   }
+  if (skill === 'food_signup') return notAnOffer(said)
+  return null
+}
+
+// --- A food sign-up: them offering to bring something, and nothing else -------
+
+/** "Hey Miriam, could you please…": the asking, before what is asked. */
+const ASKING_HER =
+  /^(?:(?:hey|ok|okay|um|uh|so)[,\s]+)*(?:miriam[,\s]+)?(?:please\s+)?(?:(?:can|could|would)\s+you\s+(?:please\s+)?)?/i
+/** Asked as a question — but "can I bring chips?" is an offer. */
+const QUESTION =
+  /^(?:what|what's|whats|when|where|who|who's|whose|why|how|which|is|are|am|was|were|did|does|do|should|will|would|can|could|may|shall)\b/i
+const OFFERED =
+  /^(?:can|could|may)\s+(?:i|we)\s+(?:bring|make|cook|bake|take|do|handle|cover|provide|grab)\b/i
+
+const NOT_AN_OFFER: [RegExp, string][] = [
+  // "Remind me to bring chips": a reminder (./skills: reminder).
+  [/\b(?:remind|reminder|remember|forget)\b/i, 'a reminder'],
+  // What her briefing suggested is known only to the app (src/features/miriam/localTalk).
+  [
+    /\b(?:suggested|recommended|like\s+you\s+said|as\s+you\s+said|from\s+(?:my|the)\s+briefing)\b/i,
+    'the briefing’s suggestion',
+  ],
+  // Someone else bringing it: "Sarah is bringing chips", "is anyone bringing dessert".
+  [/\b(?:everyone|everybody|anyone|anybody|someone|somebody|who)\b/i, 'someone else’s'],
+  // Taking one back, or changing it: Claude's.
+  [
+    /\b(?:can't|cannot|won't|wont|not|no\s+longer|instead|anymore|swap|switch|change|cancel|drop|un-?sign)\b|\boff\s+(?:the|my)\s+list\b/i,
+    'a change',
+  ],
+  // Brought already, or only maybe.
+  [
+    /\b(?:i|we)\s+(?:made|baked|brought|cooked)\b|\blast\s+(?:time|week|month|year)\b|\bif\b/i,
+    'not an offer now',
+  ],
+]
+
+/** Said by them, of themselves: "I'll", "sign me up", "we can". */
+const THEIR_OWN = /\b(?:i|i'm|im|i'll|ill|i've|i'd|me|my|we|we'll|we're|us|our)\b/i
+
+/** Why a request read as a food sign-up isn't one to take, or null (./food). */
+function notAnOffer(text: string): string | null {
+  const said = text.replace(/[’‘]/g, "'")
+  const asked = said.replace(ASKING_HER, '')
+  // "Could you sign me up for chips?" asks her to: not a question about the sheet.
+  const ofHer = asked.length < said.length
+  if (!OFFERED.test(asked) && (QUESTION.test(asked) || (!ofHer && /\?\s*$/.test(said)))) {
+    return 'a question'
+  }
+  for (const [re, why] of NOT_AN_OFFER) if (re.test(said)) return why
+  if (!THEIR_OWN.test(said)) return 'someone else’s'
   return null
 }

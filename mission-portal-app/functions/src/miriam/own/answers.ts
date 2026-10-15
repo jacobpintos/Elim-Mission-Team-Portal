@@ -4,6 +4,7 @@ import type { AppToolName } from '../plan'
 import type { Mention } from './events'
 import type { Skill } from './skills'
 import { dayIn, reminderIn, spanIn, statusIn } from './when'
+import { hasSheet } from './food'
 import { personAnswer, personAsked } from './people'
 import {
   plainly,
@@ -124,6 +125,9 @@ function notesSaid(notes: { date: string; text: string }[], oneDay: boolean, tod
   })
   return `${lead}: ${said.join('. ')}.`
 }
+
+/** "Sign me up", "put us down" — but not "put me down as a maybe". */
+const SIGN_ME_UP = /\b(?:sign|put)\s+(?:me|us)\s+(?:up|down)\b(?!\s+as\b)/i
 
 /** What a skill needs an event to have, to be the one meant when none is named. */
 const HAS: Partial<Record<Skill, (ev: EventInstance, viewer: Viewer) => boolean>> = {
@@ -331,6 +335,9 @@ export async function answerFor(skill: Skill, ctx: AnswerContext): Promise<OwnRe
     if (!ctx.appTools.includes('set_availability')) return null
     const ev = await theEvent(skill, ctx)
     if (!ev) return null
+    // "Sign me up for the potluck", where it has a food sign-up: as likely
+    // bringing something as coming — Claude asks (./food).
+    if (SIGN_ME_UP.test(text) && hasSheet(ev)) return null
     const status = statusIn(text)
     return {
       kind: 'confirm',

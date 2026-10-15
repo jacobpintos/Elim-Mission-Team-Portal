@@ -5,7 +5,9 @@ import {
   type EventInstance,
 } from '../../functions/src/miriam/data'
 import { eventRef, type QuickData } from './miriamQuick'
-import { pickBest, type Picked } from './miriamReplies'
+import { FOOD_AHEAD_DAYS, foodItemPicked, hasSheet } from '../../functions/src/miriam/own/food'
+
+export { FOOD_AHEAD_DAYS, foodItemPicked } from '../../functions/src/miriam/own/food'
 
 /**
  * "I'll make pot roast for Sunday", "sign me up to bring drinks to the
@@ -126,26 +128,6 @@ const wordsOf = (s: string) =>
     .split(/[^a-z0-9]+/)
     .filter((w) => w.length > 1 && !['the', 'and', 'of', 'a', 'an', 'some'].includes(w))
 
-/**
- * Which item on a sheet was meant, by its index, and how sure that is
- * (lib/miriamReplies: pickBest): the same name, or every word said found in
- * one, is sure; "pot rose" for "Pot roast" is likely, to be asked about; "roast"
- * with "Pot roast" and "Roast vegetables" both on the sheet is which.
- */
-export function foodItemPicked(items: string[], asked: string): Picked<number> {
-  const picked = pickBest(
-    items.map((label, i) => ({ label, i })).filter((o) => o.label.trim()),
-    (o) => o.label,
-    asked
-  )
-  if (picked.kind === 'sure') return { kind: 'sure', item: picked.item.i }
-  if (picked.kind === 'likely') {
-    return { kind: 'likely', item: picked.item.i, others: picked.others.map((o) => o.i) }
-  }
-  if (picked.kind === 'which') return { kind: 'which', items: picked.items.map((o) => o.i) }
-  return { kind: 'none' }
-}
-
 /** The item plainly meant, by its index; -1 when none is plainly it. */
 export function foodItemMatch(items: string[], asked: string): number {
   const picked = foodItemPicked(items, asked)
@@ -194,11 +176,6 @@ export function dateSaid(text: string, today: string): string | null {
   }
   return null
 }
-
-/** How far ahead a food sign-up is looked for. */
-export const FOOD_AHEAD_DAYS = 90
-
-const hasSheet = (ev: EventInstance) => ev.food === true && (ev.foodItems ?? []).some(Boolean)
 
 /**
  * Upcoming events with a food sheet that fit what was said: those on that
