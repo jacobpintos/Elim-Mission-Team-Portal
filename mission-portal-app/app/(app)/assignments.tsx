@@ -1854,9 +1854,12 @@ export default function Assignments() {
         <Pressable
           onPress={() => setShowReimbursement(true)}
           style={[
-            fabStyle,
+            // Pinned to the left only. Laid over fabStyle with right: undefined,
+            // iOS kept fabStyle's right: 16 as well, so the button stretched
+            // across the screen and under Assign Task.
+            fabBase,
             { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary },
-            { right: undefined, left: 16, bottom: insets.bottom + 16 },
+            { left: 16, bottom: insets.bottom + 16 },
           ]}
         >
           <Text color={colors.primary} fontWeight="700" fontSize="$3">
@@ -1975,10 +1978,10 @@ export default function Assignments() {
   )
 }
 
-const fabStyle: import('react-native').ViewStyle = {
+/** A floating button, not yet placed on either side. */
+const fabBase: import('react-native').ViewStyle = {
   position: 'absolute',
   bottom: 16,
-  right: 16,
   borderRadius: 20,
   paddingHorizontal: 16,
   paddingVertical: 10,
@@ -1988,3 +1991,5 @@ const fabStyle: import('react-native').ViewStyle = {
   shadowRadius: 4,
   elevation: 5,
 }
+
+const fabStyle: import('react-native').ViewStyle = { ...fabBase, right: 16 }
