@@ -3,8 +3,14 @@ import { Pressable, StyleSheet, View } from 'react-native'
 import { XStack, YStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { miriamHref } from '@/lib/miriam'
-import type { AttentionItem, Briefing, FoodNudge } from '@/lib/briefing'
+import {
+  briefingRowId as R,
+  type AttentionItem,
+  type Briefing,
+  type FoodNudge,
+} from '@/lib/briefing'
 import type { Reminder } from '@/stores/remindersStore'
+import { Focus } from './briefingFocus'
 
 type Colors = ReturnType<typeof useThemeColors>
 
@@ -46,14 +52,16 @@ export function BriefingView({
 
   return (
     <YStack gap="$3" paddingBottom="$1">
-      <YStack gap="$0.5">
-        <Text color={colors.text} fontSize="$6" fontWeight="700">
-          {b.greeting}
-        </Text>
-        <Text color={colors.textMuted} fontSize="$3">
-          {b.dateLine}
-        </Text>
-      </YStack>
+      <Focus id="head">
+        <YStack gap="$0.5">
+          <Text color={colors.text} fontSize="$6" fontWeight="700">
+            {b.greeting}
+          </Text>
+          <Text color={colors.textMuted} fontSize="$3">
+            {b.dateLine}
+          </Text>
+        </YStack>
+      </Focus>
 
       {speaking ? (
         <XStack
@@ -86,53 +94,54 @@ export function BriefingView({
       {b.today.length || b.next ? (
         <Section title={b.today.length ? 'TODAY' : 'NEXT UP'} colors={colors}>
           {(b.today.length ? b.today : [b.next!]).map((ev) => (
-            <Pressable
-              key={ev.key}
-              onPress={() => onOpen(miriamHref({ kind: 'event', key: ev.key, section: null }))}
-              accessibilityRole="link"
-              accessibilityLabel={`${ev.title}, ${ev.time} ${ev.meridiem}`}
-            >
-              <XStack
-                style={[
-                  styles.card,
-                  { borderColor: colors.border, backgroundColor: colors.background },
-                ]}
-                gap="$3"
+            <Focus key={ev.key} id={R.event(ev.key)}>
+              <Pressable
+                onPress={() => onOpen(miriamHref({ kind: 'event', key: ev.key, section: null }))}
+                accessibilityRole="link"
+                accessibilityLabel={`${ev.title}, ${ev.time} ${ev.meridiem}`}
               >
-                <YStack width={58}>
-                  <Text color={colors.text} fontSize="$4" fontWeight="700">
-                    {ev.time}
-                  </Text>
-                  <Text color={colors.textMuted} fontSize="$1">
-                    {ev.meridiem}
-                  </Text>
-                </YStack>
-                <YStack flex={1} gap="$1.5">
-                  <Text color={colors.text} fontSize="$4" fontWeight="700">
-                    {ev.title}
-                  </Text>
-                  {ev.place ? (
-                    <Text color={colors.textMuted} fontSize="$2">
-                      {ev.place}
+                <XStack
+                  style={[
+                    styles.card,
+                    { borderColor: colors.border, backgroundColor: colors.background },
+                  ]}
+                  gap="$3"
+                >
+                  <YStack width={58}>
+                    <Text color={colors.text} fontSize="$4" fontWeight="700">
+                      {ev.time}
                     </Text>
-                  ) : null}
-                  {ev.chips.length ? (
-                    <XStack flexWrap="wrap" gap="$1.5">
-                      {ev.chips.map((c) => (
-                        <View key={c} style={[styles.chip, { backgroundColor: colors.border }]}>
-                          <Text color={colors.text} fontSize="$1">
-                            {c}
-                          </Text>
-                        </View>
-                      ))}
-                    </XStack>
-                  ) : null}
-                </YStack>
-                <Text color={colors.textMuted} alignSelf="center">
-                  ›
-                </Text>
-              </XStack>
-            </Pressable>
+                    <Text color={colors.textMuted} fontSize="$1">
+                      {ev.meridiem}
+                    </Text>
+                  </YStack>
+                  <YStack flex={1} gap="$1.5">
+                    <Text color={colors.text} fontSize="$4" fontWeight="700">
+                      {ev.title}
+                    </Text>
+                    {ev.place ? (
+                      <Text color={colors.textMuted} fontSize="$2">
+                        {ev.place}
+                      </Text>
+                    ) : null}
+                    {ev.chips.length ? (
+                      <XStack flexWrap="wrap" gap="$1.5">
+                        {ev.chips.map((c) => (
+                          <View key={c} style={[styles.chip, { backgroundColor: colors.border }]}>
+                            <Text color={colors.text} fontSize="$1">
+                              {c}
+                            </Text>
+                          </View>
+                        ))}
+                      </XStack>
+                    ) : null}
+                  </YStack>
+                  <Text color={colors.textMuted} alignSelf="center">
+                    ›
+                  </Text>
+                </XStack>
+              </Pressable>
+            </Focus>
           ))}
         </Section>
       ) : null}
@@ -145,43 +154,50 @@ export function BriefingView({
               { borderColor: colors.border, backgroundColor: colors.background },
             ]}
           >
-            {b.reminders.map((r, i) => (
-              <Row
-                key={r.id}
-                colors={colors}
-                dot={colors.primary}
-                title={r.text}
-                sub={`Reminder · ${new Date(r.remindAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
-                last={i === b.reminders.length - 1 && b.tasks.length === 0}
-                onPress={() => onOpen('/assignments')}
-                action={
-                  done.has(r.id)
-                    ? { label: '✓ Done', disabled: true }
-                    : {
-                        label: '✓ Done',
-                        run: () => onReminderDone(r as Reminder).then(() => mark(r.id)),
-                      }
-                }
-              />
-            ))}
+            {/* Tasks first, then reminders: the order she says them in. */}
             {b.tasks.map((t, i) => (
-              <Row
-                key={t.id}
-                colors={colors}
-                dot={
-                  t.due === 'overdue' ? '#e74c3c' : t.due === 'today' ? '#f0a070' : colors.textMuted
-                }
-                title={t.title}
-                sub={t.label}
-                subColor={t.due === 'overdue' ? '#e74c3c' : undefined}
-                last={i === b.tasks.length - 1}
-                onPress={() => onOpen(`/assignments?taskId=${encodeURIComponent(t.id)}`)}
-                action={
-                  done.has(t.id)
-                    ? { label: '✓ Done', disabled: true }
-                    : { label: '✓ Done', run: () => onTaskDone(t.id).then(() => mark(t.id)) }
-                }
-              />
+              <Focus key={t.id} id={R.task(t.id)}>
+                <Row
+                  colors={colors}
+                  dot={
+                    t.due === 'overdue'
+                      ? '#e74c3c'
+                      : t.due === 'today'
+                        ? '#f0a070'
+                        : colors.textMuted
+                  }
+                  title={t.title}
+                  sub={t.label}
+                  subColor={t.due === 'overdue' ? '#e74c3c' : undefined}
+                  last={i === b.tasks.length - 1 && b.reminders.length === 0}
+                  onPress={() => onOpen(`/assignments?taskId=${encodeURIComponent(t.id)}`)}
+                  action={
+                    done.has(t.id)
+                      ? { label: '✓ Done', disabled: true }
+                      : { label: '✓ Done', run: () => onTaskDone(t.id).then(() => mark(t.id)) }
+                  }
+                />
+              </Focus>
+            ))}
+            {b.reminders.map((r, i) => (
+              <Focus key={r.id} id={R.reminder(r.id)}>
+                <Row
+                  colors={colors}
+                  dot={colors.primary}
+                  title={r.text}
+                  sub={`Reminder · ${new Date(r.remindAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
+                  last={i === b.reminders.length - 1}
+                  onPress={() => onOpen('/assignments')}
+                  action={
+                    done.has(r.id)
+                      ? { label: '✓ Done', disabled: true }
+                      : {
+                          label: '✓ Done',
+                          run: () => onReminderDone(r as Reminder).then(() => mark(r.id)),
+                        }
+                  }
+                />
+              </Focus>
             ))}
           </YStack>
         </Section>
@@ -196,15 +212,40 @@ export function BriefingView({
             ]}
           >
             {b.notes.map((n, i) => (
-              <Row
-                key={n.id}
-                colors={colors}
-                dot="#c9a227"
-                title={n.text}
-                sub="Your note · only you see it"
-                last={i === b.notes.length - 1}
-                onPress={() => onOpen(`/events?date=${b.date}`)}
-              />
+              <Focus key={n.id} id={R.note(n.id)}>
+                <Row
+                  colors={colors}
+                  dot="#c9a227"
+                  title={n.text}
+                  sub="Your note · only you see it"
+                  last={i === b.notes.length - 1}
+                  onPress={() => onOpen(`/events?date=${b.date}`)}
+                />
+              </Focus>
+            ))}
+          </YStack>
+        </Section>
+      ) : null}
+
+      {b.news.length ? (
+        <Section title="NEW SINCE YESTERDAY" colors={colors}>
+          <YStack
+            style={[
+              styles.list,
+              { borderColor: colors.border, backgroundColor: colors.background },
+            ]}
+          >
+            {b.news.map((n, i) => (
+              <Focus key={`${n.kind}${i}`} id={R.news(i)}>
+                <Row
+                  colors={colors}
+                  dot={n.kind === 'announcement' ? '#f0a070' : '#5b8def'}
+                  title={n.title}
+                  sub={n.sub}
+                  last={i === b.news.length - 1}
+                  onPress={() => onOpen(n.href)}
+                />
+              </Focus>
             ))}
           </YStack>
         </Section>
@@ -224,64 +265,42 @@ export function BriefingView({
               const now = left[briefed.eventKey]
               const f = now ? { ...briefed, open: now, suggestion: now[0] ?? '' } : briefed
               return (
-                <Row
-                  key={id}
-                  colors={colors}
-                  dot="#f0a070"
-                  title={`${f.title} still has open food items`}
-                  sub={
-                    f.open.length
-                      ? `How about ${f.suggestion}? · ${f.open.length} open`
-                      : 'Everything on the sheet is taken now'
-                  }
-                  last={i === b.food.length - 1}
-                  onPress={() =>
-                    onOpen(miriamHref({ kind: 'event', key: f.eventKey, section: 'food' }))
-                  }
-                  action={
-                    done.has(id)
-                      ? { label: `✓ ${f.suggestion}`, disabled: true }
-                      : f.open.length === 0
-                        ? { label: 'All taken', disabled: true }
-                        : {
-                            label: `Bring ${f.suggestion}`,
-                            filled: true,
-                            run: () =>
-                              onBringFood(f).then((result) => {
-                                if (result.signedUp) mark(id)
-                                else if (result.open) {
-                                  const open = result.open
-                                  setLeft((l) => ({ ...l, [briefed.eventKey]: open }))
-                                }
-                              }),
-                          }
-                  }
-                />
+                <Focus key={id} id={R.food(briefed.eventKey)}>
+                  <Row
+                    colors={colors}
+                    dot="#f0a070"
+                    title={`${f.title} still has open food items`}
+                    sub={
+                      f.open.length
+                        ? `How about ${f.suggestion}? · ${f.open.length} open`
+                        : 'Everything on the sheet is taken now'
+                    }
+                    last={i === b.food.length - 1}
+                    onPress={() =>
+                      onOpen(miriamHref({ kind: 'event', key: f.eventKey, section: 'food' }))
+                    }
+                    action={
+                      done.has(id)
+                        ? { label: `✓ ${f.suggestion}`, disabled: true }
+                        : f.open.length === 0
+                          ? { label: 'All taken', disabled: true }
+                          : {
+                              label: `Bring ${f.suggestion}`,
+                              filled: true,
+                              run: () =>
+                                onBringFood(f).then((result) => {
+                                  if (result.signedUp) mark(id)
+                                  else if (result.open) {
+                                    const open = result.open
+                                    setLeft((l) => ({ ...l, [briefed.eventKey]: open }))
+                                  }
+                                }),
+                            }
+                    }
+                  />
+                </Focus>
               )
             })}
-          </YStack>
-        </Section>
-      ) : null}
-
-      {b.news.length ? (
-        <Section title="NEW SINCE YESTERDAY" colors={colors}>
-          <YStack
-            style={[
-              styles.list,
-              { borderColor: colors.border, backgroundColor: colors.background },
-            ]}
-          >
-            {b.news.map((n, i) => (
-              <Row
-                key={`${n.kind}${i}`}
-                colors={colors}
-                dot={n.kind === 'announcement' ? '#f0a070' : '#5b8def'}
-                title={n.title}
-                sub={n.sub}
-                last={i === b.news.length - 1}
-                onPress={() => onOpen(n.href)}
-              />
-            ))}
           </YStack>
         </Section>
       ) : null}
@@ -298,34 +317,35 @@ export function BriefingView({
               const id = `${a.kind}${i}`
               const remind = a.remind
               return (
-                <Row
-                  key={id}
-                  colors={colors}
-                  dot={
-                    a.kind === 'issue'
-                      ? '#f0a070'
-                      : a.kind === 'setlist'
-                        ? '#a77bdb'
-                        : a.kind === 'reimbursement'
-                          ? '#e67e22'
-                          : colors.primary
-                  }
-                  title={a.title}
-                  sub={a.sub}
-                  last={i === b.attention.length - 1}
-                  onPress={() => onOpen(a.href)}
-                  action={
-                    remind
-                      ? done.has(id)
-                        ? { label: 'Reminded', disabled: true }
-                        : {
-                            label: 'Remind',
-                            filled: true,
-                            run: () => onRemind(remind).then(() => mark(id)),
-                          }
-                      : undefined
-                  }
-                />
+                <Focus key={id} id={R.attention(i)}>
+                  <Row
+                    colors={colors}
+                    dot={
+                      a.kind === 'issue'
+                        ? '#f0a070'
+                        : a.kind === 'setlist'
+                          ? '#a77bdb'
+                          : a.kind === 'reimbursement'
+                            ? '#e67e22'
+                            : colors.primary
+                    }
+                    title={a.title}
+                    sub={a.sub}
+                    last={i === b.attention.length - 1}
+                    onPress={() => onOpen(a.href)}
+                    action={
+                      remind
+                        ? done.has(id)
+                          ? { label: 'Reminded', disabled: true }
+                          : {
+                              label: 'Remind',
+                              filled: true,
+                              run: () => onRemind(remind).then(() => mark(id)),
+                            }
+                        : undefined
+                    }
+                  />
+                </Focus>
               )
             })}
           </YStack>

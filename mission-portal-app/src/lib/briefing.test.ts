@@ -129,6 +129,40 @@ describe('asking for it', () => {
     expect(briefingAsked('what do I need to bring to revival')).toBe(false)
     expect(briefingAsked('good morning sunshine')).toBe(false)
   })
+
+  it('hears it typed in a hurry, or heard a little wrong', () => {
+    for (const said of [
+      'Gibe me my daily breifing',
+      'give me my daily briefng',
+      'my dialy briefing',
+      'breif me',
+      'good mornin',
+    ]) {
+      expect(briefingAsked(said), said).toBe(true)
+    }
+    // Close words that are something else are not read as it.
+    expect(briefingAsked('bring me my daily bread')).toBe(false)
+  })
+})
+
+describe('said one part at a time', () => {
+  it('says the same words, each part with the rows it is about, in order', () => {
+    const b = buildBriefing(input())
+    expect(b.segments.map((x) => x.text).join(' ')).toBe(b.spoken)
+    expect(b.segments[0]).toEqual({ ids: ['head'], text: expect.stringMatching(/^Good morning/) })
+    const order = b.segments.flatMap((x) => x.ids)
+    // Events, then tasks, then reminders, then news: as the screen lists them.
+    const first = (prefix: string) => order.findIndex((id) => id.startsWith(prefix))
+    expect(first('ev:')).toBeGreaterThan(0)
+    expect(first('task:')).toBeGreaterThan(first('ev:'))
+    expect(first('rem:')).toBeGreaterThan(first('task:'))
+    expect(first('news:')).toBeGreaterThan(first('rem:'))
+    // Overdue first, then due today: each its own part.
+    const overdue = b.segments.find((x) => x.text.startsWith('One task is overdue'))
+    expect(overdue?.ids).toEqual(
+      b.tasks.filter((t) => t.due === 'overdue').map((t) => `task:${t.id}`)
+    )
+  })
 })
 
 describe('food still open', () => {

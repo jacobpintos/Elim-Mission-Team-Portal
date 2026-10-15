@@ -3,7 +3,6 @@ import {
   AccessibilityInfo,
   Animated,
   AppState,
-  Dimensions,
   Easing,
   Linking,
   Platform,
@@ -103,7 +102,7 @@ import { clockOf } from '../../../functions/src/push/reminderTime'
 import type { BeforeEach, ReminderExtra } from '@/stores/remindersStore'
 import { briefingAsked, type Briefing, type FoodNudge } from '@/lib/briefing'
 import { gatherBriefing, remindToAnswer } from './briefingData'
-import { BriefingView } from './BriefingView'
+import { BriefingScreen } from './BriefingScreen'
 import { appToolsFor } from './appTools'
 import { useEventsStore } from '@/stores/eventsStore'
 import { localToday, todayStr } from '@/lib/events'
@@ -359,6 +358,17 @@ export function MiriamButton() {
   // The first time the app is opened in a morning: the briefing offered.
   const [offerBriefing, setOfferBriefing] = useState(false)
   const [reading, setReading] = useState(false)
+  // The briefing on its own screen, the part of it being said, and which
+  // reading of it this is (a newer one, or Stop, ends the one before).
+  const [briefScreen, setBriefScreen] = useState(false)
+  const [saying, setSaying] = useState(-1)
+  const briefRun = useRef(0)
+  // The briefing put away — a new question, Miriam closed, a row tapped to go
+  // to it: her reading of it ends, and so does its screen.
+  // (The screen goes with it: it is only shown while there is a briefing.)
+  useEffect(() => {
+    if (!briefing) briefRun.current++
+  }, [briefing])
   // Something just done that can be taken back at a tap: a reminder set.
   const [undo, setUndo] = useState<{ label: string; run: () => Promise<string> } | null>(null)
   // A video from Content asked for, playing over the page.
@@ -912,6 +922,13 @@ export function MiriamButton() {
         await addNote(date, text)
         return
       }
+      // Claude worked out it was the briefing she was asked for, in words she
+      // didn't place herself ("gibe me my daily breifing"): the briefing,
+      // as she gives it, rather than Claude's account of their day.
+      if (result.kind === 'answer' && result.understood && briefingAsked(result.understood)) {
+        await giveBriefing(typing)
+        return
+      }
       if (result.kind === 'confirm') {
         await offerAction(result.name, result.input, result.more)
         return
@@ -1019,6 +1036,32 @@ export function MiriamButton() {
     setStage('answered')
   }
 
+  /**
+   * The briefing read aloud a part at a time (lib/briefing: segments), each
+   * part's rows lit up on the briefing screen as she comes to it. Resolves
+   * true when she read to the end, false when stopped or replaced.
+   */
+  const readBriefing = async (b: Briefing): Promise<boolean> => {
+    const run = ++briefRun.current
+    setReading(true)
+    for (let i = 0; i < b.segments.length; i++) {
+      if (run !== briefRun.current) return false
+      setSaying(i)
+      speak(b.segments[i].text)
+      await whenSpoken()
+    }
+    if (run !== briefRun.current) return false
+    setReading(false)
+    return true
+  }
+
+  /** Stops her reading the briefing, where she is. */
+  const stopBriefing = () => {
+    briefRun.current++
+    stopSpeaking()
+    setReading(false)
+  }
+
   /** The daily briefing (lib/briefing): shown to tap through, and read out. `typing`: asked for by typing, so its questions are answered so too. */
   const giveBriefing = async (typing = false) => {
     setStage('thinking')
@@ -1031,19 +1074,20 @@ export function MiriamButton() {
       return
     }
     setAnswer(null)
+    setSaying(-1)
     setBriefing(b)
+    setBriefScreen(true)
     briefedFood.current = { day: localToday(), food: b.food }
     noteDone(b.spoken)
-    speak(b.spoken)
-    setReading(true)
     const briefedFor = asked.current
-    whenSpoken().then(() => {
-      setReading(false)
+    readBriefing(b).then((finished) => {
       // Then their events still without an answer, asked about one at a time
-      // — unless they have closed her, asked something else, or have a change
-      // up to confirm, meanwhile.
+      // — unless they have closed her, asked something else, stopped her
+      // reading, or have a change up to confirm, meanwhile. Asked in her bar:
+      // the briefing screen steps aside for it.
       const profile = useAuthStore.getState().profile
       if (
+        finished &&
         b.asks.length &&
         openRef.current &&
         asked.current === briefedFor &&
@@ -1054,6 +1098,8 @@ export function MiriamButton() {
           b.asks.length === 1
             ? 'One of your events needs an answer. '
             : `${b.asks.length} of your events need an answer. `
+        setBriefScreen(false)
+        setBriefing(null)
         askAvailability(b.asks, hereNow(), talkFor(typing), lead)
       }
     })
@@ -2357,69 +2403,6 @@ export function MiriamButton() {
               </Pressable>
             </XStack>
 
-            {briefing && stage === 'answered' ? (
-              // Long: scrolled within the panel, most of the screen at most.
-              <ScrollView
-                style={{ maxHeight: Math.round(Dimensions.get('window').height * 0.62) }}
-                nestedScrollEnabled
-              >
-                <BriefingView
-                  briefing={briefing}
-                  speaking={reading}
-                  onStop={() => {
-                    stopSpeaking()
-                    setReading(false)
-                  }}
-                  onOpen={(href) => {
-                    close()
-                    router.push(href as never)
-                  }}
-                  onTaskDone={(id) => useTasksStore.getState().setStatus(id, 'done')}
-                  onReminderDone={(r) => useRemindersStore.getState().setDone(r, true)}
-                  onBringFood={async (food) => {
-                    // Signed up as asking for it would: checked, and taken only if still open.
-                    const prepared = await prepareAction('sign_up_food', {
-                      event_key: food.eventKey,
-                      item: food.suggestion,
-                      // The briefing showed it open: taken since is "just signed up".
-                      shown_open: true,
-                    })
-                    if (prepared.kind === 'ready') {
-                      const done = await prepared
-                        .run()
-                        .catch(() => 'That didn’t go through. Try it on the event’s page.')
-                      speak(done)
-                      return { signedUp: done.startsWith('You’re signed up') }
-                    }
-                    speak(
-                      prepared.kind === 'cannot'
-                        ? prepared.message
-                        : 'Pick one on the event’s page.'
-                    )
-                    // Taken: the sheet as it is now, offered in the row — and
-                    // what "as suggested" means from here on.
-                    const open = prepared.kind === 'cannot' ? prepared.open : undefined
-                    if (open && briefedFood.current) {
-                      briefedFood.current = {
-                        ...briefedFood.current,
-                        food: briefedFood.current.food.map((n) =>
-                          n.eventKey === food.eventKey
-                            ? { ...n, open, suggestion: open[0] ?? n.suggestion }
-                            : n
-                        ),
-                      }
-                    }
-                    return { signedUp: false, open }
-                  }}
-                  onRemind={async (item) => {
-                    await remindToAnswer(item)
-                    const said = `Okay — I’ve asked ${item.uids.length === 1 ? 'them' : `all ${item.uids.length}`} to answer for ${item.eventTitle}.`
-                    speak(said)
-                  }}
-                />
-              </ScrollView>
-            ) : null}
-
             {stage === 'typing' ? (
               <XStack gap="$2" alignItems="flex-end">
                 <TextInput
@@ -2512,6 +2495,65 @@ export function MiriamButton() {
             ) : null}
           </YStack>
         </View>
+
+        {/* The briefing on a screen of its own, over her bar, read a part at a time. */}
+        {briefing && briefScreen ? (
+          <BriefingScreen
+            briefing={briefing}
+            saying={saying}
+            speaking={reading}
+            onStop={stopBriefing}
+            onReplay={() => readBriefing(briefing)}
+            onClose={() => {
+              stopBriefing()
+              setBriefScreen(false)
+              setBriefing(null)
+              close()
+            }}
+            onOpen={(href) => {
+              close()
+              router.push(href as never)
+            }}
+            onTaskDone={(id) => useTasksStore.getState().setStatus(id, 'done')}
+            onReminderDone={(r) => useRemindersStore.getState().setDone(r, true)}
+            onBringFood={async (food) => {
+              // Signed up as asking for it would: checked, and taken only if still open.
+              const prepared = await prepareAction('sign_up_food', {
+                event_key: food.eventKey,
+                item: food.suggestion,
+                // The briefing showed it open: taken since is "just signed up".
+                shown_open: true,
+              })
+              if (prepared.kind === 'ready') {
+                const done = await prepared
+                  .run()
+                  .catch(() => 'That didn’t go through. Try it on the event’s page.')
+                speak(done)
+                return { signedUp: done.startsWith('You’re signed up') }
+              }
+              speak(prepared.kind === 'cannot' ? prepared.message : 'Pick one on the event’s page.')
+              // Taken: the sheet as it is now, offered in the row — and
+              // what "as suggested" means from here on.
+              const open = prepared.kind === 'cannot' ? prepared.open : undefined
+              if (open && briefedFood.current) {
+                briefedFood.current = {
+                  ...briefedFood.current,
+                  food: briefedFood.current.food.map((n) =>
+                    n.eventKey === food.eventKey
+                      ? { ...n, open, suggestion: open[0] ?? n.suggestion }
+                      : n
+                  ),
+                }
+              }
+              return { signedUp: false, open }
+            }}
+            onRemind={async (item) => {
+              await remindToAnswer(item)
+              const said = `Okay — I’ve asked ${item.uids.length === 1 ? 'them' : `all ${item.uids.length}`} to answer for ${item.eventTitle}.`
+              speak(said)
+            }}
+          />
+        ) : null}
       </FloatingLayer>
       {/* The morning offer: small, at the top, gone at a tap. */}
       <FloatingLayer

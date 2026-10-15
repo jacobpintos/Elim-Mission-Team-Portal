@@ -30,9 +30,51 @@ export function briefingAsked(text: string): boolean {
     .replace(/[.,!?]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+    .split(' ')
+    .map(spelled)
+    .join(' ')
   return /^(?:(?:can|could|would)\s+you\s+)?(?:give\s+me\s+)?(?:(?:my|the|a|today's)\s+)?(?:daily\s+|morning\s+)?briefing(?:\s+for\s+today)?(?:\s+please)?$|^brief\s+me\b|\bwhat\s+do\s+i\s+need\s+to\s+know\b|\bhow(?:'s|\s+is|\s+does)\s+my\s+day\s+look(?:ing)?\b|\bwhat(?:'s|\s+is)\s+my\s+day\s+look(?:ing)?\s+like\b|\bwhat(?:'s|\s+is)\s+(?:on\s+)?my\s+(?:day|agenda)\b|^good\s+morning(?:\s+miriam)?$|\bcatch\s+me\s+up\b/.test(
     said
   )
+}
+
+/**
+ * Words that ask for the briefing, as typed in a hurry or heard a little
+ * wrong: "breifing", "briefng", "gibe me", "mornin". A word close to one of
+ * these is read as it — one letter off, or two letters swapped; "briefing",
+ * being long, two off.
+ */
+const BRIEFING_WORDS: [string, number][] = [
+  ['briefing', 2],
+  ['brief', 1],
+  ['give', 1],
+  ['daily', 1],
+  ['morning', 1],
+]
+
+function spelled(word: string): string {
+  if (word.length < 4) return word
+  for (const [right, most] of BRIEFING_WORDS) {
+    if (word !== right && editsApart(word, right) <= most) return right
+  }
+  return word
+}
+
+/** Letters added, dropped, changed or two side by side swapped, to get from one word to the other. */
+export function editsApart(a: string, b: string): number {
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  )
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1)
+      }
+    }
+  }
+  return d[a.length][b.length]
 }
 
 export interface BriefTask {
@@ -122,6 +164,29 @@ export interface Briefing {
   /** Food still open on their events: a suggestion each. */
   food: FoodNudge[]
   spoken: string
+  /**
+   * What is said, in the order it is said, each with the items on screen it
+   * is about (briefingRowId) — so the screen can show each as she reaches it.
+   * Their text, joined, is `spoken`.
+   */
+  segments: BriefingSegment[]
+}
+
+export interface BriefingSegment {
+  /** The rows it is about: "head", "ev:<key>", "task:<id>", "rem:<id>", "note:<id>", "news:<n>", "food:<eventKey>", "att:<n>". */
+  ids: string[]
+  text: string
+}
+
+/** The id a row on the briefing screen goes by, matching BriefingSegment.ids. */
+export const briefingRowId = {
+  event: (key: string) => `ev:${key}`,
+  task: (id: string) => `task:${id}`,
+  reminder: (id: string) => `rem:${id}`,
+  note: (id: string) => `note:${id}`,
+  news: (n: number) => `news:${n}`,
+  food: (eventKey: string) => `food:${eventKey}`,
+  attention: (n: number) => `att:${n}`,
 }
 
 const localDate = (d: Date) =>
@@ -276,10 +341,15 @@ export function buildBriefing(input: BriefingInput): Briefing {
     food.length +
     notes.length
 
-  // Said aloud: in the same order, a sentence or two for each.
-  const parts: string[] = [`${greeting}. Today is ${longDate(today)}.`]
+  // Said aloud: in the same order, a sentence or two for each — each part
+  // with the rows it is about.
+  const segments: BriefingSegment[] = []
+  const say = (ids: string[], text: string) => segments.push({ ids, text })
+  const R = briefingRowId
+  say(['head'], `${greeting}. Today is ${longDate(today)}.`)
   if (shownToday.length) {
-    parts.push(
+    say(
+      shownToday.map((ev) => R.event(ev.instanceKey)),
       shownToday.length === 1
         ? 'You have one event today.'
         : `You have ${shownToday.length} events today.`
@@ -298,27 +368,34 @@ export function buildBriefing(input: BriefingInput): Briefing {
       const forecast = input.weather?.[ev.instanceKey]
       if (forecast)
         bits.push(`It'll be ${Math.round(forecast.high)} and ${forecast.label.toLowerCase()}.`)
-      parts.push(bits.join(' '))
+      say([R.event(ev.instanceKey)], bits.join(' '))
     })
   } else if (next) {
-    parts.push(`Nothing on today. Next up is ${next.title}, ${weekday(eventsKeyDate(next.key))}.`)
+    say(
+      [R.event(next.key)],
+      `Nothing on today. Next up is ${next.title}, ${weekday(eventsKeyDate(next.key))}.`
+    )
   } else {
-    parts.push('Nothing on today.')
+    say(['head'], 'Nothing on today.')
   }
   const overdue = tasks.filter((t) => t.due === 'overdue')
   const dueToday = tasks.filter((t) => t.due === 'today')
   const thisWeek = tasks.filter((t) => t.due === 'week')
+  const taskIds = (ts: typeof tasks) => ts.map((t) => R.task(t.id))
   if (overdue.length)
-    parts.push(
+    say(
+      taskIds(overdue),
       `${overdue.length === 1 ? 'One task is' : `${overdue.length} tasks are`} overdue: ${listed(overdue.map((t) => t.title))}.`
     )
-  if (dueToday.length) parts.push(`Due today: ${listed(dueToday.map((t) => t.title))}.`)
+  if (dueToday.length) say(taskIds(dueToday), `Due today: ${listed(dueToday.map((t) => t.title))}.`)
   if (thisWeek.length)
-    parts.push(
+    say(
+      taskIds(thisWeek),
       `${plural(thisWeek.length, 'more task')} due this week${thisWeek.length === 1 ? `: ${thisWeek[0].title}` : ''}.`
     )
   if (reminders.length)
-    parts.push(
+    say(
+      reminders.map((r) => R.reminder(r.id)),
       `Reminders today: ${listed(
         reminders.map(
           (r) =>
@@ -328,24 +405,34 @@ export function buildBriefing(input: BriefingInput): Briefing {
     )
   if (notes.length) {
     const said = notes.map((n) => n.text.replace(/[.!?]+$/, ''))
-    parts.push(
+    say(
+      notes.map((n) => R.note(n.id)),
       `${notes.length === 1 ? 'Your note for today' : 'Your notes for today'}: ${said.join('; ')}.`
     )
   }
   const announcements = news.filter((n) => n.kind === 'announcement')
   if (announcements.length)
-    parts.push(
+    say(
+      news.flatMap((n, i) => (n.kind === 'announcement' ? [R.news(i)] : [])),
       `${announcements.length === 1 ? 'A new announcement' : `${announcements.length} new announcements`}: ${listed(announcements.map((a) => a.title))}.`
     )
-  if (unreadTotal) parts.push(`You have ${plural(unreadTotal, 'unread message')}.`)
+  if (unreadTotal)
+    say(
+      news.flatMap((n, i) => (n.kind === 'messages' ? [R.news(i)] : [])),
+      `You have ${plural(unreadTotal, 'unread message')}.`
+    )
   for (const f of food) {
     const when = f.date === today ? 'today' : weekday(f.date)
-    parts.push(
+    say(
+      [R.food(f.eventKey)],
       `${f.title} ${when} still has ${f.open.length === 1 ? 'an open food item' : 'open food items'}. How about bringing ${lowerFirst(f.suggestion)}?`
     )
   }
   if (attention.length)
-    parts.push(`Needs your attention: ${attention.map((a) => a.spoken).join('; ')}.`)
+    say(
+      attention.map((_, i) => R.attention(i)),
+      `Needs your attention: ${attention.map((a) => a.spoken).join('; ')}.`
+    )
 
   return {
     greeting,
@@ -360,7 +447,8 @@ export function buildBriefing(input: BriefingInput): Briefing {
     news,
     attention,
     food,
-    spoken: parts.join(' '),
+    spoken: segments.map((x) => x.text).join(' '),
+    segments,
   }
 }
 
