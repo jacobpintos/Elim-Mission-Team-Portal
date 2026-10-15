@@ -47,7 +47,7 @@ export type OwnResult =
     }
   | {
       kind: 'confirm'
-      name: 'set_availability' | 'create_reminder'
+      name: 'set_availability' | 'create_reminder' | 'sign_up_food'
       input: Record<string, unknown>
       more: false
     }

@@ -24,6 +24,7 @@ import { CHURCH_SITE, siteKnowledge } from './site'
 import { leaderAnswer, leaderAsked, storyKnowledge } from './leaders'
 import { nameAnswer, nameAsked } from './names'
 import { taughtFor } from './taught'
+import { foodSignup, type SignupWould } from './signup'
 
 /**
  * Miriam, on her own: a request she understands and can answer herself, she
@@ -59,6 +60,8 @@ export interface OwnInput {
   viewer: Viewer
   lookups: Lookups
   db: OwnDb
+  /** For tests: whether a food sign-up she works out is acted on (FOOD_LIVE). */
+  foodLive?: boolean
   /** For tests: the web as it would answer. */
   web?: (
     text: string,
@@ -80,7 +83,18 @@ export interface Own {
   read: OwnRead | null
   /** Why, for the logs: "taught", "event_time", "not sure", … */
   why: string
+  /** A food sign-up she worked out, acted on or not (FOOD_LIVE): for the logs, beside Claude. */
+  would?: SignupWould | null
 }
+
+/**
+ * Whether a food sign-up she works out (./signup) is hers to offer. Until
+ * what she would do has been seen to agree with what Claude does — logged
+ * side by side (../askMiriam), never the words — it is worked out and left
+ * to Claude. One she told only by the dish (rule "uniqueDish") stays
+ * Claude's either way, for now.
+ */
+export const FOOD_LIVE = false
 
 /** Her offer of maps, made on an event's day (./answers: event_place). */
 const MAPS_OFFER = /Want me to open maps for it\?$/
@@ -94,6 +108,9 @@ const LOOK_IT_UP =
 /** The app's own things: "look up my tasks", "look up the set list" are the app's to find, not the web's. */
 const THE_APPS =
   /\b(?:my|our|mine|the church|the well|set ?lists?|tasks?|to-?dos?|sermons?|songs?|chords?|chord sheets?|announcements?|messages?|events?|calendar|notes?|reminders?|availability|carpools?|teams?|schedule|content|videos?)\b/i
+
+/** Her name, said first: "Hey Miriam,", "Miriam". */
+const HER_NAME = /^(?:(?:hey|hi|ok|okay)[,\s]+)?miriam[,.!:\s]+(?=\S)/i
 
 /** Words that lean on what was said before. */
 const LEANS_BACK =
@@ -175,8 +192,11 @@ interface Understood {
  * What it is (./understand), read with each event's name as "the event"
  * (./events) — and, if that isn't plain, as said.
  */
-async function understand(input: OwnInput, text = input.text): Promise<Understood> {
+async function understand(input: OwnInput, said = input.text): Promise<Understood> {
   const { today, lookups, db } = input
+  // "Hey Miriam, I'll bring chips": what is asked, without her name (as the app
+  // takes it off what is said aloud, but not off what is typed).
+  const text = said.replace(HER_NAME, '')
   const events = await lookups.eventsBetween(shiftDate(today, -1), shiftDate(today, 365))
   const { masked, mentions } = mentionsIn(
     text,
@@ -397,6 +417,25 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
       ? await input.web(text, key)
       : await webAnswer(text, { braveKey: key, today }).catch(() => null)
     return { result: fromWeb(found, input.can), read: own, why: 'web' }
+  }
+  if (reading.skill === 'food_signup') {
+    const food = await foodSignup({
+      text,
+      masked,
+      today,
+      mentions,
+      lookups,
+      viewer: input.viewer,
+      appTools: input.appTools,
+    }).catch(() => null)
+    if (!food) return { result: null, read: own, why: 'food_signup: failed' }
+    const live = (input.foodLive ?? FOOD_LIVE) && food.would?.rule !== 'uniqueDish'
+    return {
+      result: live ? food.result : null,
+      read: own,
+      why: `food_signup: ${food.why}${food.would && !live ? ' (not acted on)' : ''}`,
+      would: food.would,
+    }
   }
   const result = await answerFor(reading.skill, {
     text,

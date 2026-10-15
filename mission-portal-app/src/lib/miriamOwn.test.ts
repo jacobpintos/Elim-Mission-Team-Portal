@@ -23,10 +23,10 @@ import {
   listLearned,
   taughtAnswers,
   teach,
-  type OwnDb,
 } from '../../functions/src/miriam/own/learn'
 import { SEEDS, type Skill } from '../../functions/src/miriam/own/skills'
 import { skillOfAction } from '../../functions/src/miriam/own/labels'
+import { fakeDb, memoryOwnDb } from './__fixtures__/miriamOwnDb'
 import { read, seedExamples } from '../../functions/src/miriam/own/understand'
 import { dayIn, reminderIn, spanIn, statusIn } from '../../functions/src/miriam/own/when'
 import {
@@ -340,41 +340,6 @@ describe('availability said', () => {
 })
 
 // --- Her answers ---------------------------------------------------------------
-
-type Firestore = ConstructorParameters<typeof Lookups>[0]
-function fakeDb(data: Record<string, Record<string, Record<string, unknown>>>): Firestore {
-  const snap = (id: string, d: Record<string, unknown> | undefined) => ({
-    id,
-    exists: d !== undefined,
-    data: () => d,
-  })
-  return {
-    collection: (name: string) => ({
-      get: async () => ({ docs: Object.entries(data[name] ?? {}).map(([id, d]) => snap(id, d)) }),
-    }),
-    doc: (path: string) => {
-      const [name, id] = path.split('/')
-      return { get: async () => snap(id, data[name]?.[id]) }
-    },
-  } as unknown as Firestore
-}
-
-/** Her own store, in memory: one document per path. */
-function memoryOwnDb(): OwnDb & { docs: Map<string, Record<string, unknown>> } {
-  const docs = new Map<string, Record<string, unknown>>()
-  const ref = (path: string) => ({
-    get: async () => ({ data: () => docs.get(path) }),
-    set: async (d: Record<string, unknown>, opts?: { merge: boolean }) => {
-      docs.set(path, opts?.merge ? { ...(docs.get(path) ?? {}), ...d } : d)
-    },
-  })
-  return {
-    docs,
-    doc: ref,
-    runTransaction: async (fn) =>
-      fn({ get: (r) => r.get(), set: (r, d) => (r as ReturnType<typeof ref>).set(d) }),
-  }
-}
 
 /** The church's database, as her tests read it. */
 const CHURCH: Record<string, Record<string, Record<string, unknown>>> = {

@@ -138,6 +138,22 @@ export class Lookups {
     return eventByKey(templates, overrides, groups, this.viewer, key)
   }
 
+  /**
+   * An event's food sign-up: its items, and who has taken which, by each
+   * item's place on the sheet (foodSignups/{templateId}_{date}, as the app
+   * keeps it: src/lib/foodSignups). Only for an event this person can see.
+   */
+  async foodSheet(ev: EventInstance): Promise<{
+    items: string[]
+    signups: Record<string, { uid: string; displayName?: string }>
+  }> {
+    const items = ev.food ? (ev.foodItems ?? []) : []
+    if (items.length === 0) return { items, signups: {} }
+    const signups = ((await this.db.doc(`foodSignups/${ev.templateId}_${ev.date}`).get()).data()
+      ?.signups ?? {}) as Record<string, { uid: string; displayName?: string }>
+    return { items, signups }
+  }
+
   /** The dates of events this person can see between two days, soonest first. */
   async eventsBetween(from: string, to: string): Promise<EventInstance[]> {
     const [{ templates, overrides }, groups] = await Promise.all([this.eventData(), this.groups()])

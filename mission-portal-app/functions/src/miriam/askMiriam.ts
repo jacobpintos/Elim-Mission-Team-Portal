@@ -21,6 +21,7 @@ import { isAdminViewer, type Viewer } from './data'
 import { Lookups, withWeekday } from './lookups'
 import { PAUSE_MS, MAX_RESULT, seal, unseal } from './pause'
 import { ownAnswer, publicAnswer, webOrFaith, type OwnInput, type OwnRead } from './own'
+import type { SignupWould } from './own/signup'
 import { learn, type OwnDb } from './own/learn'
 import { OWN_SKILLS, type Skill } from './own/skills'
 import { skillOfAction } from './own/labels'
@@ -229,6 +230,8 @@ export const askMiriam = onCall(
     const ownDb = db as unknown as OwnDb
     // What she read, when she handed it to Claude: kept as what Claude says it was.
     let ownRead: OwnRead | null = null
+    // A food sign-up she worked out and didn't act on (./own: FOOD_LIVE): logged beside what Claude does.
+    let ownWould: SignupWould | null = null
     let ownInput: OwnInput | null = null
     // The request as put right, when it was heard otherwise: shown in the app.
     let heardAsText = ''
@@ -339,6 +342,8 @@ export const askMiriam = onCall(
           skill: own.read?.skill,
           score: own.read ? Math.round(own.read.score * 1000) / 1000 : undefined,
           margin: own.read ? Math.round(own.read.margin * 1000) / 1000 : undefined,
+          would: own.would?.kind,
+          rule: own.would?.rule,
         })
         if (own.result) {
           return own.result.kind === 'answer' && heardAsText && !own.result.understood
@@ -346,6 +351,7 @@ export const askMiriam = onCall(
             : own.result
         }
         ownRead = own.read
+        ownWould = own.would ?? null
       }
       // Not hers to answer, for a public follower: nothing is sent to Claude (./own: publicAnswer).
       if (ownOnly) {
@@ -435,6 +441,30 @@ export const askMiriam = onCall(
       await learn(ownDb, text, skill, r.v).catch((err: unknown) =>
         logger.error('askMiriam: not learned', err)
       )
+    }
+
+    /**
+     * What she would have done with a food sign-up, beside what Claude did —
+     * the same event and item, or not — to tell when hers can be acted on
+     * (./own: FOOD_LIVE). Never the words.
+     */
+    const besideClaude = (claude: string, input: Record<string, unknown> = {}) => {
+      const w = ownWould
+      ownWould = null
+      if (!w) return
+      const signedUp = claude === 'sign_up_food'
+      logger.info('askMiriam: her food sign-up beside Claude’s', {
+        uid,
+        would: w.kind,
+        rule: w.rule,
+        claude,
+        sameEvent: signedUp ? String(input.event_key ?? '') === w.event_key : undefined,
+        sameItem: signedUp
+          ? String(input.item ?? '')
+              .trim()
+              .toLowerCase() === w.item.trim().toLowerCase()
+          : undefined,
+      })
     }
 
     const client = new Anthropic({ apiKey: key })
@@ -543,6 +573,7 @@ export const askMiriam = onCall(
       if (action) {
         // More asked after it: once it is done, the app hands back to carry on.
         const { more_to_do: more, ...input } = action.input as Record<string, unknown>
+        besideClaude(action.name, input)
         // Hers to do next time (./own/labels).
         await learnFrom(skillOfAction(action.name, input), input.text)
         return { kind: 'confirm', name: action.name, input, more: more === true }
@@ -553,6 +584,7 @@ export const askMiriam = onCall(
         const skill = (OWN_SKILLS as readonly string[]).includes(String(input.skill))
           ? (input.skill as Skill)
           : 'other'
+        besideClaude(input.follow_up === true ? 'asked back' : `answer: ${skill}`)
         // Something she answers herself, seen by Claude: the web, or a question of faith.
         if ((skill === 'web' || skill === 'faith') && ownInput) {
           await learnFrom(skill)
