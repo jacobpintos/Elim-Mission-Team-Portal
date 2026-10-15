@@ -916,13 +916,26 @@ export function MiriamButton() {
         }
       }
       if (wanted?.kind === 'video') {
-        const item = useMusicStore.getState().items.find((m) => m.id === wanted.id)
+        // Content's list is only loaded once Content has been opened, so asked
+        // from anywhere else it was empty: the video was "not found", and she
+        // said she was opening it while nothing opened. Loaded here first, as
+        // her own "play" does above.
+        const music = useMusicStore.getState()
+        if (music.items.length === 0) await music.load()
+        const item = useMusicStore.getState().items.find((m) => String(m.id) === String(wanted.id))
         if (item) {
           noteDone(`Playing “${item.title}” from Content.`)
           setVideo(item)
           setOpen(false)
           return
         }
+        // Still not there — taken out of Content since, say. Not "opening it
+        // now" with nothing opening.
+        const text = 'I found it, but couldn’t open it here. It may have been taken out of Content.'
+        setAnswer(text)
+        speak(text)
+        setStage('answered')
+        return
       }
       const shown = result.kind === 'answer' ? result.open : null
       if (shown?.kind === 'event') shownNote.current = `showing the event ${shown.key}`
