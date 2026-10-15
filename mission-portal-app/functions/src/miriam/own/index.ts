@@ -21,6 +21,7 @@ import { read, seedExamples, type Reading } from './understand'
 import { webAnswer } from './web'
 import { aboutScripture, faithAnswer, isFaithReply, LEADERSHIP } from './faith'
 import { CHURCH_SITE, siteKnowledge } from './site'
+import { leaderAnswer, leaderAsked, storyKnowledge } from './leaders'
 import { nameAnswer, nameAsked } from './names'
 import { taughtFor } from './taught'
 
@@ -260,6 +261,22 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
         ),
         read: null,
         why: `names: ${named.which}`,
+      }
+    }
+  }
+  // Who leads the church, or someone in its story, from the Our Story page
+  // (./leaders) — unless an admin taught her otherwise. Never a question of
+  // faith: "who is Jesus" is the church's beliefs to answer (./faith).
+  const leader = aboutScripture(text) ? null : leaderAsked(text)
+  if (leader) {
+    const taught = await taughtFor(text, () => embed(text), db)
+    if (taught) return { result: toStay(said(taught)), read: null, why: 'taught' }
+    const found = leaderAnswer(leader, await storyKnowledge(db).catch(() => []))
+    if (found) {
+      return {
+        result: toStay(said(`From Our Story: ${found}`)),
+        read: null,
+        why: `leaders: ${leader.role ?? 'by name'}`,
       }
     }
   }

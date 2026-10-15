@@ -37,6 +37,7 @@ import {
   wikipediaSearch,
 } from '../../functions/src/miriam/own/web'
 import requests from './__fixtures__/miriamRequests.json'
+import { STORY_BLOCKS } from './__fixtures__/ourStory'
 import {
   aboutScripture,
   DEFER,
@@ -1581,5 +1582,55 @@ describe('a public follower', () => {
   it('and changes nothing — not even their availability', async () => {
     const own = await asked("I can't make the fall festival")
     expect(own.result).toBeNull()
+  })
+})
+
+describe('the church’s leaders, from Our Story', () => {
+  beforeEach(() => forgetCaches())
+
+  const withStory = () => {
+    const db = memoryOwnDb()
+    db.docs.set('config/main', { publicPages: { ourstory: { blocks: STORY_BLOCKS } } })
+    return db
+  }
+
+  it('answers who the pastor is in the page’s words, kept open to read', async () => {
+    const own = await ownAnswer(input('Who is the pastor?', { db: withStory() }))
+    expect(own.why).toBe('leaders: pastor')
+    expect(own.result).toMatchObject({
+      kind: 'answer',
+      text: 'From Our Story: Pastor Amy Lee has led The Well since 2019. She grew up in Cedar Rapids and studied at Moody. Amy loves teaching through whole books of the Bible.',
+      stay: true,
+    })
+  })
+
+  it('answers someone by name', async () => {
+    const own = await ownAnswer(input('who is Mark Chen', { db: withStory() }))
+    expect(own.result).toMatchObject({ text: expect.stringContaining('Mark Chen and Tom Reyes') })
+  })
+
+  it('leaves a question of faith to the church’s beliefs, even with a page that names Jesus', async () => {
+    const db = withStory()
+    db.docs.set('config/main', {
+      publicPages: {
+        ourstory: {
+          blocks: [{ type: 'text', data: { heading: 'Jesus', content: 'Jesus is Lord.' } }],
+        },
+      },
+    })
+    const own = await ownAnswer(input('who is Jesus', { db }))
+    expect(own.why).not.toMatch(/^leaders/)
+  })
+
+  it('says nothing from the page when there is no page, or it does not say', async () => {
+    expect((await ownAnswer(input('who is the pastor'))).why).not.toMatch(/^leaders/)
+    expect((await ownAnswer(input('who are the deacons', { db: withStory() }))).why).not.toMatch(
+      /^leaders/
+    )
+  })
+
+  it('still answers the app’s own questions about people as before', async () => {
+    const own = await ownAnswer(input("who's driving me to the retreat", { db: withStory() }))
+    expect(own.why).not.toMatch(/^leaders/)
   })
 })

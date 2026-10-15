@@ -1,4 +1,5 @@
 import { createHash } from 'crypto'
+import { forgetStory } from './leaders'
 import type { Example } from './understand'
 import { OWN_SKILLS, type Skill } from './skills'
 import { packVector, unpackVector } from './vectors'
@@ -228,4 +229,5 @@ export async function listTaught(
 export function forgetCaches(): void {
   learnedCache = null
   taughtCache = null
+  forgetStory()
 }
