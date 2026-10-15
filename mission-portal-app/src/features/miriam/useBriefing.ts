@@ -6,7 +6,8 @@ import { useAuthStore } from '@/stores/authStore'
 import { prepareAction } from './actions'
 import { appToolsFor } from './appTools'
 import { gatherBriefing, remindToAnswer } from './briefingData'
-import { askAvailability, type Here, type Talk } from './localTalk'
+import { hereNow } from './hereNow'
+import { askAvailability, type Talk } from './localTalk'
 import { stopSpeaking, unlockSpeech, whenSpoken } from './speak'
 import type { PanelState } from './usePanelState'
 
@@ -33,14 +34,12 @@ export function useBriefing(
     appActive,
     stopWake,
     talkFor,
-    hereNow,
   }: {
     appActive: boolean
     /** Stop listening for her name (./useListening). */
     stopWake: () => void
-    /** How she talks, and what she can see, in a conversation worked out here (./useMiriamConversation). */
+    /** How she talks in a conversation worked out here (./useMiriamConversation). */
     talkFor: (typing: boolean) => Talk
-    hereNow: () => Here
   }
 ) {
   const {
@@ -166,7 +165,7 @@ export function useBriefing(
             : `${b.asks.length} of your events need an answer. `
         setBriefScreen(false)
         setBriefing(null)
-        askAvailability(b.asks, hereNow(), talkFor(typing), lead)
+        askAvailability(b.asks, hereNow(briefedFoodRef), talkFor(typing), lead)
       }
     })
     setStage('answered')

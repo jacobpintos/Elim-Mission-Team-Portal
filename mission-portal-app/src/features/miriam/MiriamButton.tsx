@@ -45,7 +45,9 @@ import { useAppActive, usePanelState } from './usePanelState'
  *  - ./usePanelState: what her bar shows, shared by the rest.
  *  - ./useListening: the microphone — a request heard, and "Hey Miriam".
  *  - ./useBriefing: the daily briefing, offered, shown and read out.
- *  - ./useMiriamConversation: what she does with a request.
+ *  - ./useMiriamConversation: what she does with a request — with
+ *    ./useMiriamActions (changes made for them), ./useMiriamMedia (songs
+ *    and videos) and ./hereNow (what the app has, to answer from).
  *  - ./MiriamPanel: what is drawn.
  */
 export function MiriamButton() {
@@ -62,7 +64,6 @@ export function MiriamButton() {
     appActive,
     stopWake: listening.stopWake,
     talkFor: (typing) => conversation.talkFor(typing),
-    hereNow: () => conversation.hereNow(),
   })
   const conversation = useMiriamConversation(panel, listening, briefing)
   const { open, briefing: shown, video, setVideo, song, setSong, sheetQueue } = panel

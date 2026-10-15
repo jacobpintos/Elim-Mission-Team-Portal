@@ -8,51 +8,34 @@ import { anyOverlayOpen } from '@/lib/overlays'
 import { loadPlays, rememberName, rememberPlay, rememberWords } from '@/lib/miriamMemory'
 import { heardRight, refreshHearing } from '@/lib/miriamHearing'
 import { meetingAsked } from '@/lib/miriamMeeting'
-import { usePostsStore } from '@/stores/postsStore'
 import { tourFor, tourNames } from '@/features/tour/flows'
 import { tourAsked } from '@/lib/miriamTour'
 import {
   listAnswer,
   listAsked,
   playAsked,
-  playCandidates,
   playFits,
   playKey,
   playPick,
-  quickAnswer,
   screenAsked,
   tasksAnswer,
   tasksAsked,
   weatherLine,
-  type PlayAsk,
-  type QuickData,
 } from '@/lib/miriamQuick'
 import { fetchWeather } from '@/lib/weather'
-import { announcementsShown } from '@/lib/miriamAppData'
 import { directionsUrl, googleDirectionsUrl, placeOf } from '@/lib/directions'
 import { openDirections } from '@/lib/location'
-import { canKeepDateNotes, isDay, noteAddedSaid, noteText } from '@/lib/dateNotes'
-import {
-  minutesBeforeSaid,
-  reminderAsked,
-  reminderWhen,
-  repeatWhen,
-  type Repeat,
-} from '@/lib/reminders'
+import { canKeepDateNotes, isDay, noteText } from '@/lib/dateNotes'
+import { minutesBeforeSaid, reminderAsked, reminderWhen, type Repeat } from '@/lib/reminders'
 import { briefingAsked } from '@/lib/briefing'
-import { localToday, todayStr } from '@/lib/events'
+import { localToday } from '@/lib/events'
 import { asksAQuestion, songAsked, songThen } from '@/lib/miriamSongs'
-import { onceOpen, type OnceOpen } from '@/lib/sheetAfterOpen'
-import { chordSheetsPage, songHost, songHostSoon, songQueue } from '@/lib/songHost'
+import { songHost, songQueue } from '@/lib/songHost'
 import { parseSheetCommand } from '@/lib/sheetCommands'
 import { keyLabel } from '@/lib/nashvilleNumbers'
-import { loadAliases, rememberAlias } from '@/lib/songAliases'
+import { loadAliases } from '@/lib/songAliases'
 import { screensFor } from '@/lib/miriamScreens'
-import { isAdmin, isPublicFollower } from '@/lib/roles'
-import { effectiveAvail } from '@/lib/availability'
-import { db } from '@/lib/firebase'
-import { getDoc } from '@/lib/liveFirestore'
-import { doc } from 'firebase/firestore'
+import { isPublicFollower } from '@/lib/roles'
 import { clockOf } from '../../../functions/src/push/reminderTime'
 import { useAuthStore } from '@/stores/authStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
@@ -60,35 +43,22 @@ import { useDateNotesStore } from '@/stores/dateNotesStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useMiriamStore } from '@/stores/miriamStore'
-import { useMusicStore, type MusicItem } from '@/stores/musicStore'
-import { useRemindersStore, type BeforeEach, type ReminderExtra } from '@/stores/remindersStore'
+import { useMusicStore } from '@/stores/musicStore'
+import { useRemindersStore, type ReminderExtra } from '@/stores/remindersStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useTourStore } from '@/features/tour/tourStore'
-import { useUsersStore } from '@/stores/usersStore'
-import type { CarpoolCarData } from '@/types/events'
-import type { ChordSheet } from '@/types/chordSheet'
 import { recordAsked } from './recordAsked'
 import { stopSpeaking, unlockSpeech, whenSpoken } from './speak'
 import { askMiriam, miriamError } from './askMiriam'
 import { eventByKey, prepareAction } from './actions'
-import { appToolsFor } from './appTools'
-import {
-  allAnnouncements,
-  foodSheet,
-  latestMessages,
-  myRooms,
-  nextOpenFood,
-  openFood,
-} from './localData'
-import { offerDirections, remindBeforeEach, talkHere, type Here, type Talk } from './localTalk'
+import { appData, hereNow, quickFromApp } from './hereNow'
+import { offerDirections, remindBeforeEach, talkHere, type Talk } from './localTalk'
 import { BRIEFING_OFF, BRIEFING_OFF_KEY, BRIEFING_ON, type BriefingControls } from './useBriefing'
 import type { Listening } from './useListening'
+import { useMiriamActions } from './useMiriamActions'
+import { useMiriamMedia } from './useMiriamMedia'
 import type { PanelState } from './usePanelState'
 
-/** How long a confirmed change is waited on before it is said to be waiting for a signal. */
-const SEND_WAIT_MS = 12_000
-/** How long an answer to her availability questions is waited on before it is taken as kept for a signal. */
-const ANSWER_WAIT_MS = 4000
 /** How long an answer stays up once given, unless she is spoken to again. */
 const ANSWER_MS = 20_000
 /** Said to her, answering a question she asked back: nothing more is wanted. */
@@ -100,35 +70,8 @@ const timeNow = () => Date.now()
 const SAID_YES =
   /^(?:yes|yeah|yep|yup|yes please|sure|ok(?:ay)?|do it|go ahead|confirm(?:ed)?|please do|that'?s right|correct|sounds good)\b/i
 const SAID_NO = /^(?:no|nope|cancel|don'?t|stop|never\s*mind|wait|hold on)\b/i
-/** How long she listens for that yes or no before leaving it to a tap. */
-const CONFIRM_LISTEN_MS = 8000
 /** Sent once a change she was asked for among others is done, for her to go on to the rest. */
 const CARRY_ON = 'That’s done. Carry on with the rest of what I asked.'
-
-/**
- * A question answered from what the app has loaded — the same events and
- * rules the server would use (lib/miriamQuick) — or null, to ask Claude.
- */
-function quickFromApp(said: string) {
-  const data = appData()
-  return data ? quickAnswer(said, data) : null
-}
-
-/** The events, groups and people the app has loaded, as lib/miriamQuick reads them; null before the events are in. */
-function appData(): QuickData | null {
-  const profile = useAuthStore.getState().profile
-  const { templates, overrides } = useEventsStore.getState()
-  if (!profile || templates.length === 0) return null
-  return {
-    templates: templates as never,
-    overrides: overrides as never,
-    groups: useGroupsStore.getState().groups,
-    viewer: { uid: String(profile.uid), roles: profile.roles ?? [] },
-    names: new Map(useUsersStore.getState().users.map((u) => [String(u.uid), u.displayName])),
-    // Their own day, as the server is told it (./askMiriam: localToday).
-    today: localToday(),
-  }
-}
 
 /**
  * What Miriam does with a request: worked out here from what the app has
@@ -160,9 +103,6 @@ export function useMiriamConversation(
     heardNameRef,
     setUnderstood,
     askedRef,
-    song,
-    setSong,
-    sheetQueue,
     pending,
     setPending,
     pendingRef,
@@ -171,14 +111,12 @@ export function useMiriamConversation(
     askedHereRef,
     setSaid,
     confirmingByVoiceRef,
-    setConfirmByVoice,
     shownNoteRef,
     openRef,
     link,
     setLink,
     briefing: briefingShown,
     setBriefing,
-    undo,
     setUndo,
     setVideo,
     songGuesses,
@@ -189,31 +127,31 @@ export function useMiriamConversation(
     setStay,
     woken,
     sentRef,
+    saidAloudRef,
     speak,
     speakAside,
     noteDone,
     endVoiceConfirm,
   } = panel
-  const { available, requestRef, heardAsRef, saidHerNameRef, setWake, stopListening, listen } =
-    listening
+  const { requestRef, heardAsRef, saidHerNameRef, setWake, stopListening, listen } = listening
   const { giveBriefing, briefedFoodRef } = briefing
 
-  // The last request was said, not typed: a change it brings is listened for a yes to.
-  const saidAloud = useRef(false)
-  // How the videos on offer were asked for: the one picked is remembered as meant by it.
-  const guessedFor = useRef('')
-  // A chord sheet asked for, when none was plain: the nearest titles are
-  // offered — and the words and key it was asked with, the words learned
-  // from the one picked (lib/songAliases).
-  const songAsk = useRef<{
-    name: string
-    key: { key: string; minor: boolean } | null
-    /** What to do once it is open: "…start autoscroll 5". */
-    then: OnceOpen[]
-  }>({
-    name: '',
-    key: null,
-    then: [],
+  // Songs and videos (./useMiriamMedia), and changes made for them (./useMiriamActions).
+  const { openSong, playVideo, offerVideos, offerSongs, pickSong, pickVideo } =
+    useMiriamMedia(panel)
+  const {
+    setReminder,
+    setReminderBeforeEach,
+    addNote,
+    showDirections,
+    offerAction,
+    confirmAction,
+    cancelAction,
+    undoLast,
+    reorderLink,
+  } = useMiriamActions(panel, listening, {
+    // One of several things asked, done: on to the rest.
+    carryOn: () => askClaude(CARRY_ON, false),
   })
 
   // Group names, for the recogniser to expect in a request — and, with the
@@ -270,7 +208,7 @@ export function useMiriamConversation(
       setStage('answered')
       return
     }
-    saidAloud.current = stage !== 'typing'
+    saidAloudRef.current = stage !== 'typing'
     // Typed rather than said: a question back is answered by typing too.
     const typing = stage === 'typing'
     if (!again) askedRef.current = said
@@ -453,7 +391,12 @@ export function useMiriamConversation(
     }
     // A food sign-up, a task's status, a notification switch, announcements or
     // messages: worked out here, asking back what isn't plain (./localTalk).
-    if (local && !play && (await talkHere(withoutHerName(said), hereNow(), talkFor(typing)))) return
+    if (
+      local &&
+      !play &&
+      (await talkHere(withoutHerName(said), hereNow(briefedFoodRef), talkFor(typing)))
+    )
+      return
     // A song, opened here from the sheets on this device: no need to ask.
     // With a song screen up (a sheet open, or the Chord Sheets page), that is
     // all that is asked of her, and it is never sent off to be worked out.
@@ -488,12 +431,7 @@ export function useMiriamConversation(
         return
       }
       if (asking?.kind === 'guess') {
-        songAsk.current = { name: asking.name, key: asking.key, then: both?.then ?? [] }
-        setSongGuesses(asking.sheets)
-        const text = 'I couldn’t find that song. Did you mean one of these?'
-        setAnswer(text)
-        speak(text)
-        setStage('answered')
+        offerSongs(asking, both?.then ?? [])
         return
       }
       // A song screen up, and not a question: a song not found, said here.
@@ -625,7 +563,7 @@ export function useMiriamConversation(
             relation: minutesBeforeSaid(minutes),
           }
           // Events not loaded here: set all the same, its first worked out by the server.
-          if (!(await remindBeforeEach(ask, hereNow(), talkFor(typing)))) {
+          if (!(await remindBeforeEach(ask, hereNow(briefedFoodRef), talkFor(typing)))) {
             await setReminderBeforeEach(text, lead, ask.before, ask.relation, null)
           }
           return
@@ -796,119 +734,6 @@ export function useMiriamConversation(
     setStage('answered')
   }
 
-  /** A reminder set for them, said back with when — and a tap to take it back. */
-  const setReminder = async (text: string, at: Date, spoken: string, extra: ReminderExtra = {}) => {
-    const uid = useAuthStore.getState().profile?.uid
-    if (!uid) return
-    setStage('thinking')
-    try {
-      const id = await useRemindersStore.getState().add(String(uid), text, at, extra)
-      // A monthly one says when it starts; the others say it in how often.
-      const when = extra.repeat
-        ? extra.repeat === 'monthly'
-          ? `${repeatWhen(at, extra.repeat)}, starting ${reminderWhen(at, new Date())}`
-          : repeatWhen(at, extra.repeat)
-        : reminderWhen(at, new Date())
-      const said = `Okay — I’ll remind you ${when} ${spoken}.`
-      setAnswer(said)
-      speak(said)
-      setUndo({
-        label: 'Undo',
-        run: async () => {
-          await useRemindersStore.getState().remove(id)
-          return 'Okay — that reminder is gone.'
-        },
-      })
-    } catch {
-      const no = 'That reminder didn’t save. Try again in a moment.'
-      setAnswer(no)
-      speak(no)
-    }
-    setStage('answered')
-  }
-
-  /**
-   * One reminder before every event of theirs, from now on (stores/
-   * remindersStore: addBeforeEach): set at once, with a tap to take it back.
-   */
-  const setReminderBeforeEach = async (
-    text: string,
-    spoken: string,
-    before: BeforeEach,
-    relation: string,
-    first: { ev: { instanceKey: string; templateId: unknown; title: string }; at: Date } | null
-  ) => {
-    const uid = useAuthStore.getState().profile?.uid
-    if (!uid) return
-    setStage('thinking')
-    try {
-      const id = await useRemindersStore.getState().addBeforeEach(
-        String(uid),
-        text,
-        before,
-        relation,
-        first
-          ? {
-              at: first.at,
-              eventKey: first.ev.instanceKey,
-              eventTemplateId: String(first.ev.templateId),
-              eventTitle: first.ev.title,
-            }
-          : null
-      )
-      const said = `Okay — I’ll remind you${spoken ? ` ${spoken}` : ''} ${relation} each of your events, from now on${
-        first
-          ? ` — first ${reminderWhen(first.at, new Date())}, before ${first.ev.title}`
-          : ', starting with the next one you’re on'
-      }. It’s in your tasks.`
-      useMiriamStore.getState().remember(askedRef.current, said)
-      setAnswer(said)
-      speak(said)
-      setUndo({
-        label: 'Undo',
-        run: async () => {
-          await useRemindersStore.getState().remove(id)
-          return 'Okay — that reminder is gone.'
-        },
-      })
-    } catch {
-      const no = 'That reminder didn’t save. Try again in a moment.'
-      setAnswer(no)
-      speak(no)
-    }
-    setStage('answered')
-  }
-
-  /**
-   * A note on a day of their calendar (stores/dateNotesStore): theirs alone,
-   * added at once, with a tap to take it back.
-   */
-  const addNote = async (date: string, text: string) => {
-    setStage('thinking')
-    try {
-      const id = await useDateNotesStore.getState().add(date, text)
-      const said = noteAddedSaid(date, noteText(text), localToday())
-      noteDone(said)
-      setAnswer(said)
-      speak(said)
-      setUndo({
-        label: 'Undo',
-        run: async () => {
-          await useDateNotesStore.getState().remove([id])
-          return 'Okay — that note is gone.'
-        },
-      })
-    } catch (err) {
-      const no =
-        err instanceof Error && err.message === 'full'
-          ? 'You have as many notes as can be kept — delete some old ones on the Events calendar first.'
-          : 'That note didn’t save. Try again in a moment.'
-      setAnswer(no)
-      speak(no)
-    }
-    setStage('answered')
-  }
-
   // --- Worked out here (./localTalk) --------------------------------------
 
   /** How she speaks and acts in a conversation worked out here. `typing`: a question is answered by typing. */
@@ -972,115 +797,6 @@ export function useMiriamConversation(
     },
   })
 
-  /**
-   * The way to an event, opened in maps — the phone's own, or Google Maps in a
-   * new tab. A browser opens a tab only straight after a tap or a key: when it
-   * won't, the way there is a button to tap instead (as a reorder link is).
-   */
-  const showDirections = async (ev: {
-    title: string
-    location?: string
-    address?: string
-    city?: string
-    state?: string
-  }) => {
-    const place = placeOf(ev)
-    const opened = await openDirections(place)
-    const text = opened
-      ? `Opening directions to ${ev.title}${Platform.OS === 'web' ? ' in Google Maps' : ''}.`
-      : `Here’s the way to ${ev.title}, at ${place} — tap to open it.`
-    if (!opened) {
-      setLink({
-        url: Platform.OS === 'web' ? googleDirectionsUrl(place) : directionsUrl(place, Platform.OS),
-        name: ev.title,
-        label: Platform.OS === 'web' ? 'Open in Google Maps' : 'Open in Maps',
-      })
-    }
-    noteDone(text)
-    setAnswer(text)
-    speak(text)
-    setStage('answered')
-  }
-
-  /** What the conversations worked out here can see, as this person. */
-  const hereNow = (): Here => {
-    const profile = useAuthStore.getState().profile
-    const uid = String(profile?.uid ?? '')
-    return {
-      data: appData(),
-      profile,
-      tools: appToolsFor(profile),
-      tasks: () => {
-        const tasks = useTasksStore.getState()
-        return { ready: tasks._refCount > 0 && !tasks.loading, mine: uid ? tasks.myTasks(uid) : [] }
-      },
-      openFood,
-      foodSheet,
-      nextOpenFood,
-      announcements: async () =>
-        profile ? announcementsShown(await allAnnouncements(), profile, todayStr()) : [],
-      names: () =>
-        new Map(useUsersStore.getState().users.map((u) => [String(u.uid), u.displayName])),
-      rooms: () => myRooms(uid),
-      latest: latestMessages,
-      now: () => Date.now(),
-      briefedFood: () =>
-        briefedFoodRef.current?.day === localToday() ? briefedFoodRef.current.food : [],
-      answerOf: (ev) => {
-        const r = effectiveAvail(useEventsStore.getState().avail, ev as never, uid)
-        return r ? { status: r.status, note: r.note ?? '', ts: r.ts ?? 0 } : null
-      },
-      // As the event's page saves it. Not waited on past a moment: with no
-      // signal it is kept on the phone and sent when there is one.
-      answer: async (ev, status, note) => {
-        const saving = useEventsStore.getState().setAvail(ev as never, uid, status, note)
-        // Failing after the wait is past: nothing more to say about it then.
-        saving.catch(() => {})
-        try {
-          await Promise.race([saving, new Promise((done) => setTimeout(done, ANSWER_WAIT_MS))])
-          return true
-        } catch {
-          return false
-        }
-      },
-      // The church's post pages, read fresh, as the Posts screen reads them.
-      posts: async () => {
-        try {
-          await usePostsStore.getState().refreshConfig()
-          return usePostsStore.getState().config.pages
-        } catch {
-          return null
-        }
-      },
-      // Loaded while her panel is open (above): waited for a moment if not yet.
-      notes: async () => {
-        const until = Date.now() + 3000
-        while (!useDateNotesStore.getState().loaded && Date.now() < until) {
-          await new Promise((r) => setTimeout(r, 100))
-        }
-        const store = useDateNotesStore.getState()
-        return { ready: store.loaded, all: store.notes }
-      },
-      carsFor: async (ev) => {
-        if (ev.carpoolCars?.length) return ev.carpoolCars as unknown as CarpoolCarData[]
-        if (!ev.carpool) return []
-        try {
-          const saved = ((await getDoc(doc(db, 'carpool', `${ev.templateId}_${ev.date}`))).data()
-            ?.cars ?? []) as Partial<CarpoolCarData>[]
-          return saved.map((c, i) => ({
-            ...c,
-            id: c.id ?? String(i),
-            label: c.label ?? '',
-            driver: c.driver ?? '',
-            riders: c.riders ?? [],
-          }))
-        } catch {
-          return null
-        }
-      },
-    }
-  }
-
   /** Her question back, answered: listened for once she has said it, or typed. */
   const askBack = async (typing: boolean) => {
     setAskingBack(true)
@@ -1139,199 +855,6 @@ export function useMiriamConversation(
       return say(tasksAnswer(tasksAsk, tasks.tasks, data.viewer.uid, data.today).text)
     }
     return false
-  }
-
-  /** A change asked for: shown as exactly what will be done, or why it can't be. */
-  const offerAction = async (name: string, input: Record<string, unknown>, more = false) => {
-    setStage('thinking')
-    const prepared = await prepareAction(name, input)
-    if (prepared.kind === 'cannot') {
-      setPending(null)
-      setAnswer(prepared.message)
-      speak(prepared.message)
-    } else if (prepared.kind === 'open') {
-      // A form to finish: nothing is changed until it is saved there.
-      setPending(null)
-      const said = await prepared.run()
-      setAnswer(said)
-      speak(said)
-      if (name === 'create_user' && !anyOverlayOpen()) router.push('/admin/users' as never)
-    } else {
-      setPending({ name, prepared, more })
-      setAnswer(prepared.title)
-      speak(prepared.title)
-      setStage('answered')
-      // Asked out loud: a yes or no listened for once it has been said.
-      if (saidAloud.current && available) listenForYes()
-      return
-    }
-    setStage('answered')
-  }
-
-  /** The change on screen, answered by voice: listened for once she has asked, a short while. */
-  const listenForYes = async () => {
-    confirmingByVoiceRef.current = true
-    setConfirmByVoice(true)
-    await whenSpoken()
-    if (!openRef.current || !confirmingByVoiceRef.current) return endVoiceConfirm()
-    listen(false, true)
-    setTimeout(() => {
-      // Nothing said: left to a tap.
-      if (!confirmingByVoiceRef.current || requestRef.current.trim()) return
-      endVoiceConfirm()
-      stopListening()
-      setStage('answered')
-    }, CONFIRM_LISTEN_MS)
-  }
-  /** Confirmed: done, and said so. */
-  const confirmAction = async (shown = pending) => {
-    endVoiceConfirm()
-    if (shown?.prepared.kind !== 'ready') return
-    const { run, undo: takeBack } = shown.prepared
-    const more = !!shown.more
-    unlockSpeech()
-    setPending(null)
-    setStage('thinking')
-    let said: string
-    let done = false
-    try {
-      // Without a signal the change waits on the phone to be sent: said so,
-      // rather than left on "Working on it…".
-      said = await Promise.race([
-        run(),
-        new Promise<string>((done) =>
-          setTimeout(
-            () => done('No signal yet — it will go through as soon as you’re connected.'),
-            SEND_WAIT_MS
-          )
-        ),
-      ])
-      done = true
-    } catch {
-      said = 'That didn’t go through. Nothing was changed — try it on the screen.'
-    }
-    setAnswer(said)
-    speak(said)
-    // Done, and it can be taken back: a tap to, while it is shown.
-    if (done && takeBack) setUndo({ label: 'Undo', run: takeBack })
-    setStage('answered')
-    // One of several things asked: on to the next, with this one remembered as done.
-    if (more && done) {
-      useMiriamStore.getState().remember(askedRef.current, said)
-      await askClaude(CARRY_ON, false)
-    }
-  }
-  const cancelAction = () => {
-    endVoiceConfirm()
-    setPending(null)
-    useMiriamStore.getState().setAwaiting(false)
-    setAnswer('Okay — nothing was changed.')
-    speak('Okay.')
-  }
-  /** Something just done, taken back at a tap. */
-  const undoLast = async () => {
-    if (!undo) return
-    const { run } = undo
-    setUndo(null)
-    const said = await run().catch(() => 'That couldn’t be undone just now.')
-    setAnswer(said)
-    speak(said)
-  }
-
-  /** A reorder list item's link, if it has one: admins' list (Operations — Inventory). */
-  const reorderLink = async (id: string) => {
-    if (!isAdmin(useAuthStore.getState().profile)) return null
-    try {
-      const item = (await getDoc(doc(db, 'reorderItems', id))).data() as
-        | { name?: string; link?: string }
-        | undefined
-      const url = item?.link?.trim() ?? ''
-      return /^https?:\/\//i.test(url) ? { url, name: item?.name ?? 'it' } : null
-    } catch {
-      return null
-    }
-  }
-
-  /**
-   * A chord sheet, opened; the bar goes, to leave it in view — and what was
-   * asked to be done with it ("…start autoscroll 5") done once it is open.
-   */
-  const openSong = async (
-    sheet: ChordSheet,
-    key: { key: string; minor: boolean } | null,
-    then: readonly OnceOpen[] = []
-  ) => {
-    noteDone(`Opened the chord sheet “${sheet.title}”.`)
-    setSongGuesses([])
-    setVideoGuesses([])
-    setStay(false)
-    setOpen(false)
-    onceOpen(sheet.id, then)
-    // Where a song screen is up, there — an open sheet's own place — rather
-    // than another sheet on top of it.
-    const host = songHost()
-    if (host && !song) {
-      host(sheet, key)
-      return
-    }
-    // Else on the Chord Sheets page, so closing it leaves them at the list to
-    // find another — when they have it, and nothing is open over the page.
-    const chords = screensFor(useAuthStore.getState().profile).some((x) => x.id === 'worship')
-    if (chords && !song && !anyOverlayOpen()) {
-      router.push(chordSheetsPage() as never)
-      const there = await songHostSoon()
-      if (there) {
-        there(sheet, key)
-        return
-      }
-    }
-    sheetQueue.reset()
-    setSong({ sheet, key })
-  }
-  /** A video from Content, played over the page; the bar goes, to leave it in view. */
-  const playVideo = (item: MusicItem) => {
-    noteDone(`Playing “${item.title}” from Content.`)
-    setVideoGuesses([])
-    setStay(false)
-    setVideo(item)
-    setOpen(false)
-  }
-  /** A video asked for that isn't plainly one: the likely ones to choose from, or Content to look through. */
-  const offerVideos = (ask: PlayAsk, items: MusicItem[], fitting?: string) => {
-    const likely = playCandidates(ask, items)
-    if (likely.length) {
-      guessedFor.current = playKey(ask)
-      setVideoGuesses(likely)
-      const text =
-        fitting ??
-        (likely.length === 1
-          ? 'I couldn’t find that exactly. Did you mean this one?'
-          : 'I couldn’t find that exactly. Did you mean one of these?')
-      setAnswer(text)
-      speak(text)
-      setStage('answered')
-      return
-    }
-    const content = screensFor(useAuthStore.getState().profile).find((x) => x.id === 'music')
-    const text = content
-      ? 'I couldn’t find that in Content — here’s everything to look through.'
-      : 'I couldn’t find that video.'
-    setAnswer(text)
-    speak(text)
-    setStage('answered')
-    if (content && !anyOverlayOpen()) router.push(content.path as never)
-  }
-  /** One of the songs she offered: opened, and learned as what was meant. */
-  const pickSong = (sheet: ChordSheet) => {
-    if (songAsk.current.name) rememberAlias(songAsk.current.name, String(sheet.id))
-    openSong(sheet, songAsk.current.key, songAsk.current.then)
-  }
-  /** One of the videos she offered: played, and played straight away when asked this way again. */
-  const pickVideo = (item: MusicItem) => {
-    if (guessedFor.current) {
-      void rememberPlay(guessedFor.current, String(item.id))
-    }
-    playVideo(item)
   }
 
   // A question handed over (an open chord sheet heard it): asked here, as if
@@ -1433,7 +956,6 @@ export function useMiriamConversation(
   return {
     send,
     talkFor,
-    hereNow,
     offerAction,
     confirmAction,
     cancelAction,

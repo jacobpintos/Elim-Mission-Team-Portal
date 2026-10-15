@@ -78,6 +78,8 @@ export function usePanelState() {
   const [woken, setWoken] = useState(false)
   // The request now has been sent: nothing more heard is taken for it.
   const sentRef = useRef(false)
+  // The last request was said, not typed: a change it brings is listened for a yes to.
+  const saidAloudRef = useRef(false)
 
   /** Said aloud, and written out in her bar. */
   const speak = (text: string) => {
@@ -162,6 +164,7 @@ export function usePanelState() {
     woken,
     setWoken,
     sentRef,
+    saidAloudRef,
     speak,
     speakAside,
     noteDone,
