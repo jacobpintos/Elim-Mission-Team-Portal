@@ -30,6 +30,7 @@ import { minutesBeforeSaid, reminderAsked, reminderWhen, type Repeat } from '@/l
 import { briefingAsked } from '@/lib/briefing'
 import { localToday } from '@/lib/events'
 import { asksAQuestion, songAsked, songThen } from '@/lib/miriamSongs'
+import { looksLikeLyrics, slidesAsked, type SlidesAsk } from '@/lib/lyricSlides'
 import { songHost, songQueue } from '@/lib/songHost'
 import { parseSheetCommand } from '@/lib/sheetCommands'
 import { keyLabel } from '@/lib/nashvilleNumbers'
@@ -58,6 +59,7 @@ import { BRIEFING_OFF, BRIEFING_OFF_KEY, BRIEFING_ON, type BriefingControls } fr
 import type { Listening } from './useListening'
 import { useMiriamActions } from './useMiriamActions'
 import { useMiriamMedia } from './useMiriamMedia'
+import { useMiriamSlides } from './useMiriamSlides'
 import type { PanelState } from './usePanelState'
 
 /** How long an answer stays up once given, unless she is spoken to again. */
@@ -124,6 +126,10 @@ export function useMiriamConversation(
     setSongGuesses,
     videoGuesses,
     setVideoGuesses,
+    slides,
+    setSlides,
+    lyricsWanted,
+    setLyricsWanted,
     stay,
     setStay,
     woken,
@@ -137,9 +143,18 @@ export function useMiriamConversation(
   const { requestRef, heardAsRef, saidHerNameRef, setWake, stopListening, listen } = listening
   const { giveBriefing, briefedFoodRef } = briefing
 
-  // Songs and videos (./useMiriamMedia), and changes made for them (./useMiriamActions).
-  const { openSong, playVideo, offerVideos, offerSongs, pickSong, pickVideo } =
-    useMiriamMedia(panel)
+  // Songs and videos (./useMiriamMedia), lyric slides (./useMiriamSlides), and
+  // changes made for them (./useMiriamActions). Each reaches the others through
+  // these, called only once everything is in place.
+  const { openSong, playVideo, offerVideos, offerSongs, pickSong, pickVideo } = useMiriamMedia(
+    panel,
+    { slidesOf: (sheet) => slideMaker.slidesOfSheet(sheet) }
+  )
+  const slideMaker = useMiriamSlides(panel, {
+    offerSongs,
+    askBack: (typing) => void askBack(typing),
+  })
+  const { makeSlides, saveSlides } = slideMaker
   const {
     setReminder,
     setReminderBeforeEach,
@@ -226,6 +241,7 @@ export function useMiriamConversation(
     setChoices([])
     setSongGuesses([])
     setVideoGuesses([])
+    setSlides(null)
     setStay(false)
     setPending(null)
     setLink(null)
@@ -254,6 +270,23 @@ export function useMiriamConversation(
       setStage('answered')
       return
     }
+    // Answering her "which song?" for slides: the lyrics as typed — their
+    // lines kept, and never "put right" as something misheard — or its name.
+    // Lyrics are pasted, a line to a line: one line, or anything said, is a
+    // name. Anything else is taken as a request of its own, below.
+    if (!again && lyricsWanted && useMiriamStore.getState().awaiting) {
+      setLyricsWanted(false)
+      const reply = withoutHerName(asHeard)
+      if (!NEVER_MIND.test(reply)) {
+        const pasted = typing && /\n|\s\/\s/.test(reply) && looksLikeLyrics(reply)
+        const ask: SlidesAsk =
+          slidesAsked(reply) ??
+          (pasted ? { kind: 'lyrics', lyrics: reply, title: '' } : { kind: 'song', name: reply })
+        if (await makeSlides(ask, true)) return
+        useMiriamStore.getState().setAwaiting(false)
+      }
+    }
+    setLyricsWanted(false)
     // Answering a question she asked here: carried on here. A reply that is
     // no answer to it is taken as a request of its own, below.
     if (!again && askedHereRef.current && useMiriamStore.getState().awaiting) {
@@ -266,15 +299,26 @@ export function useMiriamConversation(
     // Answering what she asked back: hers to work out with what came before,
     // not taken for a song or a screen on its own.
     const replying = !again && useMiriamStore.getState().awaiting
+    // Lyric slides asked for (lib/lyricSlides): read from what was typed as
+    // it was typed, as pasted lyrics keep their lines. Made here even in the
+    // middle of a conversation with Claude, who can't make them.
+    const slidesAsk = !again ? slidesAsked(withoutHerName(asHeard)) : null
     // A question of its own, not an answer to hers: kept, without who asked,
-    // for Admin → Analytics (./recordAsked).
-    if (!again && !replying) recordAsked(withoutHerName(said), useAuthStore.getState().profile)
+    // for Admin → Analytics (./recordAsked). Not a song's lyrics.
+    if (!again && !replying && !slidesAsk) {
+      recordAsked(withoutHerName(said), useAuthStore.getState().profile)
+    }
     if (replying && NEVER_MIND.test(withoutHerName(said))) {
       useMiriamStore.getState().setAwaiting(false)
       setAnswer('Okay.')
       speak('Okay.')
       setStage('answered')
       return
+    }
+    // "Make slides for Way Maker", or for this song with its lyrics pasted: made here.
+    if (slidesAsk) {
+      useMiriamStore.getState().setAwaiting(false)
+      if (await makeSlides(slidesAsk)) return
     }
     // Worked out here, from what the app has, when it plainly can be.
     const local = !again && !replying
@@ -879,6 +923,7 @@ export function useMiriamConversation(
       setChoices([])
       setSongGuesses([])
       setVideoGuesses([])
+      setSlides(null)
       setStay(false)
       setPending(null)
       setLink(null)
@@ -909,6 +954,7 @@ export function useMiriamConversation(
     setAskingBack(false)
     setBriefing(null)
     setSaid(null)
+    setLyricsWanted(false)
     useMiriamStore.getState().setAwaiting(false)
     setOpen(false)
   }
@@ -928,6 +974,7 @@ export function useMiriamConversation(
       choices.length ||
       songGuesses.length ||
       videoGuesses.length ||
+      slides ||
       stay ||
       pending ||
       link
@@ -944,6 +991,7 @@ export function useMiriamConversation(
     choices.length,
     songGuesses.length,
     videoGuesses.length,
+    slides,
     stay,
     pending,
     link,
@@ -975,6 +1023,7 @@ export function useMiriamConversation(
     undoLast,
     pickSong,
     pickVideo,
+    saveSlides,
     pick,
     typeInstead,
     close,

@@ -1286,7 +1286,7 @@ async function voteKaizen(profile: UserProfile, input: Record<string, unknown>) 
 // --- Set lists: the worship team's and admins' -------------------------------------
 
 /** The chord sheets, loaded if the screens haven't. */
-async function chordSheets(): Promise<ChordSheet[]> {
+export async function chordSheets(): Promise<ChordSheet[]> {
   const loaded = useChordSheetsStore.getState().chordSheets
   if (loaded.length) return loaded
   return (await getDocs(collection(db, 'chordSheets'))).docs.map(

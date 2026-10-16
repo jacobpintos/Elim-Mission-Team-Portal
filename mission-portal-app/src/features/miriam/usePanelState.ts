@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import { useSongQueue } from '@/features/worship/useSongQueue'
 import type { Briefing } from '@/lib/briefing'
+import type { LyricDeck } from '@/lib/lyricSlides'
 import { useMiriamStore } from '@/stores/miriamStore'
 import type { MusicItem } from '@/stores/musicStore'
 import { useUIStore } from '@/stores/uiStore'
@@ -71,6 +72,10 @@ export function usePanelState() {
   const [video, setVideo] = useState<MusicItem | null>(null)
   const [songGuesses, setSongGuesses] = useState<ChordSheet[]>([])
   const [videoGuesses, setVideoGuesses] = useState<MusicItem[]>([])
+  // Lyric slides made (./useMiriamSlides): shown, to download or share as a .pptx.
+  const [slides, setSlides] = useState<LyricDeck | null>(null)
+  // She asked which song to make slides of: what is typed next is its lyrics, or its name.
+  const [lyricsWanted, setLyricsWanted] = useState(false)
   // An answer on faith: left open, to be read, until it is closed.
   const [stay, setStay] = useState(false)
   // Opened by her name rather than a tap: shown unmistakably, as it may be
@@ -159,6 +164,10 @@ export function usePanelState() {
     setSongGuesses,
     videoGuesses,
     setVideoGuesses,
+    slides,
+    setSlides,
+    lyricsWanted,
+    setLyricsWanted,
     stay,
     setStay,
     woken,

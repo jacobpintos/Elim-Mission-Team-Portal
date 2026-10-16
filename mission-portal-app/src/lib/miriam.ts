@@ -22,6 +22,12 @@ export function canUseMiriam(profile: UserProfile | null): boolean {
 
 /** The longest request Miriam takes, typed or said (askMiriam's MAX_TEXT). */
 export const MAX_REQUEST = 1500
+/**
+ * The most that can be typed to her: room for a song's lyrics, pasted for
+ * slides (lib/lyricSlides). Anything else past MAX_REQUEST is too long for
+ * Claude, who says so.
+ */
+export const MAX_PASTE = 12_000
 
 /** One way of a flight, as Miriam fills it in. */
 export interface FlightLegDraft {

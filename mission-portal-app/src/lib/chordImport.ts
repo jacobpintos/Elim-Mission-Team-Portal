@@ -137,7 +137,8 @@ export function chordLine(line: string): ImportedChord[] | null {
  * Lines a chart carries that are not the song: SongSelect's copyright and
  * licence footer, and the like. Dropped rather than imported as a verse.
  */
-const FOOTER = /(CCLI|©|\(c\)\s*\d{4}|copyright|songselect|terms of use|all rights reserved|www\.)/i
+export const FOOTER =
+  /(CCLI|©|\(c\)\s*\d{4}|copyright|songselect|terms of use|all rights reserved|www\.)/i
 
 /** "Key - G", "Key: F#m", "Tempo - 72", "Key: G | Tempo: 72 | Time: 4/4". */
 function metadata(line: string): { key?: string; bpm?: number } | null {

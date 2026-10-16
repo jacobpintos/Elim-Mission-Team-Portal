@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text, XStack, YStack } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { wakeEngine } from '@/lib/wakeEngine'
-import { MAX_REQUEST } from '@/lib/miriam'
+import { MAX_PASTE } from '@/lib/miriam'
 import { shownAlready } from '@/lib/miriamReplies'
 import { songHost } from '@/lib/songHost'
 import { FD } from '@/lib/format'
@@ -87,6 +87,8 @@ export function MiriamPanel({
     undo,
     songGuesses,
     videoGuesses,
+    slides,
+    lyricsWanted,
     stay,
     woken,
   } = panel
@@ -99,6 +101,7 @@ export function MiriamPanel({
     undoLast,
     pickSong,
     pickVideo,
+    saveSlides,
     pick,
     typeInstead,
     close,
@@ -336,6 +339,59 @@ export function MiriamPanel({
                 ))}
               </YStack>
             ) : null}
+            {stage === 'answered' && slides ? (
+              // Lyric slides made: as they'll show, to look over — then the file.
+              <YStack gap="$1.5" paddingTop="$1.5">
+                <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled>
+                  <YStack gap="$1.5">
+                    {slides.slides.map((slide, i) => (
+                      <View
+                        key={i}
+                        style={styles.slide}
+                        accessible
+                        accessibilityLabel={`Slide ${i + 1}: ${
+                          slide.kind === 'title'
+                            ? [slide.title, slide.artist].filter(Boolean).join(', ')
+                            : slide.lines.join(' ')
+                        }`}
+                      >
+                        {slide.kind === 'title' ? (
+                          <>
+                            <Text color="white" fontWeight="800" fontSize="$4" textAlign="center">
+                              {slide.title}
+                            </Text>
+                            {slide.artist ? (
+                              <Text color="#BFBFBF" fontSize="$1" textAlign="center">
+                                {slide.artist}
+                              </Text>
+                            ) : null}
+                          </>
+                        ) : (
+                          <Text color="white" fontWeight="800" fontSize="$2" textAlign="center">
+                            {slide.lines.join('\n')}
+                          </Text>
+                        )}
+                      </View>
+                    ))}
+                  </YStack>
+                </ScrollView>
+                <XStack gap="$2" alignItems="center">
+                  <Pressable
+                    onPress={saveSlides}
+                    accessibilityRole="button"
+                    accessibilityHint="A PowerPoint file, which Google Slides opens too"
+                    style={[styles.small, { backgroundColor: colors.primary }]}
+                  >
+                    <Text color="white" fontWeight="700" fontSize="$2">
+                      {Platform.OS === 'web' ? '⬇ Download slides' : 'Share slides'}
+                    </Text>
+                  </Pressable>
+                  <Text color={soft} fontSize="$1" flex={1}>
+                    A PowerPoint file. For Google Slides, upload it to Drive and open it there.
+                  </Text>
+                </XStack>
+              </YStack>
+            ) : null}
           </YStack>
           {stage === 'listening' && heard ? (
             <Pressable
@@ -378,14 +434,20 @@ export function MiriamPanel({
             <TextInput
               value={typed}
               onChangeText={setTyped}
-              placeholder="What should Miriam do?"
+              placeholder={
+                lyricsWanted ? 'Paste the lyrics, or the song’s name' : 'What should Miriam do?'
+              }
               placeholderTextColor={colors.textMuted}
               autoFocus
               multiline
-              maxLength={MAX_REQUEST}
-              accessibilityLabel="What should Miriam do?"
+              // Room for a song's lyrics, pasted for slides.
+              maxLength={MAX_PASTE}
+              accessibilityLabel={
+                lyricsWanted ? 'The song’s lyrics, or its name' : 'What should Miriam do?'
+              }
               style={[
                 styles.field,
+                lyricsWanted ? styles.lyricsField : null,
                 {
                   color: colors.text,
                   borderColor: colors.border,
@@ -656,6 +718,20 @@ const styles = StyleSheet.create({
   },
   link: {
     minHeight: 36,
+    justifyContent: 'center',
+  },
+  // Lyrics pasted: more of them in view.
+  lyricsField: {
+    maxHeight: 220,
+  },
+  // A slide in small: white capitals on black, as it will show.
+  slide: {
+    backgroundColor: '#000',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 60,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   track: {

@@ -16,8 +16,13 @@ import type { PanelState } from './usePanelState'
  * Songs and videos Miriam is asked for: a chord sheet opened, a video from
  * Content played over the page, or — when none is plainly the one — the
  * likely ones offered, and the one picked learned as what was meant.
+ *
+ * `slidesOf`: a song picked from those offered for slides (./useMiriamSlides).
  */
-export function useMiriamMedia(panel: PanelState) {
+export function useMiriamMedia(
+  panel: PanelState,
+  { slidesOf }: { slidesOf: (sheet: ChordSheet) => void }
+) {
   const router = useRouter()
   const {
     setOpen,
@@ -44,10 +49,13 @@ export function useMiriamMedia(panel: PanelState) {
     key: { key: string; minor: boolean } | null
     /** What to do once it is open: "…start autoscroll 5". */
     then: OnceOpen[]
+    /** Offered to make slides of, not to open. */
+    forSlides: boolean
   }>({
     name: '',
     key: null,
     then: [],
+    forSlides: false,
   })
 
   /**
@@ -119,10 +127,11 @@ export function useMiriamMedia(panel: PanelState) {
     setStage('answered')
     if (content && !anyOverlayOpen()) router.push(content.path as never)
   }
-  /** One of the songs she offered: opened, and learned as what was meant. */
+  /** One of the songs she offered: opened (or made into slides), and learned as what was meant. */
   const pickSong = (sheet: ChordSheet) => {
     if (songAsk.current.name) rememberAlias(songAsk.current.name, String(sheet.id))
-    openSong(sheet, songAsk.current.key, songAsk.current.then)
+    if (songAsk.current.forSlides) slidesOf(sheet)
+    else openSong(sheet, songAsk.current.key, songAsk.current.then)
   }
   /** One of the videos she offered: played, and played straight away when asked this way again. */
   const pickVideo = (item: MusicItem) => {
@@ -131,14 +140,20 @@ export function useMiriamMedia(panel: PanelState) {
     }
     playVideo(item)
   }
-  /** A song asked for that isn't plainly one: the nearest titles, to choose from. */
+  /**
+   * A song asked for that isn't plainly one: the nearest titles, to choose
+   * from — to open, or (`forSlides`) to make slides of.
+   */
   const offerSongs = (
     asked: { name: string; key: { key: string; minor: boolean } | null; sheets: ChordSheet[] },
-    then: OnceOpen[]
+    then: OnceOpen[],
+    forSlides = false
   ) => {
-    songAsk.current = { name: asked.name, key: asked.key, then }
+    songAsk.current = { name: asked.name, key: asked.key, then, forSlides }
     setSongGuesses(asked.sheets)
-    const text = 'I couldn’t find that song. Did you mean one of these?'
+    const text = forSlides
+      ? 'I couldn’t find that song. Which one should I make slides for?'
+      : 'I couldn’t find that song. Did you mean one of these?'
     setAnswer(text)
     speak(text)
     setStage('answered')
