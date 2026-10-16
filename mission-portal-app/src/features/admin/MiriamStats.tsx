@@ -34,7 +34,9 @@ export const SKILL_NAMES: Record<string, string> = {
   taught: 'Answers you taught her',
   names: 'Where Elim and Miriam come from',
   leaders: 'Who leads the church',
-  maps: 'Opening maps',
+  maps: 'Her offer of maps, answered',
+  event_page: 'From the event’s own page',
+  her_own: 'Something else she answered',
   public: 'Public accounts',
   other: 'Not hers — Claude’s',
 }
@@ -164,7 +166,9 @@ function FoodSection({ food }: { food: Summary['food'] }) {
   const { offered, dishOnly } = food
   const against = offered.different + offered.otherwise
   return (
-    <Section title="Signing up to bring food (not switched on yet)">
+    <Section
+      title={`Signing up to bring food (not switched on yet)${food.allTime ? ' — since counting began' : ''}`}
+    >
       <Text fontSize="$2" color="$gray10">
         When someone offers to bring food in words the phone doesn’t know, she works out the sign-up
         herself and it is kept beside what Claude does with it — Claude still answers. Once she
@@ -300,11 +304,16 @@ function Body({ s, spanSaid }: { s: Summary; spanSaid: string }) {
         <Row
           label="Couldn’t do it"
           n={outcomes.couldnt}
-          note={
-            reached ? `${pct(outcomes.couldnt, reached)} of what reached the server.` : undefined
-          }
+          note={`${reached ? `${pct(outcomes.couldnt, reached)} of what reached the server: ` : ''}refused, or not understood. When Claude says something can’t be done in the app yet, it counts as answered.`}
         />
         {outcomes.error ? <Row label="Went wrong" n={outcomes.error} /> : null}
+        {turns.none ? (
+          <Row
+            label="Turned away before anything was done"
+            n={turns.none}
+            note="Too many at once, or too long — counted in Requests, not on the phone, by her or by Claude."
+          />
+        ) : null}
         {outcomes.limited ? (
           <Row label="Too many at once (asked to wait)" n={outcomes.limited} />
         ) : null}

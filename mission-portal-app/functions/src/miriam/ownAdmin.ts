@@ -14,7 +14,7 @@ import {
 } from './own/learn'
 import { CHURCH_SITE, readSite, SITE_DOC, storeSite } from './own/site'
 import { ASKED, groupAsked } from './own/asked'
-import { EVENTS, MAX_EVENTS, summarize } from './stats'
+import { EVENTS, MAX_EVENTS, MAX_FOOD_EVENTS, summarize } from './stats'
 import { packVector, unpackVector } from './own/vectors'
 
 /** The questions read for one look at Analytics, at most: the latest. */
@@ -78,16 +78,21 @@ export const miriamOwnAdmin = onCall(
       // How she is doing over the last days: where requests were handled, and how they ended (./stats).
       const days = [7, 30, 90].includes(Number(req.data?.days)) ? Number(req.data.days) : 30
       const since = admin.firestore.Timestamp.fromMillis(Date.now() - days * DAY_MS)
-      const snap = await db
-        .collection(EVENTS)
-        .where('at', '>=', since)
-        .orderBy('at', 'desc')
-        .limit(MAX_EVENTS)
-        .get()
+      const [snap, food] = await Promise.all([
+        db
+          .collection(EVENTS)
+          .where('at', '>=', since)
+          .orderBy('at', 'desc')
+          .limit(MAX_EVENTS)
+          .get(),
+        // Whether her food sign-ups are ready to switch on: from all of them, whatever the days.
+        db.collection(EVENTS).where('kind', '==', 'food').limit(MAX_FOOD_EVENTS).get(),
+      ])
       return summarize(
         snap.docs.map((d) => d.data()),
         days,
-        snap.size >= MAX_EVENTS
+        snap.size >= MAX_EVENTS,
+        food.docs.map((d) => d.data())
       )
     }
     if (action === 'asked') {

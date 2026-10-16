@@ -152,7 +152,7 @@ export function useMiriamConversation(
     reorderLink,
   } = useMiriamActions(panel, listening, {
     // One of several things asked, done: on to the rest.
-    carryOn: () => askClaude(CARRY_ON, false),
+    carryOn: () => askClaude(CARRY_ON, false, true),
   })
 
   // Group names, for the recogniser to expect in a request — and, with the
@@ -510,7 +510,7 @@ export function useMiriamConversation(
    * answered just before: shown, said, and opened. `typing`: a question she
    * asks back is answered by typing, rather than listened for.
    */
-  const askClaude = async (said: string, typing: boolean) => {
+  const askClaude = async (said: string, typing: boolean, continued = false) => {
     toServer.current++
     setStage('thinking')
     try {
@@ -519,7 +519,7 @@ export function useMiriamConversation(
       const justSaid =
         said === requestRef.current || said === heardRight(requestRef.current ?? '').text
       const heard = !typing && justSaid ? (heardAsRef.current ?? undefined) : undefined
-      const result = await askMiriam(said, heard)
+      const result = await askMiriam(said, heard, continued)
       if (result.kind === 'answer') {
         if (result.misheard?.length) {
           rememberWords(result.misheard)
@@ -781,7 +781,8 @@ export function useMiriamConversation(
       setStage('thinking')
       const prepared = await prepareAction(name, input)
       if (prepared.kind === 'ready') {
-        await confirmAction({ name, prepared })
+        // Agreed to in words, with no card shown: not a card's answer (./recordTurn).
+        await confirmAction({ name, prepared }, false)
       } else if (prepared.kind === 'cannot') {
         setAnswer(prepared.message)
         speak(prepared.message)

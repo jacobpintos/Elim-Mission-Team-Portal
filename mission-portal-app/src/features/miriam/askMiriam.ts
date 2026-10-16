@@ -46,11 +46,20 @@ export interface Heard {
   confidence: number | null
 }
 
-export async function askMiriam(text: string, heard?: Heard): Promise<MiriamResult> {
+/**
+ * `continued`: carrying on with the rest of what was asked, once a change
+ * is done — the same request, not counted again (functions/src/miriam/stats).
+ */
+export async function askMiriam(
+  text: string,
+  heard?: Heard,
+  continued = false
+): Promise<MiriamResult> {
   const call = httpsCallable<Record<string, unknown>, MiriamResult | Run>(functions, 'askMiriam')
   const profile = useAuthStore.getState().profile
   const today = localToday()
   let { data } = await call({
+    ...(continued ? { continued: true } : {}),
     text,
     today,
     now: localClock(),
@@ -69,7 +78,11 @@ export async function askMiriam(text: string, heard?: Heard): Promise<MiriamResu
     const results = await Promise.all(
       calls.map(async (c) => ({ id: c.id, content: await runAppTool(c.name, c.input ?? {}) }))
     )
-    ;({ data } = await call({ today, resume: { state, results } }))
+    ;({ data } = await call({
+      ...(continued ? { continued: true } : {}),
+      today,
+      resume: { state, results },
+    }))
   }
   return data.kind === 'run'
     ? { kind: 'reply', text: 'I couldn’t work that out — try asking another way.' }

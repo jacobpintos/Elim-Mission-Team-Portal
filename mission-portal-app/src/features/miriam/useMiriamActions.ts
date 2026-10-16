@@ -246,10 +246,11 @@ export function useMiriamActions(
     }, CONFIRM_LISTEN_MS)
   }
   /** Confirmed: done, and said so. */
-  const confirmAction = async (shown = pending) => {
+  /** `card`: confirmed on a card she showed — not agreed to in words with none (./recordTurn). */
+  const confirmAction = async (shown = pending, card = true) => {
     endVoiceConfirm()
     if (shown?.prepared.kind !== 'ready') return
-    recordCard('confirmed')
+    if (card) recordCard('confirmed')
     const { run, undo: takeBack } = shown.prepared
     const more = !!shown.more
     unlockSpeech()

@@ -16,11 +16,13 @@
 export const EVENTS = 'miriamEvents'
 /** Read for one look at the panel, at most: the latest. */
 export const MAX_EVENTS = 20_000
+/** Her food sign-ups read, since counting began, at most. */
+export const MAX_FOOD_EVENTS = 10_000
 /** Kept this long, then cleared (../cleanup). */
 export const EVENTS_KEEP_DAYS = 400
 
-/** Where a request was handled. */
-export type Tier = 'phone' | 'own' | 'public' | 'claude'
+/** Where a request was handled; "none" when it was turned away first (too many at once, too long). */
+export type Tier = 'phone' | 'own' | 'public' | 'claude' | 'none'
 /** How a request that reached the server ended. */
 export type Outcome = 'answered' | 'askedBack' | 'change' | 'couldnt' | 'error' | 'limited'
 
@@ -59,7 +61,21 @@ export function outcomeOf(result: { kind?: unknown; followUp?: unknown }): Outco
  */
 export function ownTag(why: string, skill: string | undefined): string {
   const head = why.split(/[:(,]/)[0].trim()
-  return /^[a-z_]+$/.test(head) ? head : skill && /^[a-z_]+$/.test(skill) ? skill : 'other'
+  if (OWN_TAGS[head]) return OWN_TAGS[head]
+  if (/^[a-z_]+$/.test(head)) return head
+  // Hers, whatever she read it as: never "other".
+  return skill && skill !== 'other' && /^[a-z_]+$/.test(skill) ? skill : 'her_own'
+}
+
+/** Her answers whose reasons are more than a word (./own: ownAnswer). */
+const OWN_TAGS: Record<string, string> = {
+  // From the event itself, however she read the request.
+  'schedule item': 'event_page',
+  'theirs at it': 'event_page',
+  'someone’s travel': 'event_page',
+  'what it is': 'event_page',
+  // Her offer of maps, answered.
+  'maps declined': 'maps',
 }
 
 export interface Summary {
@@ -87,6 +103,8 @@ export interface Summary {
     dishOnly: Beside
     /** Enough agreement on what she would offer, and none against her, to switch her on. */
     ready: boolean
+    /** Counted since counting began, not only over the days asked. */
+    allTime: boolean
   }
 }
 
@@ -104,7 +122,7 @@ export const FOOD_READY_AT = 20
 const count = <K extends string>(keys: readonly K[]) =>
   Object.fromEntries(keys.map((k) => [k, 0])) as Record<K, number>
 
-const TIERS: readonly Tier[] = ['phone', 'own', 'public', 'claude']
+const TIERS: readonly Tier[] = ['phone', 'own', 'public', 'claude', 'none']
 const OUTCOMES: readonly Outcome[] = [
   'answered',
   'askedBack',
@@ -114,8 +132,19 @@ const OUTCOMES: readonly Outcome[] = [
   'limited',
 ]
 
-/** The events of a stretch of days, summed up. Anything malformed is passed over. */
-export function summarize(events: unknown[], days: number, capped = false): Summary {
+/**
+ * The events of a stretch of days, summed up. Anything malformed is passed
+ * over. `foodEvents`: her food sign-ups since counting began — whether she
+ * is ready to be switched on is never decided from a stretch of days alone,
+ * where an older disagreement would be left out. Without it, those of the
+ * stretch.
+ */
+export function summarize(
+  events: unknown[],
+  days: number,
+  capped = false,
+  foodEvents?: unknown[]
+): Summary {
   const turns = { ...count(TIERS), total: 0 }
   const outcomes = count(OUTCOMES)
   const own = new Map<string, number>()
@@ -123,11 +152,19 @@ export function summarize(events: unknown[], days: number, capped = false): Summ
   const labels = { agreed: 0, differed: 0 }
   const differences = new Map<string, number>()
   const beside = (): Beside => ({ same: 0, different: 0, askedBack: 0, otherwise: 0 })
-  const food = { worked: 0, offered: beside(), dishOnly: beside(), ready: false }
+  const food = {
+    worked: 0,
+    offered: beside(),
+    dishOnly: beside(),
+    ready: false,
+    allTime: !!foodEvents,
+  }
 
   for (const raw of events) {
     const e = raw as Record<string, unknown>
     if (!e || typeof e !== 'object') continue
+    // Her food sign-ups, from all of them, below — when they were read apart.
+    if (foodEvents && e.kind === 'food') continue
     if (e.kind === 'turn' && TIERS.includes(e.tier as Tier)) {
       turns.total++
       turns[e.tier as Tier]++
@@ -144,7 +181,12 @@ export function summarize(events: unknown[], days: number, capped = false): Summ
         const k = `${e.read}\u0000${e.label}`
         differences.set(k, (differences.get(k) ?? 0) + 1)
       }
-    } else if (e.kind === 'food' && typeof e.claude === 'string') {
+    }
+  }
+  for (const raw of foodEvents ?? events) {
+    const e = raw as Record<string, unknown>
+    if (!e || typeof e !== 'object') continue
+    if (e.kind === 'food' && typeof e.claude === 'string') {
       food.worked++
       // A sign-up she would offer; "already yours" or "taken" are answers, not offers.
       if (e.would !== 'confirm') continue

@@ -201,29 +201,37 @@ export const askMiriam = onCall(
   { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 90, memory: '1GiB', cpu: 1 },
   async (req) => {
     // Where it was handled, set as it goes, and noted once it ends (./stats).
-    const turn: TurnNote = { tier: 'claude' }
+    const turn: TurnNote = {}
     const db = admin.firestore()
+    // Carrying on with the rest of what was asked, once a change is done: the
+    // same request, counted once already (src/features/miriam/useMiriamActions).
+    if (req.data?.continued === true) turn.skip = true
     try {
       const result = await answerRequest(req, turn)
       // Paused for the app's lookups: noted when it carries on.
-      if (result.kind !== 'run' && !turn.skip) {
+      if (result.kind === 'run') return result
+      if (!turn.skip) {
         await noteEvent(db, {
           kind: 'turn',
-          tier: turn.tier,
+          // Answered before any of it was handled ("nothing I can do") isn't counted (skip).
+          tier: turn.tier ?? 'none',
           outcome: turn.outcome ?? outcomeOf(result),
           ...(turn.skill ? { skill: turn.skill } : {}),
         })
       }
+      await notedBeside(db, turn, `ended: ${String(result.kind)}`)
       return result
     } catch (err) {
       if (req.auth?.uid && !turn.skip) {
         const limited = err instanceof HttpsError && err.code === 'resource-exhausted'
         await noteEvent(db, {
           kind: 'turn',
-          tier: turn.tier,
+          // Turned away before anything was done — too many at once, too long — is "none".
+          tier: turn.tier ?? 'none',
           outcome: limited ? 'limited' : 'error',
         })
       }
+      await notedBeside(db, turn, 'ended: error')
       throw err
     }
   }
@@ -231,13 +239,27 @@ export const askMiriam = onCall(
 
 /** Where a request was handled, and how she read it, as it is worked out (./stats). */
 interface TurnNote {
-  tier: Tier
+  /** Unset until it is plain: turned away before then is "none". */
+  tier?: Tier
   /** What her own answer was: "event_time", "taught" (./stats: ownTag). */
   skill?: string
   /** How it ended, where the result alone doesn't say. */
   outcome?: Outcome
-  /** Not a request to count: there was nothing she could do for them at all. */
+  /** Not a request to count: nothing she could do for them at all, or one carried on with. */
   skip?: boolean
+  /**
+   * A food sign-up she worked out and didn't act on, until it is noted beside
+   * what Claude did — however Claude ends: a form, a plain reply, an error.
+   */
+  would?: SignupWould
+}
+
+/** Her food sign-up, beside a Claude that ended some other way than an answer or a change. */
+async function notedBeside(db: admin.firestore.Firestore, turn: TurnNote, claude: string) {
+  const w = turn.would
+  turn.would = undefined
+  if (!w) return
+  await noteEvent(db, { kind: 'food', would: w.kind, rule: w.rule, claude, same: null })
 }
 
 /** One of her records (./stats), with when: never the words, never who. Nothing said if it can't be kept. */
@@ -269,6 +291,8 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
   // A public follower: answered from her own knowing only, never sent on to
   // Claude (./plan: isPublicFollower) — and so never carried on with one.
   const ownOnly = isPublicFollower(roles)
+  // A public follower's is never Claude's, however it ends (./stats).
+  if (ownOnly) turn.tier = 'public'
   if (ownOnly && req.data?.resume) {
     throw new HttpsError('failed-precondition', 'Ask again.')
   }
@@ -406,6 +430,7 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
       }
       ownRead = own.read
       ownWould = own.would ?? null
+      turn.would = own.would ?? undefined
     }
     // Not hers to answer, for a public follower: nothing is sent to Claude (./own: publicAnswer).
     if (ownOnly) {
@@ -507,6 +532,7 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
   const besideClaude = async (claude: string, input: Record<string, unknown> = {}) => {
     const w = ownWould
     ownWould = null
+    turn.would = undefined
     if (!w) return
     const signedUp = claude === 'sign_up_food'
     const sameEvent = signedUp ? String(input.event_key ?? '') === w.event_key : undefined
@@ -560,6 +586,7 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
           messages,
         })
 
+  turn.tier = 'claude'
   for (let round = firstRound; round < MAX_ROUNDS; round++) {
     let response: Anthropic.Beta.BetaMessage
     try {

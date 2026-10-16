@@ -29,9 +29,13 @@ describe('what her own answer was', () => {
     expect(ownTag('names: elim', undefined)).toBe('names')
     expect(ownTag('event_time', 'event_time')).toBe('event_time')
     expect(ownTag('food_signup: confirm (not acted on)', 'food_signup')).toBe('food_signup')
-    // Not one word of hers: by the skill she read, else "other".
-    expect(ownTag('schedule item', 'event_schedule')).toBe('event_schedule')
-    expect(ownTag('someone’s travel', undefined)).toBe('other')
+    // From the event's own page, however she read it; her offer of maps, answered.
+    expect(ownTag('schedule item', 'other')).toBe('event_page')
+    expect(ownTag('someone’s travel', undefined)).toBe('event_page')
+    expect(ownTag('maps declined', undefined)).toBe('maps')
+    // Hers, whatever else: never "other" (Claude's).
+    expect(ownTag('some new reason', 'other')).toBe('her_own')
+    expect(ownTag('some new reason', 'event_time')).toBe('event_time')
   })
 })
 
@@ -64,7 +68,7 @@ describe('a stretch of days, summed up', () => {
       ],
       30
     )
-    expect(s.turns).toEqual({ phone: 2, own: 3, public: 1, claude: 3, total: 9 })
+    expect(s.turns).toEqual({ phone: 2, own: 3, public: 1, claude: 3, none: 0, total: 9 })
     expect(s.outcomes).toEqual({
       answered: 3,
       askedBack: 1,
@@ -122,6 +126,17 @@ describe('her food sign-ups beside Claude’s', () => {
     expect(summarize([...agreeing, food('answer: other', null)], 30).food.ready).toBe(false)
     // Claude asking something first doesn't.
     expect(summarize([...agreeing, food('asked back', null)], 30).food.ready).toBe(true)
+  })
+
+  it('are ready only by all of them since counting began, not the days looked at', () => {
+    const agreeing = Array.from({ length: FOOD_READY_AT }, () => food('sign_up_food', true))
+    // The days looked at hold only agreement; an older disagreement is outside them.
+    const span = summarize(agreeing, 30, false, [...agreeing, food('sign_up_food', false)])
+    expect(span.food.ready).toBe(false)
+    expect(span.food.allTime).toBe(true)
+    expect(span.food.offered.different).toBe(1)
+    // Food sign-ups in the days looked at are not counted twice.
+    expect(summarize(agreeing, 30, false, agreeing).food.offered.same).toBe(FOOD_READY_AT)
   })
 
   it('keeps those told only by the dish apart: not offered, so not counted for or against', () => {
