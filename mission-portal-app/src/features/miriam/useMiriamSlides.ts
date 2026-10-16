@@ -109,6 +109,8 @@ export function useMiriamSlides(
       return true
     }
     if (found?.kind === 'guess') {
+      // A tap picks one: nothing said next answers her.
+      useMiriamStore.getState().setAwaiting(false)
       offerSongs({ name: splitSpokenKey(ask.name).name, key: null, sheets: found.sheets }, [], true)
       return true
     }

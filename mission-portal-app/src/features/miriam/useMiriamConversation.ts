@@ -3,7 +3,7 @@ import { Linking, Platform } from 'react-native'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { namesHer, stopListeningAsked, withoutHerName } from '@/lib/wakeWord'
-import { miriamHref } from '@/lib/miriam'
+import { MAX_REQUEST, miriamHref } from '@/lib/miriam'
 import { anyOverlayOpen } from '@/lib/overlays'
 import { loadPlays, rememberName, rememberPlay, rememberWords } from '@/lib/miriamMemory'
 import { heardRight, refreshHearing } from '@/lib/miriamHearing'
@@ -30,7 +30,7 @@ import { minutesBeforeSaid, reminderAsked, reminderWhen, type Repeat } from '@/l
 import { briefingAsked } from '@/lib/briefing'
 import { localToday } from '@/lib/events'
 import { asksAQuestion, songAsked, songThen } from '@/lib/miriamSongs'
-import { looksLikeLyrics, slidesAsked, type SlidesAsk } from '@/lib/lyricSlides'
+import { looksLikeLyrics, slidesAsked, slidesAsking, type SlidesAsk } from '@/lib/lyricSlides'
 import { songHost, songQueue } from '@/lib/songHost'
 import { parseSheetCommand } from '@/lib/sheetCommands'
 import { keyLabel } from '@/lib/nashvilleNumbers'
@@ -67,6 +67,9 @@ const ANSWER_MS = 20_000
 /** Said to her, answering a question she asked back: nothing more is wanted. */
 const NEVER_MIND =
   /^(?:never\s*mind|cancel|forget\s+(?:it|that)|stop|no(?:\s+thanks?)?|nothing|that'?s\s+all)\b/i
+/** The whole reply only "never mind": a song's name may start with "No" ("No Longer Slaves"). */
+const ONLY_NEVER_MIND =
+  /^(?:never\s*mind|cancel|forget\s+(?:it|that)|stop|no(?:\s+thanks?)?|nothing|that'?s\s+all)[\s.!]*$/i
 /** The time now: read when something is asked, never while drawing. */
 const timeNow = () => Date.now()
 /** A change shown to confirm, answered out loud: yes, or no. Anything else leaves it to a tap. */
@@ -277,11 +280,13 @@ export function useMiriamConversation(
     if (!again && lyricsWanted && useMiriamStore.getState().awaiting) {
       setLyricsWanted(false)
       const reply = withoutHerName(asHeard)
-      if (!NEVER_MIND.test(reply)) {
+      if (!ONLY_NEVER_MIND.test(reply)) {
         const pasted = typing && /\n|\s\/\s/.test(reply) && looksLikeLyrics(reply)
         const ask: SlidesAsk =
           slidesAsked(reply) ??
           (pasted ? { kind: 'lyrics', lyrics: reply, title: '' } : { kind: 'song', name: reply })
+        // Remembered without the lyrics: they stay on the device.
+        if (ask.kind === 'lyrics') askedRef.current = slidesAsking(ask)
         if (await makeSlides(ask, true)) return
         useMiriamStore.getState().setAwaiting(false)
       }
@@ -303,6 +308,24 @@ export function useMiriamConversation(
     // it was typed, as pasted lyrics keep their lines. Made here even in the
     // middle of a conversation with Claude, who can't make them.
     const slidesAsk = !again ? slidesAsked(withoutHerName(asHeard)) : null
+    // Lyrics pasted, too long to send her, and not asked as slides: how to
+    // ask for them, here — the lyrics never sent, nor kept.
+    if (
+      !again &&
+      typing &&
+      !slidesAsk &&
+      asHeard.length > MAX_REQUEST &&
+      looksLikeLyrics(asHeard)
+    ) {
+      askedRef.current = ''
+      useMiriamStore.getState().setAwaiting(false)
+      const text =
+        'To make slides of a song, type “make slides for this song” with its lyrics pasted underneath.'
+      setAnswer(text)
+      speak(text)
+      setStage('answered')
+      return
+    }
     // A question of its own, not an answer to hers: kept, without who asked,
     // for Admin → Analytics (./recordAsked). Not a song's lyrics.
     if (!again && !replying && !slidesAsk) {
@@ -318,6 +341,8 @@ export function useMiriamConversation(
     // "Make slides for Way Maker", or for this song with its lyrics pasted: made here.
     if (slidesAsk) {
       useMiriamStore.getState().setAwaiting(false)
+      // Remembered without the lyrics: they stay on the device.
+      if (slidesAsk.kind === 'lyrics') askedRef.current = slidesAsking(slidesAsk)
       if (await makeSlides(slidesAsk)) return
     }
     // Worked out here, from what the app has, when it plainly can be.

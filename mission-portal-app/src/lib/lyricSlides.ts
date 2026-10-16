@@ -43,9 +43,11 @@ const SLIDES_FOR = new RegExp(
   `${LEAD}${FILL}(?:lyrics?\\s+)?(?:slides|slide\\s*deck|slideshow)\\s+(?:for|of)\\b\\s*(.*)$`,
   'i'
 )
-/** "Put Way Maker on slides", "turn these lyrics into slides". */
+/** Words that end a request, and aren't the song: "…please", "…for Sunday". */
+const AFTER = String.raw`(?:[\s,]+(?:please|thanks|thank\s+you|for\s+(?:me|us)|for\s+(?:this\s+)?sunday|for\s+(?:the\s+)?service))*`
+/** "Put Way Maker on slides", "turn these lyrics into slides please". */
 const INTO_SLIDES = new RegExp(
-  `${LEAD}(?:turn|put|make|convert|format|change)\\s+(.+?)\\s+(?:into|onto|on|to|as)\\s+${FILL}${SORT}${DECK}\\s*[.!?]*$`,
+  `${LEAD}(?:turn|put|make|convert|format|change)\\s+(.+?)\\s+(?:into|onto|on|to|as)\\s+${FILL}${SORT}${DECK}${AFTER}\\s*[.!?]*$`,
   'i'
 )
 
@@ -60,6 +62,9 @@ const THIS_THEN = /^(?:this|these|the\s+following)\s+(?:song|lyrics?|words)\s*[-
 /** Words that end a request, and aren't the song: "…please", "…thanks". */
 const TRAILING =
   /[\s,]*(?:please|thanks|thank\s+you|for\s+me|for\s+sunday|for\s+service)?[\s.!?]*$/i
+/** When they're for, not which song: "make slides for Sunday", "…for me". */
+const OCCASION =
+  /^(?:(?:this|next|on)\s+)?(?:sunday|(?:sunday(?:'?s|’s)?\s+)?(?:service|worship|morning)|church|tonight|me|us)$/i
 
 /**
  * Lyric slides asked for, and for what — or null when it isn't that. The
@@ -93,6 +98,7 @@ export function slidesAsked(text: string): SlidesAsk | null {
   }
   target = target.replace(TRAILING, '').trim()
   target = target.replace(/^[“"'‘]+|[”"'’]+$/g, '').trim()
+  if (OCCASION.test(target)) target = ''
 
   let name = ''
   const called = target.match(THIS_CALLED)
@@ -105,6 +111,16 @@ export function slidesAsked(text: string): SlidesAsk | null {
   if (looksLikeLyrics(lyrics)) return { kind: 'lyrics', lyrics, title: name }
   if (name) return { kind: 'song', name }
   return { kind: 'which' }
+}
+
+/**
+ * The asking alone, without any lyrics pasted: what she remembers of it, for
+ * what comes next, as nothing pasted for slides leaves the device.
+ */
+export function slidesAsking(ask: SlidesAsk): string {
+  if (ask.kind === 'song') return `make slides for ${ask.name}`
+  if (ask.kind === 'lyrics' && ask.title) return `make slides for ${ask.title}`
+  return 'make slides for this song'
 }
 
 function askingIn(line: string): { target: string } | null {

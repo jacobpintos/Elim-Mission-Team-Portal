@@ -11,6 +11,7 @@ import {
   rowsOf,
   sheetForSlides,
   slidesAsked,
+  slidesAsking,
   slidesOf,
   sungLine,
   width,
@@ -39,6 +40,9 @@ describe('asking Miriam for lyric slides', () => {
       'slides for Waymaker',
       'put Waymaker on slides',
       'make slides for the song Waymaker',
+      'put Waymaker on slides for Sunday',
+      'turn Waymaker into slides please',
+      'make slides for Waymaker for me',
     ]) {
       expect(slidesAsked(said), said).toEqual({ kind: 'song', name: 'Waymaker' })
     }
@@ -82,6 +86,39 @@ describe('asking Miriam for lyric slides', () => {
       kind: 'lyrics',
       lyrics: 'Amazing grace! How sweet the sound\nThat saved a wretch like me!',
     })
+  })
+
+  it('takes "into slides" with a please or a Sunday after it', () => {
+    const lyrics = 'Amazing grace! How sweet the sound\nThat saved a wretch like me!'
+    for (const said of [
+      'Can you turn these lyrics into slides please?',
+      'Put these lyrics on slides for me',
+      'Please turn this song into slides for Sunday',
+    ]) {
+      expect(slidesAsked(`${said}\n${lyrics}`), said).toEqual({ kind: 'lyrics', title: '', lyrics })
+    }
+  })
+
+  it('takes Sunday, or who they’re for, as no song’s name', () => {
+    const lyrics = 'Amazing grace! How sweet the sound\nThat saved a wretch like me!'
+    expect(slidesAsked(`Can you make lyric slides for Sunday?\n${lyrics}`)).toEqual({
+      kind: 'lyrics',
+      title: '',
+      lyrics,
+    })
+    expect(slidesAsked('make slides for Sunday')).toEqual({ kind: 'which' })
+    expect(slidesAsked('make slides for this Sunday’s service')).toEqual({ kind: 'which' })
+    expect(slidesAsked('make me slides for me')).toEqual({ kind: 'which' })
+  })
+
+  it('is remembered without the lyrics pasted', () => {
+    expect(slidesAsking({ kind: 'lyrics', lyrics: 'Amazing grace…', title: '' })).toBe(
+      'make slides for this song'
+    )
+    expect(slidesAsking({ kind: 'lyrics', lyrics: 'Amazing grace…', title: 'Amazing Grace' })).toBe(
+      'make slides for Amazing Grace'
+    )
+    expect(slidesAsking({ kind: 'song', name: 'Waymaker' })).toBe('make slides for Waymaker')
   })
 
   it('asks which song, when none is named and nothing is pasted', () => {
