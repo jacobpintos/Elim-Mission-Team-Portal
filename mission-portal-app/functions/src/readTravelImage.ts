@@ -4,6 +4,7 @@ import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
 import Anthropic from '@anthropic-ai/sdk'
 import { canAsk } from './miriam/data'
+import { withinLimit, type UsageLimit } from './utils/usageLimit'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -28,18 +29,8 @@ const MAX_ROUNDS = 3
 /** Only pictures the event form uploaded; never an arbitrary address. */
 const PATH = /^(eventFlights|eventLodging)\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/
 
-/** Per person: generous for filling in a form, not enough to run up a bill. */
-const PER_WINDOW = 30
-const WINDOW_MS = 10 * 60 * 1000
-const recent = new Map<string, number[]>()
-function allowed(uid: string): boolean {
-  const now = Date.now()
-  const calls = (recent.get(uid) ?? []).filter((t) => now - t < WINDOW_MS)
-  if (calls.length >= PER_WINDOW) return false
-  calls.push(now)
-  recent.set(uid, calls)
-  return true
-}
+/** Per person: generous for filling in a form, not enough to run up a bill. Counted across every copy of the server (./utils/usageLimit). */
+const LIMIT: UsageLimit = { name: 'readTravelImage', perWindow: 30, windowMs: 10 * 60 * 1000 }
 
 const text = { type: 'string' }
 
@@ -108,7 +99,10 @@ export const readTravelImage = onCall(
     const me = await admin.firestore().doc(`users/${uid}`).get()
     const roles: string[] = Array.isArray(me.data()?.roles) ? me.data()!.roles : []
     if (!canAsk(roles)) throw new HttpsError('permission-denied', 'Not available for this account.')
-    if (!allowed(uid)) {
+    const allowed = await withinLimit(admin.firestore(), uid, LIMIT, {
+      onError: (err) => logger.warn('readTravelImage: usage count unreachable, counted here', err),
+    })
+    if (!allowed) {
       throw new HttpsError('resource-exhausted', 'Too many pictures read just now. Try again soon.')
     }
 

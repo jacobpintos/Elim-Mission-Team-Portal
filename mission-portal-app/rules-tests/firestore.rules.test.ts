@@ -909,6 +909,25 @@ describe('Miriam’s records of how she is doing', () => {
   })
 })
 
+describe('usage counts — the server’s alone', () => {
+  it('are read, written or taken away by no device — an admin’s included, or their own', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'usageLimits', `askMiriam_${MEMBER}`), {
+        calls: [1],
+        until: 2,
+      })
+    })
+    await assertFails(getDoc(doc(as(MEMBER), 'usageLimits', `askMiriam_${MEMBER}`)))
+    await assertFails(getDoc(doc(as(ADMIN), 'usageLimits', `askMiriam_${MEMBER}`)))
+    // Their own count put back to nothing, to be allowed more.
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'usageLimits', `askMiriam_${MEMBER}`), { calls: [], until: 0 })
+    )
+    await assertFails(deleteDoc(doc(as(MEMBER), 'usageLimits', `askMiriam_${MEMBER}`)))
+    await assertFails(getDocs(collection(as(ADMIN), 'usageLimits')))
+  })
+})
+
 describe('guests', () => {
   it('reads set lists and chord sheets', () => {
     // The worship tab they were given would render nothing without this.

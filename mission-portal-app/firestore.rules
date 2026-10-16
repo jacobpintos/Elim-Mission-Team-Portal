@@ -498,6 +498,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // How often each person has just called something that costs to run
+    // (Miriam, reading a travel picture): the times of their latest calls,
+    // counted by the server (functions/src/utils/usageLimit), never seen.
+    match /usageLimits/{id} {
+      allow read, write: if false;
+    }
+
     // One-time connect invitations, consumed by the fbConnect web flow.
     match /fbConnectInvites/{inviteId} {
       allow read, write: if false;

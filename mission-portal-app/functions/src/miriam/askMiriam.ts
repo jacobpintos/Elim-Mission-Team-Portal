@@ -29,6 +29,7 @@ import { OWN_SKILLS, type Skill } from './own/skills'
 import { skillOfAction } from './own/labels'
 import { notHers } from './own/guards'
 import { heardRight } from './hearing'
+import { withinLimit, type UsageLimit } from '../utils/usageLimit'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -54,18 +55,8 @@ const ADVISOR: Anthropic.Beta.BetaAdvisorTool20260301 = {
 /** A minute of talking, with room to spare; past it, it isn't a request. Mirrored in the app (lib/miriam: MAX_REQUEST). */
 const MAX_TEXT = 1500
 
-/** Per person: enough for real use, not enough to run up a bill. */
-const PER_WINDOW = 20
-const WINDOW_MS = 10 * 60 * 1000
-const recent = new Map<string, number[]>()
-function allowed(uid: string): boolean {
-  const now = Date.now()
-  const calls = (recent.get(uid) ?? []).filter((t) => now - t < WINDOW_MS)
-  if (calls.length >= PER_WINDOW) return false
-  calls.push(now)
-  recent.set(uid, calls)
-  return true
-}
+/** Per person: enough for real use, not enough to run up a bill. Counted across every copy of the server (../utils/usageLimit). */
+const LIMIT: UsageLimit = { name: 'askMiriam', perWindow: 20, windowMs: 10 * 60 * 1000 }
 
 const SYSTEM = `You are Miriam, the assistant in the Mission Portal app of The Well of Iowa, a church mission team.
 
@@ -351,7 +342,10 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
     if (text !== asHeard) heardAsText = text
     if (text.length > MAX_TEXT)
       throw new HttpsError('invalid-argument', 'That was too long — try it in two.')
-    if (!allowed(uid)) {
+    const allowed = await withinLimit(admin.firestore(), uid, LIMIT, {
+      onError: (err) => logger.warn('Miriam: usage count unreachable, counted here', err),
+    })
+    if (!allowed) {
       throw new HttpsError(
         'resource-exhausted',
         'That’s a lot of requests — try again in a few minutes.'

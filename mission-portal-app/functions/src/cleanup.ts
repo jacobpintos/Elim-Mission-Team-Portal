@@ -2,6 +2,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { ASKED, ASKED_KEEP_DAYS } from './miriam/own/asked'
 import { EVENTS, EVENTS_KEEP_DAYS } from './miriam/stats'
+import { USAGE_LIMITS } from './utils/usageLimit'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -96,6 +97,20 @@ export const dailyCleanup = onSchedule('0 2 * * *', async () => {
   )
   for (;;) {
     const oldSnap = await db.collection(EVENTS).where('at', '<', eventsBefore).limit(400).get()
+    if (oldSnap.empty) break
+    const batch = db.batch()
+    oldSnap.docs.forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+    if (oldSnap.size < 400) break
+  }
+
+  // ── Usage counts (utils/usageLimit): cleared once their times have passed ──
+  for (;;) {
+    const oldSnap = await db
+      .collection(USAGE_LIMITS)
+      .where('until', '<', Date.now())
+      .limit(400)
+      .get()
     if (oldSnap.empty) break
     const batch = db.batch()
     oldSnap.docs.forEach((d) => batch.delete(d.ref))
