@@ -60,11 +60,17 @@ export function useMiriamActions(
   } = panel
   const { available, requestRef, stopListening, listen } = listening
 
-  /** A reminder set for them, said back with when — and a tap to take it back. */
-  const setReminder = async (text: string, at: Date, spoken: string, extra: ReminderExtra = {}) => {
+  /** A reminder set for them, said back with when — and a tap to take it back, which it gives back too. */
+  const setReminder = async (
+    text: string,
+    at: Date,
+    spoken: string,
+    extra: ReminderExtra = {}
+  ): Promise<(() => Promise<string>) | null> => {
     const uid = useAuthStore.getState().profile?.uid
-    if (!uid) return
+    if (!uid) return null
     setStage('thinking')
+    let takeBack: (() => Promise<string>) | null = null
     try {
       const id = await useRemindersStore.getState().add(String(uid), text, at, extra)
       // A monthly one says when it starts; the others say it in how often.
@@ -76,19 +82,18 @@ export function useMiriamActions(
       const said = `Okay — I’ll remind you ${when} ${spoken}.`
       setAnswer(said)
       speak(said)
-      setUndo({
-        label: 'Undo',
-        run: async () => {
-          await useRemindersStore.getState().remove(id)
-          return 'Okay — that reminder is gone.'
-        },
-      })
+      takeBack = async () => {
+        await useRemindersStore.getState().remove(id)
+        return 'Okay — that reminder is gone.'
+      }
+      setUndo({ label: 'Undo', run: takeBack })
     } catch {
       const no = 'That reminder didn’t save. Try again in a moment.'
       setAnswer(no)
       speak(no)
     }
     setStage('answered')
+    return takeBack
   }
 
   /**
@@ -250,6 +255,8 @@ export function useMiriamActions(
   const confirmAction = async (shown = pending, card = true) => {
     endVoiceConfirm()
     if (shown?.prepared.kind !== 'ready') return
+    // What was meant, after all: no longer hers to say it wasn't.
+    useMiriamStore.getState().setLastOwn(null)
     if (card) recordCard('confirmed')
     const { run, undo: takeBack } = shown.prepared
     const more = !!shown.more
@@ -286,6 +293,7 @@ export function useMiriamActions(
     }
   }
   const cancelAction = () => {
+    useMiriamStore.getState().setLastOwn(null)
     recordCard('cancelled')
     endVoiceConfirm()
     setPending(null)

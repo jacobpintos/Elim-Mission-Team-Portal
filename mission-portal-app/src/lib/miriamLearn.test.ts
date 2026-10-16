@@ -15,6 +15,7 @@ import {
   MAX_WAITING,
   ownKnowledge,
   sameKey,
+  takeOff,
   WAITING_MS,
   type OwnDb,
 } from '../../functions/src/miriam/own/learn'
@@ -150,6 +151,68 @@ describe('a lesson', () => {
     expect(await approve(db, { key: sameKey('who’s driving to the event') }, 3)).toBe('in use')
     expect(learningOf(db).retired).toEqual([])
     expect(await approve(db, { key: sameKey('never learned') }, 4)).toBe('not found')
+  })
+})
+
+describe('a request Claude reads one way, then another', () => {
+  it('is never used on two readings with another between — “only Claude’s” counts, kept or not', async () => {
+    const db = memoryOwnDb()
+    await learn(db, 'is the event on', 'event_place', A, 0)
+    // Claude: only Claude's to do — not kept as a lesson, but it takes hers back.
+    expect(await learn(db, 'is the event on', 'other', A, GAP, { keep: false })).toMatchObject({
+      kept: 'not kept',
+      retired: 1,
+    })
+    expect(await learn(db, 'is the event on', 'event_place', A, 2 * GAP)).toMatchObject({
+      kept: 'waiting',
+    })
+    expect(learnedOf(db)).toEqual([])
+  })
+
+  it('is taken back of any other skill once an admin approves one', async () => {
+    const db = memoryOwnDb()
+    await learn(db, 'is the event on', 'event_time', A, 0)
+    await learn(db, 'is the event on', 'event_time', A, GAP)
+    await learn(db, 'is the event on', 'event_place', A, 2 * GAP)
+    // The admin says event_time is right: event_place, of the same request, taken back for good.
+    await approve(db, { key: sameKey('is the event on'), skill: 'event_time' }, 3 * GAP)
+    expect(learnedOf(db)).toMatchObject([{ s: 'event_time', ok: true }])
+    expect(learningOf(db).waiting).toEqual([])
+    expect(learningOf(db).retired?.map((e) => [e.s, e.why])).toEqual([['event_place', 'admin']])
+  })
+
+  it('keeps an admin’s “not this” however many Claude takes back after', async () => {
+    const db = memoryOwnDb()
+    await learn(db, 'is it cold out at the event', 'event_place', A, 0)
+    await forget(db, { key: sameKey('is it cold out at the event') }, 1)
+    const retired = Array.from({ length: MAX_RETIRED + 5 }, (_, i) => ({
+      t: `gone ${i}`,
+      s: 'event_time',
+      v: packVector(new Float32Array([1, 0])),
+      at: i,
+      gone: 10 + i,
+      why: 'claude:event_place',
+    }))
+    db.docs.set(LEARNING_DOC, {
+      ...learningOf(db),
+      retired: [...(learningOf(db).retired ?? []), ...retired],
+    })
+    await learn(db, 'something else entirely', 'web', apart(4), 1000)
+    expect(learningOf(db).retired?.filter((e) => e.why === 'admin')).toHaveLength(1)
+    expect(await learn(db, 'is it cold out at the event', 'event_place', A, 2000)).toMatchObject({
+      kept: 'not kept',
+    })
+  })
+
+  it('“Take off” touches only what was taken back, never a lesson waiting or in use', async () => {
+    const db = memoryOwnDb()
+    await learn(db, 'is the event on', 'event_time', A, 0)
+    await learn(db, 'is the event on', 'event_place', A, GAP)
+    await learn(db, 'is the event on', 'event_time', A, 2 * GAP)
+    expect(learningOf(db).retired?.map((e) => e.s)).toEqual(['event_time', 'event_place'])
+    await takeOff(db, { key: sameKey('is the event on'), skill: 'event_time' }, 3 * GAP)
+    expect(learningOf(db).retired?.map((e) => e.s)).toEqual(['event_place'])
+    expect(learningOf(db).waiting).toMatchObject([{ s: 'event_time' }])
   })
 })
 
@@ -350,6 +413,21 @@ describe('someone saying an answer wasn’t what they meant', () => {
       { t: 'when is it', s: 'event_dress' },
       { t: 'when is the event', why: 'corrected', y: 1 },
     ])
+  })
+
+  it('keeps handing the words on when her reading wasn’t what led her wrong', async () => {
+    const db = memoryOwnDb()
+    const key = sameKey('when does she arrive')
+    // An answer from the event's page (no reading of hers to blame), corrected.
+    await corrected(db, { key, from: [] }, 0)
+    await learn(db, 'when does she arrive', 'event_schedule', A, 1, {
+      corrected: { read: null, from: [], key },
+    })
+    // Read as Claude does — already was: still handed on, until it expires.
+    await learn(db, 'when does she arrive', 'event_schedule', A, DAY, {
+      herReading: { skill: 'event_schedule', key },
+    })
+    expect(learningOf(db).handOn).toMatchObject([{ k: key, hold: true }])
   })
 
   it('hands the words on until she reads them as Claude does', async () => {

@@ -131,17 +131,25 @@ describe('answers of hers said not to be what was meant', () => {
         c('event_place', 'event_place'),
         c('event_page', 'asked back'),
         c('web', 'none'),
+        {
+          kind: 'correction',
+          read: 'event_page',
+          label: 'event_time',
+          learned: false,
+          byReading: false,
+        },
         { kind: 'correction', read: 'x' },
         { kind: 'correction', label: 'y' },
       ],
       30
     )
     expect(s.corrections).toEqual({
-      total: 5,
+      total: 6,
       readSame: 1,
       readOtherwise: 2,
       askedBack: 1,
       fromLearned: 1,
+      notByReading: 1,
       differences: [{ read: 'event_dress', label: 'event_time', n: 2 }],
     })
     expect(summarize([], 30).corrections.total).toBe(0)

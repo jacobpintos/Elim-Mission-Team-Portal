@@ -398,6 +398,13 @@ function CorrectionsSection({ c, own }: { c: Summary['corrections']; own: number
             note="Her reading was right; the answer missed."
           />
           {c.askedBack ? <Row label="Claude asked them what they meant" n={c.askedBack} /> : null}
+          {c.notByReading ? (
+            <Row
+              label="From an event’s page, not her reading"
+              n={c.notByReading}
+              note="The answer missed; how she read it wasn’t in question."
+            />
+          ) : null}
           <Row
             label="Led by something she learned"
             n={c.fromLearned}

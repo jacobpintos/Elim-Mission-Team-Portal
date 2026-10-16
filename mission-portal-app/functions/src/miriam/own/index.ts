@@ -49,6 +49,12 @@ export const sure = (r: Pick<Reading, 'score' | 'margin'>) =>
   (r.score >= 0.6 && r.margin >= 0.05) || (r.score >= 0.4 && r.margin >= 0.1)
 
 export interface OwnInput {
+  /**
+   * Words someone said an answer to wasn't what they meant are handed to
+   * Claude (./learn): false where there is no Claude to hand them to (a
+   * public follower's), and she answers as ever.
+   */
+  handOn?: boolean
   text: string
   today: string
   /** Their clock, "HH:MM", from the app (newer versions). */
@@ -403,7 +409,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
   }
   // Said not to be what was meant, the last time she answered it: Claude's,
   // until she reads it as Claude does (./learn: handOn).
-  if (handOn) return { result: null, read: own, why: 'corrected before' }
+  if (handOn && input.handOn !== false) return { result: null, read: own, why: 'corrected before' }
 
   // 2. From the event itself, however she read it: something on its schedule
   // ("When does Olivia arrive for New Year's Eve?" — “Courtney and Olivia

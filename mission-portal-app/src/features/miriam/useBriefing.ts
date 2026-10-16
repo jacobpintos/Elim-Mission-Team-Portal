@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { AttentionItem, Briefing, FoodNudge } from '@/lib/briefing'
 import { localToday } from '@/lib/events'
 import { useAuthStore } from '@/stores/authStore'
+import { useMiriamStore } from '@/stores/miriamStore'
 import { prepareAction } from './actions'
 import { appToolsFor } from './appTools'
 import { gatherBriefing, remindToAnswer } from './briefingData'
@@ -130,6 +131,8 @@ export function useBriefing(
 
   /** The daily briefing (lib/briefing): shown to tap through, and read out. `typing`: asked for by typing, so its questions are answered so too. */
   const giveBriefing = async (typing = false) => {
+    // Her last answer put away: "not what I meant" is no longer about it.
+    useMiriamStore.getState().setLastOwn(null)
     setStage('thinking')
     const b = await gatherBriefing().catch(() => null)
     if (!b) {
@@ -175,6 +178,7 @@ export function useBriefing(
   /** The morning offer taken up: the panel opened on the briefing. */
   const openBriefing = async () => {
     unlockSpeech()
+    useMiriamStore.getState().setLastOwn(null)
     setOfferBriefing(false)
     stopWake()
     sentRef.current = true

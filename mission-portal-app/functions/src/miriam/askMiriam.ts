@@ -48,6 +48,8 @@ import { OWN_SKILLS, type Skill } from './own/skills'
 import { skillOfAction } from './own/labels'
 import { notHers } from './own/guards'
 import { heardRight } from './hearing'
+import { meantInstead } from './notMeant'
+import { aboutScripture } from './own/faith'
 import { withinLimit, type UsageLimit } from '../utils/usageLimit'
 
 if (!admin.apps.length) admin.initializeApp()
@@ -270,7 +272,7 @@ interface TurnNote {
    */
   would?: SignupWould
   /** Someone said an answer of hers wasn't what they meant: noted once it ends (./stats). */
-  correction?: { read: string; label: string; learned: boolean }
+  correction?: { read: string; label: string; learned: boolean; byReading: boolean }
 }
 
 /** A "not what I meant", noted once, however it ends. */
@@ -339,7 +341,9 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
   // Check): what they had asked, and what she said; and how she had read it,
   // with the lessons that led her (./own: readFor).
   let fixed: Check | null = null
-  let correcting: { read: Skill | null; from: string[] } | null = null
+  let correcting: { read: Skill | null; from: string[]; key?: string } | null = null
+  // What they said they did mean, with it ("the one on Ingersoll"); '' when only that it wasn't.
+  let meant = ''
   // The request as put right, when it was heard otherwise: shown in the app.
   let heardAsText = ''
 
@@ -439,6 +443,8 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
       viewer,
       lookups,
       db: ownDb,
+      // Words handed to Claude after a correction: a public follower has no Claude to hand them to.
+      handOn: !ownOnly,
     }
     // "That's not what I meant", after one of hers: what they had asked, read
     // again; the lessons that led her flagged, and the words handed to Claude
@@ -453,14 +459,21 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
         logger.error('askMiriam: her reading, again, failed', err)
         return null
       })
-      if (again) {
-        await corrected(ownDb, { key: sameKey(again.own.masked), from: again.from }).catch(
-          (err: unknown) => logger.error('askMiriam: correction not kept', err)
+      const marker = again ? sameKey(again.own.masked) : undefined
+      if (again && marker) {
+        await corrected(ownDb, { key: marker, from: again.from }).catch((err: unknown) =>
+          logger.error('askMiriam: correction not kept', err)
         )
         ownRead = again.own
       }
-      correcting = { read, from: again?.from ?? [] }
-      turn.correction = { read: read ?? fixed.tag, label: 'none', learned: !!again?.from.length }
+      correcting = { read, from: again?.from ?? [], key: marker }
+      meant = meantInstead(text)
+      turn.correction = {
+        read: read ?? fixed.tag,
+        label: 'none',
+        learned: !!again?.from.length,
+        byReading: !!read,
+      }
       logger.info('askMiriam: not what they meant', {
         uid,
         tag: fixed.tag,
@@ -500,7 +513,8 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
             uid,
             until: Date.now() + CHECK_MS,
             text,
-            read: own.byReading ? own.read.skill : null,
+            // The web asked of God or the Bible is answered from faith: read as that.
+            read: own.byReading ? (own.why === 'faith' ? 'faith' : own.read.skill) : null,
             tag: turn.skill,
             reply: replyOf(result),
           },
@@ -584,17 +598,21 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
   const learnFrom = async (skill: Skill | null, reminderText?: unknown) => {
     const r = ownRead
     ownRead = null
+    if (correcting && turn.correction) turn.correction.label = skill ?? 'other'
     if (!r) return
     // What they had asked, as Claude read it after they said her answer
     // wasn't what they meant: the lessons that led her sent back to wait if
     // Claude read it otherwise; Claude's reading itself only waits, as ever.
     if (correcting) {
       const label = skill ?? 'other'
-      if (turn.correction) turn.correction.label = label
-      const learned = await learn(ownDb, r.masked, label, r.v, Date.now(), {
-        corrected: correcting,
-        keep: !notHers(r.masked, label),
-      }).catch((err: unknown) => {
+      const learned = await learn(
+        ownDb,
+        withoutReminder(r.masked, label, reminderText),
+        label,
+        r.v,
+        Date.now(),
+        { corrected: correcting, keep: !notHers(r.masked, label) }
+      ).catch((err: unknown) => {
         logger.error('askMiriam: not learned', err)
         return null
       })
@@ -620,15 +638,13 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
     // How she read it herself: words handed on after a correction are let go
     // once she reads them as Claude does (./own/learn).
     const herReading = { skill: r.skill, key: sameKey(r.masked) }
-    if (!keep) {
+    // Not kept: nothing to write — unless it is "only Claude's", which takes
+    // back a lesson of hers for it, or words handed on are to be let go.
+    if (!keep && skill !== 'other') {
       const knows = await ownKnowledge(ownDb).catch(() => null)
       if (!knows?.handOn.has(herReading.key)) return
     }
-    let text = r.masked
-    if (skill === 'reminder' && typeof reminderText === 'string' && reminderText.trim()) {
-      const words = reminderText.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      text = text.replace(new RegExp(words, 'i'), 'do something')
-    }
+    const text = withoutReminder(r.masked, skill, reminderText)
     // Waits, until Claude reads the same request the same way again: one
     // wrong reading never answers anyone (./own/learn).
     const learned = await learn(ownDb, text, skill, r.v, Date.now(), { keep, herReading }).catch(
@@ -796,12 +812,28 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
       // Something she answers herself, seen by Claude: the web, or a question of faith.
       if ((skill === 'web' || skill === 'faith') && ownInput) {
         await learnFrom(skill)
-        // Not what they meant, and read as she read it: not the same answer again.
-        if (correcting?.read === skill) {
-          return skill === 'faith' ? fromLeadership(ownInput.can) : said(WEB_AGAIN)
+        if (correcting && fixed) {
+          // Not what they meant: asked back by Claude, Claude's question stands.
+          if (input.follow_up === true) {
+            if (turn.correction) turn.correction.label = 'asked back'
+          } else {
+            // The web asked of God or the Bible is the church's to answer, as faith is.
+            const asFaith = (s: string | null) =>
+              s === 'web' && aboutScripture(fixed!.text) ? 'faith' : s
+            const again = asFaith(correcting.read) === asFaith(skill)
+            // Read as she read it: the church's leadership on faith, never the
+            // same answer back; the web searched again only with more said.
+            if (again && (asFaith(skill) === 'faith' || !meant)) {
+              return asFaith(skill) === 'faith' ? fromLeadership(ownInput.can) : said(WEB_AGAIN)
+            }
+            const asked = meant ? `${fixed.text} — ${meant}` : fixed.text
+            const hers = await webOrFaith(skill, asked, ownInput).catch(() => null)
+            if (hers) return hers
+          }
+        } else {
+          const hers = await webOrFaith(skill, ownInput.text, ownInput).catch(() => null)
+          if (hers) return hers
         }
-        const hers = await webOrFaith(skill, ownInput.text, ownInput).catch(() => null)
-        if (hers) return hers
       }
       // Its own question back isn't the answer: nothing learned from it.
       if (input.follow_up !== true) await learnFrom(skill)
@@ -970,4 +1002,11 @@ function notMeant(fixed: Check, text: string): string {
     `Then they said: “${text}” — that isn’t what they meant. Work out what they did mean and do that, asking back (follow_up) only if you can’t tell; don’t give that answer again unless it is plainly what they asked. ` +
     `Set skill to what “${fixed.text}” really was.`
   )
+}
+
+/** A reminder's own words kept out of what she learns ("remind me Friday to do something"). */
+function withoutReminder(text: string, skill: Skill, reminderText: unknown): string {
+  if (skill !== 'reminder' || typeof reminderText !== 'string' || !reminderText.trim()) return text
+  const words = reminderText.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.replace(new RegExp(words, 'i'), 'do something')
 }

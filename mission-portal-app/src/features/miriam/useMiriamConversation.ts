@@ -51,6 +51,7 @@ import { useTourStore } from '@/features/tour/tourStore'
 import { recordAsked } from './recordAsked'
 import { recordTurn } from './recordTurn'
 import { stopSpeaking, unlockSpeech, whenSpoken } from './speak'
+import type { LastOwn } from '@/stores/miriamStore'
 import { FORGET_MS } from '@/lib/miriamConversation'
 import { NOT_MEANT_TAP, notMeantSaid } from '@/lib/miriamNotMeant'
 import { askMiriam, miriamError } from './askMiriam'
@@ -125,7 +126,6 @@ export function useMiriamConversation(
     setLink,
     briefing: briefingShown,
     setBriefing,
-    undo,
     setUndo,
     setVideo,
     songGuesses,
@@ -227,8 +227,10 @@ export function useMiriamConversation(
     useMiriamStore.getState().setLastOwn(null)
     const notMeant = !again && lastOwn ? notMeantSaid(withoutHerName(said)) : null
     if (lastOwn && notMeant && timeNow() - lastOwn.at < FORGET_MS) {
+      // Said or typed, not tapped: how a question back is answered.
+      if (stage !== 'answered') saidAloudRef.current = stage !== 'typing'
       await correct(
-        lastOwn.check,
+        lastOwn,
         notMeant === 'restated' ? said : NOT_MEANT_TAP,
         stage === 'typing' || (stage === 'answered' && !saidAloudRef.current)
       )
@@ -598,28 +600,41 @@ export function useMiriamConversation(
    * what she said (functions/src/miriam/askMiriam: correct). What they had
    * asked stays what Claude's answer is remembered against.
    */
-  const correct = async (check: string, saidNow: string, typing: boolean) => {
+  const correct = async (last: LastOwn, saidNow: string, typing: boolean) => {
     endVoiceConfirm()
     stopListening()
     stopSpeaking()
     setPending(null)
-    if (undo) {
+    // A reminder she set for it — kept with her answer, as listening again
+    // takes away its Undo. Never a change they confirmed: that was theirs.
+    if (last.undo) {
       setUndo(null)
-      await undo.run().catch(() => {})
+      await last.undo().catch(() => {})
     }
     useMiriamStore.getState().setAwaiting(false)
+    setAskingBack(false)
     setAnswer('')
     setChoices([])
+    setSongGuesses([])
+    setVideoGuesses([])
+    setSlides(null)
     setLink(null)
     setStay(false)
+    setBriefing(null)
     setUnderstood('')
     setSaid(null)
+    shownNoteRef.current = ''
     setHeard(saidNow)
-    await askClaude(saidNow, typing, false, check)
+    await askClaude(saidNow, typing, false, last.check)
   }
 
-  /** "Not what I meant", tapped under one of her own answers. */
+  /** "Not what I meant", tapped under one of her own answers — while it can still be. */
   const notMeant = () => {
+    const last = useMiriamStore.getState().lastOwn
+    if (!last || timeNow() - last.at >= FORGET_MS) {
+      useMiriamStore.getState().setLastOwn(null)
+      return
+    }
     unlockSpeech()
     sentRef.current = false
     stopSpeaking()
@@ -643,9 +658,18 @@ export function useMiriamConversation(
         said === requestRef.current || said === heardRight(requestRef.current ?? '').text
       const heard = !typing && justSaid ? (heardAsRef.current ?? undefined) : undefined
       const result = await askMiriam(said, heard, continued, check)
-      // Her own answer: kept a little while, for "that's not what I meant".
-      if ((result.kind === 'answer' || result.kind === 'confirm') && result.check) {
-        useMiriamStore.getState().setLastOwn({ check: result.check, at: timeNow() })
+      // Her own answer: kept a little while, for "that's not what I meant" — and let go after.
+      const ownCheck =
+        (result.kind === 'answer' || result.kind === 'confirm') && result.check
+          ? result.check
+          : null
+      if (ownCheck) {
+        useMiriamStore.getState().setLastOwn({ check: ownCheck, at: timeNow() })
+        setTimeout(() => {
+          if (useMiriamStore.getState().lastOwn?.check === ownCheck) {
+            useMiriamStore.getState().setLastOwn(null)
+          }
+        }, FORGET_MS)
       }
       if (result.kind === 'answer') {
         if (result.misheard?.length) {
@@ -741,7 +765,17 @@ export function useMiriamConversation(
           setStage('answered')
           return
         }
-        await setReminder(text, at, `to ${text.charAt(0).toLowerCase()}${text.slice(1)}`, extra)
+        const takeBack = await setReminder(
+          text,
+          at,
+          `to ${text.charAt(0).toLowerCase()}${text.slice(1)}`,
+          extra
+        )
+        // Her own: taken back if they say it wasn't what they meant.
+        const last = useMiriamStore.getState().lastOwn
+        if (ownCheck && takeBack && last?.check === ownCheck) {
+          useMiriamStore.getState().setLastOwn({ ...last, undo: takeBack })
+        }
         return
       }
       // A note on a day of their calendar: theirs alone, added at once, with a tap to take it back.
@@ -919,9 +953,9 @@ export function useMiriamConversation(
       }
     },
     thinking: () => setStage('thinking'),
-    remind: (text, at, spoken, extra) => {
+    remind: async (text, at, spoken, extra) => {
       useMiriamStore.getState().setAwaiting(false)
-      return setReminder(text, at, spoken, extra)
+      await setReminder(text, at, spoken, extra)
     },
     directions: (ev) => {
       useMiriamStore.getState().setAwaiting(false)

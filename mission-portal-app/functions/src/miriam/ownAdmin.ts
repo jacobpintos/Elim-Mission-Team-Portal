@@ -5,6 +5,7 @@ import { forgetBraveKey } from './own'
 import {
   approve,
   forget,
+  takeOff,
   listLearning,
   listTaught,
   sameKey,
@@ -162,6 +163,10 @@ export const miriamOwnAdmin = onCall(
     }
     if (action === 'forget') {
       await forget(ownDb, lessonKey())
+      return { ok: true }
+    }
+    if (action === 'takeOff') {
+      await takeOff(ownDb, lessonKey())
       return { ok: true }
     }
     if (action === 'approve') {

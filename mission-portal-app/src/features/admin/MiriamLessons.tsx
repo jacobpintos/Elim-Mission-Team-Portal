@@ -88,7 +88,7 @@ export function MiriamLessons({
         destructive: true,
       })
     ) {
-      await run({ action: 'forget', ...which(l) }, 'Taken off.')
+      await run({ action: 'takeOff', ...which(l) }, 'Taken off.')
     }
   }
 
@@ -98,7 +98,7 @@ export function MiriamLessons({
       <Group title={`What she’s learned (${data.learnedCount})`} items={data.learned}>
         {(l) => (
           <Row
-            key={`${l.text}-${l.at}`}
+            key={`${l.text}-${l.skill}-${l.at}`}
             text={l.text}
             note={`${skillName(l.skill)} · ${day(l.at)}`}
           >
@@ -124,7 +124,7 @@ export function MiriamLessons({
       <Group title={`Waiting (${data.waitingCount ?? data.waiting.length})`} items={data.waiting}>
         {(l) => (
           <Row
-            key={`${l.key ?? l.text}-w`}
+            key={`${l.key ?? l.text}-${l.skill}-w-${l.last}`}
             text={l.text}
             note={`${skillName(l.skill)} · ${WAITING_WHY[l.why]?.(l) ?? day(l.last)}`}
           >
@@ -145,7 +145,7 @@ export function MiriamLessons({
       >
         {(l) => (
           <Row
-            key={`${l.key ?? l.text}-u`}
+            key={`${l.key ?? l.text}-${l.skill}-u-${l.last ?? l.at}`}
             text={l.text}
             note={[
               skillName(l.skill),
@@ -176,7 +176,7 @@ export function MiriamLessons({
       <Group title={`Taken back (${data.retired?.length ?? 0})`} items={data.retired ?? []}>
         {(l) => (
           <Row
-            key={`${l.key ?? l.text}-r`}
+            key={`${l.key ?? l.text}-${l.skill}-r-${l.gone}`}
             text={l.text}
             note={`${skillName(l.skill)} · ${
               l.why === 'admin'

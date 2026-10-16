@@ -49,7 +49,14 @@ export type MiriamEvent =
    * "event_page"), what Claude then read it as ("asked back", or "none" if
    * it ended before saying), and whether lessons she learned led her.
    */
-  | { kind: 'correction'; read: string; label: string; learned: boolean }
+  | {
+      kind: 'correction'
+      read: string
+      label: string
+      learned: boolean
+      /** Her answer came of how she read it; false when not (an event's page): her reading isn't in question. */
+      byReading?: boolean
+    }
 
 /** How a result the server sends back ended. */
 export function outcomeOf(result: { kind?: unknown; followUp?: unknown }): Outcome {
@@ -112,6 +119,8 @@ export interface Summary {
     askedBack: number
     /** Lessons she learned led her: sent back to wait, if Claude read it otherwise. */
     fromLearned: number
+    /** Answers not of her reading (an event's page): the answer missed, whatever Claude read. */
+    notByReading: number
     /** Her readings beside Claude's, where they differed, most first. */
     differences: { read: string; label: string; n: number }[]
   }
@@ -178,6 +187,7 @@ export function summarize(
     readOtherwise: 0,
     askedBack: 0,
     fromLearned: 0,
+    notByReading: 0,
   }
   const correctedAs = new Map<string, number>()
   const beside = (): Beside => ({ same: 0, different: 0, askedBack: 0, otherwise: 0 })
@@ -211,6 +221,7 @@ export function summarize(
       corrections.total++
       if (e.learned === true) corrections.fromLearned++
       if (e.label === 'asked back') corrections.askedBack++
+      else if (e.byReading === false) corrections.notByReading++
       else if (e.label === e.read) corrections.readSame++
       else if (e.label !== 'none') {
         corrections.readOtherwise++

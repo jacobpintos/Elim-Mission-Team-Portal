@@ -70,8 +70,15 @@ interface MiriamStore {
    * back if they say it wasn't what they meant (lib/miriamNotMeant). Kept in
    * memory only.
    */
-  lastOwn: { check: string; at: number } | null
-  setLastOwn: (lastOwn: { check: string; at: number } | null) => void
+  lastOwn: LastOwn | null
+  setLastOwn: (lastOwn: LastOwn | null) => void
+}
+
+/** Her last answer of her own: sealed as the server sent it, when, and a reminder she set for it, to take back. */
+export interface LastOwn {
+  check: string
+  at: number
+  undo?: () => Promise<unknown>
 }
 
 /** Where "Hey Miriam" on or off is kept, on this device. */

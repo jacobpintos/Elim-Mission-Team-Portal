@@ -110,6 +110,12 @@ interface Retired extends Lesson {
 interface Marker {
   k: string
   at: number
+  /**
+   * Her reading wasn't what led her wrong (an event's page; or Claude read
+   * it as she did): handed on until it expires, not let go when she reads
+   * it as Claude does — she already did.
+   */
+  hold?: true
 }
 
 export interface TaughtEntry {
@@ -258,7 +264,18 @@ function bounded(st: State, now: number): void {
     .filter((e) => !knownSkill(e.s) || now - e.last < WAITING_MS)
     .sort((a, b) => a.last - b.last)
     .slice(-MAX_WAITING)
-  st.retired = st.retired.sort((a, b) => a.gone - b.gone).slice(-MAX_RETIRED)
+  // An admin's "not this" kept apart from Claude's readings otherwise: never pushed out by them.
+  const byAdmin = (e: Retired) => e.why === 'admin'
+  st.retired = [
+    ...st.retired
+      .filter(byAdmin)
+      .sort((a, b) => a.gone - b.gone)
+      .slice(-MAX_RETIRED),
+    ...st.retired
+      .filter((e) => !byAdmin(e))
+      .sort((a, b) => a.gone - b.gone)
+      .slice(-MAX_RETIRED),
+  ].sort((a, b) => a.gone - b.gone)
   st.handOn = st.handOn
     .filter((m) => now - m.at < HAND_ON_MS)
     .sort((a, b) => a.at - b.at)
@@ -357,7 +374,7 @@ export interface LearnOptions {
    * A correction's reading (../askMiriam: correct): what she had read it as
    * (null: not by her reading), and the lessons that led her (sameKey).
    */
-  corrected?: { read: Skill | null; from: string[] }
+  corrected?: { read: Skill | null; from: string[]; key?: string }
 }
 
 export interface Learned {
@@ -407,10 +424,17 @@ export async function learn(
       })
     }
 
+    // Not her reading's doing — an event's page, or Claude read it as she
+    // did: the words stay handed on until they expire.
+    if (fix?.key && !(fix.read && fix.read !== skill)) {
+      const m = st.handOn.find((h) => h.k === fix.key)
+      if (m) m.hold = true
+    }
+
     // Words handed on after a correction: let go once she reads them as Claude does.
     const mine = opts.herReading
     if (mine) {
-      const at = st.handOn.findIndex((m) => m.k === mine.key)
+      const at = st.handOn.findIndex((m) => m.k === mine.key && !m.hold)
       if (at >= 0) {
         if (mine.skill === skill) st.handOn.splice(at, 1)
         else st.handOn[at] = { k: mine.key, at: now }
@@ -419,7 +443,11 @@ export async function learn(
 
     // An admin said these words aren't this skill: not learned so again.
     const barred = st.retired.some((e) => e.why === 'admin' && e.s === skill && same(e))
-    if (opts.keep === false || barred) return out
+    if (barred) return out
+    // Kept or not, Claude reading it as "only Claude's" still takes back a
+    // lesson of hers for it: one read another way in between is never used.
+    // A reading her guards refuse is no reading to go by.
+    if (opts.keep === false && skill !== 'other') return out
 
     // Read otherwise: taken back — an approved one kept, and flagged for an admin.
     st.inUse = st.inUse.filter((e) => {
@@ -438,6 +466,7 @@ export async function learn(
       out.retired++
       return false
     })
+    if (opts.keep === false) return out
 
     // Read the same way again: counted, once a conversation.
     let found = false
@@ -511,8 +540,26 @@ export async function approve(
   const { key } = which
   const is = isIt(which)
   return changing(db, now, (st) => {
+    /** Another skill's lessons of the same request: an admin said this one is right. */
+    const others = (e: Lesson) => {
+      const v = unpackVector(e.v)
+      const sameAs = (l: Lesson) => {
+        if (!knownSkill(l.s) || l.s === e.s) return false
+        if (sameKey(l.t) === sameKey(e.t)) return true
+        const m = unpackVector(l.v)
+        return !!v && !!m && m.length === v.length && similarity(m, v) >= SAME_REQUEST
+      }
+      const take = (l: Lesson) => {
+        if (!sameAs(l)) return true
+        st.retired.push(retiredAs(l, 'admin', now))
+        return false
+      }
+      st.inUse = st.inUse.filter(take)
+      st.waiting = st.waiting.filter(take)
+    }
     const using = st.inUse.find(is)
     if (using) {
+      others(using)
       using.ok = true
       using.d = 0
       using.by ??= 'admin'
@@ -532,6 +579,7 @@ export async function approve(
       last: now,
     }
     if (!roomFor(st, lesson, now)) return 'full'
+    others(e)
     const other = (l: Lesson) => !(l.s === e.s && sameKey(l.t) === key)
     st.waiting = st.waiting.filter(other)
     st.retired = st.retired.filter(other)
@@ -558,6 +606,14 @@ export async function forget(db: OwnDb, which: Which, now = Date.now()): Promise
     st.waiting = st.waiting.filter(take)
     if (gone.length) st.retired.push(...gone)
     else st.retired = st.retired.filter((e) => !is(e))
+  })
+}
+
+/** Taken off the list of those taken back — an admin's "not this" with it: never a lesson waiting or in use. */
+export async function takeOff(db: OwnDb, which: Which, now = Date.now()): Promise<void> {
+  const is = isIt(which)
+  await changing(db, now, (st) => {
+    st.retired = st.retired.filter((e) => !is(e))
   })
 }
 
