@@ -9,6 +9,7 @@ import { notHers } from '../../functions/src/miriam/own/guards'
 import {
   ownAnswer,
   publicAnswer,
+  readRequest,
   sure,
   webOrFaith,
   type OwnInput,
@@ -27,7 +28,7 @@ import {
 import { SEEDS, type Skill } from '../../functions/src/miriam/own/skills'
 import { skillOfAction } from '../../functions/src/miriam/own/labels'
 import { fakeDb, memoryOwnDb } from './__fixtures__/miriamOwnDb'
-import { read, seedExamples } from '../../functions/src/miriam/own/understand'
+import { seedExamples } from '../../functions/src/miriam/own/understand'
 import { dayIn, reminderIn, spanIn, statusIn } from '../../functions/src/miriam/own/when'
 import {
   bestPassage,
@@ -89,13 +90,7 @@ const TITLES = [
 
 /** As she reads one (functions/src/miriam/own/index): names masked, as said if that isn't plain, then her guards. */
 function taken(text: string): Skill | null {
-  const examples = seedExamples()
-  const { masked } = mentionsIn(text, TITLES)
-  let r = read(embed(masked), examples)
-  if (masked !== text && !sure(r)) {
-    const r2 = read(embed(text), examples)
-    if (sure(r2) || r2.score > r.score) r = r2
-  }
+  const r = readRequest(text, TITLES, seedExamples()).reading
   if (r.skill === 'other' || !sure(r) || notHers(text, r.skill)) return null
   return r.skill
 }
@@ -140,9 +135,9 @@ describe('what she takes as hers, of requests she has never seen', () => {
     event_weather: 7,
     my_events: 21,
     availability: 22,
-    reminder: 10,
+    reminder: 15,
     food_signup: 2,
-    web: 8,
+    web: 12,
     faith: 9,
   }
 
@@ -229,6 +224,13 @@ describe('the guards', () => {
     expect(notHers('what are my notes for Friday', 'my_events')).toBeTruthy()
     expect(notHers('add a note to Friday to bring chairs', 'reminder')).toBeTruthy()
     expect(notHers("what's on my calendar this week", 'my_events')).toBeTruthy()
+    // Someone else's: reminded, or coming.
+    expect(notHers('remind Sarah at 5 to call mom', 'reminder')).toBeTruthy()
+    expect(notHers('remind myself at 5 to call mom', 'reminder')).toBeNull()
+    expect(notHers("my wife can't come to youth night", 'availability')).toBeTruthy()
+    expect(notHers("Miriam, she won't make the picnic", 'availability')).toBeTruthy()
+    expect(notHers("I can't make the picnic", 'availability')).toBeNull()
+    expect(notHers('my family and I are in for the picnic', 'availability')).toBeNull()
   })
 
   it('take a food sign-up only as their own offer, now', () => {
@@ -282,6 +284,7 @@ describe('the guards', () => {
       // Eating, or the menu, put as a question: not an offer.
       ['Can I grab some pizza at youth night', 'a question'],
       ['Could we do pizza for youth night', 'a question'],
+      ['ping me at 6 to cook dinner', 'a reminder'],
     ]) {
       expect([t, offer(t)]).toEqual([t, why])
     }
@@ -511,7 +514,9 @@ describe('her answers', () => {
       ...CHURCH,
       events: { ...CHURCH.events, pic: { ...CHURCH.events.pic, food: true, foodItems: ['Chips'] } },
     })
-    const at = (text: string) => ownAnswer(input(text, { lookups: new Lookups(fed, sarah, TODAY) }))
+    const tools: OwnInput['appTools'] = ['set_availability', 'create_reminder', 'sign_up_food']
+    const at = (text: string, appTools = tools) =>
+      ownAnswer(input(text, { lookups: new Lookups(fed, sarah, TODAY), appTools }))
     // Bringing something, as likely as coming: Claude asks.
     expect((await at('sign me up for the picnic')).result).toBeNull()
     expect((await at('put me down for the picnic')).result).toBeNull()
@@ -520,11 +525,36 @@ describe('her answers', () => {
       kind: 'confirm',
       name: 'set_availability',
     })
+    // A maybe or a no is no food sign-up.
+    expect((await at('put me down for a maybe for the picnic')).result).toMatchObject({
+      name: 'set_availability',
+      input: { status: 'tbd' },
+    })
+    // Nor for someone who can't sign up for food (a guest): their answer.
+    expect(
+      (await at('sign me up for the picnic', ['set_availability', 'create_reminder'])).result
+    ).toMatchObject({ kind: 'confirm', name: 'set_availability' })
     // With no food sign-up, it is their answer.
     expect((await ownAnswer(input('sign me up for the picnic'))).result).toMatchObject({
       kind: 'confirm',
       name: 'set_availability',
       input: { event_key: 'pic_2026-10-17' },
+    })
+  })
+
+  it('not their answer, when it is someone else coming or not', async () => {
+    for (const said of [
+      "Jacob can't make the picnic",
+      "Hey Miriam, Jacob won't make the picnic",
+      "Miriam, my wife can't come to the picnic",
+      "she won't make it to the picnic",
+    ]) {
+      expect([said, (await ownAnswer(input(said))).result]).toEqual([said, null])
+    }
+    // Their own still is, however it begins.
+    expect((await ownAnswer(input("Miriam, I can't make the picnic"))).result).toMatchObject({
+      name: 'set_availability',
+      input: { status: 'no' },
     })
   })
 

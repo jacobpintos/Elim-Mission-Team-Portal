@@ -126,6 +126,22 @@ function notesSaid(notes: { date: string; text: string }[], oneDay: boolean, tod
   return `${lead}: ${said.join('. ')}.`
 }
 
+/** Starts with a person's name, not theirs: "Olivia can't make the picnic", "Hey Miriam, Sam is out". */
+async function someoneElseFirst(text: string, ctx: AnswerContext): Promise<boolean> {
+  const first = text
+    .replace(/^(?:(?:hey|hi|ok|okay|so|um+|uh+|well)[,\s]+)*(?:miriam[,.\s]+)?/i, '')
+    // A name, then what they will or won't do: "Mark me as out" is not Mark.
+    .match(
+      /^([a-z]+)(?:'s|’s)?\s+(?:can't|can’t|cannot|won't|won’t|isn't|isn’t|is|will|can|could|might|may|does|doesn't|doesn’t|has|had|needs?|wants?|plans?|going|coming|out)\b/i
+    )?.[1]
+    ?.toLowerCase()
+  if (!first || first === 'i' || first === 'we') return false
+  for (const [uid, name] of await ctx.lookups.names()) {
+    if (uid !== ctx.viewer.uid && name.toLowerCase().split(/\s+/)[0] === first) return true
+  }
+  return false
+}
+
 /** "Sign me up", "put us down" — but not "put me down as a maybe". */
 const SIGN_ME_UP = /\b(?:sign|put)\s+(?:me|us)\s+(?:up|down)\b(?!\s+as\b)/i
 
@@ -335,10 +351,20 @@ export async function answerFor(skill: Skill, ctx: AnswerContext): Promise<OwnRe
     if (!ctx.appTools.includes('set_availability')) return null
     const ev = await theEvent(skill, ctx)
     if (!ev) return null
-    // "Sign me up for the potluck", where it has a food sign-up: as likely
-    // bringing something as coming — Claude asks (./food).
-    if (SIGN_ME_UP.test(text) && hasSheet(ev)) return null
     const status = statusIn(text)
+    // "Sign me up for the potluck", where it has a food sign-up they could
+    // sign up on: as likely bringing something as coming — Claude asks (./food).
+    // Not a maybe or a no: "put me down for a maybe for the potluck".
+    if (
+      status === 'yes' &&
+      ctx.appTools.includes('sign_up_food') &&
+      SIGN_ME_UP.test(text) &&
+      hasSheet(ev)
+    ) {
+      return null
+    }
+    // Someone else, by name: "Olivia can't make the picnic" (./guards has "my wife", "she").
+    if (await someoneElseFirst(text, ctx)) return null
     return {
       kind: 'confirm',
       name: 'set_availability',

@@ -297,6 +297,9 @@ export const SEEDS: Record<Skill, string[]> = {
     'set me a reminder for next Tuesday at 10 to book flights',
     'remind me to grab the projector before 6',
     'don’t let me forget my keys tomorrow',
+    // Cooking, which a food sign-up is near: a reminder all the same.
+    'at 7 remind me to preheat the oven',
+    'set a reminder for 5 to start the soup',
   ],
   // Offering to bring something on an event's food sign-up. The dishes and
   // events here are not those her tests ask with (src/lib/miriamFoodSignup.test.ts).

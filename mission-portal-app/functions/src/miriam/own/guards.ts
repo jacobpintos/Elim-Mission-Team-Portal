@@ -41,7 +41,13 @@ const NOT_HERS: [RegExp, Skill[]][] = [
     /\b(?:everyone|everybody|all\s+of\s+them)\b/i,
     ['reminder', 'availability', 'my_events', 'food_signup'],
   ],
-  [/\bremind\s+(?!me\b)(?:the|them|him|her|us|our|my|all|every)\b/i, ['reminder']],
+  // Reminding anyone but themselves: "remind Sarah at 5 to call mom".
+  [/\bremind\s+(?!me\b|myself\b)[a-z]/i, ['reminder']],
+  // Someone else coming or not: "my wife can't come to youth night", "she won't make it".
+  [
+    /^(?:(?:hey|hi|ok|okay|so|um+|uh+|well)[,\s]+)*(?:miriam[,.\s]+)?(?:(?:my|our|his|her|their)\s+[a-z]+|he|she|they|he's|she's|they're|he'll|she'll|they'll)\s+(?:can't|can’t|cannot|won't|won’t|isn't|isn’t|aren't|aren’t|is|are|will|can|could|might|may|does|doesn't|doesn’t|has|had|needs?|wants?|plans?|going|coming|out)\b/i,
+    ['availability'],
+  ],
   // Someone else's flight, room, car or team — "Guest User's flight", "where
   // is Guest User staying": Claude looks them up, and whose is whose.
   [
@@ -96,7 +102,10 @@ const OFFERED = /^(?:can|could|may)\s+(?:i|we)\s+(?:bring|make|cook|bake|handle|
 
 const NOT_AN_OFFER: [RegExp, string][] = [
   // "Remind me to bring chips": a reminder (./skills: reminder).
-  [/\b(?:remind|reminder|remember|forget)\b/i, 'a reminder'],
+  [
+    /\b(?:remind|reminder|remember|forget|alarm)\b|\b(?:ping|nudge|alert|buzz)\s+me\b/i,
+    'a reminder',
+  ],
   // What her briefing suggested is known only to the app (src/features/miriam/localTalk).
   [
     /\b(?:suggested|recommended|like\s+you\s+said|as\s+you\s+said|from\s+(?:my|the)\s+briefing)\b/i,

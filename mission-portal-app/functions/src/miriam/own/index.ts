@@ -17,7 +17,7 @@ import { mentionsIn } from './events'
 import { notHers } from './guards'
 import { learnedExamples, WEB_DOC, type OwnDb } from './learn'
 import type { Skill } from './skills'
-import { read, seedExamples, type Reading } from './understand'
+import { read, seedExamples, type Example, type Reading } from './understand'
 import { webAnswer } from './web'
 import { aboutScripture, faithAnswer, isFaithReply, LEADERSHIP } from './faith'
 import { CHURCH_SITE, siteKnowledge } from './site'
@@ -194,19 +194,48 @@ interface Understood {
  */
 async function understand(input: OwnInput, said = input.text): Promise<Understood> {
   const { today, lookups, db } = input
+  const events = await lookups.eventsBetween(shiftDate(today, -1), shiftDate(today, 365))
+  const known = [...seedExamples(), ...(await learnedExamples(db).catch(() => []))]
+  const r = readRequest(
+    said,
+    events.map((e) => e.title),
+    known
+  )
+  return {
+    mentions: r.mentions,
+    masked: r.masked,
+    rawV: r.rawV,
+    reading: r.reading,
+    own: {
+      masked: r.readText,
+      v: r.readV,
+      skill: r.reading.skill,
+      score: r.reading.score,
+      margin: r.reading.margin,
+    },
+  }
+}
+
+/**
+ * What a request is, as she reads one, given the events' names and her
+ * examples: her name taken off the front, each event's name read as "the
+ * event" (./events) — and, if that isn't plain, as said. Exported so her
+ * tests read requests just as she does.
+ */
+export function readRequest(said: string, titles: string[], known: Example[]) {
   // "Hey Miriam, I'll bring chips": what is asked, without her name (as the app
   // takes it off what is said aloud, but not off what is typed).
   const text = said.replace(HER_NAME, '')
-  const events = await lookups.eventsBetween(shiftDate(today, -1), shiftDate(today, 365))
-  const { masked, mentions } = mentionsIn(
-    text,
-    events.map((e) => e.title)
-  )
+  const { masked, mentions } = mentionsIn(text, titles)
   const v = embed(masked)
   let raw: Float32Array | null = masked === text ? v : null
   const rawV = () => (raw ??= embed(text))
 
-  const examples = [...seedExamples(), ...(await learnedExamples(db).catch(() => []))]
+  // A food sign-up her guards would never take ("remind me at 6 to bake the
+  // pie"): not weighed at all, so it takes no other skill's margin (./guards).
+  const examples = notHers(text, 'food_signup')
+    ? known.filter((e) => e.skill !== 'food_signup')
+    : known
   let reading = read(v, examples)
   // Asked to look it up: the web — but a question of faith is still one
   // (./faith), and the app's own things are the app's.
@@ -234,19 +263,7 @@ async function understand(input: OwnInput, said = input.text): Promise<Understoo
       readText = text
     }
   }
-  return {
-    mentions,
-    masked,
-    rawV,
-    reading,
-    own: {
-      masked: readText,
-      v: readV,
-      skill: reading.skill,
-      score: reading.score,
-      margin: reading.margin,
-    },
-  }
+  return { text, masked, mentions, rawV, reading, readV, readText }
 }
 
 /**

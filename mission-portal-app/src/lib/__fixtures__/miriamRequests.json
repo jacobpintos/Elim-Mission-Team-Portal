@@ -198,7 +198,12 @@
   "set a reminder tomorrow at noon to call dad",
   "can you remind me at 7 to read my bible",
   "remind me in 10 minutes to switch the laundry",
-  "hey miriam remind me friday at 3 to buy gas"
+  "hey miriam remind me friday at 3 to buy gas",
+  "set a reminder for 6 to make the casserole",
+  "ping me at 6 to cook dinner",
+  "at 6 remind me to make dessert",
+  "remind me at 10 to bake the pie",
+  "remind me at 6 to grill the burgers"
  ],
  "food_signup": [
   "sign me up to bring drinks",
@@ -303,6 +308,10 @@
   "delete the retreat",
   "I'm out all of next week",
   "put sam in my car for the retreat",
-  "show me the announcements"
+  "show me the announcements",
+  "my wife can't come to youth night",
+  "miriam, my son can't make youth night",
+  "she won't make it to the picnic",
+  "miriam, remind sarah at 5 to call mom"
  ]
 }
