@@ -97,6 +97,27 @@ describe('withinLimit', () => {
     expect(onError.mock.calls[0][0]).toEqual(new Error('unavailable'))
   })
 
+  it('adds what it allowed on its own to the shared count, once that can be taken again', async () => {
+    const db = memoryDb()
+    // Firestore taken once, then too busy for the next 19 (contention, say), over and over.
+    let n = 0
+    const busy: LimitDb = {
+      doc: db.doc,
+      runTransaction: (fn) => (n++ % 20 === 0 ? db.runTransaction(fn) : downDb.runTransaction(fn)),
+    }
+    const limit = { ...LIMIT, perWindow: 20 }
+    let allowed = 0
+    for (let now = 0; now < 200; now++) {
+      if (await withinLimit(busy, 'mary', limit, { now })) allowed++
+    }
+    expect(allowed).toBe(20)
+    // What it allowed on its own is in the shared count: another copy sees it.
+    expect((db.docs.get('usageLimits/askMiriam_mary')?.calls as number[]).length).toBe(20)
+    vi.resetModules()
+    const fresh = await import('../../functions/src/utils/usageLimit')
+    expect(await fresh.withinLimit(db, 'mary', limit, { now: 200 })).toBe(false)
+  })
+
   it('carries on from what it counted while Firestore could be reached', async () => {
     const db = memoryDb()
     for (const now of [0, 1]) await withinLimit(db, 'eli', LIMIT, { now })

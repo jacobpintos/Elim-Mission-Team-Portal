@@ -33,20 +33,29 @@ export interface LimitTx {
  * for it. Anything stored that isn't a time is passed over.
  */
 export function counted(calls: unknown, now: number, limit: UsageLimit): number[] | null {
-  const recent = (Array.isArray(calls) ? calls : []).filter(
-    (t): t is number => typeof t === 'number' && now - t < limit.windowMs
-  )
+  const recent = inWindow(calls, now, limit)
   if (recent.length >= limit.perWindow) return null
   return [...recent, now]
 }
 
-/** This copy's own count: used only when Firestore can't be reached. */
+/** The times still in the window. */
+function inWindow(calls: unknown, now: number, limit: UsageLimit): number[] {
+  return (Array.isArray(calls) ? calls : []).filter(
+    (t): t is number => typeof t === 'number' && now - t < limit.windowMs
+  )
+}
+
+/** This copy's own count, kept as the shared one is: what decides when that can't be taken. */
 const here = new Map<string, number[]>()
+/** Calls this copy allowed on its own count alone: added to the shared one when it can next be taken. */
+const unshared = new Map<string, number[]>()
 
 /**
  * Whether one more call is allowed for this person, counted if it is. When
- * Firestore can't be reached, this copy of the server's own count decides,
- * as it did before the count was shared; `onError` is told why.
+ * the shared count can't be taken (Firestore unreachable, or too busy), this
+ * copy of the server's own count decides, as it did before the count was
+ * shared, and what it allows is added to the shared count once it can be
+ * taken again; `onError` is told why.
  */
 export async function withinLimit(
   db: LimitDb,
@@ -55,18 +64,31 @@ export async function withinLimit(
   { now = Date.now(), onError }: { now?: number; onError?: (err: unknown) => void } = {}
 ): Promise<boolean> {
   const key = `${limit.name}_${uid}`
+  const owed = unshared.get(key) ?? []
   let calls: number[] | null
   try {
     const ref = db.doc(`${USAGE_LIMITS}/${key}`)
     calls = await db.runTransaction(async (tx) => {
-      const next = counted((await tx.get(ref)).data()?.calls, now, limit)
-      // When the last of these leaves the window: cleared after that.
-      if (next) tx.set(ref, { calls: next, until: now + limit.windowMs })
+      const stored = (await tx.get(ref)).data()?.calls
+      const all = [...(Array.isArray(stored) ? stored : []), ...owed]
+      const next = counted(all, now, limit)
+      // Refused, what this copy allowed on its own is still shared: the latest, as many as count.
+      const kept =
+        next ??
+        inWindow(all, now, limit)
+          .sort((a, b) => a - b)
+          .slice(-limit.perWindow)
+      // Cleared once the last of these leaves the window.
+      if (next || owed.length) {
+        tx.set(ref, { calls: kept, until: Math.max(...kept) + limit.windowMs })
+      }
       return next
     })
+    unshared.delete(key)
   } catch (err) {
     onError?.(err)
     calls = counted(here.get(key), now, limit)
+    if (calls) unshared.set(key, [...owed.filter((t) => now - t < limit.windowMs), now])
   }
   if (calls) here.set(key, calls)
   return calls !== null
