@@ -16,12 +16,14 @@ import {
 } from '../../functions/src/miriam/own'
 import { PUBLIC_NOT_HERS } from '../../functions/src/miriam/plan'
 import {
+  CONFIRM_GAP_MS,
   forget,
   forgetCaches,
   learn,
   LEARNED_DOC,
   learnedExamples,
-  listLearned,
+  listLearning,
+  sameKey,
   taughtAnswers,
   teach,
 } from '../../functions/src/miriam/own/learn'
@@ -683,18 +685,22 @@ describe('her answers', () => {
 describe('what she learns', () => {
   beforeEach(() => forgetCaches())
 
-  it('is kept, once for the same words, and forgotten when asked', async () => {
+  it('is kept, once for the same words, used once read so twice, and forgotten when asked', async () => {
     const db = memoryOwnDb()
     const v = embed('when does the event get rolling')
     await learn(db, 'when does the event get rolling', 'event_time', v, 1)
     await learn(db, 'When does the event get rolling?', 'event_time', v, 2)
-    expect(await listLearned(db)).toEqual([
-      { text: 'When does the event get rolling?', skill: 'event_time', at: 2 },
+    expect((await listLearning(db)).waiting).toMatchObject([
+      { text: 'when does the event get rolling', skill: 'event_time', y: 1 },
     ])
+    expect(await learnedExamples(db, 3)).toEqual([])
+    await learn(db, 'when does the event get rolling', 'event_time', v, 2 + CONFIRM_GAP_MS)
     forgetCaches()
     expect((await learnedExamples(db)).map((e) => e.skill)).toEqual(['event_time'])
-    await forget(db, 'when does the event get rolling')
-    expect(await listLearned(db)).toEqual([])
+    await forget(db, { key: sameKey('when does the event get rolling') })
+    forgetCaches()
+    expect(await learnedExamples(db)).toEqual([])
+    expect((await listLearning(db)).retired).toMatchObject([{ why: 'admin' }])
   })
 
   it('keeps what a newer version of her learned, though it can’t read it', async () => {
@@ -702,10 +708,10 @@ describe('what she learns', () => {
     const v = packVector(embed('I’ll bring the event'))
     // Learned by a version with a skill this one doesn’t know (a deploy, a rollback).
     db.docs.set(LEARNED_DOC, {
-      examples: [{ t: 'I’ll bring the event', s: 'a_newer_skill', v, at: 1 }],
+      examples: [{ t: 'I’ll bring the event', s: 'a_newer_skill', v, at: 1, by: 'claude' }],
     })
     expect(await learnedExamples(db)).toEqual([])
-    expect(await listLearned(db)).toEqual([])
+    expect((await listLearning(db)).inUse).toEqual([])
     await learn(
       db,
       'when does the event start',
@@ -713,11 +719,10 @@ describe('what she learns', () => {
       embed('when does the event start'),
       2
     )
-    await forget(db, 'something never learned')
+    await forget(db, { key: sameKey('something never learned') })
     // Still kept, for the newer version to read.
     expect((db.docs.get(LEARNED_DOC)?.examples as { s: string }[]).map((e) => e.s)).toEqual([
       'a_newer_skill',
-      'event_time',
     ])
   })
 
@@ -732,15 +737,41 @@ describe('what she learns', () => {
     expect(skillOfAction('send_message', {})).toBeNull()
   })
 
-  it('makes the next one like it hers', async () => {
+  it('makes the next one like it hers — once Claude has read it so twice', async () => {
     const db = memoryOwnDb()
-    const said = 'is the youth night thing still on for this friday'
+    // Not hers from her starting examples: when Youth Night is, she isn't sure.
+    const said = 'is the youth night thing still on for friday'
     const before = await ownAnswer(input(said, { db }))
-    // Learned from Claude's answer: it was when Youth Night is.
-    if (before.read) await learn(db, before.read.masked, 'event_time', before.read.v)
-    const after = await ownAnswer(input('is the youth night thing still on for friday', { db }))
+    expect(before.result).toBeNull()
+    // Learned from Claude's answer: it was when Youth Night is. Once isn't enough.
+    await learn(db, before.read!.masked, 'event_time', before.read!.v, 0)
+    forgetCaches()
+    expect((await ownAnswer(input(said, { db }))).result).toBeNull()
+    // Read so again, in another conversation: hers.
+    await learn(db, before.read!.masked, 'event_time', before.read!.v, CONFIRM_GAP_MS)
+    forgetCaches()
+    const after = await ownAnswer(input(said, { db }))
     expect(after.read?.skill).toBe('event_time')
     expect(after.result).toMatchObject({ text: 'Youth Night is on Friday, October 16 at 7:00 PM.' })
+  })
+
+  it('hands on the words someone said an answer of hers wasn’t what they meant', async () => {
+    const db = memoryOwnDb()
+    const said = 'is the youth night thing still on for friday'
+    const first = await ownAnswer(input(said, { db }))
+    await learn(db, first.read!.masked, 'event_time', first.read!.v, 0)
+    await learn(db, first.read!.masked, 'event_time', first.read!.v, CONFIRM_GAP_MS)
+    forgetCaches()
+    expect((await ownAnswer(input(said, { db }))).result).not.toBeNull()
+    db.docs.set('miriamOwn/learning', {
+      ...(db.docs.get('miriamOwn/learning') ?? {}),
+      handOn: [{ k: sameKey(first.read!.masked), at: Date.now() }],
+    })
+    forgetCaches()
+    expect(await ownAnswer(input(said, { db }))).toMatchObject({
+      result: null,
+      why: 'corrected before',
+    })
   })
 })
 

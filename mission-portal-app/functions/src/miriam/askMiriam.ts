@@ -24,7 +24,7 @@ import { PAUSE_MS, MAX_RESULT, seal, unseal } from './pause'
 import { ownAnswer, publicAnswer, sure, webOrFaith, type OwnInput, type OwnRead } from './own'
 import type { SignupWould } from './own/signup'
 import { EVENTS, outcomeOf, ownTag, type MiriamEvent, type Outcome, type Tier } from './stats'
-import { learn, type OwnDb } from './own/learn'
+import { learn, ownKnowledge, sameKey, type OwnDb } from './own/learn'
 import { OWN_SKILLS, type Skill } from './own/skills'
 import { skillOfAction } from './own/labels'
 import { notHers } from './own/guards'
@@ -506,18 +506,33 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
       ownScore: Math.round(r.score * 1000) / 1000,
       ownMargin: Math.round(r.margin * 1000) / 1000,
     })
-    if (skill === 'other' && (r.skill === 'other' || r.score < 0.5)) return
-    // Never as something it plainly isn't: "When does Olivia arrive?" as when
-    // an event is, "what is Family Gathering?" as where (./own/guards).
-    if (skill !== 'other' && notHers(r.masked, skill)) return
+    // A lesson only where it can be one: "other" where she leaned toward a
+    // skill, to know better; never as something it plainly isn't — "When does
+    // Olivia arrive?" as when an event is, "what is Family Gathering?" as
+    // where (./own/guards).
+    const keep =
+      skill === 'other' ? r.skill !== 'other' && r.score >= 0.5 : !notHers(r.masked, skill)
+    // How she read it herself: words handed on after a correction are let go
+    // once she reads them as Claude does (./own/learn).
+    const herReading = { skill: r.skill, key: sameKey(r.masked) }
+    if (!keep) {
+      const knows = await ownKnowledge(ownDb).catch(() => null)
+      if (!knows?.handOn.has(herReading.key)) return
+    }
     let text = r.masked
     if (skill === 'reminder' && typeof reminderText === 'string' && reminderText.trim()) {
       const words = reminderText.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       text = text.replace(new RegExp(words, 'i'), 'do something')
     }
-    await learn(ownDb, text, skill, r.v).catch((err: unknown) =>
-      logger.error('askMiriam: not learned', err)
+    // Waits, until Claude reads the same request the same way again: one
+    // wrong reading never answers anyone (./own/learn).
+    const learned = await learn(ownDb, text, skill, r.v, Date.now(), { keep, herReading }).catch(
+      (err: unknown) => {
+        logger.error('askMiriam: not learned', err)
+        return null
+      }
     )
+    if (learned) logger.info('askMiriam: learned', { uid, label: skill, ...learned })
   }
 
   /**

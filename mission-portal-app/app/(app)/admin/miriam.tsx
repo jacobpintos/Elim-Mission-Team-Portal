@@ -6,30 +6,25 @@ import { functions } from '@/lib/firebase'
 import { useUIStore } from '@/stores/uiStore'
 import { confirmAsync } from '@/lib/confirm'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
-import { MiriamStats, SKILL_NAMES } from '@/features/admin/MiriamStats'
+import { MiriamLessons, type Lessons } from '@/features/admin/MiriamLessons'
+import { MiriamStats } from '@/features/admin/MiriamStats'
 
 /**
  * Admin → Miriam: what she knows that is the church's own. Answers taught
- * to her (said as written when someone asks the same thing), what she has
- * learned from the requests Claude answered for her (each one hers to answer
- * from then on — to forget if it was learned wrong), and her web search.
+ * to her (said as written when someone asks the same thing), what she is
+ * learning from the requests Claude answered for her (../../../src/features/
+ * admin/MiriamLessons: each used once Claude has read it the same way twice,
+ * or approved here — to forget if it was learned wrong), and her web search.
  * All of it kept on the server (functions/src/miriam/ownAdmin).
  */
 
-interface Learned {
-  text: string
-  skill: string
-  at: number
-}
 interface Taught {
   id: string
   q: string
   a: string
   at: number
 }
-interface Listing {
-  learned: Learned[]
-  learnedCount: number
+interface Listing extends Lessons {
   taught: Taught[]
   web: { brave: boolean; setAt: number | null }
   /** The church's website, as she last read it, for questions of faith. */
@@ -114,18 +109,6 @@ export function MiriamAdmin({ call }: { call: Api }) {
       })
     ) {
       await run({ action: 'untaught', id: t.id }, 'Taken away.')
-    }
-  }
-
-  const forget = async (l: Learned) => {
-    if (
-      await confirmAsync(`Forget “${l.text}”?`, {
-        title: 'Forget it',
-        confirmLabel: 'Forget',
-        destructive: true,
-      })
-    ) {
-      await run({ action: 'forget', text: l.text }, 'Forgotten.')
     }
   }
 
@@ -293,39 +276,9 @@ export function MiriamAdmin({ call }: { call: Api }) {
 
           <YStack {...card}>
             <Text fontSize="$5" fontWeight="700">
-              What she’s learned ({data.learnedCount})
+              What she’s learning
             </Text>
-            <Text fontSize="$2" color="$gray10">
-              Requests Claude answered for her, kept as she read them (event names as “the event”,
-              never who asked) — each one hers to answer herself from then on. Forget any that were
-              learned wrong.
-            </Text>
-            {data.learned.length === 0 ? (
-              <Text fontSize="$3" color="$gray10">
-                Nothing yet — she learns as people use her.
-              </Text>
-            ) : (
-              data.learned.map((l) => (
-                <XStack
-                  key={`${l.text}-${l.at}`}
-                  borderTopWidth={1}
-                  borderTopColor="$borderColor"
-                  paddingTop="$2"
-                  gap="$2"
-                  alignItems="center"
-                >
-                  <YStack flex={1} gap="$0.5">
-                    <Text fontSize="$3">“{l.text}”</Text>
-                    <Text fontSize="$2" color="$gray10">
-                      {SKILL_NAMES[l.skill] ?? l.skill} · {new Date(l.at).toLocaleDateString()}
-                    </Text>
-                  </YStack>
-                  <Button size="$2" onPress={() => forget(l)} disabled={busy}>
-                    Forget
-                  </Button>
-                </XStack>
-              ))
-            )}
+            <MiriamLessons data={data} busy={busy} run={run} />
           </YStack>
         </>
       )}

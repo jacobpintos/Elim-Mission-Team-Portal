@@ -3,9 +3,11 @@ import * as admin from 'firebase-admin'
 import { embed } from './own/encoder'
 import { forgetBraveKey } from './own'
 import {
+  approve,
   forget,
-  listLearned,
+  listLearning,
   listTaught,
+  sameKey,
   MAX_TAUGHT_ANSWER,
   teach,
   untaught,
@@ -50,8 +52,8 @@ export const miriamOwnAdmin = onCall(
     const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
     if (action === 'list') {
-      const [learned, taught, web, site] = await Promise.all([
-        listLearned(ownDb),
+      const [learning, taught, web, site] = await Promise.all([
+        listLearning(ownDb),
         listTaught(ownDb),
         db.doc(WEB_DOC).get(),
         db.doc(SITE_DOC).get(),
@@ -59,8 +61,14 @@ export const miriamOwnAdmin = onCall(
       const w = web.data() ?? {}
       const st = site.data() ?? {}
       return {
-        learned: learned.slice(0, 300),
-        learnedCount: learned.length,
+        // In use: as an older app shows what she has learned.
+        learned: learning.inUse.slice(0, 300),
+        learnedCount: learning.inUse.length,
+        // Waiting to be read so again, and taken back (./own/learn).
+        waiting: learning.waiting.slice(0, 300),
+        waitingCount: learning.waiting.length,
+        retired: learning.retired,
+        room: learning.room,
         taught,
         web: {
           brave: typeof w.braveKey === 'string' && !!w.braveKey,
@@ -143,10 +151,28 @@ export const miriamOwnAdmin = onCall(
       const kept = await storeSite(ownDb, read)
       return { ok: true, kept, pages: read.pages.length, passages: read.passages.length }
     }
-    if (action === 'forget') {
+    // A lesson, by its key and skill — or, from an older app, its words alone.
+    const lessonKey = () => {
+      const skill = text(req.data?.skill, 40) || undefined
+      const k = text(req.data?.key, 40)
+      if (/^[0-9a-f]{16}$/.test(k)) return { key: k, skill }
       const t = text(req.data?.text, 300)
       if (!t) throw new HttpsError('invalid-argument', 'Which one?')
-      await forget(ownDb, t)
+      return { key: sameKey(t), skill }
+    }
+    if (action === 'forget') {
+      await forget(ownDb, lessonKey())
+      return { ok: true }
+    }
+    if (action === 'approve') {
+      const done = await approve(ownDb, lessonKey())
+      if (done === 'full') {
+        throw new HttpsError(
+          'resource-exhausted',
+          'She has as many lessons in use as she can hold, all approved — forget some she no longer needs.'
+        )
+      }
+      if (done === 'not found') throw new HttpsError('not-found', 'That one isn’t there any more.')
       return { ok: true }
     }
     if (action === 'teach') {

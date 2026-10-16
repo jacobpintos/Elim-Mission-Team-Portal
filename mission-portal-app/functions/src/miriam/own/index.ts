@@ -15,7 +15,7 @@ import {
 import { embed } from './encoder'
 import { mentionsIn } from './events'
 import { notHers } from './guards'
-import { learnedExamples, WEB_DOC, type OwnDb } from './learn'
+import { ownKnowledge, sameKey, WEB_DOC, type OwnDb } from './learn'
 import type { Skill } from './skills'
 import { read, seedExamples, type Example, type Reading } from './understand'
 import { webAnswer } from './web'
@@ -179,6 +179,10 @@ async function fromFaith(
 
 /** A request, read: its events' names, its meaning, and which of her skills it is. */
 interface Understood {
+  /** The examples she read it by: her starting ones, and her lessons in use. */
+  known: Example[]
+  /** Words someone said an answer of hers wasn't what they meant: Claude's, for now (./learn). */
+  handOn: boolean
   mentions: ReturnType<typeof mentionsIn>['mentions']
   /** As said, with each event's name read as "the event". */
   masked: string
@@ -195,13 +199,16 @@ interface Understood {
 async function understand(input: OwnInput, said = input.text): Promise<Understood> {
   const { today, lookups, db } = input
   const events = await lookups.eventsBetween(shiftDate(today, -1), shiftDate(today, 365))
-  const known = [...seedExamples(), ...(await learnedExamples(db).catch(() => []))]
+  const knowledge = await ownKnowledge(db).catch(() => null)
+  const known = [...seedExamples(), ...(knowledge?.examples ?? [])]
   const r = readRequest(
     said,
     events.map((e) => e.title),
     known
   )
   return {
+    known,
+    handOn: !!knowledge?.handOn.has(sameKey(r.readText)),
     mentions: r.mentions,
     masked: r.masked,
     rawV: r.rawV,
@@ -375,7 +382,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
     }
   }
 
-  const { mentions, masked, rawV, reading, own } = await whatItIs()
+  const { mentions, masked, rawV, reading, own, handOn } = await whatItIs()
 
   // 1. Taught: said as an admin wrote it — on faith, kept open to be read.
   const faith = reading.skill === 'faith' || aboutScripture(text)
@@ -388,6 +395,9 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
       why: 'taught',
     }
   }
+  // Said not to be what was meant, the last time she answered it: Claude's,
+  // until she reads it as Claude does (./learn: handOn).
+  if (handOn) return { result: null, read: own, why: 'corrected before' }
 
   // 2. From the event itself, however she read it: something on its schedule
   // ("When does Olivia arrive for New Year's Eve?" — “Courtney and Olivia

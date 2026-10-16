@@ -18,6 +18,8 @@ export interface Example {
   text: string
   skill: Skill
   v: Float32Array
+  /** A lesson she learned (./learn: sameKey); none for her starting ones. */
+  key?: string
 }
 
 export interface Reading {
@@ -82,4 +84,19 @@ export function read(v: Float32Array, examples: readonly Example[]): Reading {
     margin: next ? best.score - next.score : best.score,
     nearest: best.nearest,
   }
+}
+
+/** A skill's examples nearest a meaning, nearest first: those that decided its score (read). */
+export function nearestOf(
+  v: Float32Array,
+  examples: readonly Example[],
+  skill: Skill,
+  n = NEAREST
+): Example[] {
+  return examples
+    .filter((e) => e.skill === skill)
+    .map((e) => ({ e, sim: similarity(v, e.v) }))
+    .sort((a, b) => b.sim - a.sim)
+    .slice(0, n)
+    .map(({ e }) => e)
 }
