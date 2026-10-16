@@ -48,6 +48,7 @@ import { useRemindersStore, type ReminderExtra } from '@/stores/remindersStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useTourStore } from '@/features/tour/tourStore'
 import { recordAsked } from './recordAsked'
+import { recordTurn } from './recordTurn'
 import { stopSpeaking, unlockSpeech, whenSpoken } from './speak'
 import { askMiriam, miriamError } from './askMiriam'
 import { eventByKey, prepareAction } from './actions'
@@ -180,7 +181,17 @@ export function useMiriamConversation(
     }
   }, [open, subGroups, unsubGroups])
 
+  // Requests sent to the server: one that sends none was the phone's alone (./recordTurn).
+  const toServer = useRef(0)
+  /** A request, or a reply, said or typed: worked out — and counted when the phone did it all. */
   const send = async (text: string, again = false) => {
+    if (!text.trim() || sentRef.current) return
+    const sent = toServer.current
+    await sendNow(text, again)
+    if (toServer.current === sent) recordTurn()
+  }
+
+  const sendNow = async (text: string, again = false) => {
     const asHeard = text.trim()
     if (!asHeard || sentRef.current) return
     // Put right where it was plainly misheard: "an even named" → "an event named".
@@ -500,6 +511,7 @@ export function useMiriamConversation(
    * asks back is answered by typing, rather than listened for.
    */
   const askClaude = async (said: string, typing: boolean) => {
+    toServer.current++
     setStage('thinking')
     try {
       // How it was heard, when it is what was just said (not typed, nor her carrying on).

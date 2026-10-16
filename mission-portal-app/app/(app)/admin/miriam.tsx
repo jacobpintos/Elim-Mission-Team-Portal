@@ -6,6 +6,7 @@ import { functions } from '@/lib/firebase'
 import { useUIStore } from '@/stores/uiStore'
 import { confirmAsync } from '@/lib/confirm'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { MiriamStats, SKILL_NAMES } from '@/features/admin/MiriamStats'
 
 /**
  * Admin → Miriam: what she knows that is the church's own. Answers taught
@@ -36,24 +37,6 @@ interface Listing {
 }
 
 /** Her skills, as an admin reads them. */
-const SKILL_NAMES: Record<string, string> = {
-  event_time: 'When an event is',
-  event_place: 'Where an event is',
-  event_dress: 'Dress code',
-  event_schedule: 'An event’s schedule',
-  event_team: 'Their team',
-  event_car: 'Their car',
-  event_lodging: 'Their room',
-  event_flight: 'Their flight',
-  event_weather: 'An event’s weather',
-  my_events: 'What they have on',
-  availability: 'Answering availability',
-  reminder: 'A reminder',
-  food_signup: 'Signing up to bring food',
-  web: 'The web',
-  faith: 'Faith (the church’s own answers)',
-  other: 'Not hers — Claude’s',
-}
 
 type Api = (data: Record<string, unknown>) => Promise<unknown>
 
@@ -172,6 +155,8 @@ export function MiriamAdmin({ call }: { call: Api }) {
         to Claude. She learns from every request Claude answers for her, and from the answers you
         teach her here.
       </Text>
+
+      <MiriamStats call={call} />
 
       {!data ? (
         <YStack padding="$6" alignItems="center">

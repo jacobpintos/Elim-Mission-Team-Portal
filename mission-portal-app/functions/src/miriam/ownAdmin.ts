@@ -14,6 +14,7 @@ import {
 } from './own/learn'
 import { CHURCH_SITE, readSite, SITE_DOC, storeSite } from './own/site'
 import { ASKED, groupAsked } from './own/asked'
+import { EVENTS, MAX_EVENTS, summarize } from './stats'
 import { packVector, unpackVector } from './own/vectors'
 
 /** The questions read for one look at Analytics, at most: the latest. */
@@ -23,13 +24,14 @@ const DAY_MS = 24 * 60 * 60 * 1000
 if (!admin.apps.length) admin.initializeApp()
 
 /**
- * Admin → Miriam: what she has learned from Claude (to see, and to forget
- * one learned wrong), the answers she has been taught (to add and take
- * away), the church's website she answers faith from (to read again now),
- * and her web search key. Admin → Analytics: the questions she is asked
- * most (./own/asked). All of it is kept where no device can read it
- * (firestore.rules: miriamOwn, miriamAsked); this is the only way in, for
- * admins only. The key is never sent back — only whether one is set.
+ * Admin → Miriam: how she is doing (./stats), what she has learned from
+ * Claude (to see, and to forget one learned wrong), the answers she has
+ * been taught (to add and take away), the church's website she answers
+ * faith from (to read again now), and her web search key. Admin →
+ * Analytics: the questions she is asked most (./own/asked). All of it is
+ * kept where no device can read it (firestore.rules: miriamOwn,
+ * miriamAsked, miriamEvents); this is the only way in, for admins only.
+ * The key is never sent back — only whether one is set.
  */
 export const miriamOwnAdmin = onCall(
   // Reading the church's site, when asked, takes a minute or two.
@@ -71,6 +73,22 @@ export const miriamOwnAdmin = onCall(
           passages: Array.isArray(st.passages) ? st.passages.length : 0,
         },
       }
+    }
+    if (action === 'stats') {
+      // How she is doing over the last days: where requests were handled, and how they ended (./stats).
+      const days = [7, 30, 90].includes(Number(req.data?.days)) ? Number(req.data.days) : 30
+      const since = admin.firestore.Timestamp.fromMillis(Date.now() - days * DAY_MS)
+      const snap = await db
+        .collection(EVENTS)
+        .where('at', '>=', since)
+        .orderBy('at', 'desc')
+        .limit(MAX_EVENTS)
+        .get()
+      return summarize(
+        snap.docs.map((d) => d.data()),
+        days,
+        snap.size >= MAX_EVENTS
+      )
     }
     if (action === 'asked') {
       // The questions asked in the last days, by what kind of account, grouped by what they mean.

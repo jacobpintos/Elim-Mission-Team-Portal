@@ -1,4 +1,4 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https'
+import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/https'
 import { defineSecret } from 'firebase-functions/params'
 import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
@@ -10,6 +10,7 @@ import {
   commandsFor,
   isPublicFollower,
   PUBLIC_APP_TOOLS,
+  PUBLIC_NOT_HERS,
   type AppToolName,
   draftFromInput,
   taskDraftFromInput,
@@ -20,8 +21,9 @@ import {
 import { isAdminViewer, type Viewer } from './data'
 import { Lookups, withWeekday } from './lookups'
 import { PAUSE_MS, MAX_RESULT, seal, unseal } from './pause'
-import { ownAnswer, publicAnswer, webOrFaith, type OwnInput, type OwnRead } from './own'
+import { ownAnswer, publicAnswer, sure, webOrFaith, type OwnInput, type OwnRead } from './own'
 import type { SignupWould } from './own/signup'
+import { EVENTS, outcomeOf, ownTag, type MiriamEvent, type Outcome, type Tier } from './stats'
 import { learn, type OwnDb } from './own/learn'
 import { OWN_SKILLS, type Skill } from './own/skills'
 import { skillOfAction } from './own/labels'
@@ -198,468 +200,530 @@ export const askMiriam = onCall(
   // A whole processor: her own model runs here (./own/encoder).
   { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 90, memory: '1GiB', cpu: 1 },
   async (req) => {
-    const uid = req.auth?.uid
-    if (!uid) throw new HttpsError('unauthenticated', 'Sign in to use Miriam.')
-
-    // The person's own day, for "Friday" and "9/25": the server's is UTC.
-    const today =
-      typeof req.data?.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.data.today)
-        ? req.data.today
-        : new Date().toISOString().slice(0, 10)
-    const key = ANTHROPIC_API_KEY.value()
-    const paused = req.data?.resume ? unseal(req.data.resume.state, key) : null
-    if (req.data?.resume && (!paused || paused.uid !== uid || paused.until < Date.now())) {
-      throw new HttpsError('failed-precondition', 'That took too long — ask again.')
-    }
-
+    // Where it was handled, set as it goes, and noted once it ends (./stats).
+    const turn: TurnNote = { tier: 'claude' }
     const db = admin.firestore()
-    const me = await db.doc(`users/${uid}`).get()
-    const roles: string[] = Array.isArray(me.data()?.roles) ? me.data()!.roles : []
-    // A public follower: answered from her own knowing only, never sent on to
-    // Claude (./plan: isPublicFollower) — and so never carried on with one.
-    const ownOnly = isPublicFollower(roles)
-    if (ownOnly && req.data?.resume) {
-      throw new HttpsError('failed-precondition', 'Ask again.')
-    }
-    const commands = commandsFor(roles)
-    if (commands.length === 0 && !ownOnly) {
-      return { kind: 'reply', text: 'There’s nothing I can do for you in the app yet.' }
-    }
-    const viewer = { uid, roles }
-    const lookups = new Lookups(db, viewer, today)
-    const ownDb = db as unknown as OwnDb
-    // What she read, when she handed it to Claude: kept as what Claude says it was.
-    let ownRead: OwnRead | null = null
-    // A food sign-up she worked out and didn't act on (./own: FOOD_LIVE): logged beside what Claude does.
-    let ownWould: SignupWould | null = null
-    let ownInput: OwnInput | null = null
-    // The request as put right, when it was heard otherwise: shown in the app.
-    let heardAsText = ''
-
-    let messages: Anthropic.Beta.BetaMessageParam[]
-    let appTools: AppToolName[]
-    let firstRound = 0
-    // Haiku, with Opus to advise; or — if that is ever turned down before
-    // anything has been said — Opus alone, as before, so the question is
-    // still answered.
-    let alone = false
-    if (paused) {
-      // Carried on with what the app found: a result for each call it was
-      // given, in the same turn as those done here.
-      const sent: unknown[] = Array.isArray(req.data.resume.results) ? req.data.resume.results : []
-      const fromApp = paused.waiting.map((id): Anthropic.Beta.BetaToolResultBlockParam => {
-        const r = sent.find((x) => (x as { id?: unknown })?.id === id) as
-          | { content?: unknown }
-          | undefined
-        return {
-          type: 'tool_result',
-          tool_use_id: id,
-          content:
-            typeof r?.content === 'string'
-              ? r.content.slice(0, MAX_RESULT)
-              : JSON.stringify({ error: 'The app could not look that up.' }),
-        }
-      })
-      messages = [...paused.messages, { role: 'user', content: [...paused.done, ...fromApp] }]
-      appTools = appToolsFrom(paused.appTools)
-      firstRound = paused.round + 1
-      alone = paused.alone
-    } else {
-      const asHeard = typeof req.data?.text === 'string' ? req.data.text.trim() : ''
-      if (!asHeard) throw new HttpsError('invalid-argument', 'Nothing was asked.')
-      // Put right where it was plainly misheard (./hearing): the app does it
-      // too, but not one too old to.
-      const text = heardRight(asHeard, misheardFrom(req.data?.words)).text
-      if (text !== asHeard) heardAsText = text
-      if (text.length > MAX_TEXT)
-        throw new HttpsError('invalid-argument', 'That was too long — try it in two.')
-      if (!allowed(uid)) {
-        throw new HttpsError(
-          'resource-exhausted',
-          'That’s a lot of requests — try again in a few minutes.'
-        )
-      }
-      // Names this device has learned: what they said, and the event they meant.
-      const known = (Array.isArray(req.data?.known) ? req.data.known : [])
-        .filter(
-          (k: unknown): k is { heard: string; title: string } =>
-            !!k &&
-            typeof (k as { heard?: unknown }).heard === 'string' &&
-            typeof (k as { title?: unknown }).title === 'string'
-        )
-        .slice(0, 30)
-        .map(
-          (k: { heard: string; title: string }) =>
-            `“${k.heard.slice(0, 80)}” meant “${k.title.slice(0, 120)}”`
-        )
-      const screens = screensFrom(req.data?.screens)
-      const history = historyFrom(req.data?.history)
-      const alternatives = alternativesFrom(req.data?.heardAs)
-      const confidence =
-        typeof req.data?.confidence === 'number' &&
-        req.data.confidence >= 0 &&
-        req.data.confidence <= 1
-          ? req.data.confidence
-          : null
-      const words = wordsFrom(req.data?.words)
-      const hearing =
-        (alternatives.length
-          ? `\nSpeech recognition also heard it as: ${alternatives.map((a) => `“${a}”`).join('; ')}.`
-          : '') +
-        (confidence !== null
-          ? `\nIt was ${confidence < 0.6 ? 'unsure of it' : 'fairly sure of it'} (${confidence.toFixed(2)}).`
-          : '')
-      appTools = appToolsFrom(req.data?.appTools)
-      // A public follower's look things up, and change nothing — whatever an app says it has.
-      if (ownOnly) appTools = appTools.filter((t) => PUBLIC_APP_TOOLS.includes(t))
-
-      // Miriam first, on her own: answered here if she can, nothing sent to Claude.
-      ownInput = {
-        text,
-        today,
-        now:
-          typeof req.data?.now === 'string' && /^\d{2}:\d{2}$/.test(req.data.now)
-            ? req.data.now
-            : null,
-        history: recentFrom(req.data?.history),
-        appTools,
-        can: (Array.isArray(req.data?.can) ? req.data.can : []).filter(
-          (c: unknown): c is string => typeof c === 'string'
-        ),
-        viewer,
-        lookups,
-        db: ownDb,
-      }
-      const own = await ownAnswer(ownInput).catch((err: unknown) => {
-        logger.error('askMiriam: her own reading failed', err)
-        return null
-      })
-      if (own) {
-        logger.info('askMiriam: her own', {
-          uid,
-          why: own.why,
-          answered: !!own.result,
-          skill: own.read?.skill,
-          score: own.read ? Math.round(own.read.score * 1000) / 1000 : undefined,
-          margin: own.read ? Math.round(own.read.margin * 1000) / 1000 : undefined,
-          would: own.would?.kind,
-          rule: own.would?.rule,
+    try {
+      const result = await answerRequest(req, turn)
+      // Paused for the app's lookups: noted when it carries on.
+      if (result.kind !== 'run' && !turn.skip) {
+        await noteEvent(db, {
+          kind: 'turn',
+          tier: turn.tier,
+          outcome: turn.outcome ?? outcomeOf(result),
+          ...(turn.skill ? { skill: turn.skill } : {}),
         })
-        if (own.result) {
-          return own.result.kind === 'answer' && heardAsText && !own.result.understood
-            ? { ...own.result, understood: heardAsText }
-            : own.result
-        }
-        ownRead = own.read
-        ownWould = own.would ?? null
       }
-      // Not hers to answer, for a public follower: nothing is sent to Claude (./own: publicAnswer).
-      if (ownOnly) {
-        const reply = await publicAnswer(text, ownInput)
-        return heardAsText ? { ...reply, understood: heardAsText } : reply
-      }
-
-      messages = [
-        {
-          role: 'user',
-          content:
-            `Today is ${withWeekday(today)}.\n\n` +
-            (screens.length ? `Screens they can open (id: name):\n${screens.join('\n')}\n\n` : '') +
-            (known.length
-              ? `Names they have used before for events:\n${known.join('\n')}\n\n`
-              : '') +
-            (words.length ? `Words misheard for them before:\n${words.join('\n')}\n\n` : '') +
-            (history.length
-              ? `Earlier in this conversation, oldest first:\n${history.join('\n')}\n\nNow they said: “${text}”`
-              : `They said: “${text}”`) +
-            (text !== asHeard ? ` (as written down: “${asHeard}”)` : '') +
-            hearing,
-        },
-      ]
-    }
-
-    // The people and groups a new event's form can name: only for those who
-    // may make one (admins, who can see them all), and only once asked for.
-    let roster: Roster | null = null
-    const loadRoster = async (): Promise<Roster> => {
-      if (roster) return roster
-      const [names, groups, userSnap, config, templates] = await Promise.all([
-        lookups.names(),
-        lookups.groups(),
-        db.collection('users').get(),
-        db.doc('config/main').get(),
-        db.collection('taskTemplates').get(),
-      ])
-      const teams: unknown = config.data()?.COMMON_TEAMS
-      roster = {
-        people: userSnap.docs
-          .filter((d) => {
-            const roles: string[] = Array.isArray(d.data().roles) ? d.data().roles : []
-            return names.has(d.id) && !(roles.length > 0 && roles.every((r) => r === 'public'))
-          })
-          .map((d) => ({ id: d.id, name: names.get(d.id)! }))
-          .sort((a, b) => a.name.localeCompare(b.name)),
-        groups: groups.filter((g) => g.name).sort((a, b) => a.name.localeCompare(b.name)),
-        commonTeams: (Array.isArray(teams) ? teams : []).map(
-          (t: { name?: unknown; members?: unknown[] }) => ({
-            name: String(t.name ?? ''),
-            members: (t.members ?? []).map(String),
-          })
-        ),
-        taskTemplates: templates.docs.map((d) => ({ id: d.id, name: String(d.data().name ?? '') })),
-      }
-      return roster
-    }
-
-    /**
-     * What Claude said a request she handed on was, kept for her to answer
-     * the next like it herself: one of her skills, or — where she thought it
-     * hers and it wasn't — "other", so she knows better. Kept as she read it,
-     * a reminder's own words taken out; once.
-     */
-    const learnFrom = async (skill: Skill | null, reminderText?: unknown) => {
-      const r = ownRead
-      ownRead = null
-      if (!r || !skill) return
-      // How she read it, beside what Claude said it was: never the words.
-      logger.info('askMiriam: Claude’s label', {
-        uid,
-        label: skill,
-        ownSkill: r.skill,
-        ownScore: Math.round(r.score * 1000) / 1000,
-        ownMargin: Math.round(r.margin * 1000) / 1000,
-      })
-      if (skill === 'other' && (r.skill === 'other' || r.score < 0.5)) return
-      // Never as something it plainly isn't: "When does Olivia arrive?" as when
-      // an event is, "what is Family Gathering?" as where (./own/guards).
-      if (skill !== 'other' && notHers(r.masked, skill)) return
-      let text = r.masked
-      if (skill === 'reminder' && typeof reminderText === 'string' && reminderText.trim()) {
-        const words = reminderText.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        text = text.replace(new RegExp(words, 'i'), 'do something')
-      }
-      await learn(ownDb, text, skill, r.v).catch((err: unknown) =>
-        logger.error('askMiriam: not learned', err)
-      )
-    }
-
-    /**
-     * What she would have done with a food sign-up, beside what Claude did —
-     * the same event and item, or not — to tell when hers can be acted on
-     * (./own: FOOD_LIVE). Never the words.
-     */
-    const besideClaude = (claude: string, input: Record<string, unknown> = {}) => {
-      const w = ownWould
-      ownWould = null
-      if (!w) return
-      const signedUp = claude === 'sign_up_food'
-      logger.info('askMiriam: her food sign-up beside Claude’s', {
-        uid,
-        would: w.kind,
-        rule: w.rule,
-        claude,
-        sameEvent: signedUp ? String(input.event_key ?? '') === w.event_key : undefined,
-        sameItem: signedUp
-          ? String(input.item ?? '')
-              .trim()
-              .toLowerCase() === w.item.trim().toLowerCase()
-          : undefined,
-      })
-    }
-
-    const client = new Anthropic({ apiKey: key })
-    const commandTools = toolsFor(commands, appTools) as Anthropic.Beta.BetaTool[]
-    const ask = () =>
-      alone
-        ? client.beta.messages.create({
-            model: ADVISOR.model,
-            max_tokens: 8000,
-            // Declined on safety grounds: tried again on the model Anthropic
-            // recommends for that, inside the same call.
-            betas: ['server-side-fallback-2026-07-01'],
-            fallbacks: 'default',
-            output_config: { effort: 'low' },
-            system: SYSTEM,
-            tools: commandTools,
-            messages,
-          })
-        : client.beta.messages.create({
-            model: MODEL,
-            max_tokens: 8000,
-            betas: ['advisor-tool-2026-03-01'],
-            output_config: { effort: 'medium' },
-            // Each round re-reads the one before from the cache.
-            cache_control: { type: 'ephemeral' },
-            system: SYSTEM,
-            tools: [...commandTools, ADVISOR],
-            messages,
-          })
-
-    for (let round = firstRound; round < MAX_ROUNDS; round++) {
-      let response: Anthropic.Beta.BetaMessage
-      try {
-        response = await ask().catch((err: unknown) => {
-          if (!(err instanceof Anthropic.BadRequestError) || alone || messages.length > 1) throw err
-          logger.error('askMiriam: Haiku with an advisor was refused; asking Opus alone', err)
-          alone = true
-          return ask()
+      return result
+    } catch (err) {
+      if (req.auth?.uid && !turn.skip) {
+        const limited = err instanceof HttpsError && err.code === 'resource-exhausted'
+        await noteEvent(db, {
+          kind: 'turn',
+          tier: turn.tier,
+          outcome: limited ? 'limited' : 'error',
         })
-      } catch (err) {
-        if (err instanceof Anthropic.AuthenticationError) {
-          logger.error('askMiriam: the Anthropic API key was refused')
-        } else if (err instanceof Anthropic.RateLimitError) {
-          throw new HttpsError('resource-exhausted', 'Miriam is busy — try again in a moment.')
-        } else {
-          logger.error('askMiriam: request failed', err)
-        }
-        throw new HttpsError('unavailable', 'Miriam couldn’t be reached. Try again.')
       }
-      logger.info('askMiriam', { uid, round, model: response.model, usage: response.usage })
-
-      if (response.stop_reason === 'refusal') {
-        return { kind: 'reply', text: 'Sorry, I can’t help with that.' }
-      }
-      // Paused while asking the advisor: carried on from where it stopped.
-      if (response.stop_reason === 'pause_turn') {
-        messages.push({ role: 'assistant', content: response.content })
-        continue
-      }
-      const calls = response.content.filter(
-        (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use'
-      )
-      if (calls.length === 0) {
-        const said = response.content
-          .map((b) => (b.type === 'text' ? b.text : ''))
-          .join(' ')
-          .trim()
-        return { kind: 'reply', text: said || 'Sorry, I didn’t catch that. Try again?' }
-      }
-
-      // Checked again: only a command this person may use is acted on.
-      const isAppTool = (name: string) => appTools.includes(name as AppToolName)
-      const refusedCall = calls.find(
-        (c) => !commands.includes(c.name as CommandName) && !isAppTool(c.name)
-      )
-      if (refusedCall) return { kind: 'reply', text: 'You don’t have permission to do that.' }
-
-      const form = calls.find((c) => c.name === 'open_event_form')
-      if (form) {
-        const { draft, notes } = draftFromInput(form.input as EventFormInput, await loadRoster())
-        return { kind: 'eventForm', draft, notes }
-      }
-      const task = calls.find((c) => c.name === 'open_task_form')
-      if (task) {
-        const { draft, notes } = taskDraftFromInput(
-          task.input as Record<string, unknown>,
-          await loadRoster()
-        )
-        return { kind: 'taskForm', draft, notes }
-      }
-      // An existing event's form, with the changes asked for made.
-      const edit = calls.find((c) => c.name === 'edit_event')
-      if (edit) {
-        const input = edit.input as EventFormInput
-        const ev = await lookups.event(String(input.event_key ?? ''))
-        if (!ev) return { kind: 'reply', text: 'I couldn’t find that event to change.' }
-        const { draft, notes } = draftFromInput(input, await loadRoster(), {
-          users: (ev.users ?? []).map(String),
-          groups: (ev.groups ?? []).map(String),
-        })
-        return { kind: 'eventForm', draft, notes, editKey: ev.instanceKey }
-      }
-      // A change: not made here. The app shows exactly what will be done,
-      // and does it only once they confirm.
-      const action = calls.find((c) => ACTIONS.includes(c.name as never) && isAppTool(c.name))
-      if (action) {
-        // More asked after it: once it is done, the app hands back to carry on.
-        const { more_to_do: more, ...input } = action.input as Record<string, unknown>
-        besideClaude(action.name, input)
-        // Hers to do next time (./own/labels).
-        await learnFrom(skillOfAction(action.name, input), input.text)
-        return { kind: 'confirm', name: action.name, input, more: more === true }
-      }
-      const final = calls.find((c) => c.name === 'answer')
-      if (final) {
-        const input = final.input as AnswerInput
-        const skill = (OWN_SKILLS as readonly string[]).includes(String(input.skill))
-          ? (input.skill as Skill)
-          : 'other'
-        besideClaude(input.follow_up === true ? 'asked back' : `answer: ${skill}`)
-        // Something she answers herself, seen by Claude: the web, or a question of faith.
-        if ((skill === 'web' || skill === 'faith') && ownInput) {
-          await learnFrom(skill)
-          const hers = await webOrFaith(skill, ownInput.text, ownInput).catch(() => null)
-          if (hers) return hers
-        }
-        // Its own question back isn't the answer: nothing learned from it.
-        if (input.follow_up !== true) await learnFrom(skill)
-        const answered = await finish(input, lookups, viewer)
-        return heardAsText && !answered.understood
-          ? { ...answered, understood: heardAsText }
-          : answered
-      }
-
-      // Looked up, and handed back for the next round.
-      const results: Anthropic.Beta.BetaToolResultBlockParam[] = []
-      for (const call of calls.filter((c) => !isAppTool(c.name))) {
-        const input = call.input as { query?: string; date?: string; key?: string }
-        let result: unknown
-        try {
-          result =
-            call.name === 'people_and_groups'
-              ? await loadRoster().then((r) => ({
-                  groups: r.groups.map((g) => `${g.id}: ${g.name}`),
-                  people: r.people.map((p) => `${p.id}: ${p.name}`),
-                  teams: (r.commonTeams ?? []).map((t) => ({
-                    name: t.name,
-                    members: t.members.length,
-                  })),
-                  taskTemplates: (r.taskTemplates ?? []).map((t) => `${t.id}: ${t.name}`),
-                }))
-              : call.name === 'find_events'
-                ? await lookups.findEvents(String(input.query ?? ''), String(input.date ?? ''))
-                : call.name === 'get_event'
-                  ? await lookups.getEvent(String(input.key ?? ''))
-                  : call.name === 'event_availability'
-                    ? await lookups.availability(String(input.key ?? ''))
-                    : call.name === 'event_weather'
-                      ? await lookups.weather(String(input.key ?? ''))
-                      : call.name === 'find_tasks'
-                        ? await lookups.findTasks(String(input.query ?? ''))
-                        : { error: 'Not a lookup.' }
-        } catch (err) {
-          logger.error(`askMiriam: ${call.name} failed`, err)
-          result = { error: 'That could not be looked up just now.' }
-        }
-        results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(result) })
-      }
-      messages.push({ role: 'assistant', content: response.content })
-      // Lookups the app makes: handed to it, to carry on when it answers.
-      const forApp = calls.filter((c) => isAppTool(c.name))
-      if (forApp.length) {
-        return {
-          kind: 'run',
-          calls: forApp.map((c) => ({ id: c.id, name: c.name, input: c.input })),
-          state: seal(
-            {
-              uid,
-              until: Date.now() + PAUSE_MS,
-              round,
-              alone,
-              appTools,
-              messages,
-              done: results,
-              waiting: forApp.map((c) => c.id),
-            },
-            key
-          ),
-        }
-      }
-      messages.push({ role: 'user', content: results })
+      throw err
     }
-    return { kind: 'reply', text: 'I couldn’t work that out — try asking another way.' }
   }
 )
+
+/** Where a request was handled, and how she read it, as it is worked out (./stats). */
+interface TurnNote {
+  tier: Tier
+  /** What her own answer was: "event_time", "taught" (./stats: ownTag). */
+  skill?: string
+  /** How it ended, where the result alone doesn't say. */
+  outcome?: Outcome
+  /** Not a request to count: there was nothing she could do for them at all. */
+  skip?: boolean
+}
+
+/** One of her records (./stats), with when: never the words, never who. Nothing said if it can't be kept. */
+async function noteEvent(db: admin.firestore.Firestore, event: MiriamEvent): Promise<void> {
+  await db
+    .collection(EVENTS)
+    .add({ ...event, at: admin.firestore.FieldValue.serverTimestamp() })
+    .catch((err: unknown) => logger.error('askMiriam: not noted', err))
+}
+
+async function answerRequest(req: CallableRequest, turn: TurnNote) {
+  const uid = req.auth?.uid
+  if (!uid) throw new HttpsError('unauthenticated', 'Sign in to use Miriam.')
+
+  // The person's own day, for "Friday" and "9/25": the server's is UTC.
+  const today =
+    typeof req.data?.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.data.today)
+      ? req.data.today
+      : new Date().toISOString().slice(0, 10)
+  const key = ANTHROPIC_API_KEY.value()
+  const paused = req.data?.resume ? unseal(req.data.resume.state, key) : null
+  if (req.data?.resume && (!paused || paused.uid !== uid || paused.until < Date.now())) {
+    throw new HttpsError('failed-precondition', 'That took too long — ask again.')
+  }
+
+  const db = admin.firestore()
+  const me = await db.doc(`users/${uid}`).get()
+  const roles: string[] = Array.isArray(me.data()?.roles) ? me.data()!.roles : []
+  // A public follower: answered from her own knowing only, never sent on to
+  // Claude (./plan: isPublicFollower) — and so never carried on with one.
+  const ownOnly = isPublicFollower(roles)
+  if (ownOnly && req.data?.resume) {
+    throw new HttpsError('failed-precondition', 'Ask again.')
+  }
+  const commands = commandsFor(roles)
+  if (commands.length === 0 && !ownOnly) {
+    turn.skip = true
+    return { kind: 'reply', text: 'There’s nothing I can do for you in the app yet.' }
+  }
+  const viewer = { uid, roles }
+  const lookups = new Lookups(db, viewer, today)
+  const ownDb = db as unknown as OwnDb
+  // What she read, when she handed it to Claude: kept as what Claude says it was.
+  let ownRead: OwnRead | null = null
+  // A food sign-up she worked out and didn't act on (./own: FOOD_LIVE): logged beside what Claude does.
+  let ownWould: SignupWould | null = null
+  let ownInput: OwnInput | null = null
+  // The request as put right, when it was heard otherwise: shown in the app.
+  let heardAsText = ''
+
+  let messages: Anthropic.Beta.BetaMessageParam[]
+  let appTools: AppToolName[]
+  let firstRound = 0
+  // Haiku, with Opus to advise; or — if that is ever turned down before
+  // anything has been said — Opus alone, as before, so the question is
+  // still answered.
+  let alone = false
+  if (paused) {
+    // Carried on with what the app found: a result for each call it was
+    // given, in the same turn as those done here.
+    const sent: unknown[] = Array.isArray(req.data.resume.results) ? req.data.resume.results : []
+    const fromApp = paused.waiting.map((id): Anthropic.Beta.BetaToolResultBlockParam => {
+      const r = sent.find((x) => (x as { id?: unknown })?.id === id) as
+        | { content?: unknown }
+        | undefined
+      return {
+        type: 'tool_result',
+        tool_use_id: id,
+        content:
+          typeof r?.content === 'string'
+            ? r.content.slice(0, MAX_RESULT)
+            : JSON.stringify({ error: 'The app could not look that up.' }),
+      }
+    })
+    messages = [...paused.messages, { role: 'user', content: [...paused.done, ...fromApp] }]
+    appTools = appToolsFrom(paused.appTools)
+    firstRound = paused.round + 1
+    alone = paused.alone
+  } else {
+    const asHeard = typeof req.data?.text === 'string' ? req.data.text.trim() : ''
+    if (!asHeard) throw new HttpsError('invalid-argument', 'Nothing was asked.')
+    // Put right where it was plainly misheard (./hearing): the app does it
+    // too, but not one too old to.
+    const text = heardRight(asHeard, misheardFrom(req.data?.words)).text
+    if (text !== asHeard) heardAsText = text
+    if (text.length > MAX_TEXT)
+      throw new HttpsError('invalid-argument', 'That was too long — try it in two.')
+    if (!allowed(uid)) {
+      throw new HttpsError(
+        'resource-exhausted',
+        'That’s a lot of requests — try again in a few minutes.'
+      )
+    }
+    // Names this device has learned: what they said, and the event they meant.
+    const known = (Array.isArray(req.data?.known) ? req.data.known : [])
+      .filter(
+        (k: unknown): k is { heard: string; title: string } =>
+          !!k &&
+          typeof (k as { heard?: unknown }).heard === 'string' &&
+          typeof (k as { title?: unknown }).title === 'string'
+      )
+      .slice(0, 30)
+      .map(
+        (k: { heard: string; title: string }) =>
+          `“${k.heard.slice(0, 80)}” meant “${k.title.slice(0, 120)}”`
+      )
+    const screens = screensFrom(req.data?.screens)
+    const history = historyFrom(req.data?.history)
+    const alternatives = alternativesFrom(req.data?.heardAs)
+    const confidence =
+      typeof req.data?.confidence === 'number' &&
+      req.data.confidence >= 0 &&
+      req.data.confidence <= 1
+        ? req.data.confidence
+        : null
+    const words = wordsFrom(req.data?.words)
+    const hearing =
+      (alternatives.length
+        ? `\nSpeech recognition also heard it as: ${alternatives.map((a) => `“${a}”`).join('; ')}.`
+        : '') +
+      (confidence !== null
+        ? `\nIt was ${confidence < 0.6 ? 'unsure of it' : 'fairly sure of it'} (${confidence.toFixed(2)}).`
+        : '')
+    appTools = appToolsFrom(req.data?.appTools)
+    // A public follower's look things up, and change nothing — whatever an app says it has.
+    if (ownOnly) appTools = appTools.filter((t) => PUBLIC_APP_TOOLS.includes(t))
+
+    // Miriam first, on her own: answered here if she can, nothing sent to Claude.
+    ownInput = {
+      text,
+      today,
+      now:
+        typeof req.data?.now === 'string' && /^\d{2}:\d{2}$/.test(req.data.now)
+          ? req.data.now
+          : null,
+      history: recentFrom(req.data?.history),
+      appTools,
+      can: (Array.isArray(req.data?.can) ? req.data.can : []).filter(
+        (c: unknown): c is string => typeof c === 'string'
+      ),
+      viewer,
+      lookups,
+      db: ownDb,
+    }
+    const own = await ownAnswer(ownInput).catch((err: unknown) => {
+      logger.error('askMiriam: her own reading failed', err)
+      return null
+    })
+    if (own) {
+      logger.info('askMiriam: her own', {
+        uid,
+        why: own.why,
+        answered: !!own.result,
+        skill: own.read?.skill,
+        score: own.read ? Math.round(own.read.score * 1000) / 1000 : undefined,
+        margin: own.read ? Math.round(own.read.margin * 1000) / 1000 : undefined,
+        would: own.would?.kind,
+        rule: own.would?.rule,
+      })
+      if (own.result) {
+        turn.tier = 'own'
+        turn.skill = ownTag(own.why, own.read?.skill)
+        return own.result.kind === 'answer' && heardAsText && !own.result.understood
+          ? { ...own.result, understood: heardAsText }
+          : own.result
+      }
+      ownRead = own.read
+      ownWould = own.would ?? null
+    }
+    // Not hers to answer, for a public follower: nothing is sent to Claude (./own: publicAnswer).
+    if (ownOnly) {
+      const reply = await publicAnswer(text, ownInput)
+      turn.tier = 'public'
+      turn.skill = 'public'
+      if (reply.kind === 'answer' && reply.text === PUBLIC_NOT_HERS) turn.outcome = 'couldnt'
+      return heardAsText ? { ...reply, understood: heardAsText } : reply
+    }
+
+    messages = [
+      {
+        role: 'user',
+        content:
+          `Today is ${withWeekday(today)}.\n\n` +
+          (screens.length ? `Screens they can open (id: name):\n${screens.join('\n')}\n\n` : '') +
+          (known.length ? `Names they have used before for events:\n${known.join('\n')}\n\n` : '') +
+          (words.length ? `Words misheard for them before:\n${words.join('\n')}\n\n` : '') +
+          (history.length
+            ? `Earlier in this conversation, oldest first:\n${history.join('\n')}\n\nNow they said: “${text}”`
+            : `They said: “${text}”`) +
+          (text !== asHeard ? ` (as written down: “${asHeard}”)` : '') +
+          hearing,
+      },
+    ]
+  }
+
+  // The people and groups a new event's form can name: only for those who
+  // may make one (admins, who can see them all), and only once asked for.
+  let roster: Roster | null = null
+  const loadRoster = async (): Promise<Roster> => {
+    if (roster) return roster
+    const [names, groups, userSnap, config, templates] = await Promise.all([
+      lookups.names(),
+      lookups.groups(),
+      db.collection('users').get(),
+      db.doc('config/main').get(),
+      db.collection('taskTemplates').get(),
+    ])
+    const teams: unknown = config.data()?.COMMON_TEAMS
+    roster = {
+      people: userSnap.docs
+        .filter((d) => {
+          const roles: string[] = Array.isArray(d.data().roles) ? d.data().roles : []
+          return names.has(d.id) && !(roles.length > 0 && roles.every((r) => r === 'public'))
+        })
+        .map((d) => ({ id: d.id, name: names.get(d.id)! }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      groups: groups.filter((g) => g.name).sort((a, b) => a.name.localeCompare(b.name)),
+      commonTeams: (Array.isArray(teams) ? teams : []).map(
+        (t: { name?: unknown; members?: unknown[] }) => ({
+          name: String(t.name ?? ''),
+          members: (t.members ?? []).map(String),
+        })
+      ),
+      taskTemplates: templates.docs.map((d) => ({ id: d.id, name: String(d.data().name ?? '') })),
+    }
+    return roster
+  }
+
+  /**
+   * What Claude said a request she handed on was, kept for her to answer
+   * the next like it herself: one of her skills, or — where she thought it
+   * hers and it wasn't — "other", so she knows better. Kept as she read it,
+   * a reminder's own words taken out; once.
+   */
+  const learnFrom = async (skill: Skill | null, reminderText?: unknown) => {
+    const r = ownRead
+    ownRead = null
+    if (!r || !skill) return
+    // How she read it, beside what Claude said it was: never the words.
+    await noteEvent(db, { kind: 'label', label: skill, read: r.skill, sure: sure(r) })
+    logger.info('askMiriam: Claude’s label', {
+      uid,
+      label: skill,
+      ownSkill: r.skill,
+      ownScore: Math.round(r.score * 1000) / 1000,
+      ownMargin: Math.round(r.margin * 1000) / 1000,
+    })
+    if (skill === 'other' && (r.skill === 'other' || r.score < 0.5)) return
+    // Never as something it plainly isn't: "When does Olivia arrive?" as when
+    // an event is, "what is Family Gathering?" as where (./own/guards).
+    if (skill !== 'other' && notHers(r.masked, skill)) return
+    let text = r.masked
+    if (skill === 'reminder' && typeof reminderText === 'string' && reminderText.trim()) {
+      const words = reminderText.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      text = text.replace(new RegExp(words, 'i'), 'do something')
+    }
+    await learn(ownDb, text, skill, r.v).catch((err: unknown) =>
+      logger.error('askMiriam: not learned', err)
+    )
+  }
+
+  /**
+   * What she would have done with a food sign-up, beside what Claude did —
+   * the same event and item, or not — to tell when hers can be acted on
+   * (./own: FOOD_LIVE). Never the words.
+   */
+  const besideClaude = async (claude: string, input: Record<string, unknown> = {}) => {
+    const w = ownWould
+    ownWould = null
+    if (!w) return
+    const signedUp = claude === 'sign_up_food'
+    const sameEvent = signedUp ? String(input.event_key ?? '') === w.event_key : undefined
+    const sameItem = signedUp
+      ? String(input.item ?? '')
+          .trim()
+          .toLowerCase() === w.item.trim().toLowerCase()
+      : undefined
+    logger.info('askMiriam: her food sign-up beside Claude’s', {
+      uid,
+      would: w.kind,
+      rule: w.rule,
+      claude,
+      sameEvent,
+      sameItem,
+    })
+    await noteEvent(db, {
+      kind: 'food',
+      would: w.kind,
+      rule: w.rule,
+      claude,
+      same: signedUp ? !!sameEvent && !!sameItem : null,
+    })
+  }
+
+  const client = new Anthropic({ apiKey: key })
+  const commandTools = toolsFor(commands, appTools) as Anthropic.Beta.BetaTool[]
+  const ask = () =>
+    alone
+      ? client.beta.messages.create({
+          model: ADVISOR.model,
+          max_tokens: 8000,
+          // Declined on safety grounds: tried again on the model Anthropic
+          // recommends for that, inside the same call.
+          betas: ['server-side-fallback-2026-07-01'],
+          fallbacks: 'default',
+          output_config: { effort: 'low' },
+          system: SYSTEM,
+          tools: commandTools,
+          messages,
+        })
+      : client.beta.messages.create({
+          model: MODEL,
+          max_tokens: 8000,
+          betas: ['advisor-tool-2026-03-01'],
+          output_config: { effort: 'medium' },
+          // Each round re-reads the one before from the cache.
+          cache_control: { type: 'ephemeral' },
+          system: SYSTEM,
+          tools: [...commandTools, ADVISOR],
+          messages,
+        })
+
+  for (let round = firstRound; round < MAX_ROUNDS; round++) {
+    let response: Anthropic.Beta.BetaMessage
+    try {
+      response = await ask().catch((err: unknown) => {
+        if (!(err instanceof Anthropic.BadRequestError) || alone || messages.length > 1) throw err
+        logger.error('askMiriam: Haiku with an advisor was refused; asking Opus alone', err)
+        alone = true
+        return ask()
+      })
+    } catch (err) {
+      if (err instanceof Anthropic.AuthenticationError) {
+        logger.error('askMiriam: the Anthropic API key was refused')
+      } else if (err instanceof Anthropic.RateLimitError) {
+        throw new HttpsError('resource-exhausted', 'Miriam is busy — try again in a moment.')
+      } else {
+        logger.error('askMiriam: request failed', err)
+      }
+      throw new HttpsError('unavailable', 'Miriam couldn’t be reached. Try again.')
+    }
+    logger.info('askMiriam', { uid, round, model: response.model, usage: response.usage })
+
+    if (response.stop_reason === 'refusal') {
+      return { kind: 'reply', text: 'Sorry, I can’t help with that.' }
+    }
+    // Paused while asking the advisor: carried on from where it stopped.
+    if (response.stop_reason === 'pause_turn') {
+      messages.push({ role: 'assistant', content: response.content })
+      continue
+    }
+    const calls = response.content.filter(
+      (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use'
+    )
+    if (calls.length === 0) {
+      const said = response.content
+        .map((b) => (b.type === 'text' ? b.text : ''))
+        .join(' ')
+        .trim()
+      return { kind: 'reply', text: said || 'Sorry, I didn’t catch that. Try again?' }
+    }
+
+    // Checked again: only a command this person may use is acted on.
+    const isAppTool = (name: string) => appTools.includes(name as AppToolName)
+    const refusedCall = calls.find(
+      (c) => !commands.includes(c.name as CommandName) && !isAppTool(c.name)
+    )
+    if (refusedCall) return { kind: 'reply', text: 'You don’t have permission to do that.' }
+
+    const form = calls.find((c) => c.name === 'open_event_form')
+    if (form) {
+      const { draft, notes } = draftFromInput(form.input as EventFormInput, await loadRoster())
+      return { kind: 'eventForm', draft, notes }
+    }
+    const task = calls.find((c) => c.name === 'open_task_form')
+    if (task) {
+      const { draft, notes } = taskDraftFromInput(
+        task.input as Record<string, unknown>,
+        await loadRoster()
+      )
+      return { kind: 'taskForm', draft, notes }
+    }
+    // An existing event's form, with the changes asked for made.
+    const edit = calls.find((c) => c.name === 'edit_event')
+    if (edit) {
+      const input = edit.input as EventFormInput
+      const ev = await lookups.event(String(input.event_key ?? ''))
+      if (!ev) return { kind: 'reply', text: 'I couldn’t find that event to change.' }
+      const { draft, notes } = draftFromInput(input, await loadRoster(), {
+        users: (ev.users ?? []).map(String),
+        groups: (ev.groups ?? []).map(String),
+      })
+      return { kind: 'eventForm', draft, notes, editKey: ev.instanceKey }
+    }
+    // A change: not made here. The app shows exactly what will be done,
+    // and does it only once they confirm.
+    const action = calls.find((c) => ACTIONS.includes(c.name as never) && isAppTool(c.name))
+    if (action) {
+      // More asked after it: once it is done, the app hands back to carry on.
+      const { more_to_do: more, ...input } = action.input as Record<string, unknown>
+      await besideClaude(action.name, input)
+      // Hers to do next time (./own/labels).
+      await learnFrom(skillOfAction(action.name, input), input.text)
+      return { kind: 'confirm', name: action.name, input, more: more === true }
+    }
+    const final = calls.find((c) => c.name === 'answer')
+    if (final) {
+      const input = final.input as AnswerInput
+      const skill = (OWN_SKILLS as readonly string[]).includes(String(input.skill))
+        ? (input.skill as Skill)
+        : 'other'
+      await besideClaude(input.follow_up === true ? 'asked back' : `answer: ${skill}`)
+      // Something she answers herself, seen by Claude: the web, or a question of faith.
+      if ((skill === 'web' || skill === 'faith') && ownInput) {
+        await learnFrom(skill)
+        const hers = await webOrFaith(skill, ownInput.text, ownInput).catch(() => null)
+        if (hers) return hers
+      }
+      // Its own question back isn't the answer: nothing learned from it.
+      if (input.follow_up !== true) await learnFrom(skill)
+      const answered = await finish(input, lookups, viewer)
+      return heardAsText && !answered.understood
+        ? { ...answered, understood: heardAsText }
+        : answered
+    }
+
+    // Looked up, and handed back for the next round.
+    const results: Anthropic.Beta.BetaToolResultBlockParam[] = []
+    for (const call of calls.filter((c) => !isAppTool(c.name))) {
+      const input = call.input as { query?: string; date?: string; key?: string }
+      let result: unknown
+      try {
+        result =
+          call.name === 'people_and_groups'
+            ? await loadRoster().then((r) => ({
+                groups: r.groups.map((g) => `${g.id}: ${g.name}`),
+                people: r.people.map((p) => `${p.id}: ${p.name}`),
+                teams: (r.commonTeams ?? []).map((t) => ({
+                  name: t.name,
+                  members: t.members.length,
+                })),
+                taskTemplates: (r.taskTemplates ?? []).map((t) => `${t.id}: ${t.name}`),
+              }))
+            : call.name === 'find_events'
+              ? await lookups.findEvents(String(input.query ?? ''), String(input.date ?? ''))
+              : call.name === 'get_event'
+                ? await lookups.getEvent(String(input.key ?? ''))
+                : call.name === 'event_availability'
+                  ? await lookups.availability(String(input.key ?? ''))
+                  : call.name === 'event_weather'
+                    ? await lookups.weather(String(input.key ?? ''))
+                    : call.name === 'find_tasks'
+                      ? await lookups.findTasks(String(input.query ?? ''))
+                      : { error: 'Not a lookup.' }
+      } catch (err) {
+        logger.error(`askMiriam: ${call.name} failed`, err)
+        result = { error: 'That could not be looked up just now.' }
+      }
+      results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(result) })
+    }
+    messages.push({ role: 'assistant', content: response.content })
+    // Lookups the app makes: handed to it, to carry on when it answers.
+    const forApp = calls.filter((c) => isAppTool(c.name))
+    if (forApp.length) {
+      return {
+        kind: 'run',
+        calls: forApp.map((c) => ({ id: c.id, name: c.name, input: c.input })),
+        state: seal(
+          {
+            uid,
+            until: Date.now() + PAUSE_MS,
+            round,
+            alone,
+            appTools,
+            messages,
+            done: results,
+            waiting: forApp.map((c) => c.id),
+          },
+          key
+        ),
+      }
+    }
+    messages.push({ role: 'user', content: results })
+  }
+  return { kind: 'reply', text: 'I couldn’t work that out — try asking another way.' }
+}
 
 interface AnswerInput {
   spoken: string

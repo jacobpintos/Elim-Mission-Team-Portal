@@ -15,6 +15,7 @@ import { useDateNotesStore } from '@/stores/dateNotesStore'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { useRemindersStore, type BeforeEach, type ReminderExtra } from '@/stores/remindersStore'
 import { prepareAction } from './actions'
+import { recordCard } from './recordTurn'
 import { unlockSpeech, whenSpoken } from './speak'
 import type { Listening } from './useListening'
 import type { PanelState } from './usePanelState'
@@ -248,6 +249,7 @@ export function useMiriamActions(
   const confirmAction = async (shown = pending) => {
     endVoiceConfirm()
     if (shown?.prepared.kind !== 'ready') return
+    recordCard('confirmed')
     const { run, undo: takeBack } = shown.prepared
     const more = !!shown.more
     unlockSpeech()
@@ -283,6 +285,7 @@ export function useMiriamActions(
     }
   }
   const cancelAction = () => {
+    recordCard('cancelled')
     endVoiceConfirm()
     setPending(null)
     useMiriamStore.getState().setAwaiting(false)

@@ -395,6 +395,25 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    // How Miriam is doing (functions/src/miriam/stats): the app writes only
+    // that it handled a request itself, or that a change she showed was
+    // confirmed or cancelled — never the words, never who. The server writes
+    // the rest, and reads them only for Admin → Miriam (functions: miriamOwnAdmin).
+    match /miriamEvents/{id} {
+      allow create: if isSignedIn()
+        && request.resource.data.at == request.time
+        && (
+          (request.resource.data.keys().hasOnly(['kind', 'tier', 'outcome', 'at'])
+            && request.resource.data.kind == 'turn'
+            && request.resource.data.tier == 'phone'
+            && request.resource.data.outcome == 'handled')
+          || (request.resource.data.keys().hasOnly(['kind', 'outcome', 'at'])
+            && request.resource.data.kind == 'card'
+            && request.resource.data.outcome in ['confirmed', 'cancelled'])
+        );
+      allow read, update, delete: if false;
+    }
+
     // Each person's notes on days of their own calendar (src/stores/
     // dateNotesStore): theirs alone — nobody else reads them, an admin
     // included. Kept by anyone with more than a public account, at most a

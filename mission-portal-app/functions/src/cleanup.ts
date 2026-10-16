@@ -1,6 +1,7 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { ASKED, ASKED_KEEP_DAYS } from './miriam/own/asked'
+import { EVENTS, EVENTS_KEEP_DAYS } from './miriam/stats'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -82,6 +83,19 @@ export const dailyCleanup = onSchedule('0 2 * * *', async () => {
   )
   for (;;) {
     const oldSnap = await db.collection(ASKED).where('at', '<', askedBefore).limit(400).get()
+    if (oldSnap.empty) break
+    const batch = db.batch()
+    oldSnap.docs.forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+    if (oldSnap.size < 400) break
+  }
+
+  // ── How Miriam is doing: kept a little over a year (Admin → Miriam) ─────────
+  const eventsBefore = admin.firestore.Timestamp.fromMillis(
+    Date.now() - EVENTS_KEEP_DAYS * 24 * 60 * 60 * 1000
+  )
+  for (;;) {
+    const oldSnap = await db.collection(EVENTS).where('at', '<', eventsBefore).limit(400).get()
     if (oldSnap.empty) break
     const batch = db.batch()
     oldSnap.docs.forEach((d) => batch.delete(d.ref))

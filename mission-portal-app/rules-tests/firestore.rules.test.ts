@@ -852,6 +852,63 @@ describe('questions asked of Miriam', () => {
   })
 })
 
+describe('Miriam’s records of how she is doing', () => {
+  const turn = (extra: Record<string, unknown> = {}) => ({
+    kind: 'turn',
+    tier: 'phone',
+    outcome: 'handled',
+    at: serverTimestamp(),
+    ...extra,
+  })
+  const card = (extra: Record<string, unknown> = {}) => ({
+    kind: 'card',
+    outcome: 'confirmed',
+    at: serverTimestamp(),
+    ...extra,
+  })
+
+  it('are written by anyone signed in: that the phone handled one, or a card’s answer — never what or who', async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER), 'miriamEvents', 'e1'), turn()))
+    await assertSucceeds(
+      setDoc(doc(as(GUEST), 'miriamEvents', 'e2'), card({ outcome: 'cancelled' }))
+    )
+    // Only the phone's own: the server's are written by the server.
+    await assertFails(setDoc(doc(as(MEMBER), 'miriamEvents', 'e3'), turn({ tier: 'claude' })))
+    await assertFails(setDoc(doc(as(MEMBER), 'miriamEvents', 'e4'), turn({ outcome: 'answered' })))
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'miriamEvents', 'e5'), {
+        kind: 'food',
+        would: 'confirm',
+        at: serverTimestamp(),
+      })
+    )
+    // Never the words, nor who.
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'miriamEvents', 'e6'), turn({ text: 'when is youth night' }))
+    )
+    await assertFails(setDoc(doc(as(MEMBER), 'miriamEvents', 'e7'), card({ uid: MEMBER })))
+    await assertFails(setDoc(doc(as(MEMBER), 'miriamEvents', 'e8'), card({ outcome: 'maybe' })))
+    await assertFails(setDoc(doc(as(MEMBER), 'miriamEvents', 'e9'), turn({ at: 1 })))
+    await assertFails(
+      setDoc(doc(env.unauthenticatedContext().firestore(), 'miriamEvents', 'e10'), turn())
+    )
+  })
+
+  it('are read, changed or taken away by no device — an admin’s included', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'miriamEvents', 'e1'), {
+        kind: 'turn',
+        tier: 'own',
+        outcome: 'answered',
+        at: 1,
+      })
+    })
+    await assertFails(getDoc(doc(as(ADMIN), 'miriamEvents', 'e1')))
+    await assertFails(updateDoc(doc(as(ADMIN), 'miriamEvents', 'e1'), { tier: 'phone' }))
+    await assertFails(deleteDoc(doc(as(ADMIN), 'miriamEvents', 'e1')))
+  })
+})
+
 describe('guests', () => {
   it('reads set lists and chord sheets', () => {
     // The worship tab they were given would render nothing without this.
