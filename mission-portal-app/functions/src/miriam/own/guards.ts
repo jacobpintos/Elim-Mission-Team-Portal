@@ -84,14 +84,15 @@ export function notHers(text: string, skill: Skill): string | null {
 
 // --- A food sign-up: them offering to bring something, and nothing else -------
 
-/** "Hey Miriam, could you please…": the asking, before what is asked. */
-const ASKING_HER =
-  /^(?:(?:hey|ok|okay|um|uh|so)[,\s]+)*(?:miriam[,\s]+)?(?:please\s+)?(?:(?:can|could|would)\s+you\s+(?:please\s+)?)?/i
+/** Said first, and nothing to what is asked: "Hey Miriam,", "um", "so". */
+const FILLER = /^(?:(?:hey|hi|ok|okay|um+|uh+|so|well|oh)[,\s]+)*(?:miriam[,.\s]+)?(?:please\s+)?/i
+/** Asked of her: "can you…", "could you please…". */
+const ASKED_OF_HER = /^(?:can|could|would|will)\s+you\s+(?:please\s+)?/i
 /** Asked as a question — but "can I bring chips?" is an offer. */
 const QUESTION =
   /^(?:what|what's|whats|when|where|who|who's|whose|why|how|which|is|are|am|was|were|did|does|do|should|will|would|can|could|may|shall)\b/i
-const OFFERED =
-  /^(?:can|could|may)\s+(?:i|we)\s+(?:bring|make|cook|bake|take|do|handle|cover|provide|grab)\b/i
+/** An offer put as a question: "can I bring chips?", "could we make the salad?" — not "can I grab some pizza?" (eating). */
+const OFFERED = /^(?:can|could|may)\s+(?:i|we)\s+(?:bring|make|cook|bake|handle|cover|provide)\b/i
 
 const NOT_AN_OFFER: [RegExp, string][] = [
   // "Remind me to bring chips": a reminder (./skills: reminder).
@@ -101,29 +102,41 @@ const NOT_AN_OFFER: [RegExp, string][] = [
     /\b(?:suggested|recommended|like\s+you\s+said|as\s+you\s+said|from\s+(?:my|the)\s+briefing)\b/i,
     'the briefing’s suggestion',
   ],
-  // Someone else bringing it: "Sarah is bringing chips", "is anyone bringing dessert".
-  [/\b(?:everyone|everybody|anyone|anybody|someone|somebody|who)\b/i, 'someone else’s'],
-  // Taking one back, or changing it: Claude's.
+  // Asking whether they are, not offering: "check I'm bringing chips", "…, right?".
   [
-    /\b(?:can't|cannot|won't|wont|not|no\s+longer|instead|anymore|swap|switch|change|cancel|drop|un-?sign)\b|\boff\s+(?:the|my)\s+list\b/i,
+    /\b(?:check|confirm|verify|whether|make\s+sure|supposed\s+to|already|signed\s+up)\b|\b(?:right|correct|ok(?:ay)?|alright)\s*\??\s*$/i,
+    'a question',
+  ],
+  // Someone else bringing it: "Sarah is bringing chips", "is anyone bringing
+  // dessert", "my neighbor will bring chips", "ask my husband to bring drinks".
+  [/\b(?:everyone|everybody|anyone|anybody|someone|somebody|who)\b/i, 'someone else’s'],
+  [/^(?:ask|have|get|tell|let)\s+(?!me\b|us\b)/i, 'someone else’s'],
+  [
+    /^(?!.*\b(?:and|&)\s+(?:i|we)\b)(?:.*\s)?(?:my|our)\s+(?:[a-z]+\s+){1,2}(?:will|is|are|was|'ll|'s|wants?|can|could|would|might|may|said|says)\b/i,
+    'someone else’s',
+  ],
+  // No, or not now: "I don't want to bring chips", "too busy to", "I'll pass".
+  [
+    /\b[a-z]+n't\b|\b(?:dont|didnt|doesnt|isnt|arent|wasnt|cant|cannot|wont|wouldnt|couldnt|shouldnt|havent|hasnt|not|never|no\s+longer|instead|anymore|swap|switch|change|cancel|drop|un-?sign|wish|but)\b|\btoo\s+[a-z]+\s+to\b|\bpass\s+on\b|\boff\s+(?:the|my)\s+list\b/i,
     'a change',
   ],
   // Brought already, or only maybe.
   [
-    /\b(?:i|we)\s+(?:made|baked|brought|cooked)\b|\blast\s+(?:time|week|month|year)\b|\bif\b/i,
+    /\b(?:i|we)\s+(?:made|baked|brought|cooked|may|might)\b|\b(?:maybe|probably|perhaps|possibly|doubt|hope|hoping|try|trying)\b|\bthinking\s+(?:of|about)\b|\bused\s+to\b|\bwas\s+(?:going|gonna)\b|\blast\s+(?:time|week|month|year)\b|\bif\b/i,
     'not an offer now',
   ],
 ]
 
-/** Said by them, of themselves: "I'll", "sign me up", "we can". */
-const THEIR_OWN = /\b(?:i|i'm|im|i'll|ill|i've|i'd|me|my|we|we'll|we're|us|our)\b/i
+/** Said by them, of themselves: "I'll", "we can", "sign me up", "count us in". */
+const THEIR_OWN = /\b(?:i|i'm|im|i'll|ill|i've|i'd|me|we|we'll|we're|we've|we'd|us)\b/i
 
 /** Why a request read as a food sign-up isn't one to take, or null (./food). */
 function notAnOffer(text: string): string | null {
-  const said = text.replace(/[’‘]/g, "'")
-  const asked = said.replace(ASKING_HER, '')
+  const said = text.replace(/[’‘]/g, "'").trim()
+  const what = said.replace(FILLER, '')
   // "Could you sign me up for chips?" asks her to: not a question about the sheet.
-  const ofHer = asked.length < said.length
+  const ofHer = ASKED_OF_HER.test(what)
+  const asked = what.replace(ASKED_OF_HER, '')
   if (!OFFERED.test(asked) && (QUESTION.test(asked) || (!ofHer && /\?\s*$/.test(said)))) {
     return 'a question'
   }

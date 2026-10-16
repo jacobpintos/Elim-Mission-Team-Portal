@@ -53,6 +53,11 @@ const NOT_A_DISH =
  * said: "I'll make it to the event", "sign me up for the event".
  */
 export function dishIn(masked: string): string | null {
+  return dishSaid(masked)?.dish ?? null
+}
+
+/** The dish, and what was said after it: "to the event on Sunday". */
+export function dishSaid(masked: string): { dish: string; after: string } | null {
   const said = masked
     .toLowerCase()
     .replace(/[’‘]/g, "'")
@@ -66,5 +71,46 @@ export function dishIn(masked: string): string | null {
   let dish = (cut ? rest.slice(0, cut.index) : rest).trim()
   while (LEAD.test(dish)) dish = dish.replace(LEAD, '')
   while (TAIL.test(dish)) dish = dish.replace(TAIL, '')
-  return dish && !NOT_A_DISH.test(dish) ? dish : null
+  if (!dish || NOT_A_DISH.test(dish)) return null
+  return { dish, after: cut ? rest.slice(cut.index).trim() : '' }
+}
+
+/** What may be said after the dish without naming anywhere else: the event, a day, a date. */
+const ONLY_WHEN =
+  /\b(?:the\s+event|to|for|on|at|this|next|the|of|sign[-\s]?up|sheet|list|please|too|as\s+well|today|tonight|tomorrow|morning|afternoon|evening|night|(?:sun|mon|tues|wednes|thurs|fri|satur)day(?:'s)?|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|\d{1,2}(?:st|nd|rd|th)?|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\b/g
+
+/**
+ * Somewhere else named after the dish — "to my son's soccer game on Sunday",
+ * "for my family", "next week" — as the words the event and the day leave over.
+ * Empty when only the event and when were said.
+ */
+export function elsewhereIn(after: string): string {
+  return after.replace(ONLY_WHEN, ' ').replace(/\s+/g, ' ').trim()
+}
+
+/** A word's ending that doesn't change the dish: "drinks", "dishes", "mom's". */
+const PLURAL = /^(?:s|es|'s)$/
+
+/**
+ * The dish plainly the item's name, by whole words — "pot roast", "potroast",
+ * "drinks" for "Drinks", "vegetables" for "Roast vegetables" — and not the
+ * start of a longer word: "ham" is not "Hamburgers", nor "cheese" "Cheesecake".
+ */
+export function namesItem(label: string, dish: string): boolean {
+  const words = (s: string) =>
+    s
+      .toLowerCase()
+      .split(/[^a-z0-9']+/)
+      .filter((w) => w && w !== 'and')
+  const item = words(label)
+  const said = words(dish)
+  if (said.join('') === item.join('')) return true
+  return said.every((w) =>
+    item.some(
+      (i) =>
+        w === i ||
+        (w.startsWith(i) && PLURAL.test(w.slice(i.length))) ||
+        (i.startsWith(w) && PLURAL.test(i.slice(w.length)))
+    )
+  )
 }

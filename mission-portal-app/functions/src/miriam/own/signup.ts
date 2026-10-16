@@ -3,7 +3,7 @@ import type { Lookups } from '../lookups'
 import type { AppToolName } from '../plan'
 import { said, type OwnResult } from './answers'
 import type { Mention } from './events'
-import { dishIn, FOOD_AHEAD_DAYS, foodItemPicked, hasSheet } from './food'
+import { dishSaid, elsewhereIn, FOOD_AHEAD_DAYS, foodItemPicked, hasSheet, namesItem } from './food'
 import { dayIn } from './when'
 
 /**
@@ -12,10 +12,11 @@ import { dayIn } from './when'
  * work it out (src/features/miriam/localTalk: foodHere): which event's
  * sheet, and which item on it.
  *
- * Only when it is all plain: a dish said, one event with a sheet — by its
- * name, the day said, or (not acted on yet) the one whose sheet has that
- * dish — one item on its sheet that is plainly the dish, its name there
- * once. Then the same change Claude would offer (sign_up_food), for the app
+ * Only when it is all plain: a dish said, and nothing after it but the
+ * event and when ("to my son's game on Sunday" is somewhere else); one
+ * event with a sheet — by its name, the day said, or (not acted on yet) the
+ * one whose sheet has that dish; one item on its sheet named by the dish in
+ * whole words ("ham" is not "Hamburgers"), and named there once. Then the same change Claude would offer (sign_up_food), for the app
  * to show and them to confirm; or, when the item is already theirs or
  * someone else's, said so. Anything else is Claude's: null.
  */
@@ -51,6 +52,20 @@ export interface Signup {
 
 const none = (why: string): Signup => ({ result: null, would: null, why })
 
+/**
+ * The item on a sheet the dish names, by its place there; -1 when none is
+ * plainly it. Its name there once: the app finds an item by its name
+ * (src/lib/miriamActions: foodItemFor).
+ */
+function itemNamed(items: string[], dish: string): number {
+  const picked = foodItemPicked(items, dish)
+  if (picked.kind !== 'sure') return -1
+  const label = items[picked.item]
+  if (!namesItem(label, dish)) return -1
+  const first = items.findIndex((l) => l.trim().toLowerCase() === label.trim().toLowerCase())
+  return first === picked.item ? picked.item : -1
+}
+
 /** The event meant, of those with a sheet ahead, and how it was told; or why not. */
 function eventMeant(
   ctx: SignupContext,
@@ -59,32 +74,45 @@ function eventMeant(
 ): { ev: EventInstance; rule: SignupRule } | { why: string } {
   const day = dayIn(ctx.text, ctx.today)
   const titles = ctx.mentions.flatMap((m) => m.titles)
-  // Soonest first (Lookups: eventsBetween): a weekly one named is its next.
-  const one = (evs: EventInstance[], rule: SignupRule) => {
-    const distinct = new Set(evs.map((ev) => ev.title))
-    if (distinct.size === 1) return { ev: evs[0], rule }
-    return { why: distinct.size === 0 ? `no sheet (${rule})` : `${distinct.size} events (${rule})` }
+  // One event: a weekly one, its next (soonest first: Lookups.eventsBetween);
+  // on a day said, that day's alone. Two of one name are two events.
+  const one = (evs: EventInstance[], rule: SignupRule, onDay: boolean) => {
+    const events = new Set(evs.map((ev) => String(ev.templateId)))
+    if (events.size === 1 && (!onDay || evs.length === 1)) return { ev: evs[0], rule }
+    return { why: evs.length === 0 ? `no sheet (${rule})` : `${evs.length} events (${rule})` }
   }
   if (titles.length > 0) {
     const named = withSheet.filter((ev) => titles.includes(ev.title))
-    return one(day ? named.filter((ev) => ev.date === day) : named, 'named')
+    return day
+      ? one(
+          named.filter((ev) => ev.date === day),
+          'named',
+          true
+        )
+      : one(named, 'named', false)
   }
   if (day)
     return one(
       withSheet.filter((ev) => ev.date === day),
-      'day'
+      'day',
+      true
     )
-  // Nothing said of which: the only event whose sheet plainly has the dish.
+  // Nothing said of which: the only event whose sheet names the dish.
   return one(
-    withSheet.filter((ev) => foodItemPicked(ev.foodItems ?? [], dish).kind === 'sure'),
-    'uniqueDish'
+    withSheet.filter((ev) => itemNamed(ev.foodItems ?? [], dish) >= 0),
+    'uniqueDish',
+    false
   )
 }
 
 export async function foodSignup(ctx: SignupContext): Promise<Signup> {
   if (!ctx.appTools.includes('sign_up_food')) return none('no tool')
-  const dish = dishIn(ctx.masked)
-  if (!dish) return none('no dish')
+  const spoken = dishSaid(ctx.masked)
+  if (!spoken) return none('no dish')
+  const { dish, after } = spoken
+  // "To my son's soccer game on Sunday", "for my family", "next week": not
+  // only the event and when — somewhere, or some time, she can't place.
+  if (elsewhereIn(after)) return none('more said than the event and when')
   // Ahead, with a sheet — and the first day of one over several, the key the app finds it by.
   const withSheet = (
     await ctx.lookups.eventsBetween(ctx.today, shiftDate(ctx.today, FOOD_AHEAD_DAYS))
@@ -94,12 +122,9 @@ export async function foodSignup(ctx: SignupContext): Promise<Signup> {
   const { ev, rule } = meant
 
   const { items, signups } = await ctx.lookups.foodSheet(ev)
-  const picked = foodItemPicked(items, dish)
-  if (picked.kind !== 'sure') return none(`item ${picked.kind}`)
-  const label = items[picked.item]
-  // Its name there once: the app finds an item by its name (src/lib/miriamActions: foodItemFor).
-  const at = items.findIndex((l) => l.trim().toLowerCase() === label.trim().toLowerCase())
-  if (at !== picked.item) return none('item named twice')
+  const at = itemNamed(items, dish)
+  if (at < 0) return none('no item plainly named')
+  const label = items[at]
 
   const would = (kind: SignupWould['kind']): SignupWould => ({
     kind,
@@ -107,7 +132,7 @@ export async function foodSignup(ctx: SignupContext): Promise<Signup> {
     event_key: ev.instanceKey,
     item: label,
   })
-  const by = signups[String(picked.item)]
+  const by = signups[String(at)]
   if (by && String(by.uid) === String(ctx.viewer.uid)) {
     return {
       result: said(`You’re already bringing ${label} for ${ev.title}.`, {

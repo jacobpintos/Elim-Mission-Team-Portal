@@ -242,6 +242,8 @@ describe('the guards', () => {
       'could we bring dessert',
       'Hey Miriam, could you sign me up for chips?',
       'can you put me down for drinks',
+      'My husband and I will bring drinks',
+      "I'll bring my mom's cookies",
     ]) {
       expect([t, offer(t)]).toEqual([t, null])
     }
@@ -263,6 +265,23 @@ describe('the guards', () => {
       ['add drinks to the picnic food list', 'a command'],
       ['add a note to bring chips', 'a command'],
       ["I'll bring snacks for my task", 'about something else'],
+      // No, or not now.
+      ["I don't want to bring chips to youth night", 'a change'],
+      ["I'm too busy to bring dessert to the potluck", 'a change'],
+      ['I wish I could bring chips', 'a change'],
+      ['I might bring chips to youth night', 'not an offer now'],
+      ["I'll probably bring dessert", 'not an offer now'],
+      ['I was going to bring chips', 'not an offer now'],
+      // Asking whether they are, not offering.
+      ['Um I’m bringing dessert to the potluck?', 'a question'],
+      ["Can you check whether I'm bringing chips", 'a question'],
+      ["I'm supposed to bring chips to youth night right", 'a question'],
+      // Someone else's, though said with "my".
+      ['My neighbor will bring chips to youth night', 'someone else’s'],
+      ['Ask my husband to bring the drinks', 'someone else’s'],
+      // Eating, or the menu, put as a question: not an offer.
+      ['Can I grab some pizza at youth night', 'a question'],
+      ['Could we do pizza for youth night', 'a question'],
     ]) {
       expect([t, offer(t)]).toEqual([t, why])
     }
