@@ -137,6 +137,7 @@ export function useListening(
     video,
     setSongGuesses,
     setVideoGuesses,
+    setSlides,
     setStay,
     setWoken,
     sentRef,
@@ -226,6 +227,8 @@ export function useListening(
     setChoices([])
     setSongGuesses([])
     setVideoGuesses([])
+    // Slides made before: put away, not shown again under what comes next.
+    setSlides(null)
     setStay(false)
     if (!keepQuestion) setPending(null)
     setLink(null)

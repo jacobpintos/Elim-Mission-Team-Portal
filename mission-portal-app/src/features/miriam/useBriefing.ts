@@ -58,6 +58,7 @@ export function useBriefing(
     setUndo,
     setSongGuesses,
     setVideoGuesses,
+    setSlides,
     setStay,
     sentRef,
     speak,
@@ -183,6 +184,7 @@ export function useBriefing(
     setChoices([])
     setSongGuesses([])
     setVideoGuesses([])
+    setSlides(null)
     setStay(false)
     setPending(null)
     setUndo(null)
