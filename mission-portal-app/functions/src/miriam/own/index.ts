@@ -17,7 +17,7 @@ import { mentionsIn } from './events'
 import { notHers } from './guards'
 import { ownKnowledge, sameKey, WEB_DOC, type OwnDb } from './learn'
 import type { Skill } from './skills'
-import { read, seedExamples, type Example, type Reading } from './understand'
+import { nearestOf, read, seedExamples, type Example, type Reading } from './understand'
 import { webAnswer } from './web'
 import { aboutScripture, faithAnswer, isFaithReply, LEADERSHIP } from './faith'
 import { CHURCH_SITE, siteKnowledge } from './site'
@@ -85,6 +85,12 @@ export interface Own {
   why: string
   /** A food sign-up she worked out, acted on or not (FOOD_LIVE): for the logs, beside Claude. */
   would?: SignupWould | null
+  /**
+   * Her answer came of how she read it (a skill, by her examples) — not of
+   * an event's page, or something taught: what a "not what I meant" holds
+   * her reading, and the lessons behind it, to account for (readFor).
+   */
+  byReading?: true
 }
 
 /**
@@ -157,7 +163,7 @@ const SAID_BACK =
   /^(?:(?:ok(?:ay)?|oh|ah|wow|great|cool|awesome|nice|perfect|good|amen|so true|got it|i see|makes sense|that(?:'|’)?s (?:helpful|good|great|nice|cool|beautiful|true)|that helps|thanks|thank you|thx|ty|appreciate it|so much|very much|a lot|miriam|no|nope|nah|no thanks|hi|hello|hey|bye|goodbye|good night|see you|see ya|later|have a good (?:day|night|one))[\s,.!]*)+$/i
 
 /** Beliefs aren't hers to discuss: the church's leadership, and its website. */
-function fromLeadership(can: readonly string[]): OwnResult {
+export function fromLeadership(can: readonly string[]): OwnResult {
   return said(
     LEADERSHIP,
     can.includes('link') ? { kind: 'link', url: CHURCH_SITE, label: 'thewellofiowa.com' } : null
@@ -436,14 +442,19 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
 
   // 4. Her answer. On God or the Bible, only the church's own (./faith) — never the web's.
   if (reading.skill === 'faith' || (reading.skill === 'web' && aboutScripture(text))) {
-    return { result: await fromFaith(text, db, input.can, rawV()), read: own, why: 'faith' }
+    return {
+      result: await fromFaith(text, db, input.can, rawV()),
+      read: own,
+      why: 'faith',
+      byReading: true,
+    }
   }
   if (reading.skill === 'web') {
     const key = await braveKeyOf(db).catch(() => null)
     const found = input.web
       ? await input.web(text, key)
       : await webAnswer(text, { braveKey: key, today }).catch(() => null)
-    return { result: fromWeb(found, input.can), read: own, why: 'web' }
+    return { result: fromWeb(found, input.can), read: own, why: 'web', byReading: true }
   }
   if (reading.skill === 'food_signup') {
     const food = await foodSignup({
@@ -462,6 +473,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
       read: own,
       why: `food_signup: ${food.why}${food.would && !live ? ' (not acted on)' : ''}`,
       would: food.would,
+      byReading: true,
     }
   }
   const result = await answerFor(reading.skill, {
@@ -473,7 +485,31 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
     viewer: input.viewer,
     appTools: input.appTools,
   })
-  return { result, read: own, why: result ? reading.skill : `${reading.skill}: no plain answer` }
+  return {
+    result,
+    read: own,
+    why: result ? reading.skill : `${reading.skill}: no plain answer`,
+    byReading: true,
+  }
+}
+
+/**
+ * A request she answered, read again as she read it then — for when they
+ * say it wasn't what they meant (../askMiriam: correct): how she read it,
+ * and the lessons she learned (./learn: sameKey) among the examples of
+ * `read` nearest it, which led her there. None when her answer didn't come
+ * of her reading (`read` null).
+ */
+export async function readFor(
+  input: OwnInput,
+  read: Skill | null
+): Promise<{ own: OwnRead; from: string[] }> {
+  const { own, known } = await understand(input)
+  const from =
+    read && read !== 'other'
+      ? nearestOf(own.v, known, read).flatMap((e) => (e.key ? [e.key] : []))
+      : []
+  return { own, from }
 }
 
 /** Claude's answer to a request she handed on, when it says what it was: hers to answer from now on. */

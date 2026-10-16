@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { seal, unseal, type Paused } from '../../functions/src/miriam/pause'
+import { seal, sealCheck, unseal, unsealCheck, type Paused } from '../../functions/src/miriam/pause'
 import { appToolsFrom } from '../../functions/src/miriam/plan'
 import { screensFor } from './miriamScreens'
 import {
@@ -17,6 +17,58 @@ import type { MusicItem } from '@/stores/musicStore'
 
 const person = (uid: string, roles: string[]) =>
   ({ uid, roles, displayName: uid, email: `${uid}@x.org` }) as unknown as UserProfile
+
+describe('one of her own answers, kept for “that’s not what I meant”', () => {
+  const check = {
+    uid: 'sarah',
+    until: 100,
+    text: 'what do I wear to youth night',
+    read: 'event_dress',
+    tag: 'event_dress',
+    reply: 'The dress code for Youth Night is Casual.',
+  }
+
+  it('comes back as it was sent, to them, while it is fresh', () => {
+    const sealed = sealCheck(check, 'key')
+    expect(unsealCheck(sealed, 'key', 'sarah', 50)).toEqual({ k: 'check', ...check })
+    expect(unsealCheck(sealed, 'key', 'sarah', 101)).toBeNull()
+    expect(unsealCheck(sealed, 'key', 'sam', 50)).toBeNull()
+    expect(unsealCheck(sealed, 'other key', 'sarah', 50)).toBeNull()
+    expect(unsealCheck(undefined, 'key', 'sarah', 50)).toBeNull()
+    expect(
+      unsealCheck(sealCheck({ ...check, read: null }, 'key'), 'key', 'sarah', 50)
+    ).toMatchObject({ read: null })
+  })
+
+  it('is refused if changed, or not as it should be', () => {
+    const [, mark] = sealCheck(check, 'key').split('.')
+    const body = (v: unknown) => Buffer.from(JSON.stringify(v)).toString('base64url')
+    expect(
+      unsealCheck(`${body({ k: 'check', ...check, uid: 'sam' })}.${mark}`, 'key', 'sam', 50)
+    ).toBeNull()
+    expect(
+      unsealCheck(sealCheck({ ...check, read: 3 as never }, 'key'), 'key', 'sarah', 50)
+    ).toBeNull()
+    expect(
+      unsealCheck(sealCheck({ ...check, text: null as never }, 'key'), 'key', 'sarah', 50)
+    ).toBeNull()
+  })
+
+  it('never passes for a paused request, nor one for it', () => {
+    const paused: Paused = {
+      uid: 'sarah',
+      until: 100,
+      round: 1,
+      alone: false,
+      appTools: [],
+      messages: [],
+      done: [],
+      waiting: [],
+    }
+    expect(unsealCheck(seal(paused, 'key'), 'key', 'sarah', 50)).toBeNull()
+    expect(unseal(sealCheck(check, 'key'), 'key')).toBeNull()
+  })
+})
 
 describe('a request paused while the app looks things up', () => {
   const paused: Paused = {
@@ -44,6 +96,22 @@ describe('a request paused while the app looks things up', () => {
     expect(unseal(`${body}.${mark}x`, 'key')).toBeNull()
     expect(unseal(state, 'other key')).toBeNull()
     expect(unseal(undefined, 'key')).toBeNull()
+  })
+
+  it('is sealed as it always was: one paused before a deploy carries on after it', () => {
+    const fixed: Paused = {
+      uid: 'u1',
+      until: 1,
+      round: 0,
+      alone: false,
+      appTools: ['a'],
+      messages: [{ role: 'user', content: 'x' }],
+      done: [],
+      waiting: ['w'],
+    }
+    expect(seal(fixed, 'k')).toBe(
+      'eyJ1aWQiOiJ1MSIsInVudGlsIjoxLCJyb3VuZCI6MCwiYWxvbmUiOmZhbHNlLCJhcHBUb29scyI6WyJhIl0sIm1lc3NhZ2VzIjpbeyJyb2xlIjoidXNlciIsImNvbnRlbnQiOiJ4In1dLCJkb25lIjpbXSwid2FpdGluZyI6WyJ3Il19.vtKv1j3chqC0pCJSKXoPLiI-1ZQc93vLKrycGDTl5IA'
+    )
   })
 
   it('offers only lookups that exist', () => {

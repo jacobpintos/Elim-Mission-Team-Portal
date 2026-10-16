@@ -53,13 +53,16 @@ export interface Heard {
 export async function askMiriam(
   text: string,
   heard?: Heard,
-  continued = false
+  continued = false,
+  /** Said not to be what they meant: her answer, sent back (lib/miriamNotMeant). */
+  correct?: string
 ): Promise<MiriamResult> {
   const call = httpsCallable<Record<string, unknown>, MiriamResult | Run>(functions, 'askMiriam')
   const profile = useAuthStore.getState().profile
   const today = localToday()
   let { data } = await call({
     ...(continued ? { continued: true } : {}),
+    ...(correct ? { correct } : {}),
     text,
     today,
     now: localClock(),

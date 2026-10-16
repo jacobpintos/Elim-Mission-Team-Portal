@@ -116,6 +116,38 @@ describe('a stretch of days, summed up', () => {
   })
 })
 
+describe('answers of hers said not to be what was meant', () => {
+  it('are counted by what Claude then read them as — never the words', () => {
+    const c = (read: string, label: string, learned = false): MiriamEvent => ({
+      kind: 'correction',
+      read,
+      label,
+      learned,
+    })
+    const s = summarize(
+      [
+        c('event_dress', 'event_time', true),
+        c('event_dress', 'event_time'),
+        c('event_place', 'event_place'),
+        c('event_page', 'asked back'),
+        c('web', 'none'),
+        { kind: 'correction', read: 'x' },
+        { kind: 'correction', label: 'y' },
+      ],
+      30
+    )
+    expect(s.corrections).toEqual({
+      total: 5,
+      readSame: 1,
+      readOtherwise: 2,
+      askedBack: 1,
+      fromLearned: 1,
+      differences: [{ read: 'event_dress', label: 'event_time', n: 2 }],
+    })
+    expect(summarize([], 30).corrections.total).toBe(0)
+  })
+})
+
 describe('her food sign-ups beside Claude’s', () => {
   it('are ready to switch on only after agreeing enough, and never not', () => {
     const agreeing = Array.from({ length: FOOD_READY_AT }, () => food('sign_up_food', true))

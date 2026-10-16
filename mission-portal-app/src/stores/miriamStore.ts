@@ -65,6 +65,13 @@ interface MiriamStore {
   /** She asked something back, and what is said next answers it. */
   awaiting: boolean
   setAwaiting: (awaiting: boolean) => void
+  /**
+   * Her last answer, when it was her own (not Claude's), a little while: sent
+   * back if they say it wasn't what they meant (lib/miriamNotMeant). Kept in
+   * memory only.
+   */
+  lastOwn: { check: string; at: number } | null
+  setLastOwn: (lastOwn: { check: string; at: number } | null) => void
 }
 
 /** Where "Hey Miriam" on or off is kept, on this device. */
@@ -101,4 +108,6 @@ export const useMiriamStore = create<MiriamStore>((set) => ({
     ),
   awaiting: false,
   setAwaiting: (awaiting) => set({ awaiting }),
+  lastOwn: null,
+  setLastOwn: (lastOwn) => set({ lastOwn }),
 }))

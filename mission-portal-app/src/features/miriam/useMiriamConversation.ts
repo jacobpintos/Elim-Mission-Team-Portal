@@ -51,6 +51,8 @@ import { useTourStore } from '@/features/tour/tourStore'
 import { recordAsked } from './recordAsked'
 import { recordTurn } from './recordTurn'
 import { stopSpeaking, unlockSpeech, whenSpoken } from './speak'
+import { FORGET_MS } from '@/lib/miriamConversation'
+import { NOT_MEANT_TAP, notMeantSaid } from '@/lib/miriamNotMeant'
 import { askMiriam, miriamError } from './askMiriam'
 import { eventByKey, prepareAction } from './actions'
 import { appData, hereNow, quickFromApp } from './hereNow'
@@ -123,6 +125,7 @@ export function useMiriamConversation(
     setLink,
     briefing: briefingShown,
     setBriefing,
+    undo,
     setUndo,
     setVideo,
     songGuesses,
@@ -217,6 +220,20 @@ export function useMiriamConversation(
     // Sent by a tap (the button, or a choice): lets a browser say the answer.
     unlockSpeech()
     sentRef.current = true
+    // "That's not what I meant", after an answer of her own: asked again, of
+    // Claude — before a yes or no to her card, as "no, that's not what I
+    // meant" isn't a no to it. Anything else said lets her answer go.
+    const lastOwn = useMiriamStore.getState().lastOwn
+    useMiriamStore.getState().setLastOwn(null)
+    const notMeant = !again && lastOwn ? notMeantSaid(withoutHerName(said)) : null
+    if (lastOwn && notMeant && timeNow() - lastOwn.at < FORGET_MS) {
+      await correct(
+        lastOwn.check,
+        notMeant === 'restated' ? said : NOT_MEANT_TAP,
+        stage === 'typing' || (stage === 'answered' && !saidAloudRef.current)
+      )
+      return
+    }
     // A yes or no to the change she just showed: done, or not, from here.
     const shown = pendingRef.current
     if (confirmingByVoiceRef.current && shown?.prepared.kind === 'ready') {
@@ -575,20 +592,61 @@ export function useMiriamConversation(
   }
 
   /**
+   * One of her own answers wasn't what they meant: what she showed put away
+   * (a card not counted as cancelled — the correction is counted; a reminder
+   * she just set taken back), and the request asked again of Claude, with
+   * what she said (functions/src/miriam/askMiriam: correct). What they had
+   * asked stays what Claude's answer is remembered against.
+   */
+  const correct = async (check: string, saidNow: string, typing: boolean) => {
+    endVoiceConfirm()
+    stopListening()
+    stopSpeaking()
+    setPending(null)
+    if (undo) {
+      setUndo(null)
+      await undo.run().catch(() => {})
+    }
+    useMiriamStore.getState().setAwaiting(false)
+    setAnswer('')
+    setChoices([])
+    setLink(null)
+    setStay(false)
+    setUnderstood('')
+    setSaid(null)
+    setHeard(saidNow)
+    await askClaude(saidNow, typing, false, check)
+  }
+
+  /** "Not what I meant", tapped under one of her own answers. */
+  const notMeant = () => {
+    unlockSpeech()
+    sentRef.current = false
+    stopSpeaking()
+    void send(NOT_MEANT_TAP)
+  }
+
+  /**
    * Worked out by Claude (functions/src/miriam), with what was said and
    * answered just before: shown, said, and opened. `typing`: a question she
-   * asks back is answered by typing, rather than listened for.
+   * asks back is answered by typing, rather than listened for. `check`: one
+   * of her own answers, said not to be what they meant.
    */
-  const askClaude = async (said: string, typing: boolean, continued = false) => {
+  const askClaude = async (said: string, typing: boolean, continued = false, check?: string) => {
     toServer.current++
     setStage('thinking')
+    useMiriamStore.getState().setLastOwn(null)
     try {
       // How it was heard, when it is what was just said (not typed, nor her carrying on).
       // (What was just said, as heard or as put right: lib/miriamHearing.)
       const justSaid =
         said === requestRef.current || said === heardRight(requestRef.current ?? '').text
       const heard = !typing && justSaid ? (heardAsRef.current ?? undefined) : undefined
-      const result = await askMiriam(said, heard, continued)
+      const result = await askMiriam(said, heard, continued, check)
+      // Her own answer: kept a little while, for "that's not what I meant".
+      if ((result.kind === 'answer' || result.kind === 'confirm') && result.check) {
+        useMiriamStore.getState().setLastOwn({ check: result.check, at: timeNow() })
+      }
       if (result.kind === 'answer') {
         if (result.misheard?.length) {
           rememberWords(result.misheard)
@@ -1050,6 +1108,7 @@ export function useMiriamConversation(
     pickVideo,
     saveSlides,
     pick,
+    notMeant,
     typeInstead,
     close,
   }

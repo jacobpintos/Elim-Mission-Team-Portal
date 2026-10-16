@@ -368,7 +368,51 @@ function Body({ s, spanSaid }: { s: Summary; spanSaid: string }) {
         )}
       </Section>
 
+      {s.corrections ? <CorrectionsSection c={s.corrections} own={own} /> : null}
+
       <FoodSection food={s.food} />
     </YStack>
+  )
+}
+
+/** Answers of her own someone said weren't what they meant: hidden by an older server. */
+function CorrectionsSection({ c, own }: { c: Summary['corrections']; own: number }) {
+  const name = (s: string) => (s === 'other' ? 'something only Claude does' : (SKILL_NAMES[s] ?? s))
+  return (
+    <Section title="Not what they meant">
+      {c.total === 0 ? (
+        <Text fontSize="$3" color="$gray10">
+          No one has said an answer of hers wasn’t what they meant.
+        </Text>
+      ) : (
+        <>
+          <Row
+            label="Said of her own answers"
+            n={c.total}
+            note={own ? `${pct(c.total, own)} of the answers her own model gave.` : undefined}
+          />
+          <Row label="Claude read it another way" n={c.readOtherwise} />
+          <Row
+            label="Claude read it the same way"
+            n={c.readSame}
+            note="Her reading was right; the answer missed."
+          />
+          {c.askedBack ? <Row label="Claude asked them what they meant" n={c.askedBack} /> : null}
+          <Row
+            label="Led by something she learned"
+            n={c.fromLearned}
+            note="Those lessons were sent back to wait, where Claude read it another way."
+          />
+          {c.differences.map((d) => (
+            <Row
+              key={`${d.read}-${d.label}`}
+              label={`Read as ${name(d.read)}`}
+              note={`Claude: ${name(d.label)}`}
+              n={d.n}
+            />
+          ))}
+        </>
+      )}
+    </Section>
   )
 }

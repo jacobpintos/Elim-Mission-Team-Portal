@@ -2,13 +2,14 @@ import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { Lookups } from '../../functions/src/miriam/lookups'
-import { embed } from '../../functions/src/miriam/own/encoder'
+import { embed, similarity } from '../../functions/src/miriam/own/encoder'
 import { packVector } from '../../functions/src/miriam/own/vectors'
 import { mentionsIn } from '../../functions/src/miriam/own/events'
 import { notHers } from '../../functions/src/miriam/own/guards'
 import {
   ownAnswer,
   publicAnswer,
+  readFor,
   readRequest,
   sure,
   webOrFaith,
@@ -17,6 +18,8 @@ import {
 import { PUBLIC_NOT_HERS } from '../../functions/src/miriam/plan'
 import {
   CONFIRM_GAP_MS,
+  corrected,
+  SAME_REQUEST,
   forget,
   forgetCaches,
   learn,
@@ -726,6 +729,24 @@ describe('what she learns', () => {
     ])
   })
 
+  it('takes requests for the same only when they are, by her own meanings', () => {
+    const near = (a: string, b: string) => similarity(embed(a), embed(b))
+    // The same request, in other words: confirms.
+    expect(
+      near(
+        'is the youth night thing still on for this friday',
+        'is the youth night thing still on for friday'
+      )
+    ).toBeGreaterThanOrEqual(SAME_REQUEST)
+    // Of different skills, however alike: never.
+    expect(near("when's the event this year", "where's the event at this year")).toBeLessThan(
+      SAME_REQUEST
+    )
+    expect(near('what time is the event', 'what is the dress code for the event')).toBeLessThan(
+      SAME_REQUEST
+    )
+  })
+
   it('learns from the changes Claude makes that are hers', () => {
     expect(skillOfAction('set_availability', { event_key: 'k', status: 'yes' })).toBe(
       'availability'
@@ -772,6 +793,72 @@ describe('what she learns', () => {
       result: null,
       why: 'corrected before',
     })
+  })
+})
+
+// --- Not what they meant -------------------------------------------------------
+
+describe('when someone says her answer wasn’t what they meant', () => {
+  beforeEach(() => forgetCaches())
+  const said = 'is the youth night thing still on for friday'
+
+  it('accounts for the lessons that led her, and learns better from Claude', async () => {
+    const db = memoryOwnDb()
+    // Claude read requests like it wrongly, each twice: what to wear — enough to lead her.
+    const lessons = []
+    for (const t of [
+      said,
+      'is the youth night thing still on friday',
+      'is youth night still on for friday',
+    ]) {
+      const r = (await ownAnswer(input(t, { db }))).read!
+      lessons.push({
+        t: r.masked,
+        s: 'event_dress',
+        v: packVector(r.v),
+        at: 0,
+        by: 'claude',
+        y: 2,
+        last: 0,
+      })
+    }
+    db.docs.set(LEARNED_DOC, { examples: lessons })
+    forgetCaches()
+    const wrong = await ownAnswer(input(said, { db }))
+    expect(wrong).toMatchObject({
+      result: { text: 'The dress code for Youth Night is Casual — jeans are fine.' },
+      byReading: true,
+    })
+    // "That's not what I meant": her reading again, and the lessons that led her.
+    const { own, from } = await readFor(input(said, { db }), 'event_dress')
+    expect(from).toContain(sameKey(own.masked))
+    await corrected(db, { key: sameKey(own.masked), from })
+    forgetCaches()
+    expect(await ownAnswer(input(said, { db }))).toMatchObject({
+      result: null,
+      why: 'corrected before',
+    })
+    // Claude read it as when Youth Night is: those lessons wait again, and she no longer reads it so.
+    const learned = await learn(db, own.masked, 'event_time', own.v, CONFIRM_GAP_MS, {
+      corrected: { read: 'event_dress', from },
+    })
+    expect(learned).toMatchObject({ demoted: from.length })
+    forgetCaches()
+    expect((await ownAnswer(input(said, { db }))).read?.skill).not.toBe('event_dress')
+  })
+
+  it('blames nothing she learned for an answer that didn’t come of her reading', async () => {
+    const db = memoryOwnDb()
+    await teach(db, {
+      q: 'where do I park',
+      a: 'Park in the north lot.',
+      v: embed('where do I park'),
+      by: 'admin',
+    })
+    const taught = await ownAnswer(input('where do I park', { db }))
+    expect(taught).toMatchObject({ why: 'taught' })
+    expect(taught.byReading).toBeUndefined()
+    expect((await readFor(input('where do I park', { db }), null)).from).toEqual([])
   })
 })
 

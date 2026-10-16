@@ -137,6 +137,8 @@ export type MiriamResult =
       misheard?: { heard: string; meant: string }[]
       /** An answer on faith: kept open, to be read, until it is closed. */
       stay?: boolean
+      /** Her own answer: sent back if they say it wasn't what they meant (lib/miriamNotMeant). */
+      check?: string
     }
   | { kind: 'reply'; text: string }
   /** A new task's form, filled in, for an admin to check and save. */
@@ -148,6 +150,8 @@ export type MiriamResult =
       input: Record<string, unknown>
       /** More was asked after it: once it is done, she carries on. */
       more?: boolean
+      /** Her own: sent back if they say it wasn't what they meant (lib/miriamNotMeant). */
+      check?: string
     }
 
 /** The app's address for where an answer is shown. */

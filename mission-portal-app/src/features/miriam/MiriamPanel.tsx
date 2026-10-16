@@ -21,6 +21,7 @@ import { FD } from '@/lib/format'
 import type { Conversation } from './useMiriamConversation'
 import type { Listening } from './useListening'
 import type { PanelState } from './usePanelState'
+import { useMiriamStore } from '@/stores/miriamStore'
 
 /** Miriam's button, in the header: a green dot while she listens for her name. */
 export function MiriamHeaderButton({
@@ -103,9 +104,12 @@ export function MiriamPanel({
     pickVideo,
     saveSlides,
     pick,
+    notMeant,
     typeInstead,
     close,
   } = conversation
+  // Her own last answer, while it can still be said not to be what was meant.
+  const correctable = useMiriamStore((s) => !!s.lastOwn)
 
   // Woken by her name and listening: the bar in her colour, so it is seen.
   const called = woken && listening && stage === 'listening'
@@ -189,6 +193,19 @@ export function MiriamPanel({
                   {said}
                 </Text>
               </ScrollView>
+            ) : null}
+            {stage === 'answered' && correctable ? (
+              <Pressable
+                onPress={notMeant}
+                accessibilityRole="button"
+                accessibilityLabel="That’s not what I meant — ask again"
+                hitSlop={8}
+                style={{ alignSelf: 'flex-start', paddingVertical: 2 }}
+              >
+                <Text color={soft} fontSize="$2" textDecorationLine="underline">
+                  Not what I meant
+                </Text>
+              </Pressable>
             ) : null}
             {stage === 'answered' && choices.length ? (
               <YStack gap="$1.5" paddingTop="$1.5">

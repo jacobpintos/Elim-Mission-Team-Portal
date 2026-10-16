@@ -20,11 +20,30 @@ import {
 } from './plan'
 import { isAdminViewer, type Viewer } from './data'
 import { Lookups, withWeekday } from './lookups'
-import { PAUSE_MS, MAX_RESULT, seal, unseal } from './pause'
-import { ownAnswer, publicAnswer, sure, webOrFaith, type OwnInput, type OwnRead } from './own'
+import {
+  CHECK_MS,
+  PAUSE_MS,
+  MAX_RESULT,
+  seal,
+  sealCheck,
+  unseal,
+  unsealCheck,
+  type Check,
+} from './pause'
+import {
+  fromLeadership,
+  ownAnswer,
+  publicAnswer,
+  readFor,
+  sure,
+  webOrFaith,
+  type OwnInput,
+  type OwnRead,
+} from './own'
+import { said, type OwnResult } from './own/answers'
 import type { SignupWould } from './own/signup'
 import { EVENTS, outcomeOf, ownTag, type MiriamEvent, type Outcome, type Tier } from './stats'
-import { learn, ownKnowledge, sameKey, type OwnDb } from './own/learn'
+import { corrected, learn, ownKnowledge, sameKey, type OwnDb } from './own/learn'
 import { OWN_SKILLS, type Skill } from './own/skills'
 import { skillOfAction } from './own/labels'
 import { notHers } from './own/guards'
@@ -201,8 +220,11 @@ export const askMiriam = onCall(
     if (req.data?.continued === true) turn.skip = true
     try {
       const result = await answerRequest(req, turn)
-      // Paused for the app's lookups: noted when it carries on.
-      if (result.kind === 'run') return result
+      // Paused for the app's lookups: noted when it carries on — a correction now, as it was made.
+      if (result.kind === 'run') {
+        await notedCorrection(db, turn)
+        return result
+      }
       if (!turn.skip) {
         await noteEvent(db, {
           kind: 'turn',
@@ -213,6 +235,7 @@ export const askMiriam = onCall(
         })
       }
       await notedBeside(db, turn, `ended: ${String(result.kind)}`)
+      await notedCorrection(db, turn)
       return result
     } catch (err) {
       if (req.auth?.uid && !turn.skip) {
@@ -225,6 +248,7 @@ export const askMiriam = onCall(
         })
       }
       await notedBeside(db, turn, 'ended: error')
+      await notedCorrection(db, turn)
       throw err
     }
   }
@@ -245,6 +269,15 @@ interface TurnNote {
    * what Claude did — however Claude ends: a form, a plain reply, an error.
    */
   would?: SignupWould
+  /** Someone said an answer of hers wasn't what they meant: noted once it ends (./stats). */
+  correction?: { read: string; label: string; learned: boolean }
+}
+
+/** A "not what I meant", noted once, however it ends. */
+async function notedCorrection(db: admin.firestore.Firestore, turn: TurnNote) {
+  const c = turn.correction
+  turn.correction = undefined
+  if (c) await noteEvent(db, { kind: 'correction', ...c })
 }
 
 /** Her food sign-up, beside a Claude that ended some other way than an answer or a change. */
@@ -302,6 +335,11 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
   // A food sign-up she worked out and didn't act on (./own: FOOD_LIVE): logged beside what Claude does.
   let ownWould: SignupWould | null = null
   let ownInput: OwnInput | null = null
+  // Said not to be what they meant, after one of her own answers (./pause:
+  // Check): what they had asked, and what she said; and how she had read it,
+  // with the lessons that led her (./own: readFor).
+  let fixed: Check | null = null
+  let correcting: { read: Skill | null; from: string[] } | null = null
   // The request as put right, when it was heard otherwise: shown in the app.
   let heardAsText = ''
 
@@ -402,10 +440,40 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
       lookups,
       db: ownDb,
     }
-    const own = await ownAnswer(ownInput).catch((err: unknown) => {
-      logger.error('askMiriam: her own reading failed', err)
-      return null
-    })
+    // "That's not what I meant", after one of hers: what they had asked, read
+    // again; the lessons that led her flagged, and the words handed to Claude
+    // until she reads them as Claude does (./own/learn) — this time too.
+    fixed = ownOnly ? null : unsealCheck(req.data?.correct, key, uid, Date.now())
+    if (fixed) {
+      const read = (OWN_SKILLS as readonly string[]).includes(fixed.read ?? '')
+        ? (fixed.read as Skill)
+        : null
+      ownInput = { ...ownInput, text: fixed.text }
+      const again = await readFor(ownInput, read).catch((err: unknown) => {
+        logger.error('askMiriam: her reading, again, failed', err)
+        return null
+      })
+      if (again) {
+        await corrected(ownDb, { key: sameKey(again.own.masked), from: again.from }).catch(
+          (err: unknown) => logger.error('askMiriam: correction not kept', err)
+        )
+        ownRead = again.own
+      }
+      correcting = { read, from: again?.from ?? [] }
+      turn.correction = { read: read ?? fixed.tag, label: 'none', learned: !!again?.from.length }
+      logger.info('askMiriam: not what they meant', {
+        uid,
+        tag: fixed.tag,
+        read,
+        from: again?.from.length ?? 0,
+      })
+    }
+    const own = fixed
+      ? null
+      : await ownAnswer(ownInput).catch((err: unknown) => {
+          logger.error('askMiriam: her own reading failed', err)
+          return null
+        })
     if (own) {
       logger.info('askMiriam: her own', {
         uid,
@@ -420,9 +488,25 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
       if (own.result) {
         turn.tier = 'own'
         turn.skill = ownTag(own.why, own.read?.skill)
-        return own.result.kind === 'answer' && heardAsText && !own.result.understood
-          ? { ...own.result, understood: heardAsText }
-          : own.result
+        const result =
+          own.result.kind === 'answer' && heardAsText && !own.result.understood
+            ? { ...own.result, understood: heardAsText }
+            : own.result
+        // Kept by the app a little while, for "that's not what I meant" — where
+        // there's Claude to ask instead, and something she read to account for.
+        if (!own.read || ownOnly) return result
+        const check = sealCheck(
+          {
+            uid,
+            until: Date.now() + CHECK_MS,
+            text,
+            read: own.byReading ? own.read.skill : null,
+            tag: turn.skill,
+            reply: replyOf(result),
+          },
+          key
+        )
+        return { ...result, check }
       }
       ownRead = own.read
       ownWould = own.would ?? null
@@ -446,8 +530,12 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
           (known.length ? `Names they have used before for events:\n${known.join('\n')}\n\n` : '') +
           (words.length ? `Words misheard for them before:\n${words.join('\n')}\n\n` : '') +
           (history.length
-            ? `Earlier in this conversation, oldest first:\n${history.join('\n')}\n\nNow they said: “${text}”`
-            : `They said: “${text}”`) +
+            ? `Earlier in this conversation, oldest first:\n${history.join('\n')}\n\n${
+                fixed ? notMeant(fixed, text) : `Now they said: “${text}”`
+              }`
+            : fixed
+              ? notMeant(fixed, text)
+              : `They said: “${text}”`) +
           (text !== asHeard ? ` (as written down: “${asHeard}”)` : '') +
           hearing,
       },
@@ -496,7 +584,24 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
   const learnFrom = async (skill: Skill | null, reminderText?: unknown) => {
     const r = ownRead
     ownRead = null
-    if (!r || !skill) return
+    if (!r) return
+    // What they had asked, as Claude read it after they said her answer
+    // wasn't what they meant: the lessons that led her sent back to wait if
+    // Claude read it otherwise; Claude's reading itself only waits, as ever.
+    if (correcting) {
+      const label = skill ?? 'other'
+      if (turn.correction) turn.correction.label = label
+      const learned = await learn(ownDb, r.masked, label, r.v, Date.now(), {
+        corrected: correcting,
+        keep: !notHers(r.masked, label),
+      }).catch((err: unknown) => {
+        logger.error('askMiriam: not learned', err)
+        return null
+      })
+      if (learned) logger.info('askMiriam: learned, corrected', { uid, label, ...learned })
+      return
+    }
+    if (!skill) return
     // How she read it, beside what Claude said it was: never the words.
     await noteEvent(db, { kind: 'label', label: skill, read: r.skill, sure: sure(r) })
     logger.info('askMiriam: Claude’s label', {
@@ -691,11 +796,16 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
       // Something she answers herself, seen by Claude: the web, or a question of faith.
       if ((skill === 'web' || skill === 'faith') && ownInput) {
         await learnFrom(skill)
+        // Not what they meant, and read as she read it: not the same answer again.
+        if (correcting?.read === skill) {
+          return skill === 'faith' ? fromLeadership(ownInput.can) : said(WEB_AGAIN)
+        }
         const hers = await webOrFaith(skill, ownInput.text, ownInput).catch(() => null)
         if (hers) return hers
       }
       // Its own question back isn't the answer: nothing learned from it.
       if (input.follow_up !== true) await learnFrom(skill)
+      else if (turn.correction) turn.correction.label = 'asked back'
       const answered = await finish(input, lookups, viewer)
       return heardAsText && !answered.understood
         ? { ...answered, understood: heardAsText }
@@ -836,4 +946,28 @@ async function finish(input: AnswerInput, lookups: Lookups, viewer: Viewer) {
     .slice(0, 5)
     .map((w) => ({ heard: String(w.heard).slice(0, 40), meant: String(w.meant).slice(0, 60) }))
   return { kind: 'answer', text, open, choices, heardName, followUp, understood, misheard }
+}
+
+/** Her answer, in words Claude is told she said, or did. */
+function replyOf(result: OwnResult): string {
+  if (result.kind === 'answer') return result.text.slice(0, 600)
+  return CARD_SAID[result.name]
+}
+const CARD_SAID: Record<Extract<OwnResult, { kind: 'confirm' }>['name'], string> = {
+  set_availability: '(offered to answer their availability, for them to confirm)',
+  create_reminder: '(offered to set them a reminder, for them to confirm)',
+  sign_up_food: '(offered to sign them up to bring food, for them to confirm)',
+}
+
+/** Her web answer, said not to be what was meant, and the web read again: nothing better to find. */
+const WEB_AGAIN =
+  'That’s the best I found online — try asking it another way, with more of what you’re looking for.'
+
+/** What Claude is told when they say her answer wasn't what they meant. */
+function notMeant(fixed: Check, text: string): string {
+  return (
+    `They asked: “${fixed.text}”. Miriam answered that herself: “${fixed.reply}”. ` +
+    `Then they said: “${text}” — that isn’t what they meant. Work out what they did mean and do that, asking back (follow_up) only if you can’t tell; don’t give that answer again unless it is plainly what they asked. ` +
+    `Set skill to what “${fixed.text}” really was.`
+  )
 }

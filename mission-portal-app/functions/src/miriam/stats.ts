@@ -43,6 +43,13 @@ export type MiriamEvent =
       /** The same event and item as Claude's sign-up; null when Claude didn't sign them up. */
       same: boolean | null
     }
+  /**
+   * Someone said an answer of hers wasn't what they meant (./askMiriam:
+   * correct): what she read it as (a skill, or her answer's tag, as
+   * "event_page"), what Claude then read it as ("asked back", or "none" if
+   * it ended before saying), and whether lessons she learned led her.
+   */
+  | { kind: 'correction'; read: string; label: string; learned: boolean }
 
 /** How a result the server sends back ended. */
 export function outcomeOf(result: { kind?: unknown; followUp?: unknown }): Outcome {
@@ -92,6 +99,20 @@ export interface Summary {
   labels: {
     agreed: number
     differed: number
+    differences: { read: string; label: string; n: number }[]
+  }
+  /** Answers of hers someone said weren't what they meant. */
+  corrections: {
+    total: number
+    /** Claude read it as she had: her reading was right, and her answer missed. */
+    readSame: number
+    /** Claude read it another way. */
+    readOtherwise: number
+    /** Claude asked them what they meant. */
+    askedBack: number
+    /** Lessons she learned led her: sent back to wait, if Claude read it otherwise. */
+    fromLearned: number
+    /** Her readings beside Claude's, where they differed, most first. */
     differences: { read: string; label: string; n: number }[]
   }
   food: {
@@ -151,6 +172,14 @@ export function summarize(
   const cards = { confirmed: 0, cancelled: 0 }
   const labels = { agreed: 0, differed: 0 }
   const differences = new Map<string, number>()
+  const corrections = {
+    total: 0,
+    readSame: 0,
+    readOtherwise: 0,
+    askedBack: 0,
+    fromLearned: 0,
+  }
+  const correctedAs = new Map<string, number>()
   const beside = (): Beside => ({ same: 0, different: 0, askedBack: 0, otherwise: 0 })
   const food = {
     worked: 0,
@@ -174,6 +203,20 @@ export function summarize(
       }
     } else if (e.kind === 'card' && (e.outcome === 'confirmed' || e.outcome === 'cancelled')) {
       cards[e.outcome]++
+    } else if (
+      e.kind === 'correction' &&
+      typeof e.read === 'string' &&
+      typeof e.label === 'string'
+    ) {
+      corrections.total++
+      if (e.learned === true) corrections.fromLearned++
+      if (e.label === 'asked back') corrections.askedBack++
+      else if (e.label === e.read) corrections.readSame++
+      else if (e.label !== 'none') {
+        corrections.readOtherwise++
+        const k = `${e.read}\u0000${e.label}`
+        correctedAs.set(k, (correctedAs.get(k) ?? 0) + 1)
+      }
     } else if (e.kind === 'label' && typeof e.label === 'string' && typeof e.read === 'string') {
       if (e.label === e.read) labels.agreed++
       else {
@@ -204,6 +247,14 @@ export function summarize(
     food.offered.different === 0 &&
     food.offered.otherwise === 0
   const byCount = <T extends { n: number }>(a: T, b: T) => b.n - a.n
+  const pairs = (m: Map<string, number>) =>
+    [...m]
+      .map(([k, n]) => {
+        const [read, label] = k.split('\u0000')
+        return { read, label, n }
+      })
+      .sort(byCount)
+      .slice(0, 8)
   return {
     days,
     capped,
@@ -211,16 +262,8 @@ export function summarize(
     outcomes,
     ownBy: [...own].map(([skill, n]) => ({ skill, n })).sort(byCount),
     cards,
-    labels: {
-      ...labels,
-      differences: [...differences]
-        .map(([k, n]) => {
-          const [read, label] = k.split('\u0000')
-          return { read, label, n }
-        })
-        .sort(byCount)
-        .slice(0, 8),
-    },
+    labels: { ...labels, differences: pairs(differences) },
+    corrections: { ...corrections, differences: pairs(correctedAs) },
     food,
   }
 }
