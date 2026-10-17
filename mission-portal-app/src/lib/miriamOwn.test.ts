@@ -45,6 +45,7 @@ import {
   wikipediaSearch,
 } from '../../functions/src/miriam/own/web'
 import requests from './__fixtures__/miriamRequests.json'
+import casual from './__fixtures__/miriamCasual.json'
 import { STORY_BLOCKS } from './__fixtures__/ourStory'
 import {
   aboutScripture,
@@ -117,6 +118,26 @@ describe('her examples', () => {
       .filter((t) => !stored[t])
     expect(missing).toEqual([])
   })
+
+  it('are none of the casual requests she is measured on', () => {
+    const plainly = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/[{}]/g, '')
+        .replace(/[^a-z0-9 ]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    const measured = new Set(
+      Object.values(casual as Record<string, string[]>)
+        .flat()
+        .map(plainly)
+    )
+    expect(
+      Object.values(SEEDS)
+        .flat()
+        .filter((t) => measured.has(plainly(t)))
+    ).toEqual([])
+  })
 })
 
 describe('what she takes as hers, of requests she has never seen', () => {
@@ -131,7 +152,7 @@ describe('what she takes as hers, of requests she has never seen', () => {
   const ANSWERS: Partial<Record<Skill, number>> = {
     event_time: 28,
     event_place: 20,
-    event_dress: 13,
+    event_dress: 14,
     event_schedule: 9,
     event_team: 7,
     event_car: 9,
@@ -140,7 +161,7 @@ describe('what she takes as hers, of requests she has never seen', () => {
     event_weather: 7,
     my_events: 21,
     availability: 22,
-    reminder: 15,
+    reminder: 16,
     food_signup: 2,
     web: 12,
     faith: 9,
@@ -165,6 +186,71 @@ describe('what she takes as hers, of requests she has never seen', () => {
     expect(wrong).toEqual([])
     // Handed to Claude when unsure: the rest. Most are hers.
     expect(answered / hers).toBeGreaterThan(0.75)
+    const fewer = Object.entries(ANSWERS)
+      .filter(([skill, n]) => (per[skill] ?? 0) < n!)
+      .map(([skill, n]) => `${skill}: ${per[skill] ?? 0} of ${n}`)
+    expect(fewer).toEqual([])
+  }, 180_000)
+})
+
+describe('what she takes as hers, of casual requests she has never seen', () => {
+  // Said as people talk to a phone: lowercase, run together, half a sentence.
+  const all = Object.entries(casual as Record<string, string[]>).flatMap(([want, list]) =>
+    list.map((text) => ({ text, want }))
+  )
+  /** As many as she answers now; raise them as she gets better. */
+  const ANSWERS: Partial<Record<Skill, number>> = {
+    event_time: 12,
+    event_place: 11,
+    event_dress: 12,
+    event_schedule: 4,
+    event_team: 5,
+    event_car: 10,
+    event_lodging: 5,
+    event_flight: 6,
+    event_weather: 10,
+    my_events: 17,
+    availability: 13,
+    reminder: 16,
+    food_signup: 5,
+    web: 10,
+    faith: 9,
+  }
+  /**
+   * Read wrongly already, before casual examples were added — to put right,
+   * one by one; none more. Most never reach anyone as they are: with no
+   * plain answer, she hands them on (a flight changed, someone else's team).
+   */
+  const KNOWN_WRONG = [
+    'is there free time at camp in the afternoon → event_time',
+    'what time are the breakout sessions at the leadership conference → event_time',
+    'when does the auction start at the gala → event_time',
+    "where am i crashing at the women's retreat → event_place",
+    'sign me up for sweet tea at the picnic → availability',
+    'is it gonna rain in kansas city tomorrow → event_weather',
+    'ask jen if she can drive to camp → event_car',
+    'switch my flight to the later one → event_flight',
+    'which team is sam on for the outreach → event_team',
+    'go to the carpool page → event_car',
+  ]
+
+  it('is wrong no more than it was, and answers three in four', async () => {
+    const wrong: string[] = []
+    const per: Partial<Record<string, number>> = {}
+    let hers = 0
+    let answered = 0
+    for (const [i, { text, want }] of all.entries()) {
+      if (i % 20 === 0) await new Promise((done) => setImmediate(done))
+      const got = taken(text)
+      if (want !== 'other') hers++
+      if (got === null) continue
+      if (got === want) {
+        answered++
+        per[want] = (per[want] ?? 0) + 1
+      } else wrong.push(`${text} → ${got}`)
+    }
+    expect(wrong.filter((w) => !KNOWN_WRONG.includes(w))).toEqual([])
+    expect(answered / hers).toBeGreaterThanOrEqual(0.75)
     const fewer = Object.entries(ANSWERS)
       .filter(([skill, n]) => (per[skill] ?? 0) < n!)
       .map(([skill, n]) => `${skill}: ${per[skill] ?? 0} of ${n}`)

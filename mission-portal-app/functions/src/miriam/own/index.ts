@@ -47,6 +47,8 @@ import { foodSignup, type SignupWould } from './signup'
 /** Near enough its examples, and nearer than the next skill by enough — or nearly, by a lot. */
 export const sure = (r: Pick<Reading, 'score' | 'margin'>) =>
   (r.score >= 0.6 && r.margin >= 0.05) || (r.score >= 0.4 && r.margin >= 0.1)
+/** Nearer nothing she knows than this, a request is no skill's, whichever is nearest: below what sure() ever takes. */
+const NEAR_NOTHING = 0.4
 
 export interface OwnInput {
   /**
@@ -376,7 +378,15 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
     // "thanks" isn't more asked.
     if (!SAID_BACK.test(text.trim()) && followsOn(text) && (await onFaith(input, last))) {
       const { reading, rawV } = await whatItIs()
-      if (reading.skill === 'faith' || reading.skill === 'other' || aboutScripture(text)) {
+      // Near nothing she knows ("why did she use a tambourine"): no other
+      // skill's, whichever happens to be nearest — never sure below this.
+      const nearNothing = reading.score < NEAR_NOTHING
+      if (
+        reading.skill === 'faith' ||
+        reading.skill === 'other' ||
+        nearNothing ||
+        aboutScripture(text)
+      ) {
         const taught = await taughtFor(text, rawV, db, { strict: true })
         if (taught && !justSaid(taught, last.reply)) {
           return { result: toStay(said(taught)), read: null, why: 'taught' }
