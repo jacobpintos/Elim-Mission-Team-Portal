@@ -66,7 +66,7 @@ export function BriefingScreen({
   const finished = !speaking && saying >= briefing.segments.length - 1
 
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}>
+    <View style={[StyleSheet.absoluteFill, styles.screen, { backgroundColor: colors.background }]}>
       <XStack
         paddingTop={insets.top + 8}
         paddingHorizontal="$4"
@@ -141,6 +141,12 @@ export function BriefingScreen({
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    // The layer it is shown in passes touches through to the page (on the
+    // web, to everything in it that doesn't take its own): the screen takes
+    // them, its ✕ among them — not her bar beneath it.
+    pointerEvents: 'auto',
+  },
   pill: {
     minHeight: 36,
     paddingHorizontal: 14,
