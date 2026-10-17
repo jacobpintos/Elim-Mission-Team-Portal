@@ -7,6 +7,7 @@ import {
   flightsFor,
   instancesOf,
   lodgingFor,
+  seesTeamSide,
   shiftDate,
   type EventInstance,
   type EventTemplate,
@@ -411,6 +412,9 @@ function scheduleItemAt(ask: QuickAsk, events: EventInstance[]): QuickAnswer | n
   return { text: found[0].text, open: { key: found[0].ev.instanceKey, section: 'schedule' } }
 }
 
+/** What an event's page shows only to its team's members. */
+const TEAM_SIDE: readonly QuickField[] = ['dress', 'team', 'car', 'lodging', 'flight', 'weather']
+
 /** The answer, worked out here, or null to ask Claude. */
 export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
   if (!data.templates.length) return null
@@ -419,6 +423,17 @@ export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
   const events = eventsFor(ask, data)
   // Nothing found, or more than can be said in a breath: Claude works it out.
   if (events.length === 0 || events.length > 3) return null
+  // An event's team side, which its page shows only to its team's members
+  // (functions/src/miriam/data: seesTeamSide): never a public follower's.
+  if (TEAM_SIDE.includes(ask.field) && !seesTeamSide(data.viewer)) {
+    return {
+      text:
+        events.length === 1
+          ? `That’s shown to ${events[0].title}’s team members.`
+          : 'That’s shown to those events’ team members.',
+      open: null,
+    }
+  }
   // Something on its schedule — "what time is the sermon on New Year's Eve?",
   // "the schedule for Olivia getting here" — not the event's own time, nor all
   // of it; and what comes before or after something, worked out by her.

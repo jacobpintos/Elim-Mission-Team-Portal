@@ -2,7 +2,7 @@ import type { Announcement, CarpoolCarData, Message, PostPage, Room, Task } from
 import { visibleTabs } from '@/lib/roles'
 import { postsAsked, postsFor, postsSaid } from '@/lib/miriamPosts'
 import type { UserProfile } from '@/types/user'
-import type { EventInstance } from '../../../functions/src/miriam/data'
+import { seesTeamSide, type EventInstance } from '../../../functions/src/miriam/data'
 import { FD } from '@/lib/format'
 import { foodStillOpenSaid, foodTakenSaid, stillOpen } from '@/lib/miriamActions'
 import { eventRef, listAsked, type QuickData } from '@/lib/miriamQuick'
@@ -1220,6 +1220,10 @@ async function agendaHere(said: string, here: Here, talk: Talk): Promise<boolean
 /** One of their events, with what is theirs at it: "Youth Night, Friday at 7 PM — you're on Worship, bringing Chips." */
 async function agendaLine(ev: EventInstance, here: Here, data: QuickData): Promise<string> {
   const uid = data.viewer.uid
+  const when = `${eventDay(ev, data.today)}${ev.startTime ? ` at ${ev.startTime}` : ''}`
+  // Its team side — team, food, car, availability — is never a public
+  // follower's: their event pages don't show it (functions/src/miriam/data: seesTeamSide).
+  if (!seesTeamSide(data.viewer)) return `${ev.title}, ${when}.`
   const parts: string[] = []
   const team = (ev.teams ?? []).find((t) =>
     [...t.leaders, ...t.members].some((m) => String(m) === uid)
@@ -1247,7 +1251,6 @@ async function agendaLine(ev: EventInstance, here: Here, data: QuickData): Promi
   else if (answer.status === 'no') parts.push('you said you can’t make it')
   else if (answer.status === 'tbd') parts.push('you weren’t sure yet')
   else if (answer.status === 'partial') parts.push('you’ll be there for part of it')
-  const when = `${eventDay(ev, data.today)}${ev.startTime ? ` at ${ev.startTime}` : ''}`
   return `${ev.title}, ${when}${parts.length ? ` — ${parts.join(', ')}` : ''}.`
 }
 

@@ -17,6 +17,8 @@ import {
   type Group,
   type Task,
   type Viewer,
+  seesTeamSide,
+  yoursAt,
 } from '../../functions/src/miriam/data'
 
 const admin: Viewer = { uid: 'boss', roles: ['admin'] }
@@ -247,5 +249,46 @@ describe('tasks', () => {
     expect(findTasks(tasks, sarah, 'print programs')).toEqual([])
     expect(findTasks(tasks, admin, 'print programs').map((t) => t.id)).toEqual(['t2'])
     expect(findTasks(tasks, sarah, 'sound').map((t) => t.id)).toEqual(['t1'])
+  })
+})
+
+describe('an event’s team side', () => {
+  const ev = {
+    id: 'trip',
+    title: 'Mission Trip',
+    date: '2026-11-01',
+    users: ['pub'],
+    dcw: 'All black',
+    dressCode: [{ group: '_remainder_', text: 'Red shirts' }],
+    carpool: true,
+    carpoolCars: [{ id: 'c', label: 'Van 1', driver: 'sam', riders: ['pub'] }],
+    flights: true,
+    flightEntries: [{ uid: 'pub', outAirline: 'American', outFlight: '12' }],
+    lodging: true,
+    lodgingEntries: [{ name: 'Hampton Inn', assignees: ['pub'] }],
+    teams: [{ name: 'Kids', leaders: [], members: ['pub'] }],
+    food: true,
+    foodItems: ['Chips'],
+  } as never
+  const names = new Map([['sam', 'Sam Lee']])
+
+  it('is never shown to a public follower, whatever else the account holds', () => {
+    for (const roles of [['public'], ['public', 'regular']]) {
+      const v = { uid: 'pub', roles }
+      expect(seesTeamSide(v)).toBe(false)
+      expect(dressCodeFor(ev, v)).toEqual([])
+      expect(carpoolFor(ev, v, names)).toEqual([])
+      expect(flightsFor(ev, v, names)).toEqual([])
+      expect(lodgingFor(ev, v, names)).toEqual([])
+      expect(foodFor(ev, { 0: { uid: 'pub' } }, v, names)).toEqual({ mine: [], sheet: [] })
+      expect(yoursAt(ev, v, names, { cars: [], bringing: ['Chips'], tasks: [] })).toEqual([])
+    }
+  })
+
+  it('is shown to members and guests, their own', () => {
+    const v = { uid: 'pub', roles: ['guest'] }
+    expect(seesTeamSide(v)).toBe(true)
+    expect(dressCodeFor(ev, v)).toEqual(['Red shirts'])
+    expect(carpoolFor(ev, v, names)).toEqual(['Van 1 (your car): driven by Sam Lee, riding: you'])
   })
 })

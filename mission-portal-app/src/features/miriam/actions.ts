@@ -27,7 +27,7 @@ import {
   switchesSaid,
 } from '@/lib/miriamNotifications'
 import { useSecurityStore } from '@/stores/securityStore'
-import { assignedTo, type Group } from '../../../functions/src/miriam/data'
+import { assignedTo, canSeeEvent, type Group } from '../../../functions/src/miriam/data'
 import { roomName, roomsFor } from '@/lib/miriamAppData'
 import { claimFoodItem, type FoodSignups } from '@/lib/foodSignups'
 import {
@@ -1496,8 +1496,12 @@ async function setAvailabilityRange(profile: UserProfile, input: Record<string, 
   const uid = String(profile.uid)
   const { templates, overrides } = useEventsStore.getState()
   const groups = useGroupsStore.getState().groups as unknown as Group[]
+  const viewer = { uid, roles: (profile.roles ?? []).map(String) }
+  // Theirs, and to be seen: never a draft only an admin sees (functions/src/miriam/data: canSeeEvent).
   const events = allInstances(templates, overrides, input.from, input.to)
-    .filter((ev) => assignedTo(ev as never, groups).has(uid))
+    .filter(
+      (ev) => assignedTo(ev as never, groups).has(uid) && canSeeEvent(ev as never, viewer, groups)
+    )
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, MAX_RANGE_EVENTS)
   if (events.length === 0) {

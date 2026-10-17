@@ -1478,6 +1478,9 @@ describe('answered from the event itself', () => {
       mitch: { displayName: 'Mitch Moylan', roles: ['regular'] },
       glenn: { displayName: 'Glenn Pettit', roles: ['regular'] },
       guest: { displayName: 'Guest User', roles: ['guest'] },
+      // Shares the end of Guest User's name, and has no flight or room.
+      mira: { displayName: 'Mira User', roles: ['regular'] },
+      dana: { displayName: 'Dana Fox', roles: ['public'] },
     },
     groups: {},
     events: {
@@ -1486,8 +1489,8 @@ describe('answered from the event itself', () => {
         date: '2026-12-31',
         startTime: '10:30 PM',
         location: 'Elim Church',
-        users: ['jacob', 'mitch', 'glenn', 'guest'],
-        teams: [{ name: 'Production - Audio', leaders: [], members: ['jacob'] }],
+        users: ['jacob', 'mitch', 'glenn', 'guest', 'mira', 'dana'],
+        teams: [{ name: 'Production - Audio', leaders: [], members: ['jacob', 'dana'] }],
         carpool: true,
         carpoolCars: [
           { id: 'c1', label: 'Jacob’s Rouge', driver: 'jacob', riders: ['mitch', 'glenn'] },
@@ -1613,6 +1616,40 @@ describe('answered from the event itself', () => {
     expect(await said('where is guest user staying for new years eve', guest)).toBe(
       'You’re staying at Marmot House, 55 Marmot Ct, North Liberty, IA for New Years Eve.'
     )
+  })
+
+  it('never someone else’s for one who has none, though their names end alike', async () => {
+    // Mira User has no flight or room; Guest User has both.
+    const mira = as('mira', ['regular'])
+    expect(await said('where is mira user staying for new years eve', mira)).toBe(
+      'You haven’t been given a room for New Years Eve yet.'
+    )
+    expect(await said('when does mira user arrive for new years eve', mira)).toBe(
+      'You have no flight for New Years Eve yet.'
+    )
+    for (const q of [
+      'where are guest and mira user staying for new years eve',
+      'what is mira user’s flight for new years eve',
+    ]) {
+      expect(await said(q, mira)).not.toMatch(/Marmot|Nashville|1234|7 PM/)
+    }
+  })
+
+  it('none of the team’s side to a public follower on it, as its page shows them none', async () => {
+    // Dana was a member, put on the team, then made a public follower: still on the event.
+    const dana = as('dana', ['public'])
+    expect(await said('what team am I on for new years eve', dana)).toBe(
+      'That’s shown to New Years Eve’s team members.'
+    )
+    expect(await said('who am I riding with to new years eve', dana)).toBe(
+      'That’s shown to New Years Eve’s team members.'
+    )
+    // Handed on (to the public reply), never told.
+    expect((await said('what are my responsibilities for new years eve', dana)) ?? '').not.toMatch(
+      /Production|Audio|Rouge/
+    )
+    // When and where, as its page shows anyone who can open it.
+    expect(await said('when is new years eve', dana)).toMatch(/December 31 at 10:30 PM/)
   })
 
   it('what an event is', async () => {
@@ -1926,6 +1963,43 @@ describe('a public follower', () => {
   it('and changes nothing — not even their availability', async () => {
     const own = await asked("I can't make the fall festival")
     expect(own.result).toBeNull()
+  })
+
+  it('is told nothing of an event’s team side: its page shows them none', async () => {
+    const pub = fakeDb({
+      ...CHURCH,
+      events: {
+        ...CHURCH.events,
+        fest: {
+          title: 'Fall Festival',
+          date: '2026-10-24',
+          startTime: '4:00 PM',
+          location: 'Greenwood Park',
+          isPublic: true,
+          rtp: '2:00 PM',
+          rtm: '2:30 PM',
+          dcw: 'All black',
+          dressCode: [{ group: '_remainder_', text: 'Red shirts' }],
+          carpool: true,
+        },
+      },
+    })
+    const ask = (text: string) =>
+      ownAnswer(
+        input(text, { viewer: visitor, lookups: new Lookups(pub, visitor, TODAY), appTools: [] })
+      ).then((o) => (o.result as { text: string } | null)?.text ?? '')
+    expect(await ask('what should I wear to the fall festival')).toBe(
+      'That’s shown to Fall Festival’s team members.'
+    )
+    expect(await ask('when do I need to show up for the fall festival')).not.toMatch(/2:00|2:30/)
+    expect(await ask('who am I riding with to the fall festival')).not.toMatch(/car/i)
+    expect(await ask('what time is the fall festival')).toMatch(/October 24 at 4:00 PM/)
+    // Its team side, not given to Claude's lookups either.
+    const details = await new Lookups(pub, visitor, TODAY).getEvent('fest_2026-10-24')
+    expect(details).toMatchObject({ title: 'Fall Festival', venue: 'Greenwood Park' })
+    for (const k of ['reportTimes', 'dressCode', 'carpool', 'yours', 'yourAvailability']) {
+      expect([k, (details as Record<string, unknown>)[k]]).toEqual([k, undefined])
+    }
   })
 })
 

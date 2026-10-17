@@ -4,6 +4,7 @@ import {
   carpoolFor,
   dressCodeFor,
   instancesOf,
+  seesTeamSide,
   shiftDate,
   type EventInstance,
   type EventTemplate,
@@ -211,17 +212,25 @@ function clock(time: string | undefined): [string, string] {
   return [`${m[1]}:${m[2] ?? '00'}`, m[3].toUpperCase()]
 }
 
-/** Them, as someone on the event rather than an admin: their own team, dress code and car. */
-const asMember = (viewer: Viewer): Viewer => ({ uid: viewer.uid, roles: [] })
+/**
+ * Them, as someone on the event rather than an admin: their own team, dress
+ * code and car — none at all for a public follower, whose event pages don't
+ * show them (functions/src/miriam/data: seesTeamSide).
+ */
+const asMember = (viewer: Viewer): Viewer => ({
+  uid: viewer.uid,
+  roles: seesTeamSide(viewer) ? [] : ['public'],
+})
 
 function eventCard(ev: EventInstance, input: BriefingInput, today: string): BriefEvent {
   const me = asMember(input.viewer)
-  const team = (ev.teams ?? []).find((t) =>
+  const sees = seesTeamSide(input.viewer)
+  const team = (sees ? (ev.teams ?? []) : []).find((t) =>
     [...t.leaders, ...t.members].some((m) => String(m) === input.viewer.uid)
   )
   const dress = dressCodeFor(ev, me)[0]
   const car = ev.carpool ? carpoolFor(ev, me, input.names)[0] : undefined
-  const forecast = input.weather?.[ev.instanceKey]
+  const forecast = sees ? input.weather?.[ev.instanceKey] : undefined
   const chips = [
     team ? `${team.name} team` : '',
     dress ?? '',
@@ -365,7 +374,7 @@ export function buildBriefing(input: BriefingInput): Briefing {
       if (dress) bits.push(`Dress code: ${dress}.`)
       const car = ev.carpool ? carpoolFor(ev, asMember(viewer), input.names)[0] : undefined
       if (car) bits.push(`Your car: ${car.replace(/\s*\(your car\)/, '')}.`)
-      const forecast = input.weather?.[ev.instanceKey]
+      const forecast = seesTeamSide(viewer) ? input.weather?.[ev.instanceKey] : undefined
       if (forecast)
         bits.push(`It'll be ${Math.round(forecast.high)} and ${forecast.label.toLowerCase()}.`)
       say([R.event(ev.instanceKey)], bits.join(' '))

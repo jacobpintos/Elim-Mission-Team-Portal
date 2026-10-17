@@ -119,6 +119,26 @@ describe('event questions answered on the device', () => {
     expect(quickAnswer('When is Revival', data())?.directions).toBeUndefined()
   })
 
+  it('tells a public follower none of an event’s team side, as its page shows them none', () => {
+    const pub = data('me', ['public'])
+    for (const q of [
+      'what’s the dress code for revival in the heartland',
+      'who am I riding with to the youth retreat',
+      'where am I staying for the youth retreat',
+      'what team am I on for revival in the heartland',
+    ]) {
+      expect([q, quickAnswer(q, pub)?.text]).toEqual([
+        q,
+        expect.stringMatching(/^That’s shown to .+’s team members\.$/),
+      ])
+    }
+    expect(quickAnswer('what’s the weather for revival in the heartland', pub)?.weather).toBe(
+      undefined
+    )
+    // When and where, as anyone who can open it sees.
+    expect(quickAnswer('when is revival in the heartland', pub)?.text).toMatch(/5 PM/)
+  })
+
   it('never answers about an event the person can’t see', () => {
     expect(quickAnswer('dress code for secret planning', data())).toBeNull()
   })

@@ -20,6 +20,7 @@ import { canKeepDateNotes } from '@/lib/dateNotes'
 import {
   assignedTo,
   canSeeEvent,
+  seesTeamSide,
   effectiveResponse,
   instancesOf,
   shiftDate,
@@ -132,7 +133,7 @@ export async function gatherBriefing(): Promise<
       []
     ),
     quietly(() => forecasts(events, evOverrides, groups, viewer, day), {}),
-    asked ? quietly(() => foodOpen(events, evOverrides, groups, uid, day), []) : [],
+    asked ? quietly(() => foodOpen(events, evOverrides, groups, viewer, day), []) : [],
     quietly(() => availabilityAsks(events, evOverrides, groups, viewer, day, now.getTime()), []),
     quietly(() => moneyFor(uid, day), [] as AttentionItem[]),
   ])
@@ -236,6 +237,8 @@ async function forecasts(
   viewer: { uid: string; roles: string[] },
   day: string
 ) {
+  // The forecast is its page's for its team members: a public follower's pages fetch none.
+  if (!seesTeamSide(viewer)) return {}
   const todays = templates
     .filter((t) => canSeeEvent(t, viewer, groups))
     .flatMap((t) => instancesOf(t, day, day, overrides))
@@ -437,12 +440,20 @@ async function foodOpen(
   templates: EventTemplate[],
   overrides: Record<string, Partial<EventTemplate>>,
   groups: Group[],
-  uid: string,
+  viewer: { uid: string; roles: string[] },
   day: string
 ): Promise<FoodNudge[]> {
+  const uid = viewer.uid
+  // Theirs, and to be seen: never a draft only an admin sees.
   const theirs = templates
     .flatMap((t) => instancesOf(t, day, shiftDate(day, FOOD_DAYS), overrides))
-    .filter((ev) => ev.food && (ev.foodItems ?? []).length > 0 && assignedTo(ev, groups).has(uid))
+    .filter(
+      (ev) =>
+        ev.food &&
+        (ev.foodItems ?? []).length > 0 &&
+        assignedTo(ev, groups).has(uid) &&
+        canSeeEvent(ev, viewer, groups)
+    )
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 4)
   const found = await Promise.all(

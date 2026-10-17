@@ -18,6 +18,10 @@
  *   (EventDetailModal FlightDisplay, LodgingDisplay, CarpoolReadOnly.)
  * - Food: the sign-up sheet, who brings what, as everyone on it sees it.
  *   (EventDetailModal FoodPanel.)
+ * - An event's team side — report times, dress code, weather, food,
+ *   carpool, teams, lodging, flights, availability — never to an account
+ *   that is a public follower, whatever else it holds: its page shows them
+ *   only when !isPublic(profile). (events/[id] isMember; seesTeamSide.)
  * - Meeting and sign-up links: to anyone who can see the event.
  *
  * Kept free of Firebase so it can be tested on its own
@@ -32,6 +36,14 @@ export interface Viewer {
 }
 
 export const isAdminViewer = (v: Viewer) => v.roles.includes('admin')
+
+/**
+ * Shown an event's team side — report times, dress code, weather, food,
+ * carpool, teams, lodging, flights, availability — as its page shows it:
+ * not to an account holding the public role (app/(app)/events/[id].tsx:
+ * isMember = !isPublic(profile)).
+ */
+export const seesTeamSide = (v: Viewer) => !v.roles.includes('public')
 
 /** A member, or a guest: anyone who is not a public follower only. */
 export function canAsk(roles: readonly string[] | undefined): boolean {
@@ -325,6 +337,7 @@ export function eventByKey(
 
 /** The dress code this person is shown — or, for an admin, every entry. */
 export function dressCodeFor(ev: EventTemplate, viewer: Viewer): string[] {
+  if (!seesTeamSide(viewer)) return []
   if (ev.dressCode?.length) {
     if (isAdminViewer(viewer)) {
       return ev.dressCode.map((e) => {
@@ -365,6 +378,7 @@ export function carpoolFor(
   /** The cars for this date, set on the event's page, when its form has none. */
   cars: Car[] = ev.carpoolCars ?? []
 ): string[] {
+  if (!seesTeamSide(viewer)) return []
   const mine = (c: Car) => same(c.driver, viewer.uid) || c.riders.some((r) => same(r, viewer.uid))
   const shown = isAdminViewer(viewer) ? cars : cars.filter(mine)
   // The one asking is "you": "driven by you", so their own driving is plain.
@@ -426,6 +440,7 @@ export function flightsFor(
   viewer: Viewer,
   names: Map<string, string>
 ): string[] {
+  if (!seesTeamSide(viewer)) return []
   const shown = (ev.flightEntries ?? []).filter(
     (f) => isAdminViewer(viewer) || same(f.uid, viewer.uid)
   )
@@ -442,6 +457,7 @@ export function lodgingFor(
   viewer: Viewer,
   names: Map<string, string>
 ): string[] {
+  if (!seesTeamSide(viewer)) return []
   const mine = (l: Lodging) => l.assignees.some((a) => same(a, viewer.uid))
   const shown = (ev.lodgingEntries ?? []).filter((l) => isAdminViewer(viewer) || mine(l))
   return shown.map((l) => {
@@ -462,6 +478,7 @@ export function foodFor(
   viewer: Viewer,
   names: Map<string, string>
 ): { mine: string[]; sheet: string[] } {
+  if (!seesTeamSide(viewer)) return { mine: [], sheet: [] }
   const items = ev.foodItems ?? []
   const mine: string[] = []
   const sheet = items.map((item, i) => {
@@ -599,6 +616,7 @@ export function yoursAt(
     tasks: { title: string; status: string; dueDate?: string | null; assignees: unknown[] }[]
   }
 ): string[] {
+  if (!seesTeamSide(viewer)) return []
   const me = (uid: unknown) => same(uid, viewer.uid)
   const team = (ev.teams ?? []).find((t) => [...t.leaders, ...t.members].some(me))
   const car = ev.carpool ? their.cars.find((c) => me(c.driver) || c.riders.some(me)) : undefined

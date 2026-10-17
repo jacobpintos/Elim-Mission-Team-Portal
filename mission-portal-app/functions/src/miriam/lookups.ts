@@ -28,6 +28,7 @@ import {
   type Viewer,
   scheduleFor,
   yoursAt,
+  seesTeamSide,
 } from './data'
 import { FORECAST_DAYS, forecastFor } from './weather'
 
@@ -278,42 +279,49 @@ export class Lookups {
     const myTeam = (ev.teams ?? []).find((t) =>
       [...t.leaders, ...t.members].some((m) => String(m) === this.viewer.uid)
     )
+    // A public follower is shown what its page shows them: when, where, its links and schedule.
+    const team = seesTeamSide(this.viewer)
     return {
       key: ev.instanceKey,
       title: ev.title,
       date: withWeekday(ev.date),
       startTime: ev.startTime || undefined,
       reportTimes:
-        ev.rtp || ev.rtm
+        team && (ev.rtp || ev.rtm)
           ? { production: ev.rtp || undefined, mission: ev.rtm || undefined }
           : undefined,
       venue: ev.location || undefined,
       address: [ev.address, ev.city, ev.state].filter(Boolean).join(', ') || undefined,
       virtualMeetingLink: ev.isVirtual ? ev.virtualLink || 'none given' : undefined,
       signUpLink: ev.signUpLink || undefined,
-      yourTeam: myTeam?.name,
-      dressCode: dressCodeFor(ev, this.viewer),
+      yourTeam: team ? myTeam?.name : undefined,
+      dressCode: team ? dressCodeFor(ev, this.viewer) : undefined,
       schedule: ev.schedule?.length ? scheduleFor(ev, firstDay) : undefined,
-      food: food ?? undefined,
-      carpool: ev.carpool
-        ? {
-            meetingPlace: ev.carpoolLoc || undefined,
-            cars: carpoolFor(ev, this.viewer, names, perDate ?? undefined),
-            // Where its cars are set: for this date on its page (set_carpool), or for every date in its form (edit_event).
-            carsSet: perDate ? 'for this date, on its page' : 'for every date, in its form',
-          }
-        : undefined,
-      flights: ev.flights ? flightsFor(ev, this.viewer, names) : undefined,
-      lodging: ev.lodging ? lodgingFor(ev, this.viewer, names) : undefined,
+      food: team ? (food ?? undefined) : undefined,
+      carpool:
+        team && ev.carpool
+          ? {
+              meetingPlace: ev.carpoolLoc || undefined,
+              cars: carpoolFor(ev, this.viewer, names, perDate ?? undefined),
+              // Where its cars are set: for this date on its page (set_carpool), or for every date in its form (edit_event).
+              carsSet: perDate ? 'for this date, on its page' : 'for every date, in its form',
+            }
+          : undefined,
+      flights: team && ev.flights ? flightsFor(ev, this.viewer, names) : undefined,
+      lodging: team && ev.lodging ? lodgingFor(ev, this.viewer, names) : undefined,
       // Everything theirs at it, all together: "what are my responsibilities?".
-      yours: yoursAt(ev, this.viewer, names, {
-        cars: (perDate ?? ev.carpoolCars ?? []) as Car[],
-        bringing: food?.mine ?? [],
-        tasks: forThisEvent,
-      }),
-      yourAvailability: own
-        ? `${AVAIL_LABELS[own.status]}${own.note ? ` — “${own.note}”` : ''}`
-        : 'not answered',
+      yours: team
+        ? yoursAt(ev, this.viewer, names, {
+            cars: (perDate ?? ev.carpoolCars ?? []) as Car[],
+            bringing: food?.mine ?? [],
+            tasks: forThisEvent,
+          })
+        : undefined,
+      yourAvailability: !team
+        ? undefined
+        : own
+          ? `${AVAIL_LABELS[own.status]}${own.note ? ` — “${own.note}”` : ''}`
+          : 'not answered',
       tasks: forThisEvent.map((t) => ({
         title: t.title,
         status: TASK_STATUS[t.status] ?? t.status,
@@ -329,6 +337,8 @@ export class Lookups {
     const ev = await this.event(key)
     if (!ev) return { error: 'No event this person can see has that key.' }
     if (ev.isVirtual) return { note: 'It is a virtual event: there is no weather to give.' }
+    // Its page shows the forecast to its team's members, not to a public follower.
+    if (!seesTeamSide(this.viewer)) return { note: 'Its forecast is shown to its team members.' }
     const { _geocodeLat: lat, _geocodeLng: lng } = ev
     if (typeof lat !== 'number' || typeof lng !== 'number') {
       return { note: 'Its page has no forecast: no city is set for it.' }

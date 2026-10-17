@@ -1,4 +1,4 @@
-import { isAdminViewer, type EventInstance, type Flight, type Lodging } from '../data'
+import { isAdminViewer, seesTeamSide, type EventInstance, type Flight, type Lodging } from '../data'
 import type { Lookups } from '../lookups'
 import type { Viewer } from '../data'
 
@@ -119,10 +119,13 @@ export async function personAnswer(
   ev: EventInstance,
   { lookups, viewer }: { lookups: Lookups; viewer: Viewer }
 ): Promise<string | null> {
+  // Never a public follower's to be told: its page shows them no rooms or flights.
+  if (!seesTeamSide(viewer)) return null
   const names = await lookups.names()
   const title = ev.title
   // Anyone else's is an admin's to see — never even whether they have one.
-  if (!isAdminViewer(viewer)) {
+  const admin = isAdminViewer(viewer)
+  if (!admin) {
     const asked = personNamed(ask.said, [...names.keys()], names)
     if (!asked) return null
     if (asked !== viewer.uid) {
@@ -132,26 +135,25 @@ export async function personAnswer(
     }
   }
   const self = (uid: string) => uid === viewer.uid
+  /**
+   * Who of those with an entry was asked about: for anyone but an admin,
+   * only themselves — never someone else whose name ends as theirs does
+   * ("Mary Smith", with none, is not "Tom Smith", with one).
+   */
+  const whoOf = (holders: string[]) =>
+    admin ? personNamed(ask.said, holders, names) : holders.includes(viewer.uid) ? viewer.uid : null
   if (ask.kind === 'lodging') {
     const rooms: Lodging[] = ev.lodgingEntries ?? []
-    const uid = personNamed(
-      ask.said,
-      [...new Set(rooms.flatMap((l) => l.assignees.map(String)))],
-      names
-    )
-    if (!uid) return null
+    const uid = whoOf([...new Set(rooms.flatMap((l) => l.assignees.map(String)))])
+    if (!uid) return admin ? null : `You haven’t been given a room for ${title} yet.`
     const room = rooms.find((l) => l.assignees.some((a) => String(a) === uid))!
     const where = [room.name, room.address, room.room && `room ${room.room}`].filter(Boolean)
     const who = self(uid) ? 'You’re' : names.get(uid) ? `${names.get(uid)} is` : 'They’re'
     return `${who} staying at ${where.join(', ')} for ${title}.`
   }
   const flights: Flight[] = ev.flightEntries ?? []
-  const uid = personNamed(
-    ask.said,
-    flights.map((f) => String(f.uid)),
-    names
-  )
-  if (!uid) return null
+  const uid = whoOf(flights.map((f) => String(f.uid)))
+  if (!uid) return admin ? null : `You have no flight for ${title} yet.`
   const whose = self(uid) ? 'Your' : names.get(uid) ? `${names.get(uid)}’s` : 'Their'
   const f = flights.find((x) => String(x.uid) === uid)!
   const out = legSaid(f, 'out')

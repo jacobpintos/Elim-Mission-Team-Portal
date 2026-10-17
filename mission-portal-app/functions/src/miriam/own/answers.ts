@@ -1,4 +1,4 @@
-import { dressCodeFor, shiftDate, type EventInstance, type Viewer } from '../data'
+import { dressCodeFor, seesTeamSide, shiftDate, type EventInstance, type Viewer } from '../data'
 import type { Lookups } from '../lookups'
 import type { AppToolName } from '../plan'
 import type { Mention } from './events'
@@ -196,11 +196,25 @@ export async function theEvent(skill: Skill, ctx: AnswerContext): Promise<EventI
   return null
 }
 
+/** What its page shows only to an event's team members: never told to a public follower. */
+const TEAM_SIDE: readonly Skill[] = [
+  'event_dress',
+  'event_team',
+  'event_car',
+  'event_lodging',
+  'event_flight',
+  'event_weather',
+]
+
 /** One event's answer, as the app words it. */
 async function aboutEvent(skill: Skill, ev: EventInstance, ctx: AnswerContext): Promise<OwnResult> {
   const { lookups, viewer, today } = ctx
   const title = ev.title
   const when = whenSaid(ev.date, today)
+  // Its team side, which its page shows only to its team's members (../data: seesTeamSide).
+  if (TEAM_SIDE.includes(skill) && !seesTeamSide(viewer)) {
+    return said(`That’s shown to ${title}’s team members.`, onPage(ev))
+  }
   switch (skill) {
     case 'event_time': {
       const details = await lookups.getEvent(ev.instanceKey)
@@ -444,6 +458,8 @@ const RESPONSIBILITIES =
  */
 export async function yoursAnswer(ctx: AnswerContext): Promise<OwnResult | null> {
   if (!RESPONSIBILITIES.test(ctx.text) || ctx.mentions.length === 0) return null
+  // Their team side at it: never a public follower's to be told (../data: seesTeamSide).
+  if (!seesTeamSide(ctx.viewer)) return null
   const ev = await theEvent('event_team', ctx)
   if (!ev) return null
   const details = await ctx.lookups.getEvent(ev.instanceKey)
@@ -502,7 +518,7 @@ export async function overviewAnswer(
  */
 export async function travelAnswer(ctx: AnswerContext): Promise<OwnResult | null> {
   const ask = personAsked(ctx.text)
-  if (!ask) return null
+  if (!ask || !seesTeamSide(ctx.viewer)) return null
   const ev = await theEvent(ask.kind === 'lodging' ? 'event_lodging' : 'event_flight', ctx)
   if (!ev) return null
   const text = await personAnswer(ask, ev, ctx)
