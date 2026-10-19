@@ -1,11 +1,4 @@
-import {
-  dressCodeFor,
-  seesOwnTrip,
-  seesTeamSide,
-  shiftDate,
-  type EventInstance,
-  type Viewer,
-} from '../data'
+import { dressCodeFor, seesTeamSide, shiftDate, type EventInstance, type Viewer } from '../data'
 import type { Lookups } from '../lookups'
 import type { AppToolName } from '../plan'
 import type { Mention } from './events'
@@ -204,17 +197,17 @@ export async function theEvent(skill: Skill, ctx: AnswerContext): Promise<EventI
 }
 
 /** What its page shows only to an event's team members, and an admin (../data: seesTeamSide). */
-const TEAM_SIDE: readonly Skill[] = ['event_dress', 'event_team', 'event_car']
-/** Their own room and flight, and its weather: on their dashboard too (../data: seesOwnTrip). */
-const OWN_TRIP: readonly Skill[] = ['event_lodging', 'event_flight', 'event_weather']
+const TEAM_SIDE: readonly Skill[] = [
+  'event_dress',
+  'event_team',
+  'event_car',
+  'event_lodging',
+  'event_flight',
+  'event_weather',
+]
 
-/** Whether what `skill` asks of an event is shown to them, on its page or their dashboard. */
-const shownTo = (skill: Skill, viewer: Viewer) =>
-  TEAM_SIDE.includes(skill)
-    ? seesTeamSide(viewer)
-    : OWN_TRIP.includes(skill)
-      ? seesOwnTrip(viewer)
-      : true
+/** Whether what `skill` asks of an event is shown to them on its page. */
+const shownTo = (skill: Skill, viewer: Viewer) => !TEAM_SIDE.includes(skill) || seesTeamSide(viewer)
 
 /** Said of what isn't shown to them, when no event was named: the same whether or not one has it. */
 const NOT_SHOWN = 'That’s shown to each event’s team members.'
@@ -380,7 +373,7 @@ export async function answerFor(skill: Skill, ctx: AnswerContext): Promise<OwnRe
     return said(`On ${span.said}: ${shown.join('; ')}${more}.${noted}`)
   }
   if (skill === 'availability') {
-    if (!ctx.appTools.includes('set_availability') || !seesOwnTrip(ctx.viewer)) return null
+    if (!ctx.appTools.includes('set_availability') || !seesTeamSide(ctx.viewer)) return null
     const ev = await theEvent(skill, ctx)
     if (!ev) return null
     const status = statusIn(text)
@@ -536,8 +529,8 @@ export async function overviewAnswer(
  */
 export async function travelAnswer(ctx: AnswerContext): Promise<OwnResult | null> {
   const ask = personAsked(ctx.text)
-  // Their own, as their dashboard shows it; anyone's, to an admin (./people).
-  if (!ask || !seesOwnTrip(ctx.viewer)) return null
+  // Their own; anyone's, to an admin (./people). Never a public follower's.
+  if (!ask || !seesTeamSide(ctx.viewer)) return null
   const ev = await theEvent(ask.kind === 'lodging' ? 'event_lodging' : 'event_flight', ctx)
   if (!ev) return null
   const text = await personAnswer(ask, ev, ctx)

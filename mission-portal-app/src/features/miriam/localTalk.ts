@@ -2,7 +2,7 @@ import type { Announcement, CarpoolCarData, Message, PostPage, Room, Task } from
 import { visibleTabs } from '@/lib/roles'
 import { postsAsked, postsFor, postsSaid } from '@/lib/miriamPosts'
 import type { UserProfile } from '@/types/user'
-import { seesOwnTrip, seesTeamSide, type EventInstance } from '../../../functions/src/miriam/data'
+import { seesTeamSide, type EventInstance } from '../../../functions/src/miriam/data'
 import { FD } from '@/lib/format'
 import { foodStillOpenSaid, foodTakenSaid, stillOpen } from '@/lib/miriamActions'
 import { eventRef, listAsked, type QuickData } from '@/lib/miriamQuick'
@@ -978,8 +978,8 @@ function nextToAnswer(here: Here, data: QuickData): EventInstance | null {
  */
 async function availabilityHere(said: string, here: Here, talk: Talk): Promise<boolean> {
   const { data } = here
-  // Asked on their event pages and dashboard (functions/src/miriam/data: seesOwnTrip).
-  if (!data || !here.tools.includes('set_availability') || !seesOwnTrip(data.viewer)) return false
+  // Asked of an event's team members only (functions/src/miriam/data: seesTeamSide).
+  if (!data || !here.tools.includes('set_availability') || !seesTeamSide(data.viewer)) return false
   const ask = availabilitySaid(said, data.today)
   if (!ask) return false
   if (!ask.date && !ask.name) {
@@ -1206,7 +1206,7 @@ async function agendaHere(said: string, here: Here, talk: Talk): Promise<boolean
   const more = events.length > shown.length ? ` And ${events.length - shown.length} more.` : ''
   const text = `${ask.span.charAt(0).toUpperCase()}${ask.span.slice(1)} you have ${count}. ${lines.join(' ')}${more}${noted}`
   const unanswered =
-    here.tools.includes('set_availability') && seesOwnTrip(data.viewer)
+    here.tools.includes('set_availability') && seesTeamSide(data.viewer)
       ? shown.filter((ev) => !here.answerOf(ev)).slice(0, 3)
       : []
   if (unanswered.length) {
@@ -1224,17 +1224,15 @@ async function agendaHere(said: string, here: Here, talk: Talk): Promise<boolean
 async function agendaLine(ev: EventInstance, here: Here, data: QuickData): Promise<string> {
   const uid = data.viewer.uid
   const when = `${eventDay(ev, data.today)}${ev.startTime ? ` at ${ev.startTime}` : ''}`
-  // Its team side — team, food, car — is never told to anyone holding the
-  // public role: their event pages don't show it (functions/src/miriam/data:
-  // seesTeamSide); their availability is on their dashboard too (seesOwnTrip).
-  if (!seesOwnTrip(data.viewer)) return `${ev.title}, ${when}.`
-  const side = seesTeamSide(data.viewer)
+  // Its team side — team, food, car, availability — is never a public
+  // follower's: their event pages don't show it (functions/src/miriam/data: seesTeamSide).
+  if (!seesTeamSide(data.viewer)) return `${ev.title}, ${when}.`
   const parts: string[] = []
-  const team = side
-    ? (ev.teams ?? []).find((t) => [...t.leaders, ...t.members].some((m) => String(m) === uid))
-    : undefined
+  const team = (ev.teams ?? []).find((t) =>
+    [...t.leaders, ...t.members].some((m) => String(m) === uid)
+  )
   if (team) parts.push(`you’re on ${team.name}`)
-  if (side && ev.food && ev.foodItems?.length) {
+  if (ev.food && ev.foodItems?.length) {
     const sheet = await here.foodSheet(ev).catch(() => null)
     const mine = Object.entries(sheet ?? {})
       .filter(([, who]) => String(who.uid) === uid)
@@ -1242,7 +1240,7 @@ async function agendaLine(ev: EventInstance, here: Here, data: QuickData): Promi
       .filter((x): x is string => !!x)
     if (mine.length) parts.push(`bringing ${listed(mine)}`)
   }
-  if (side && ev.carpool) {
+  if (ev.carpool) {
     const cars = await here.carsFor(ev).catch(() => null)
     const i = (cars ?? []).findIndex((c) => c.driver === uid || c.riders.includes(uid))
     if (cars && i >= 0) {

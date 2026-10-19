@@ -1,4 +1,4 @@
-import { isAdminViewer, seesOwnTrip, type EventInstance, type Flight, type Lodging } from '../data'
+import { isAdminViewer, seesTeamSide, type EventInstance, type Flight, type Lodging } from '../data'
 import type { Lookups } from '../lookups'
 import type { Viewer } from '../data'
 
@@ -119,8 +119,8 @@ export async function personAnswer(
   ev: EventInstance,
   { lookups, viewer }: { lookups: Lookups; viewer: Viewer }
 ): Promise<string | null> {
-  // Never a public follower's alone to be told: no screen of theirs shows rooms or flights.
-  if (!seesOwnTrip(viewer)) return null
+  // Never a public follower's to be told: its page shows them no rooms or flights.
+  if (!seesTeamSide(viewer)) return null
   const names = await lookups.names()
   const title = ev.title
   // Anyone else's is an admin's to see — never even whether they have one.

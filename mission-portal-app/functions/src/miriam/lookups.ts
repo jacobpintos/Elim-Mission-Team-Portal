@@ -29,7 +29,6 @@ import {
   scheduleFor,
   yoursAt,
   seesOwnNotes,
-  seesOwnTrip,
   seesTeamSide,
 } from './data'
 import { FORECAST_DAYS, forecastFor } from './weather'
@@ -283,11 +282,8 @@ export class Lookups {
     const myTeam = (ev.teams ?? []).find((t) =>
       [...t.leaders, ...t.members].some((m) => String(m) === this.viewer.uid)
     )
-    // A public follower is shown what its page shows them: when, where, its
-    // links and schedule; with a member's or a guest's role besides, their
-    // own room, flight and availability too, as their dashboard shows them.
+    // A public follower is shown what its page shows them: when, where, its links and schedule.
     const team = seesTeamSide(this.viewer)
-    const trip = seesOwnTrip(this.viewer)
     return {
       key: ev.instanceKey,
       title: ev.title,
@@ -314,17 +310,17 @@ export class Lookups {
               carsSet: perDate ? 'for this date, on its page' : 'for every date, in its form',
             }
           : undefined,
-      flights: trip && ev.flights ? flightsFor(ev, this.viewer, names) : undefined,
-      lodging: trip && ev.lodging ? lodgingFor(ev, this.viewer, names) : undefined,
+      flights: team && ev.flights ? flightsFor(ev, this.viewer, names) : undefined,
+      lodging: team && ev.lodging ? lodgingFor(ev, this.viewer, names) : undefined,
       // Everything theirs at it, all together: "what are my responsibilities?".
-      yours: trip
+      yours: team
         ? yoursAt(ev, this.viewer, names, {
             cars: (perDate ?? ev.carpoolCars ?? []) as Car[],
             bringing: food?.mine ?? [],
             tasks: forThisEvent,
           })
         : undefined,
-      yourAvailability: !trip
+      yourAvailability: !team
         ? undefined
         : own
           ? `${AVAIL_LABELS[own.status]}${own.note ? ` — “${own.note}”` : ''}`
@@ -344,8 +340,8 @@ export class Lookups {
     const ev = await this.event(key)
     if (!ev) return { error: 'No event this person can see has that key.' }
     if (ev.isVirtual) return { note: 'It is a virtual event: there is no weather to give.' }
-    // Its page and their dashboard show the forecast to its team, not to a public follower.
-    if (!seesOwnTrip(this.viewer)) return { note: 'Its forecast is shown to its team members.' }
+    // Its page shows the forecast to its team's members, not to a public follower.
+    if (!seesTeamSide(this.viewer)) return { note: 'Its forecast is shown to its team members.' }
     const { _geocodeLat: lat, _geocodeLng: lng } = ev
     if (typeof lat !== 'number' || typeof lng !== 'number') {
       return { note: 'Its page has no forecast: no city is set for it.' }
@@ -371,8 +367,8 @@ export class Lookups {
   async availability(key: string) {
     const ev = await this.event(key)
     if (!ev) return { error: 'No event this person can see has that key.' }
-    // Asked of its team on its page and their dashboard; a public follower is shown none of it.
-    if (!seesOwnTrip(this.viewer)) {
+    // Asked of its team's members on its page; a public follower is shown none of it.
+    if (!seesTeamSide(this.viewer)) {
       return { event: ev.title, note: 'Its availability is asked of its team members.' }
     }
     const [groups, names, avail] = await Promise.all([this.groups(), this.names(), this.avail(ev)])

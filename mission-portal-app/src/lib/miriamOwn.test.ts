@@ -1659,34 +1659,29 @@ describe('answered from the event itself', () => {
     )
   })
 
-  it('their own trip to one holding a member’s or a guest’s role beside the public one, as their dashboard shows it', async () => {
+  it('none of it to one holding a member’s or a guest’s role beside the public one, as its page shows them none', async () => {
     const tools: OwnInput['appTools'] = ['set_availability', 'sign_up_food']
     const asking = (uid: string, roles: string[]) => {
       const viewer = { uid, roles }
-      return (text: string) =>
-        ownAnswer(input(text, { viewer, lookups: new Lookups(db, viewer, TODAY), appTools: tools }))
+      return async (text: string) =>
+        (
+          await ownAnswer(
+            input(text, { viewer, lookups: new Lookups(db, viewer, TODAY), appTools: tools })
+          )
+        ).result as { text?: string; kind?: string } | null
     }
-    // Their availability: on their dashboard's event cards.
-    const dana = asking('dana', ['regular', 'public'])
-    expect((await dana('I can’t make it to new years eve')).result).toMatchObject({
-      kind: 'confirm',
-      name: 'set_availability',
-    })
-    // Their own room, too — but not their team, which only its page shows.
-    const guest = asking('guest', ['guest', 'public'])
-    expect(
-      ((await guest('where am I staying for new years eve')).result as { text: string }).text
-    ).toMatch(/Marmot House/)
-    expect(
-      ((await dana('what team am I on for new years eve')).result as { text: string }).text
-    ).toBe('That’s shown to New Years Eve’s team members.')
-    // A public follower alone: none of it, whatever tools an app says it has.
-    const pub = asking('dana', ['public'])
-    expect((await pub('I can’t make it to new years eve')).result).toBeNull()
-    expect(
-      ((await pub('where am I staying for new years eve')).result as { text: string } | null)
-        ?.text ?? ''
-    ).not.toMatch(/Marmot/)
+    // Whatever tools an app says it has.
+    for (const [uid, roles] of [
+      ['dana', ['regular', 'public']],
+      ['guest', ['guest', 'public']],
+    ] as const) {
+      const ask = asking(uid, [...roles])
+      expect(await ask('I can’t make it to new years eve')).toBeNull()
+      expect((await ask('where am I staying for new years eve'))?.text ?? '').not.toMatch(/Marmot/)
+      expect((await ask('what team am I on for new years eve'))?.text).toBe(
+        'That’s shown to New Years Eve’s team members.'
+      )
+    }
   })
 
   it('all of it to an admin, as their event form holds it, whatever else they hold', async () => {

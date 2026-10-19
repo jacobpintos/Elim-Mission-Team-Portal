@@ -1,6 +1,7 @@
 import { collection, doc, limit, orderBy, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
+import { MESSAGES_PAGE_SIZE } from '@/lib/messages'
 import { partitionHiddenMessages } from '@/lib/moderation'
 import type { Announcement, Message, Room } from '@/types/events'
 import type { EventInstance } from '../../../functions/src/miriam/data'
@@ -70,8 +71,8 @@ export async function myRooms(uid: string): Promise<Room[]> {
   return rooms.sort((a, b) => millis(b.updatedAt) - millis(a.updatedAt))
 }
 
-/** Read past the last few asked for, in case some are hidden from them. */
-const HIDDEN_SPARE = 10
+/** Read past the last few asked for, in case some are hidden from them: a page of the thread's. */
+const HIDDEN_SPARE = MESSAGES_PAGE_SIZE
 
 /** A conversation's latest messages, newest first, as its thread shows them to this person. */
 export async function latestMessages(

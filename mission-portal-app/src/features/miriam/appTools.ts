@@ -10,6 +10,7 @@ import {
   visibleTabs,
 } from '@/lib/roles'
 import { localToday, todayStr } from '@/lib/events'
+import { MESSAGES_PAGE_SIZE } from '@/lib/messages'
 import { partitionHiddenMessages } from '@/lib/moderation'
 import { canKeepDateNotes, isDay, notesBetween } from '@/lib/dateNotes'
 import { useDateNotesStore } from '@/stores/dateNotesStore'
@@ -38,7 +39,7 @@ import type { UserProfile } from '@/types/user'
 import type { Announcement, Message, Room } from '@/types/events'
 import type { IssueReport, KaizenCard, PlanningBoard } from '@/types/operations'
 import type { InventoryCategory, InventoryItem, ReorderItem } from '@/types/inventory'
-import { seesOwnTrip, seesTeamSide } from '../../../functions/src/miriam/data'
+import { seesTeamSide } from '../../../functions/src/miriam/data'
 
 /**
  * Miriam's lookups that run here, in the app, as the person signed in
@@ -137,15 +138,17 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   // The same people the screens let make each change.
   const admin = isAdmin(profile)
   const guest = isGuest(profile) && !admin
-  // An event's food sheet and their availability: as their event page, event
-  // cards and an admin's event form show them (functions/src/miriam/data).
-  const viewer = { uid: String(profile.uid), roles: (profile.roles ?? []).map(String) }
-  const member = seesTeamSide(viewer)
-  const trip = seesOwnTrip(viewer)
+  // An event's availability and food sheet: its team's, on the event page —
+  // never an account's that also holds the public role, but an admin's
+  // (functions/src/miriam/data: seesTeamSide).
+  const member = seesTeamSide({
+    uid: String(profile.uid),
+    roles: (profile.roles ?? []).map(String),
+  })
   if (canUseMessages(profile)) tools.push('send_message')
   if (admin) tools.push('post_announcement', ...ADMIN_ACTIONS)
   if (tabs.includes('assignments') && !guest) tools.push('set_task_status')
-  if (tabs.includes('events') && trip) tools.push('set_availability')
+  if (tabs.includes('events') && member) tools.push('set_availability')
   if (tabs.includes('events') && member && !guest) tools.push('sign_up_food')
   if (tabs.includes('settings')) tools.push('change_notification')
   // Reminders are their own, for anyone with tasks (the Tasks tab shows them).
@@ -158,7 +161,7 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
     tools.push('add_to_set_list', 'create_set_list', 'edit_set_list', 'notify_set_list')
   // A concern for security: anyone, as the drawer's Report a Concern is.
   tools.push('report_security')
-  if (tabs.includes('events') && trip) tools.push('set_availability_range')
+  if (tabs.includes('events') && member) tools.push('set_availability_range')
   // Meeting requests are sent to leaders by name; anyone but a guest may be one.
   if (!guest) tools.push('read_meeting_requests', 'meeting_request')
   if (tabs.includes('settings')) tools.push('change_my_name')
@@ -174,8 +177,8 @@ function names(): Map<string, string> {
   return new Map(useUsersStore.getState().users.map((u) => [String(u.uid), u.displayName]))
 }
 
-/** Read past the last few asked for, in case some are hidden from them. */
-const HIDDEN_SPARE = 10
+/** Read past the last few asked for, in case some are hidden from them: a page of the thread's. */
+const HIDDEN_SPARE = MESSAGES_PAGE_SIZE
 
 async function readMessages(profile: UserProfile, said: string) {
   const uid = String(profile.uid)

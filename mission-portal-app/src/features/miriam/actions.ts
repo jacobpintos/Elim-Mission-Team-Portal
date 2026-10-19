@@ -30,7 +30,6 @@ import { useSecurityStore } from '@/stores/securityStore'
 import {
   assignedTo,
   canSeeEvent,
-  seesOwnTrip,
   seesTeamSide,
   type Group,
 } from '../../../functions/src/miriam/data'
@@ -183,9 +182,9 @@ async function seenEventByKey(profile: UserProfile, key: string): Promise<EventI
 }
 
 /**
- * An event's food sheet, and their availability, as their event page,
- * event cards and an admin's event form show them (functions/src/miriam/data:
- * seesTeamSide, seesOwnTrip).
+ * An event's availability and food sheet are its team's: its page shows
+ * neither to anyone holding the public role but an admin
+ * (functions/src/miriam/data: seesTeamSide).
  */
 const TEAM_ONLY = 'That’s for each event’s team members.'
 const viewerOf = (profile: UserProfile) => ({
@@ -320,7 +319,7 @@ async function setTaskStatus(profile: UserProfile, input: Record<string, unknown
 async function setAvailability(profile: UserProfile, input: Record<string, unknown>) {
   const status = String(input.status ?? '') as AvailResponse['status']
   if (!(status in AVAIL_LABELS)) return cannot('That isn’t an answer availability takes.')
-  if (!seesOwnTrip(viewerOf(profile))) return cannot(TEAM_ONLY)
+  if (!seesTeamSide(viewerOf(profile))) return cannot(TEAM_ONLY)
   const ev = await seenEventByKey(profile, String(input.event_key ?? ''))
   if (!ev) return cannot('I couldn’t find that event.')
   const note = String(input.note ?? '').trim()
@@ -1527,7 +1526,7 @@ const MAX_RANGE_EVENTS = 40
 async function setAvailabilityRange(profile: UserProfile, input: Record<string, unknown>) {
   const status = String(input.status ?? '') as AvailResponse['status']
   if (!(status in AVAIL_LABELS)) return cannot('That isn’t an answer availability takes.')
-  if (!seesOwnTrip(viewerOf(profile))) return cannot(TEAM_ONLY)
+  if (!seesTeamSide(viewerOf(profile))) return cannot(TEAM_ONLY)
   if (!isDay(input.from) || !isDay(input.to) || input.to < input.from) {
     return cannot('I couldn’t tell which dates you meant.')
   }

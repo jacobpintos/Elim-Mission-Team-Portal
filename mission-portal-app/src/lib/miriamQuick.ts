@@ -7,7 +7,6 @@ import {
   flightsFor,
   instancesOf,
   lodgingFor,
-  seesOwnTrip,
   seesTeamSide,
   shiftDate,
   type EventInstance,
@@ -414,9 +413,7 @@ function scheduleItemAt(ask: QuickAsk, events: EventInstance[]): QuickAnswer | n
 }
 
 /** What an event's page shows only to its team's members, and an admin. */
-const TEAM_SIDE: readonly QuickField[] = ['dress', 'team', 'car']
-/** Their own room and flight, and its weather: on their dashboard too. */
-const OWN_TRIP: readonly QuickField[] = ['lodging', 'flight', 'weather']
+const TEAM_SIDE: readonly QuickField[] = ['dress', 'team', 'car', 'lodging', 'flight', 'weather']
 
 /** The answer, worked out here, or null to ask Claude. */
 export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
@@ -427,12 +424,8 @@ export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
   // Nothing found, or more than can be said in a breath: Claude works it out.
   if (events.length === 0 || events.length > 3) return null
   // An event's team side, which its page shows only to its team's members
-  // (functions/src/miriam/data: seesTeamSide), and their own trip, which
-  // their dashboard shows too (seesOwnTrip): never a public follower's.
-  if (
-    (TEAM_SIDE.includes(ask.field) && !seesTeamSide(data.viewer)) ||
-    (OWN_TRIP.includes(ask.field) && !seesOwnTrip(data.viewer))
-  ) {
+  // (functions/src/miriam/data: seesTeamSide): never a public follower's.
+  if (TEAM_SIDE.includes(ask.field) && !seesTeamSide(data.viewer)) {
     return {
       text:
         events.length === 1

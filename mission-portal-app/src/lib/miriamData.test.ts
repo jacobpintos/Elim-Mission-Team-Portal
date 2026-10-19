@@ -17,7 +17,6 @@ import {
   type Group,
   type Task,
   type Viewer,
-  seesOwnTrip,
   seesTeamSide,
   yoursAt,
 } from '../../functions/src/miriam/data'
@@ -274,58 +273,21 @@ describe('an event’s team side', () => {
   const names = new Map([['sam', 'Sam Lee']])
 
   it('is never shown to a public follower, whatever else the account holds', () => {
-    for (const roles of [['public'], ['public', 'regular']]) {
+    for (const roles of [
+      ['public'],
+      ['public', 'regular'],
+      ['public', 'guest'],
+      ['public', 'intern'],
+    ]) {
       const v = { uid: 'pub', roles }
       expect(seesTeamSide(v)).toBe(false)
       expect(dressCodeFor(ev, v)).toEqual([])
       expect(carpoolFor(ev, v, names)).toEqual([])
+      expect(flightsFor(ev, v, names)).toEqual([])
+      expect(lodgingFor(ev, v, names)).toEqual([])
       expect(foodFor(ev, { 0: { uid: 'pub' } }, v, names)).toEqual({ mine: [], sheet: [] })
+      expect(yoursAt(ev, v, names, { cars: [], bringing: ['Chips'], tasks: [] })).toEqual([])
     }
-  })
-
-  it('their own room and flight, as their dashboard shows them, for any member or guest role', () => {
-    const alone = { uid: 'pub', roles: ['public'] }
-    expect(seesOwnTrip(alone)).toBe(false)
-    expect(flightsFor(ev, alone, names)).toEqual([])
-    expect(lodgingFor(ev, alone, names)).toEqual([])
-    expect(yoursAt(ev, alone, names, { cars: [], bringing: ['Chips'], tasks: [] })).toEqual([])
-    for (const roles of [
-      ['public', 'regular'],
-      ['public', 'guest'],
-    ]) {
-      const v = { uid: 'pub', roles }
-      expect(seesOwnTrip(v)).toBe(true)
-      expect(flightsFor(ev, v, names)).toHaveLength(1)
-      expect(lodgingFor(ev, v, names)).toHaveLength(1)
-      // Theirs at it, but not the team, car or food their event page doesn't show them.
-      const yours = yoursAt(ev, v, names, {
-        cars: [{ id: 'c', label: 'Van 1', driver: 'sam', riders: ['pub'] }] as never,
-        bringing: ['Chips'],
-        tasks: [],
-      })
-      expect(yours).toEqual(['staying at Hampton Inn', expect.stringMatching(/^flying: /)])
-    }
-  })
-
-  it('their own trip, for exactly the roles whose dashboard or home has their event cards', () => {
-    const sees = (roles: string[]) => seesOwnTrip({ uid: 'x', roles })
-    // An event card of theirs: on a dashboard, or a member's home.
-    for (const roles of [
-      ['regular', 'public'],
-      ['worship', 'public'],
-      ['security', 'public'],
-      ['admin', 'public'],
-      ['intern', 'regular', 'public'],
-      ['guest', 'public'],
-    ]) {
-      expect([roles, sees(roles)]).toEqual([roles, true])
-    }
-    // Neither: a public follower alone, and an intern (whose tabs have no dashboard, and whose home is the public one).
-    for (const roles of [['public'], ['intern', 'public'], ['guest', 'intern', 'public']]) {
-      expect([roles, sees(roles)]).toEqual([roles, false])
-    }
-    // Without the public role, the event page shows it all.
-    expect(sees(['intern'])).toBe(true)
   })
 
   it('is all an admin’s, as their event form holds it, whatever else they hold', () => {

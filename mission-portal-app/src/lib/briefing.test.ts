@@ -91,10 +91,14 @@ describe('the daily briefing', () => {
     expect(b.today.map((e) => e.chips)).toEqual([[], []])
     expect(b.spoken).not.toMatch(/Worship\.|Black jeans|truck|68/)
   })
-  it('gives a member holding the public role besides its forecast, as their dashboard does', () => {
+  it('shows a member holding the public role besides none of it either, as its page shows none', () => {
     const b = buildBriefing(input({ viewer: { uid: 'me', roles: ['regular', 'public'] } }))
+    expect(b.today.map((e) => e.chips)).toEqual([[], []])
+    expect(b.spoken).not.toMatch(/Worship\.|Black jeans|truck|68/)
+  })
+  it('shows an admin holding the public role all of it, as they open and edit every event', () => {
+    const b = buildBriefing(input({ viewer: { uid: 'me', roles: ['admin', 'public'] } }))
     expect(b.spoken).toMatch(/68/)
-    expect(b.spoken).not.toMatch(/Worship\.|Black jeans|truck/)
   })
   it('says it in order', () => {
     const { spoken } = buildBriefing(input())

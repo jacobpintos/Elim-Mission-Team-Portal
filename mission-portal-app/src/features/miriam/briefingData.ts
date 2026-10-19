@@ -2,6 +2,7 @@ import { collection, doc, limit, orderBy, query, where } from 'firebase/firestor
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
+import { MESSAGES_PAGE_SIZE } from '@/lib/messages'
 import { partitionHiddenMessages } from '@/lib/moderation'
 import { isAdmin, isGuest, isWorship, visibleTabs } from '@/lib/roles'
 import { announcementsShown, roomName } from '@/lib/miriamAppData'
@@ -21,7 +22,6 @@ import { canKeepDateNotes } from '@/lib/dateNotes'
 import {
   assignedTo,
   canSeeEvent,
-  seesOwnTrip,
   seesTeamSide,
   effectiveResponse,
   instancesOf,
@@ -111,10 +111,9 @@ export async function gatherBriefing(): Promise<
 
   // Guests are along for the trip, not asked to bring food (firestore.rules);
   // nor is anyone holding the public role, whose event pages show no food
-  // sheet (functions/src/miriam/data: seesTeamSide). Their availability is
-  // asked on their dashboard too: of anyone but a public follower alone (seesOwnTrip).
-  const asked = seesTeamSide(viewer) && !(isGuest(profile) && !isAdmin(profile))
-  const trip = seesOwnTrip(viewer)
+  // sheet or availability (functions/src/miriam/data: seesTeamSide).
+  const team = seesTeamSide(viewer)
+  const asked = team && !(isGuest(profile) && !isAdmin(profile))
   const [announcements, unread, attention, weather, food, asks, money] = await Promise.all([
     quietly(async () => {
       const all = (await getDocs(collection(db, 'announcements'))).docs.map(
@@ -140,7 +139,7 @@ export async function gatherBriefing(): Promise<
     ),
     quietly(() => forecasts(events, evOverrides, groups, viewer, day), {}),
     asked ? quietly(() => foodOpen(events, evOverrides, groups, viewer, day), []) : [],
-    trip
+    team
       ? quietly(() => availabilityAsks(events, evOverrides, groups, viewer, day, now.getTime()), [])
       : [],
     quietly(() => moneyFor(uid, day), [] as AttentionItem[]),
@@ -217,6 +216,9 @@ async function availabilityAsks(
 }
 
 /** Unread messages in their conversations active this past week: by conversation. */
+/** How far back a conversation's unread messages are counted. */
+const UNREAD_WINDOW = 20
+
 async function unreadFor(
   uid: string,
   names: Map<string, string>,
@@ -226,6 +228,10 @@ async function unreadFor(
     await getDocs(query(collection(db, 'rooms'), where('members', 'array-contains', uid)))
   ).docs.map((d) => ({ ...(d.data() as Room), id: d.id }))
   const recent = rooms.filter((r) => Date.now() - millis(r.updatedAt) < 7 * 86_400_000).slice(0, 15)
+  // As the thread shows them: none from someone they blocked, or that they
+  // reported — a page more read, for those left out, if any could be.
+  const spare =
+    hidden.blockedUsers?.length || hidden.reportedMessages?.length ? MESSAGES_PAGE_SIZE : 0
   const counts = await Promise.all(
     recent.map(async (room) => {
       const msgs = (
@@ -233,16 +239,13 @@ async function unreadFor(
           query(
             collection(db, 'rooms', String(room.id), 'messages'),
             orderBy('ts', 'desc'),
-            limit(20)
+            limit(UNREAD_WINDOW + spare)
           )
         )
       ).docs.map((d) => d.data() as Message)
-      // As the thread shows them: none from someone they blocked, or that they reported.
-      const count = partitionHiddenMessages(
-        msgs,
-        hidden.blockedUsers,
-        hidden.reportedMessages
-      ).visible.filter((m) => String(m.uid) !== uid && !m.readBy?.[uid]).length
+      const count = partitionHiddenMessages(msgs, hidden.blockedUsers, hidden.reportedMessages)
+        .visible.slice(0, UNREAD_WINDOW)
+        .filter((m) => String(m.uid) !== uid && !m.readBy?.[uid]).length
       return { name: roomName(room, uid, names), count }
     })
   )
@@ -257,8 +260,8 @@ async function forecasts(
   viewer: { uid: string; roles: string[] },
   day: string
 ) {
-  // On its page and their dashboard: a public follower alone is shown none.
-  if (!seesOwnTrip(viewer)) return {}
+  // The forecast is its page's for its team members: a public follower's pages fetch none.
+  if (!seesTeamSide(viewer)) return {}
   const todays = templates
     .filter((t) => canSeeEvent(t, viewer, groups))
     .flatMap((t) => instancesOf(t, day, day, overrides))
