@@ -588,6 +588,9 @@ describe('her answers', () => {
     expect(own.result).toMatchObject({
       text: 'On this weekend: Church Picnic, Saturday at 12:00 PM. Your notes: Saturday — Bring the blanket. Sunday — Call Mom.',
     })
+    // Made a public follower since: their calendar shows no notes, kept from before or not.
+    const now = { uid: 'sarah', roles: ['public'] }
+    expect(await new Lookups(db, now, TODAY).notesBetween('2026-10-17', '2026-10-18')).toEqual([])
   })
 
   it('their answer for an event, to confirm', async () => {
@@ -1656,30 +1659,44 @@ describe('answered from the event itself', () => {
     )
   })
 
-  it('no availability answered for one holding the public role, whatever tools an app says it has', async () => {
-    const viewer = { uid: 'dana', roles: ['regular', 'public'] }
-    const ask = (text: string) =>
-      ownAnswer(
-        input(text, {
-          viewer,
-          lookups: new Lookups(db, viewer, TODAY),
-          appTools: ['set_availability', 'sign_up_food'],
-        })
-      )
-    expect((await ask('I can’t make it to new years eve')).result).toBeNull()
-    // A member's is.
-    const mitch = { uid: 'mitch', roles: ['regular'] }
+  it('their own trip to one holding a member’s or a guest’s role beside the public one, as their dashboard shows it', async () => {
+    const tools: OwnInput['appTools'] = ['set_availability', 'sign_up_food']
+    const asking = (uid: string, roles: string[]) => {
+      const viewer = { uid, roles }
+      return (text: string) =>
+        ownAnswer(input(text, { viewer, lookups: new Lookups(db, viewer, TODAY), appTools: tools }))
+    }
+    // Their availability: on their dashboard's event cards.
+    const dana = asking('dana', ['regular', 'public'])
+    expect((await dana('I can’t make it to new years eve')).result).toMatchObject({
+      kind: 'confirm',
+      name: 'set_availability',
+    })
+    // Their own room, too — but not their team, which only its page shows.
+    const guest = asking('guest', ['guest', 'public'])
     expect(
-      (
-        await ownAnswer(
-          input('I can’t make it to new years eve', {
-            viewer: mitch,
-            lookups: new Lookups(db, mitch, TODAY),
-            appTools: ['set_availability'],
-          })
-        )
-      ).result
-    ).toMatchObject({ kind: 'confirm', name: 'set_availability' })
+      ((await guest('where am I staying for new years eve')).result as { text: string }).text
+    ).toMatch(/Marmot House/)
+    expect(
+      ((await dana('what team am I on for new years eve')).result as { text: string }).text
+    ).toBe('That’s shown to New Years Eve’s team members.')
+    // A public follower alone: none of it, whatever tools an app says it has.
+    const pub = asking('dana', ['public'])
+    expect((await pub('I can’t make it to new years eve')).result).toBeNull()
+    expect(
+      ((await pub('where am I staying for new years eve')).result as { text: string } | null)
+        ?.text ?? ''
+    ).not.toMatch(/Marmot/)
+  })
+
+  it('all of it to an admin, as their event form holds it, whatever else they hold', async () => {
+    const boss = as('jacob', ['admin', 'public'])
+    expect(await said('who is riding with jacob to new years eve', boss)).not.toMatch(
+      /team members/
+    )
+    expect(await said('where is guest user staying for new years eve', boss)).toMatch(
+      /Marmot House/
+    )
   })
 
   it('what an event is', async () => {

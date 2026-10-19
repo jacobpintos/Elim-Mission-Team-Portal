@@ -91,6 +91,11 @@ describe('the daily briefing', () => {
     expect(b.today.map((e) => e.chips)).toEqual([[], []])
     expect(b.spoken).not.toMatch(/Worship\.|Black jeans|truck|68/)
   })
+  it('gives a member holding the public role besides its forecast, as their dashboard does', () => {
+    const b = buildBriefing(input({ viewer: { uid: 'me', roles: ['regular', 'public'] } }))
+    expect(b.spoken).toMatch(/68/)
+    expect(b.spoken).not.toMatch(/Worship\.|Black jeans|truck/)
+  })
   it('says it in order', () => {
     const { spoken } = buildBriefing(input())
     expect(spoken).toContain('Good morning, Jacob. Today is Sunday, October 18.')

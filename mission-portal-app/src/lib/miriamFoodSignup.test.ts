@@ -286,17 +286,24 @@ describe('her food sign-ups', () => {
       input('I can bring the drinks to the potluck', { viewer: dana, lookups })
     )
     expect(own).toMatchObject({ result: null, would: null, why: 'food_signup: no tool' })
-    // Nor its sheet, or its availability, from Claude's lookups.
+    // Nor its sheet from Claude's lookups. Their own availability, which
+    // their dashboard shows them, still is.
     const [pic] = await lookups.eventsBetween('2026-11-01', '2026-11-01')
     expect(await lookups.foodSheet(pic)).toEqual({ items: [], signups: {} })
-    expect(await lookups.availability('pic_2026-11-01')).toEqual({
+    expect(await lookups.availability('pic_2026-11-01')).toMatchObject({
       event: 'Church Picnic',
-      note: 'Its availability is asked of its team members.',
+      yours: 'not answered',
     })
     expect((await lookups.getEvent('pic_2026-11-01')) as Record<string, unknown>).toMatchObject({
       title: 'Church Picnic',
       food: undefined,
-      yourAvailability: undefined,
+      yourAvailability: 'not answered',
+    })
+    // A public follower alone: none of it.
+    const pub = { uid: 'dana', roles: ['public'] }
+    expect(await new Lookups(db, pub, TODAY).availability('pic_2026-11-01')).toEqual({
+      event: 'Church Picnic',
+      note: 'Its availability is asked of its team members.',
     })
   })
 })

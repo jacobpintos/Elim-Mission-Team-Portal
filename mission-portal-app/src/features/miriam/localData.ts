@@ -1,6 +1,7 @@
 import { collection, doc, limit, orderBy, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
+import { partitionHiddenMessages } from '@/lib/moderation'
 import type { Announcement, Message, Room } from '@/types/events'
 import type { EventInstance } from '../../../functions/src/miriam/data'
 import { answered } from './briefingData'
@@ -69,13 +70,31 @@ export async function myRooms(uid: string): Promise<Room[]> {
   return rooms.sort((a, b) => millis(b.updatedAt) - millis(a.updatedAt))
 }
 
-/** A conversation's latest messages, newest first. */
-export async function latestMessages(room: Room, n: number): Promise<Message[]> {
-  return (
+/** Read past the last few asked for, in case some are hidden from them. */
+const HIDDEN_SPARE = 10
+
+/** A conversation's latest messages, newest first, as its thread shows them to this person. */
+export async function latestMessages(
+  room: Room,
+  n: number,
+  hidden: { blockedUsers?: string[]; reportedMessages?: string[] } | null = null
+): Promise<Message[]> {
+  // As the thread shows them: none from someone they blocked, or that they
+  // reported (lib/moderation) — a few more read, for those left out.
+  const read = (
     await getDocs(
-      query(collection(db, 'rooms', String(room.id), 'messages'), orderBy('ts', 'desc'), limit(n))
+      query(
+        collection(db, 'rooms', String(room.id), 'messages'),
+        orderBy('ts', 'desc'),
+        limit(n + HIDDEN_SPARE)
+      )
     )
   ).docs.map((d) => d.data() as Message)
+  return partitionHiddenMessages(
+    read,
+    hidden?.blockedUsers,
+    hidden?.reportedMessages
+  ).visible.slice(0, n)
 }
 
 /** Every announcement, for lib/miriamAppData's announcementsShown to pick theirs from. */

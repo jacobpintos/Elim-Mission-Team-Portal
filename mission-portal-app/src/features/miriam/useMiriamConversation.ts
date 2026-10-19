@@ -36,7 +36,7 @@ import { parseSheetCommand } from '@/lib/sheetCommands'
 import { keyLabel } from '@/lib/nashvilleNumbers'
 import { loadAliases } from '@/lib/songAliases'
 import { screensFor } from '@/lib/miriamScreens'
-import { isPublicFollower } from '@/lib/roles'
+import { isPublicFollower, visibleTabs } from '@/lib/roles'
 import { clockOf } from '../../../functions/src/push/reminderTime'
 import { useAuthStore } from '@/stores/authStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
@@ -1025,7 +1025,9 @@ export function useMiriamConversation(
     // "What's due this week?": once their tasks are in.
     const tasksAsk = tasksAsked(said)
     const tasks = useTasksStore.getState()
-    if (tasksAsk && data && tasks._refCount > 0 && !tasks.loading) {
+    // Only where their Tasks tab is: a public follower alone has none to be told of.
+    const tasksTab = visibleTabs(useAuthStore.getState().profile).includes('assignments')
+    if (tasksAsk && data && tasksTab && tasks._refCount > 0 && !tasks.loading) {
       return say(tasksAnswer(tasksAsk, tasks.tasks, data.viewer.uid, data.today).text)
     }
     return false

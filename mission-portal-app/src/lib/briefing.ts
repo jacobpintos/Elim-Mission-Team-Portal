@@ -4,6 +4,7 @@ import {
   carpoolFor,
   dressCodeFor,
   instancesOf,
+  seesOwnTrip,
   seesTeamSide,
   shiftDate,
   type EventInstance,
@@ -230,7 +231,8 @@ function eventCard(ev: EventInstance, input: BriefingInput, today: string): Brie
   )
   const dress = dressCodeFor(ev, me)[0]
   const car = ev.carpool ? carpoolFor(ev, me, input.names)[0] : undefined
-  const forecast = sees ? input.weather?.[ev.instanceKey] : undefined
+  // Its forecast is on their dashboard too (functions/src/miriam/data: seesOwnTrip).
+  const forecast = seesOwnTrip(input.viewer) ? input.weather?.[ev.instanceKey] : undefined
   const chips = [
     team ? `${team.name} team` : '',
     dress ?? '',
@@ -375,7 +377,7 @@ export function buildBriefing(input: BriefingInput): Briefing {
       if (dress) bits.push(`Dress code: ${dress}.`)
       const car = ev.carpool ? carpoolFor(ev, asMember(viewer), input.names)[0] : undefined
       if (car) bits.push(`Your car: ${car.replace(/\s*\(your car\)/, '')}.`)
-      const forecast = seesTeamSide(viewer) ? input.weather?.[ev.instanceKey] : undefined
+      const forecast = seesOwnTrip(viewer) ? input.weather?.[ev.instanceKey] : undefined
       if (forecast)
         bits.push(`It'll be ${Math.round(forecast.high)} and ${forecast.label.toLowerCase()}.`)
       say([R.event(ev.instanceKey)], bits.join(' '))

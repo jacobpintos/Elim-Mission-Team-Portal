@@ -2,7 +2,8 @@ import { collection, doc, limit, orderBy, query, where } from 'firebase/firestor
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
-import { isAdmin, isGuest, isWorship } from '@/lib/roles'
+import { partitionHiddenMessages } from '@/lib/moderation'
+import { isAdmin, isGuest, isWorship, visibleTabs } from '@/lib/roles'
 import { announcementsShown, roomName } from '@/lib/miriamAppData'
 import { buildBriefing, type AttentionItem, type Briefing, type FoodNudge } from '@/lib/briefing'
 import { fetchWeather } from '@/lib/weather'
@@ -20,6 +21,7 @@ import { canKeepDateNotes } from '@/lib/dateNotes'
 import {
   assignedTo,
   canSeeEvent,
+  seesOwnTrip,
   seesTeamSide,
   effectiveResponse,
   instancesOf,
@@ -109,9 +111,10 @@ export async function gatherBriefing(): Promise<
 
   // Guests are along for the trip, not asked to bring food (firestore.rules);
   // nor is anyone holding the public role, whose event pages show no food
-  // sheet or availability (functions/src/miriam/data: seesTeamSide).
-  const team = seesTeamSide(viewer)
-  const asked = team && !(isGuest(profile) && !isAdmin(profile))
+  // sheet (functions/src/miriam/data: seesTeamSide). Their availability is
+  // asked on their dashboard too: of anyone but a public follower alone (seesOwnTrip).
+  const asked = seesTeamSide(viewer) && !(isGuest(profile) && !isAdmin(profile))
+  const trip = seesOwnTrip(viewer)
   const [announcements, unread, attention, weather, food, asks, money] = await Promise.all([
     quietly(async () => {
       const all = (await getDocs(collection(db, 'announcements'))).docs.map(
@@ -121,7 +124,7 @@ export async function gatherBriefing(): Promise<
         .filter((a) => now.getTime() - a.ts < NEW_MS)
         .map((a) => ({ id: String(a.id), title: a.title, ts: a.ts }))
     }, []),
-    quietly(() => unreadFor(uid, names), []),
+    quietly(() => unreadFor(uid, names, profile), []),
     quietly(
       () =>
         attentionFor(
@@ -137,7 +140,7 @@ export async function gatherBriefing(): Promise<
     ),
     quietly(() => forecasts(events, evOverrides, groups, viewer, day), {}),
     asked ? quietly(() => foodOpen(events, evOverrides, groups, viewer, day), []) : [],
-    team
+    trip
       ? quietly(() => availabilityAsks(events, evOverrides, groups, viewer, day, now.getTime()), [])
       : [],
     quietly(() => moneyFor(uid, day), [] as AttentionItem[]),
@@ -151,13 +154,16 @@ export async function gatherBriefing(): Promise<
     names,
     templates: events,
     overrides: evOverrides,
-    tasks: useTasksStore.getState().tasks.map((t) => ({
-      id: String(t.id),
-      title: t.title,
-      status: t.status,
-      dueDate: t.projectedDate || t.dueDate,
-      assignees: t.assignees,
-    })),
+    // Only where their Tasks tab is: a public follower alone has none to be told of.
+    tasks: visibleTabs(profile).includes('assignments')
+      ? useTasksStore.getState().tasks.map((t) => ({
+          id: String(t.id),
+          title: t.title,
+          status: t.status,
+          dueDate: t.projectedDate || t.dueDate,
+          assignees: t.assignees,
+        }))
+      : [],
     // One before every event, said with the event it is next before: "pray before Youth Night".
     reminders: useRemindersStore
       .getState()
@@ -211,7 +217,11 @@ async function availabilityAsks(
 }
 
 /** Unread messages in their conversations active this past week: by conversation. */
-async function unreadFor(uid: string, names: Map<string, string>) {
+async function unreadFor(
+  uid: string,
+  names: Map<string, string>,
+  hidden: { blockedUsers?: string[]; reportedMessages?: string[] }
+) {
   const rooms = (
     await getDocs(query(collection(db, 'rooms'), where('members', 'array-contains', uid)))
   ).docs.map((d) => ({ ...(d.data() as Room), id: d.id }))
@@ -227,7 +237,12 @@ async function unreadFor(uid: string, names: Map<string, string>) {
           )
         )
       ).docs.map((d) => d.data() as Message)
-      const count = msgs.filter((m) => String(m.uid) !== uid && !m.readBy?.[uid]).length
+      // As the thread shows them: none from someone they blocked, or that they reported.
+      const count = partitionHiddenMessages(
+        msgs,
+        hidden.blockedUsers,
+        hidden.reportedMessages
+      ).visible.filter((m) => String(m.uid) !== uid && !m.readBy?.[uid]).length
       return { name: roomName(room, uid, names), count }
     })
   )
@@ -242,8 +257,8 @@ async function forecasts(
   viewer: { uid: string; roles: string[] },
   day: string
 ) {
-  // The forecast is its page's for its team members: a public follower's pages fetch none.
-  if (!seesTeamSide(viewer)) return {}
+  // On its page and their dashboard: a public follower alone is shown none.
+  if (!seesOwnTrip(viewer)) return {}
   const todays = templates
     .filter((t) => canSeeEvent(t, viewer, groups))
     .flatMap((t) => instancesOf(t, day, day, overrides))

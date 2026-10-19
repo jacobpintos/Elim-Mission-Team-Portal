@@ -79,7 +79,7 @@ export function hereNow(briefedFoodRef: {
       profile ? announcementsShown(await allAnnouncements(), profile, todayStr()) : [],
     names: () => new Map(useUsersStore.getState().users.map((u) => [String(u.uid), u.displayName])),
     rooms: () => myRooms(uid),
-    latest: latestMessages,
+    latest: (room, n) => latestMessages(room, n, profile),
     now: () => Date.now(),
     briefedFood: () =>
       briefedFoodRef.current?.day === localToday() ? briefedFoodRef.current.food : [],

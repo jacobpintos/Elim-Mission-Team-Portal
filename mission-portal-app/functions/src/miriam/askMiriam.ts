@@ -11,6 +11,7 @@ import {
   isPublicFollower,
   PUBLIC_APP_TOOLS,
   PUBLIC_NOT_HERS,
+  OWN_TRIP_APP_TOOLS,
   TEAM_SIDE_APP_TOOLS,
   type AppToolName,
   draftFromInput,
@@ -19,7 +20,7 @@ import {
   type EventFormInput,
   type Roster,
 } from './plan'
-import { isAdminViewer, seesTeamSide, type Viewer } from './data'
+import { isAdminViewer, seesOwnTrip, seesTeamSide, type Viewer } from './data'
 import { Lookups, withWeekday } from './lookups'
 import {
   CHECK_MS,
@@ -429,6 +430,7 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
     if (ownOnly) appTools = appTools.filter((t) => PUBLIC_APP_TOOLS.includes(t))
     // Nor an event's team side to anyone holding the public role (./data: seesTeamSide).
     if (!seesTeamSide(viewer)) appTools = appTools.filter((t) => !TEAM_SIDE_APP_TOOLS.includes(t))
+    if (!seesOwnTrip(viewer)) appTools = appTools.filter((t) => !OWN_TRIP_APP_TOOLS.includes(t))
 
     // Miriam first, on her own: answered here if she can, nothing sent to Claude.
     ownInput = {

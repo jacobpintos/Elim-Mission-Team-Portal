@@ -17,6 +17,7 @@ import {
   type Group,
   type Task,
   type Viewer,
+  seesOwnTrip,
   seesTeamSide,
   yoursAt,
 } from '../../functions/src/miriam/data'
@@ -278,11 +279,40 @@ describe('an event’s team side', () => {
       expect(seesTeamSide(v)).toBe(false)
       expect(dressCodeFor(ev, v)).toEqual([])
       expect(carpoolFor(ev, v, names)).toEqual([])
-      expect(flightsFor(ev, v, names)).toEqual([])
-      expect(lodgingFor(ev, v, names)).toEqual([])
       expect(foodFor(ev, { 0: { uid: 'pub' } }, v, names)).toEqual({ mine: [], sheet: [] })
-      expect(yoursAt(ev, v, names, { cars: [], bringing: ['Chips'], tasks: [] })).toEqual([])
     }
+  })
+
+  it('their own room and flight, as their dashboard shows them, for any member or guest role', () => {
+    const alone = { uid: 'pub', roles: ['public'] }
+    expect(seesOwnTrip(alone)).toBe(false)
+    expect(flightsFor(ev, alone, names)).toEqual([])
+    expect(lodgingFor(ev, alone, names)).toEqual([])
+    expect(yoursAt(ev, alone, names, { cars: [], bringing: ['Chips'], tasks: [] })).toEqual([])
+    for (const roles of [
+      ['public', 'regular'],
+      ['public', 'guest'],
+    ]) {
+      const v = { uid: 'pub', roles }
+      expect(seesOwnTrip(v)).toBe(true)
+      expect(flightsFor(ev, v, names)).toHaveLength(1)
+      expect(lodgingFor(ev, v, names)).toHaveLength(1)
+      // Theirs at it, but not the team, car or food their event page doesn't show them.
+      const yours = yoursAt(ev, v, names, {
+        cars: [{ id: 'c', label: 'Van 1', driver: 'sam', riders: ['pub'] }] as never,
+        bringing: ['Chips'],
+        tasks: [],
+      })
+      expect(yours).toEqual(['staying at Hampton Inn', expect.stringMatching(/^flying: /)])
+    }
+  })
+
+  it('is all an admin’s, as their event form holds it, whatever else they hold', () => {
+    const v = { uid: 'boss', roles: ['admin', 'public'] }
+    expect(seesTeamSide(v)).toBe(true)
+    expect(dressCodeFor(ev, v)).toEqual(['Everyone else: Red shirts'])
+    expect(carpoolFor(ev, v, names)).toHaveLength(1)
+    expect(lodgingFor(ev, v, names)).toHaveLength(1)
   })
 
   it('is shown to members and guests, their own', () => {

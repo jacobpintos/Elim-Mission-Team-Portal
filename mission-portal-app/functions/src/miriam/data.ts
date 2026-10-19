@@ -18,10 +18,14 @@
  *   (EventDetailModal FlightDisplay, LodgingDisplay, CarpoolReadOnly.)
  * - Food: the sign-up sheet, who brings what, as everyone on it sees it.
  *   (EventDetailModal FoodPanel.)
- * - An event's team side — report times, dress code, weather, food,
- *   carpool, teams, lodging, flights, availability — never to an account
- *   that is a public follower, whatever else it holds: its page shows them
- *   only when !isPublic(profile). (events/[id] isMember; seesTeamSide.)
+ * - An event's team side — report times, dress code, food, carpool, teams —
+ *   never to an account holding the public role, whatever else it holds:
+ *   its page shows them only when !isPublic(profile); an admin's event form
+ *   holds them all. (events/[id] isMember; seesTeamSide.)
+ * - Their own availability, room and flight, and an event's weather: on
+ *   their dashboard's event cards too, shown to anyone with a member or a
+ *   guest role, whatever else they hold — a public follower alone sees none.
+ *   (dashboard EventCard; seesOwnTrip.)
  * - Meeting and sign-up links: to anyone who can see the event.
  *
  * Kept free of Firebase so it can be tested on its own
@@ -38,12 +42,31 @@ export interface Viewer {
 export const isAdminViewer = (v: Viewer) => v.roles.includes('admin')
 
 /**
- * Shown an event's team side — report times, dress code, weather, food,
- * carpool, teams, lodging, flights, availability — as its page shows it:
- * not to an account holding the public role (app/(app)/events/[id].tsx:
- * isMember = !isPublic(profile)).
+ * Shown an event's team side — report times, dress code, food, carpool,
+ * teams — as its page shows it: not to an account holding the public role
+ * (app/(app)/events/[id].tsx: isMember = !isPublic(profile)). An admin's
+ * event form holds it all.
  */
-export const seesTeamSide = (v: Viewer) => !v.roles.includes('public')
+export const seesTeamSide = (v: Viewer) => isAdminViewer(v) || !v.roles.includes('public')
+
+/** A member's roles, and a guest's: each has a dashboard (src/lib/roles: visibleTabs). */
+const DASHBOARD_ROLES = ['admin', 'security', 'regular', 'intern', 'worship', 'guest']
+
+/**
+ * Shown their own availability, room and flight, and an event's weather:
+ * on the event page as its team side, and on their dashboard's event cards
+ * (src/components/ui/EventCard) to anyone with a member or a guest role,
+ * whatever else they hold. Not to a public follower alone.
+ */
+export const seesOwnTrip = (v: Viewer) =>
+  seesTeamSide(v) || v.roles.some((r) => DASHBOARD_ROLES.includes(r))
+
+/**
+ * Shown their notes on days of their calendar: those same roles, who may
+ * keep them (src/lib/dateNotes canKeepDateNotes; firestore.rules keepsNotes).
+ * A public follower alone's calendar shows none, kept from before or not.
+ */
+export const seesOwnNotes = (v: Viewer) => v.roles.some((r) => DASHBOARD_ROLES.includes(r))
 
 /** A member, or a guest: anyone who is not a public follower only. */
 export function canAsk(roles: readonly string[] | undefined): boolean {
@@ -440,7 +463,7 @@ export function flightsFor(
   viewer: Viewer,
   names: Map<string, string>
 ): string[] {
-  if (!seesTeamSide(viewer)) return []
+  if (!seesOwnTrip(viewer)) return []
   const shown = (ev.flightEntries ?? []).filter(
     (f) => isAdminViewer(viewer) || same(f.uid, viewer.uid)
   )
@@ -457,7 +480,7 @@ export function lodgingFor(
   viewer: Viewer,
   names: Map<string, string>
 ): string[] {
-  if (!seesTeamSide(viewer)) return []
+  if (!seesOwnTrip(viewer)) return []
   const mine = (l: Lodging) => l.assignees.some((a) => same(a, viewer.uid))
   const shown = (ev.lodgingEntries ?? []).filter((l) => isAdminViewer(viewer) || mine(l))
   return shown.map((l) => {
@@ -616,10 +639,15 @@ export function yoursAt(
     tasks: { title: string; status: string; dueDate?: string | null; assignees: unknown[] }[]
   }
 ): string[] {
-  if (!seesTeamSide(viewer)) return []
+  if (!seesOwnTrip(viewer)) return []
   const me = (uid: unknown) => same(uid, viewer.uid)
-  const team = (ev.teams ?? []).find((t) => [...t.leaders, ...t.members].some(me))
-  const car = ev.carpool ? their.cars.find((c) => me(c.driver) || c.riders.some(me)) : undefined
+  // Their team, car and food: the event page's alone (seesTeamSide).
+  const side = seesTeamSide(viewer)
+  const team = side
+    ? (ev.teams ?? []).find((t) => [...t.leaders, ...t.members].some(me))
+    : undefined
+  const car =
+    side && ev.carpool ? their.cars.find((c) => me(c.driver) || c.riders.some(me)) : undefined
   const carSaid = (c: Car) => {
     const label = c.label || `Car ${their.cars.indexOf(c) + 1}`
     const others = c.riders.filter((r) => !me(r)).map((r) => nameOf(names, r))
@@ -636,7 +664,7 @@ export function yoursAt(
   return [
     team && `on the ${team.name} team${team.leaders.some(me) ? ', leading it' : ''}`,
     car && carSaid(car),
-    their.bringing.length && `bringing ${their.bringing.join(', ')} for the food sign-up`,
+    side && their.bringing.length && `bringing ${their.bringing.join(', ')} for the food sign-up`,
     ...their.tasks
       .filter((t) => t.assignees.some(me) && t.status !== 'done')
       .map((t) => `the task “${t.title}”${t.dueDate ? `, due ${t.dueDate}` : ''}`),

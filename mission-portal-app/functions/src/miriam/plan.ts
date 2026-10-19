@@ -53,14 +53,19 @@ export const PUBLIC_APP_TOOLS: readonly AppToolName[] = [
 ]
 
 /**
- * Changes to an event's team side — its availability and food sheet — which
- * its page shows only to its team's members (./data: seesTeamSide): never
- * offered to an account holding the public role, whatever its others.
+ * Signing up on an event's food sheet, which its page shows only to its
+ * team's members (./data: seesTeamSide): never offered to an account holding
+ * the public role, whatever its others, but an admin's.
  */
-export const TEAM_SIDE_APP_TOOLS: readonly AppToolName[] = [
+export const TEAM_SIDE_APP_TOOLS: readonly AppToolName[] = ['sign_up_food']
+
+/**
+ * Answering their own availability, as their dashboard lets anyone with a
+ * member's or a guest's role (./data: seesOwnTrip).
+ */
+export const OWN_TRIP_APP_TOOLS: readonly AppToolName[] = [
   'set_availability',
   'set_availability_range',
-  'sign_up_food',
 ]
 
 /** Said to a public follower when her own knowing has no answer: nothing is sent on. */
