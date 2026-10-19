@@ -107,8 +107,11 @@ export async function gatherBriefing(): Promise<
   const events = templates as unknown as EventTemplate[]
   const evOverrides = overrides as unknown as Record<string, Partial<EventTemplate>>
 
-  // Guests are along for the trip, not asked to bring food (firestore.rules).
-  const asked = !(isGuest(profile) && !isAdmin(profile))
+  // Guests are along for the trip, not asked to bring food (firestore.rules);
+  // nor is anyone holding the public role, whose event pages show no food
+  // sheet or availability (functions/src/miriam/data: seesTeamSide).
+  const team = seesTeamSide(viewer)
+  const asked = team && !(isGuest(profile) && !isAdmin(profile))
   const [announcements, unread, attention, weather, food, asks, money] = await Promise.all([
     quietly(async () => {
       const all = (await getDocs(collection(db, 'announcements'))).docs.map(
@@ -134,7 +137,9 @@ export async function gatherBriefing(): Promise<
     ),
     quietly(() => forecasts(events, evOverrides, groups, viewer, day), {}),
     asked ? quietly(() => foodOpen(events, evOverrides, groups, viewer, day), []) : [],
-    quietly(() => availabilityAsks(events, evOverrides, groups, viewer, day, now.getTime()), []),
+    team
+      ? quietly(() => availabilityAsks(events, evOverrides, groups, viewer, day, now.getTime()), [])
+      : [],
     quietly(() => moneyFor(uid, day), [] as AttentionItem[]),
   ])
 

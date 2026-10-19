@@ -5,6 +5,7 @@ import {
   canUseMessages,
   isAdmin,
   isGuest,
+  isPublic,
   isPublicFollower,
   isWorship,
   visibleTabs,
@@ -135,11 +136,14 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   // The same people the screens let make each change.
   const admin = isAdmin(profile)
   const guest = isGuest(profile) && !admin
+  // An event's availability and food sheet: its team's, on the event page —
+  // never shown to an account that also holds the public role (events/[id]: isMember).
+  const member = !isPublic(profile)
   if (canUseMessages(profile)) tools.push('send_message')
   if (admin) tools.push('post_announcement', ...ADMIN_ACTIONS)
   if (tabs.includes('assignments') && !guest) tools.push('set_task_status')
-  if (tabs.includes('events')) tools.push('set_availability')
-  if (tabs.includes('events') && !guest) tools.push('sign_up_food')
+  if (tabs.includes('events') && member) tools.push('set_availability')
+  if (tabs.includes('events') && member && !guest) tools.push('sign_up_food')
   if (tabs.includes('settings')) tools.push('change_notification')
   // Reminders are their own, for anyone with tasks (the Tasks tab shows them).
   if (tabs.includes('assignments')) tools.push('create_reminder')
@@ -151,7 +155,7 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
     tools.push('add_to_set_list', 'create_set_list', 'edit_set_list', 'notify_set_list')
   // A concern for security: anyone, as the drawer's Report a Concern is.
   tools.push('report_security')
-  if (tabs.includes('events')) tools.push('set_availability_range')
+  if (tabs.includes('events') && member) tools.push('set_availability_range')
   // Meeting requests are sent to leaders by name; anyone but a guest may be one.
   if (!guest) tools.push('read_meeting_requests', 'meeting_request')
   if (tabs.includes('settings')) tools.push('change_my_name')

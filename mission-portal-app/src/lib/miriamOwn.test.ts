@@ -1650,6 +1650,36 @@ describe('answered from the event itself', () => {
     )
     // When and where, as its page shows anyone who can open it.
     expect(await said('when is new years eve', dana)).toMatch(/December 31 at 10:30 PM/)
+    // No event named: the one found by its carpool goes unsaid.
+    expect(await said('who am I riding with on december 31', dana)).toBe(
+      'That’s shown to each event’s team members.'
+    )
+  })
+
+  it('no availability answered for one holding the public role, whatever tools an app says it has', async () => {
+    const viewer = { uid: 'dana', roles: ['regular', 'public'] }
+    const ask = (text: string) =>
+      ownAnswer(
+        input(text, {
+          viewer,
+          lookups: new Lookups(db, viewer, TODAY),
+          appTools: ['set_availability', 'sign_up_food'],
+        })
+      )
+    expect((await ask('I can’t make it to new years eve')).result).toBeNull()
+    // A member's is.
+    const mitch = { uid: 'mitch', roles: ['regular'] }
+    expect(
+      (
+        await ownAnswer(
+          input('I can’t make it to new years eve', {
+            viewer: mitch,
+            lookups: new Lookups(db, mitch, TODAY),
+            appTools: ['set_availability'],
+          })
+        )
+      ).result
+    ).toMatchObject({ kind: 'confirm', name: 'set_availability' })
   })
 
   it('what an event is', async () => {

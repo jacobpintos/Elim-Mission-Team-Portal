@@ -148,7 +148,8 @@ export class Lookups {
     items: string[]
     signups: Record<string, { uid: string; displayName?: string }>
   }> {
-    const items = ev.food ? (ev.foodItems ?? []) : []
+    // Its page shows the sheet to its team's members only (./data: seesTeamSide).
+    const items = ev.food && seesTeamSide(this.viewer) ? (ev.foodItems ?? []) : []
     if (items.length === 0) return { items, signups: {} }
     const signups = ((await this.db.doc(`foodSignups/${ev.templateId}_${ev.date}`).get()).data()
       ?.signups ?? {}) as Record<string, { uid: string; displayName?: string }>
@@ -364,6 +365,10 @@ export class Lookups {
   async availability(key: string) {
     const ev = await this.event(key)
     if (!ev) return { error: 'No event this person can see has that key.' }
+    // Asked of its team's members on its page; a public follower is shown none of it.
+    if (!isAdminViewer(this.viewer) && !seesTeamSide(this.viewer)) {
+      return { event: ev.title, note: 'Its availability is asked of its team members.' }
+    }
     const [groups, names, avail] = await Promise.all([this.groups(), this.names(), this.avail(ev)])
     const report = availabilityReport(ev, groups, names, avail.instance, avail.series, this.viewer)
     return isAdminViewer(this.viewer)

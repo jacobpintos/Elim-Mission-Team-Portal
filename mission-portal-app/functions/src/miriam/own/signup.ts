@@ -1,4 +1,4 @@
-import { shiftDate, type EventInstance } from '../data'
+import { seesTeamSide, shiftDate, type EventInstance, type Viewer } from '../data'
 import type { Lookups } from '../lookups'
 import type { AppToolName } from '../plan'
 import { said, type OwnResult } from './answers'
@@ -28,7 +28,7 @@ export interface SignupContext {
   today: string
   mentions: Mention[]
   lookups: Lookups
-  viewer: { uid: string }
+  viewer: Viewer
   appTools: readonly AppToolName[]
 }
 
@@ -106,7 +106,8 @@ function eventMeant(
 }
 
 export async function foodSignup(ctx: SignupContext): Promise<Signup> {
-  if (!ctx.appTools.includes('sign_up_food')) return none('no tool')
+  // A food sheet is its team's, never a public follower's (../data: seesTeamSide).
+  if (!ctx.appTools.includes('sign_up_food') || !seesTeamSide(ctx.viewer)) return none('no tool')
   const spoken = dishSaid(ctx.masked)
   if (!spoken) return none('no dish')
   const { dish, after } = spoken

@@ -192,4 +192,22 @@ describe('food still open', () => {
       'Youth Retreat Friday still has open food items. How about bringing chips?'
     )
   })
+  it('suggests none to anyone holding the public role, whose event pages show no food sheet', () => {
+    const b = buildBriefing(
+      input({
+        viewer: { uid: 'me', roles: ['regular', 'public'] },
+        food: [
+          {
+            eventKey: 'ret_2026-10-23',
+            title: 'Youth Retreat',
+            date: '2026-10-23',
+            open: ['Chips', 'Cups'],
+            suggestion: 'Chips',
+          },
+        ],
+      })
+    )
+    expect(b.food).toEqual([])
+    expect(b.spoken).not.toMatch(/food|chips/i)
+  })
 })

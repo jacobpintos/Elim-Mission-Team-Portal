@@ -11,6 +11,7 @@ import {
   isPublicFollower,
   PUBLIC_APP_TOOLS,
   PUBLIC_NOT_HERS,
+  TEAM_SIDE_APP_TOOLS,
   type AppToolName,
   draftFromInput,
   taskDraftFromInput,
@@ -18,7 +19,7 @@ import {
   type EventFormInput,
   type Roster,
 } from './plan'
-import { isAdminViewer, type Viewer } from './data'
+import { isAdminViewer, seesTeamSide, type Viewer } from './data'
 import { Lookups, withWeekday } from './lookups'
 import {
   CHECK_MS,
@@ -426,6 +427,8 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
     appTools = appToolsFrom(req.data?.appTools)
     // A public follower's look things up, and change nothing — whatever an app says it has.
     if (ownOnly) appTools = appTools.filter((t) => PUBLIC_APP_TOOLS.includes(t))
+    // Nor an event's team side to anyone holding the public role (./data: seesTeamSide).
+    if (!seesTeamSide(viewer)) appTools = appTools.filter((t) => !TEAM_SIDE_APP_TOOLS.includes(t))
 
     // Miriam first, on her own: answered here if she can, nothing sent to Claude.
     ownInput = {

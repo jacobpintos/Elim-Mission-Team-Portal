@@ -157,6 +157,28 @@ export async function eventByKey(key: string): Promise<EventInstance | null> {
   )
 }
 
+/**
+ * The event a key names, if its page is theirs to see: never a draft only
+ * an admin sees, or one they aren't on (functions/src/miriam/data: canSeeEvent).
+ */
+async function seenEventByKey(profile: UserProfile, key: string): Promise<EventInstance | null> {
+  const ev = await eventByKey(key)
+  if (!ev) return null
+  const viewer = { uid: String(profile.uid), roles: (profile.roles ?? []).map(String) }
+  const seen = (groups: Group[]) => canSeeEvent(ev as never, viewer, groups)
+  const loaded = useGroupsStore.getState().groups as unknown as Group[]
+  if (seen(loaded)) return ev
+  if (loaded.length) return null
+  // Its groups not read yet: read now, so no one on it by a group is turned away.
+  const groups = (await getDocs(collection(db, 'groups'))).docs.map(
+    (d) => ({ ...d.data(), id: d.id }) as unknown as Group
+  )
+  return seen(groups) ? ev : null
+}
+
+/** An event's availability and food sheet are its team's: its page shows neither to anyone holding the public role. */
+const TEAM_ONLY = 'That’s for each event’s team members.'
+
 async function sendMessage(profile: UserProfile, input: Record<string, unknown>) {
   const uid = String(profile.uid)
   const text = String(input.text ?? '').trim()
@@ -284,7 +306,8 @@ async function setTaskStatus(profile: UserProfile, input: Record<string, unknown
 async function setAvailability(profile: UserProfile, input: Record<string, unknown>) {
   const status = String(input.status ?? '') as AvailResponse['status']
   if (!(status in AVAIL_LABELS)) return cannot('That isn’t an answer availability takes.')
-  const ev = await eventByKey(String(input.event_key ?? ''))
+  if (isPublic(profile)) return cannot(TEAM_ONLY)
+  const ev = await seenEventByKey(profile, String(input.event_key ?? ''))
   if (!ev) return cannot('I couldn’t find that event.')
   const note = String(input.note ?? '').trim()
   // As it was, for Undo.
@@ -323,7 +346,8 @@ const CLAIM_WAIT_MS = 8000
 async function signUpFood(profile: UserProfile, input: Record<string, unknown>) {
   // Guests are along for the trip, not asked to bring food (firestore.rules).
   if (isGuest(profile) && !isAdmin(profile)) return cannot('Guests aren’t asked to bring food.')
-  const ev = await eventByKey(String(input.event_key ?? ''))
+  if (isPublic(profile)) return cannot(TEAM_ONLY)
+  const ev = await seenEventByKey(profile, String(input.event_key ?? ''))
   if (!ev) return cannot('I couldn’t find that event.')
   const items = ev.food ? (ev.foodItems ?? []) : []
   if (items.length === 0) return cannot(`${ev.title} has no food sign-up.`)
@@ -1489,6 +1513,7 @@ const MAX_RANGE_EVENTS = 40
 async function setAvailabilityRange(profile: UserProfile, input: Record<string, unknown>) {
   const status = String(input.status ?? '') as AvailResponse['status']
   if (!(status in AVAIL_LABELS)) return cannot('That isn’t an answer availability takes.')
+  if (isPublic(profile)) return cannot(TEAM_ONLY)
   if (!isDay(input.from) || !isDay(input.to) || input.to < input.from) {
     return cannot('I couldn’t tell which dates you meant.')
   }

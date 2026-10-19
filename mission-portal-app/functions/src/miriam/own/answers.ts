@@ -212,8 +212,11 @@ async function aboutEvent(skill: Skill, ev: EventInstance, ctx: AnswerContext): 
   const title = ev.title
   const when = whenSaid(ev.date, today)
   // Its team side, which its page shows only to its team's members (../data: seesTeamSide).
+  // Unnamed, the event found by what it has (HAS) goes unsaid: that is its team side too.
   if (TEAM_SIDE.includes(skill) && !seesTeamSide(viewer)) {
-    return said(`That’s shown to ${title}’s team members.`, onPage(ev))
+    return ctx.mentions.length
+      ? said(`That’s shown to ${title}’s team members.`, onPage(ev))
+      : said('That’s shown to each event’s team members.')
   }
   switch (skill) {
     case 'event_time': {
@@ -362,7 +365,7 @@ export async function answerFor(skill: Skill, ctx: AnswerContext): Promise<OwnRe
     return said(`On ${span.said}: ${shown.join('; ')}${more}.${noted}`)
   }
   if (skill === 'availability') {
-    if (!ctx.appTools.includes('set_availability')) return null
+    if (!ctx.appTools.includes('set_availability') || !seesTeamSide(ctx.viewer)) return null
     const ev = await theEvent(skill, ctx)
     if (!ev) return null
     const status = statusIn(text)

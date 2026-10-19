@@ -331,7 +331,8 @@ function neverMind(reply: string, talk: Talk): boolean {
 
 async function foodHere(said: string, here: Here, talk: Talk): Promise<boolean> {
   const { data } = here
-  if (!data || !here.tools.includes('sign_up_food')) return false
+  // A food sheet is its team's (functions/src/miriam/data: seesTeamSide).
+  if (!data || !here.tools.includes('sign_up_food') || !seesTeamSide(data.viewer)) return false
   const said0 = foodAsked(said, data.today)
   if (!said0) return false
   // "Sign me up for the potluck": the event named, not a dish — when it is an
@@ -977,7 +978,8 @@ function nextToAnswer(here: Here, data: QuickData): EventInstance | null {
  */
 async function availabilityHere(said: string, here: Here, talk: Talk): Promise<boolean> {
   const { data } = here
-  if (!data || !here.tools.includes('set_availability')) return false
+  // Asked of an event's team members only (functions/src/miriam/data: seesTeamSide).
+  if (!data || !here.tools.includes('set_availability') || !seesTeamSide(data.viewer)) return false
   const ask = availabilitySaid(said, data.today)
   if (!ask) return false
   if (!ask.date && !ask.name) {
@@ -1203,9 +1205,10 @@ async function agendaHere(said: string, here: Here, talk: Talk): Promise<boolean
   const count = events.length === 1 ? 'one event' : `${events.length} events`
   const more = events.length > shown.length ? ` And ${events.length - shown.length} more.` : ''
   const text = `${ask.span.charAt(0).toUpperCase()}${ask.span.slice(1)} you have ${count}. ${lines.join(' ')}${more}${noted}`
-  const unanswered = here.tools.includes('set_availability')
-    ? shown.filter((ev) => !here.answerOf(ev)).slice(0, 3)
-    : []
+  const unanswered =
+    here.tools.includes('set_availability') && seesTeamSide(data.viewer)
+      ? shown.filter((ev) => !here.answerOf(ev)).slice(0, 3)
+      : []
   if (unanswered.length) {
     askAvailability(
       unanswered.map((ev) => ({ ev, wasUnsure: false })),

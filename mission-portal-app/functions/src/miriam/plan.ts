@@ -52,6 +52,17 @@ export const PUBLIC_APP_TOOLS: readonly AppToolName[] = [
   'read_announcements',
 ]
 
+/**
+ * Changes to an event's team side — its availability and food sheet — which
+ * its page shows only to its team's members (./data: seesTeamSide): never
+ * offered to an account holding the public role, whatever its others.
+ */
+export const TEAM_SIDE_APP_TOOLS: readonly AppToolName[] = [
+  'set_availability',
+  'set_availability_range',
+  'sign_up_food',
+]
+
 /** Said to a public follower when her own knowing has no answer: nothing is sent on. */
 export const PUBLIC_NOT_HERS =
   'I can’t help with that one yet. I can tell you about events and The Well, take you around the app, or help you ask to meet with our leadership.'

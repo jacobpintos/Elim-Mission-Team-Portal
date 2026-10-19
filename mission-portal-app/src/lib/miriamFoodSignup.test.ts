@@ -270,6 +270,35 @@ describe('her food sign-ups', () => {
     )
     expect(own).toMatchObject({ result: null, would: null, why: 'food_signup: no tool' })
   })
+
+  it('nor anyone holding the public role, whose event pages show no food sheet', async () => {
+    forgetCaches()
+    // On the events, as a member was, and still holding a member's role beside it.
+    const dana = { uid: 'dana', roles: ['regular', 'public'] }
+    const db = fakeDb({
+      ...CHURCH,
+      users: { ...CHURCH.users, dana: { displayName: 'Dana Fox', roles: dana.roles } },
+      groups: { gAll: { name: 'All', members: ['sarah', 'boss', 'dana'] } },
+    })
+    const lookups = new Lookups(db, dana, TODAY)
+    // Whatever tools an app says it has.
+    const own = await ownAnswer(
+      input('I can bring the drinks to the potluck', { viewer: dana, lookups })
+    )
+    expect(own).toMatchObject({ result: null, would: null, why: 'food_signup: no tool' })
+    // Nor its sheet, or its availability, from Claude's lookups.
+    const [pic] = await lookups.eventsBetween('2026-11-01', '2026-11-01')
+    expect(await lookups.foodSheet(pic)).toEqual({ items: [], signups: {} })
+    expect(await lookups.availability('pic_2026-11-01')).toEqual({
+      event: 'Church Picnic',
+      note: 'Its availability is asked of its team members.',
+    })
+    expect((await lookups.getEvent('pic_2026-11-01')) as Record<string, unknown>).toMatchObject({
+      title: 'Church Picnic',
+      food: undefined,
+      yourAvailability: undefined,
+    })
+  })
 })
 
 describe('the dish said', () => {

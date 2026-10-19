@@ -338,7 +338,8 @@ export function buildBriefing(input: BriefingInput): Briefing {
   }
 
   const attention = input.attention.slice(0, 5)
-  const food = (input.food ?? []).slice(0, 2)
+  // A food sheet is its team's: never nudged to anyone holding the public role.
+  const food = seesTeamSide(input.viewer) ? (input.food ?? []).slice(0, 2) : []
   const notes = (input.notes ?? [])
     .filter((n) => n.date === today)
     .sort((a, b) => a.at - b.at)
