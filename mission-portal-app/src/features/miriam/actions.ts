@@ -19,15 +19,7 @@ import { useMiriamStore } from '@/stores/miriamStore'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
 import { allInstances, localToday } from '@/lib/events'
 import { AVAIL_LABELS } from '@/lib/availability'
-import {
-  isAdmin,
-  isGuest,
-  isPublic,
-  isPublicFollower,
-  isSecurity,
-  isWorship,
-  visibleTabs,
-} from '@/lib/roles'
+import { isAdmin, isGuest, isPublic, isSecurity, isWorship, visibleTabs } from '@/lib/roles'
 import {
   notificationKeysFor,
   notificationLabel,
@@ -35,7 +27,13 @@ import {
   switchesSaid,
 } from '@/lib/miriamNotifications'
 import { useSecurityStore } from '@/stores/securityStore'
-import { assignedTo, canSeeEvent, type Group } from '../../../functions/src/miriam/data'
+import {
+  assignedTo,
+  canSeeEvent,
+  seesOwnTrip,
+  seesTeamSide,
+  type Group,
+} from '../../../functions/src/miriam/data'
 import { roomName, roomsFor } from '@/lib/miriamAppData'
 import { claimFoodItem, type FoodSignups } from '@/lib/foodSignups'
 import {
@@ -185,12 +183,15 @@ async function seenEventByKey(profile: UserProfile, key: string): Promise<EventI
 }
 
 /**
- * An event's food sheet is its team's: its page shows it to no one holding
- * the public role but an admin. Their availability is on their dashboard
- * too, for anyone but a public follower alone (functions/src/miriam/data).
+ * An event's food sheet, and their availability, as their event page,
+ * event cards and an admin's event form show them (functions/src/miriam/data:
+ * seesTeamSide, seesOwnTrip).
  */
 const TEAM_ONLY = 'That’s for each event’s team members.'
-const teamSide = (profile: UserProfile) => !isPublic(profile) || isAdmin(profile)
+const viewerOf = (profile: UserProfile) => ({
+  uid: String(profile.uid),
+  roles: (profile.roles ?? []).map(String),
+})
 
 async function sendMessage(profile: UserProfile, input: Record<string, unknown>) {
   const uid = String(profile.uid)
@@ -319,7 +320,7 @@ async function setTaskStatus(profile: UserProfile, input: Record<string, unknown
 async function setAvailability(profile: UserProfile, input: Record<string, unknown>) {
   const status = String(input.status ?? '') as AvailResponse['status']
   if (!(status in AVAIL_LABELS)) return cannot('That isn’t an answer availability takes.')
-  if (isPublicFollower(profile)) return cannot(TEAM_ONLY)
+  if (!seesOwnTrip(viewerOf(profile))) return cannot(TEAM_ONLY)
   const ev = await seenEventByKey(profile, String(input.event_key ?? ''))
   if (!ev) return cannot('I couldn’t find that event.')
   const note = String(input.note ?? '').trim()
@@ -359,7 +360,7 @@ const CLAIM_WAIT_MS = 8000
 async function signUpFood(profile: UserProfile, input: Record<string, unknown>) {
   // Guests are along for the trip, not asked to bring food (firestore.rules).
   if (isGuest(profile) && !isAdmin(profile)) return cannot('Guests aren’t asked to bring food.')
-  if (!teamSide(profile)) return cannot(TEAM_ONLY)
+  if (!seesTeamSide(viewerOf(profile))) return cannot(TEAM_ONLY)
   const ev = await seenEventByKey(profile, String(input.event_key ?? ''))
   if (!ev) return cannot('I couldn’t find that event.')
   const items = ev.food ? (ev.foodItems ?? []) : []
@@ -1526,7 +1527,7 @@ const MAX_RANGE_EVENTS = 40
 async function setAvailabilityRange(profile: UserProfile, input: Record<string, unknown>) {
   const status = String(input.status ?? '') as AvailResponse['status']
   if (!(status in AVAIL_LABELS)) return cannot('That isn’t an answer availability takes.')
-  if (isPublicFollower(profile)) return cannot(TEAM_ONLY)
+  if (!seesOwnTrip(viewerOf(profile))) return cannot(TEAM_ONLY)
   if (!isDay(input.from) || !isDay(input.to) || input.to < input.from) {
     return cannot('I couldn’t tell which dates you meant.')
   }

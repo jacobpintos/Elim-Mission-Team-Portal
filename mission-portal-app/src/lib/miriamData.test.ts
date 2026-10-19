@@ -307,6 +307,27 @@ describe('an event’s team side', () => {
     }
   })
 
+  it('their own trip, for exactly the roles whose dashboard or home has their event cards', () => {
+    const sees = (roles: string[]) => seesOwnTrip({ uid: 'x', roles })
+    // An event card of theirs: on a dashboard, or a member's home.
+    for (const roles of [
+      ['regular', 'public'],
+      ['worship', 'public'],
+      ['security', 'public'],
+      ['admin', 'public'],
+      ['intern', 'regular', 'public'],
+      ['guest', 'public'],
+    ]) {
+      expect([roles, sees(roles)]).toEqual([roles, true])
+    }
+    // Neither: a public follower alone, and an intern (whose tabs have no dashboard, and whose home is the public one).
+    for (const roles of [['public'], ['intern', 'public'], ['guest', 'intern', 'public']]) {
+      expect([roles, sees(roles)]).toEqual([roles, false])
+    }
+    // Without the public role, the event page shows it all.
+    expect(sees(['intern'])).toBe(true)
+  })
+
   it('is all an admin’s, as their event form holds it, whatever else they hold', () => {
     const v = { uid: 'boss', roles: ['admin', 'public'] }
     expect(seesTeamSide(v)).toBe(true)

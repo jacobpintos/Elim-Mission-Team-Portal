@@ -5,7 +5,6 @@ import {
   canUseMessages,
   isAdmin,
   isGuest,
-  isPublic,
   isPublicFollower,
   isWorship,
   visibleTabs,
@@ -39,6 +38,7 @@ import type { UserProfile } from '@/types/user'
 import type { Announcement, Message, Room } from '@/types/events'
 import type { IssueReport, KaizenCard, PlanningBoard } from '@/types/operations'
 import type { InventoryCategory, InventoryItem, ReorderItem } from '@/types/inventory'
+import { seesOwnTrip, seesTeamSide } from '../../../functions/src/miriam/data'
 
 /**
  * Miriam's lookups that run here, in the app, as the person signed in
@@ -137,15 +137,15 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   // The same people the screens let make each change.
   const admin = isAdmin(profile)
   const guest = isGuest(profile) && !admin
-  // An event's food sheet: its team's, on the event page — never shown to an
-  // account that also holds the public role (events/[id]: isMember), but an
-  // admin, whose event form holds it. Their availability is on their
-  // dashboard too, so it is anyone's here (a public follower alone has gone).
-  const member = !isPublic(profile) || admin
+  // An event's food sheet and their availability: as their event page, event
+  // cards and an admin's event form show them (functions/src/miriam/data).
+  const viewer = { uid: String(profile.uid), roles: (profile.roles ?? []).map(String) }
+  const member = seesTeamSide(viewer)
+  const trip = seesOwnTrip(viewer)
   if (canUseMessages(profile)) tools.push('send_message')
   if (admin) tools.push('post_announcement', ...ADMIN_ACTIONS)
   if (tabs.includes('assignments') && !guest) tools.push('set_task_status')
-  if (tabs.includes('events')) tools.push('set_availability')
+  if (tabs.includes('events') && trip) tools.push('set_availability')
   if (tabs.includes('events') && member && !guest) tools.push('sign_up_food')
   if (tabs.includes('settings')) tools.push('change_notification')
   // Reminders are their own, for anyone with tasks (the Tasks tab shows them).
@@ -158,7 +158,7 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
     tools.push('add_to_set_list', 'create_set_list', 'edit_set_list', 'notify_set_list')
   // A concern for security: anyone, as the drawer's Report a Concern is.
   tools.push('report_security')
-  if (tabs.includes('events')) tools.push('set_availability_range')
+  if (tabs.includes('events') && trip) tools.push('set_availability_range')
   // Meeting requests are sent to leaders by name; anyone but a guest may be one.
   if (!guest) tools.push('read_meeting_requests', 'meeting_request')
   if (tabs.includes('settings')) tools.push('change_my_name')
@@ -185,7 +185,8 @@ async function readMessages(profile: UserProfile, said: string) {
     await getDocs(query(collection(db, 'rooms'), where('members', 'array-contains', uid)))
   ).docs.map((d) => ({ ...(d.data() as Room), id: d.id }))
   // As the thread shows them: none from someone they blocked, or that they
-  // reported (lib/moderation) — a few more read, for those left out.
+  // reported (lib/moderation) — a few more read, for those left out, if any could be.
+  const spare = profile.blockedUsers?.length || profile.reportedMessages?.length ? HIDDEN_SPARE : 0
   const latest = async (room: Room, n: number) =>
     partitionHiddenMessages(
       (
@@ -193,7 +194,7 @@ async function readMessages(profile: UserProfile, said: string) {
           query(
             collection(db, 'rooms', String(room.id), 'messages'),
             orderBy('ts', 'desc'),
-            limit(n + HIDDEN_SPARE)
+            limit(n + spare)
           )
         )
       ).docs.map((d) => d.data() as Message),

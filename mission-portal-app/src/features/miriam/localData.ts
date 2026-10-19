@@ -80,13 +80,14 @@ export async function latestMessages(
   hidden: { blockedUsers?: string[]; reportedMessages?: string[] } | null = null
 ): Promise<Message[]> {
   // As the thread shows them: none from someone they blocked, or that they
-  // reported (lib/moderation) — a few more read, for those left out.
+  // reported (lib/moderation) — a few more read, for those left out, if any could be.
+  const spare = hidden?.blockedUsers?.length || hidden?.reportedMessages?.length ? HIDDEN_SPARE : 0
   const read = (
     await getDocs(
       query(
         collection(db, 'rooms', String(room.id), 'messages'),
         orderBy('ts', 'desc'),
-        limit(n + HIDDEN_SPARE)
+        limit(n + spare)
       )
     )
   ).docs.map((d) => d.data() as Message)

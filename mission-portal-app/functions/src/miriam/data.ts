@@ -23,9 +23,9 @@
  *   its page shows them only when !isPublic(profile); an admin's event form
  *   holds them all. (events/[id] isMember; seesTeamSide.)
  * - Their own availability, room and flight, and an event's weather: on
- *   their dashboard's event cards too, shown to anyone with a member or a
- *   guest role, whatever else they hold — a public follower alone sees none.
- *   (dashboard EventCard; seesOwnTrip.)
+ *   their dashboard's or home's event cards too, shown to most members and
+ *   guests whatever else they hold — a public follower alone sees none.
+ *   (dashboard and home EventCard; seesOwnTrip.)
  * - Meeting and sign-up links: to anyone who can see the event.
  *
  * Kept free of Firebase so it can be tested on its own
@@ -49,24 +49,35 @@ export const isAdminViewer = (v: Viewer) => v.roles.includes('admin')
  */
 export const seesTeamSide = (v: Viewer) => isAdminViewer(v) || !v.roles.includes('public')
 
-/** A member's roles, and a guest's: each has a dashboard (src/lib/roles: visibleTabs). */
-const DASHBOARD_ROLES = ['admin', 'security', 'regular', 'intern', 'worship', 'guest']
+/**
+ * Roles whose dashboard or home lists their events on cards that show their
+ * own room, flight, weather and availability (src/components/ui/EventCard;
+ * app/(app)/dashboard, home). An intern's alone has neither (src/lib/roles:
+ * visibleTabs), so is not one.
+ */
+const CARD_ROLES = ['admin', 'security', 'regular', 'worship']
+/** A member's roles (src/lib/roles: MEMBER_ROLES). */
+const MEMBER_ROLES = [...CARD_ROLES, 'intern']
 
 /**
  * Shown their own availability, room and flight, and an event's weather:
- * on the event page as its team side, and on their dashboard's event cards
- * (src/components/ui/EventCard) to anyone with a member or a guest role,
- * whatever else they hold. Not to a public follower alone.
+ * on the event page as its team side, and on their event cards to anyone
+ * with one of those roles, or a guest's dashboard (a guest with no member
+ * role), whatever else they hold. Not to a public follower alone.
  */
 export const seesOwnTrip = (v: Viewer) =>
-  seesTeamSide(v) || v.roles.some((r) => DASHBOARD_ROLES.includes(r))
+  seesTeamSide(v) ||
+  v.roles.some((r) => CARD_ROLES.includes(r)) ||
+  (v.roles.includes('guest') && !v.roles.some((r) => MEMBER_ROLES.includes(r)))
+
+/** Who may keep notes on days of their calendar (src/lib/dateNotes; firestore.rules keepsNotes). */
+const NOTE_KEEPERS = [...MEMBER_ROLES, 'guest']
 
 /**
- * Shown their notes on days of their calendar: those same roles, who may
- * keep them (src/lib/dateNotes canKeepDateNotes; firestore.rules keepsNotes).
- * A public follower alone's calendar shows none, kept from before or not.
+ * Shown their notes on days of their calendar: those who may keep them. A
+ * public follower alone's calendar shows none, kept from before or not.
  */
-export const seesOwnNotes = (v: Viewer) => v.roles.some((r) => DASHBOARD_ROLES.includes(r))
+export const seesOwnNotes = (v: Viewer) => v.roles.some((r) => NOTE_KEEPERS.includes(r))
 
 /** A member, or a guest: anyone who is not a public follower only. */
 export function canAsk(roles: readonly string[] | undefined): boolean {
