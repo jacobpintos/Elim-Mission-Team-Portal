@@ -50,6 +50,7 @@ export const PUBLIC_APP_TOOLS: readonly AppToolName[] = [
   'app_guide',
   'find_content',
   'read_announcements',
+  'read_store',
 ]
 
 /**
@@ -475,6 +476,7 @@ export type AppToolName =
   | 'read_set_lists'
   | 'read_meeting_requests'
   | 'read_date_notes'
+  | 'read_store'
   | ActionName
 
 /**
@@ -1257,6 +1259,14 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
         required: ['from', 'to'],
         additionalProperties: false,
       },
+    },
+    read_store: {
+      name: 'read_store',
+      description:
+        'The Elim Store — its own screen ("store"), and theelimstore.com: what it says it is, its featured items shelf by shelf, and the sale running now with its last day, or that none is. ' +
+        'For "is anything on sale?", "what does the Elim Store sell?", "what is the Elim Store?".',
+      strict: true,
+      input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
     },
     read_meeting_requests: {
       name: 'read_meeting_requests',

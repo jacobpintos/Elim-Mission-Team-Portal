@@ -311,6 +311,11 @@ describe('the guards', () => {
     expect(notHers('remind me at 4 to call mom', 'reminder')).toBeNull()
     expect(notHers('how many people live in Iowa', 'web')).toBeNull()
     expect(notHers('where is the picnic', 'event_place')).toBeNull()
+    // The Elim Store is the app's, not the web's: "what is the Elim Store" found nothing online.
+    expect(notHers('what is the elim store', 'web')).toBeTruthy()
+    expect(notHers('is anything on sale for the elim store', 'web')).toBeTruthy()
+    expect(notHers('what merch do you have', 'web')).toBeTruthy()
+    expect(notHers('what is on sale at costco', 'web')).toBeNull()
     // Notes on days of their calendar are the app's (src/lib/dateNotes).
     expect(notHers('what are my notes for Friday', 'my_events')).toBeTruthy()
     expect(notHers('add a note to Friday to bring chairs', 'reminder')).toBeTruthy()

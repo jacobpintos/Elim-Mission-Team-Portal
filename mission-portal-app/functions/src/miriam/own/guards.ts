@@ -28,6 +28,9 @@ const EVENTS: Skill[] = [
 ]
 
 const NOT_HERS: [RegExp, Skill[]][] = [
+  // The Elim Store is the app's own — its tab, its shelves, its sales: Claude
+  // reads it (read_store). The web knew nothing of it ("what is the Elim Store?").
+  [/\b(?:the)?elim\s*store\b|\bmerch(?:andise)?\b/i, ['web']],
   // Their notes on days of their calendar (src/lib/dateNotes): read and kept in the app.
   [/\bnotes?\b|\bmy\s+calendar\b/i, [...EVENTS, 'reminder', 'web', 'faith', 'food_signup']],
   // Their tasks, and anyone's answers or numbers: Claude looks them up.

@@ -93,6 +93,7 @@ describe('who may use what', () => {
       'find_content',
       'read_announcements',
       'read_settings',
+      'read_store',
     ])
     expect(publicReply('thanks so much')).toBe('You’re welcome!')
     expect(publicReply('hi there')).toMatch(/^Hi!/)

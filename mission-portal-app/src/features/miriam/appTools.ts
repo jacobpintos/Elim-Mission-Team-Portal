@@ -13,6 +13,7 @@ import { localToday, todayStr } from '@/lib/events'
 import { MESSAGES_PAGE_SIZE } from '@/lib/messages'
 import { partitionHiddenMessages } from '@/lib/moderation'
 import { canKeepDateNotes, isDay, notesBetween } from '@/lib/dateNotes'
+import { readElimStore } from '@/features/store/readElimStore'
 import { useDateNotesStore } from '@/stores/dateNotesStore'
 import {
   announcementsFound,
@@ -57,6 +58,7 @@ export type AppToolName =
   | 'read_set_lists'
   | 'read_meeting_requests'
   | 'read_date_notes'
+  | 'read_store'
   // Changes: offered as these are, made only once confirmed (./actions.ts).
   | 'send_message'
   | 'post_announcement'
@@ -130,6 +132,8 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   const tools: AppToolName[] = ['read_settings', 'app_guide']
   if (tabs.includes('music')) tools.push('find_content')
   if (tabs.includes('announce')) tools.push('read_announcements')
+  // The Elim Store, and whether a sale is on: read as its tab shows them, for anyone with the tab.
+  if (tabs.includes('store')) tools.push('read_store')
   // A public follower looks things up — and changes nothing (the meeting form
   // is filled in for them to send themselves: MiriamButton).
   if (isPublicFollower(profile)) return tools
@@ -326,6 +330,23 @@ export async function runAppTool(name: string, input: Record<string, unknown>): 
       result = requests.length
         ? { requests }
         : { requests: [], note: 'No open meeting requests for them.' }
+    } else if (name === 'read_store') {
+      const { store, sale } = await readElimStore()
+      result = {
+        about: [store.tagline, store.intro]
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .join(' '),
+        shelves: store.shelves
+          .filter((sh) => sh.items.length)
+          .map((sh) => ({
+            title: sh.title,
+            featured: sh.items.map((i) => i.title).filter(Boolean),
+          })),
+        more_at: 'theelimstore.com',
+        sale: sale ? { message: sale.message, last_day: sale.endsOn } : null,
+        ...(sale ? {} : { note: 'No sale is running at the Elim Store right now.' }),
+      }
     } else if (name === 'read_date_notes') {
       // Their own, as loaded with her panel open (MiriamButton); else read now.
       const store = useDateNotesStore.getState()

@@ -21,6 +21,18 @@ export interface StoreSale {
   createdBy?: string
 }
 
+/** A sale as stored, read defensively: a field missing reads as empty, not as a crash. */
+export function saleFrom(id: string, x: Record<string, unknown>): StoreSale {
+  return {
+    id,
+    message: String(x.message ?? ''),
+    endsOn: String(x.endsOn ?? ''),
+    endsAt: Number(x.endsAt ?? 0),
+    createdAt: Number(x.createdAt ?? 0),
+    createdBy: x.createdBy ? String(x.createdBy) : undefined,
+  }
+}
+
 /** The end of a calendar day in this device's time zone, in ms. */
 export function endOfDay(iso: string): number {
   const [y, m, d] = iso.split('-').map(Number)

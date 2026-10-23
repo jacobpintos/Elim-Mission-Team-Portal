@@ -121,7 +121,7 @@ const LOOK_IT_UP =
 
 /** The app's own things: "look up my tasks", "look up the set list" are the app's to find, not the web's. */
 const THE_APPS =
-  /\b(?:my|our|mine|the church|the well|set ?lists?|tasks?|to-?dos?|sermons?|songs?|chords?|chord sheets?|announcements?|messages?|events?|calendar|notes?|reminders?|availability|carpools?|teams?|schedule|content|videos?)\b/i
+  /\b(?:my|our|mine|the church|the well|set ?lists?|tasks?|to-?dos?|sermons?|songs?|chords?|chord sheets?|announcements?|messages?|events?|calendar|notes?|reminders?|availability|carpools?|teams?|schedule|content|videos?|(?:the)?elim\s*store|merch(?:andise)?)\b/i
 
 /** Her name, said first: "Hey Miriam,", "Miriam". */
 const HER_NAME = /^(?:(?:hey|hi|ok|okay)[,\s]+)?miriam[,.!:\s]+(?=\S)/i

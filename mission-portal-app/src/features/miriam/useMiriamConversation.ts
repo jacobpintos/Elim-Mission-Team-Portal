@@ -8,6 +8,8 @@ import { anyOverlayOpen } from '@/lib/overlays'
 import { loadPlays, rememberName, rememberPlay, rememberWords } from '@/lib/miriamMemory'
 import { heardRight, refreshHearing } from '@/lib/miriamHearing'
 import { meetingAsked } from '@/lib/miriamMeeting'
+import { storeAsked, storeReply } from '@/lib/miriamStore'
+import { readElimStore } from '@/features/store/readElimStore'
 import { tourFor, tourNames } from '@/features/tour/flows'
 import { tourAsked } from '@/lib/miriamTour'
 import {
@@ -458,6 +460,27 @@ export function useMiriamConversation(
       setStage('answered')
       router.push(connect.path as never)
       return
+    }
+    // "Is anything on sale at the Elim Store?", "what's for sale there?", "what
+    // is it?": answered from the store and its sale as they stand
+    // (lib/miriamStore), not guessed at or looked for on the web — with the
+    // store opened, where there is something there to see.
+    const storeAsk = local && !play && !anyOverlayOpen() ? storeAsked(withoutHerName(said)) : null
+    const storeScreen = storeAsk
+      ? screensFor(useAuthStore.getState().profile).find((x) => x.id === 'store')
+      : undefined
+    if (storeAsk && storeScreen) {
+      setStage('thinking')
+      const read = await readElimStore().catch(() => null)
+      if (read) {
+        const reply = storeReply(storeAsk, read.store, read.sale)
+        noteDone(reply.text)
+        setAnswer(reply.text)
+        speak(reply.text)
+        setStage('answered')
+        if (reply.open) router.push(storeScreen.path as never)
+        return
+      }
     }
     // A screen asked for by name ("open settings"): gone to from here.
     if (local && !play && !anyOverlayOpen()) {

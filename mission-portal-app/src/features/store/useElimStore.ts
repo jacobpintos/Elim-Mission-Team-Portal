@@ -4,7 +4,7 @@ import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import type { PageBlock } from '@/types/pages'
 import { resolveStore, type StoreContent } from './storeContent'
-import { activeSale, type StoreSale } from './storeSale'
+import { activeSale, saleFrom, type StoreSale } from './storeSale'
 
 /**
  * The store as it stands, and the sale running in it, kept live.
@@ -40,19 +40,7 @@ export function useElimStore(): {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'storeSales'), (snap) => {
-      setSales(
-        snap.docs.map((d) => {
-          const x = d.data()
-          return {
-            id: d.id,
-            message: String(x.message ?? ''),
-            endsOn: String(x.endsOn ?? ''),
-            endsAt: Number(x.endsAt ?? 0),
-            createdAt: Number(x.createdAt ?? 0),
-            createdBy: x.createdBy ? String(x.createdBy) : undefined,
-          }
-        })
-      )
+      setSales(snap.docs.map((d) => saleFrom(d.id, d.data())))
     })
     return () => unsub()
   }, [])
