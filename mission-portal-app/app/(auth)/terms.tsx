@@ -78,7 +78,7 @@ export default function TermsScreen() {
             Terms of Use
           </Text>
           <Text color={c.textMuted} fontSize={13}>
-            Effective date: August 26, 2026
+            Effective date: October 23, 2026
           </Text>
           <Body>
             These Terms of Use (“Terms”) are an agreement between you and {ORG_NAME} (“we,” “us,” or
@@ -166,13 +166,48 @@ export default function TermsScreen() {
           </Body>
         </Section>
 
-        <Section title="7. Privacy">
+        <Section title="7. Miriam, the in-app assistant">
+          <Body>
+            Miriam answers questions and carries out requests you make by voice or by typing. Some
+            of a team member&rsquo;s requests are answered with Claude, an AI model from Anthropic;
+            our Privacy Policy explains what is sent and what is kept.
+          </Body>
+          <YStack gap="$1.5" marginTop="$1">
+            <Bullet>
+              Her answers can be wrong or out of date. Check anything that matters — an
+              event&rsquo;s time or place, a task, a sign-up — in the App itself before you rely on
+              it.
+            </Bullet>
+            <Bullet>
+              Nothing she says is medical, legal, financial or pastoral advice. Questions of faith
+              are answered only from the church&rsquo;s own words, or passed to our leadership.
+            </Bullet>
+            <Bullet>
+              Before she changes anything for you, she shows you what she will do; you are
+              responsible for what you confirm.
+            </Bullet>
+            <Bullet>
+              What you ask her is covered by section 3, as anything else you send in the App is.
+            </Bullet>
+          </YStack>
+        </Section>
+
+        <Section title="8. Giving and purchases">
+          <Body>
+            Giving and the Elim Store open outside services — such as Tithe.ly, Venmo, Cash App and
+            theelimstore.com — in your browser or their own apps. Payments are made there, not in
+            the App, under those services&rsquo; terms. The App does not see or keep your payment
+            details.
+          </Body>
+        </Section>
+
+        <Section title="9. Privacy">
           <Body>
             Our Privacy Policy explains what we collect and why. It forms part of these Terms.
           </Body>
         </Section>
 
-        <Section title="8. Disclaimers and limitation of liability">
+        <Section title="10. Disclaimers and limitation of liability">
           <Body>
             The App is provided “as is,” without warranties of any kind. To the fullest extent
             permitted by law, {ORG_NAME} is not liable for indirect, incidental or consequential
@@ -181,7 +216,7 @@ export default function TermsScreen() {
           </Body>
         </Section>
 
-        <Section title="9. Changes to these Terms">
+        <Section title="11. Changes to these Terms">
           <Body>
             We may update these Terms. When we make material changes we will update the effective
             date above and notify active users in the App. Continuing to use the App after a change
@@ -189,7 +224,7 @@ export default function TermsScreen() {
           </Body>
         </Section>
 
-        <Section title="10. Contact">
+        <Section title="12. Contact">
           <Body>
             Questions about these Terms, or a report you want to escalate, can be sent to:
           </Body>

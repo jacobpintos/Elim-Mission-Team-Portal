@@ -204,6 +204,9 @@ export const miriamOwnAdmin = onCall(
       await untaught(ownDb, id)
       return { ok: true }
     }
+    // A Brave Search key sends the words of web questions to Brave, which the
+    // Privacy Policy (app/(auth)/privacy.tsx, sections 3, 7 and 10) does not
+    // yet name — it says Wikipedia only. Add Brave there before setting one.
     if (action === 'setWebKey') {
       const key = text(req.data?.key, 200)
       await db
