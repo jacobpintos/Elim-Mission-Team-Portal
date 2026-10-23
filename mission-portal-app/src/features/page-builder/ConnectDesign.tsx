@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Text, XStack, YStack } from 'tamagui'
@@ -12,6 +12,7 @@ import type { PageBlock } from '@/types/pages'
 import { composeConnect, directionsQuery, directionsUrl } from './connectLayout'
 import { HeroPill, LinkCard, renderRestBlock } from './designedParts'
 import { MeetingBlock } from './BlockRenderer/MeetingBlock'
+import { useMiriamStore } from '@/stores/miriamStore'
 
 const lines = (text: string | undefined) =>
   (text ?? '')
@@ -47,6 +48,21 @@ export function ConnectDesign({
   const scrollRef = useRef<ScrollView>(null)
   const visitY = useRef(0)
   const meetingY = useRef(0)
+  /** Waiting for the form to be laid out, to bring it into view. */
+  const meetingWanted = useRef(false)
+  const toMeeting = () => scrollRef.current?.scrollTo({ y: Math.max(0, meetingY.current - 16) })
+
+  // Sent here by Miriam to the meeting form — filled in from what they said,
+  // or to reach the leadership: the form brought into view, at once if it is
+  // laid out, else as soon as it is. A minute old, it is a visit of its own.
+  const meetingShown = useMiriamStore((s) => s.meetingShown)
+  useEffect(() => {
+    if (!meetingShown) return
+    useMiriamStore.getState().clearMeetingShown()
+    if (Date.now() - meetingShown > 60_000) return
+    if (meetingY.current > 0) toMeeting()
+    else meetingWanted.current = true
+  }, [meetingShown])
 
   const layout = useMemo(() => composeConnect(blocks), [blocks])
 
@@ -327,7 +343,13 @@ export function ConnectDesign({
           paddingHorizontal={gutter}
           paddingTop={wide ? 72 : 52}
           gap={14}
-          onLayout={(e) => (meetingY.current = e.nativeEvent.layout.y)}
+          onLayout={(e) => {
+            meetingY.current = e.nativeEvent.layout.y
+            if (meetingWanted.current) {
+              meetingWanted.current = false
+              toMeeting()
+            }
+          }}
         >
           <Overline color={primary}>Meet with us</Overline>
           {/* The form draws its own card; a second frame round it would be a box in a box. */}

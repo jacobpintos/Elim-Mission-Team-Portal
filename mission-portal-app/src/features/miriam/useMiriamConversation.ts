@@ -38,7 +38,8 @@ import { parseSheetCommand } from '@/lib/sheetCommands'
 import { keyLabel } from '@/lib/nashvilleNumbers'
 import { loadAliases } from '@/lib/songAliases'
 import { screensFor } from '@/lib/miriamScreens'
-import { isPublicFollower, visibleTabs } from '@/lib/roles'
+import { canUseMessages, isAdmin, isPublicFollower, visibleTabs } from '@/lib/roles'
+import { selfAsked, selfIntro } from '../../../functions/src/miriam/own/self'
 import { clockOf } from '../../../functions/src/push/reminderTime'
 import { useAuthStore } from '@/stores/authStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
@@ -459,6 +460,23 @@ export function useMiriamConversation(
       speak(text)
       setStage('answered')
       router.push(connect.path as never)
+      return
+    }
+    // "Who are you?", "what can you do?": who she is — an AI, not a person —
+    // and what she can do for them, said here (functions/src/miriam/own/self),
+    // as the server says it.
+    if (local && !play && selfAsked(withoutHerName(said))) {
+      const profile = useAuthStore.getState().profile
+      const text = selfIntro({
+        isPublic: isPublicFollower(profile),
+        messages: canUseMessages(profile),
+        worship: visibleTabs(profile).includes('worship'),
+        admin: isAdmin(profile),
+      })
+      noteDone(text)
+      setAnswer(text)
+      speak(text)
+      setStage('answered')
       return
     }
     // "Is anything on sale at the Elim Store?", "what's for sale there?", "what
@@ -919,6 +937,8 @@ export function useMiriamConversation(
         if (open.kind === 'screen') {
           // Only a screen this person has: checked again here.
           const screen = screensFor(useAuthStore.getState().profile).find((x) => x.id === open.id)
+          // Connect's meeting form, brought into view once the page is there.
+          if (screen && open.section === 'meeting') useMiriamStore.getState().showMeetingForm()
           if (screen) router.push(screen.path as never)
         } else {
           router.push(miriamHref(open) as never)

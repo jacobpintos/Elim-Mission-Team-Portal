@@ -50,8 +50,11 @@ import { STORY_BLOCKS } from './__fixtures__/ourStory'
 import {
   aboutScripture,
   DEFER,
+  DEFER_MEETING,
   faithAnswer,
+  isFaithReply,
   LEADERSHIP,
+  LEADERSHIP_MEETING,
 } from '../../functions/src/miriam/own/faith'
 import {
   ELIM_ANSWER,
@@ -767,6 +770,54 @@ describe('her answers', () => {
     ).toBeNull()
   })
 
+  it('a question of faith not hers, from a public follower: the meeting form, not the website', async () => {
+    const visitor = { uid: 'v', roles: ['public'] }
+    const own = await ownAnswer(
+      input('what does the Bible say about worry', {
+        viewer: visitor,
+        lookups: new Lookups(church, visitor, TODAY),
+      })
+    )
+    expect(own.result).toMatchObject({
+      text: DEFER_MEETING,
+      open: { kind: 'screen', id: 'connect', section: 'meeting' },
+    })
+    // A team member still gets the website.
+    expect((await ownAnswer(input('what does the Bible say about worry'))).result).toMatchObject({
+      text: DEFER,
+      open: { kind: 'link' },
+    })
+    // And more asked after it is the leadership's, by the form too.
+    const more = await ownAnswer(
+      input('but why?', {
+        viewer: visitor,
+        lookups: new Lookups(church, visitor, TODAY),
+        history: [{ said: 'what does the Bible say about worry', reply: DEFER_MEETING }],
+      })
+    )
+    expect(more.result).toMatchObject({
+      text: LEADERSHIP_MEETING,
+      open: { kind: 'screen', id: 'connect', section: 'meeting' },
+    })
+    expect(isFaithReply(DEFER_MEETING) && isFaithReply(LEADERSHIP_MEETING)).toBe(true)
+  })
+
+  it('who she is: an AI, what she can do — not a question of faith', async () => {
+    const own = await ownAnswer(input('Who are you?'))
+    expect(own.why).toBe('self')
+    expect((own.result as { text: string }).text).toMatch(
+      /^I’m Miriam, the assistant in this app — an AI language model, not a person\..*Claude, an AI model from Anthropic/
+    )
+    const visitor = { uid: 'v', roles: ['public'] }
+    const theirs = await ownAnswer(
+      input('what can you do', { viewer: visitor, lookups: new Lookups(church, visitor, TODAY) })
+    )
+    expect((theirs.result as { text: string }).text).toMatch(/ask to meet with our leadership/)
+    expect((theirs.result as { text: string }).text).not.toMatch(/Claude|Anthropic/)
+    // Where her name comes from is still the church's to tell.
+    expect((await ownAnswer(input('why are you called Miriam'))).why).toMatch(/^names/)
+  })
+
   it('leaves a conversation under way to Claude', async () => {
     const own = await ownAnswer(
       input('at 5', {
@@ -1464,8 +1515,10 @@ describe('a question taught, asked in other words', () => {
     expect(await publicAnswer('is the bible without error?', visitor)).toMatchObject({
       text: BIBLE_A,
     })
+    // Its leadership's to answer: the form to ask to meet with them, not the website.
     expect(await publicAnswer('do y’all think the bible has mistakes?', visitor)).toMatchObject({
-      text: DEFER,
+      text: DEFER_MEETING,
+      open: { kind: 'screen', id: 'connect', section: 'meeting' },
     })
     // Not asked: said back as ever.
     expect(await publicAnswer('thanks, God bless', visitor)).toMatchObject({

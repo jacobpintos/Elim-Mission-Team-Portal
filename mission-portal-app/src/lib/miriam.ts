@@ -105,8 +105,11 @@ export type MiriamOpen =
     }
   | { kind: 'task'; id: string }
   | { kind: 'availability' }
-  /** A screen from lib/miriamScreens, by id; opened only if it is this person's. */
-  | { kind: 'screen'; id: string }
+  /**
+   * A screen from lib/miriamScreens, by id; opened only if it is this person's.
+   * `section: 'meeting'`: Connect, at its form to ask to meet with the leadership.
+   */
+  | { kind: 'screen'; id: string; section?: 'meeting' }
   /** A video from Content, by id: played over the page. */
   | { kind: 'video'; id: string }
   /** A reorder list item, by id: its link opened, to buy it (admins). */

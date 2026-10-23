@@ -1,6 +1,6 @@
 import { shiftDate, type Viewer } from '../data'
 import type { Lookups } from '../lookups'
-import { publicReply, PUBLIC_NOT_HERS, type AppToolName } from '../plan'
+import { isPublicFollower, publicReply, PUBLIC_NOT_HERS, type AppToolName } from '../plan'
 import {
   answerFor,
   overviewAnswer,
@@ -19,12 +19,20 @@ import { ownKnowledge, sameKey, WEB_DOC, type OwnDb } from './learn'
 import type { Skill } from './skills'
 import { nearestOf, read, seedExamples, type Example, type Reading } from './understand'
 import { webAnswer } from './web'
-import { aboutScripture, faithAnswer, isFaithReply, LEADERSHIP } from './faith'
+import {
+  aboutScripture,
+  DEFER_MEETING,
+  faithAnswer,
+  isFaithReply,
+  LEADERSHIP,
+  LEADERSHIP_MEETING,
+} from './faith'
 import { CHURCH_SITE, siteKnowledge } from './site'
 import { leaderAnswer, leaderAsked, storyKnowledge } from './leaders'
 import { nameAnswer, nameAsked } from './names'
 import { taughtFor } from './taught'
 import { foodSignup, type SignupWould } from './signup'
+import { selfAsked, selfIntro, type SelfFor } from './self'
 
 /**
  * Miriam, on her own: a request she understands and can answer herself, she
@@ -170,8 +178,15 @@ const justSaid = (answer: string, reply: string) =>
 const SAID_BACK =
   /^(?:(?:ok(?:ay)?|oh|ah|wow|great|cool|awesome|nice|perfect|good|amen|so true|got it|i see|makes sense|that(?:'|’)?s (?:helpful|good|great|nice|cool|beautiful|true)|that helps|thanks|thank you|thx|ty|appreciate it|so much|very much|a lot|miriam|no|nope|nah|no thanks|hi|hello|hey|bye|goodbye|good night|see you|see ya|later|have a good (?:day|night|one))[\s,.!]*)+$/i
 
-/** Beliefs aren't hers to discuss: the church's leadership, and its website. */
-export function fromLeadership(can: readonly string[]): OwnResult {
+/** The Connect page, at its form to ask to meet with the leadership. */
+const MEETING_FORM = { kind: 'screen', id: 'connect', section: 'meeting' } as const
+
+/**
+ * Beliefs aren't hers to discuss: the church's leadership, and its website —
+ * or, for a public follower (`meeting`), the form to ask to meet with them.
+ */
+export function fromLeadership(can: readonly string[], meeting = false): OwnResult {
+  if (meeting) return said(LEADERSHIP_MEETING, MEETING_FORM)
   return said(
     LEADERSHIP,
     can.includes('link') ? { kind: 'link', url: CHURCH_SITE, label: 'thewellofiowa.com' } : null
@@ -183,9 +198,13 @@ async function fromFaith(
   text: string,
   db: OwnDb,
   can: readonly string[],
-  v?: Float32Array
+  v?: Float32Array,
+  meeting = false
 ): Promise<OwnResult> {
   const f = await faithAnswer(text, db, v)
+  // Not enough from the church to answer with: a public follower is taken to
+  // the form to ask to meet with the leadership (fromLeadership).
+  if (f.from === 'leadership' && meeting) return said(DEFER_MEETING, MEETING_FORM)
   const r = said(f.text, f.link && can.includes('link') ? { kind: 'link', ...f.link } : null)
   // The church's own answer stays to be read; "reach out to our leadership" goes as any answer does.
   return f.from === 'leadership' ? r : toStay(r)
@@ -299,8 +318,27 @@ async function onFaith(input: OwnInput, last: { said: string; reply: string }): 
   return reading.skill === 'faith' && sure(reading)
 }
 
+/** A public follower reaches the leadership through Connect's meeting form, not the website. */
+const meetingFor = (input: Pick<OwnInput, 'viewer'>) => isPublicFollower(input.viewer.roles)
+
+/** What she can offer this person (./self), from the lookups their app says they have. */
+const selfFor = (input: Pick<OwnInput, 'viewer' | 'appTools'>): SelfFor => ({
+  isPublic: isPublicFollower(input.viewer.roles),
+  messages: input.appTools.includes('read_messages'),
+  worship: input.appTools.includes('read_set_lists'),
+  admin: input.appTools.includes('create_user'),
+})
+
 export async function ownAnswer(input: OwnInput): Promise<Own> {
   const { text, today, history, lookups, db } = input
+  // Who she is, and what she can do (./self) — an AI, not a person — unless
+  // an admin taught her otherwise. Never a question of faith: only where her
+  // name comes from is (./names, above).
+  if (selfAsked(text) && !nameAsked(text)) {
+    const taught = await taughtFor(text, () => embed(text), db)
+    if (taught) return { result: said(taught), read: null, why: 'taught' }
+    return { result: said(selfIntro(selfFor(input))), read: null, why: 'self' }
+  }
   // Where the names Elim and Miriam come from, as the church gave them
   // (./names) — whatever came before it, and unless an admin taught her otherwise.
   if (nameAsked(text)) {
@@ -391,7 +429,11 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
         if (taught && !justSaid(taught, last.reply)) {
           return { result: toStay(said(taught)), read: null, why: 'taught' }
         }
-        return { result: fromLeadership(input.can), read: null, why: 'faith: more asked' }
+        return {
+          result: fromLeadership(input.can, meetingFor(input)),
+          read: null,
+          why: 'faith: more asked',
+        }
       }
     }
     // An answer to a question asked, or leaning on what came before: Claude has the thread.
@@ -459,7 +501,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
   // 4. Her answer. On God or the Bible, only the church's own (./faith) — never the web's.
   if (reading.skill === 'faith' || (reading.skill === 'web' && aboutScripture(text))) {
     return {
-      result: await fromFaith(text, db, input.can, rawV()),
+      result: await fromFaith(text, db, input.can, rawV(), meetingFor(input)),
       read: own,
       why: 'faith',
       byReading: true,
@@ -532,7 +574,11 @@ export async function readFor(
 export async function webOrFaith(
   skill: Skill,
   text: string,
-  input: Pick<OwnInput, 'db' | 'today' | 'can' | 'web'> & Partial<Pick<OwnInput, 'history'>>
+  input: Pick<OwnInput, 'db' | 'today' | 'can' | 'web'> &
+    Partial<Pick<OwnInput, 'history'>> & {
+      /** A public follower's: the leadership reached through the meeting form (fromLeadership). */
+      meeting?: boolean
+    }
 ): Promise<OwnResult | null> {
   // On God or the Bible, only the church's own (./faith) — never the web's.
   if (skill === 'faith' || (skill === 'web' && aboutScripture(text))) {
@@ -543,9 +589,9 @@ export async function webOrFaith(
       const taught = await taughtFor(text, () => embed(text), input.db, { strict: true })
       return taught && !justSaid(taught, last.reply)
         ? toStay(said(taught))
-        : fromLeadership(input.can)
+        : fromLeadership(input.can, input.meeting)
     }
-    return fromFaith(text, input.db, input.can)
+    return fromFaith(text, input.db, input.can, undefined, input.meeting)
   }
   if (skill !== 'web') return null
   const key = await braveKeyOf(input.db).catch(() => null)
@@ -570,7 +616,7 @@ export async function publicAnswer(
 ): Promise<OwnResult> {
   const back = publicReply(text)
   if (back === PUBLIC_NOT_HERS && aboutScripture(text) && ASKS.test(text.trim())) {
-    const faith = await webOrFaith('faith', text, input).catch(() => null)
+    const faith = await webOrFaith('faith', text, { ...input, meeting: true }).catch(() => null)
     if (faith) return faith
   }
   return said(back)

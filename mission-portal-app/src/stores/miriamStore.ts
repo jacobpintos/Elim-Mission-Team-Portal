@@ -59,6 +59,14 @@ interface MiriamStore {
   meetingForm: (MeetingAsk & { id: number }) | null
   offerMeetingForm: (form: MeetingAsk) => void
   clearMeetingForm: () => void
+  /**
+   * When she last sent someone to the meeting form — filled in, or to reach
+   * the leadership — for the Connect page to bring it into view
+   * (page-builder ConnectDesign), which it clears once it has.
+   */
+  meetingShown: number | null
+  showMeetingForm: () => void
+  clearMeetingShown: () => void
   /** What was said and answered lately (lib/miriamConversation). */
   conversation: Exchange[]
   remember: (said: string, reply: string) => void
@@ -104,8 +112,14 @@ export const useMiriamStore = create<MiriamStore>((set) => ({
   offerUserForm: (form) => set({ userForm: { ...form, id: Date.now() } }),
   clearUserForm: () => set({ userForm: null }),
   meetingForm: null,
-  offerMeetingForm: (form) => set({ meetingForm: { ...form, id: Date.now() } }),
+  offerMeetingForm: (form) => {
+    const at = Date.now()
+    set({ meetingForm: { ...form, id: at }, meetingShown: at })
+  },
   clearMeetingForm: () => set({ meetingForm: null }),
+  meetingShown: null,
+  showMeetingForm: () => set({ meetingShown: Date.now() }),
+  clearMeetingShown: () => set({ meetingShown: null }),
   conversation: [],
   remember: (said, reply) =>
     set((s) =>

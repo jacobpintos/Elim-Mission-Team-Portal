@@ -36,6 +36,8 @@ export type OwnResult =
         | { kind: 'event'; key: string; section: EventSection | null }
         | { kind: 'directions'; key: string }
         | { kind: 'link'; url: string; label: string }
+        /** A screen of theirs (src/lib/miriamScreens), at a part of it: Connect's meeting form. */
+        | { kind: 'screen'; id: string; section?: 'meeting' }
         | null
       choices: never[]
       heardName: string

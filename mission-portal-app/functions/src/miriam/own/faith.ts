@@ -36,6 +36,14 @@ export interface FaithAnswer {
 export const LEADERSHIP =
   'For more on that, please reach out to our church leadership directly — they’d be glad to talk with you.'
 
+/**
+ * The same, to a public follower, who is taken to the Connect page's form to
+ * ask to meet with the leadership rather than sent to the website: someone
+ * outside the church has no other way to reach them from here.
+ */
+export const LEADERSHIP_MEETING =
+  'For more on that, our church leadership would be glad to talk with you — here’s where you can ask to meet with them.'
+
 /** Said when neither the church's site nor an answer she was taught says enough to answer with confidence. */
 export const DEFER =
   'I don’t have enough from The Well to answer that confidently — please reach out to our church leadership directly; they’d be glad to talk with you. You can also read what The Well believes at thewellofiowa.com.'
@@ -47,6 +55,10 @@ const siteLabel = (url: string) => {
     return 'thewellofiowa.com'
   }
 }
+
+/** DEFER, to a public follower: with the meeting form rather than the website (LEADERSHIP_MEETING). */
+export const DEFER_MEETING =
+  'I don’t have enough from The Well to answer that confidently. Our church leadership would be glad to talk with you — here’s where you can ask to meet with them.'
 
 /** Her answer to a question of faith: the church's own, or its leadership's to give. */
 export async function faithAnswer(
@@ -84,7 +96,10 @@ export async function faithAnswer(
 /** Whether something she said was one of her answers about faith (as kept in the conversation). */
 export function isFaithReply(reply: string): boolean {
   const r = reply.trim()
-  if (r === DEFER || r === LEADERSHIP || r === ELIM_ANSWER || r === MIRIAM_ANSWER) return true
+  if (
+    [DEFER, LEADERSHIP, DEFER_MEETING, LEADERSHIP_MEETING, ELIM_ANSWER, MIRIAM_ANSWER].includes(r)
+  )
+    return true
   // From the church's site: "(from thewellofiowa.com)", or a part of it.
   const host = new URL(CHURCH_SITE).hostname.replace(/^www\./, '').replace(/\./g, '\\.')
   return new RegExp(`\\(from (?:[a-z0-9-]+\\.)*${host}\\)$`, 'i').test(r)
