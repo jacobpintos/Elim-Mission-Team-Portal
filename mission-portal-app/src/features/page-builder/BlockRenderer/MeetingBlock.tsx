@@ -49,6 +49,20 @@ export function MeetingBlock({ data }: MeetingBlockProps) {
 
   const leaders = users.filter((u) => leadershipTeam.includes(u.uid))
 
+  // Blocked by an admin from asking again (meetingBlocks, which only admins
+  // write). Said up front rather than after they have filled the form in;
+  // sendMeetingRequest refuses them either way.
+  const uid = profile?.uid
+  const [blocked, setBlocked] = useState(false)
+  useEffect(() => {
+    if (!uid) return
+    return onSnapshot(
+      doc(db, 'meetingBlocks', uid),
+      (snap) => setBlocked(snap.exists()),
+      () => setBlocked(false)
+    )
+  }, [uid])
+
   const [selectedLeaders, setSelectedLeaders] = useState<string[]>([])
   const [availability, setAvailability] = useState('')
   const [message, setMessage] = useState('')
@@ -213,6 +227,10 @@ export function MeetingBlock({ data }: MeetingBlockProps) {
               {"We'll be in touch to schedule your meeting."}
             </Text>
           </YStack>
+        ) : blocked ? (
+          <Text color="$gray10" paddingVertical="$2">
+            Meeting requests can&rsquo;t be sent from this account.
+          </Text>
         ) : (
           <>
             {profile && (

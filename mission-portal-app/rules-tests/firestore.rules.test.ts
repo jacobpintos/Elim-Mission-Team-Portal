@@ -1281,6 +1281,63 @@ describe('meetingRequests', () => {
   })
 })
 
+describe('meetingBlocks — no more requests from this account', () => {
+  const block = () => ({ blockedAt: Date.now(), requestId: 'mr1' })
+  const seedBlock = () =>
+    env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), 'meetingBlocks', OUTSIDER), block())
+    )
+
+  it('lets an admin block the sender, recording who on the request itself', async () => {
+    // What the task's Block button writes, in one batch.
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'meetingBlocks', OUTSIDER), block()))
+    await assertSucceeds(
+      updateDoc(doc(as(ADMIN), 'meetingRequests/mr1'), {
+        blockedBy: ADMIN,
+        blockedByName: 'Admin',
+        blockedAt: Date.now(),
+      })
+    )
+  })
+
+  it('refuses a block from anyone else, the leader it was sent to included', async () => {
+    await assertFails(setDoc(doc(as(WORSHIP), 'meetingBlocks', OUTSIDER), block()))
+    await assertFails(setDoc(doc(as(MEMBER), 'meetingBlocks', OUTSIDER), block()))
+  })
+
+  it('refuses a block carrying who made it', () => {
+    // The blocked person can read their own block, so naming the admin on it
+    // would tell them who to take it up with.
+    return assertFails(
+      setDoc(doc(as(ADMIN), 'meetingBlocks', OUTSIDER), { ...block(), blockedByName: 'Admin' })
+    )
+  })
+
+  it('lets the blocked person see their own block, and nobody else’s', async () => {
+    await seedBlock()
+    await assertSucceeds(getDoc(doc(as(OUTSIDER), 'meetingBlocks', OUTSIDER)))
+    await assertFails(getDoc(doc(as(MEMBER), 'meetingBlocks', OUTSIDER)))
+    await assertFails(getDoc(doc(anon(), 'meetingBlocks', OUTSIDER)))
+  })
+
+  it('lets someone check for a block that is not there', () => {
+    // The form asks on every visit, blocked or not; a refusal here would break
+    // it for everyone who has never been blocked.
+    return assertSucceeds(getDoc(doc(as(MEMBER), 'meetingBlocks', MEMBER)))
+  })
+
+  it('refuses the blocked person lifting it themselves', async () => {
+    await seedBlock()
+    await assertFails(deleteDoc(doc(as(OUTSIDER), 'meetingBlocks', OUTSIDER)))
+    await assertFails(updateDoc(doc(as(OUTSIDER), 'meetingBlocks', OUTSIDER), { blockedAt: 0 }))
+  })
+
+  it('lets an admin lift it', async () => {
+    await seedBlock()
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'meetingBlocks', OUTSIDER)))
+  })
+})
+
 describe('reimbursements', () => {
   it('lets the person who asked read their request', () => {
     return assertSucceeds(getDoc(doc(as(MEMBER), 'reimbursements/rb1')))

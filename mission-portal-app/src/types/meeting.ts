@@ -15,13 +15,11 @@ export interface MeetingRequest {
   /** The uids they asked to meet. Everyone here can see and answer it. */
   leaders: string[]
   /**
-   * Those leaders' own addresses, so a reply can copy the rest of them in.
-   *
-   * Carried on the request because the people who need them cannot look them
-   * up: `users` is readable only by its owner and by admins, and most of the
-   * leadership team is neither to the others.
+   * Those leaders' names, as the form showed them, so the task can say who was
+   * asked. Carried here because most of the people reading the task cannot
+   * look another account up: `users` is readable only by its owner and admins.
    */
-  leaderEmails?: string[]
+  leaderNames?: string[]
   availability: string
   message: string
   createdAt: number
@@ -29,9 +27,9 @@ export interface MeetingRequest {
    * Who said they would answer it, and when.
    *
    * Separate from handled, because claiming and finishing are different
-   * moments: somebody says they are on it, writes the email, and the
+   * moments: somebody says they are on it, gets in touch, and the
    * conversation carries on from there. Collapsing the two would have a
-   * request read as answered the second anyone opened a draft.
+   * request read as answered the second anyone picked it up.
    */
   claimedBy?: string
   claimedByName?: string
@@ -43,4 +41,27 @@ export interface MeetingRequest {
   handledBy?: string
   handledByName?: string
   handledAt?: number
+  /**
+   * The admin who blocked the sender from this request, and when.
+   *
+   * Kept here rather than on the block, which the blocked person can read.
+   * Whether they are still blocked is the block's to say: this is only who did
+   * it, cleared when it is lifted from this request.
+   */
+  blockedBy?: string
+  blockedByName?: string
+  blockedAt?: number
+}
+
+/**
+ * meetingBlocks/{uid}: an account an admin has stopped from sending meeting
+ * requests. sendMeetingRequest refuses them while it exists.
+ *
+ * Readable by the person it names, so it holds nothing that says who did it;
+ * the rules refuse any other field.
+ */
+export interface MeetingBlock {
+  blockedAt: number
+  /** The request it was made from. */
+  requestId: string
 }

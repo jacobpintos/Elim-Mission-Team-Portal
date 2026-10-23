@@ -52,7 +52,9 @@ function clean(value: unknown, max: number): string {
  * announcements collect, and a person waiting on an answer should not be
  * queued behind them. It gets a push of its own instead.
  *
- * What it does create is one task, assigned to everyone named on the request.
+ * What it does create is one task, assigned to everyone named on the request,
+ * which is where it is answered: the request shows inside it with everything
+ * the form said, and nothing here sends or drafts an email.
  * A request to meet is work someone has to do, and the app already has a place
  * for work someone has to do — with a status, a due date and a screen people
  * already check. One task rather than one each, so that whoever picks it up
@@ -84,7 +86,22 @@ export const sendMeetingRequest = onCall(async (request) => {
   const sender = senderSnap.data()
   if (!sender) throw new HttpsError('failed-precondition', 'Your account could not be read.')
 
-  const last = Number(sender.lastMeetingRequest ?? 0)
+  // Blocked by an admin who was sent one of their requests. Kept in a
+  // collection only admins write, not on the person's own record, which they
+  // can edit — a block they could lift themselves would be no block at all.
+  if ((await db.doc(`meetingBlocks/${uid}`).get()).exists) {
+    throw new HttpsError('permission-denied', 'Meeting requests can’t be sent from this account.')
+  }
+
+  // The last request, from the requests themselves as well as the stamp on
+  // their record. That stamp sits on a document its owner may write, so on its
+  // own anyone could clear it and send another; the requests are written here
+  // and nowhere else, and they cannot.
+  const sent = await db.collection(COLLECTION).where('fromUid', '==', uid).get()
+  const last = Math.max(
+    Number(sender.lastMeetingRequest ?? 0),
+    ...sent.docs.map((d) => Number(d.data().createdAt ?? 0))
+  )
   if (last && Date.now() - last < RATE_LIMIT_MS) {
     throw new HttpsError('resource-exhausted', 'You have already sent a request today.')
   }
@@ -94,6 +111,18 @@ export const sendMeetingRequest = onCall(async (request) => {
   const fromName = clean(sender.displayName, 200) || 'Someone'
   const fromEmail = clean(sender.email, 320)
 
+  // The names of the people it was sent to, so the task can say who was
+  // asked: a leader reading it cannot look the others up, `users` being
+  // readable only by its owner and by admins. Their push tokens on the way past.
+  const tokens: string[] = []
+  const leaderNames: string[] = []
+  for (const leaderUid of leaders) {
+    const profile = (await db.doc(`users/${leaderUid}`).get()).data()
+    if (!profile) continue
+    tokens.push(...extractTokens(profile.pushTokens))
+    leaderNames.push(clean(profile.displayName, 200) || 'A leader')
+  }
+
   const now = Date.now()
   const ref = db.collection(COLLECTION).doc()
   await ref.set({
@@ -102,6 +131,7 @@ export const sendMeetingRequest = onCall(async (request) => {
     fromName,
     fromEmail,
     leaders,
+    leaderNames,
     availability,
     message: clean(request.data?.message, MAX_MESSAGE),
     createdAt: now,
@@ -124,23 +154,6 @@ export const sendMeetingRequest = onCall(async (request) => {
     _updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   })
   await ref.set({ taskId }, { merge: true })
-
-  // Gathered here, on the way past, because a leader answering this cannot
-  // look them up for themselves: `users` is readable only by its owner and by
-  // admins, and most of the leadership team holds neither claim over the
-  // others. Stored on the request so the reply can copy in the rest of the
-  // people it was addressed to.
-  const tokens: string[] = []
-  const leaderEmails: string[] = []
-  for (const leaderUid of leaders) {
-    const snap = await db.doc(`users/${leaderUid}`).get()
-    const profile = snap.data()
-    if (!profile) continue
-    tokens.push(...extractTokens(profile.pushTokens))
-    const email = clean(profile.email, 320)
-    if (email) leaderEmails.push(email)
-  }
-  if (leaderEmails.length > 0) await ref.set({ leaderEmails }, { merge: true })
 
   if (tokens.length > 0) {
     await sendExpoPush(

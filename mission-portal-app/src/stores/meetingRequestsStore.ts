@@ -1,8 +1,16 @@
 import { create } from 'zustand'
-import { collection, doc, query, updateDoc, where } from 'firebase/firestore'
+import {
+  collection,
+  deleteField,
+  doc,
+  query,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { db, auth } from '@/lib/firebase'
-import type { MeetingRequest } from '@/types/meeting'
+import type { MeetingBlock, MeetingRequest } from '@/types/meeting'
 
 interface MeetingRequestsStore {
   requests: MeetingRequest[]
@@ -14,6 +22,8 @@ interface MeetingRequestsStore {
   byId: (id?: string) => MeetingRequest | undefined
   claim: (id: string, byUid: string, byName: string) => Promise<void>
   markHandled: (id: string, byUid: string, byName: string) => Promise<void>
+  block: (request: MeetingRequest, byUid: string, byName: string) => Promise<void>
+  unblock: (request: MeetingRequest) => Promise<void>
 }
 
 export const useMeetingRequestsStore = create<MeetingRequestsStore>((set, get) => ({
@@ -78,5 +88,37 @@ export const useMeetingRequestsStore = create<MeetingRequestsStore>((set, get) =
       handledByName: byName,
       handledAt: Date.now(),
     })
+  },
+
+  /**
+   * Stop the sender asking for any more meetings. Admins only, by the rules.
+   *
+   * Two writes in one batch: the block itself, which the sender can read and so
+   * says only when and from which request, and who did it, on the request,
+   * which they cannot.
+   */
+  block: async (request, byUid, byName) => {
+    const at = Date.now()
+    const block: MeetingBlock = { blockedAt: at, requestId: request.id }
+    const batch = writeBatch(db)
+    batch.set(doc(db, 'meetingBlocks', request.fromUid), block)
+    batch.update(doc(db, 'meetingRequests', request.id), {
+      blockedBy: byUid,
+      blockedByName: byName,
+      blockedAt: at,
+    })
+    await batch.commit()
+  },
+
+  /** Let them ask again, from whichever of their requests it is lifted. */
+  unblock: async (request) => {
+    const batch = writeBatch(db)
+    batch.delete(doc(db, 'meetingBlocks', request.fromUid))
+    batch.update(doc(db, 'meetingRequests', request.id), {
+      blockedBy: deleteField(),
+      blockedByName: deleteField(),
+      blockedAt: deleteField(),
+    })
+    await batch.commit()
   },
 }))

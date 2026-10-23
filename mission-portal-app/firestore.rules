@@ -241,6 +241,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Somebody an admin has stopped from asking for any more meetings, keyed
+    // by their uid. sendMeetingRequest refuses them while it exists.
+    //
+    // Their own block is readable to them, so the form can say so rather than
+    // let them fill it in for nothing. That is why it may hold only when and
+    // from which request: who blocked them is kept on the request, which they
+    // cannot read.
+    match /meetingBlocks/{uid} {
+      allow read: if isAdmin() || isSelf(uid);
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['blockedAt', 'requestId']);
+      allow delete: if isAdmin();
+    }
+
     // A request to be paid back for something bought for an event.
     //
     // Read by the person who asked, the Accountant it was sent to, and admins.
