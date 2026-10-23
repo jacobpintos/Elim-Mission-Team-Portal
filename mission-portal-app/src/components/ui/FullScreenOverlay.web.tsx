@@ -78,6 +78,11 @@ export function FullScreenOverlay({
     el.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;z-index:${aboveSheets ? ABOVE_SHEETS_Z : BASE_Z};display:flex;flex-direction:column`
     el.setAttribute('role', 'dialog')
     el.setAttribute('aria-modal', 'true')
+    // The app's typeface comes from Tamagui's font_body class on a wrapper
+    // inside #root, and this layer is appended to the body, outside it — so
+    // every Text drawn here fell back to the browser's default serif. The
+    // theme survives (it is on the body); the font has to be brought along.
+    el.className = 'font_body'
     return el
   })
   const [id] = useState(() => nextId++)
