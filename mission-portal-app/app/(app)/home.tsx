@@ -18,6 +18,7 @@ import { StreamBox } from '@/components/ui/StreamBox'
 import { WeatherDetailSheet } from '@/features/events/WeatherDetailSheet'
 import { AvailModal } from '@/features/events/AvailModal'
 import { isAdmin, isSecurity, isWorship } from '@/lib/roles'
+import { isTabVisible } from '@/lib/featureFlags'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { Img } from '@/components/ui/Img'
 import { todayStr, dateStr } from '@/lib/events'
@@ -423,121 +424,128 @@ function PubHomeContent() {
           )}
         </YStack>
 
-        {/* Posts */}
-        <YStack gap="$2">
-          <H3 color={colors.text}>Posts</H3>
-          {pages.length === 0 ? (
-            <YStack
-              backgroundColor={colors.surface}
-              borderRadius="$3"
-              padding="$3"
-              borderWidth={1}
-              borderColor={colors.border}
-            >
-              <Text color={colors.textMuted}>No post directories configured.</Text>
-            </YStack>
-          ) : (
-            <YStack gap={10}>
-              {pages.map((page) => {
-                const unseen = hasUnseen(page)
-                return (
-                  <Pressable
-                    key={page.id}
-                    onPress={() => router.push(`/posts/${page.id}` as never)}
-                  >
-                    <View
-                      style={{
-                        borderRadius: 14,
-                        overflow: 'hidden',
-                        minHeight: 82,
-                        flexDirection: 'row',
-                        borderWidth: 1,
-                        borderColor: unseen ? colors.primary : colors.border,
-                      }}
+        {/* Posts — only while the Posts tab is shown (featureFlags: HIDDEN_PUBLIC_TABS). */}
+        {isTabVisible('posts') ? (
+          <YStack gap="$2">
+            <H3 color={colors.text}>Posts</H3>
+            {pages.length === 0 ? (
+              <YStack
+                backgroundColor={colors.surface}
+                borderRadius="$3"
+                padding="$3"
+                borderWidth={1}
+                borderColor={colors.border}
+              >
+                <Text color={colors.textMuted}>No post directories configured.</Text>
+              </YStack>
+            ) : (
+              <YStack gap={10}>
+                {pages.map((page) => {
+                  const unseen = hasUnseen(page)
+                  return (
+                    <Pressable
+                      key={page.id}
+                      onPress={() => router.push(`/posts/${page.id}` as never)}
                     >
-                      {/* Left: photo panel */}
                       <View
                         style={{
-                          width: 90,
-                          alignSelf: 'stretch',
+                          borderRadius: 14,
                           overflow: 'hidden',
-                          position: 'relative',
+                          minHeight: 82,
+                          flexDirection: 'row',
+                          borderWidth: 1,
+                          borderColor: unseen ? colors.primary : colors.border,
                         }}
                       >
-                        {page.bgImage ? (
-                          <Img
-                            src={page.bgImage}
-                            alt=""
-                            style={{
-                              position: 'absolute',
-                              top: 0,
-                              left: 0,
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                            }}
-                          />
-                        ) : (
-                          <View
-                            style={{
-                              position: 'absolute',
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              backgroundColor: colors.primary + '77',
-                            }}
-                          />
-                        )}
-                      </View>
-                      {/* Right: text panel */}
-                      <View
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          overflow: 'hidden',
-                          paddingHorizontal: 16,
-                          paddingVertical: 14,
-                          justifyContent: 'center',
-                          backgroundColor: colors.surface,
-                        }}
-                      >
-                        {unseen ? (
-                          <XStack gap={4} alignItems="center" marginBottom={2}>
-                            <View
+                        {/* Left: photo panel */}
+                        <View
+                          style={{
+                            width: 90,
+                            alignSelf: 'stretch',
+                            overflow: 'hidden',
+                            position: 'relative',
+                          }}
+                        >
+                          {page.bgImage ? (
+                            <Img
+                              src={page.bgImage}
+                              alt=""
                               style={{
-                                width: 6,
-                                height: 6,
-                                borderRadius: 3,
-                                backgroundColor: colors.primary,
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
                               }}
                             />
-                            <Text color={colors.primary} fontSize={11} fontWeight="600">
-                              New
-                            </Text>
-                          </XStack>
-                        ) : null}
-                        <Text color={colors.text} fontWeight="700" fontSize={15} numberOfLines={1}>
-                          {page.label}
-                        </Text>
-                        {page.desc ? (
+                          ) : (
+                            <View
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                backgroundColor: colors.primary + '77',
+                              }}
+                            />
+                          )}
+                        </View>
+                        {/* Right: text panel */}
+                        <View
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            overflow: 'hidden',
+                            paddingHorizontal: 16,
+                            paddingVertical: 14,
+                            justifyContent: 'center',
+                            backgroundColor: colors.surface,
+                          }}
+                        >
+                          {unseen ? (
+                            <XStack gap={4} alignItems="center" marginBottom={2}>
+                              <View
+                                style={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: 3,
+                                  backgroundColor: colors.primary,
+                                }}
+                              />
+                              <Text color={colors.primary} fontSize={11} fontWeight="600">
+                                New
+                              </Text>
+                            </XStack>
+                          ) : null}
                           <Text
-                            color={colors.textMuted}
-                            fontSize={12}
+                            color={colors.text}
+                            fontWeight="700"
+                            fontSize={15}
                             numberOfLines={1}
-                            marginTop={2}
                           >
-                            {page.desc}
+                            {page.label}
                           </Text>
-                        ) : null}
+                          {page.desc ? (
+                            <Text
+                              color={colors.textMuted}
+                              fontSize={12}
+                              numberOfLines={1}
+                              marginTop={2}
+                            >
+                              {page.desc}
+                            </Text>
+                          ) : null}
+                        </View>
                       </View>
-                    </View>
-                  </Pressable>
-                )
-              })}
-            </YStack>
-          )}
-        </YStack>
+                    </Pressable>
+                  )
+                })}
+              </YStack>
+            )}
+          </YStack>
+        ) : null}
 
         {/* Upcoming Stops */}
         <YStack gap="$2">

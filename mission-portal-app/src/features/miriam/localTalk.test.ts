@@ -6,6 +6,7 @@ import type { Announcement, Message, PostPage, Room, Task } from '@/types/events
 import type { UserProfile } from '@/types/user'
 import type { EventInstance } from '../../../functions/src/miriam/data'
 import type { DateNote } from '@/lib/dateNotes'
+import { isTabVisible } from '@/lib/featureFlags'
 
 /**
  * Miriam's on-device conversations, played through: what is said to her, and
@@ -872,22 +873,25 @@ describe('posts, read out', () => {
     },
   ]
 
+  // Read out only while Posts is shown (featureFlags: HIDDEN_PUBLIC_TABS);
+  // while it is hidden they are not read here, and the question goes on.
+  const shown = isTabVisible('posts')
+  const latest = shown
+    ? ['say: The latest post, from Youth yesterday: Pizza night Friday at 7.']
+    : ['(to Claude)']
+
   it('to a public follower, from their Posts', async () => {
     const say = conversation({
       profile: { uid: 'me', roles: ['public'] } as unknown as UserProfile,
       tools: [],
       posts,
     })
-    expect(await say('what’s the latest post?')).toEqual([
-      'say: The latest post, from Youth yesterday: Pizza night Friday at 7.',
-    ])
+    expect(await say('what’s the latest post?')).toEqual(latest)
   })
 
   it('to a member, from their Public Facing', async () => {
     const say = conversation({ posts })
-    expect(await say('read me the newest post from youth')).toEqual([
-      'say: The latest post, from Youth yesterday: Pizza night Friday at 7.',
-    ])
+    expect(await say('read me the newest post from youth')).toEqual(latest)
   })
 })
 

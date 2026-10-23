@@ -27,6 +27,7 @@ import { TourHost } from '@/features/tour/TourHost'
 import { useTourStore } from '@/features/tour/tourStore'
 import { buildTabTour } from '@/features/tour/flows'
 import type { Tab } from '@/lib/roles'
+import { isTabVisible } from '@/lib/featureFlags'
 import { INBOX_TITLE } from '@/features/inbox/InboxTabs'
 
 const DRAWER_W = 260
@@ -237,7 +238,8 @@ export default function AppLayout() {
     // so reaching /inventory no longer implies permission to see it. The
     // screen redirects anyone who is not an admin.
     inventory: 'issues',
-    posts: 'public',
+    // Only while Posts is shown (featureFlags: HIDDEN_PUBLIC_TABS).
+    ...(isTabVisible('posts') ? { posts: 'public' as Tab } : {}),
     // A member reaches the store inside Public Facing; a sale notification
     // links to /store for everyone, so it opens for them too.
     store: 'public',

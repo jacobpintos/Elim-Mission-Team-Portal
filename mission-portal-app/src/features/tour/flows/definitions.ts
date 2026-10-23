@@ -559,9 +559,9 @@ export const publicFlow: TourFlow = {
       id: 'pub-intro',
       route: '/public',
       title: 'The public-facing site',
-      body: 'This is what visitors and public users see — Posts, Connect, Giving, the Elim Store, Our Story, Content and Photos. It is a tab like any other, so you can look at it whenever you want and leave by opening anything else.',
+      body: 'This is what visitors and public users see — Connect, Giving, the Elim Store, Our Story and Content. It is a tab like any other, so you can look at it whenever you want and leave by opening anything else.',
       bullets: [
-        'Six public sections',
+        'Five public sections',
         'Content also has its own tab, since members use it most',
         'Good for checking what visitors experience',
       ],

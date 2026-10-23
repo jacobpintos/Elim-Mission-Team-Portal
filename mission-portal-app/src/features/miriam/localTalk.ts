@@ -1,5 +1,6 @@
 import type { Announcement, CarpoolCarData, Message, PostPage, Room, Task } from '@/types/events'
 import { visibleTabs } from '@/lib/roles'
+import { isTabVisible } from '@/lib/featureFlags'
 import { postsAsked, postsFor, postsSaid } from '@/lib/miriamPosts'
 import type { UserProfile } from '@/types/user'
 import { seesTeamSide, type EventInstance } from '../../../functions/src/miriam/data'
@@ -1370,6 +1371,8 @@ async function postsHere(said: string, here: Here, talk: Talk): Promise<boolean>
   if (!here.profile) return false
   const tabs = visibleTabs(here.profile)
   if (!tabs.includes('posts') && !tabs.includes('public')) return false
+  // Hidden from the app (featureFlags: HIDDEN_PUBLIC_TABS): not read out either.
+  if (!isTabVisible('posts')) return false
   const ask = postsAsked(said)
   if (!ask) return false
   talk.thinking()

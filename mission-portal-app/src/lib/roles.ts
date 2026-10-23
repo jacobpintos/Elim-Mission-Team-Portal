@@ -145,7 +145,8 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
   // sign-out button.
   if (!isMember) {
     if (!PUBLIC_SURFACE_ENABLED) return ['settings']
-    return [
+    // Less any page hidden on its own (featureFlags: HIDDEN_PUBLIC_TABS).
+    return onlyVisible([
       'home',
       'events',
       'announce',
@@ -156,7 +157,7 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
       'story',
       'posts',
       'settings',
-    ]
+    ])
   }
 
   if (isAdmin(u)) {

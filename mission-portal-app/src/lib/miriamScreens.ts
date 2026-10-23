@@ -1,5 +1,6 @@
 import type { UserProfile } from '@/types/user'
 import { canUseMessages, isAdmin, visibleTabs, type Tab } from './roles'
+import { isTabVisible } from './featureFlags'
 import { ADMIN_SECTIONS } from './adminSections'
 
 /**
@@ -69,7 +70,7 @@ export function screensFor(profile: UserProfile | null): MiriamScreen[] {
   // A member's Public Facing section: its pages, as a public follower has them as tabs.
   if (tabs.includes('public')) {
     screens.push(
-      { id: 'posts', label: 'Posts', path: '/public/posts' },
+      ...(isTabVisible('posts') ? [{ id: 'posts', label: 'Posts', path: '/public/posts' }] : []),
       { id: 'connect', label: 'Connect — meet with our leadership', path: '/public/connect' },
       { id: 'giving', label: 'Giving', path: '/public/giving' },
       { id: 'store', label: 'Elim Store — clothing and books', path: '/public/store' },

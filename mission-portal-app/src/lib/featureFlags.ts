@@ -56,15 +56,35 @@ export const SIGN_UP_ENABLED = false
  * hidden behaviour, and nothing under `app/(app)/public/` is deleted.
  *
  * To hide the whole section again:   PUBLIC_SURFACE_ENABLED = false
- * To hide one tab on its own:        drop its key from VISIBLE_PUBLIC_TABS
+ * To hide one tab on its own:        add its key to HIDDEN_PUBLIC_TABS
  *
  * Tab keys are plain strings rather than the `Tab` union so that `roles.ts`,
  * which owns that union, can import from here without a circular reference.
  */
 export const PUBLIC_SURFACE_ENABLED = true
 
-/** Every tab that belongs to the public-facing surface. */
-export const PUBLIC_FACING_TABS = ['posts', 'connect', 'giving', 'store', 'story', 'music'] as const
+/**
+ * Every tab that belongs to the public-facing surface. `photos` is a page of
+ * Public Facing only, never a menu entry of its own, but it is hidden the same way.
+ */
+export const PUBLIC_FACING_TABS = [
+  'posts',
+  'connect',
+  'giving',
+  'store',
+  'story',
+  'music',
+  'photos',
+] as const
+
+/**
+ * Public-facing tabs hidden on their own while the rest are shown.
+ *
+ * Posts and Photos: hidden at the church's request. Their screens, and
+ * everything behind them, are kept; taking a key out of this list brings its
+ * tab back — the menu, Public Facing, the route, the tour and Miriam with it.
+ */
+export const HIDDEN_PUBLIC_TABS: readonly string[] = ['posts', 'photos']
 
 /**
  * The public-facing tabs currently reachable.
@@ -74,7 +94,7 @@ export const PUBLIC_FACING_TABS = ['posts', 'connect', 'giving', 'store', 'story
  * guests and interns see, so it stays visible even when the rest are hidden.
  */
 export const VISIBLE_PUBLIC_TABS: readonly string[] = PUBLIC_SURFACE_ENABLED
-  ? PUBLIC_FACING_TABS
+  ? PUBLIC_FACING_TABS.filter((t) => !HIDDEN_PUBLIC_TABS.includes(t))
   : ['music']
 
 /**

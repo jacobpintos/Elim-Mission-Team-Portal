@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { postsAsked, postsFor, postsSaid } from './miriamPosts'
 import { screenAsked } from './miriamQuick'
 import { screensFor } from './miriamScreens'
+import { isTabVisible } from './featureFlags'
 import type { PostPage } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 
@@ -61,7 +62,8 @@ describe('a public follower’s screens, asked for', () => {
     ['take me to giving', 'giving'],
     ['open our story', 'story'],
     ['open the meeting form', 'connect'],
-    ['go to posts', 'posts'],
+    // Only while Posts is shown (featureFlags: HIDDEN_PUBLIC_TABS); otherwise not a screen of theirs.
+    ['go to posts', isTabVisible('posts') ? 'posts' : null],
     ['show me the events', 'events'],
   ])('%s', (said, id) => {
     expect(screenAsked(said, screens)).toBe(id)

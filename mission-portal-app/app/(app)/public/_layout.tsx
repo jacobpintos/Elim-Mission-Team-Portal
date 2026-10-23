@@ -1,9 +1,10 @@
-import { Slot, useRouter, usePathname } from 'expo-router'
+import { Redirect, Slot, useRouter, usePathname } from 'expo-router'
 import { ScrollView, Pressable } from 'react-native'
 import { XStack, Text, YStack, View } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { isTabVisible } from '@/lib/featureFlags'
 
-const TABS = [
+const ALL_TABS = [
   { key: 'posts', label: 'Posts', path: '/(app)/public/posts' },
   { key: 'connect', label: 'Connect', path: '/(app)/public/connect' },
   { key: 'giving', label: 'Giving', path: '/(app)/public/giving' },
@@ -13,11 +14,17 @@ const TABS = [
   { key: 'photos', label: 'Photos', path: '/(app)/public/photos' },
 ]
 
+/** Less any hidden on its own (featureFlags: HIDDEN_PUBLIC_TABS). */
+export const PUBLIC_TABS = ALL_TABS.filter((t) => isTabVisible(t.key))
+
 export default function PublicLayout() {
   const colors = useThemeColors()
   const router = useRouter()
   const pathname = usePathname()
-  const activeKey = pathname.split('/').pop() ?? 'posts'
+  const activeKey = pathname.split('/').pop() ?? ''
+  // A hidden page, reached by its address: the section's first page instead.
+  const hidden = ALL_TABS.find((t) => t.key === activeKey && !PUBLIC_TABS.includes(t))
+  if (hidden && PUBLIC_TABS[0]) return <Redirect href={PUBLIC_TABS[0].path as never} />
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
@@ -32,7 +39,7 @@ export default function PublicLayout() {
           contentContainerStyle={{ paddingHorizontal: 8 }}
         >
           <XStack gap="$0">
-            {TABS.map((tab) => {
+            {PUBLIC_TABS.map((tab) => {
               const isActive = activeKey === tab.key || pathname.endsWith('/' + tab.key)
               return (
                 <Pressable key={tab.key} onPress={() => router.push(tab.path as never)}>

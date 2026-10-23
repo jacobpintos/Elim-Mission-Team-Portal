@@ -12,6 +12,7 @@ import {
   countsTowardAllGroup,
 } from './roles'
 import type { Tab } from './roles'
+import { isTabVisible } from './featureFlags'
 import type { UserProfile, Role } from '@/types/user'
 
 const user = (...roles: Role[]) => ({ uid: 'u1', roles }) as UserProfile
@@ -53,9 +54,11 @@ describe('visibleTabs', () => {
   it('gives a public user the visitor-facing pages', () => {
     const tabs = visibleTabs(user('public'))
 
-    for (const t of ['home', 'posts', 'connect', 'giving', 'store', 'story', 'music'] as Tab[]) {
+    for (const t of ['home', 'connect', 'giving', 'store', 'story', 'music'] as Tab[]) {
       expect(tabs).toContain(t)
     }
+    // Posts is theirs only while it is shown (featureFlags: HIDDEN_PUBLIC_TABS).
+    expect(tabs.includes('posts')).toBe(isTabVisible('posts'))
     // Settings is never dropped: it holds account deletion, which has to stay
     // reachable for anyone who has an account at all.
     expect(tabs).toContain('settings')
