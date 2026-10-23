@@ -1,20 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Image } from 'expo-image'
-import { Spinner, Text, XStack, YStack } from 'tamagui'
-import { doc } from 'firebase/firestore'
+import { Text, XStack, YStack } from 'tamagui'
 import { Arrow, BrandHero, BrandMark, INK, Overline, SERIF } from '@/components/ui/Brand'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
-import { onSnapshot } from '@/lib/liveFirestore'
-import { db } from '@/lib/firebase'
 import { openExternalUrl } from '@/lib/externalUrl'
 import { parseEmphasis } from '@/lib/textEmphasis'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useThemeStore } from '@/stores/themeStore'
 import { autoTextColor } from '@/theme/contrast'
-import type { ButtonData, PageBlock, PageData, QuoteData, TextData } from '@/types/pages'
-import { composeStoryDraft, paragraphs, type Cover, type StorySection } from './storyDraft'
-import { DraftNotice, HeroPill, renderRestBlock } from './designedParts'
+import type { ButtonData, PageBlock, QuoteData, TextData } from '@/types/pages'
+import { composeStory, paragraphs, type Cover, type StorySection } from './storyLayout'
+import { HeroPill, renderRestBlock } from './designedParts'
 
 type Colors = ReturnType<typeof useThemeColors>
 
@@ -261,11 +258,9 @@ function OutlinedAction({ action, primary }: { action: ButtonData; primary: stri
 }
 
 /**
- * A redesign of Our Story, drawn from the live page's own content and pictures.
- *
- * Read-only, like Draft Giving and Draft Connect: the blocks come from
- * publicPages.ourstory and are laid out by composeStoryDraft, so this is
- * always the real Our Story in the new design, and nothing done here changes it.
+ * Our Story, as people see it: its blocks and pictures (publicPages.ourstory),
+ * as the page builder holds them, laid out by composeStory. Admins still edit
+ * the blocks in the page builder (PageBuilderScreen); this only draws them.
  *
  * Top to bottom, in the page's order: the header in the dark band, with the
  * photograph of Pastor Ajai and Maureena beside it rather than under a wash;
@@ -274,32 +269,22 @@ function OutlinedAction({ action, primary }: { action: ButtonData; primary: stri
  * of their own; the books on a dark shelf with the excerpt under them; Sunny
  * beside the album; and the logo's mark to close.
  */
-export function DraftStoryScreen() {
+export function StoryDesign({
+  blocks,
+  top,
+}: {
+  blocks: PageBlock[]
+  /** Above the header: the admins' Edit Page button. */
+  top?: ReactNode
+}) {
   const colors = useThemeColors()
   const primary = colors.primary
   const onPrimary = useThemeStore((s) => s.theme.onPrimaryOverride) ?? autoTextColor(primary)
 
-  const [blocks, setBlocks] = useState<PageBlock[] | null>(null)
   const [width, setWidth] = useState(0)
   const [viewing, setViewing] = useState<string | null>(null)
 
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'config', 'main'), (snap) => {
-      const page = snap.data()?.publicPages?.ourstory as PageData | undefined
-      setBlocks(page?.blocks ?? [])
-    })
-    return () => unsub()
-  }, [])
-
-  const draft = useMemo(() => composeStoryDraft(blocks ?? []), [blocks])
-
-  if (!blocks) {
-    return (
-      <YStack flex={1} alignItems="center" justifyContent="center">
-        <Spinner size="large" />
-      </YStack>
-    )
-  }
+  const layout = useMemo(() => composeStory(blocks), [blocks])
 
   const wide = width >= 720
   const gutter = wide ? 40 : 20
@@ -309,14 +294,14 @@ export function DraftStoryScreen() {
   const besideWidth = wide ? Math.round((column - besideGap) * 0.42) : column
   const space = wide ? 80 : 56
 
-  const hero = draft.hero
+  const hero = layout.hero
   const heroPhoto = hero?.bgImage?.trim()
 
   // A band straight after the header or another band meets it edge to edge,
   // rather than leaving a strip of page between the two.
   const isBand = (s: StorySection | undefined) => s?.kind === 'group' || s?.kind === 'shelf'
   const section = (s: StorySection, i: number) => {
-    const bandGap = i === 0 || isBand(draft.sections[i - 1]) ? 0 : space
+    const bandGap = i === 0 || isBand(layout.sections[i - 1]) ? 0 : space
     switch (s.kind) {
       case 'text':
         return (
@@ -500,7 +485,7 @@ export function DraftStoryScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
     >
-      <DraftNotice page="Our Story" gutter={gutter} />
+      {top}
 
       {width > 0 ? (
         <>
@@ -525,7 +510,7 @@ export function DraftStoryScreen() {
             }
           />
 
-          {draft.sections.map(section)}
+          {layout.sections.map(section)}
 
           {/* Close */}
           <YStack alignItems="center" paddingTop={space} paddingBottom={64}>

@@ -7,7 +7,7 @@ import type {
   QuoteData,
   TextData,
 } from '@/types/pages'
-import { giveHandle } from './draftGiving'
+import { giveHandle } from './givingLayout'
 
 /** A picture from a gallery, and where tapping it goes, if anywhere. */
 export interface Cover {
@@ -18,8 +18,8 @@ export interface Cover {
 }
 
 /**
- * One section of the draft. Our Story is a story, so unlike Giving and Connect
- * the draft keeps the page's order and sets each part in the new design,
+ * One section of the design. Our Story is a story, so unlike Giving and Connect
+ * the design keeps the page's order and sets each part in the new design,
  * pairing only what plainly belongs together.
  */
 export type StorySection =
@@ -35,10 +35,10 @@ export type StorySection =
   /** A gallery, with the buttons either side of it. */
   | { kind: 'shelf'; key: string; heading: string | null; covers: Cover[]; actions: ButtonData[] }
   | { kind: 'action'; key: string; action: ButtonData }
-  /** A kind the draft has no setting for, drawn as the page builder draws it. */
+  /** A kind the design has no setting for, drawn as the page builder draws it. */
   | { kind: 'block'; key: string; block: PageBlock }
 
-export interface StoryDraft {
+export interface StoryLayout {
   hero: HeroData | null
   sections: StorySection[]
 }
@@ -62,10 +62,10 @@ function covers(data: GalleryData): Cover[] {
 }
 
 /**
- * The live Our Story page's blocks, as the draft's sections.
+ * The live Our Story page's blocks, as the design's sections.
  *
  * Read-only and invented nowhere, as with Giving and Connect: every word,
- * photo and link is the page's own, and what the draft decides is the setting.
+ * photo and link is the page's own, and what the design decides is the setting.
  *
  * In page order, with three pairings:
  * - Two or more headed passages in a row become one group, set side by side —
@@ -77,20 +77,20 @@ function covers(data: GalleryData): Cover[] {
  *   REVIVE ME sits with the book's cover.
  *
  * The first passage opens the story in a larger size. Dividers are dropped;
- * the draft's sections mark their own edges. A second hero, and any kind the
- * draft has no setting for, is drawn as the page builder draws it.
+ * the design's sections mark their own edges. A second hero, and any kind the
+ * design has no setting for, is drawn as the page builder draws it.
  */
-export function composeStoryDraft(blocks: PageBlock[]): StoryDraft {
-  const draft: StoryDraft = { hero: null, sections: [] }
-  const out = draft.sections
+export function composeStory(blocks: PageBlock[]): StoryLayout {
+  const layout: StoryLayout = { hero: null, sections: [] }
+  const out = layout.sections
   const key = (b: PageBlock) => String(b.id)
 
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]
     switch (block.type) {
       case 'hero':
-        if (draft.hero) out.push({ kind: 'block', key: key(block), block })
-        else draft.hero = block.data as HeroData
+        if (layout.hero) out.push({ kind: 'block', key: key(block), block })
+        else layout.hero = block.data as HeroData
         break
 
       case 'text': {
@@ -169,7 +169,7 @@ export function composeStoryDraft(blocks: PageBlock[]): StoryDraft {
 
   const first = out[0]
   if (first?.kind === 'text') first.lede = true
-  return draft
+  return layout
 }
 
 /** A passage's paragraphs, one to a line, as the page builder's text block splits them. */

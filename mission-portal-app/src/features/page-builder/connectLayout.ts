@@ -8,10 +8,10 @@ import type {
   TextData,
   TwoColData,
 } from '@/types/pages'
-import { giveHandle, type GiveWay } from './draftGiving'
+import { giveHandle, type GiveWay } from './givingLayout'
 
-/** The Connect page, sorted into the parts the draft lays out. */
-export interface ConnectDraft {
+/** The Connect page, sorted into the parts the design lays out. */
+export interface ConnectLayout {
   hero: HeroData | null
   /** Who the church is, in a line: the page's first quote. */
   tagline: QuoteData | null
@@ -29,10 +29,10 @@ export interface ConnectDraft {
 }
 
 /**
- * The live Connect page's blocks, sorted into the draft's sections.
+ * The live Connect page's blocks, sorted into the design's sections.
  *
- * Read-only and invented nowhere, as composeGivingDraft is for Giving: every
- * word, photo and link is the page's own, and what the draft decides is the
+ * Read-only and invented nowhere, as composeGiving is for Giving: every
+ * word, photo and link is the page's own, and what the design decides is the
  * order and the setting.
  *
  * The order is what someone opening Connect is there for. Who the church is
@@ -40,12 +40,12 @@ export interface ConnectDraft {
  * directions; then the people, and the form to ask to meet them, which is a
  * closing move rather than something to put in the middle.
  *
- * A second block of a kind the draft gives a section to is carried to the end
+ * A second block of a kind the design gives a section to is carried to the end
  * and drawn as it is today, as is a kind it has no section for. Only dividers
- * are dropped; the draft's sections mark their own edges.
+ * are dropped; the design's sections mark their own edges.
  */
-export function composeConnectDraft(blocks: PageBlock[]): ConnectDraft {
-  const draft: ConnectDraft = {
+export function composeConnect(blocks: PageBlock[]): ConnectLayout {
+  const layout: ConnectLayout = {
     hero: null,
     tagline: null,
     visit: null,
@@ -60,27 +60,27 @@ export function composeConnectDraft(blocks: PageBlock[]): ConnectDraft {
   for (const block of blocks) {
     switch (block.type) {
       case 'hero':
-        if (draft.hero) draft.rest.push(block)
-        else draft.hero = block.data as HeroData
+        if (layout.hero) layout.rest.push(block)
+        else layout.hero = block.data as HeroData
         break
       case 'quote':
-        if (draft.tagline) draft.rest.push(block)
-        else draft.tagline = block.data as QuoteData
+        if (layout.tagline) layout.rest.push(block)
+        else layout.tagline = block.data as QuoteData
         break
       case 'twocol':
-        if (draft.visit) draft.rest.push(block)
-        else draft.visit = block.data as TwoColData
+        if (layout.visit) layout.rest.push(block)
+        else layout.visit = block.data as TwoColData
         break
       case 'meeting':
-        if (draft.meeting) draft.rest.push(block)
-        else draft.meeting = block.data as MeetingData
+        if (layout.meeting) layout.rest.push(block)
+        else layout.meeting = block.data as MeetingData
         break
       case 'social': {
         const data = block.data as SocialData
-        draft.linksHeading ??= data.heading?.trim() || null
+        layout.linksHeading ??= data.heading?.trim() || null
         for (const link of data.links ?? []) {
           if (!link.url?.trim()) continue
-          draft.links.push({
+          layout.links.push({
             label: link.label?.trim() || giveHandle(link.url),
             url: link.url.trim(),
             icon: link.icon ?? '',
@@ -90,18 +90,18 @@ export function composeConnectDraft(blocks: PageBlock[]): ConnectDraft {
         break
       }
       case 'text':
-        draft.story.push(block.data as TextData)
+        layout.story.push(block.data as TextData)
         break
       case 'button':
-        draft.actions.push(block.data as ButtonData)
+        layout.actions.push(block.data as ButtonData)
         break
       case 'divider':
         break
       default:
-        draft.rest.push(block)
+        layout.rest.push(block)
     }
   }
-  return draft
+  return layout
 }
 
 /** "10 AM at The Midnight Gem" → "The Midnight Gem"; anything else as it is. */

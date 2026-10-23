@@ -18,8 +18,8 @@ export interface GiveWay {
   handle: string
 }
 
-/** The Giving page, sorted into the parts the draft lays out. */
-export interface GivingDraft {
+/** The Giving page, sorted into the parts the design lays out. */
+export interface GivingLayout {
   hero: HeroData | null
   waysHeading: string | null
   ways: GiveWay[]
@@ -31,12 +31,12 @@ export interface GivingDraft {
 }
 
 /**
- * The live Giving page's blocks, sorted into the draft's sections.
+ * The live Giving page's blocks, sorted into the design's sections.
  *
  * Nothing is written and nothing is invented: every heading, line and link
- * comes from the page as an admin entered it, so the draft always shows the
- * real Giving page in the new design. What the draft changes is where things
- * sit and how they are set.
+ * comes from the page as an admin entered it, so this is always the real
+ * Giving page. What the design changes is where things sit and how they are
+ * set.
  *
  * The ways to give lead, straight under the hero. They are what someone opened
  * the page to find, and a reason to give reads better once you can see how.
@@ -44,13 +44,13 @@ export interface GivingDraft {
  * App marks — and, on a page with no such block, from its buttons instead, so
  * that a page built from buttons still gets cards.
  *
- * A block of a kind the draft has no section for is carried to the end and
- * drawn as it is today, and so is a second hero or quote: a draft that quietly
+ * A block of a kind the design has no section for is carried to the end and
+ * drawn as it is today, and so is a second hero or quote: a design that quietly
  * loses a block is worse than one that sets it plainly. Only dividers are
- * dropped, because the draft's sections already mark their own edges.
+ * dropped, because the design's sections already mark their own edges.
  */
-export function composeGivingDraft(blocks: PageBlock[]): GivingDraft {
-  const draft: GivingDraft = {
+export function composeGiving(blocks: PageBlock[]): GivingLayout {
+  const layout: GivingLayout = {
     hero: null,
     waysHeading: null,
     ways: [],
@@ -63,15 +63,15 @@ export function composeGivingDraft(blocks: PageBlock[]): GivingDraft {
   for (const block of blocks) {
     switch (block.type) {
       case 'hero':
-        if (draft.hero) draft.rest.push(block)
-        else draft.hero = block.data as HeroData
+        if (layout.hero) layout.rest.push(block)
+        else layout.hero = block.data as HeroData
         break
       case 'social': {
         const data = block.data as SocialData
-        draft.waysHeading ??= data.heading?.trim() || null
+        layout.waysHeading ??= data.heading?.trim() || null
         for (const link of data.links ?? []) {
           if (!link.url?.trim()) continue
-          draft.ways.push({
+          layout.ways.push({
             label: link.label?.trim() || giveHandle(link.url),
             url: link.url.trim(),
             icon: link.icon ?? '',
@@ -81,24 +81,24 @@ export function composeGivingDraft(blocks: PageBlock[]): GivingDraft {
         break
       }
       case 'quote':
-        if (draft.quote) draft.rest.push(block)
-        else draft.quote = block.data as QuoteData
+        if (layout.quote) layout.rest.push(block)
+        else layout.quote = block.data as QuoteData
         break
       case 'text':
-        draft.story.push(block.data as TextData)
+        layout.story.push(block.data as TextData)
         break
       case 'button':
-        draft.actions.push(block.data as ButtonData)
+        layout.actions.push(block.data as ButtonData)
         break
       case 'divider':
         break
       default:
-        draft.rest.push(block)
+        layout.rest.push(block)
     }
   }
 
-  if (!draft.ways.length) {
-    draft.ways = draft.actions
+  if (!layout.ways.length) {
+    layout.ways = layout.actions
       .filter((b) => b.url?.trim())
       .map((b) => ({
         label: b.label?.trim() || giveHandle(b.url!),
@@ -106,10 +106,10 @@ export function composeGivingDraft(blocks: PageBlock[]): GivingDraft {
         icon: '',
         handle: giveHandle(b.url!),
       }))
-    draft.actions = draft.actions.filter((b) => !b.url?.trim())
+    layout.actions = layout.actions.filter((b) => !b.url?.trim())
   }
 
-  return draft
+  return layout
 }
 
 /**

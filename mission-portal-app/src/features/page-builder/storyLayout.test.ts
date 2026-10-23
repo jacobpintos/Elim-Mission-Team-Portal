@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { composeStoryDraft, paragraphs } from './storyDraft'
+import { composeStory, paragraphs } from './storyLayout'
 import type { PageBlock } from '@/types/pages'
 
 const block = (id: number, type: string, data: Record<string, unknown> = {}): PageBlock =>
@@ -32,9 +32,9 @@ const live: PageBlock[] = [
   block(11, 'image', { src: 'https://example.com/revived.png' }),
 ]
 
-describe('composeStoryDraft', () => {
+describe('composeStory', () => {
   it('lays the live page out in its own order', () => {
-    const d = composeStoryDraft(live)
+    const d = composeStory(live)
     expect(d.hero?.heading).toBe('A missionary journey from the Middle East to the Midwest.')
     expect(d.sections.map((s) => s.kind)).toEqual([
       'text',
@@ -47,13 +47,13 @@ describe('composeStoryDraft', () => {
   })
 
   it('opens with the first passage set larger, and only that one', () => {
-    const d = composeStoryDraft(live)
+    const d = composeStory(live)
     const texts = d.sections.filter((s) => s.kind === 'text')
     expect(texts.map((s) => s.lede)).toEqual([true, false])
   })
 
   it('sets the people side by side, with their photo', () => {
-    const group = composeStoryDraft(live).sections.find((s) => s.kind === 'group')
+    const group = composeStory(live).sections.find((s) => s.kind === 'group')
     expect(group?.kind === 'group' && group.texts.map((t) => t.heading)).toEqual([
       'Pastor Ajai',
       'Maureena',
@@ -64,14 +64,14 @@ describe('composeStoryDraft', () => {
   })
 
   it('puts the excerpt with the covers, and says where each cover goes', () => {
-    const shelf = composeStoryDraft(live).sections.find((s) => s.kind === 'shelf')
+    const shelf = composeStory(live).sections.find((s) => s.kind === 'shelf')
     if (shelf?.kind !== 'shelf') throw new Error('no shelf')
     expect(shelf.actions.map((a) => a.label)).toEqual(['Read excerpt from REVIVE ME'])
     expect(shelf.covers.map((c) => c.handle)).toEqual(['facebook.com', 'theelimstore.com'])
   })
 
   it('pairs a single passage with the picture after it', () => {
-    const feature = composeStoryDraft(live).sections.at(-1)
+    const feature = composeStory(live).sections.at(-1)
     expect(feature?.kind === 'feature' && [feature.text.heading, feature.image.src]).toEqual([
       'Sunny Singh',
       'https://example.com/revived.png',
@@ -79,7 +79,7 @@ describe('composeStoryDraft', () => {
   })
 
   it('leaves a passage alone when no picture follows, and a picture alone when no passage leads', () => {
-    const d = composeStoryDraft([
+    const d = composeStory([
       block(1, 'text', { heading: 'Alone' }),
       block(2, 'quote', { text: 'Between' }),
       block(3, 'image', { src: 'https://example.com/a.png' }),
@@ -88,7 +88,7 @@ describe('composeStoryDraft', () => {
   })
 
   it('takes buttons after a gallery too, and keeps a button away from one as its own', () => {
-    const d = composeStoryDraft([
+    const d = composeStory([
       block(1, 'button', { label: 'Alone', url: 'https://example.com/alone' }),
       block(2, 'quote', { text: 'Between' }),
       block(3, 'gallery', { images: ['https://example.com/a.png'] }),
@@ -105,7 +105,7 @@ describe('composeStoryDraft', () => {
   })
 
   it('drops what has nothing to show, and keeps what it has no setting for', () => {
-    const d = composeStoryDraft([
+    const d = composeStory([
       block(1, 'divider'),
       block(2, 'image', { src: '  ' }),
       block(3, 'gallery', { images: [] }),
@@ -119,7 +119,7 @@ describe('composeStoryDraft', () => {
   })
 
   it('draws a second hero as a block rather than replacing the first', () => {
-    const d = composeStoryDraft([
+    const d = composeStory([
       block(1, 'hero', { heading: 'First' }),
       block(2, 'hero', { heading: 'Second' }),
     ])

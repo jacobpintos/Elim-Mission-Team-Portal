@@ -6,7 +6,7 @@ import { openExternalUrl } from '@/lib/externalUrl'
 import { resolveSocialIcon } from '@/lib/socialIcon'
 import { useThemeColors } from '@/theme/useThemeColors'
 import type { PageBlock } from '@/types/pages'
-import type { GiveWay } from './draftGiving'
+import type { GiveWay } from './givingLayout'
 import { ImageBlock } from './BlockRenderer/ImageBlock'
 import { EmbedBlock } from './BlockRenderer/EmbedBlock'
 import { GalleryBlock } from './BlockRenderer/GalleryBlock'
@@ -17,30 +17,8 @@ import { HeroBlock } from './BlockRenderer/HeroBlock'
 import { QuoteBlock } from './BlockRenderer/QuoteBlock'
 
 /**
- * Pieces the designed drafts — Giving, Connect and Our Story — have in common.
+ * Pieces the designed pages — Giving, Connect and Our Story — have in common.
  */
-
-/** The strip across the top saying what the page is, for the admins who can see it. */
-export function DraftNotice({ page, gutter }: { page: string; gutter: number }) {
-  const colors = useThemeColors()
-  return (
-    <XStack
-      paddingHorizontal={gutter}
-      paddingVertical={10}
-      gap={8}
-      alignItems="center"
-      justifyContent="center"
-      backgroundColor={colors.primary + '1a'}
-    >
-      <Text fontSize={12} fontWeight="800" letterSpacing={1.5} color={colors.primary}>
-        DRAFT
-      </Text>
-      <Text fontSize={12} color={colors.textMuted} flexShrink={1}>
-        A new design for {page}, showing the live page’s content. Nothing here changes {page}.
-      </Text>
-    </XStack>
-  )
-}
 
 /** A button in the dark band: solid coral for the main way on, outlined for the other. */
 export function HeroPill({

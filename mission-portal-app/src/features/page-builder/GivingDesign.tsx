@@ -1,18 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Arrow, BrandHero, BrandMark, Overline, SERIF } from '@/components/ui/Brand'
-import { Spinner, Text, XStack, YStack } from 'tamagui'
-import { doc } from 'firebase/firestore'
-import { onSnapshot } from '@/lib/liveFirestore'
-import { db } from '@/lib/firebase'
+import { Text, XStack, YStack } from 'tamagui'
 import { openExternalUrl } from '@/lib/externalUrl'
 import { parseEmphasis } from '@/lib/textEmphasis'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useThemeStore } from '@/stores/themeStore'
 import { autoTextColor } from '@/theme/contrast'
-import type { PageBlock, PageData } from '@/types/pages'
-import { composeGivingDraft } from './draftGiving'
-import { DraftNotice, LinkCard, renderRestBlock } from './designedParts'
+import type { PageBlock } from '@/types/pages'
+import { composeGiving } from './givingLayout'
+import { LinkCard, renderRestBlock } from './designedParts'
 
 /**
  * Said when the page carries no verse of its own. 2 Corinthians 9:7, ESV.
@@ -24,11 +21,10 @@ const DEFAULT_VERSE = {
 }
 
 /**
- * A redesign of the Giving page, drawn from the live page's own content.
- *
- * It only reads: the blocks come from publicPages.giving and are sorted into
- * the draft's sections by composeGivingDraft, so what is shown is always the
- * real Giving page in the new design, and nothing here can change it.
+ * The Giving page, as people see it: its blocks (publicPages.giving), as the
+ * page builder holds them, sorted into the design's sections by
+ * composeGiving. Admins still edit the blocks in the page builder
+ * (PageBuilderScreen); this only draws them.
  *
  * Top to bottom: a dark hero carrying the logo's mark, with one button that
  * goes straight to the ways to give; the ways themselves as cards, lifted over
@@ -37,33 +33,23 @@ const DEFAULT_VERSE = {
  * a quiet close. The coral throughout is the theme's primary colour, which is
  * the logo's.
  */
-export function DraftGivingScreen() {
+export function GivingDesign({
+  blocks,
+  top,
+}: {
+  blocks: PageBlock[]
+  /** Above the header: the admins' Edit Page button. */
+  top?: ReactNode
+}) {
   const colors = useThemeColors()
   const primary = colors.primary
   const onPrimary = useThemeStore((s) => s.theme.onPrimaryOverride) ?? autoTextColor(primary)
 
-  const [blocks, setBlocks] = useState<PageBlock[] | null>(null)
   const [width, setWidth] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
   const waysY = useRef(0)
 
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'config', 'main'), (snap) => {
-      const page = snap.data()?.publicPages?.giving as PageData | undefined
-      setBlocks(page?.blocks ?? [])
-    })
-    return () => unsub()
-  }, [])
-
-  const draft = useMemo(() => composeGivingDraft(blocks ?? []), [blocks])
-
-  if (!blocks) {
-    return (
-      <YStack flex={1} alignItems="center" justifyContent="center">
-        <Spinner size="large" />
-      </YStack>
-    )
-  }
+  const layout = useMemo(() => composeGiving(blocks), [blocks])
 
   const wide = width >= 720
   const columns = width >= 960 ? 3 : width >= 600 ? 2 : 1
@@ -73,13 +59,13 @@ export function DraftGivingScreen() {
   const row = Math.min(width, 1040) - gutter * 2 - panelPadding * 2 - 2
   const cardWidth = columns === 1 ? '100%' : (row - 16 * (columns - 1)) / columns
 
-  const hero = draft.hero
+  const hero = layout.hero
   const heading = hero?.heading?.trim() || 'Giving'
-  const verse = draft.quote?.text
-    ? { text: draft.quote.text, attribution: draft.quote.attribution ?? '' }
+  const verse = layout.quote?.text
+    ? { text: layout.quote.text, attribution: layout.quote.attribution ?? '' }
     : DEFAULT_VERSE
 
-  const giveNow = draft.ways.length ? (
+  const giveNow = layout.ways.length ? (
     <XStack marginTop={10} gap={18} alignItems="center" flexWrap="wrap">
       <Pressable
         onPress={() => scrollRef.current?.scrollTo({ y: Math.max(0, waysY.current - 16) })}
@@ -100,9 +86,9 @@ export function DraftGivingScreen() {
         </XStack>
       </Pressable>
       <Text color="rgba(255,255,255,0.7)" fontSize={14}>
-        {draft.ways.length === 1
-          ? `Through ${draft.ways[0].label}`
-          : `${draft.ways.length} ways · ${draft.ways.map((w) => w.label).join(', ')}`}
+        {layout.ways.length === 1
+          ? `Through ${layout.ways[0].label}`
+          : `${layout.ways.length} ways · ${layout.ways.map((w) => w.label).join(', ')}`}
       </Text>
     </XStack>
   ) : null
@@ -113,7 +99,7 @@ export function DraftGivingScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
     >
-      <DraftNotice page="Giving" gutter={gutter} />
+      {top}
 
       <BrandHero
         label="Giving"
@@ -124,13 +110,13 @@ export function DraftGivingScreen() {
         wide={wide}
         gutter={gutter}
         // Room for the ways-to-give panel lifted over the band's lower edge.
-        extraBottom={draft.ways.length ? (wide ? 32 : 28) : 0}
+        extraBottom={layout.ways.length ? (wide ? 32 : 28) : 0}
       >
         {giveNow}
       </BrandHero>
 
       {/* Ways to give, lifted over the hero's lower edge. */}
-      {draft.ways.length ? (
+      {layout.ways.length ? (
         <YStack
           width="100%"
           maxWidth={1040}
@@ -159,14 +145,14 @@ export function DraftGivingScreen() {
                 color={colors.text}
                 letterSpacing={-0.4}
               >
-                {draft.waysHeading || 'Give online'}
+                {layout.waysHeading || 'Give online'}
               </Text>
               <Text fontSize={15} color={colors.textMuted}>
                 Choose whichever is easiest for you.
               </Text>
             </YStack>
             <XStack flexWrap="wrap" gap={16}>
-              {draft.ways.map((way, i) => (
+              {layout.ways.map((way, i) => (
                 <LinkCard key={`${way.url}-${i}`} link={way} width={cardWidth} verb="Give with" />
               ))}
             </XStack>
@@ -225,7 +211,7 @@ export function DraftGivingScreen() {
       </YStack>
 
       {/* The page's own words */}
-      {draft.story.length ? (
+      {layout.story.length ? (
         <YStack backgroundColor={colors.surface} borderTopWidth={1} borderColor={colors.border}>
           <YStack
             width="100%"
@@ -235,7 +221,7 @@ export function DraftGivingScreen() {
             paddingVertical={wide ? 72 : 52}
             gap={wide ? 44 : 36}
           >
-            {draft.story.map((t, i) => (
+            {layout.story.map((t, i) => (
               <YStack key={i} gap={14}>
                 {i === 0 ? <Overline color={colors.primary}>Why we give</Overline> : null}
                 {t.heading ? (
@@ -263,10 +249,10 @@ export function DraftGivingScreen() {
       ) : null}
 
       {/* Buttons that are not ways to give, and anything else on the page. */}
-      {draft.actions.length || draft.rest.length ? (
+      {layout.actions.length || layout.rest.length ? (
         <YStack width="100%" maxWidth={820} alignSelf="center" paddingVertical={24} gap={8}>
-          {draft.rest.map(renderRestBlock)}
-          {draft.actions.map((a, i) => (
+          {layout.rest.map(renderRestBlock)}
+          {layout.actions.map((a, i) => (
             <YStack key={i} paddingHorizontal={gutter} alignItems="center">
               <Pressable
                 onPress={() => openExternalUrl(a.url)}

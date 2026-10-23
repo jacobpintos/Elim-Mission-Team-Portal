@@ -1,19 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Image } from 'expo-image'
-import { Spinner, Text, XStack, YStack } from 'tamagui'
-import { doc } from 'firebase/firestore'
+import { Text, XStack, YStack } from 'tamagui'
 import { Arrow, BrandHero, BrandMark, Overline, SERIF } from '@/components/ui/Brand'
-import { onSnapshot } from '@/lib/liveFirestore'
-import { db } from '@/lib/firebase'
 import { openExternalUrl } from '@/lib/externalUrl'
 import { parseEmphasis } from '@/lib/textEmphasis'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useThemeStore } from '@/stores/themeStore'
 import { autoTextColor } from '@/theme/contrast'
-import type { PageBlock, PageData } from '@/types/pages'
-import { composeConnectDraft, directionsQuery, directionsUrl } from './connectDraft'
-import { DraftNotice, HeroPill, LinkCard, renderRestBlock } from './designedParts'
+import type { PageBlock } from '@/types/pages'
+import { composeConnect, directionsQuery, directionsUrl } from './connectLayout'
+import { HeroPill, LinkCard, renderRestBlock } from './designedParts'
 import { MeetingBlock } from './BlockRenderer/MeetingBlock'
 
 const lines = (text: string | undefined) =>
@@ -23,11 +20,10 @@ const lines = (text: string | undefined) =>
     .filter(Boolean)
 
 /**
- * A redesign of the Connect page, drawn from the live page's own content.
- *
- * Read-only, like Draft Giving: the blocks come from publicPages.connect and
- * are sorted by composeConnectDraft, so this is always the real Connect page
- * in the new design, and nothing done here changes it.
+ * The Connect page, as people see it: its blocks (publicPages.connect), as the
+ * page builder holds them, sorted into the design's sections by
+ * composeConnect. Admins still edit the blocks in the page builder
+ * (PageBuilderScreen); this only draws them.
  *
  * Top to bottom: the page's header in the dark band, with a button to the
  * service details and one to the meeting form; the church's line about itself,
@@ -35,34 +31,24 @@ const lines = (text: string | undefined) =>
  * directions and the venue's photograph; anything else the page says; and the
  * form to ask to meet the leadership last, in a card of its own.
  */
-export function DraftConnectScreen() {
+export function ConnectDesign({
+  blocks,
+  top,
+}: {
+  blocks: PageBlock[]
+  /** Above the header: the admins' Edit Page button. */
+  top?: ReactNode
+}) {
   const colors = useThemeColors()
   const primary = colors.primary
   const onPrimary = useThemeStore((s) => s.theme.onPrimaryOverride) ?? autoTextColor(primary)
 
-  const [blocks, setBlocks] = useState<PageBlock[] | null>(null)
   const [width, setWidth] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
   const visitY = useRef(0)
   const meetingY = useRef(0)
 
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'config', 'main'), (snap) => {
-      const page = snap.data()?.publicPages?.connect as PageData | undefined
-      setBlocks(page?.blocks ?? [])
-    })
-    return () => unsub()
-  }, [])
-
-  const draft = useMemo(() => composeConnectDraft(blocks ?? []), [blocks])
-
-  if (!blocks) {
-    return (
-      <YStack flex={1} alignItems="center" justifyContent="center">
-        <Spinner size="large" />
-      </YStack>
-    )
-  }
+  const layout = useMemo(() => composeConnect(blocks), [blocks])
 
   const wide = width >= 720
   const gutter = wide ? 40 : 20
@@ -71,7 +57,7 @@ export function DraftConnectScreen() {
   const linkWidth = linkColumns === 1 ? '100%' : (column - 16 * (linkColumns - 1)) / linkColumns
   const scrollTo = (y: number) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 16) })
 
-  const visit = draft.visit
+  const visit = layout.visit
   const visitLines = lines(visit?.leftContent)
   const query = directionsQuery(visit?.leftContent)
 
@@ -81,18 +67,18 @@ export function DraftConnectScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
     >
-      <DraftNotice page="Connect" gutter={gutter} />
+      {top}
 
       <BrandHero
         label="Connect"
-        heading={draft.hero?.heading?.trim() || 'Connect'}
-        subheading={draft.hero?.subheading}
-        bgImage={draft.hero?.bgImage}
+        heading={layout.hero?.heading?.trim() || 'Connect'}
+        subheading={layout.hero?.subheading}
+        bgImage={layout.hero?.bgImage}
         primary={primary}
         wide={wide}
         gutter={gutter}
       >
-        {visit || draft.meeting ? (
+        {visit || layout.meeting ? (
           <XStack marginTop={10} gap={12} alignItems="center" flexWrap="wrap">
             {visit ? (
               <HeroPill
@@ -103,7 +89,7 @@ export function DraftConnectScreen() {
                 onPrimary={onPrimary}
               />
             ) : null}
-            {draft.meeting ? (
+            {layout.meeting ? (
               <HeroPill
                 label="Request a meeting"
                 onPress={() => scrollTo(meetingY.current)}
@@ -117,7 +103,7 @@ export function DraftConnectScreen() {
       </BrandHero>
 
       {/* Who the church is, in its own words. */}
-      {draft.tagline?.text ? (
+      {layout.tagline?.text ? (
         <YStack
           width="100%"
           maxWidth={820}
@@ -134,7 +120,7 @@ export function DraftConnectScreen() {
             textAlign="center"
             color={colors.text}
           >
-            {parseEmphasis(draft.tagline.text).map((seg, i) => (
+            {parseEmphasis(layout.tagline.text).map((seg, i) => (
               <Text
                 key={i}
                 fontFamily={SERIF}
@@ -243,7 +229,7 @@ export function DraftConnectScreen() {
       ) : null}
 
       {/* The page's own words. */}
-      {draft.story.length ? (
+      {layout.story.length ? (
         <YStack
           width="100%"
           maxWidth={720}
@@ -252,7 +238,7 @@ export function DraftConnectScreen() {
           paddingTop={wide ? 72 : 52}
           gap={wide ? 44 : 36}
         >
-          {draft.story.map((t, i) => (
+          {layout.story.map((t, i) => (
             <YStack key={i} gap={14}>
               {t.heading ? (
                 <Text
@@ -275,7 +261,7 @@ export function DraftConnectScreen() {
       ) : null}
 
       {/* The church elsewhere. */}
-      {draft.links.length ? (
+      {layout.links.length ? (
         <YStack
           width="100%"
           maxWidth={1040}
@@ -286,19 +272,19 @@ export function DraftConnectScreen() {
         >
           <YStack gap={8}>
             <Overline color={primary}>Follow along</Overline>
-            {draft.linksHeading ? (
+            {layout.linksHeading ? (
               <Text
                 fontSize={wide ? 28 : 24}
                 fontWeight="800"
                 color={colors.text}
                 letterSpacing={-0.4}
               >
-                {draft.linksHeading}
+                {layout.linksHeading}
               </Text>
             ) : null}
           </YStack>
           <XStack flexWrap="wrap" gap={16}>
-            {draft.links.map((link, i) => (
+            {layout.links.map((link, i) => (
               <LinkCard key={`${link.url}-${i}`} link={link} width={linkWidth} verb="Open" />
             ))}
           </XStack>
@@ -306,10 +292,10 @@ export function DraftConnectScreen() {
       ) : null}
 
       {/* Buttons, and anything else the page holds. */}
-      {draft.actions.length || draft.rest.length ? (
+      {layout.actions.length || layout.rest.length ? (
         <YStack width="100%" maxWidth={820} alignSelf="center" paddingTop={32} gap={8}>
-          {draft.rest.map(renderRestBlock)}
-          {draft.actions.map((a, i) => (
+          {layout.rest.map(renderRestBlock)}
+          {layout.actions.map((a, i) => (
             <YStack key={i} paddingHorizontal={gutter} alignItems="center">
               <Pressable
                 onPress={() => openExternalUrl(a.url)}
@@ -333,7 +319,7 @@ export function DraftConnectScreen() {
       ) : null}
 
       {/* Asking to meet: the closing move. */}
-      {draft.meeting ? (
+      {layout.meeting ? (
         <YStack
           width="100%"
           maxWidth={820}
@@ -345,7 +331,7 @@ export function DraftConnectScreen() {
         >
           <Overline color={primary}>Meet with us</Overline>
           {/* The form draws its own card; a second frame round it would be a box in a box. */}
-          <MeetingBlock data={draft.meeting} />
+          <MeetingBlock data={layout.meeting} />
         </YStack>
       ) : null}
 

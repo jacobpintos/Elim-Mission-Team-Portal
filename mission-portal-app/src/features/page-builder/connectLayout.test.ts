@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { composeConnectDraft, directionsQuery, directionsUrl } from './connectDraft'
+import { composeConnect, directionsQuery, directionsUrl } from './connectLayout'
 import type { PageBlock } from '@/types/pages'
 
 const block = (id: number, type: string, data: Record<string, unknown> = {}): PageBlock =>
@@ -22,9 +22,9 @@ const live: PageBlock[] = [
   block(4, 'meeting', { heading: 'Request a Meeting' }),
 ]
 
-describe('composeConnectDraft', () => {
+describe('composeConnect', () => {
   it('sorts the page into its sections', () => {
-    const d = composeConnectDraft(live)
+    const d = composeConnect(live)
     expect(d.hero?.heading).toBe('Come As You Are!')
     expect(d.tagline?.text).toBe('Bringing a Generation to the Rest Found in Jesus')
     expect(d.visit?.leftHead).toBe('Sunday Service')
@@ -33,7 +33,7 @@ describe('composeConnectDraft', () => {
   })
 
   it('keeps a second block of a kind it places, rather than losing it', () => {
-    const d = composeConnectDraft([
+    const d = composeConnect([
       ...live,
       block(5, 'twocol', { leftHead: 'Wednesday' }),
       block(6, 'quote', { text: 'Another line' }),
@@ -43,7 +43,7 @@ describe('composeConnectDraft', () => {
   })
 
   it('makes cards of social links and keeps text, buttons and anything else', () => {
-    const d = composeConnectDraft([
+    const d = composeConnect([
       block(1, 'social', {
         heading: 'Follow along',
         links: [{ icon: '', label: 'Facebook', url: 'https://www.facebook.com/elim' }],

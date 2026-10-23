@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { composeGivingDraft, giveHandle } from './draftGiving'
+import { composeGiving, giveHandle } from './givingLayout'
 import type { PageBlock } from '@/types/pages'
 
 const block = (id: number, type: string, data: Record<string, unknown> = {}): PageBlock =>
@@ -21,9 +21,9 @@ const giving: PageBlock[] = [
   block(5, 'image', { src: 'https://example.com/a.jpg' }),
 ]
 
-describe('composeGivingDraft', () => {
+describe('composeGiving', () => {
   it('sorts the page into its sections', () => {
-    const d = composeGivingDraft(giving)
+    const d = composeGiving(giving)
     expect(d.hero?.heading).toBe('Giving')
     expect(d.story.map((t) => t.heading)).toEqual(['Why we give'])
     expect(d.waysHeading).toBe('Give online')
@@ -31,7 +31,7 @@ describe('composeGivingDraft', () => {
   })
 
   it('makes a way to give of each link, with the account people know it by', () => {
-    const d = composeGivingDraft(giving)
+    const d = composeGiving(giving)
     expect(d.ways.map((w) => [w.label, w.handle])).toEqual([
       ['Tithe.ly', 'tithe.ly'],
       ['Venmo', '@Some-Church'],
@@ -40,13 +40,13 @@ describe('composeGivingDraft', () => {
   })
 
   it('drops dividers and nothing else', () => {
-    const d = composeGivingDraft(giving)
+    const d = composeGiving(giving)
     const kept = [d.hero, ...d.story, ...d.rest].length + (d.ways.length ? 1 : 0)
     expect(kept).toBe(giving.length - 1)
   })
 
   it('keeps a second hero or quote rather than losing it', () => {
-    const d = composeGivingDraft([
+    const d = composeGiving([
       block(1, 'hero', { heading: 'One' }),
       block(2, 'hero', { heading: 'Two' }),
       block(3, 'quote', { text: 'A' }),
@@ -58,7 +58,7 @@ describe('composeGivingDraft', () => {
   })
 
   it('turns buttons into ways to give on a page with no giving links', () => {
-    const d = composeGivingDraft([
+    const d = composeGiving([
       block(1, 'button', { label: 'Give with Tithe.ly', url: 'https://tithe.ly/give' }),
       block(2, 'button', { label: 'Nowhere' }),
     ])
@@ -67,7 +67,7 @@ describe('composeGivingDraft', () => {
   })
 
   it('leaves buttons as buttons beside giving links', () => {
-    const d = composeGivingDraft([
+    const d = composeGiving([
       ...giving,
       block(9, 'button', { label: 'Mail a check', url: 'x.com' }),
     ])

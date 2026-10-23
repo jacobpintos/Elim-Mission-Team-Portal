@@ -9,57 +9,28 @@ import { isAdmin } from '@/lib/roles'
 import { usePageBuilderStore } from '@/stores/pageBuilderStore'
 import { BlockCard } from './BlockCard'
 import { BlockPalette } from './BlockPalette'
-import { HeroBlock } from './BlockRenderer/HeroBlock'
-import { TextBlock } from './BlockRenderer/TextBlock'
-import { ImageBlock } from './BlockRenderer/ImageBlock'
-import { EmbedBlock } from './BlockRenderer/EmbedBlock'
-import { QuoteBlock } from './BlockRenderer/QuoteBlock'
-import { GalleryBlock } from './BlockRenderer/GalleryBlock'
-import { TwoColBlock } from './BlockRenderer/TwoColBlock'
-import { TimelineBlock } from './BlockRenderer/TimelineBlock'
-import { ButtonBlock } from './BlockRenderer/ButtonBlock'
-import { DividerBlock } from './BlockRenderer/DividerBlock'
-import { MeetingBlock } from './BlockRenderer/MeetingBlock'
-import { SocialBlock } from './BlockRenderer/SocialBlock'
 import { useUIStore } from '@/stores/uiStore'
 import type { PageBlock, PageData } from '@/types/pages'
+import { GivingDesign } from './GivingDesign'
+import { ConnectDesign } from './ConnectDesign'
+import { StoryDesign } from './StoryDesign'
 
 type PageKey = 'ourstory' | 'connect' | 'giving'
+
+/**
+ * How each page is drawn for people to read. The blocks are still what admins
+ * build here; each design sorts them into its own sections, in the Elim look
+ * (./GivingDesign, ./ConnectDesign, ./StoryDesign).
+ */
+const DESIGNS = {
+  giving: GivingDesign,
+  connect: ConnectDesign,
+  ourstory: StoryDesign,
+} satisfies Record<PageKey, unknown>
 
 interface PageBuilderScreenProps {
   pageKey: PageKey
   pageTitle: string
-}
-
-function renderBlock(block: PageBlock) {
-  switch (block.type) {
-    case 'hero':
-      return <HeroBlock key={block.id} data={block.data as never} />
-    case 'text':
-      return <TextBlock key={block.id} data={block.data as never} />
-    case 'image':
-      return <ImageBlock key={block.id} data={block.data as never} />
-    case 'embed':
-      return <EmbedBlock key={block.id} data={block.data as never} />
-    case 'quote':
-      return <QuoteBlock key={block.id} data={block.data as never} />
-    case 'gallery':
-      return <GalleryBlock key={block.id} data={block.data as never} />
-    case 'twocol':
-      return <TwoColBlock key={block.id} data={block.data as never} />
-    case 'timeline':
-      return <TimelineBlock key={block.id} data={block.data as never} />
-    case 'button':
-      return <ButtonBlock key={block.id} data={block.data as never} />
-    case 'divider':
-      return <DividerBlock key={block.id} />
-    case 'meeting':
-      return <MeetingBlock key={block.id} data={block.data as never} />
-    case 'social':
-      return <SocialBlock key={block.id} data={block.data as never} />
-    default:
-      return null
-  }
 }
 
 export function PageBuilderScreen({ pageKey, pageTitle }: PageBuilderScreenProps) {
@@ -259,33 +230,33 @@ export function PageBuilderScreen({ pageKey, pageTitle }: PageBuilderScreenProps
   }
 
   // View mode
+  const editButton = canBuild ? (
+    <XStack padding="$3" justifyContent="flex-end">
+      <Button size="$2" onPress={() => setBuildMode(pageKey)} theme="active">
+        Edit Page
+      </Button>
+    </XStack>
+  ) : null
+
+  if (pageData.blocks.length > 0) {
+    const Design = DESIGNS[pageKey]
+    return <Design blocks={pageData.blocks} top={editButton} />
+  }
+
   return (
     <ScrollView>
       <YStack flex={1}>
-        {/* Admin toggle */}
-        {canBuild && (
-          <XStack padding="$3" justifyContent="flex-end">
-            <Button size="$2" onPress={() => setBuildMode(pageKey)} theme="active">
-              Edit Page
-            </Button>
-          </XStack>
-        )}
-
-        {/* Render blocks */}
-        {pageData.blocks.length > 0 ? (
-          pageData.blocks.map((block) => renderBlock(block))
-        ) : (
-          <YStack padding="$8" alignItems="center" justifyContent="center">
-            <Text fontSize="$5" fontWeight="700" marginBottom="$2">
-              {pageTitle}
-            </Text>
-            <Text color="$gray10" fontSize="$3" textAlign="center">
-              {canBuild
-                ? 'No content yet. Click "Edit Page" to add blocks.'
-                : `There is nothing on the ${pageTitle} page right now. Check back after your next team update.`}
-            </Text>
-          </YStack>
-        )}
+        {editButton}
+        <YStack padding="$8" alignItems="center" justifyContent="center">
+          <Text fontSize="$5" fontWeight="700" marginBottom="$2">
+            {pageTitle}
+          </Text>
+          <Text color="$gray10" fontSize="$3" textAlign="center">
+            {canBuild
+              ? 'No content yet. Click "Edit Page" to add blocks.'
+              : `There is nothing on the ${pageTitle} page right now. Check back after your next team update.`}
+          </Text>
+        </YStack>
       </YStack>
     </ScrollView>
   )

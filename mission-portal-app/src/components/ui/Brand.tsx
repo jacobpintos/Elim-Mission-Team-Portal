@@ -5,8 +5,8 @@ import { Text, XStack, YStack } from 'tamagui'
 
 /**
  * The pieces of the Elim look shared by the public pages that are designed
- * rather than built from blocks — the Elim Store and the drafts of Giving,
- * Connect and Our Story.
+ * rather than drawn block by block — the Elim Store, Giving, Connect and
+ * Our Story.
  */
 
 /** Near-black, leaning toward the app's navy: the ground of their dark bands. */
