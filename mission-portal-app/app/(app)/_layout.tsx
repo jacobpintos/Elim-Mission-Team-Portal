@@ -47,6 +47,7 @@ const TAB_LABELS: Record<Tab, string> = {
   music: 'Content',
   posts: 'Posts',
   giving: 'Giving',
+  store: 'Elim Store',
   story: 'Our Story',
   connect: 'Connect',
   rolehub: 'Admin',
@@ -69,6 +70,7 @@ const TAB_ICONS: Record<Tab, string> = {
   music: '🎶',
   posts: '📝',
   giving: '💝',
+  store: '🛍️',
   story: '📖',
   connect: '🤝',
   rolehub: '⚙',
@@ -236,6 +238,9 @@ export default function AppLayout() {
     // screen redirects anyone who is not an admin.
     inventory: 'issues',
     posts: 'public',
+    // A member reaches the store inside Public Facing; a sale notification
+    // links to /store for everyone, so it opens for them too.
+    store: 'public',
     blocked: 'settings',
     'delete-account': 'settings',
     // Messages share the announce tab now. The routes are untouched — a link
@@ -508,6 +513,8 @@ export default function AppLayout() {
                 <Tabs.Screen name="pages/connect" options={{ href: null }} />
                 <Tabs.Screen name="pages/giving" options={{ href: null }} />
                 <Tabs.Screen name="pages/draft-connect" options={{ href: null }} />
+                <Tabs.Screen name="pages/draft-giving" options={{ href: null }} />
+                <Tabs.Screen name="pages/store" options={{ href: null }} />
                 <Tabs.Screen name="admin/users" options={{ href: null }} />
                 <Tabs.Screen name="admin/avail" options={{ href: null }} />
                 <Tabs.Screen name="admin/groups" options={{ href: null }} />
@@ -527,6 +534,8 @@ export default function AppLayout() {
                 <Tabs.Screen name="public/music" options={{ href: null }} />
                 <Tabs.Screen name="public/photos" options={{ href: null }} />
                 <Tabs.Screen name="public/draft-connect" options={{ href: null }} />
+                <Tabs.Screen name="public/draft-giving" options={{ href: null }} />
+                <Tabs.Screen name="public/store" options={{ href: null }} />
                 <Tabs.Screen name="rolehub/admin" options={{ href: null }} />
                 <Tabs.Screen name="profile" options={{ href: null }} />
               </>

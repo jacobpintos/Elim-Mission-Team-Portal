@@ -57,6 +57,7 @@ export type Tab =
   | 'music'
   | 'posts'
   | 'giving'
+  | 'store'
   | 'story'
   | 'connect'
   | 'rolehub'
@@ -151,6 +152,7 @@ export function visibleTabs(u: UserProfile | null): Tab[] {
       'connect',
       'music',
       'giving',
+      'store',
       'story',
       'posts',
       'settings',

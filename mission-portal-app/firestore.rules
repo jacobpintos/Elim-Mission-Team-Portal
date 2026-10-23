@@ -319,6 +319,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Elim Store sales: the message at the top of the store tab and its last
+    // day. Read by every signed-in account, public followers included — the
+    // sale is announced to them — and posted, corrected or ended by admins.
+    // The read is not narrowed by endsAt, for the reason given above for
+    // stream cards: one ended sale would refuse the whole listener.
+    match /storeSales/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     // Food sign-ups. There was no rule here at all, so every write was
     // default-denied and signing up for a dish silently did nothing.
     // Guests are along for the trip and are not asked to bring food.

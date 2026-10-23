@@ -488,6 +488,7 @@ const SCREEN_WORDS: Record<string, string[]> = {
     'tithing',
     'offering',
   ],
+  store: ['elim store', 'the elim store', 'store', 'merch', 'merch store', 'merchandise', 'shop'],
   story: ['our story', 'story', 'about us', 'about the church', 'about the well', 'who we are'],
   connect: [
     'connect',

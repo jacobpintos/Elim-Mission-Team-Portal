@@ -59,6 +59,14 @@ export interface NotificationPrefs {
    * new account starts unasked, not opted in.
    */
   livestream?: { push: boolean; email: boolean }
+  /**
+   * The Elim Store has started a new sale.
+   *
+   * Opt-in in the same way as `livestream`, and for the same reason: absent
+   * until someone asks for it on the store tab or in Settings, and absent
+   * means no. Left out of defaultNotificationPrefs.
+   */
+  storeSale?: { push: boolean; email: boolean }
   /** An event you are on opened a food sign-up. */
   foodSignupOpen: { push: boolean; email: boolean }
   /** Items are still unclaimed a few days before the event. */

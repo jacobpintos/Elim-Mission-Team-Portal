@@ -31,6 +31,7 @@ const TAB_NAMES: Record<Tab, string> = {
   music: 'Content — music, sermons and podcasts',
   posts: 'Posts',
   giving: 'Giving',
+  store: 'Elim Store — clothing and books',
   story: 'Our Story',
   connect: 'Connect',
   rolehub: 'Role hub',
@@ -71,6 +72,7 @@ export function screensFor(profile: UserProfile | null): MiriamScreen[] {
       { id: 'posts', label: 'Posts', path: '/public/posts' },
       { id: 'connect', label: 'Connect — meet with our leadership', path: '/public/connect' },
       { id: 'giving', label: 'Giving', path: '/public/giving' },
+      { id: 'store', label: 'Elim Store — clothing and books', path: '/public/store' },
       { id: 'story', label: 'Our Story', path: '/public/story' }
     )
   }

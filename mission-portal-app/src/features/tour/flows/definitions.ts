@@ -559,7 +559,7 @@ export const publicFlow: TourFlow = {
       id: 'pub-intro',
       route: '/public',
       title: 'The public-facing site',
-      body: 'This is what visitors and public users see — Posts, Connect, Giving, Our Story, Content and Photos. It is a tab like any other, so you can look at it whenever you want and leave by opening anything else.',
+      body: 'This is what visitors and public users see — Posts, Connect, Giving, the Elim Store, Our Story, Content and Photos. It is a tab like any other, so you can look at it whenever you want and leave by opening anything else.',
       bullets: [
         'Six public sections',
         'Content also has its own tab, since members use it most',
@@ -612,6 +612,20 @@ export const givingFlow: TourFlow = {
       route: '/giving',
       title: 'Giving',
       body: 'The giving page makes it easy for people to support the mission. Content here is managed by admins.',
+    },
+  ],
+}
+
+export const storeFlow: TourFlow = {
+  id: 'store',
+  tab: 'store',
+  title: 'Elim Store',
+  steps: [
+    {
+      id: 'store-intro',
+      route: '/store',
+      title: 'Elim Store',
+      body: 'Featured clothing and books from the Elim Store — another way to support the mission. Tap anything to see it at theelimstore.com, and ask to be notified when a sale starts.',
     },
   ],
 }
@@ -740,6 +754,7 @@ export const TAB_FLOWS: TourFlow[] = [
   contentFlow,
   postsFlow,
   givingFlow,
+  storeFlow,
   storyFlow,
   connectFlow,
   settingsFlow,

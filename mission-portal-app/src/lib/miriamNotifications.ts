@@ -128,6 +128,10 @@ const SUBJECT_LIST: { re: RegExp; keys: string[]; first?: string[] }[] = [
     keys: ['livestream'],
   },
   {
+    re: /\b(?:elim\s+)?store\s+sales?|\bsales?\s+(?:at|in|on|from)\s+the\s+(?:elim\s+)?store|\bmerch(?:andise)?\s+sales?|\bwhen\s+(?:there'?s|there\s+is)\s+a\s+sale/g,
+    keys: ['storeSale'],
+  },
+  {
     re: /\badded\s+to\s+(?:an?\s+|new\s+)?(?:events?|teams?)|\bevent\s+(?:invites?|invitations?|additions?)|\bput\s+on\s+(?:an?\s+)?(?:events?|teams?)/g,
     keys: ['eventJoin'],
   },

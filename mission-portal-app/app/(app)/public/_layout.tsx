@@ -7,10 +7,12 @@ const TABS = [
   { key: 'posts', label: 'Posts', path: '/(app)/public/posts' },
   { key: 'connect', label: 'Connect', path: '/(app)/public/connect' },
   { key: 'giving', label: 'Giving', path: '/(app)/public/giving' },
+  { key: 'store', label: 'Elim Store', path: '/(app)/public/store' },
   { key: 'story', label: 'Our Story', path: '/(app)/public/story' },
   { key: 'music', label: 'Content', path: '/(app)/public/music' },
   { key: 'photos', label: 'Photos', path: '/(app)/public/photos' },
   { key: 'draft-connect', label: 'Draft Connect', path: '/(app)/public/draft-connect' },
+  { key: 'draft-giving', label: 'Draft Giving', path: '/(app)/public/draft-giving' },
 ]
 
 export default function PublicLayout() {

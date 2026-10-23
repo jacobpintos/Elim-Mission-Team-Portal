@@ -1136,6 +1136,79 @@ describe('livestreams', () => {
   })
 })
 
+describe('storeSales', () => {
+  const PUBLIC = 'public-uid'
+  const sale = {
+    message: '20% off every T-shirt',
+    endsOn: '2026-11-01',
+    endsAt: Date.now() + 24 * 60 * 60 * 1000,
+    createdAt: Date.now(),
+  }
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'users', PUBLIC), { roles: ['public'], displayName: 'Follower' })
+      await setDoc(doc(db, 'storeSales', 'sale1'), sale)
+      await setDoc(doc(db, 'storeSales', 'ended1'), { ...sale, endsAt: Date.now() - 1000 })
+    })
+  })
+
+  it('lets any signed-in account read the sale, public followers included', async () => {
+    await assertSucceeds(getDoc(doc(as(PUBLIC), 'storeSales/sale1')))
+    await assertSucceeds(getDoc(doc(as(GUEST), 'storeSales/sale1')))
+    // The store tab listens to the whole collection, ended sales and all.
+    const snap = await assertSucceeds(getDocs(collection(as(PUBLIC), 'storeSales')))
+    expect(snap.docs.map((d) => d.id).sort()).toEqual(['ended1', 'sale1'])
+  })
+
+  it('refuses the sale to signed-out users', async () => {
+    await assertFails(getDoc(doc(anon(), 'storeSales/sale1')))
+  })
+
+  it('lets an admin post, correct and end a sale', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'storeSales/sale2'), sale))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'storeSales/sale2'), { message: 'Half off' }))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'storeSales/sale2')))
+  })
+
+  it('refuses a sale posted, changed or ended by anyone but an admin', async () => {
+    await assertFails(setDoc(doc(as(MEMBER), 'storeSales/nope'), sale))
+    await assertFails(setDoc(doc(as(PUBLIC), 'storeSales/nope'), sale))
+    await assertFails(updateDoc(doc(as(MEMBER), 'storeSales/sale1'), { message: 'Free' }))
+    await assertFails(deleteDoc(doc(as(PUBLIC), 'storeSales/sale1')))
+  })
+})
+
+describe('the Elim Store tab', () => {
+  const PUBLIC = 'public-uid'
+  const store = { tagline: 'Handmade', intro: '', featuredNote: '', shelves: [] }
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'users', PUBLIC), { roles: ['public'], displayName: 'Follower' })
+      await setDoc(doc(db, 'config', 'main'), { elimStore: store })
+    })
+  })
+
+  it('is read by a public follower', async () => {
+    await assertSucceeds(getDoc(doc(as(PUBLIC), 'config/main')))
+  })
+
+  it('is edited by an admin and nobody else', async () => {
+    await assertSucceeds(
+      updateDoc(doc(as(ADMIN), 'config/main'), { elimStore: { ...store, tagline: 'New' } })
+    )
+    await assertFails(
+      updateDoc(doc(as(MEMBER), 'config/main'), { elimStore: { ...store, tagline: 'Mine' } })
+    )
+    await assertFails(
+      updateDoc(doc(as(PUBLIC), 'config/main'), { elimStore: { ...store, tagline: 'Mine' } })
+    )
+  })
+})
+
 describe('meetingRequests', () => {
   it('lets a leader named on the request read it', () => {
     // The reason the rule is not admin-only: a worship leader holds no admin

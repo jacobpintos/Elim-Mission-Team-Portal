@@ -38,6 +38,8 @@ export type NotificationType =
    * paid. Built by functions/src/reimbursements, which writes the whole line.
    */
   | 'reimbursement'
+  /** The Elim Store started a sale. Opt-in; see push/storeSaleNotifications.ts. */
+  | 'storeSale'
 
 /**
  * Notification types the user asked to be "bulk" (starred in their spec):
@@ -204,6 +206,8 @@ export function inAppMessage(type: NotificationType, data: Record<string, unknow
       return `Are you available for ${data.eventTitle ?? 'an event'}${data.eventDate ? ` on ${data.eventDate}` : ''}? Please answer in the app.`
     case 'reimbursement':
       return String(data.message ?? 'A reimbursement request was updated')
+    case 'storeSale':
+      return `Elim Store sale: ${data.message ?? 'a new sale has started'}${data.endsLabel ? ` (${data.endsLabel})` : ''}`
     case 'textingListSignup':
       // Built by signupDigestMessage — names and numbers in full, so the
       // coordinator can act on it without opening anything.
@@ -241,6 +245,7 @@ function subjectFor(type: NotificationType, _data: Record<string, unknown>): str
     reminder: 'Reminder',
     availabilityNudge: 'Are you available? — Mission Portal',
     reimbursement: 'Reimbursement — Mission Portal',
+    storeSale: 'Elim Store sale',
   }
   return subjects[type] ?? 'Mission Portal notification'
 }

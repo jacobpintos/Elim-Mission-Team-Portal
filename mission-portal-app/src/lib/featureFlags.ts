@@ -43,7 +43,7 @@ export const SIGN_UP_ENABLED = false
 /**
  * Which parts of the public-facing surface the app exposes.
  *
- * The Public Facing section — Posts, Connect, Giving, Our Story, Content,
+ * The Public Facing section — Posts, Connect, Giving, Elim Store, Our Story, Content,
  * Photos — along with the `public` profile type that exists to read it.
  *
  * This was off while those pages were still empty: several are PageBuilder
@@ -64,7 +64,7 @@ export const SIGN_UP_ENABLED = false
 export const PUBLIC_SURFACE_ENABLED = true
 
 /** Every tab that belongs to the public-facing surface. */
-export const PUBLIC_FACING_TABS = ['posts', 'connect', 'giving', 'story', 'music'] as const
+export const PUBLIC_FACING_TABS = ['posts', 'connect', 'giving', 'store', 'story', 'music'] as const
 
 /**
  * The public-facing tabs currently reachable.

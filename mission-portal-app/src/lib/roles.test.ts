@@ -53,7 +53,7 @@ describe('visibleTabs', () => {
   it('gives a public user the visitor-facing pages', () => {
     const tabs = visibleTabs(user('public'))
 
-    for (const t of ['home', 'posts', 'connect', 'giving', 'story', 'music'] as Tab[]) {
+    for (const t of ['home', 'posts', 'connect', 'giving', 'store', 'story', 'music'] as Tab[]) {
       expect(tabs).toContain(t)
     }
     // Settings is never dropped: it holds account deletion, which has to stay
@@ -260,7 +260,7 @@ describe('the public-facing surface, as a member sees it', () => {
     // top-level entries, which made one member's menu a different shape.
     for (const u of MEMBERS) {
       const tabs = visibleTabs(u)
-      for (const inside of ['posts', 'connect', 'giving', 'story'] as Tab[]) {
+      for (const inside of ['posts', 'connect', 'giving', 'store', 'story'] as Tab[]) {
         expect(tabs).not.toContain(inside)
       }
     }

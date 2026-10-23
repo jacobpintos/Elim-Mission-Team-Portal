@@ -25,6 +25,7 @@ export type NotifKey = keyof Pick<
   | 'foodSignupOpen'
   | 'foodSignupReminder'
   | 'livestream'
+  | 'storeSale'
 >
 
 // Admin-only notification keys — hidden from the toggle list for non-admins,
@@ -68,11 +69,12 @@ export const NOTIF_LABELS: Record<NotifKey, string> = {
   foodSignupOpen: 'Food sign-up opened',
   foodSignupReminder: 'Food items still open',
   livestream: 'A service goes live',
+  storeSale: 'Elim Store sales',
 }
 
 export type PublicNotifKey = keyof Pick<
   NotificationPrefs,
-  'publicAnnouncement' | 'publicEvent' | 'contentFeatured' | 'livestream'
+  'publicAnnouncement' | 'publicEvent' | 'contentFeatured' | 'livestream' | 'storeSale'
 >
 
 export const PUBLIC_NOTIF_LABELS: Record<PublicNotifKey, string> = {
@@ -80,15 +82,16 @@ export const PUBLIC_NOTIF_LABELS: Record<PublicNotifKey, string> = {
   publicEvent: 'Nearby & virtual events',
   contentFeatured: 'New & featured content',
   livestream: 'A service goes live',
+  storeSale: 'Elim Store sales',
 }
 
 /**
  * What a toggle shows for a preference never written.
  *
  * The public rows default on; the member rows already default off. Stream
- * alerts have to read as off in both, because there an unset value means the
- * prompt has not been answered — and showing it on would promise a
- * notification that nothing is going to send.
+ * and store-sale alerts have to read as off in both, because they are opt-in
+ * and an unset value means nobody has asked for them — showing it on would
+ * promise a notification that nothing is going to send.
  */
-const PUSH_DEFAULT_OFF = new Set<string>(['livestream'])
+const PUSH_DEFAULT_OFF = new Set<string>(['livestream', 'storeSale'])
 export const pushDefaultFor = (key: string) => !PUSH_DEFAULT_OFF.has(key)
