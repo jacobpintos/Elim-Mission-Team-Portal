@@ -17,7 +17,7 @@ import { HeroBlock } from './BlockRenderer/HeroBlock'
 import { QuoteBlock } from './BlockRenderer/QuoteBlock'
 
 /**
- * Pieces the designed drafts — Draft Giving and Draft Connect — have in common.
+ * Pieces the designed drafts — Giving, Connect and Our Story — have in common.
  */
 
 /** The strip across the top saying what the page is, for the admins who can see it. */
@@ -39,6 +39,48 @@ export function DraftNotice({ page, gutter }: { page: string; gutter: number }) 
         A new design for {page}, showing the live page’s content. Nothing here changes {page}.
       </Text>
     </XStack>
+  )
+}
+
+/** A button in the dark band: solid coral for the main way on, outlined for the other. */
+export function HeroPill({
+  label,
+  onPress,
+  solid,
+  primary,
+  onPrimary,
+}: {
+  label: string
+  onPress: () => void
+  solid: boolean
+  primary: string
+  onPrimary: string
+}) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button">
+      <XStack
+        backgroundColor={solid ? primary : 'transparent'}
+        borderWidth={solid ? 0 : 1.5}
+        borderColor="rgba(255,255,255,0.55)"
+        borderRadius={999}
+        paddingHorizontal={24}
+        paddingVertical={solid ? 15 : 13.5}
+        gap={10}
+        alignItems="center"
+      >
+        {/* Shrinks to wrap a long label rather than run off a phone's edge. */}
+        <Text
+          color={solid ? onPrimary : '#ffffff'}
+          fontSize={16}
+          fontWeight="800"
+          letterSpacing={0.3}
+          flexShrink={1}
+        >
+          {label}
+        </Text>
+        {solid ? <Arrow color={onPrimary} /> : null}
+      </XStack>
+    </Pressable>
   )
 }
 

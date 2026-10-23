@@ -13,7 +13,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import { autoTextColor } from '@/theme/contrast'
 import type { PageBlock, PageData } from '@/types/pages'
 import { composeConnectDraft, directionsQuery, directionsUrl } from './connectDraft'
-import { DraftNotice, LinkCard, renderRestBlock } from './designedParts'
+import { DraftNotice, HeroPill, LinkCard, renderRestBlock } from './designedParts'
 import { MeetingBlock } from './BlockRenderer/MeetingBlock'
 
 const lines = (text: string | undefined) =>
@@ -21,46 +21,6 @@ const lines = (text: string | undefined) =>
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean)
-
-/** A button in the dark band: solid coral for the main way on, outlined for the other. */
-function HeroPill({
-  label,
-  onPress,
-  solid,
-  primary,
-  onPrimary,
-}: {
-  label: string
-  onPress: () => void
-  solid: boolean
-  primary: string
-  onPrimary: string
-}) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button">
-      <XStack
-        backgroundColor={solid ? primary : 'transparent'}
-        borderWidth={solid ? 0 : 1.5}
-        borderColor="rgba(255,255,255,0.55)"
-        borderRadius={999}
-        paddingHorizontal={24}
-        paddingVertical={solid ? 15 : 13.5}
-        gap={10}
-        alignItems="center"
-      >
-        <Text
-          color={solid ? onPrimary : '#ffffff'}
-          fontSize={16}
-          fontWeight="800"
-          letterSpacing={0.3}
-        >
-          {label}
-        </Text>
-        {solid ? <Arrow color={onPrimary} /> : null}
-      </XStack>
-    </Pressable>
-  )
-}
 
 /**
  * A redesign of the Connect page, drawn from the live page's own content.

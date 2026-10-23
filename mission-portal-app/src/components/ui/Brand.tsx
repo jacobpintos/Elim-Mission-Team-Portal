@@ -5,7 +5,8 @@ import { Text, XStack, YStack } from 'tamagui'
 
 /**
  * The pieces of the Elim look shared by the public pages that are designed
- * rather than built from blocks — Draft Giving and the Elim Store.
+ * rather than built from blocks — the Elim Store and the drafts of Giving,
+ * Connect and Our Story.
  */
 
 /** Near-black, leaning toward the app's navy: the ground of their dark bands. */
@@ -97,6 +98,7 @@ export function BrandHero({
   wide,
   gutter,
   extraBottom = 0,
+  aside,
   children,
 }: {
   label: string
@@ -108,18 +110,16 @@ export function BrandHero({
   gutter: number
   /** Room left at the bottom for a panel lifted over the band's edge. */
   extraBottom?: number
+  /**
+   * A picture shown as it is rather than under the wash: beside the words on a
+   * wide screen, under them on a narrow one. Our Story's photograph of the
+   * people it is about, whose faces a wash would darken.
+   */
+  aside?: ReactNode
   children?: ReactNode
 }) {
-  const content = (
-    <YStack
-      width="100%"
-      maxWidth={1040}
-      alignSelf="center"
-      paddingHorizontal={gutter}
-      paddingTop={wide ? 88 : 56}
-      paddingBottom={(wide ? 72 : 56) + extraBottom}
-      gap={18}
-    >
+  const words = (
+    <>
       <XStack alignItems="center" gap={12}>
         <BrandMark color={primary} height={18} />
         {heading.trim().toLowerCase() !== label.toLowerCase() ? (
@@ -150,6 +150,33 @@ export function BrandHero({
         </Text>
       ) : null}
       {children}
+    </>
+  )
+
+  const content = (
+    <YStack
+      width="100%"
+      maxWidth={1040}
+      alignSelf="center"
+      paddingHorizontal={gutter}
+      paddingTop={wide ? 88 : 56}
+      paddingBottom={(wide ? 72 : 56) + extraBottom}
+      gap={18}
+    >
+      {aside ? (
+        <XStack
+          flexDirection={wide ? 'row' : 'column'}
+          alignItems={wide ? 'center' : 'stretch'}
+          gap={wide ? 56 : 32}
+        >
+          <YStack flex={wide ? 1 : undefined} gap={18}>
+            {words}
+          </YStack>
+          {aside}
+        </XStack>
+      ) : (
+        words
+      )}
     </YStack>
   )
 

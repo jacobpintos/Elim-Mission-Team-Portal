@@ -13,6 +13,7 @@ const TABS = [
   { key: 'photos', label: 'Photos', path: '/(app)/public/photos' },
   { key: 'draft-connect', label: 'Draft Connect', path: '/(app)/public/draft-connect' },
   { key: 'draft-giving', label: 'Draft Giving', path: '/(app)/public/draft-giving' },
+  { key: 'draft-story', label: 'Draft Our Story', path: '/(app)/public/draft-story' },
 ]
 
 export default function PublicLayout() {

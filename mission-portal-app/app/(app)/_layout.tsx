@@ -514,6 +514,7 @@ export default function AppLayout() {
                 <Tabs.Screen name="pages/giving" options={{ href: null }} />
                 <Tabs.Screen name="pages/draft-connect" options={{ href: null }} />
                 <Tabs.Screen name="pages/draft-giving" options={{ href: null }} />
+                <Tabs.Screen name="pages/draft-story" options={{ href: null }} />
                 <Tabs.Screen name="pages/store" options={{ href: null }} />
                 <Tabs.Screen name="admin/users" options={{ href: null }} />
                 <Tabs.Screen name="admin/avail" options={{ href: null }} />
@@ -535,6 +536,7 @@ export default function AppLayout() {
                 <Tabs.Screen name="public/photos" options={{ href: null }} />
                 <Tabs.Screen name="public/draft-connect" options={{ href: null }} />
                 <Tabs.Screen name="public/draft-giving" options={{ href: null }} />
+                <Tabs.Screen name="public/draft-story" options={{ href: null }} />
                 <Tabs.Screen name="public/store" options={{ href: null }} />
                 <Tabs.Screen name="rolehub/admin" options={{ href: null }} />
                 <Tabs.Screen name="profile" options={{ href: null }} />
