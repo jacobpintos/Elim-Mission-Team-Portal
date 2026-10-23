@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Spinner, Text, XStack, YStack } from 'tamagui'
-import { Arrow, BrandMark, INK, SERIF } from '@/components/ui/Brand'
+import { Arrow, BrandMark, INK, Overline, SERIF } from '@/components/ui/Brand'
 import { openExternalUrl } from '@/lib/externalUrl'
 import { isAdmin } from '@/lib/roles'
 import { useAuthStore } from '@/stores/authStore'
@@ -19,15 +19,6 @@ import { SaleNotifyOption } from './SaleNotifyOption'
 
 const GAP = 16
 const WHITE_MUTED = 'rgba(255,255,255,0.72)'
-
-/** The small, widely spaced label that names a section before its heading does. */
-function Overline({ children, color }: { children: string; color: string }) {
-  return (
-    <Text fontSize={12} fontWeight="800" letterSpacing={3} color={color}>
-      {children.toUpperCase()}
-    </Text>
-  )
-}
 
 /**
  * A photo of something in the store, which opens it there.
@@ -196,14 +187,14 @@ function SaleBanner({ sale, gutter }: { sale: StoreSale; gutter: number }) {
 }
 
 /**
- * The Elim Store tab: another way to support the mission.
+ * The Elim Store tab.
  *
- * A dark band carrying the store's name, set in a serif after its own
- * lettering, with its line about itself and a way straight there; then the
- * featured pieces, one shelf for the handmade clothing and one for Pastor
- * Ajai's books. What is here is a selection and says so — every shelf is
- * marked as featured and ends in a link to the rest — because the store
- * carries far more than a phone screen should.
+ * A dark band carrying the logo's mark and the store's name, set in a serif
+ * after its own lettering, with its line about itself and a way straight
+ * there; then the featured pieces, one shelf for the handmade clothing and
+ * one for Pastor Ajai's books. What is here is a selection and says so —
+ * every shelf is marked as featured and ends in a link to the rest — because
+ * the store carries far more than a phone screen should.
  *
  * A sale, while one runs, sits above everything with the day it ends. Admins
  * get two buttons over the page: one for the shelves and wording, one for the
@@ -290,7 +281,7 @@ export function ElimStoreScreen() {
             paddingBottom={wide ? 64 : 44}
             gap={14}
           >
-            <Overline color={colors.primary}>Another way to support the mission</Overline>
+            <BrandMark color={colors.primary} height={18} />
             <Text
               color="#ffffff"
               fontFamily={SERIF}
@@ -351,24 +342,6 @@ export function ElimStoreScreen() {
           paddingBottom={wide ? 64 : 48}
           gap={wide ? 56 : 44}
         >
-          {/* Only some of what the store sells is shown here, and it says so. */}
-          {store.featuredNote ? (
-            <XStack
-              gap={12}
-              alignItems="center"
-              padding={14}
-              borderRadius={12}
-              borderWidth={1}
-              borderColor={colors.primary + '55'}
-              backgroundColor={colors.primary + '12'}
-            >
-              <Text fontSize={18}>✨</Text>
-              <Text flex={1} color={colors.text} fontSize={15} lineHeight={22}>
-                {store.featuredNote}
-              </Text>
-            </XStack>
-          ) : null}
-
           {store.shelves.map((shelf) => (
             <Shelf key={shelf.id} shelf={shelf} column={column} wide={wide} />
           ))}

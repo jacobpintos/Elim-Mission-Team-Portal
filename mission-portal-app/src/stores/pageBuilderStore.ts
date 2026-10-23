@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-type PageKey = 'ourstory' | 'connect' | 'giving' | 'draftconnect'
+type PageKey = 'ourstory' | 'connect' | 'giving'
 
 interface PageBuilderStore {
   buildModeKey: PageKey | null

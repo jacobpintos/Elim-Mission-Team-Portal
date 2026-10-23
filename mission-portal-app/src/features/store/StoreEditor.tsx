@@ -359,7 +359,7 @@ export function StoreEditor({
     }
   }
 
-  const text = (key: 'tagline' | 'intro' | 'featuredNote', label: string, multiline = false) => (
+  const text = (key: 'tagline' | 'intro', label: string, multiline = false) => (
     <YStack gap={6}>
       <Label>{label}</Label>
       {multiline ? (
@@ -417,7 +417,6 @@ export function StoreEditor({
             </Text>
             {text('tagline', 'Tagline')}
             {text('intro', 'Introduction', true)}
-            {text('featuredNote', 'Featured-items note', true)}
           </YStack>
           {draft.shelves.map((shelf) => (
             <ShelfEditor

@@ -625,7 +625,7 @@ export const storeFlow: TourFlow = {
       id: 'store-intro',
       route: '/store',
       title: 'Elim Store',
-      body: 'Featured clothing and books from the Elim Store — another way to support the mission. Tap anything to see it at theelimstore.com, and ask to be notified when a sale starts.',
+      body: 'Featured clothing and books from the Elim Store. Tap anything to see it at theelimstore.com, and ask to be notified when a sale starts.',
     },
   ],
 }

@@ -11,10 +11,8 @@ import type { GalleryData, PageBlock } from '@/types/pages'
 export interface StoreContent {
   /** The store's own line about itself. */
   tagline: string
-  /** Why it is here: another way to support the mission. */
+  /** Why it is here: buying from it supports the mission. */
   intro: string
-  /** That only some things are shown, and where the rest are. */
-  featuredNote: string
   shelves: StoreShelf[]
 }
 
@@ -95,9 +93,7 @@ const DEFAULT_CLOTHING: StoreItem[] = [
 
 export const DEFAULT_TEXT = {
   tagline: 'Handmade products pointing our generation to Jesus.',
-  intro:
-    'Purchasing clothing and books from the Elim merch store is another way to support the mission.',
-  featuredNote: 'These are a few featured items. Many more are available at theelimstore.com.',
+  intro: 'Purchasing clothing and books from the Elim merch store supports the mission.',
   clothingTitle: 'Handmade clothing',
   clothingBody:
     'Made by hand by members of the Elim team. Each piece is a great way to carry the spirit of revival with you into any room.',
@@ -110,7 +106,6 @@ export function defaultStore(books: StoreItem[]): StoreContent {
   return {
     tagline: DEFAULT_TEXT.tagline,
     intro: DEFAULT_TEXT.intro,
-    featuredNote: DEFAULT_TEXT.featuredNote,
     shelves: [
       {
         id: 'clothing',
@@ -206,7 +201,6 @@ export function resolveStore(saved: unknown, ourStory: PageBlock[] | undefined):
   return {
     tagline: text(s.tagline, fallback.tagline),
     intro: text(s.intro, fallback.intro),
-    featuredNote: text(s.featuredNote, fallback.featuredNote),
     shelves: s.shelves
       .filter((sh): sh is Record<string, unknown> => !!sh && typeof sh === 'object')
       .map((sh, i) => ({
