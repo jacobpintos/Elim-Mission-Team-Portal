@@ -11,6 +11,7 @@ import * as Notifications from 'expo-notifications'
 import { DynamicThemeProvider } from '@/theme/DynamicThemeProvider'
 import { useAuthStore } from '@/stores/authStore'
 import { takePendingNotificationLink } from '@/lib/notificationLink'
+import { useSignedInTabsMounted } from '@/lib/useSignedInTabsMounted'
 import {
   registerReminderButtons,
   reminderButton,
@@ -100,7 +101,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
  */
 function NotificationRouter() {
   const router = useRouter()
-  const segments = useSegments()
   // Which tap has already been acted on. AuthGate takes the one that launched
   // the app, and clearing it should stop this hook seeing it — but the hook
   // holds its own copy in state, and a clear it has not processed yet would
@@ -110,16 +110,18 @@ function NotificationRouter() {
   const profile = useAuthStore((s) => s.profile)
   const lastResponse = Notifications.useLastNotificationResponse()
 
-  // Already inside the signed-in group, which is the condition that makes a
-  // push land. Two things are true only once it is: the navigator holding
-  // those routes has mounted, so a push is not swallowed by a tree that does
-  // not exist yet; and AuthGate has finished sending us to the first tab, so
-  // there is no replace still to come that would land on top of ours.
-  const inApp = (segments as string[])[0] === '(app)'
+  // The signed-in tabs are up, which is the condition that makes a push land
+  // where it should. By then AuthGate or index.tsx has finished sending us to
+  // a tab, so there is no replace still to come that would land on top of
+  // ours. Not merely being sent into the group (lib/tabsMounted): a push in
+  // the moment before the tabs exist stacks a second copy of the app, at the
+  // link, over the first tab's — which fits what a phone did on being opened
+  // by a tap: the notification's screen for a moment, then the first tab.
+  const tabsUp = useSignedInTabsMounted()
 
   useEffect(() => {
     if (!lastResponse) return
-    if (!fbUser || !profile || !inApp) return
+    if (!fbUser || !profile || !tabsUp) return
     // A reminder's own buttons: Snooze and Done, done here, then to the Tasks tab.
     const action = lastResponse.actionIdentifier
     if (action === REMINDER_SNOOZE || action === REMINDER_DONE) {
@@ -162,7 +164,7 @@ function NotificationRouter() {
       // exists. Staying where we are beats taking the app down over it.
       console.warn('Could not open the notification link', data.link, err)
     }
-  }, [lastResponse, fbUser, profile, inApp, router])
+  }, [lastResponse, fbUser, profile, tabsUp, router])
 
   return null
 }
