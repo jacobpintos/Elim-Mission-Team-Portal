@@ -3,7 +3,7 @@ import { ScrollView, Pressable, TextInput, View, StyleSheet } from 'react-native
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
-import { Stack } from 'expo-router'
+import { Stack, useLocalSearchParams } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useKaizenStore } from '@/stores/kaizenStore'
 import { useTasksStore } from '@/stores/tasksStore'
@@ -208,6 +208,7 @@ function KaizenCardItem({
   onUpvote,
   onMove,
   onDelete,
+  focused = false,
 }: {
   card: KaizenCard
   uid: string
@@ -217,6 +218,7 @@ function KaizenCardItem({
   onUpvote: () => void
   onMove: (dir: 'forward' | 'back') => void
   onDelete: () => void
+  focused?: boolean
 }) {
   const hasVoted = card.upvotes.some((u) => sameId(u, uid))
   const displayName = (id: string | number) => {
@@ -238,8 +240,8 @@ function KaizenCardItem({
       borderRadius="$3"
       padding="$3"
       gap="$2"
-      borderWidth={1}
-      borderColor={colors.border}
+      borderWidth={focused ? 2 : 1}
+      borderColor={focused ? colors.primary : colors.border}
       marginBottom="$2"
     >
       <Text color={colors.text} fontWeight="700" fontSize="$4" numberOfLines={2}>
@@ -373,6 +375,11 @@ export default function Kaizen() {
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
   const { users } = useUsersStore()
   const nonPublicUsers = users.filter((u) => !u.roles?.includes('public'))
+  // The idea a notification was about (a new idea's push links here with its
+  // id): first in its column and outlined, so it is the thing they see rather
+  // than a board to search.
+  const { id: focusId } = useLocalSearchParams<{ id?: string }>()
+  const isFocus = (card: KaizenCard) => !!focusId && sameId(card.id, focusId)
 
   useEffect(() => {
     subscribe()
@@ -522,7 +529,10 @@ export default function Kaizen() {
           {COLUMNS.map((col) => {
             const colCards = cards
               .filter((c) => c.status === col.key)
-              .sort((a, b) => b.upvotes.length - a.upvotes.length)
+              .sort(
+                (a, b) =>
+                  Number(isFocus(b)) - Number(isFocus(a)) || b.upvotes.length - a.upvotes.length
+              )
 
             return (
               <YStack key={col.key} width={280}>
@@ -582,6 +592,7 @@ export default function Kaizen() {
                             setDeleteTarget(card)
                             setDeleteReason('')
                           }}
+                          focused={isFocus(card)}
                         />
                       ))
                     )}

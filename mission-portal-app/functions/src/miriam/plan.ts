@@ -608,6 +608,11 @@ const NOTIFICATIONS = [
   'securityReportUrgent',
 ]
 const ACTS = ' Only when they plainly tell you to; they will be shown it to confirm first.'
+// For an idea or a problem, telling Miriam is the request: asked "do you want
+// me to send it?" first, they had to say yes before being asked again by the
+// card itself.
+const OFFERS =
+  ' Being told one is the request: call this at once, filled in from their words. They are shown it to confirm before anything is sent, and that is the asking — never ask first whether to send it, or for more than they said.'
 const ADMINS = ' Admins only. Ids from people_and_groups.' + ACTS
 const ROLES = ['admin', 'security', 'worship', 'regular', 'intern', 'guest', 'public']
 const ids = (description: string) => ({ type: 'array', items: { type: 'string' }, description })
@@ -972,7 +977,7 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
       name: 'report_issue',
       description:
         'Report an issue in Operations: something broken, unsafe or in the way, in their words.' +
-        ACTS,
+        OFFERS,
       strict: true,
       input_schema: objectOf({
         title: {
@@ -993,7 +998,7 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
     submit_kaizen: {
       name: 'submit_kaizen',
       description:
-        'Submit a kaizen idea in Operations: something that could be done better.' + ACTS,
+        'Submit a kaizen idea in Operations: something that could be done better.' + OFFERS,
       strict: true,
       input_schema: objectOf({
         title: { type: 'string', description: 'A short name for the idea.' },
