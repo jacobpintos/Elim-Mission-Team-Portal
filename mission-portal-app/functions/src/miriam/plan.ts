@@ -417,7 +417,8 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
           follow_up: {
             type: 'boolean',
             description:
-              'True when `spoken` asks them for something you need to do what they asked: the app listens for their reply.',
+              'True when `spoken` asks them for something you need to do what they asked: the app listens for their reply. ' +
+              'Never to ask whether to go ahead with a change ("do you want me to send it?"): call its tool instead — the app shows them what will be done, to confirm.',
           },
           understood: {
             type: 'string',

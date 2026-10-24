@@ -896,6 +896,12 @@ export function useMiriamConversation(
       }
       // Asked something back: the reply listened for once she has asked it.
       if (followUp) {
+        // Remembered here, not left to the panel's "answered" (usePanelState):
+        // typed, askBack goes straight on to the box for the reply, the panel
+        // is never seen answered, and her question was never kept — so "yes"
+        // went to Claude with nothing before it to be a yes to.
+        const shown = shownNoteRef.current ? ` (${shownNoteRef.current})` : ''
+        noteDone(result.text + shown)
         setStage('answered')
         askBack(typing)
         return
