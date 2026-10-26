@@ -9,6 +9,8 @@ import { loadPlays, rememberName, rememberPlay, rememberWords } from '@/lib/miri
 import { heardRight, refreshHearing } from '@/lib/miriamHearing'
 import { meetingAsked } from '@/lib/miriamMeeting'
 import { storeAsked, storeReply } from '@/lib/miriamStore'
+import { accountAsked, locationAsked, nameChangeAsked, themeAsked } from '@/lib/miriamSettings'
+import { useThemeStore } from '@/stores/themeStore'
 import { readElimStore } from '@/features/store/readElimStore'
 import { tourFor, tourNames } from '@/features/tour/flows'
 import { tourAsked } from '@/lib/miriamTour'
@@ -497,6 +499,53 @@ export function useMiriamConversation(
         speak(reply.text)
         setStage('answered')
         if (reply.open) router.push(storeScreen.path as never)
+        return
+      }
+    }
+    // Their own settings, for anyone — a public follower too, whose requests
+    // never go to Claude (lib/miriamSettings): light or dark, at once, as
+    // Settings' switch does it; their name or location, shown to confirm; and
+    // what needs Settings itself — a password, a photo picked — opened there.
+    if (local && !play && !anyOverlayOpen()) {
+      const asked = withoutHerName(said)
+      const mode = themeAsked(asked)
+      if (mode) {
+        const theme = useThemeStore.getState()
+        const text =
+          theme.mode === mode ? `It’s already in ${mode} mode.` : `Switched to ${mode} mode.`
+        if (theme.mode !== mode) theme.chooseMode(mode)
+        noteDone(text)
+        setAnswer(text)
+        speak(text)
+        setStage('answered')
+        return
+      }
+      const name = nameChangeAsked(asked)
+      const where = name ? null : locationAsked(asked)
+      if (name || where) {
+        useMiriamStore.getState().setAwaiting(false)
+        await offerAction(
+          name ? 'change_my_name' : 'set_my_location',
+          name ? { name } : { ...where }
+        )
+        return
+      }
+      const account = accountAsked(asked)
+      const settings = account
+        ? screensFor(useAuthStore.getState().profile).find((x) => x.id === 'settings')
+        : undefined
+      if (account && settings) {
+        const text = {
+          email:
+            'Your email is changed in Profile & Settings, with your password to confirm it — here it is.',
+          password: 'Your password is changed in Profile & Settings — here it is.',
+          photo: 'Your photo is changed in Profile & Settings — tap your picture there.',
+        }[account]
+        noteDone(text)
+        setAnswer(text)
+        speak(text)
+        setStage('answered')
+        router.push(settings.path as never)
         return
       }
     }

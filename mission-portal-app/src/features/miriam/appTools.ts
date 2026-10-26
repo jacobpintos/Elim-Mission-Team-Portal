@@ -134,9 +134,15 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   if (tabs.includes('announce')) tools.push('read_announcements')
   // The Elim Store, and whether a sale is on: read as its tab shows them, for anyone with the tab.
   if (tabs.includes('store')) tools.push('read_store')
-  // A public follower looks things up — and changes nothing (the meeting form
-  // is filled in for them to send themselves: MiriamButton).
-  if (isPublicFollower(profile)) return tools
+  // A public follower looks things up — and changes nothing but their own
+  // settings, as Settings lets them: notifications and their name, worked out
+  // on the device (localTalk, useMiriamConversation), since their requests
+  // never go to Claude. The meeting form is filled in for them to send
+  // themselves (MiriamButton).
+  if (isPublicFollower(profile)) {
+    if (tabs.includes('settings')) tools.push('change_notification', 'change_my_name')
+    return tools
+  }
   if (canUseMessages(profile)) tools.push('read_messages')
   if (tabs.includes('issues')) tools.push('read_operations')
   // The same people the screens let make each change.

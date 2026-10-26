@@ -58,6 +58,7 @@ describe('selfIntro', () => {
     const said = selfIntro({ isPublic: true })
     expect(said).toMatch(/an AI language model, not a person, and I run on the app’s own servers/)
     expect(said).toContain('ask to meet with our leadership')
+    expect(said).toContain('light or dark mode, your notifications')
     expect(said).not.toMatch(/Claude|Anthropic|messages/)
   })
 })

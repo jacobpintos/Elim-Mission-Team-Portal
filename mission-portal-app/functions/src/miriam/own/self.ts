@@ -70,6 +70,7 @@ export function selfIntro(who: SelfFor): string {
     return (
       'I’m Miriam, the assistant in this app — an AI language model, not a person, and I run on the app’s own servers. ' +
       'I can tell you about events and The Well, answer questions about the Elim Store, play videos from Content, ' +
+      'change your settings — light or dark mode, your notifications, your name or location — ' +
       'take you around the app, and help you ask to meet with our leadership. ' +
       'I can get things wrong, so check anything that matters. Say “give me a tour” to see around.'
     )

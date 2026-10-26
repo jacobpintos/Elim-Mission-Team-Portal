@@ -731,6 +731,7 @@ export const miriamFlow: TourFlow = {
         '“Play the latest sermon”',
         '“Is anything on sale at the Elim Store?”',
         '“I’d like to meet with a pastor”',
+        '“Switch to light mode”, “Turn off announcement notifications”',
         '“Give me a tour of Events”',
       ],
       publicOnly: true,

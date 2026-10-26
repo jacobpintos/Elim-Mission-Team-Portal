@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
@@ -9,6 +10,9 @@ import type { ThemeDoc } from '@/types/theme'
 
 type Mode = 'dark' | 'light'
 
+/** Their choice of light or dark, kept on the device: Settings' switch, or asked of Miriam. */
+const MODE_KEY = 'theme_mode'
+
 interface ThemeStore {
   theme: ThemeDoc
   mode: Mode
@@ -16,7 +20,10 @@ interface ThemeStore {
   _unsub: (() => void) | null
   subscribe: () => void
   unsubscribe: () => void
+  /** For now only (useLightModeScreen); not kept. */
   setMode: (mode: Mode) => void
+  /** Their choice, kept on the device for the next time the app opens. */
+  chooseMode: (mode: Mode) => void
   publishTheme: (patch: Partial<ThemeDoc>, uid: string) => Promise<void>
   setLogo: (blob: Blob, contentType: string, uid: string) => Promise<void>
   revertLogo: (uid: string) => Promise<void>
@@ -44,6 +51,11 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
   },
 
   setMode: (mode) => set({ mode }),
+
+  chooseMode: (mode) => {
+    set({ mode })
+    AsyncStorage.setItem(MODE_KEY, mode).catch(() => {})
+  },
 
   publishTheme: async (patch, uid) => {
     await setDoc(
@@ -121,3 +133,10 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
     return t.onPrimaryOverride ?? autoTextColor(t.primary)
   },
 }))
+
+// The choice kept from before, once read; dark until then, and for anyone who never chose.
+AsyncStorage.getItem(MODE_KEY)
+  .then((kept) => {
+    if (kept === 'light' || kept === 'dark') useThemeStore.setState({ mode: kept })
+  })
+  .catch(() => {})

@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   query,
   serverTimestamp,
@@ -74,6 +75,7 @@ import type { SetList, SetListSong } from '@/types/worship'
 import type { IssueCategory, KaizenCard } from '@/types/operations'
 import { FD } from '@/lib/format'
 import { useAuthStore } from '@/stores/authStore'
+import { geocodeCity } from '@/lib/geocode'
 import { useUsersStore } from '@/stores/usersStore'
 import { sendMessageAs, useMessagesStore } from '@/stores/messagesStore'
 import { useLivestreamStore } from '@/stores/livestreamStore'
@@ -1805,6 +1807,40 @@ async function meetingRequest(profile: UserProfile, input: Record<string, unknow
   } satisfies Prepared
 }
 
+/**
+ * Where they are, for Events Near Me, as Settings' Location sets it: a city
+ * (found on the map first, so a misheard one is caught here), and how far out
+ * "near" reaches. Only the distance asked: the city they have.
+ */
+async function setMyLocation(profile: UserProfile, input: Record<string, unknown>) {
+  const was = profile.locationPref
+  const city = String(input.city ?? '').trim() || was?.city || ''
+  const state = String(input.city ?? '').trim()
+    ? String(input.state ?? '').trim()
+    : (was?.state ?? '')
+  const radius = Math.round(Number(input.radius)) || was?.radius || 50
+  if (!city) return cannot('Which city should I set as your location?')
+  if (radius > 500) return cannot('That’s farther than I can look — 500 miles at most.')
+  const place = [city, state].filter(Boolean).join(', ')
+  const coords = await geocodeCity(city, state)
+  if (!coords) return cannot(`I couldn’t find ${place} on the map.`)
+  const uid = String(profile.uid)
+  return {
+    kind: 'ready',
+    title: `Set your location to ${place}?`,
+    details: [`Events within ${radius} miles show as near you`],
+    confirm: 'Set',
+    run: async () => {
+      await updateDoc(doc(db, 'users', uid), { locationPref: { city, state, radius, ...coords } })
+      return 'Set.'
+    },
+    undo: async () => {
+      await updateDoc(doc(db, 'users', uid), { locationPref: was ?? deleteField() })
+      return 'Your location is back as it was.'
+    },
+  } satisfies Prepared
+}
+
 /** Their own name, as Settings changes it. */
 async function changeMyName(profile: UserProfile, input: Record<string, unknown>) {
   const name = String(input.name ?? '').trim()
@@ -1935,6 +1971,7 @@ const ACTIONS: Record<
   take_down_livestream: takeDownLivestream,
   meeting_request: meetingRequest,
   change_my_name: changeMyName,
+  set_my_location: setMyLocation,
   add_date_note: addDateNote,
   remove_date_note: removeDateNote,
 }

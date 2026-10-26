@@ -13,8 +13,8 @@ import { useThemeStore } from '@/stores/themeStore'
  * those are reachable from Settings while signed in, and flipping an already
  * dark-themed app to light and back to read them would be jarring.
  *
- * `mode` lives in memory only — nothing is persisted — so this cannot leave a
- * user's preference altered beyond the session.
+ * Set with setMode, in memory only — the choice kept on the device is
+ * chooseMode's — so this cannot leave a user's preference altered.
  */
 export function useLightModeScreen() {
   const setMode = useThemeStore((s) => s.setMode)
