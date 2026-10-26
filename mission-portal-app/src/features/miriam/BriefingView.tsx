@@ -11,6 +11,7 @@ import {
 } from '@/lib/briefing'
 import type { Reminder } from '@/stores/remindersStore'
 import { Focus } from './briefingFocus'
+import { daySaid, OCCASION_ICON } from '@/lib/occasions'
 
 type Colors = ReturnType<typeof useThemeColors>
 
@@ -227,6 +228,34 @@ export function BriefingView({
         </Section>
       ) : null}
 
+      {b.occasions.length ? (
+        <Section title="BIRTHDAYS & ANNIVERSARIES" colors={colors}>
+          <YStack
+            style={[
+              styles.list,
+              { borderColor: colors.border, backgroundColor: colors.background },
+            ]}
+          >
+            {b.occasions.map((o, i) => {
+              const when = daySaid(o.date, b.date).replace(/, .*$/, '')
+              return (
+                <Focus key={o.key} id={R.occasion(o.key)}>
+                  <Row
+                    colors={colors}
+                    dot=""
+                    icon={OCCASION_ICON[o.kind]}
+                    title={o.title}
+                    sub={`${when.charAt(0).toUpperCase()}${when.slice(1)} · ${o.wish}`}
+                    last={i === b.occasions.length - 1}
+                    onPress={() => onOpen(`/events?date=${o.date}`)}
+                  />
+                </Focus>
+              )
+            })}
+          </YStack>
+        </Section>
+      ) : null}
+
       {b.news.length ? (
         <Section title="NEW SINCE YESTERDAY" colors={colors}>
           <YStack
@@ -357,6 +386,7 @@ export function BriefingView({
       !b.tasks.length &&
       !b.reminders.length &&
       !b.notes.length &&
+      !b.occasions.length &&
       !b.news.length &&
       !b.food.length &&
       !b.attention.length ? (
@@ -390,6 +420,7 @@ function Section({
 function Row({
   colors,
   dot,
+  icon,
   title,
   sub,
   subColor,
@@ -399,6 +430,8 @@ function Row({
 }: {
   colors: Colors
   dot: string
+  /** An emoji in the dot's place: a birthday's cake. */
+  icon?: string
   title: string
   sub: string
   subColor?: string
@@ -417,7 +450,11 @@ function Row({
       borderBottomWidth={last ? 0 : 1}
       borderBottomColor={colors.border}
     >
-      <View style={[styles.dot, { backgroundColor: dot }]} />
+      {icon ? (
+        <Text fontSize="$4">{icon}</Text>
+      ) : (
+        <View style={[styles.dot, { backgroundColor: dot }]} />
+      )}
       <Pressable onPress={onPress} accessibilityRole="link" style={{ flex: 1, paddingVertical: 8 }}>
         <Text color={colors.text} fontSize="$4" fontWeight="600" numberOfLines={2}>
           {title}

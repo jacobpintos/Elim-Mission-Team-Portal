@@ -301,6 +301,10 @@ describe('the guards', () => {
     expect(notHers(flight, 'event_flight')).toBeTruthy()
     expect(notHers('where is guest user staying for new years eve', 'event_place')).toBeTruthy()
     expect(notHers('where is guest user staying for new years eve', 'event_lodging')).toBeTruthy()
+    // Birthdays and anniversaries are the calendar's own; a birthday party is an event.
+    expect(notHers('when is Whitney’s birthday', 'event_time')).toBeTruthy()
+    expect(notHers('when is the Slatterys anniversary', 'event_time')).toBeTruthy()
+    expect(notHers('when is Josh’s birthday party', 'event_time')).toBeNull()
     // Their own still are.
     expect(notHers('where am I staying for the retreat', 'event_lodging')).toBeNull()
     expect(notHers('when does my flight land', 'event_flight')).toBeNull()

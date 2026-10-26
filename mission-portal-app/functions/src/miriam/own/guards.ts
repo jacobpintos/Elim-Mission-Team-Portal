@@ -71,6 +71,13 @@ const NOT_HERS: [RegExp, Skill[]][] = [
     /^(?!.*\b(?:where|wheres|where's|address|location|located|venue|building|church|city|park|place|directions|map|get\s+to|held|going|meet)\b)/i,
     ['event_place'],
   ],
+  // Birthdays and anniversaries are the calendar's own (src/lib/occasions),
+  // answered in the app — never an event's time or place. A birthday party is
+  // an event.
+  [
+    /\b(?:birthdays?|b-?days?|anniversar(?:y|ies))\b(?!\s+(?:party|parties|dinner|lunch|brunch|celebration|bash|service|event))/i,
+    EVENTS,
+  ],
   // Bringing something is the food sign-up, not coming.
   [/\b(?:bring(?:ing)?|food|sign[-\s]?up\s+sheet|potluck\s+list)\b/i, ['availability']],
   // A span of days ("all of November", "the whole week") is a range, not one event.

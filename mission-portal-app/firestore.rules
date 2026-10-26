@@ -38,6 +38,13 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
           .hasAny(['admin', 'security', 'regular', 'intern', 'worship', 'guest']);
     }
+    // Every account but a guest's or a public one: who sees the birthdays and
+    // anniversaries on the event calendar (src/lib/occasions: seesOccasions).
+    function seesOccasions() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+          .hasAny(['admin', 'security', 'regular', 'intern', 'worship']);
+    }
     function isWorshipOrAdmin() {
       return isSignedIn() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
@@ -442,6 +449,15 @@ service cloud.firestore {
     // dateNotesStore): theirs alone — nobody else reads them, an admin
     // included. Kept by anyone with more than a public account, at most a
     // thousand; read and cleared by their owner whatever their account is now.
+    // Birthdays and anniversaries on the event calendar (stores/occasionsStore):
+    // one document, each a field. Seen by every account but a guest's or a
+    // public one; kept by admins.
+    match /occasions/{id} {
+      allow read: if seesOccasions();
+      allow write: if isAdmin() && request.resource.data.size() <= 2000;
+      allow delete: if isAdmin();
+    }
+
     match /dateNotes/{uid} {
       allow read, delete: if isSelf(uid);
       allow create, update: if isSelf(uid) && keepsNotes()

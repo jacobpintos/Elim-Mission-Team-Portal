@@ -27,6 +27,16 @@ import {
 } from '@/features/events/DayTasks'
 import type { EventInstance, EventTemplate, Task } from '@/types/events'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import {
+  OCCASION_ICON,
+  occasionsBetween,
+  occasionTitle,
+  seesOccasions,
+  type Occasion,
+} from '@/lib/occasions'
+import { useOccasionsStore } from '@/stores/occasionsStore'
+import { useUsersStore } from '@/stores/usersStore'
+import { OccasionsSheet } from '@/features/events/OccasionsSheet'
 
 const VIRTUAL_COLOR = '#8e44ad'
 
@@ -46,9 +56,10 @@ const MONTH_NAMES = [
   'December',
 ]
 
-/** On the list, a day's events first, then the tasks due, then your notes. */
-const ROW_ORDER = { event: 0, task: 1, note: 2 } as const
+/** On the list, a day's birthdays and anniversaries first, its events, then the tasks due, then your notes. */
+const ROW_ORDER = { occasion: -1, event: 0, task: 1, note: 2 } as const
 type Row =
+  | { kind: 'occasion'; date: string; key: string; occasion: Occasion }
   | { kind: 'event'; date: string; key: string; ev: EventInstance }
   | { kind: 'task'; date: string; key: string; task: Task }
   | { kind: 'note'; date: string; key: string; note: DateNote }
@@ -57,19 +68,26 @@ type Row =
 function Legend({
   marks,
 }: {
-  marks: { label: string; color: string; shape: 'dot' | 'square' | 'bar' }[]
+  marks: (
+    | { label: string; color: string; shape: 'dot' | 'square' | 'bar' }
+    | { label: string; emoji: string }
+  )[]
 }) {
   const colors = useThemeColors()
   return (
     <XStack gap="$3" justifyContent="center" flexWrap="wrap" marginTop="$2">
       {marks.map((m) => (
         <XStack key={m.label} gap="$1.5" alignItems="center">
-          <YStack
-            width={m.shape === 'bar' ? 9 : 7}
-            height={m.shape === 'bar' ? 3 : 7}
-            borderRadius={m.shape === 'dot' ? 4 : 1}
-            backgroundColor={m.color}
-          />
+          {'emoji' in m ? (
+            <Text fontSize={11}>{m.emoji}</Text>
+          ) : (
+            <YStack
+              width={m.shape === 'bar' ? 9 : 7}
+              height={m.shape === 'bar' ? 3 : 7}
+              borderRadius={m.shape === 'dot' ? 4 : 1}
+              backgroundColor={m.color}
+            />
+          )}
           <Text color={colors.textMuted} fontSize={11}>
             {m.label}
           </Text>
@@ -99,6 +117,12 @@ export default function EventsScreen() {
   const keepsNotes = canKeepDateNotes(profile)
   const allTasks = useTasksStore((s) => s.tasks)
   const allNotes = useDateNotesStore((s) => s.notes)
+  // Birthdays and anniversaries: every account's but a guest's or a public one's (lib/occasions).
+  const seesOcc = seesOccasions(profile?.roles)
+  const occasions = useOccasionsStore((s) => s.occasions)
+  const users = useUsersStore((s) => s.users)
+  const [occasionsOpen, setOccasionsOpen] = useState(false)
+  const [editOccasion, setEditOccasion] = useState<Occasion | null>(null)
 
   const { instances, templates } = useEventsStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
@@ -179,6 +203,12 @@ export default function EventsScreen() {
   }, [askedDay, admin])
 
   useEffect(() => {
+    if (!seesOcc) return
+    useOccasionsStore.getState().subscribe()
+    return () => useOccasionsStore.getState().unsubscribe()
+  }, [seesOcc])
+
+  useEffect(() => {
     if (publicUser || !uid) return
     const tasks = useTasksStore.getState()
     const notes = useDateNotesStore.getState()
@@ -225,10 +255,27 @@ export default function EventsScreen() {
   const monthNotes = keepsNotes ? notesBetween(allNotes, from, to) : []
   const notesByDate: Record<string, DateNote[]> = {}
   monthNotes.forEach((n) => (notesByDate[n.date] ??= []).push(n))
+  const names = new Map(users.map((u) => [String(u.uid), u.displayName]))
+  const monthOccasions = seesOcc ? occasionsBetween(occasions, from, to) : []
+  const occasionsByDate: Record<string, Occasion[]> = {}
+  monthOccasions.forEach((f) => (occasionsByDate[f.date] ??= []).push(f.occasion))
+  // An admin's to change, from its day.
+  const openOccasion = admin
+    ? (o: Occasion) => {
+        setEditOccasion(o)
+        setOccasionsOpen(true)
+      }
+    : null
   const openTask = (t: Task) =>
     router.push(`/assignments?taskId=${encodeURIComponent(String(t.id))}` as never)
   // The list: the month's events, tasks due and notes, by day.
   const rows: Row[] = [
+    ...monthOccasions.map((f) => ({
+      kind: 'occasion' as const,
+      date: f.date,
+      key: `occasion-${f.occasion.id}`,
+      occasion: f.occasion,
+    })),
     ...monthEvents.map((ev) => ({
       kind: 'event' as const,
       date: ev.date,
@@ -385,6 +432,24 @@ export default function EventsScreen() {
                 </XStack>
               </Pressable>
             ) : null}
+            <Pressable
+              onPress={() => {
+                setEditOccasion(null)
+                setOccasionsOpen(true)
+              }}
+            >
+              <XStack
+                borderRadius="$2"
+                paddingHorizontal="$3"
+                paddingVertical="$1"
+                borderWidth={1}
+                borderColor={colors.border}
+              >
+                <Text color={colors.text} fontSize="$2" fontWeight="600">
+                  {OCCASION_ICON.birthday} Birthdays
+                </Text>
+              </XStack>
+            </Pressable>
             <Pressable onPress={() => router.push('/(app)/admin/avail' as never)}>
               <XStack
                 borderRadius="$2"
@@ -443,6 +508,7 @@ export default function EventsScreen() {
                   const evs = byDate[ds] ?? []
                   const dayTasks = tasksByDate[ds] ?? []
                   const dayNotes = notesByDate[ds] ?? []
+                  const dayOccasions = occasionsByDate[ds] ?? []
                   const isSelected = selectedDay === ds
                   const isToday = ds === new Date().toISOString().split('T')[0]
 
@@ -470,6 +536,12 @@ export default function EventsScreen() {
                         >
                           {day}
                         </Text>
+                        {dayOccasions.length ? (
+                          // A cake for a birthday, a ring for an anniversary: one of each kind.
+                          <Text fontSize={10} lineHeight={12} pointerEvents="none">
+                            {[...new Set(dayOccasions.map((o) => OCCASION_ICON[o.kind]))].join('')}
+                          </Text>
+                        ) : null}
                         {evs.length > 0 ? (
                           // The dots are a count, not a control. Each used to be
                           // its own Pressable that jumped straight into one
@@ -536,6 +608,12 @@ export default function EventsScreen() {
                   ...(keepsNotes
                     ? [{ label: 'My note', color: NOTE_COLOR, shape: 'bar' as const }]
                     : []),
+                  ...(seesOcc
+                    ? [
+                        { label: 'Birthday', emoji: OCCASION_ICON.birthday },
+                        { label: 'Anniversary', emoji: OCCASION_ICON.anniversary },
+                      ]
+                    : []),
                 ]}
               />
             ) : null}
@@ -546,6 +624,24 @@ export default function EventsScreen() {
                 <Text color={colors.text} fontWeight="700" fontSize="$3">
                   {FD(selectedDay, { weekday: true })}
                 </Text>
+                {(occasionsByDate[selectedDay] ?? []).map((o) => (
+                  <Pressable key={o.id} disabled={!openOccasion} onPress={() => openOccasion?.(o)}>
+                    <XStack
+                      backgroundColor={colors.surface}
+                      borderRadius="$2"
+                      padding="$2"
+                      borderWidth={1}
+                      borderColor={colors.border}
+                      gap="$2"
+                      alignItems="center"
+                    >
+                      <Text fontSize="$5">{OCCASION_ICON[o.kind]}</Text>
+                      <Text flex={1} color={colors.text} fontWeight="600" fontSize="$3">
+                        {occasionTitle(o, names)}
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                ))}
                 {selectedEvents.length === 0 ? (
                   <Text color={colors.textMuted} fontSize="$2">
                     No events on {FD(selectedDay)}.
@@ -605,6 +701,44 @@ export default function EventsScreen() {
               </Text>
             ) : (
               rows.map((row) => {
+                if (row.kind === 'occasion') {
+                  return (
+                    <Pressable
+                      key={row.key}
+                      disabled={!openOccasion}
+                      onPress={() => openOccasion?.(row.occasion)}
+                    >
+                      <XStack
+                        backgroundColor={colors.surface}
+                        borderRadius="$3"
+                        padding="$3"
+                        borderWidth={1}
+                        borderColor={colors.border}
+                        gap="$2"
+                        alignItems="center"
+                      >
+                        <YStack
+                          width={44}
+                          height={44}
+                          borderRadius="$2"
+                          backgroundColor={colors.primary + '14'}
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          <Text fontSize={22}>{OCCASION_ICON[row.occasion.kind]}</Text>
+                        </YStack>
+                        <YStack flex={1}>
+                          <Text color={colors.text} fontWeight="600">
+                            {occasionTitle(row.occasion, names)}
+                          </Text>
+                          <Text color={colors.textMuted} fontSize="$2">
+                            {FD(row.date, { weekday: true })}
+                          </Text>
+                        </YStack>
+                      </XStack>
+                    </Pressable>
+                  )
+                }
                 if (row.kind !== 'event') {
                   const color =
                     row.kind === 'note'
@@ -772,6 +906,17 @@ export default function EventsScreen() {
           </YStack>
         ) : null}
       </ScrollView>
+
+      {admin ? (
+        <OccasionsSheet
+          open={occasionsOpen}
+          editing={editOccasion}
+          onClose={() => {
+            setOccasionsOpen(false)
+            setEditOccasion(null)
+          }}
+        />
+      ) : null}
 
       {admin ? (
         <EventFormModal

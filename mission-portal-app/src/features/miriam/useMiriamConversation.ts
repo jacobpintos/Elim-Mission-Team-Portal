@@ -52,6 +52,9 @@ import { canUseMessages, isAdmin, isPublicFollower, visibleTabs } from '@/lib/ro
 import { selfAsked, selfIntro } from '../../../functions/src/miriam/own/self'
 import { clockOf } from '../../../functions/src/push/reminderTime'
 import { useAuthStore } from '@/stores/authStore'
+import { useOccasionsStore } from '@/stores/occasionsStore'
+import { useUsersStore } from '@/stores/usersStore'
+import { occasionAnswer, occasionAsked, seesOccasions } from '@/lib/occasions'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useDateNotesStore } from '@/stores/dateNotesStore'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -608,6 +611,32 @@ export function useMiriamConversation(
         router.push(connect.path as never)
       }
       return
+    }
+    // Birthdays and anniversaries, for those who see them on the calendar
+    // (lib/occasions): "whose birthday is next month?", "when is Josh and
+    // Whitney's anniversary?" — said, and the calendar opened at the day.
+    const occasionAsk =
+      local && !play && seesOccasions(useAuthStore.getState().profile?.roles)
+        ? occasionAsked(withoutHerName(said), localToday())
+        : null
+    if (occasionAsk) {
+      setStage('thinking')
+      const list = await useOccasionsStore
+        .getState()
+        .read()
+        .catch(() => null)
+      if (list) {
+        const names = new Map(
+          useUsersStore.getState().users.map((u) => [String(u.uid), u.displayName])
+        )
+        const reply = occasionAnswer(occasionAsk, list, localToday(), names)
+        noteDone(reply.text)
+        setAnswer(reply.text)
+        speak(reply.text)
+        setStage('answered')
+        if (reply.date && !anyOverlayOpen()) router.push(`/events?date=${reply.date}` as never)
+        return
+      }
     }
     // A screen asked for by name ("open settings"): gone to from here.
     if (local && !play && !anyOverlayOpen()) {

@@ -220,3 +220,52 @@ describe('food still open', () => {
     expect(b.spoken).not.toMatch(/food|chips/i)
   })
 })
+
+describe('the briefing, of birthdays, anniversaries and teams', () => {
+  it('reminds them to wish those whose birthday or anniversary is this week', () => {
+    const b = buildBriefing(
+      input({
+        occasions: [
+          { id: 'w', kind: 'birthday', people: [{ name: 'Whitney Slattery' }], month: 10, day: 18 },
+          {
+            id: 'a',
+            kind: 'anniversary',
+            people: [{ name: 'Josh Slattery' }, { name: 'Whitney Slattery' }],
+            month: 10,
+            day: 21,
+          },
+          // Too far off to say.
+          { id: 'x', kind: 'birthday', people: [{ name: 'Later Person' }], month: 12, day: 1 },
+        ],
+      })
+    )
+    expect(b.occasions.map((o) => o.title)).toEqual([
+      'Whitney Slattery’s birthday',
+      'Josh and Whitney Slattery’s anniversary',
+    ])
+    expect(b.spoken).toContain(
+      'Today is Whitney Slattery’s birthday — wish Whitney a happy birthday!'
+    )
+    expect(b.spoken).toContain(
+      'Josh and Whitney Slattery’s anniversary is Wednesday — wish Josh and Whitney a happy anniversary!'
+    )
+    expect(b.segments.some((s) => s.ids.includes('occ:w_2026-10-18'))).toBe(true)
+  })
+
+  it('says every team they’re on', () => {
+    const many = templates.map((t) =>
+      t.id === 'sun'
+        ? {
+            ...t,
+            teams: [
+              { name: 'Worship', leaders: [], members: ['me'] },
+              { name: 'Setup', leaders: ['me'], members: [] },
+            ],
+          }
+        : t
+    )
+    const b = buildBriefing(input({ templates: many as never }))
+    expect(b.today[0].chips).toEqual(expect.arrayContaining(['Worship team', 'Setup team']))
+    expect(b.spoken).toContain('You’re on Worship and Setup.'.replace('’', "'"))
+  })
+})

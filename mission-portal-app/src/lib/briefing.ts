@@ -12,6 +12,7 @@ import {
   type Viewer,
   teamsOf,
 } from '../../functions/src/miriam/data'
+import { nudgeSaid, occasionsSoon, type Occasion, type OccasionNudge } from './occasions'
 
 /**
  * Miriam's daily briefing — "what do I need to know today?" — put together
@@ -125,6 +126,8 @@ export interface BriefingInput {
   food?: FoodNudge[]
   /** Their own notes on days of their calendar (lib/dateNotes): today's are said. */
   notes?: { id: string; date: string; text: string; at: number }[]
+  /** Birthdays and anniversaries on the calendar, for those who see them (lib/occasions): this week's are said. */
+  occasions?: Occasion[]
 }
 
 /** An event of theirs with open food items, and one of them suggested. */
@@ -165,6 +168,8 @@ export interface Briefing {
   attention: AttentionItem[]
   /** Food still open on their events: a suggestion each. */
   food: FoodNudge[]
+  /** Birthdays and anniversaries this week: whom to wish well. */
+  occasions: OccasionNudge[]
   spoken: string
   /**
    * What is said, in the order it is said, each with the items on screen it
@@ -175,7 +180,7 @@ export interface Briefing {
 }
 
 export interface BriefingSegment {
-  /** The rows it is about: "head", "ev:<key>", "task:<id>", "rem:<id>", "note:<id>", "news:<n>", "food:<eventKey>", "att:<n>". */
+  /** The rows it is about: "head", "ev:<key>", "task:<id>", "rem:<id>", "note:<id>", "occ:<key>", "news:<n>", "food:<eventKey>", "att:<n>". */
   ids: string[]
   text: string
 }
@@ -186,6 +191,7 @@ export const briefingRowId = {
   task: (id: string) => `task:${id}`,
   reminder: (id: string) => `rem:${id}`,
   note: (id: string) => `note:${id}`,
+  occasion: (key: string) => `occ:${key}`,
   news: (n: number) => `news:${n}`,
   food: (eventKey: string) => `food:${eventKey}`,
   attention: (n: number) => `att:${n}`,
@@ -343,6 +349,7 @@ export function buildBriefing(input: BriefingInput): Briefing {
     .filter((n) => n.date === today)
     .sort((a, b) => a.at - b.at)
     .map((n) => ({ id: n.id, text: n.text }))
+  const occasions = occasionsSoon(input.occasions ?? [], today, viewer.uid, input.names)
   const needs =
     tasks.filter((t) => t.due !== 'week').length +
     attention.length +
@@ -368,8 +375,11 @@ export function buildBriefing(input: BriefingInput): Briefing {
       const bits = [
         `${i > 0 ? 'Then ' : ''}${ev.title}${ev.startTime ? ` at ${ev.startTime}` : ''}${card.place && !ev.isVirtual ? `, at ${card.place}` : ev.isVirtual ? ', online' : ''}.`,
       ]
-      const team = card.chips.find((c) => c.endsWith(' team'))
-      if (team) bits.push(`You're on ${team.replace(/ team$/, '')}.`)
+      // Every team they're on: someone can be on several.
+      const teams = card.chips
+        .filter((c) => c.endsWith(' team'))
+        .map((c) => c.replace(/ team$/, ''))
+      if (teams.length) bits.push(`You're on ${listed(teams)}.`)
       const dress = dressCodeFor(ev, asMember(viewer))[0]
       if (dress) bits.push(`Dress code: ${dress}.`)
       const car = ev.carpool ? carpoolFor(ev, asMember(viewer), input.names)[0] : undefined
@@ -419,6 +429,8 @@ export function buildBriefing(input: BriefingInput): Briefing {
       `${notes.length === 1 ? 'Your note for today' : 'Your notes for today'}: ${said.join('; ')}.`
     )
   }
+  // Birthdays and anniversaries this week: whom to wish well.
+  for (const o of occasions) say([R.occasion(o.key)], nudgeSaid(o, today))
   const announcements = news.filter((n) => n.kind === 'announcement')
   if (announcements.length)
     say(
@@ -456,6 +468,7 @@ export function buildBriefing(input: BriefingInput): Briefing {
     news,
     attention,
     food,
+    occasions,
     spoken: segments.map((x) => x.text).join(' '),
     segments,
   }

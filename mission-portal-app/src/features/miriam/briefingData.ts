@@ -19,6 +19,8 @@ import { useTasksStore } from '@/stores/tasksStore'
 import { useRemindersStore } from '@/stores/remindersStore'
 import { useDateNotesStore } from '@/stores/dateNotesStore'
 import { canKeepDateNotes } from '@/lib/dateNotes'
+import { seesOccasions } from '@/lib/occasions'
+import { useOccasionsStore } from '@/stores/occasionsStore'
 import {
   assignedTo,
   canSeeEvent,
@@ -145,6 +147,11 @@ export async function gatherBriefing(): Promise<
     quietly(() => moneyFor(uid, day), [] as AttentionItem[]),
   ])
 
+  // Birthdays and anniversaries, for those who see them (lib/occasions).
+  const occasions = seesOccasions(profile.roles)
+    ? await quietly(() => useOccasionsStore.getState().read(), [])
+    : []
+
   const briefing = buildBriefing({
     now,
     firstName: (profile.displayName ?? '').split(' ')[0],
@@ -178,6 +185,7 @@ export async function gatherBriefing(): Promise<
     weather,
     food,
     notes: keepsNotes ? useDateNotesStore.getState().notes : [],
+    occasions,
   })
   return { ...briefing, asks }
 }

@@ -817,6 +817,32 @@ describe('notes on days of their calendar', () => {
   })
 })
 
+describe('birthdays and anniversaries on the calendar', () => {
+  const one = { o1: { kind: 'birthday', people: [{ name: 'Whitney' }], month: 11, day: 5 } }
+
+  it('are kept by admins', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'occasions', 'all'), one, { merge: true }))
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'occasions', 'all'), { o1: deleteField() }, { merge: true })
+    )
+    await assertFails(setDoc(doc(as(MEMBER), 'occasions', 'all'), one, { merge: true }))
+    await assertFails(setDoc(doc(as(WORSHIP), 'occasions', 'all'), one, { merge: true }))
+  })
+
+  it('are seen by every account but a guest’s or a public one', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'occasions', 'all'), one)
+      await setDoc(doc(ctx.firestore(), 'users', 'public-uid'), { roles: ['public'] })
+    })
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'occasions', 'all')))
+    await assertSucceeds(getDoc(doc(as(WORSHIP), 'occasions', 'all')))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'occasions', 'all')))
+    await assertFails(getDoc(doc(as(GUEST), 'occasions', 'all')))
+    await assertFails(getDoc(doc(as('public-uid'), 'occasions', 'all')))
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'occasions', 'all')))
+  })
+})
+
 describe('questions asked of Miriam', () => {
   const asked = (extra: Record<string, unknown> = {}) => ({
     text: 'when is youth night?',
