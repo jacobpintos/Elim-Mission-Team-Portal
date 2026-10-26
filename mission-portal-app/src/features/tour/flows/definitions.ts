@@ -475,7 +475,7 @@ export const homeFlow: TourFlow = {
         'The latest announcements',
         'Events near you — tap “Edit Location” to set where you are',
         'New and featured releases from Content',
-        'The events coming up after that',
+        'Events farther away, beyond your radius',
       ],
       publicOnly: true,
     },

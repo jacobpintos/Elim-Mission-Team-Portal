@@ -143,6 +143,29 @@ export function dateStr(daysFromNow: number): string {
 }
 
 /**
+ * Each event once, at its next date: a recurring or multi-day event is one
+ * entry in a list, not one a week. `list` in date order, as allInstances
+ * gives it.
+ */
+export function nextOfEach(list: EventInstance[]): EventInstance[] {
+  const seen = new Set<string>()
+  return list.filter((ev) => {
+    const key = String(ev.templateId ?? ev.id)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/** How often a recurring event comes round — "every week" — or null for one that doesn't. */
+export function repeatsSaid(ev: Pick<EventInstance, 'isRec' | 'recur'>): string | null {
+  if (!ev.isRec) return null
+  if (ev.recur === 'biweekly') return 'every other week'
+  if (ev.recur === 'monthly') return 'every month'
+  return 'every week'
+}
+
+/**
  * An event as a calendar file, to add to a phone's or computer's calendar.
  *
  * `team`: whether the person saving it sees the event's team side — report

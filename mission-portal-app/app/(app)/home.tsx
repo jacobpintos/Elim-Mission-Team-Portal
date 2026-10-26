@@ -21,7 +21,7 @@ import { isAdmin, isSecurity, isWorship } from '@/lib/roles'
 import { isTabVisible } from '@/lib/featureFlags'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { Img } from '@/components/ui/Img'
-import { todayStr, dateStr } from '@/lib/events'
+import { todayStr, dateStr, nextOfEach, repeatsSaid } from '@/lib/events'
 import { FD, timeOfDay } from '@/lib/format'
 import { haversineMiles, geocodeCity, estimatedDriveTime } from '@/lib/geocode'
 import { doc, updateDoc } from 'firebase/firestore'
@@ -77,11 +77,13 @@ function PubHomeContent() {
   const allPublic60 = instances(today, in60).filter((ev) => ev.isPublic)
   const allPublic30 = instances(today, in30).filter((ev) => ev.isPublic)
 
-  // Events Near Me — virtual events always included, physical filtered by radius
+  // Events Near Me — virtual events always included, physical filtered by
+  // radius. Each event once, at its next date: Sunday Service is one entry,
+  // not one a week.
+  const locPref = profile?.locationPref
   const nearMe = (() => {
-    const locPref = profile?.locationPref
     if (!locPref?.lat || !locPref?.lng) return []
-    return allPublic60.filter((ev) => {
+    return nextOfEach(allPublic60).filter((ev) => {
       if (ev.isVirtual) return true
       if (!ev._geocodeLat || !ev._geocodeLng) return false
       return (
@@ -90,10 +92,14 @@ function PubHomeContent() {
     })
   })()
 
-  const nearMeKeys = new Set(nearMe.map((ev) => ev.instanceKey))
+  const nearMeEvents = new Set(nearMe.map((ev) => String(ev.templateId ?? ev.id)))
 
-  // Upcoming Stops: public events not in nearMe, within 30 days
-  const upcomingStops = allPublic30.filter((ev) => !nearMeKeys.has(ev.instanceKey))
+  // Farther away: public events, within 30 days, beyond their radius — or,
+  // with no location set, all of them. Each once, as above.
+  const fartherAway = nextOfEach(allPublic30).filter(
+    (ev) => !nearMeEvents.has(String(ev.templateId ?? ev.id))
+  )
+  const located = !!locPref?.lat && !!locPref?.lng
 
   // Announcements: public, within last 30 days OR newer than previous login
   const thirtyDaysAgo = useMemo(() => +new Date() - 30 * 24 * 60 * 60 * 1000, [])
@@ -297,6 +303,7 @@ function PubHomeContent() {
                 <Text color={colors.textMuted} fontSize="$2">
                   {FD(ev.date)} {ev.startTime ? `· ${ev.startTime}` : ''}
                   {ev.isVirtual ? ' · Virtual' : ''}
+                  {repeatsSaid(ev) ? ` · ${repeatsSaid(ev)}` : ''}
                 </Text>
                 {ev.location ? (
                   <Text color={colors.textMuted} fontSize="$2">
@@ -547,10 +554,17 @@ function PubHomeContent() {
           </YStack>
         ) : null}
 
-        {/* Upcoming Stops */}
+        {/* Farther away: beyond their radius */}
         <YStack gap="$2">
-          <H3 color={colors.text}>Upcoming Stops</H3>
-          {upcomingStops.length === 0 ? (
+          <YStack>
+            <H3 color={colors.text}>{located ? 'Events Farther Away' : 'Upcoming Events'}</H3>
+            {located ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                More than {locPref?.radius} miles from you, in the next 30 days
+              </Text>
+            ) : null}
+          </YStack>
+          {fartherAway.length === 0 ? (
             <YStack
               backgroundColor={colors.surface}
               borderRadius="$3"
@@ -558,10 +572,14 @@ function PubHomeContent() {
               borderWidth={1}
               borderColor={colors.border}
             >
-              <Text color={colors.textMuted}>No upcoming stops in the next 30 days.</Text>
+              <Text color={colors.textMuted}>
+                {located
+                  ? 'Nothing farther away in the next 30 days.'
+                  : 'No upcoming events in the next 30 days.'}
+              </Text>
             </YStack>
           ) : (
-            upcomingStops.map((ev) => (
+            fartherAway.map((ev) => (
               <YStack
                 key={ev.instanceKey}
                 backgroundColor={colors.surface}
@@ -576,6 +594,7 @@ function PubHomeContent() {
                 </Text>
                 <Text color={colors.textMuted} fontSize="$2">
                   {FD(ev.date, { weekday: true })} {ev.startTime ? `· ${ev.startTime}` : ''}
+                  {repeatsSaid(ev) ? ` · ${repeatsSaid(ev)}` : ''}
                 </Text>
                 {ev.location ? (
                   <Text color={colors.textMuted} fontSize="$2">

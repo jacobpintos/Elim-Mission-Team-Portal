@@ -67,3 +67,27 @@ describe('an event as a calendar file', () => {
     expect(line(ics, 'DESCRIPTION')).toContain('Join online: https://zoom.us/j/1')
   })
 })
+
+describe('each event once', () => {
+  it('keeps a recurring or multi-day event at its next date', async () => {
+    const { nextOfEach, repeatsSaid } = await import('./events')
+    const at = (templateId: string, date: string) =>
+      ({ templateId, date, instanceKey: `${templateId}_${date}` }) as unknown as EventInstance
+    const list = [
+      at('sun', '2026-11-01'),
+      at('test', '2026-11-03'),
+      at('sun', '2026-11-08'),
+      at('camp', '2026-11-10'),
+      at('camp', '2026-11-11'),
+      at('sun', '2026-11-15'),
+    ]
+    expect(nextOfEach(list).map((e) => e.instanceKey)).toEqual([
+      'sun_2026-11-01',
+      'test_2026-11-03',
+      'camp_2026-11-10',
+    ])
+    expect(repeatsSaid({ isRec: true, recur: 'weekly' })).toBe('every week')
+    expect(repeatsSaid({ isRec: true, recur: 'biweekly' })).toBe('every other week')
+    expect(repeatsSaid({ isRec: false })).toBeNull()
+  })
+})
