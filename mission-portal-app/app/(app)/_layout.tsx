@@ -56,6 +56,47 @@ const TAB_LABELS: Record<Tab, string> = {
   settings: 'Profile & Settings',
 }
 
+/** `color` at an alpha (two hex digits), or a neutral grey when it isn't a plain #rrggbb. */
+const tinted = (color: string, alpha: string) =>
+  /^#[0-9a-f]{6}$/i.test(color) ? color + alpha : `#808080${alpha}`
+
+/**
+ * A row of the side menu, shaded so it's plain which one is under the mouse
+ * or the finger: every other row faintly, the one under the mouse on a
+ * computer, the one being pressed more. The open tab keeps its own colour.
+ */
+function MenuRow({
+  onPress,
+  shaded = false,
+  active = false,
+  children,
+}: {
+  onPress: () => void
+  shaded?: boolean
+  active?: boolean
+  children: (state: { background: string }) => React.ReactNode
+}) {
+  const colors = useThemeColors()
+  return (
+    <Pressable onPress={onPress}>
+      {(state) => {
+        // `hovered` is react-native-web's; on a phone there is no mouse.
+        const hovered = (state as { hovered?: boolean }).hovered === true
+        const background = active
+          ? colors.primary + '22'
+          : state.pressed
+            ? tinted(colors.text, '26')
+            : hovered
+              ? tinted(colors.text, '1a')
+              : shaded
+                ? tinted(colors.text, '0f')
+                : 'transparent'
+        return children({ background })
+      }}
+    </Pressable>
+  )
+}
+
 // Vertical bar + three horizontal bars — clearly a menu icon
 function MenuIcon({ color }: { color: string }) {
   return (
@@ -351,7 +392,7 @@ export default function AppLayout() {
           {/* Nav items */}
           <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
             <YStack paddingVertical="$2">
-              {tabs.map((tab) => {
+              {tabs.map((tab, i) => {
                 // A tab stays lit while one of the routes it owns is open,
                 // otherwise opening Messages would leave nothing highlighted.
                 const isActive =
@@ -359,31 +400,35 @@ export default function AppLayout() {
                   pathname.startsWith(`/${tab}/`) ||
                   SUB_ROUTE_OWNERS[pathSeg] === tab
                 return (
-                  <Pressable
+                  <MenuRow
                     key={tab}
+                    active={isActive}
+                    shaded={i % 2 === 1}
                     onPress={() => {
                       closeDrawer()
                       router.push(`/${tab}`)
                     }}
                   >
-                    <XStack
-                      paddingHorizontal="$4"
-                      paddingVertical="$3"
-                      gap="$3"
-                      alignItems="center"
-                      backgroundColor={isActive ? colors.primary + '22' : 'transparent'}
-                      borderLeftWidth={3}
-                      borderLeftColor={isActive ? colors.primary : 'transparent'}
-                    >
-                      <Text
-                        color={isActive ? colors.primary : colors.text}
-                        fontWeight={isActive ? '700' : '400'}
-                        fontSize="$3"
+                    {({ background }) => (
+                      <XStack
+                        paddingHorizontal="$4"
+                        paddingVertical="$3"
+                        gap="$3"
+                        alignItems="center"
+                        backgroundColor={background}
+                        borderLeftWidth={3}
+                        borderLeftColor={isActive ? colors.primary : 'transparent'}
                       >
-                        {tab === 'announce' ? INBOX_TITLE(profile) : TAB_LABELS[tab]}
-                      </Text>
-                    </XStack>
-                  </Pressable>
+                        <Text
+                          color={isActive ? colors.primary : colors.text}
+                          fontWeight={isActive ? '700' : '400'}
+                          fontSize="$3"
+                        >
+                          {tab === 'announce' ? INBOX_TITLE(profile) : TAB_LABELS[tab]}
+                        </Text>
+                      </XStack>
+                    )}
+                  </MenuRow>
                 )
               })}
             </YStack>
@@ -391,46 +436,52 @@ export default function AppLayout() {
 
           {/* Need help? */}
           {!tourActive && tabTour ? (
-            <Pressable
+            <MenuRow
               onPress={() => {
                 closeDrawer()
                 tourStart({ title: tabTour.title, steps: tabTour.steps })
               }}
             >
-              <XStack
-                padding="$4"
-                gap="$3"
-                alignItems="center"
-                borderTopWidth={1}
-                borderTopColor={colors.border}
-              >
-                <Text color={colors.textMuted} fontSize="$3">
-                  Need help?
-                </Text>
-              </XStack>
-            </Pressable>
+              {({ background }) => (
+                <XStack
+                  padding="$4"
+                  gap="$3"
+                  alignItems="center"
+                  backgroundColor={background}
+                  borderTopWidth={1}
+                  borderTopColor={colors.border}
+                >
+                  <Text color={colors.textMuted} fontSize="$3">
+                    Need help?
+                  </Text>
+                </XStack>
+              )}
+            </MenuRow>
           ) : null}
 
           {/* Report a Concern */}
           {showReportButton ? (
-            <Pressable
+            <MenuRow
               onPress={() => {
                 closeDrawer()
                 setReportOpen(true)
               }}
             >
-              <XStack
-                padding="$4"
-                gap="$3"
-                alignItems="center"
-                borderTopWidth={1}
-                borderTopColor={colors.border}
-              >
-                <Text color={colors.textMuted} fontSize="$3">
-                  Report a Concern
-                </Text>
-              </XStack>
-            </Pressable>
+              {({ background }) => (
+                <XStack
+                  padding="$4"
+                  gap="$3"
+                  alignItems="center"
+                  backgroundColor={background}
+                  borderTopWidth={1}
+                  borderTopColor={colors.border}
+                >
+                  <Text color={colors.textMuted} fontSize="$3">
+                    Report a Concern
+                  </Text>
+                </XStack>
+              )}
+            </MenuRow>
           ) : null}
         </YStack>
       </Animated.View>
