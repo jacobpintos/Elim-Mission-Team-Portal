@@ -129,7 +129,9 @@ describe('event questions answered on the device', () => {
     ]) {
       expect([q, quickAnswer(q, pub)?.text]).toEqual([
         q,
-        expect.stringMatching(/^That’s shown to .+’s team members\.$/),
+        expect.stringMatching(
+          /^Sorry, I can’t help with that one — but I can tell you when and where .+ is\.$/
+        ),
       ])
     }
     expect(quickAnswer('what’s the weather for revival in the heartland', pub)?.weather).toBe(
@@ -224,7 +226,7 @@ describe('an event’s schedule', () => {
   it('keeps it from a public follower, as the event’s page does', () => {
     const pub = { ...data('me', ['public']), templates: [...templates, camp] as never }
     expect(quickAnswer('What’s the schedule for family camp?', pub)?.text).toBe(
-      'That’s shown to Family Camp’s team members.'
+      'Sorry, I can’t help with that one — but I can tell you when and where Family Camp is.'
     )
     expect(quickAnswer('when is worship at family camp', pub)?.text ?? '').not.toContain('Worship')
   })

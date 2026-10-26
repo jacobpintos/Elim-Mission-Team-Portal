@@ -110,7 +110,6 @@ describe('notificationAsked: which, none, or not one', () => {
     'Turn on dark mode',
     'Stop the music',
     'What notifications do I have on?',
-    'Turn off all notifications except messages',
     'I am getting too many messages',
     'Remind me to call Sam at 5',
     // A reminder of their own names reminders, and switches none.
@@ -142,5 +141,42 @@ describe('pushIsOn', () => {
 describe('switchesSaid', () => {
   it('names them as Settings does', () => {
     expect(switchesSaid(['newMessage', 'announcement'])).toBe('“New message” and “Announcement”')
+  })
+})
+
+describe('notificationAsked: all but some', () => {
+  const keepOf = (text: string, who: UserProfile) => {
+    const ask = notificationAsked(text)
+    const p = ask && notificationPlan(ask, notificationKeysFor(who))
+    return p && (p.kind === 'sure' || p.kind === 'likely') ? p.keep : undefined
+  }
+
+  it('turns off all of them but those named, which are kept on', () => {
+    const visible = notificationKeysFor(pub)
+    expect(plan('turn off all notifications except for elim store sales', pub)).toBe(
+      `off sure:${visible.filter((k) => k !== 'storeSale').join(',')}`
+    )
+    expect(keepOf('turn off all notifications except for elim store sales', pub)).toEqual([
+      'storeSale',
+    ])
+    expect(keepOf('turn off everything except store sales', pub)).toEqual(['storeSale'])
+    expect(plan('Turn off all notifications except messages')).toBe(
+      `off sure:${notificationKeysFor(member)
+        .filter((k) => k !== 'newMessage')
+        .join(',')}`
+    )
+    expect(keepOf('Turn off all notifications but not announcements and messages', member)).toEqual(
+      notificationKeysFor(member).filter((k) => ['announcement', 'newMessage'].includes(k))
+    )
+  })
+
+  it('takes "how do I" as asking for it', () => {
+    expect(plan('how do I turn off announcement notifications', pub)).toBe(
+      'off sure:publicAnnouncement'
+    )
+  })
+
+  it('leaves an exception it can’t name', () => {
+    expect(notificationAsked('turn off all notifications except the ones I like')).toBeNull()
   })
 })

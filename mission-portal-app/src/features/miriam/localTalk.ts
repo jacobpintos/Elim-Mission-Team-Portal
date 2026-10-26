@@ -819,7 +819,13 @@ async function notificationOffer(
   talk: Talk
 ): Promise<boolean> {
   const state = ask.on ? 'on' : 'off'
-  const change = (keys: string[]) => ({ notifications: keys, on: ask.on })
+  // Left out of it ("except store sales"): kept the other way, in the same change.
+  const keep = plan.kind === 'sure' || plan.kind === 'likely' ? (plan.keep ?? []) : []
+  const change = (keys: string[]) => ({
+    notifications: keys,
+    on: ask.on,
+    ...(keep.length ? { keep } : {}),
+  })
 
   if (plan.kind === 'sure') {
     await talk.offer('change_notifications', change(plan.keys))
@@ -850,42 +856,42 @@ async function notificationOffer(
         'and'
       )}.`
     : ''
-  talk.ask(
-    `${lead}Did you mean: turn ${state} ${switchesPhrase(plan.keys, visible)}?${also}`,
-    async (r, t) => {
-      if (neverMind(r, t)) return true
-      if (saidYes(r)) {
-        await t.doNow('change_notifications', change(plan.keys))
-        return true
-      }
-      const no = saidNo(r)
-      // "No, the flight ones": the one meant, named.
-      if (no?.rest)
-        return notificationNamed(no.rest, ask, visible, [...plan.keys, ...plan.others], t)
-      if (no) {
-        // The others that fit, or — for several at once — each of them.
-        const choices = plan.others.length ? plan.others : plan.keys.length > 1 ? plan.keys : []
-        if (choices.length === 0) {
-          t.say('Okay — nothing was changed.')
-          return true
-        }
-        // One other: asked about in the same way, so a yes does it.
-        if (choices.length === 1) {
-          return notificationOffer({ kind: 'likely', keys: choices, others: [] }, ask, visible, t)
-        }
-        t.ask(
-          `Which, then: ${listed(
-            choices.slice(0, 4).map((k) => quoted(notificationLabel(k))),
-            'or'
-          )}?`,
-          (r2, t2) => notificationNamed(r2, ask, visible, choices, t2)
-        )
-        return true
-      }
-      // Another named instead: "just the event ones", "all of them".
-      return notificationNamed(r, ask, visible, [...plan.keys, ...plan.others], t)
+  const what =
+    keep.length && plan.keys.length + keep.length === visible.length
+      ? `all your notifications but ${switchesSaid(keep)}, which ${keep.length === 1 ? 'stays' : 'stay'} ${ask.on ? 'off' : 'on'}`
+      : switchesPhrase(plan.keys, visible)
+  talk.ask(`${lead}Did you mean: turn ${state} ${what}?${also}`, async (r, t) => {
+    if (neverMind(r, t)) return true
+    if (saidYes(r)) {
+      await t.doNow('change_notifications', change(plan.keys))
+      return true
     }
-  )
+    const no = saidNo(r)
+    // "No, the flight ones": the one meant, named.
+    if (no?.rest) return notificationNamed(no.rest, ask, visible, [...plan.keys, ...plan.others], t)
+    if (no) {
+      // The others that fit, or — for several at once — each of them.
+      const choices = plan.others.length ? plan.others : plan.keys.length > 1 ? plan.keys : []
+      if (choices.length === 0) {
+        t.say('Okay — nothing was changed.')
+        return true
+      }
+      // One other: asked about in the same way, so a yes does it.
+      if (choices.length === 1) {
+        return notificationOffer({ kind: 'likely', keys: choices, others: [] }, ask, visible, t)
+      }
+      t.ask(
+        `Which, then: ${listed(
+          choices.slice(0, 4).map((k) => quoted(notificationLabel(k))),
+          'or'
+        )}?`,
+        (r2, t2) => notificationNamed(r2, ask, visible, choices, t2)
+      )
+      return true
+    }
+    // Another named instead: "just the event ones", "all of them".
+    return notificationNamed(r, ask, visible, [...plan.keys, ...plan.others], t)
+  })
   return true
 }
 

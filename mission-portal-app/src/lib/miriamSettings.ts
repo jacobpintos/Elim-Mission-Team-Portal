@@ -189,10 +189,22 @@ export type AccountAsk = 'email' | 'password' | 'photo'
 /** "Change my email", "reset my password", "change my profile picture": what of their account, or null. */
 export function accountAsked(text: string): AccountAsk | null {
   const t = plain(text)
-  if (!/\b(?:change|update|reset|set|new|edit|replace|forgot|remove|add)\b/.test(t)) return null
-  if (!/\bmy\b/.test(t)) return null
-  if (/\be-?mail(?:\s+address)?\b/.test(t) && !/\bnotifications?\b|\bdigest/.test(t)) return 'email'
-  if (/\bpass\s?word\b/.test(t)) return 'password'
-  if (/\b(?:profile\s+)?(?:photo|picture|pic|avatar)\b/.test(t)) return 'photo'
+  if (!/\b(?:change|update|reset|set|new|edit|replace|forgot|remove|add|upload|put)\b/.test(t))
+    return null
+  // Theirs: "my email", "my account's password" — not "a new email to Sam".
+  const mine = /\b(?:my|account)\b/.test(t)
+  if (mine && /\be-?mail(?:\s+address)?\b/.test(t) && !/\bnotifications?\b|\bdigest/.test(t))
+    return 'email'
+  if (/\bpass\s?word\b/.test(t) && (mine || /\b(?:a|the)\s+(?:new\s+)?pass\s?word\b/.test(t)))
+    return 'password'
+  // A picture of them: "my photo", "a profile picture", "how do I add a photo".
+  const picture = /\b(?:photo|picture|pic|avatar)\b/
+  // Not one put somewhere else: "add a photo to the event".
+  const elsewhere = /\b(?:to|on|in|for)\s+(?:the|an?|this|that|our)\b/.test(t)
+  if (
+    picture.test(t) &&
+    (mine || /\bprofile\b/.test(t) || (/\b(?:add|upload|put)\b/.test(t) && !elsewhere))
+  )
+    return 'photo'
   return null
 }

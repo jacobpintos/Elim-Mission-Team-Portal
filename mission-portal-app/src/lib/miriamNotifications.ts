@@ -215,6 +215,12 @@ export interface NotificationAsk {
   on: boolean
   /** Each subject named: the switches it could mean, and those most likely. */
   subjects: { keys: string[]; first: string[] }[]
+  /**
+   * Said after "except", "but not", "other than": the switches left out of
+   * it — and kept the other way, so "turn off all notifications except
+   * store sales" leaves store sales on, even where it was off.
+   */
+  except: { keys: string[]; first: string[] }[]
   /** "All notifications", "everything". */
   all: boolean
   /** Said in a word for notifications ("notifications", "alerts"), or as a mute: plainly a switch. */
@@ -225,33 +231,20 @@ export interface NotificationAsk {
   oneChat: string | null
 }
 
-export function notificationAsked(text: string): NotificationAsk | null {
-  const said = withoutEnding(withoutAsking(plain(text)))
-  if (!said || OWN_REMINDER.test(said)) return null
-  // Exceptions, and a question about them, are Claude's.
-  if (/\b(?:except|but\s+not|other\s+than|apart\s+from|besides|aside\s+from)\b/.test(said))
-    return null
-  if (/^(?:what|which|how|are|is|do|does|did|why|when)\b/.test(said)) return null
+/** Asking how, which is as good as asking for it: "how do I turn off message notifications?" */
+const HOW_DO_I =
+  /^(?:how\s+(?:do|can|would|should)\s+i|how\s+to|can\s+i|could\s+i|is\s+there\s+a\s+way\s+to)\s+/
 
-  const strongOff = STRONG_OFF.test(said)
-  const strongOn = STRONG_ON.test(said)
-  if (strongOff && strongOn) return null
-  const on = strongOn
-    ? true
-    : strongOff
-      ? false
-      : LOOSE_OFF.test(said)
-        ? false
-        : LOOSE_ON.test(said)
-          ? true
-          : null
-  if (on === null) return null
+/** Where what is left out begins: "except", "but not", "other than". */
+const EXCEPT =
+  /\s*\b(?:except(?:\s+for)?|but\s+not|other\s+than|apart\s+from|besides|aside\s+from|excluding|save\s+for|but\s+(?:keep|leave)(?:\s+on)?)\b\s*/
 
-  // Every subject named, the longer kept where one holds another.
+/** The subjects named in `text`, in the order said, each once; the longer kept where one holds another. */
+function subjectsIn(text: string): { keys: string[]; first: string[] }[] {
   const found: { start: number; end: number; index: number }[] = []
   SUBJECTS.forEach(({ re }, index) => {
     re.lastIndex = 0
-    for (let m = re.exec(said); m; m = re.exec(said)) {
+    for (let m = re.exec(text); m; m = re.exec(text)) {
       if (m[0].trim()) found.push({ start: m.index, end: m.index + m[0].length, index })
       if (m[0].length === 0) re.lastIndex++
     }
@@ -267,15 +260,44 @@ export function notificationAsked(text: string): NotificationAsk | null {
             (g.end - g.start === f.end - f.start && g.index < f.index))
       )
   )
-  // In the order they were said, each once.
-  const subjects = [
-    ...new Set([...kept].sort((a, b) => a.start - b.start).map((k) => k.index)),
-  ].map((i) => ({ keys: SUBJECTS[i].keys, first: SUBJECTS[i].first ?? SUBJECTS[i].keys }))
+  return [...new Set([...kept].sort((a, b) => a.start - b.start).map((k) => k.index))].map((i) => ({
+    keys: SUBJECTS[i].keys,
+    first: SUBJECTS[i].first ?? SUBJECTS[i].keys,
+  }))
+}
 
+export function notificationAsked(text: string): NotificationAsk | null {
+  const said = withoutEnding(withoutAsking(plain(text))).replace(HOW_DO_I, '')
+  if (!said || OWN_REMINDER.test(said)) return null
+  if (/^(?:what|which|how|are|is|do|does|did|why|when)\b/.test(said)) return null
+  // What is left out, said after the rest: one exception, naming what it leaves out.
+  const [asked, ...left] = said.split(EXCEPT)
+  if (left.length > 1) return null
+  const except = left.length ? subjectsIn(left[0]) : []
+  if (left.length && except.length === 0) return null
+
+  const strongOff = STRONG_OFF.test(asked)
+  const strongOn = STRONG_ON.test(asked)
+  if (strongOff && strongOn) return null
+  const on = strongOn
+    ? true
+    : strongOff
+      ? false
+      : LOOSE_OFF.test(asked)
+        ? false
+        : LOOSE_ON.test(asked)
+          ? true
+          : null
+  if (on === null) return null
+
+  const subjects = subjectsIn(asked)
   const notifyWord = NOTIFY_WORD.test(said)
   const muting = /\b(?:mute|silence|unmute)\b/.test(said)
+  // "Everything except store sales": a notification left out says what everything is.
   const all =
-    subjects.length === 0 && /\b(?:all|every|everything|any)\b/.test(said) && (notifyWord || muting)
+    subjects.length === 0 &&
+    /\b(?:all|every|everything|any)\b/.test(asked) &&
+    (notifyWord || muting || except.length > 0)
   // A switch when said in so many words; or with a subject and a strong verb
   // ("turn off messages"), or asking to be told ("let me know when…"); or
   // everything muted. Only the first is plain: the rest are asked about.
@@ -284,6 +306,7 @@ export function notificationAsked(text: string): NotificationAsk | null {
   return {
     on,
     subjects,
+    except,
     all,
     plainly: notifyWord,
     email: /\be-?mail/.test(said),
@@ -292,10 +315,10 @@ export function notificationAsked(text: string): NotificationAsk | null {
 }
 
 export type NotificationPlan =
-  /** These, plainly. */
-  | { kind: 'sure'; keys: string[] }
+  /** These, plainly; `keep`, left out of them, the other way. */
+  | { kind: 'sure'; keys: string[]; keep?: string[] }
   /** Most likely these — asked about first — or else one of `others`. */
-  | { kind: 'likely'; keys: string[]; others: string[] }
+  | { kind: 'likely'; keys: string[]; others: string[]; keep?: string[] }
   /** None named: asked which. */
   | { kind: 'which' }
   /** Only switches this person doesn't have. */
@@ -304,6 +327,17 @@ export type NotificationPlan =
 /** What was asked, among the switches this person has (`visible`, from notificationKeysFor). */
 export function notificationPlan(ask: NotificationAsk, visible: string[]): NotificationPlan {
   const has = new Set(visible)
+  // All of them, or those named — less what was left out, which is kept the other way.
+  if (ask.except.length) {
+    const out = new Set(ask.except.flatMap((s) => s.keys))
+    const from = ask.all ? visible : [...new Set(ask.subjects.flatMap((s) => s.keys))]
+    const keys = from.filter((k) => has.has(k) && !out.has(k))
+    const keep = visible.filter((k) => out.has(k))
+    if (keys.length === 0) return { kind: 'none' }
+    return ask.plainly && !ask.email
+      ? { kind: 'sure', keys, keep }
+      : { kind: 'likely', keys, others: [], keep }
+  }
   if (ask.all) {
     return ask.plainly && !ask.email
       ? { kind: 'sure', keys: visible }

@@ -189,7 +189,7 @@ async function seenEventByKey(profile: UserProfile, key: string): Promise<EventI
  * neither to anyone holding the public role but an admin
  * (functions/src/miriam/data: seesTeamSide).
  */
-const TEAM_ONLY = 'That’s for each event’s team members.'
+const TEAM_ONLY = 'Sorry, that’s not something I can do for you.'
 const viewerOf = (profile: UserProfile) => ({
   uid: String(profile.uid),
   roles: (profile.roles ?? []).map(String),
@@ -447,44 +447,68 @@ async function changeNotifications(profile: UserProfile, input: Record<string, u
     .filter((k) => has.has(k))
   if (asked.length === 0) return cannot('Those aren’t notifications you have.')
   const prefs = profile.notificationPrefs as unknown as Parameters<typeof pushIsOn>[0]
-  const changing = asked.filter((k) => pushIsOn(prefs, k, isPublic(profile)) !== on)
+  const pub = isPublic(profile)
+  const changing = asked.filter((k) => pushIsOn(prefs, k, pub) !== on)
   const state = on ? 'on' : 'off'
-  if (changing.length === 0) {
+  const other = on ? 'off' : 'on'
+  // Left out of it — "all except store sales" — and kept the other way.
+  const keep = (Array.isArray(input.keep) ? input.keep : [])
+    .map(String)
+    .filter((k) => has.has(k) && !asked.includes(k))
+  const keeping = keep.filter((k) => pushIsOn(prefs, k, pub) === on)
+  if (changing.length === 0 && keeping.length === 0) {
     return cannot(
       asked.length === 1
         ? `“${notificationLabel(asked[0])}” is already ${state}.`
-        : `Those are already ${state}.`
+        : keep.length
+          ? `Those are already ${state}, and ${switchesSaid(keep)} ${other}.`
+          : `Those are already ${state}.`
     )
   }
   const write = (value: boolean) =>
     updateDoc(
       doc(db, 'users', String(profile.uid)),
-      Object.fromEntries(changing.map((k) => [`notificationPrefs.${k}.push`, value]))
+      Object.fromEntries([
+        ...changing.map((k) => [`notificationPrefs.${k}.push`, value]),
+        ...keeping.map((k) => [`notificationPrefs.${k}.push`, !value]),
+      ])
     )
+  const changingSaid =
+    changing.length === 1
+      ? `“${notificationLabel(changing[0])}” notifications`
+      : `${changing.length} notifications`
   return {
     kind: 'ready',
-    title:
-      changing.length === 1
-        ? `Turn ${state} “${notificationLabel(changing[0])}” notifications?`
-        : `Turn ${state} ${changing.length} notifications?`,
-    details:
-      changing.length === 1
-        ? []
-        : [
-            changing.length === has.size
-              ? `All of yours, by push.`
-              : `${switchesSaid(changing)}, by push.`,
-          ],
-    confirm: on ? 'Turn on' : 'Turn off',
+    title: changing.length
+      ? `Turn ${state} ${changingSaid}${keeping.length ? `, and turn ${other} ${switchesSaid(keeping)}` : ''}?`
+      : `Turn ${other} ${switchesSaid(keeping)}?`,
+    details: [
+      ...(changing.length > 1
+        ? [
+            changing.length + keep.length === has.size && keep.length
+              ? `All of yours but ${switchesSaid(keep)}, by push.`
+              : changing.length === has.size
+                ? `All of yours, by push.`
+                : `${switchesSaid(changing)}, by push.`,
+          ]
+        : []),
+      ...(keep.length && !keeping.length
+        ? [`${switchesSaid(keep)} ${keep.length === 1 ? 'stays' : 'stay'} ${other}.`]
+        : []),
+    ],
+    confirm: changing.length ? (on ? 'Turn on' : 'Turn off') : on ? 'Turn off' : 'Turn on',
     run: async () => {
       await write(on)
-      return changing.length === 1
-        ? `Turned ${state}.`
-        : `Turned ${state} — ${changing.length} of them.`
+      if (changing.length > 1) {
+        return `Turned ${state} — ${changing.length} of them${keeping.length ? `; ${switchesSaid(keeping)} ${other}` : ''}.`
+      }
+      return keeping.length ? 'Done.' : `Turned ${state}.`
     },
     undo: async () => {
       await write(!on)
-      return changing.length === 1 ? 'It’s back as it was.' : 'They’re back as they were.'
+      return changing.length + keeping.length === 1
+        ? 'It’s back as it was.'
+        : 'They’re back as they were.'
     },
   } satisfies Prepared
 }

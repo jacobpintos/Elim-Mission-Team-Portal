@@ -213,7 +213,8 @@ const TEAM_SIDE: readonly Skill[] = [
 const shownTo = (skill: Skill, viewer: Viewer) => !TEAM_SIDE.includes(skill) || seesTeamSide(viewer)
 
 /** Said of what isn't shown to them, when no event was named: the same whether or not one has it. */
-const NOT_SHOWN = 'That’s shown to each event’s team members.'
+const NOT_SHOWN =
+  'Sorry, I can’t help with that one — but I can tell you when and where events are.'
 
 /** One event's answer, as the app words it. */
 async function aboutEvent(skill: Skill, ev: EventInstance, ctx: AnswerContext): Promise<OwnResult> {
@@ -223,7 +224,10 @@ async function aboutEvent(skill: Skill, ev: EventInstance, ctx: AnswerContext): 
   // Its team side, which its page shows only to its team's members (../data).
   if (!shownTo(skill, viewer)) {
     return ctx.mentions.length
-      ? said(`That’s shown to ${title}’s team members.`, onPage(ev))
+      ? said(
+          `Sorry, I can’t help with that one — but I can tell you when and where ${title} is.`,
+          onPage(ev)
+        )
       : said(NOT_SHOWN)
   }
   switch (skill) {

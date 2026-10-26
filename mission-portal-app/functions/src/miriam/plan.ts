@@ -67,7 +67,7 @@ export const TEAM_SIDE_APP_TOOLS: readonly AppToolName[] = [
 
 /** Said to a public follower when her own knowing has no answer: nothing is sent on. */
 export const PUBLIC_NOT_HERS =
-  'I can’t help with that one yet. I can tell you about events and The Well, change your settings, take you around the app, or help you ask to meet with our leadership.'
+  'Sorry, I can’t help with that one yet. I can tell you about events and The Well, change your settings, take you around the app, or help you ask to meet with our leadership.'
 
 /** What she says to a public follower that her own knowing has no answer for: a thanks or a hello answered in kind. */
 export function publicReply(text: string): string {

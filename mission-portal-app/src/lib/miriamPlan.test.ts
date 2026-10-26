@@ -97,7 +97,7 @@ describe('who may use what', () => {
     ])
     expect(publicReply('thanks so much')).toBe('You’re welcome!')
     expect(publicReply('hi there')).toMatch(/^Hi!/)
-    expect(publicReply('can you write me a poem')).toMatch(/^I can’t help with that one yet/)
+    expect(publicReply('can you write me a poem')).toMatch(/^Sorry, I can’t help with that one yet/)
   })
 
   it('names roles for every command, and a closed schema — strict ones with every field required', () => {

@@ -437,8 +437,8 @@ export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
     return {
       text:
         events.length === 1
-          ? `That’s shown to ${events[0].title}’s team members.`
-          : 'That’s shown to those events’ team members.',
+          ? `Sorry, I can’t help with that one — but I can tell you when and where ${events[0].title} is.`
+          : 'Sorry, I can’t help with that one — but I can tell you when and where those events are.',
       open: null,
     }
   }

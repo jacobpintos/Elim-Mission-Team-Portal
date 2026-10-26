@@ -1656,7 +1656,7 @@ describe('answered from the event itself', () => {
       /schedule/
     )
     expect(await said('what’s the schedule for new years eve', dana)).toBe(
-      'That’s shown to New Years Eve’s team members.'
+      'Sorry, I can’t help with that one — but I can tell you when and where New Years Eve is.'
     )
     const overview = await said('what is new years eve', dana)
     expect(overview).toMatch(/^New Years Eve is /)
@@ -1714,10 +1714,10 @@ describe('answered from the event itself', () => {
     // Dana was a member, put on the team, then made a public follower: still on the event.
     const dana = as('dana', ['public'])
     expect(await said('what team am I on for new years eve', dana)).toBe(
-      'That’s shown to New Years Eve’s team members.'
+      'Sorry, I can’t help with that one — but I can tell you when and where New Years Eve is.'
     )
     expect(await said('who am I riding with to new years eve', dana)).toBe(
-      'That’s shown to New Years Eve’s team members.'
+      'Sorry, I can’t help with that one — but I can tell you when and where New Years Eve is.'
     )
     // Handed on (to the public reply), never told.
     expect((await said('what are my responsibilities for new years eve', dana)) ?? '').not.toMatch(
@@ -1727,7 +1727,7 @@ describe('answered from the event itself', () => {
     expect(await said('when is new years eve', dana)).toMatch(/December 31 at 10:30 PM/)
     // No event named: the one found by its carpool goes unsaid.
     expect(await said('who am I riding with on december 31', dana)).toBe(
-      'That’s shown to each event’s team members.'
+      'Sorry, I can’t help with that one — but I can tell you when and where events are.'
     )
   })
 
@@ -1751,7 +1751,7 @@ describe('answered from the event itself', () => {
       expect(await ask('I can’t make it to new years eve')).toBeNull()
       expect((await ask('where am I staying for new years eve'))?.text ?? '').not.toMatch(/Marmot/)
       expect((await ask('what team am I on for new years eve'))?.text).toBe(
-        'That’s shown to New Years Eve’s team members.'
+        'Sorry, I can’t help with that one — but I can tell you when and where New Years Eve is.'
       )
     }
   })
@@ -2103,7 +2103,7 @@ describe('a public follower', () => {
         input(text, { viewer: visitor, lookups: new Lookups(pub, visitor, TODAY), appTools: [] })
       ).then((o) => (o.result as { text: string } | null)?.text ?? '')
     expect(await ask('what should I wear to the fall festival')).toBe(
-      'That’s shown to Fall Festival’s team members.'
+      'Sorry, I can’t help with that one — but I can tell you when and where Fall Festival is.'
     )
     expect(await ask('when do I need to show up for the fall festival')).not.toMatch(/2:00|2:30/)
     expect(await ask('who am I riding with to the fall festival')).not.toMatch(/car/i)
