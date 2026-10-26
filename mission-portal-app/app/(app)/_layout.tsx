@@ -56,29 +56,6 @@ const TAB_LABELS: Record<Tab, string> = {
   settings: 'Profile & Settings',
 }
 
-const TAB_ICONS: Record<Tab, string> = {
-  dashboard: '📊',
-  home: '🏠',
-  events: '📅',
-  assignments: '✅',
-  messages: '💬',
-  issues: '⚠',
-  security: '🔒',
-  inventory: '📦',
-  announce: '📢',
-  worship: '🎵',
-  admin: '⚙',
-  public: '🌐',
-  music: '🎶',
-  posts: '📝',
-  giving: '💝',
-  store: '🛍️',
-  story: '📖',
-  connect: '🤝',
-  rolehub: '⚙',
-  settings: '⚙',
-}
-
 // Vertical bar + three horizontal bars — clearly a menu icon
 function MenuIcon({ color }: { color: string }) {
   return (
@@ -398,7 +375,6 @@ export default function AppLayout() {
                       borderLeftWidth={3}
                       borderLeftColor={isActive ? colors.primary : 'transparent'}
                     >
-                      <Text fontSize={16}>{TAB_ICONS[tab]}</Text>
                       <Text
                         color={isActive ? colors.primary : colors.text}
                         fontWeight={isActive ? '700' : '400'}
@@ -428,7 +404,6 @@ export default function AppLayout() {
                 borderTopWidth={1}
                 borderTopColor={colors.border}
               >
-                <Text fontSize={14}>?</Text>
                 <Text color={colors.textMuted} fontSize="$3">
                   Need help?
                 </Text>
@@ -451,7 +426,6 @@ export default function AppLayout() {
                 borderTopWidth={1}
                 borderTopColor={colors.border}
               >
-                <Text fontSize={14}>⚑</Text>
                 <Text color={colors.textMuted} fontSize="$3">
                   Report a Concern
                 </Text>

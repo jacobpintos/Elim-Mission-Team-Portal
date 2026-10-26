@@ -11,6 +11,8 @@ import { useUIStore } from '@/stores/uiStore'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { useLightModeScreen } from '@/theme/useLightModeScreen'
 import { passwordInputProps } from '@/lib/passwordInput'
+import { EyeIcon } from '@/components/ui/EyeIcon'
+import { useThemeColors } from '@/theme/useThemeColors'
 
 const schema = z.object({
   email: z.string().email('Invalid email address'),
@@ -26,6 +28,7 @@ export default function LoginScreen() {
   const { toast } = useUIStore()
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const colors = useThemeColors()
 
   const {
     control,
@@ -137,9 +140,10 @@ export default function LoginScreen() {
                         hitSlop={8}
                         accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
                       >
-                        <Text color="$colorMuted" fontSize="$3" paddingHorizontal="$2">
-                          {showPassword ? '🙈 Hide' : '👁 Show'}
-                        </Text>
+                        <XStack paddingHorizontal="$2">
+                          {/* Crossed out while hidden; open while it shows. */}
+                          <EyeIcon off={!showPassword} color={colors.textMuted} />
+                        </XStack>
                       </Pressable>
                     </XStack>
                     {errors.password && (
