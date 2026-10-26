@@ -726,6 +726,7 @@ export const miriamFlow: TourFlow = {
       title: 'Meet Miriam',
       body: 'Tap Miriam at the top of any screen and ask, typed or spoken. She answers from the app and takes you to where the answer is.',
       bullets: [
+        '“When is Elim coming to my area?”',
         '“What’s happening this weekend?”',
         '“When is Sunday service?”',
         '“Play the latest sermon”',

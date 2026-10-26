@@ -9,7 +9,15 @@ import { loadPlays, rememberName, rememberPlay, rememberWords } from '@/lib/miri
 import { heardRight, refreshHearing } from '@/lib/miriamHearing'
 import { meetingAsked } from '@/lib/miriamMeeting'
 import { storeAsked, storeReply } from '@/lib/miriamStore'
-import { accountAsked, locationAsked, nameChangeAsked, themeAsked } from '@/lib/miriamSettings'
+import {
+  accountAsked,
+  locationAsked,
+  nameChangeAsked,
+  placeIn,
+  themeAsked,
+} from '@/lib/miriamSettings'
+import { comingAsked, comingSaid, eventsThere, upcomingSeen } from '@/lib/miriamComing'
+import { geocodeCity } from '@/lib/geocode'
 import { useThemeStore } from '@/stores/themeStore'
 import { readElimStore } from '@/features/store/readElimStore'
 import { tourFor, tourNames } from '@/features/tour/flows'
@@ -61,7 +69,7 @@ import { FORGET_MS } from '@/lib/miriamConversation'
 import { NOT_MEANT_TAP, notMeantSaid } from '@/lib/miriamNotMeant'
 import { askMiriam, miriamError } from './askMiriam'
 import { eventByKey, prepareAction } from './actions'
-import { appData, hereNow, quickFromApp } from './hereNow'
+import { appData, eventsLoaded, hereNow, quickFromApp } from './hereNow'
 import { offerDirections, remindBeforeEach, talkHere, type Talk } from './localTalk'
 import { BRIEFING_OFF, BRIEFING_OFF_KEY, BRIEFING_ON, type BriefingControls } from './useBriefing'
 import type { Listening } from './useListening'
@@ -92,6 +100,9 @@ const CARRY_ON = 'That’s done. Carry on with the rest of what I asked.'
  * when it plainly can be (./localTalk, lib/miriamQuick), or else by Claude
  * (./askMiriam) — then said, shown, opened, or offered to confirm.
  */
+/** How far around a city named counts as coming there, in miles. */
+const CITY_MILES = 25
+
 export function useMiriamConversation(
   panel: PanelState,
   listening: Listening,
@@ -548,6 +559,55 @@ export function useMiriamConversation(
         router.push(settings.path as never)
         return
       }
+    }
+    // "When is Elim coming to my area?", "…to Des Moines?" — for someone
+    // following the church: the public events within the distance they set,
+    // or in and around the city named, by date (lib/miriamComing). None:
+    // nothing upcoming there at the moment, and the form to ask the
+    // leadership team to bring Elim there, filled in with where.
+    const coming =
+      local && !play && !anyOverlayOpen() && isPublicFollower(useAuthStore.getState().profile)
+        ? comingAsked(withoutHerName(said))
+        : null
+    if (coming) {
+      const profile = useAuthStore.getState().profile
+      const loc = profile?.locationPref
+      const answer = (text: string) => {
+        noteDone(text)
+        setAnswer(text)
+        speak(text)
+        setStage('answered')
+      }
+      if (coming.near && (!loc?.lat || !loc?.lng)) {
+        answer(
+          'I don’t know where you are yet. Tell me your city — “set my location to North Liberty, Iowa” — or ask “when is Elim coming to Des Moines?”'
+        )
+        return
+      }
+      setStage('thinking')
+      const data = await eventsLoaded()
+      const events = data ? upcomingSeen(data) : []
+      const city = coming.near ? null : placeIn(coming.place)
+      const spot = coming.near
+        ? { lat: loc!.lat!, lng: loc!.lng!, miles: loc!.radius || 50 }
+        : city
+          ? await geocodeCity(city.city, city.state)
+              .then((c) => (c ? { ...c, miles: CITY_MILES } : null))
+              .catch(() => null)
+          : null
+      const found = eventsThere(events, spot, city ?? undefined)
+      const named = coming.near ? (loc?.city ?? '') : (city?.city ?? coming.place)
+      answer(comingSaid(found, coming.near ? 'near you' : `in ${named}`))
+      const connect = screensFor(profile).find((x) => x.id === 'connect')
+      if (!found.length && connect) {
+        useMiriamStore.getState().offerMeetingForm({
+          names: [],
+          availability: '',
+          message: named ? `Could Elim come to ${named}?` : 'Could Elim come to my area?',
+        })
+        router.push(connect.path as never)
+      }
+      return
     }
     // A screen asked for by name ("open settings"): gone to from here.
     if (local && !play && !anyOverlayOpen()) {

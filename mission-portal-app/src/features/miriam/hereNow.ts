@@ -58,6 +58,25 @@ export function appData(): QuickData | null {
   }
 }
 
+/**
+ * The events as appData gives them — read for a moment first, where this
+ * screen hasn't loaded them (Home and Events do). Null with none to see.
+ */
+export async function eventsLoaded(): Promise<QuickData | null> {
+  const ready = appData()
+  if (ready) return ready
+  useEventsStore.getState().subscribe()
+  try {
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 150))
+      if (appData() || !useEventsStore.getState().loading) break
+    }
+    return appData()
+  } finally {
+    useEventsStore.getState().unsubscribe()
+  }
+}
+
 /** What the conversations worked out here can see, as this person. */
 export function hereNow(briefedFoodRef: {
   current: { day: string; food: FoodNudge[] } | null
