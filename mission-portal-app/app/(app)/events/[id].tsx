@@ -168,7 +168,7 @@ export default function EventDetailScreen() {
   const handleExportICS = async () => {
     if (!event) return
     try {
-      await downloadICS(event)
+      await downloadICS(event, { team: isMember })
     } catch {
       toast('Failed to export calendar file', 'error')
     }
@@ -382,8 +382,8 @@ export default function EventDetailScreen() {
             </YStack>
           ) : null}
 
-          {/* Schedule — for anyone who can see the event */}
-          {event.schedule?.length ? (
+          {/* Schedule — members only: what the team does when, not the public's */}
+          {isMember && event.schedule?.length ? (
             <Spot lit={lit === 'schedule'} color={colors.primary} name="schedule" onPlaced={placed}>
               <ScheduleDisplay event={event} />
             </Spot>

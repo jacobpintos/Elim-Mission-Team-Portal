@@ -901,7 +901,7 @@ export function EventDetailModal({
   const handleExportICS = async () => {
     if (!event) return
     try {
-      await downloadICS(event)
+      await downloadICS(event, { team: isMember })
     } catch {
       toast('Failed to export calendar file', 'error')
     }
@@ -1043,7 +1043,7 @@ export function EventDetailModal({
           ) : null}
 
           {/* Schedule — for anyone who can see the event */}
-          <ScheduleDisplay event={event} />
+          {isMember ? <ScheduleDisplay event={event} /> : null}
 
           {/* Dress Code — members only */}
           {isMember ? <DressCodeDisplay event={event} uid={uid} /> : null}

@@ -221,6 +221,14 @@ describe('an event’s schedule', () => {
     ).toContain('The schedule for Family Camp')
   })
 
+  it('keeps it from a public follower, as the event’s page does', () => {
+    const pub = { ...data('me', ['public']), templates: [...templates, camp] as never }
+    expect(quickAnswer('What’s the schedule for family camp?', pub)?.text).toBe(
+      'That’s shown to Family Camp’s team members.'
+    )
+    expect(quickAnswer('when is worship at family camp', pub)?.text ?? '').not.toContain('Worship')
+  })
+
   it('keeps “my schedule this week” for their week, and “my schedule for camp” for the event', () => {
     expect(listAsked('what’s my schedule this week', today)).not.toBeNull()
     expect(listAsked('what’s my schedule for family camp', today)).toBeNull()

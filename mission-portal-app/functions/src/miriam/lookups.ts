@@ -282,7 +282,7 @@ export class Lookups {
     const myTeam = (ev.teams ?? []).find((t) =>
       [...t.leaders, ...t.members].some((m) => String(m) === this.viewer.uid)
     )
-    // A public follower is shown what its page shows them: when, where, its links and schedule.
+    // A public follower is shown what its page shows them: when, where and its links.
     const team = seesTeamSide(this.viewer)
     return {
       key: ev.instanceKey,
@@ -299,7 +299,7 @@ export class Lookups {
       signUpLink: ev.signUpLink || undefined,
       yourTeam: team ? myTeam?.name : undefined,
       dressCode: team ? dressCodeFor(ev, this.viewer) : undefined,
-      schedule: ev.schedule?.length ? scheduleFor(ev, firstDay) : undefined,
+      schedule: team && ev.schedule?.length ? scheduleFor(ev, firstDay) : undefined,
       food: team ? (food ?? undefined) : undefined,
       carpool:
         team && ev.carpool

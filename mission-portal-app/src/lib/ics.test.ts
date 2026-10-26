@@ -1,0 +1,69 @@
+import { describe, it, expect } from 'vitest'
+import { buildICS } from './events'
+import type { EventInstance } from '@/types/events'
+
+const nye = {
+  id: 'e1',
+  instanceKey: 'e1',
+  templateId: 'e1',
+  title: 'New Years Eve',
+  date: '2026-12-31',
+  startTime: '5 PM',
+  location: 'The Midnight Gem',
+  address: '2613 Ders Drive Northwest',
+  city: 'Swisher',
+  state: 'IA',
+  rtp: '3:00 PM',
+  dcw: 'All black',
+  teams: [{ id: 't', name: 'WALL TEAM', leaders: [], members: [] }],
+} as unknown as EventInstance
+
+const line = (ics: string, name: string) => ics.split('\r\n').find((l) => l.startsWith(name)) ?? ''
+
+describe('an event as a calendar file', () => {
+  it('starts at its time, however it was written, and runs two hours', () => {
+    for (const startTime of ['5 PM', '5:00 PM', '5pm', '17:00', '5:00 PM (doors 4:30)']) {
+      const ics = buildICS({ ...nye, startTime }, { team: true })
+      expect(line(ics, 'DTSTART'), startTime).toBe('DTSTART:20261231T170000')
+      expect(line(ics, 'DTEND'), startTime).toBe('DTEND:20261231T190000')
+    }
+  })
+
+  it('ends on the next day when the two hours pass midnight', () => {
+    const ics = buildICS({ ...nye, startTime: '10:30 PM' }, { team: true })
+    expect(line(ics, 'DTSTART')).toBe('DTSTART:20261231T223000')
+    expect(line(ics, 'DTEND')).toBe('DTEND:20270101T003000')
+  })
+
+  it('is the whole day, ending the next, when it has no time it can read', () => {
+    for (const startTime of ['', 'Evening']) {
+      const ics = buildICS({ ...nye, startTime }, { team: true })
+      expect(line(ics, 'DTSTART')).toBe('DTSTART;VALUE=DATE:20261231')
+      expect(line(ics, 'DTEND')).toBe('DTEND;VALUE=DATE:20270101')
+    }
+  })
+
+  it('gives where it is in full', () => {
+    expect(line(buildICS(nye, { team: false }), 'LOCATION')).toBe(
+      'LOCATION:The Midnight Gem\\, 2613 Ders Drive Northwest\\, Swisher\\, IA'
+    )
+  })
+
+  it('keeps the team side — report times, dress code, teams — for the team', () => {
+    const team = line(buildICS(nye, { team: true }), 'DESCRIPTION')
+    expect(team).toContain('Teams: WALL TEAM')
+    expect(team).toContain('Report Time (Production): 3:00 PM')
+    expect(team).toContain('\\n')
+    const follower = line(buildICS(nye, { team: false }), 'DESCRIPTION')
+    expect(follower).not.toMatch(/Teams|Report Time|Dress Code/)
+  })
+
+  it('gives an online event its link', () => {
+    const ics = buildICS(
+      { ...nye, isVirtual: true, virtualLink: 'https://zoom.us/j/1' },
+      { team: false }
+    )
+    expect(line(ics, 'LOCATION')).toBe('LOCATION:Online')
+    expect(line(ics, 'DESCRIPTION')).toContain('Join online: https://zoom.us/j/1')
+  })
+})

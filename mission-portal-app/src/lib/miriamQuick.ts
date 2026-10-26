@@ -413,7 +413,15 @@ function scheduleItemAt(ask: QuickAsk, events: EventInstance[]): QuickAnswer | n
 }
 
 /** What an event's page shows only to its team's members, and an admin. */
-const TEAM_SIDE: readonly QuickField[] = ['dress', 'team', 'car', 'lodging', 'flight', 'weather']
+const TEAM_SIDE: readonly QuickField[] = [
+  'schedule',
+  'dress',
+  'team',
+  'car',
+  'lodging',
+  'flight',
+  'weather',
+]
 
 /** The answer, worked out here, or null to ask Claude. */
 export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
@@ -437,7 +445,8 @@ export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
   // Something on its schedule — "what time is the sermon on New Year's Eve?",
   // "the schedule for Olivia getting here" — not the event's own time, nor all
   // of it; and what comes before or after something, worked out by her.
-  if (ask.field === 'time' || ask.field === 'schedule') {
+  // Not for a public follower: the schedule is the team's.
+  if ((ask.field === 'time' || ask.field === 'schedule') && seesTeamSide(data.viewer)) {
     if (/\b(?:after|before)\b/.test(text.toLowerCase())) return null
     const asked = events.some((ev) => besidesItsName(ev, ask.name).length)
     const item = asked ? scheduleItemAt(ask, events) : null

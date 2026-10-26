@@ -1650,6 +1650,20 @@ describe('answered from the event itself', () => {
     )
   })
 
+  it('none of its schedule to a public follower, as its page shows them none', async () => {
+    const dana = as('dana', ['public'])
+    expect((await said('When does Olivia arrive for New Years Eve', dana)) ?? '').not.toMatch(
+      /schedule/
+    )
+    expect(await said('what’s the schedule for new years eve', dana)).toBe(
+      'That’s shown to New Years Eve’s team members.'
+    )
+    const overview = await said('what is new years eve', dana)
+    expect(overview).toMatch(/^New Years Eve is /)
+    expect(overview).not.toMatch(/schedule/)
+    expect(await said('what is new years eve')).toMatch(/On its schedule: 3:00 PM Setup/)
+  })
+
   it('all that is theirs at it, their car among it', async () => {
     expect(await said('what are my responsibilities for new years eve')).toBe(
       'For New Years Eve, you’re on the Production - Audio team; and you’re driving Jacob’s Rouge, with Mitch Moylan, Glenn Pettit. It starts on Thursday, December 31 at 10:30 PM.'

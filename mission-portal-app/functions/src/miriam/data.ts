@@ -18,8 +18,8 @@
  *   (EventDetailModal FlightDisplay, LodgingDisplay, CarpoolReadOnly.)
  * - Food: the sign-up sheet, who brings what, as everyone on it sees it.
  *   (EventDetailModal FoodPanel.)
- * - An event's team side — report times, dress code, weather, food,
- *   carpool, teams, lodging, flights, availability — never to an account
+ * - An event's team side — report times, its schedule, dress code, weather,
+ *   food, carpool, teams, lodging, flights, availability — never to an account
  *   holding the public role, whatever else it holds: its page shows them
  *   only when !isPublic(profile). An admin, who opens and edits every
  *   event, is shown it all. (events/[id] isMember; seesTeamSide.)

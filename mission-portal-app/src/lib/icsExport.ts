@@ -2,8 +2,9 @@ import { Platform } from 'react-native'
 import { buildICS } from '@/lib/events'
 import type { EventInstance } from '@/types/events'
 
-export async function downloadICS(ev: EventInstance): Promise<void> {
-  const content = buildICS(ev)
+/** `team`: whether they see the event's team side (lib/events buildICS). */
+export async function downloadICS(ev: EventInstance, opts: { team: boolean }): Promise<void> {
+  const content = buildICS(ev, opts)
   const filename = `${(ev.title ?? 'event').replace(/[^a-zA-Z0-9_\- ]/g, '_')}_${(ev.date ?? '').replace(/-/g, '')}.ics`
 
   if (Platform.OS === 'web') {

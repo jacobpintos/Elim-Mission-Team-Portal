@@ -1,4 +1,5 @@
 import type { EventTemplate, EventInstance } from '@/types/events'
+import { clockMinutes } from '@/lib/eventSchedule'
 
 export const TASK_SECTIONS = [
   { id: 'production', label: 'Production', color: '#f56c5a' },
@@ -141,22 +142,36 @@ export function dateStr(daysFromNow: number): string {
   return d.toISOString().split('T')[0]
 }
 
-export function buildICS(ev: EventInstance): string {
-  const dtStart = icsDate(ev.date, ev.startTime)
-  let dtEnd = dtStart
-  if (dtStart.includes('T')) {
-    const h2 = parseInt(dtStart.slice(9, 11)) + 2
-    dtEnd = dtStart.slice(0, 9) + String(h2 % 24).padStart(2, '0') + dtStart.slice(11)
-  }
+/**
+ * An event as a calendar file, to add to a phone's or computer's calendar.
+ *
+ * `team`: whether the person saving it sees the event's team side — report
+ * times, dress code and teams go in its notes only for them, as its page
+ * shows them only to them (events/[id] isMember).
+ */
+export function buildICS(ev: EventInstance, { team }: { team: boolean }): string {
+  const start = icsStart(ev.date, ev.startTime)
+  // Two hours, for a start at a time; the next day, for a day with none (an
+  // all-day entry's end is the day after it).
+  const end = start ? icsShift(start, start.time ? 120 : 24 * 60) : null
   const uid_val = `thewell-${ev.id}${ev.instanceKey ?? ev.date ?? ''}-${Date.now()}@missionportal`
   const desc: string[] = []
-  if (ev.rtp) desc.push(`Report Time (Production): ${ev.rtp}`)
-  if (ev.rtm) desc.push(`Report Time (Mission): ${ev.rtm}`)
-  if (ev.dcw) desc.push(`Dress Code (Worship): ${ev.dcw}`)
-  if (ev.dcm) desc.push(`Dress Code (Mission): ${ev.dcm}`)
-  if (ev.teams?.length) desc.push(`Teams: ${ev.teams.map((t) => t.name).join(', ')}`)
+  if (ev.isVirtual && ev.virtualLink) desc.push(`Join online: ${ev.virtualLink}`)
+  if (team) {
+    if (ev.rtp) desc.push(`Report Time (Production): ${ev.rtp}`)
+    if (ev.rtm) desc.push(`Report Time (Mission): ${ev.rtm}`)
+    if (ev.dcw) desc.push(`Dress Code (Worship): ${ev.dcw}`)
+    if (ev.dcm) desc.push(`Dress Code (Mission): ${ev.dcm}`)
+    if (ev.teams?.length) desc.push(`Teams: ${ev.teams.map((t) => t.name).join(', ')}`)
+  }
+  const where = ev.isVirtual
+    ? 'Online'
+    : [ev.location, ev.address, [ev.city, ev.state].filter(Boolean).join(', ')]
+        .filter(Boolean)
+        .join(', ')
 
   const esc = (s: string) => (s ?? '').replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\n/g, '\\n')
+  const stamp = (t: IcsTime) => (t.time ? `:${t.date}T${t.time}00` : `;VALUE=DATE:${t.date}`)
 
   return [
     'BEGIN:VCALENDAR',
@@ -166,29 +181,58 @@ export function buildICS(ev: EventInstance): string {
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
     `UID:${uid_val}`,
-    `DTSTAMP:${icsDate(new Date().toISOString().split('T')[0])}`,
-    `DTSTART${dtStart.includes('T') ? '' : ';VALUE=DATE'}:${dtStart}`,
-    `DTEND${dtEnd.includes('T') ? '' : ';VALUE=DATE'}:${dtEnd}`,
+    `DTSTAMP:${new Date()
+      .toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\.\d+Z$/, 'Z')}`,
+    ...(start && end ? [`DTSTART${stamp(start)}`, `DTEND${stamp(end)}`] : []),
     `SUMMARY:${esc(ev.title + (ev.isRec ? ' (Recurring)' : ''))}`,
-    `LOCATION:${esc(ev.location ?? '')}`,
-    `DESCRIPTION:${esc(desc.join('\\n') || 'The Well of Iowa Mission Event')}`,
+    `LOCATION:${esc(where)}`,
+    `DESCRIPTION:${esc(desc.join('\n') || 'The Well of Iowa Mission Event')}`,
     'END:VEVENT',
     'END:VCALENDAR',
   ].join('\r\n')
 }
 
-function icsDate(dateStr?: string, timeStr?: string): string {
-  if (!dateStr) return ''
-  const d = dateStr.replace(/-/g, '')
-  if (!timeStr) return d
-  const m = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i)
-  if (!m) return d
-  let h = parseInt(m[1]),
-    mn = parseInt(m[2])
-  const ampm = (m[3] ?? '').toUpperCase()
-  if (ampm === 'PM' && h !== 12) h += 12
-  if (ampm === 'AM' && h === 12) h = 0
-  return `${d}T${String(h).padStart(2, '0')}${String(mn).padStart(2, '0')}00`
+/** A day, and a time on it ("1730") or none for the whole day. */
+interface IcsTime {
+  date: string
+  time: string | null
+}
+
+/**
+ * When an event starts, for its calendar file: its day, at its start time as
+ * written — "5 PM", "5:00 PM", "17:00", "7pm", "noon" (eventSchedule
+ * clockMinutes) — or at the first time written in it ("10:30 PM (doors at
+ * 10)"). A start time it can't read leaves the whole day.
+ */
+function icsStart(dateStr?: string, timeStr?: string): IcsTime | null {
+  if (!dateStr) return null
+  const date = dateStr.replace(/-/g, '')
+  const written = (timeStr ?? '').trim()
+  const first = written.match(/\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?|[ap]\b)?/i)?.[0]
+  const minutes = written ? (clockMinutes(written) ?? (first ? clockMinutes(first) : null)) : null
+  if (minutes === null) return { date, time: null }
+  return {
+    date,
+    time: `${String(Math.floor(minutes / 60)).padStart(2, '0')}${String(minutes % 60).padStart(2, '0')}`,
+  }
+}
+
+/** `at`, moved on by `minutes`: into the next day when it passes midnight. */
+function icsShift(at: IcsTime, minutes: number): IcsTime {
+  const y = Number(at.date.slice(0, 4))
+  const mo = Number(at.date.slice(4, 6)) - 1
+  const d = Number(at.date.slice(6, 8))
+  const h = at.time ? Number(at.time.slice(0, 2)) : 0
+  const mi = at.time ? Number(at.time.slice(2, 4)) : 0
+  // By the calendar, in UTC, so no daylight-saving change moves it.
+  const t = new Date(Date.UTC(y, mo, d, h, mi + minutes))
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return {
+    date: `${t.getUTCFullYear()}${pad(t.getUTCMonth() + 1)}${pad(t.getUTCDate())}`,
+    time: at.time ? `${pad(t.getUTCHours())}${pad(t.getUTCMinutes())}` : null,
+  }
 }
 
 /**

@@ -200,6 +200,7 @@ export async function theEvent(skill: Skill, ctx: AnswerContext): Promise<EventI
 
 /** What its page shows only to an event's team members, and an admin (../data: seesTeamSide). */
 const TEAM_SIDE: readonly Skill[] = [
+  'event_schedule',
   'event_dress',
   'event_team',
   'event_car',
@@ -454,7 +455,8 @@ export async function scheduleItemAnswer(
   ctx: AnswerContext
 ): Promise<OwnResult | null> {
   const ask = scheduleAsked(masked)
-  if (!ask) return null
+  // The schedule is its team's (../data: seesTeamSide).
+  if (!ask || !seesTeamSide(ctx.viewer)) return null
   const ev = await eventWithIt(ask, ctx)
   const text = ev && scheduleAnswer(ask, ev)
   return ev && text ? said(text, onPage(ev)) : null
@@ -512,11 +514,12 @@ export async function overviewAnswer(
         .filter(Boolean)
         .join(', ')
   const when = `${whenSaid(ev.date, ctx.today)}${ev.startTime ? ` at ${ev.startTime}` : ''}`
-  const schedule = [...(ev.schedule ?? [])]
+  // Its schedule is the team's (../data: seesTeamSide).
+  const schedule = [...(seesTeamSide(ctx.viewer) ? (ev.schedule ?? []) : [])]
     .sort((a, b) => (a.day ?? 0) - (b.day ?? 0))
     .slice(0, 4)
     .map((it) => `${timeOf(it) ? `${timeOf(it)} ` : ''}${it.title}`)
-  const more = (ev.schedule?.length ?? 0) > 4 ? ', and more' : ''
+  const more = schedule.length && (ev.schedule?.length ?? 0) > 4 ? ', and more' : ''
   return said(
     `${ev.title} is ${when}${where ? (where === 'online' ? ', online' : `, at ${where}`) : ''}.` +
       (schedule.length ? ` On its schedule: ${schedule.join('; ')}${more}.` : ''),
