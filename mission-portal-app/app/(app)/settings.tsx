@@ -72,7 +72,7 @@ export default function SettingsScreen() {
   const colors = useThemeColors()
   const router = useRouter()
   const { fbUser, profile, signOutNow } = useAuthStore()
-  const { mode, setMode } = useThemeStore()
+  const { mode, chooseMode } = useThemeStore()
   const { toast } = useUIStore()
   // Who holds the Connections Coordinator identifier — it decides whether the
   // texting-list row belongs in this user's list at all.
@@ -690,7 +690,7 @@ export default function SettingsScreen() {
             <Label>Dark mode</Label>
             <ToggleSwitch
               checked={mode === 'dark'}
-              onCheckedChange={(v) => setMode(v ? 'dark' : 'light')}
+              onCheckedChange={(v) => chooseMode(v ? 'dark' : 'light')}
             />
           </XStack>
         </Section>
