@@ -11,8 +11,9 @@ import { AuthAuditSheet } from '@/features/admin/AuthAuditSheet'
 import { PendingDeletionCard, type PendingDeletion } from '@/features/admin/PendingDeletionCard'
 import { audit } from '@/lib/audit'
 import { useUIStore } from '@/stores/uiStore'
-import { doc, updateDoc, writeBatch, collection } from 'firebase/firestore'
-import { onSnapshot, getDocs } from '@/lib/liveFirestore'
+import { doc, updateDoc, writeBatch } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
+import { removeFromLists } from '@/lib/userRemoval'
 import { db } from '@/lib/firebase'
 import type { UserProfile } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -82,17 +83,8 @@ export default function AdminUsers() {
   const execDelete = async (user: UserProfile) => {
     const batch = writeBatch(db)
     batch.delete(doc(db, 'users', user.uid))
-
-    const groupsSnap = await getDocs(collection(db, 'groups'))
-    groupsSnap.docs.forEach((g) => {
-      const members: string[] = g.data().members ?? []
-      if (members.includes(user.uid)) {
-        batch.update(g.ref, {
-          members: members.filter((m) => m !== user.uid),
-        })
-      }
-    })
-
+    // Out of every group and common team too.
+    await removeFromLists(batch, user.uid)
     await batch.commit()
     await updateDoc(doc(db, 'config', 'main'), {
       pendingDel: pendingDel.filter((d) => d.uid !== user.uid),

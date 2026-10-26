@@ -3,6 +3,7 @@ import { Pressable } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { sameId } from '@/lib/ids'
+import { stillHere } from '@/lib/commonTeamMembers'
 import { confirmAsync } from '@/lib/confirm'
 import { AVAIL_COLORS, AVAIL_LABELS, availPickRank } from '@/lib/availability'
 import type { EventTeam, CommonTeam, AvailResponse } from '@/types/events'
@@ -35,6 +36,7 @@ export function TeamsEditor({
   const [pickerIdx, setPickerIdx] = useState<number | null>(null)
   const [pickerSearch, setPickerSearch] = useState('')
   const [showCommon, setShowCommon] = useState(false)
+  const [commonSearch, setCommonSearch] = useState('')
 
   const updateTeam = (idx: number, patch: Partial<EventTeam>) =>
     onChange(teams.map((t, i) => (i === idx ? { ...t, ...patch } : t)))
@@ -58,10 +60,20 @@ export function TeamsEditor({
     updateTeam(teamIdx, { members: [...teams[teamIdx].members, uid] })
   }
 
+  // Only those who still have an account: a team kept from before someone's
+  // account was deleted still names them (lib/userRemoval now takes them out).
   const addFromCommon = (ct: CommonTeam) => {
-    onChange([...teams, { name: ct.name, leaders: [], members: ct.members }])
+    onChange([...teams, { name: ct.name, leaders: [], members: stillHere(ct.members, allUsers) }])
     setShowCommon(false)
+    setCommonSearch('')
   }
+
+  // The common teams not yet added, narrowed by what's typed.
+  const commonLeft = commonTeams.filter((ct) => !teams.some((t) => t.name === ct.name))
+  const commonQuery = commonSearch.trim().toLowerCase()
+  const commonShown = commonQuery
+    ? commonLeft.filter((ct) => ct.name.toLowerCase().includes(commonQuery))
+    : commonLeft
 
   const getName = (uid: string | number) =>
     allUsers.find((u) => sameId(u.uid, uid))?.displayName ??
@@ -118,7 +130,8 @@ export function TeamsEditor({
 
             {team.members.length > 0 && (
               <XStack flexWrap="wrap" gap="$1">
-                {team.members.map((m) => {
+                {/* No bare uid for an account deleted since. */}
+                {stillHere(team.members, allUsers).map((m) => {
                   const uidStr = String(m)
                   const assigned = assignedUids.has(uidStr)
                   const status = availOf(uidStr)
@@ -244,7 +257,12 @@ export function TeamsEditor({
         </Pressable>
 
         {commonTeams.length > 0 && (
-          <Pressable onPress={() => setShowCommon((s) => !s)}>
+          <Pressable
+            onPress={() => {
+              setShowCommon((s) => !s)
+              setCommonSearch('')
+            }}
+          >
             <XStack
               borderWidth={1}
               borderColor={colors.border}
@@ -268,29 +286,46 @@ export function TeamsEditor({
           backgroundColor={colors.surface}
           overflow="hidden"
         >
-          {commonTeams.filter((ct) => !teams.some((t) => t.name === ct.name)).length > 0 ? (
-            commonTeams
-              .filter((ct) => !teams.some((t) => t.name === ct.name))
-              .map((ct) => (
+          {commonLeft.length > 0 ? (
+            <XStack padding="$2" borderBottomWidth={1} borderBottomColor={colors.border}>
+              <Input
+                flex={1}
+                value={commonSearch}
+                onChangeText={setCommonSearch}
+                placeholder="Search common teams…"
+                backgroundColor={colors.background}
+                color={colors.text}
+                borderColor={colors.border}
+                size="$3"
+              />
+            </XStack>
+          ) : null}
+          {commonShown.length > 0 ? (
+            commonShown.map((ct) => {
+              const count = stillHere(ct.members, allUsers).length
+              return (
                 <Pressable key={ct.name} onPress={() => addFromCommon(ct)}>
                   <XStack padding="$3" borderBottomWidth={1} borderBottomColor={colors.border}>
                     <YStack>
                       <Text color={colors.text} fontSize="$3">
                         {ct.name}
                       </Text>
-                      {ct.members.length > 0 && (
+                      {count > 0 && (
                         <Text color={colors.textMuted} fontSize="$2">
-                          {ct.members.length} member{ct.members.length !== 1 ? 's' : ''}
+                          {count} member{count !== 1 ? 's' : ''}
                         </Text>
                       )}
                     </YStack>
                   </XStack>
                 </Pressable>
-              ))
+              )
+            })
           ) : (
             <XStack padding="$3">
               <Text color={colors.textMuted} fontSize="$3">
-                All common teams already added.
+                {commonLeft.length > 0
+                  ? `No common team called “${commonSearch.trim()}”.`
+                  : 'All common teams already added.'}
               </Text>
             </XStack>
           )}

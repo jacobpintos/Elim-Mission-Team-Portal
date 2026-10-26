@@ -13,10 +13,11 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { MemberPicker } from '@/features/admin/MemberPicker'
 import type { CommonTeam } from '@/types/events'
+import { stillHere } from '@/lib/commonTeamMembers'
 
 export default function AdminTeams() {
   const { commonTeams, subscribe, unsubscribe } = useConfigStore()
-  const { subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
+  const { subscribe: subUsers, unsubscribe: unsubUsers, users } = useUsersStore()
   const { profile } = useAuthStore()
   const { toast } = useUIStore()
   const colors = useThemeColors()
@@ -145,7 +146,8 @@ export default function AdminTeams() {
                   }}
                 />
                 <Button size="$2" onPress={() => setExpandedIdx(isExpanded ? null : index)}>
-                  {isExpanded ? 'Done' : `Members (${item.members.length})`}
+                  {/* Not counting an account deleted before it was taken off the team. */}
+                  {isExpanded ? 'Done' : `Members (${stillHere(item.members, users).length})`}
                 </Button>
                 <Button size="$2" theme="red" onPress={() => handleDelete(index)}>
                   ×

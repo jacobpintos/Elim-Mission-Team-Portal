@@ -76,6 +76,7 @@ import type { IssueCategory, KaizenCard } from '@/types/operations'
 import { FD } from '@/lib/format'
 import { useAuthStore } from '@/stores/authStore'
 import { geocodeCity } from '@/lib/geocode'
+import { removeFromLists } from '@/lib/userRemoval'
 import { useUsersStore } from '@/stores/usersStore'
 import { sendMessageAs, useMessagesStore } from '@/stores/messagesStore'
 import { useLivestreamStore } from '@/stores/livestreamStore'
@@ -606,15 +607,10 @@ async function deleteUser(profile: UserProfile, input: Record<string, unknown>) 
       totalAdmins: number
     }[]
   const remove = async () => {
-    // As the User Management screen: the profile, and out of every group.
+    // As the User Management screen: the profile, and out of every group and common team.
     const batch = writeBatch(db)
     batch.delete(doc(db, 'users', user.uid))
-    for (const g of (await getDocs(collection(db, 'groups'))).docs) {
-      const members: string[] = g.data().members ?? []
-      if (members.includes(user.uid)) {
-        batch.update(g.ref, { members: members.filter((m) => m !== user.uid) })
-      }
-    }
+    await removeFromLists(batch, user.uid)
     await batch.commit()
     await updateDoc(config, { pendingDel: (await pending()).filter((d) => d.uid !== user.uid) })
     await audit('user.deleted', `Deleted user ${user.email}`, by(profile))

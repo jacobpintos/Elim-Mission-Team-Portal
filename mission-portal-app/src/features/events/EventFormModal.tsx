@@ -354,11 +354,22 @@ export function EventFormModal({
    * it re-renders immediately, before anything is shown, rather than painting
    * one frame of the previous event's details.
    */
-  const [loadedFor, setLoadedFor] = useState<string | null>(identify(event, instanceKey, prefill))
+  // The carpool builder, open in its own window.
+  const [arrangingCars, setArrangingCars] = useState(false)
+  // Admin-assigned food items, keyed by item index. Written into the same
+  // foodSignups doc that self-signup uses, so both routes agree on who is
+  // bringing what.
+  const [foodAssignees, setFoodAssignees] = useState<Record<number, string>>({})
+  const [foodPickerIndex, setFoodPickerIndex] = useState<number | null>(null)
+
+  // What the form was loaded for, while open; null once it closes. Each
+  // opening loads it afresh — a new event after another new one too, which
+  // used to open with the last one's details still in it, as both are "new".
   const identity = identify(event, instanceKey, prefill)
+  const [loadedFor, setLoadedFor] = useState<string | null>(open ? identity : null)
   // Only while open: the caller clears its selection as it closes, and
   // reloading then would blank the fields in view during the closing
-  // animation. Anything changed while closed is picked up on the way back in.
+  // animation.
   if (open && identity !== loadedFor) {
     setLoadedFor(identity)
     setForm(blankForm(event, initDate, prefill))
@@ -370,15 +381,13 @@ export function EventFormModal({
     setExtraDays(next.extraDays)
     setSchedule(next.schedule)
     setEditScope(instanceKey ? 'instance' : 'all')
+    setFoodAssignees({})
+    setFoodPickerIndex(null)
+    setArrangingCars(false)
+    setBuildingSchedule(false)
+    setUserSearch('')
   }
-
-  // The carpool builder, open in its own window.
-  const [arrangingCars, setArrangingCars] = useState(false)
-  // Admin-assigned food items, keyed by item index. Written into the same
-  // foodSignups doc that self-signup uses, so both routes agree on who is
-  // bringing what.
-  const [foodAssignees, setFoodAssignees] = useState<Record<number, string>>({})
-  const [foodPickerIndex, setFoodPickerIndex] = useState<number | null>(null)
+  if (!open && loadedFor !== null) setLoadedFor(null)
 
   const field = (key: keyof FormData) => (val: string | boolean | number) =>
     setForm((f) => {
