@@ -21,6 +21,7 @@ import { migrateRetiredRoles } from '@/lib/roles'
 import { forgetOfflineData } from '@/lib/offlineCache'
 import { defaultNotificationPrefs } from '@/types/user'
 import { SIGN_UP_ENABLED } from '@/lib/featureFlags'
+import { markStartup } from '@/lib/startupTimeline'
 import type { UserProfile } from '@/types/user'
 
 interface AuthStore {
@@ -56,6 +57,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   init: () => {
     const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
       get()._unsubProfile?.()
+      markStartup(fbUser ? 'signedIn' : 'signedOut')
       if (!fbUser) {
         set({ fbUser: null, profile: null, loading: false, _unsubProfile: null })
         return
@@ -68,6 +70,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
           const userProfile = snap.exists()
             ? ({ ...(snap.data() as UserProfile), uid: fbUser.uid } as UserProfile)
             : null
+          markStartup('profile', snap.metadata.fromCache ? 'phone' : 'server')
           if (!loginAtWritten && userProfile) {
             loginAtWritten = true
             set({ prevLoginAt: userProfile.lastLoginAt ?? null })

@@ -8,6 +8,7 @@ import {
 import { db } from '@/lib/firebase'
 import { loadOffline, saveOffline } from '@/lib/offlineCache'
 import { fromKept, snapshotKey, toKept, type Kept } from '@/lib/keptSnapshot'
+import { markStartup } from '@/lib/startupTimeline'
 
 /**
  * Firestore's onSnapshot, getDoc and getDocs for the native app, with a copy
@@ -85,6 +86,7 @@ function listen(ref: Ref, ...args: unknown[]): () => void {
 
   const stop = live((snap) => {
     if (!snap.metadata.fromCache) {
+      markStartup('server')
       heard = true
       held = null
       next?.(snap)

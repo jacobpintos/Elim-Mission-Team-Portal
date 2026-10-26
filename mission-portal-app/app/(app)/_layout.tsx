@@ -29,6 +29,7 @@ import { buildTabTour } from '@/features/tour/flows'
 import type { Tab } from '@/lib/roles'
 import { isTabVisible } from '@/lib/featureFlags'
 import { INBOX_TITLE } from '@/features/inbox/InboxTabs'
+import { markStartup } from '@/lib/startupTimeline'
 
 const DRAWER_W = 260
 
@@ -168,6 +169,11 @@ export default function AppLayout() {
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // How long opening took (Profile & Settings): the first time a tab is shown.
+  useEffect(() => {
+    if (!loading && profile && visibleTabs(profile).length > 0) markStartup('firstScreen')
+  }, [loading, profile])
 
   if (loading) return null
   if (!profile) return <Redirect href="/(auth)/login" />

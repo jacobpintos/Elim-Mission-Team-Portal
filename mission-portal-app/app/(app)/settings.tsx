@@ -25,6 +25,8 @@ import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
 import { confirmAsync } from '@/lib/confirm'
 import { DEFAULT_FLIGHT_REMINDER_HOURS, defaultNotificationPrefs } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { recentStartups } from '@/lib/startupTimeline'
+import { describeRun, type StartupRun } from '@/lib/startupSteps'
 import * as Sentry from '@sentry/react-native'
 import {
   ADMIN_ONLY_NOTIF_KEYS,
@@ -106,6 +108,17 @@ export default function SettingsScreen() {
 
   // Notifications
   const [notifSearch, setNotifSearch] = useState('')
+
+  // How long the last few openings took on this phone, for admins: where the
+  // time goes when it is slow (lib/startupTimeline).
+  const [startups, setStartups] = useState<StartupRun[]>([])
+  const showStartups = Platform.OS !== 'web' && isAdmin(profile)
+  useEffect(() => {
+    if (!showStartups) return
+    recentStartups()
+      .then(setStartups)
+      .catch(() => {})
+  }, [showStartups])
 
   if (!profile || !fbUser) return null
 
@@ -949,6 +962,31 @@ export default function SettingsScreen() {
             ) : null}
           </Section>
         )}
+
+        {startups.length > 0 ? (
+          <Section title="Opening the app">
+            <Text color={colors.textMuted} fontSize="$2">
+              How long the last few openings took on this phone: each step, counted from tapping the
+              icon.
+            </Text>
+            {startups.map((run) => (
+              <YStack key={run.startedAt} gap="$1">
+                <Text color={colors.text} fontSize="$3" fontWeight="600">
+                  {new Date(run.startedAt).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  })}
+                  {run.fromLaunch ? '' : ' (from when its code began)'}
+                </Text>
+                <Text color={colors.textMuted} fontSize="$2">
+                  {describeRun(run)}
+                </Text>
+              </YStack>
+            ))}
+          </Section>
+        ) : null}
 
         {/* Legal */}
         <Section title="Legal">
