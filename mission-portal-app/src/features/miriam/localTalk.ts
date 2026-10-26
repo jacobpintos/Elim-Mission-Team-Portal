@@ -29,7 +29,13 @@ import {
 import { clockMinutes } from '@/lib/eventSchedule'
 import { clockOf } from '../../../functions/src/push/reminderTime'
 import type { ReminderExtra } from '@/stores/remindersStore'
-import { assignedTo, canSeeEvent, instancesOf, shiftDate } from '../../../functions/src/miriam/data'
+import {
+  assignedTo,
+  canSeeEvent,
+  instancesOf,
+  shiftDate,
+  teamsOf,
+} from '../../../functions/src/miriam/data'
 import {
   dateSaid,
   eventPicked,
@@ -1235,10 +1241,8 @@ async function agendaLine(ev: EventInstance, here: Here, data: QuickData): Promi
   // follower's: their event pages don't show it (functions/src/miriam/data: seesTeamSide).
   if (!seesTeamSide(data.viewer)) return `${ev.title}, ${when}.`
   const parts: string[] = []
-  const team = (ev.teams ?? []).find((t) =>
-    [...t.leaders, ...t.members].some((m) => String(m) === uid)
-  )
-  if (team) parts.push(`you’re on ${team.name}`)
+  const teams = teamsOf(ev, uid)
+  if (teams.length) parts.push(`you’re on ${listed(teams.map((t) => t.name))}`)
   if (ev.food && ev.foodItems?.length) {
     const sheet = await here.foodSheet(ev).catch(() => null)
     const mine = Object.entries(sheet ?? {})

@@ -1,11 +1,18 @@
-import { dressCodeFor, seesTeamSide, shiftDate, type EventInstance, type Viewer } from '../data'
+import {
+  dressCodeFor,
+  seesTeamSide,
+  shiftDate,
+  teamsSaid,
+  type EventInstance,
+  type Viewer,
+} from '../data'
 import type { Lookups } from '../lookups'
 import type { AppToolName } from '../plan'
 import type { Mention } from './events'
 import type { Skill } from './skills'
 import { dayIn, reminderIn, spanIn, statusIn } from './when'
 import { hasSheet } from './food'
-import { personAnswer, personAsked } from './people'
+import { personAnswer, personAsked, personNamed, teamOfAsked, theirTeamsSaid } from './people'
 import {
   plainly,
   scheduleAnswer,
@@ -284,9 +291,11 @@ async function aboutEvent(skill: Skill, ev: EventInstance, ctx: AnswerContext): 
     }
     case 'event_team': {
       const details = await lookups.getEvent(ev.instanceKey)
-      const team = 'yourTeam' in details ? details.yourTeam : undefined
+      const teams = ('yourTeams' in details ? details.yourTeams : undefined) ?? []
       return said(
-        team ? `You’re on the ${team} team for ${title}.` : `You’re not on a team for ${title}.`,
+        teams.length
+          ? `You’re on ${teamsSaid(teams.map((name) => ({ name })))} for ${title}.`
+          : `You’re not on a team for ${title}.`,
         onPage(ev)
       )
     }
@@ -544,4 +553,28 @@ export async function travelAnswer(ctx: AnswerContext): Promise<OwnResult | null
   if (!ev) return null
   const text = await personAnswer(ask, ev, ctx)
   return text ? said(text, onPage(ev)) : null
+}
+
+/**
+ * Someone's teams, asked by name — "what team is Sunny on?", "which team is
+ * Sunny on for the retreat?" (./people) — at the event named, or at each
+ * coming one, as the events' pages show anyone who sees their teams. Null
+ * when who, or which event, can't be told plainly; and for the asker
+ * themselves, whose own team is event_team's.
+ */
+export async function teamOfAnswer(ctx: AnswerContext): Promise<OwnResult | null> {
+  const ask = teamOfAsked(ctx.text)
+  if (!ask || !seesTeamSide(ctx.viewer)) return null
+  const names = await ctx.lookups.names()
+  const uid = personNamed(ask.said, [...names.keys()], names)
+  if (!uid || uid === ctx.viewer.uid) return null
+  const name = names.get(uid) ?? ask.said
+  if (ctx.mentions.length > 0 || dayIn(ctx.text, ctx.today)) {
+    const ev = await theEvent('event_time', ctx)
+    const text = ev && theirTeamsSaid(uid, name, [ev], false)
+    return ev && text ? said(text, onPage(ev)) : null
+  }
+  const coming = await ctx.lookups.eventsBetween(ctx.today, shiftDate(ctx.today, 365))
+  const text = theirTeamsSaid(uid, name, coming, true)
+  return text ? said(text) : null
 }

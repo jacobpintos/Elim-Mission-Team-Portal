@@ -537,3 +537,79 @@ describe('playing what was described, not named', () => {
     )
   })
 })
+
+describe('teams, when someone is on several', () => {
+  const day = '2026-10-11'
+  const tmpl = [
+    {
+      id: 'out',
+      title: 'Outreach Night',
+      date: '2026-10-16',
+      users: ['me', 'sam', 'lee'],
+      teams: [
+        { name: 'Worship', leaders: ['me'], members: ['sam'] },
+        { name: 'Setup Team', leaders: [], members: ['me', 'sam'] },
+        { name: 'Greeters', leaders: [], members: ['lee'] },
+      ],
+      dressCode: [
+        { group: 'Worship', text: 'all black' },
+        { group: 'Setup Team', text: 'work clothes' },
+        { group: '_remainder_', text: 'a mission shirt' },
+      ],
+    },
+    {
+      id: 'camp',
+      title: 'Fall Camp',
+      date: '2026-11-07',
+      users: ['me', 'sam'],
+      teams: [{ name: 'Kitchen', leaders: [], members: ['sam'] }],
+    },
+  ]
+  const as = (uid: string, roles = ['regular']): QuickData => ({
+    templates: tmpl as never,
+    overrides: {},
+    groups: [],
+    viewer: { uid, roles },
+    names: new Map([
+      ['me', 'Jacob Pintos'],
+      ['sam', 'Sunny Singh'],
+      ['lee', 'Lee Park'],
+    ]),
+    today: day,
+  })
+
+  it('says every team you’re on', () => {
+    expect(quickAnswer('what team am I on for outreach night', as('me'))?.text).toBe(
+      'You’re on the Worship and Setup teams for Outreach Night.'
+    )
+    expect(quickAnswer('what team am I on for outreach night', as('lee'))?.text).toBe(
+      'You’re on the Greeters team for Outreach Night.'
+    )
+  })
+
+  it('gives each of your teams’ dress codes', () => {
+    expect(quickAnswer('dress code for outreach night', as('me'))?.text).toBe(
+      'The dress code for Outreach Night is Worship: all black; Setup Team: work clothes.'
+    )
+  })
+
+  it('answers about someone else by name, never with your own team', () => {
+    expect(quickAnswer('what team is Sunny on', as('me', ['admin']))?.text).toBe(
+      'Sunny Singh is on the Worship and Setup teams for Outreach Night (Friday, Oct 16), and the Kitchen team for Fall Camp (Saturday, Nov 7).'
+    )
+    expect(quickAnswer('which team is sunny on for fall camp', as('me'))).toEqual({
+      text: 'Sunny Singh is on the Kitchen team for Fall Camp.',
+      open: { key: 'camp_2026-11-07', section: 'details' },
+    })
+    expect(quickAnswer("what's Lee's team for outreach night", as('me'))?.text).toBe(
+      'Lee Park is on the Greeters team for Outreach Night.'
+    )
+    expect(quickAnswer('is lee on a team for fall camp', as('me'))?.text).toBe(
+      'Lee Park isn’t on a team for Fall Camp.'
+    )
+    // Not someone it can tell: left to Claude, not answered as yours.
+    expect(quickAnswer('what team is Whitney on', as('me'))).toBeNull()
+    // Never a public follower's to be told.
+    expect(quickAnswer('what team is Sunny on', as('lee', ['public']))).toBeNull()
+  })
+})

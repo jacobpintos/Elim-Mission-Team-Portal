@@ -9,6 +9,8 @@ import {
   lodgingFor,
   seesTeamSide,
   shiftDate,
+  teamsOf,
+  teamsSaid,
   type EventInstance,
   type EventTemplate,
   type Group,
@@ -16,6 +18,12 @@ import {
 } from '../../functions/src/miriam/data'
 import { nameScore } from '../../functions/src/miriam/names'
 import { scheduleAnswer, scheduleWhat } from '../../functions/src/miriam/own/schedule'
+import {
+  personNamed,
+  teamOfAsked,
+  theirTeamsSaid,
+  type TeamOfAsk,
+} from '../../functions/src/miriam/own/people'
 import { placeOf } from './directions'
 import { scheduleSaid } from './eventSchedule'
 
@@ -333,11 +341,9 @@ function answerFor(field: QuickField, ev: EventInstance, data: QuickData, alone:
       return where ? `${title} is at ${where}.` : `${title} has no place set yet.`
     }
     case 'team': {
-      const team = (ev.teams ?? []).find((t) =>
-        [...t.leaders, ...t.members].some((m) => sameId(m, viewer.uid))
-      )
-      return team
-        ? `You’re on the ${team.name} team for ${title}.`
+      const teams = teamsOf(ev, viewer.uid)
+      return teams.length
+        ? `You’re on ${teamsSaid(teams)} for ${title}.`
         : `You’re not on a team for ${title}.`
     }
     case 'car': {
@@ -423,9 +429,37 @@ const TEAM_SIDE: readonly QuickField[] = [
   'weather',
 ]
 
+/**
+ * Someone else's teams, by name — "what team is Sunny on?" — at the event
+ * named, or at each coming one; as the events' pages show anyone who sees
+ * their teams. Null to ask Claude: whoever it is, or the event, isn't plain.
+ */
+function theirTeamsAnswer(ask: TeamOfAsk, data: QuickData): QuickAnswer | null {
+  const { templates, overrides, groups, viewer, names, today } = data
+  if (!seesTeamSide(viewer)) return null
+  const uid = personNamed(ask.said, [...names.keys()], names)
+  if (!uid || sameId(uid, viewer.uid)) return null
+  const name = names.get(uid) ?? ask.said
+  const ref = ask.rest ? eventRef(ask.rest, today) : null
+  if (ref) {
+    const events = eventsFor({ field: 'team', ...ref }, data)
+    if (events.length !== 1) return null
+    const text = theirTeamsSaid(uid, name, events, false)
+    return text ? { text, open: { key: events[0].instanceKey, section: 'details' } } : null
+  }
+  const coming = findEvents(templates, overrides, groups, viewer, '', today, '', 1000)
+    .filter((ev) => ev.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date))
+  const text = theirTeamsSaid(uid, name, coming, true)
+  return text ? { text, open: null } : null
+}
+
 /** The answer, worked out here, or null to ask Claude. */
 export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
   if (!data.templates.length) return null
+  // Someone else's team is never theirs: answered here, or left to Claude.
+  const theirs = teamOfAsked(text)
+  if (theirs) return theirTeamsAnswer(theirs, data)
   const ask = quickAsked(text, data.today)
   if (!ask) return null
   const events = eventsFor(ask, data)

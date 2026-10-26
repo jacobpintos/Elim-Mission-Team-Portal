@@ -10,6 +10,7 @@ import {
   type EventTemplate,
   type Group,
   type Viewer,
+  teamsOf,
 } from '../../functions/src/miriam/data'
 
 /**
@@ -225,14 +226,12 @@ const asMember = (viewer: Viewer): Viewer => ({
 function eventCard(ev: EventInstance, input: BriefingInput, today: string): BriefEvent {
   const me = asMember(input.viewer)
   const sees = seesTeamSide(input.viewer)
-  const team = (sees ? (ev.teams ?? []) : []).find((t) =>
-    [...t.leaders, ...t.members].some((m) => String(m) === input.viewer.uid)
-  )
+  const teams = sees ? teamsOf(ev, input.viewer.uid) : []
   const dress = dressCodeFor(ev, me)[0]
   const car = ev.carpool ? carpoolFor(ev, me, input.names)[0] : undefined
   const forecast = sees ? input.weather?.[ev.instanceKey] : undefined
   const chips = [
-    team ? `${team.name} team` : '',
+    ...teams.map((t) => `${t.name} team`),
     dress ?? '',
     car ? car.replace(/\s*\(your car\)/, '') : '',
     forecast ? `${Math.round(forecast.high)}°, ${forecast.label.toLowerCase()}` : '',

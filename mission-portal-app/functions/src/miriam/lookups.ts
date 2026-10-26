@@ -30,6 +30,7 @@ import {
   yoursAt,
   seesOwnNotes,
   seesTeamSide,
+  teamsOf,
 } from './data'
 import { FORECAST_DAYS, forecastFor } from './weather'
 
@@ -279,9 +280,6 @@ export class Lookups {
     const firstDay = /_d\d+$/.test(ev.instanceKey)
       ? (await this.eventData()).templates.find((t) => String(t.id) === String(ev.templateId))?.date
       : ev.date
-    const myTeam = (ev.teams ?? []).find((t) =>
-      [...t.leaders, ...t.members].some((m) => String(m) === this.viewer.uid)
-    )
     // A public follower is shown what its page shows them: when, where and its links.
     const team = seesTeamSide(this.viewer)
     return {
@@ -297,7 +295,7 @@ export class Lookups {
       address: [ev.address, ev.city, ev.state].filter(Boolean).join(', ') || undefined,
       virtualMeetingLink: ev.isVirtual ? ev.virtualLink || 'none given' : undefined,
       signUpLink: ev.signUpLink || undefined,
-      yourTeam: team ? myTeam?.name : undefined,
+      yourTeams: team ? teamsOf(ev, this.viewer.uid).map((t) => t.name) : undefined,
       dressCode: team ? dressCodeFor(ev, this.viewer) : undefined,
       schedule: team && ev.schedule?.length ? scheduleFor(ev, firstDay) : undefined,
       food: team ? (food ?? undefined) : undefined,

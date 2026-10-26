@@ -1693,6 +1693,27 @@ describe('answered from the event itself', () => {
     )
   })
 
+  it('someone’s teams, by name — never the asker’s own', async () => {
+    const mitch = as('mitch', ['regular'])
+    // At each coming event they can see: Family Gathering is not Mitch's to see.
+    expect(await said('what team is jacob on', mitch)).toBe(
+      'Jacob Pintos is on the Production - Audio team for New Years Eve (Thursday, Dec 31).'
+    )
+    expect(await said('which team is jacob on for new years eve', mitch)).toBe(
+      'Jacob Pintos is on the Production - Audio team for New Years Eve.'
+    )
+    expect(await said('what team is glenn on')).toBe(
+      'Glenn Pettit isn’t on a team for anything coming up.'
+    )
+    // Their own is still theirs.
+    expect(await said('what team am i on for new years eve')).toBe(
+      'You’re on the Production - Audio team for New Years Eve.'
+    )
+    // No one by that name: never the asker's own team in its place.
+    expect(await said('what team is nobody on')).toBeUndefined()
+    expect(notHers('what team is sunny on', 'event_team')).toBeTruthy()
+  })
+
   it('never someone else’s for one who has none, though their names end alike', async () => {
     // Mira User has no flight or room; Guest User has both.
     const mira = as('mira', ['regular'])

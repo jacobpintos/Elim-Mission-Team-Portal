@@ -1,4 +1,12 @@
-import { isAdminViewer, seesTeamSide, type EventInstance, type Flight, type Lodging } from '../data'
+import {
+  isAdminViewer,
+  seesTeamSide,
+  teamsOf,
+  teamsSaid,
+  type EventInstance,
+  type Flight,
+  type Lodging,
+} from '../data'
 import type { Lookups } from '../lookups'
 import type { Viewer } from '../data'
 
@@ -175,4 +183,88 @@ export async function personAnswer(
   return legs.length
     ? `${whose} flight for ${title} — ${legs.join('; ')}.`
     : `${whose} flight for ${title} has no details yet.`
+}
+
+// --- Someone's teams ---------------------------------------------------------
+
+/**
+ * Someone's team, asked by name — "what team is Sunny on?", "which teams is
+ * Sunny on for the retreat?", "what's Sunny's team at camp?", "is Sunny on a
+ * team for Youth Night?" — never the asker's own ("what team am I on" is
+ * theirs, answered as such). `rest`: the words after, naming the event, if any.
+ */
+export type TeamOfAsk = { said: string; rest: string }
+
+const TEAM_OF: RegExp[] = [
+  // "what team is Sunny on", "which teams are the Lees serving on for camp"
+  /\b(?:what|which)\s+teams?\s+(?:is|are|was|will)\s+(.+?)\s+(?:be\s+)?(?:on|in|with|serving(?:\s+(?:on|in|with))?|leading|assigned\s+to|put\s+on)\b(.*)$/,
+  // "what team does Sunny serve on", "which team did Sunny get put on"
+  /\b(?:what|which)\s+teams?\s+(?:does|did|will|do)\s+(.+?)\s+(?:serve|lead|belong|get\s+put|end\s+up)\s*(?:on|in|with|to)?\b(.*)$/,
+  // "what's Sunny's team for camp", "Sunny's teams"
+  /^(?:(?:hey|so|ok|okay)\s+)*(?:miriam\s+)?(?:what(?:'s|s|\s+is|\s+are)\s+|tell\s+me\s+)?([a-z][a-z' -]*?)'s\s+teams?\b(.*)$/,
+  // "is Sunny on a team for Youth Night", "is Sunny on any teams"
+  /^(?:(?:hey|so|ok|okay)\s+)*(?:miriam\s+)?is\s+(.+?)\s+on\s+(?:a|any)\s+teams?\b(.*)$/,
+]
+
+/** A question about someone else's team, by name — or null for anything else. */
+export function teamOfAsked(text: string): TeamOfAsk | null {
+  const s = plain(text)
+  for (const re of TEAM_OF) {
+    const m = re.exec(s)
+    if (!m) continue
+    const said = m[1].replace(/^(?:the)\s+/, '').trim()
+    // "who is on Sunny's team" asks who is on it: Claude's.
+    if (!said || NOT_SOMEONE.test(said) || /^(?:who|what|which|where|when|how)\b/.test(said))
+      return null
+    return { said, rest: m[2].trim() }
+  }
+  return null
+}
+
+const WHEN = (ev: EventInstance) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ev.date)
+  if (!m) return ev.date
+  const at = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12))
+  return `${DAYS[at.getUTCDay()]}, ${MONTHS[at.getUTCMonth()]} ${at.getUTCDate()}`
+}
+
+/** How many of their events are named; the rest are counted. */
+const TEAMS_SAID = 4
+
+/**
+ * Their teams, said: at the one event asked about, or — `upcoming`, none
+ * named — at each of the coming events they are on a team for, the next of
+ * each. `name`: as they are called.
+ */
+export function theirTeamsSaid(
+  uid: string,
+  name: string,
+  events: EventInstance[],
+  upcoming: boolean
+): string | null {
+  if (!upcoming) {
+    const ev = events[0]
+    if (!ev) return null
+    const teams = teamsOf(ev, uid)
+    return teams.length
+      ? `${name} is on ${teamsSaid(teams)} for ${ev.title}.`
+      : `${name} isn’t on a team for ${ev.title}.`
+  }
+  const seen = new Set<string>()
+  const on = events.filter((ev) => {
+    if (!teamsOf(ev, uid).length) return false
+    const key = String(ev.templateId ?? ev.instanceKey)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  if (!on.length) return `${name} isn’t on a team for anything coming up.`
+  const said = on
+    .slice(0, TEAMS_SAID)
+    .map((ev) => `${teamsSaid(teamsOf(ev, uid))} for ${ev.title} (${WHEN(ev)})`)
+  const list =
+    said.length > 1 ? `${said.slice(0, -1).join(', ')}, and ${said[said.length - 1]}` : said[0]
+  const more =
+    on.length > TEAMS_SAID ? ` And ${on.length - TEAMS_SAID} more on the Events calendar.` : ''
+  return `${name} is on ${list}.${more}`
 }

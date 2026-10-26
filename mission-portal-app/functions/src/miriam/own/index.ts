@@ -6,6 +6,7 @@ import {
   overviewAnswer,
   said,
   scheduleItemAnswer,
+  teamOfAnswer,
   toStay,
   travelAnswer,
   yoursAnswer,
@@ -481,6 +482,7 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
     ['schedule item', () => scheduleItemAnswer(masked, ctx)],
     ['theirs at it', () => yoursAnswer(ctx)],
     ['someone’s travel', () => travelAnswer(ctx)],
+    ['someone’s team', () => teamOfAnswer(ctx)],
     ['what it is', () => overviewAnswer(masked, ctx)],
   ] as const) {
     const result = await answer().catch(() => null)

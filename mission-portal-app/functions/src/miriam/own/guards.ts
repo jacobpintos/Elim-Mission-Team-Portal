@@ -1,4 +1,5 @@
 import type { Skill } from './skills'
+import { teamOfAsked } from './people'
 
 /**
  * A second look at what she read, by the words themselves: a request that
@@ -87,6 +88,8 @@ export function notHers(text: string, skill: Skill): string | null {
   for (const [re, skills] of NOT_HERS) {
     if (re.test(said) && skills.includes(skill)) return 'about something else'
   }
+  // Someone else's team, by name — "what team is Sunny on?" — never theirs.
+  if (EVENTS.includes(skill) && teamOfAsked(said)) return 'someone else’s team'
   if (skill === 'food_signup') return notAnOffer(said)
   return null
 }

@@ -20,6 +20,7 @@ import { nextId } from '@/lib/counters'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import type { EventTemplate, EventInstance, AvailResponse, InAppNotif } from '@/types/events'
+import { dressCodesOn, teamsOf, teamsSaid } from '../../functions/src/miriam/data'
 
 interface EventsStore {
   templates: EventTemplate[]
@@ -118,13 +119,8 @@ async function notifyAssignedAdmins(
 
 function getDCForUser(ev: EventTemplate, uid: string): string | null {
   if (!ev.dressCode?.length) return null
-  const myTeam = (ev.teams ?? []).find(
-    (t) => t.leaders.some((m) => sameId(m, uid)) || t.members.some((m) => sameId(m, uid))
-  )
-  const groupName = myTeam?.name ?? 'Unassigned'
-  const specific = ev.dressCode.find((e) => e.group === groupName)
-  const remainder = ev.dressCode.find((e) => e.group === '_remainder_')
-  return (specific ?? remainder)?.text ?? null
+  const codes = dressCodesOn(ev.dressCode, teamsOf(ev, uid))
+  return codes.length ? codes.join('; ') : null
 }
 
 async function notifyEventChanges(old: EventTemplate, updated: EventTemplate) {
@@ -135,18 +131,20 @@ async function notifyEventChanges(old: EventTemplate, updated: EventTemplate) {
     ...(updated.teams ?? []).flatMap((t) => [...t.leaders, ...t.members].map(String)),
   ])
   for (const uid of teamUids) {
-    const oldTeam = (old.teams ?? []).find(
-      (t) => t.leaders.some((m) => sameId(m, uid)) || t.members.some((m) => sameId(m, uid))
-    )
-    const newTeam = (updated.teams ?? []).find(
-      (t) => t.leaders.some((m) => sameId(m, uid)) || t.members.some((m) => sameId(m, uid))
-    )
-    if (oldTeam?.name !== newTeam?.name) {
-      const msg = newTeam
-        ? `You've been moved to the ${newTeam.name} team for ${updated.title}`
-        : `You've been removed from the ${oldTeam!.name} team for ${updated.title}`
-      notifications.push({ uid, msg })
-    }
+    // Someone can be on several teams: what changed among them.
+    const was = teamsOf(old, uid)
+    const now = teamsOf(updated, uid)
+    const added = now.filter((t) => !was.some((w) => w.name === t.name))
+    const taken = was.filter((t) => !now.some((n) => n.name === t.name))
+    if (!added.length && !taken.length) continue
+    const msg = !now.length
+      ? `You've been removed from ${teamsSaid(taken)} for ${updated.title}`
+      : added.length && taken.length
+        ? `You've been moved to ${teamsSaid(now)} for ${updated.title}`
+        : added.length
+          ? `You've been added to ${teamsSaid(added)} for ${updated.title}`
+          : `You've been taken off ${teamsSaid(taken)} for ${updated.title}`
+    notifications.push({ uid, msg })
   }
 
   const assignedUids = new Set<string>([

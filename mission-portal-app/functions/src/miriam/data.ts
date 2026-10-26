@@ -186,6 +186,41 @@ export interface Task {
 
 const same = (a: unknown, b: unknown) => String(a) === String(b)
 
+// --- Teams ------------------------------------------------------------------
+
+/** Every one of an event's teams `uid` is on — leading it or not — as there may be several. */
+export function teamsOf<T extends Team>(ev: { teams?: T[] }, uid: unknown): T[] {
+  return (ev.teams ?? []).filter((t) => [...t.leaders, ...t.members].some((m) => same(m, uid)))
+}
+
+/** "the Worship team", "the Setup Team", "the Worship and Setup teams". */
+export function teamsSaid(teams: { name: string }[]): string {
+  if (teams.length === 1) {
+    const name = teams[0].name.trim()
+    return /\bteam$/i.test(name) ? `the ${name}` : `the ${name} team`
+  }
+  const names = teams.map((t) => t.name.trim().replace(/\s+team$/i, ''))
+  return `the ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} teams`
+}
+
+/**
+ * The dress code someone on `teams` is shown: their team's entry — each
+ * one's, named, when they are on several with different codes — or else
+ * the one for everyone else ("Unassigned" for someone on no team).
+ */
+export function dressCodesOn(entries: DressCodeEntry[], teams: { name: string }[]): string[] {
+  const groups = teams.length ? teams.map((t) => t.name) : ['Unassigned']
+  const theirs = groups
+    .map((g) => entries.find((e) => e.group === g))
+    .filter((e): e is DressCodeEntry => !!e)
+  if (!theirs.length) {
+    const rest = entries.find((e) => e.group === '_remainder_')
+    return rest ? [rest.text] : []
+  }
+  const texts = [...new Set(theirs.map((e) => e.text))]
+  return texts.length === 1 ? texts : theirs.map((e) => `${e.group}: ${e.text}`)
+}
+
 // --- Events -----------------------------------------------------------------
 
 /** One template's dates between `from` and `to` (YYYY-MM-DD): lib/events getInstances. */
@@ -358,14 +393,7 @@ export function dressCodeFor(ev: EventTemplate, viewer: Viewer): string[] {
         return `${who}: ${e.text}`
       })
     }
-    const team = (ev.teams ?? []).find(
-      (t) =>
-        t.members.some((m) => same(m, viewer.uid)) || t.leaders.some((m) => same(m, viewer.uid))
-    )
-    const mine =
-      ev.dressCode.find((e) => e.group === (team?.name ?? 'Unassigned')) ??
-      ev.dressCode.find((e) => e.group === '_remainder_')
-    return mine ? [mine.text] : []
+    return dressCodesOn(ev.dressCode, teamsOf(ev, viewer.uid))
   }
   const legacy: string[] = []
   if (ev.dcw) legacy.push(`Worship: ${ev.dcw}`)
@@ -631,7 +659,8 @@ export function yoursAt(
 ): string[] {
   if (!seesTeamSide(viewer)) return []
   const me = (uid: unknown) => same(uid, viewer.uid)
-  const team = (ev.teams ?? []).find((t) => [...t.leaders, ...t.members].some(me))
+  const teams = teamsOf(ev, viewer.uid)
+  const leading = teams.filter((t) => t.leaders.some(me))
   const car = ev.carpool ? their.cars.find((c) => me(c.driver) || c.riders.some(me)) : undefined
   const carSaid = (c: Car) => {
     const label = c.label || `Car ${their.cars.indexOf(c) + 1}`
@@ -647,7 +676,14 @@ export function yoursAt(
   const lodging = (ev.lodgingEntries ?? []).filter((l) => l.assignees.some(me))
   const flights = (ev.flightEntries ?? []).filter((f) => me(f.uid))
   return [
-    team && `on the ${team.name} team${team.leaders.some(me) ? ', leading it' : ''}`,
+    teams.length &&
+      `on ${teamsSaid(teams)}${
+        !leading.length
+          ? ''
+          : teams.length === 1
+            ? ', leading it'
+            : `, leading ${teamsSaid(leading)}`
+      }`,
     car && carSaid(car),
     their.bringing.length && `bringing ${their.bringing.join(', ')} for the food sign-up`,
     ...their.tasks

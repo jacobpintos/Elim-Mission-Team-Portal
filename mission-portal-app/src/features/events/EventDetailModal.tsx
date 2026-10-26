@@ -37,6 +37,7 @@ import { carName, childNames, unplaced } from './carpoolCards'
 import { ScheduleDisplay } from './ScheduleDisplay'
 
 import { openExternalUrl } from '@/lib/externalUrl'
+import { dressCodesOn, teamsOf } from '../../../functions/src/miriam/data'
 
 export function TeamsDisplay({ event, uid }: { event: EventInstance; uid: string }) {
   const colors = useThemeColors()
@@ -46,9 +47,8 @@ export function TeamsDisplay({ event, uid }: { event: EventInstance; uid: string
   const getName = (id: string | number) =>
     users.find((u) => sameId(u.uid, id))?.displayName ?? String(id)
 
-  const myTeam = (event.teams ?? []).find(
-    (t) => t.members.some((m) => sameId(m, uid)) || t.leaders.some((m) => sameId(m, uid))
-  )
+  // Every team they're on: someone can be on several at one event.
+  const myTeams = teamsOf(event, uid)
 
   return (
     <YStack gap="$2">
@@ -56,27 +56,30 @@ export function TeamsDisplay({ event, uid }: { event: EventInstance; uid: string
         TEAMS
       </Text>
 
-      {myTeam ? (
-        <YStack
-          backgroundColor={colors.surface}
-          borderRadius="$2"
-          padding="$3"
-          borderWidth={1}
-          borderColor={colors.primary}
-          gap="$1"
-        >
-          <Text color={colors.primary} fontWeight="700" fontSize="$3">
-            Your Team: {myTeam.name}
-          </Text>
-          {myTeam.leaders.length > 0 ? (
-            <Text color={colors.textMuted} fontSize="$2">
-              Leaders: {myTeam.leaders.map(getName).join(', ')}
+      {myTeams.length ? (
+        myTeams.map((myTeam, idx) => (
+          <YStack
+            key={idx}
+            backgroundColor={colors.surface}
+            borderRadius="$2"
+            padding="$3"
+            borderWidth={1}
+            borderColor={colors.primary}
+            gap="$1"
+          >
+            <Text color={colors.primary} fontWeight="700" fontSize="$3">
+              Your Team: {myTeam.name}
             </Text>
-          ) : null}
-          <Text color={colors.textMuted} fontSize="$2">
-            {myTeam.members.map(getName).join(', ')}
-          </Text>
-        </YStack>
+            {myTeam.leaders.length > 0 ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                Leaders: {myTeam.leaders.map(getName).join(', ')}
+              </Text>
+            ) : null}
+            <Text color={colors.textMuted} fontSize="$2">
+              {myTeam.members.map(getName).join(', ')}
+            </Text>
+          </YStack>
+        ))
       ) : (
         <Text color={colors.textMuted} fontSize="$3">
           You are not assigned to a team.
@@ -91,7 +94,7 @@ export function TeamsDisplay({ event, uid }: { event: EventInstance; uid: string
 
       {showAll
         ? (event.teams ?? []).map((team, idx) => {
-            const isMine = team === myTeam
+            const isMine = myTeams.includes(team)
             return (
               <YStack
                 key={idx}
@@ -477,23 +480,20 @@ export function DressCodeDisplay({ event, uid }: { event: EventInstance; uid: st
 
   // New structured dress code
   if (event.dressCode?.length) {
-    const myTeam = (event.teams ?? []).find(
-      (t) => t.members.some((m) => sameId(m, uid)) || t.leaders.some((m) => sameId(m, uid))
-    )
-    const groupName = myTeam?.name ?? 'Unassigned'
-    const specific = event.dressCode.find((e) => e.group === groupName)
-    const remainder = event.dressCode.find((e) => e.group === '_remainder_')
-    const myDC = specific ?? remainder
-    if (!myDC) return null
+    // Their team's — each one's, on several with different codes — or everyone else's.
+    const codes = dressCodesOn(event.dressCode, teamsOf(event, uid))
+    if (!codes.length) return null
 
     return (
       <YStack gap="$1">
         <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
           DRESS CODE
         </Text>
-        <Text color={colors.text} fontSize="$3">
-          {myDC.text}
-        </Text>
+        {codes.map((code, idx) => (
+          <Text key={idx} color={colors.text} fontSize="$3">
+            {code}
+          </Text>
+        ))}
       </YStack>
     )
   }
