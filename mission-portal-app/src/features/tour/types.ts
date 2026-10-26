@@ -21,6 +21,13 @@ export interface TourStep {
   adminOnly?: boolean
   /** Only show this step if the user has at least one of these roles. */
   roles?: Role[]
+  /**
+   * Only for the team — members and guests — never a public account, which
+   * has no tasks, teams or availability, and sees only what is public.
+   */
+  teamOnly?: boolean
+  /** Only for a public account: the same thing, told as they have it. */
+  publicOnly?: boolean
   /** Override the primary (advance) button label — e.g. the welcome step's "Yes, show me around". */
   primaryLabel?: string
   /** Override the secondary (exit) button label — e.g. the welcome step's "No thanks". */

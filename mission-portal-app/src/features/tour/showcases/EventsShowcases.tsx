@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { YStack, XStack, Text } from 'tamagui'
 import { Pressable } from 'react-native'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { useAuthStore } from '@/stores/authStore'
+import { isAdmin } from '@/lib/roles'
 import {
   ScCard,
   ScField,
@@ -14,18 +16,77 @@ import {
   ScRow,
 } from './primitives'
 
-/** Mini month calendar with demo events; tap a day to see what's scheduled. */
+type DemoEvent = { title: string; time: string; virtual?: boolean; place?: string }
+
+/**
+ * Mini month calendar with demo events: tap a day to see what's scheduled,
+ * and an event to open its card — what everyone sees on one (date and time,
+ * where it is with directions, or its link, and adding it to their calendar).
+ */
 export function CalendarShowcase() {
   const c = useThemeColors()
-  const events: Record<number, { title: string; time: string; virtual?: boolean }[]> = {
-    8: [{ title: 'Team Sync', time: '7:00 PM', virtual: true }],
-    12: [{ title: 'Outreach @ Riverside', time: '9:00 AM' }],
-    13: [{ title: 'Outreach @ Riverside', time: '9:00 AM' }],
-    21: [{ title: 'Sunday Service', time: '10:00 AM' }],
-    28: [{ title: 'Sunday Service', time: '10:00 AM' }],
+  const riverside = 'Riverside Park, 200 River Rd, Austin, TX'
+  const church = 'Main Sanctuary, 120 Church St, Austin, TX'
+  const events: Record<number, DemoEvent[]> = {
+    8: [{ title: 'Prayer Night', time: '7:00 PM', virtual: true }],
+    12: [{ title: 'Outreach @ Riverside', time: '9:00 AM', place: riverside }],
+    13: [{ title: 'Outreach @ Riverside', time: '9:00 AM', place: riverside }],
+    21: [{ title: 'Sunday Service', time: '10:00 AM', place: church }],
+    28: [{ title: 'Sunday Service', time: '10:00 AM', place: church }],
   }
   const [sel, setSel] = useState(12)
+  const [open, setOpen] = useState<DemoEvent | null>(null)
+  const [added, setAdded] = useState(false)
   const days = Array.from({ length: 30 }, (_, i) => i + 1)
+  // June 2026 starts on a Monday: one empty Sunday first, so each date sits
+  // under its own day.
+  const lead = new Date(2026, 5, 1).getDay()
+  const weekday = (d: number) =>
+    new Date(2026, 5, d).toLocaleDateString('en-US', { weekday: 'short' })
+
+  if (open) {
+    return (
+      <YStack gap="$2">
+        <ScCard>
+          <Text color={c.text} fontWeight="800" fontSize={17}>
+            {open.title}
+          </Text>
+          <ScRow label="When" value={`${weekday(sel)}, Jun ${sel} · ${open.time}`} />
+          {open.virtual ? (
+            <>
+              <ScRow label="Where" value="Online" />
+              <Text color={c.primary} fontSize={13} fontWeight="700">
+                ↗ Join online
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text color={c.text} fontSize={13}>
+                {open.place}
+              </Text>
+              <Text color={c.primary} fontSize={13} fontWeight="700">
+                ↗ Get directions
+              </Text>
+            </>
+          )}
+          {added ? <ScNote>Added in the demo — nothing was put on your calendar.</ScNote> : null}
+        </ScCard>
+        <XStack gap="$2">
+          <ScButton label="⬇ Add to calendar" kind="outline" flex onPress={() => setAdded(true)} />
+          <ScButton
+            label="‹ Back to the calendar"
+            kind="outline"
+            flex
+            onPress={() => {
+              setOpen(null)
+              setAdded(false)
+            }}
+          />
+        </XStack>
+      </YStack>
+    )
+  }
+
   return (
     <YStack gap="$2">
       <Text color={c.text} fontWeight="700" fontSize={15}>
@@ -38,6 +99,9 @@ export function CalendarShowcase() {
               {d}
             </Text>
           </YStack>
+        ))}
+        {Array.from({ length: lead }, (_, i) => (
+          <YStack key={`lead${i}`} width="14.28%" />
         ))}
         {days.map((d) => {
           const evs = events[d]
@@ -91,15 +155,17 @@ export function CalendarShowcase() {
         </Text>
         {(events[sel] ?? []).length ? (
           events[sel].map((e, i) => (
-            <XStack key={i} justifyContent="space-between">
-              <Text color={c.text} fontSize={14} fontWeight="600">
-                {e.virtual ? '💻 ' : '📍 '}
-                {e.title}
-              </Text>
-              <Text color={c.textMuted} fontSize={13}>
-                {e.time}
-              </Text>
-            </XStack>
+            <Pressable key={i} onPress={() => setOpen(e)}>
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text color={c.text} fontSize={14} fontWeight="600">
+                  {e.virtual ? '💻 ' : '📍 '}
+                  {e.title}
+                </Text>
+                <Text color={c.textMuted} fontSize={13}>
+                  {e.time} ›
+                </Text>
+              </XStack>
+            </Pressable>
           ))
         ) : (
           <ScNote>No events scheduled — tap another day.</ScNote>
@@ -189,6 +255,7 @@ export function EventDetailShowcase() {
   const [open, setOpen] = useState<string | null>('food')
   const [signedUp, setSignedUp] = useState(false)
   const [rsvp, setRsvp] = useState<string | null>('yes')
+  const admin = isAdmin(useAuthStore((st) => st.profile))
   const toggle = (k: string) => setOpen((o) => (o === k ? null : k))
   const AV: Record<string, string> = {
     yes: '#27ae60',
@@ -327,15 +394,16 @@ export function EventDetailShowcase() {
 
       <XStack gap="$2">
         <ScButton label="⬇ Export to calendar" kind="outline" flex />
-        <ScButton label="✎ Edit (admin)" kind="outline" flex />
+        {admin ? <ScButton label="✎ Edit (admin)" kind="outline" flex /> : null}
       </XStack>
     </YStack>
   )
 }
 
-/** Availability — member RSVP and the admin who's-available matrix. */
+/** Availability — member RSVP, and for an admin the who's-available matrix too. */
 export function AvailabilityShowcase() {
   const c = useThemeColors()
+  const admin = isAdmin(useAuthStore((st) => st.profile))
   const [adminView, setAdminView] = useState(false)
   const AV: Record<string, string> = { Y: '#27ae60', N: '#c0392b', P: '#e67e22', '?': '#7f8c8d' }
   const people = [
@@ -345,11 +413,13 @@ export function AvailabilityShowcase() {
   ]
   return (
     <YStack gap="$2.5">
-      <XStack gap="$2">
-        <ScChip label="Member view" active={!adminView} onPress={() => setAdminView(false)} />
-        <ScChip label="Admin view" active={adminView} onPress={() => setAdminView(true)} />
-      </XStack>
-      {!adminView ? (
+      {admin ? (
+        <XStack gap="$2">
+          <ScChip label="Member view" active={!adminView} onPress={() => setAdminView(false)} />
+          <ScChip label="Admin view" active={adminView} onPress={() => setAdminView(true)} />
+        </XStack>
+      ) : null}
+      {!admin || !adminView ? (
         <ScCard>
           <Text color={c.text} fontWeight="700" fontSize={13}>
             Are you available for Sunday Service?

@@ -106,3 +106,54 @@ describe('the tour, kept up to date', () => {
     expect(worship).toEqual(expect.arrayContaining(['worship-play', 'worship-voice']))
   })
 })
+
+describe('the tour for someone who follows the church in the app', () => {
+  const follower = person('public')
+  const steps = tourFor('', follower)!.steps
+  const got = steps.map((s) => s.id)
+  const said = steps.map((s) => [s.title, s.body, ...(s.bullets ?? [])].join(' ')).join('\n')
+
+  it('tells them about what they have, as they have it', () => {
+    expect(got).toEqual(
+      expect.arrayContaining([
+        'miriam-intro-public',
+        'miriam-talk-public',
+        'home-intro-public',
+        'events-intro',
+        'ann-intro-public',
+        'connect-intro',
+      ])
+    )
+    for (const id of [
+      'miriam-intro',
+      'miriam-talk',
+      'home-intro',
+      'events-detail',
+      'events-availability',
+      'events-planning',
+      'events-updates',
+      'ann-intro',
+      'ann-public',
+    ]) {
+      expect(got, id).not.toContain(id)
+    }
+  })
+
+  it('never calls them public users, or offers them what is the team’s or the admins’', () => {
+    expect(said).not.toMatch(
+      /public users?|dress code|availability|tasks?\b|teams?\b|briefing|worship\b|admins?\b|planning board|retreat|move it to friday|editable/i
+    )
+  })
+
+  it('keeps the team’s and the admins’ steps for them', () => {
+    const member = ids(tourFor('events', person('regular')))
+    expect(member).toEqual(expect.arrayContaining(['events-detail', 'events-availability']))
+    expect(member).not.toContain('events-planning')
+    expect(member).not.toContain('events-updates')
+    expect(ids(tourFor('events', person('admin')))).toEqual(
+      expect.arrayContaining(['events-planning', 'events-updates'])
+    )
+    expect(ids(tourFor('announce', person('regular')))).toEqual(['ann-intro', 'msg-intro'])
+    expect(ids(tourFor('announce', person('admin')))).toContain('ann-public')
+  })
+})

@@ -27,7 +27,7 @@ export const eventsFlow: TourFlow = {
       route: '/events',
       title: 'Events & the Calendar',
       body: 'Every gathering lives here. Switch between a month calendar and a list. Dots mark the days that have something scheduled — tap a day to see it.',
-      bullets: ['Purple dot = virtual', 'Solid dot = in-person', 'Tap any event to open its card'],
+      bullets: ['Purple dot = virtual', 'Solid dot = in-person', 'Tap an event to open its card'],
       showcase: 'calendar',
     },
     {
@@ -79,13 +79,15 @@ export const eventsFlow: TourFlow = {
         'Export to your phone’s calendar (.ics)',
       ],
       showcase: 'eventDetail',
+      teamOnly: true,
     },
     {
       id: 'events-availability',
       route: '/events',
       title: 'Availability',
-      body: 'Members RSVP Yes / No / Partial / TBD. For recurring events you can answer the whole series or just one date. Admins see a grid of who’s available for which events.',
+      body: 'Answer Yes / No / Partial / TBD for the events you’re on. For recurring events you can answer the whole series or just one date.',
       showcase: 'availability',
+      teamOnly: true,
     },
     {
       id: 'events-planning',
@@ -93,6 +95,7 @@ export const eventsFlow: TourFlow = {
       title: 'Planning boards',
       body: 'Attach a planning board to an event for collaborative logistics — sticky notes, goals, checklists and connectors that the whole team can work on.',
       showcase: 'planningBoard',
+      adminOnly: true,
     },
     {
       id: 'events-edit',
@@ -116,6 +119,7 @@ export const eventsFlow: TourFlow = {
         'Assigned people get notified and an RSVP prompt',
         'Tasks generate from the chosen task template',
       ],
+      adminOnly: true,
     },
   ],
 }
@@ -368,6 +372,14 @@ export const announceFlow: TourFlow = {
       route: '/announce',
       title: 'Announcements',
       body: 'Broadcasts to the team (or the public). You only see the announcements meant for you, sorted newest first.',
+      teamOnly: true,
+    },
+    {
+      id: 'ann-intro-public',
+      route: '/announce',
+      title: 'Announcements',
+      body: 'News from the church, newest first — what’s coming up, what’s changed and what’s new. The latest also show on your Home page.',
+      publicOnly: true,
     },
     {
       id: 'ann-create',
@@ -382,6 +394,7 @@ export const announceFlow: TourFlow = {
       route: '/announce',
       title: 'Public announcements',
       body: 'Marking an announcement public also shows it on the public-facing home page for visitors.',
+      adminOnly: true,
     },
   ],
 }
@@ -450,12 +463,21 @@ export const homeFlow: TourFlow = {
       id: 'home-intro',
       route: '/home',
       title: 'Your Home',
-      body: 'A personalized landing page. Team members see their next events, tasks and announcements; public users see what’s happening near them.',
+      body: 'A personalized landing page: your next events, your tasks and recent announcements.',
+      teamOnly: true,
+    },
+    {
+      id: 'home-intro-public',
+      route: '/home',
+      title: 'Your Home',
+      body: 'What’s happening, at a glance.',
       bullets: [
-        'Team: my upcoming events, my tasks, recent announcements',
-        'Public: events near me, new releases, posts',
-        'Set your location to find nearby events',
+        'The latest announcements',
+        'Events near you — tap “Edit Location” to set where you are',
+        'New and featured releases from Content',
+        'The events coming up after that',
       ],
+      publicOnly: true,
     },
   ],
 }
@@ -582,7 +604,7 @@ export const contentFlow: TourFlow = {
       bullets: [
         'Filter by music / podcast / sermon',
         'NEW and ★ Featured badges',
-        'Admins add and curate items',
+        'Or ask Miriam: “play the latest sermon”',
       ],
     },
   ],
@@ -611,7 +633,7 @@ export const givingFlow: TourFlow = {
       id: 'giving-intro',
       route: '/giving',
       title: 'Giving',
-      body: 'The giving page makes it easy for people to support the mission. Content here is managed by admins.',
+      body: 'How to give and support the mission. Giving itself happens on the church’s giving site, which opens from here.',
     },
   ],
 }
@@ -639,7 +661,7 @@ export const storyFlow: TourFlow = {
       id: 'story-intro',
       route: '/story',
       title: 'Our Story',
-      body: 'Shares who you are and what you’re about — an editable page for newcomers to get to know the mission.',
+      body: 'Who we are and what we’re about — the story of the mission and the people behind it.',
     },
   ],
 }
@@ -653,7 +675,7 @@ export const connectFlow: TourFlow = {
       id: 'connect-intro',
       route: '/connect',
       title: 'Connect',
-      body: 'How people get involved and reach out — the front door for new volunteers and guests.',
+      body: 'Get in touch and get involved — and ask to meet with someone from our leadership, right from the page.',
     },
   ],
 }
@@ -697,6 +719,21 @@ export const miriamFlow: TourFlow = {
         '“What’s the dress code for the retreat?”',
         '“Give me a tour of Worship”',
       ],
+      teamOnly: true,
+    },
+    {
+      id: 'miriam-intro-public',
+      title: 'Meet Miriam',
+      body: 'Tap Miriam at the top of any screen and ask, typed or spoken. She answers from the app and takes you to where the answer is.',
+      bullets: [
+        '“What’s happening this weekend?”',
+        '“When is Sunday service?”',
+        '“Play the latest sermon”',
+        '“Is anything on sale at the Elim Store?”',
+        '“I’d like to meet with a pastor”',
+        '“Give me a tour of Events”',
+      ],
+      publicOnly: true,
     },
     {
       id: 'miriam-hey',
@@ -707,6 +744,13 @@ export const miriamFlow: TourFlow = {
       id: 'miriam-talk',
       title: 'Talking it through',
       body: 'She remembers the last few things you asked, so you can follow on — “what time is it?”, “move it to Friday”. If something she needs is missing, she says what she thinks you want and asks for it, then listens for your answer.',
+      teamOnly: true,
+    },
+    {
+      id: 'miriam-talk-public',
+      title: 'Talking it through',
+      body: 'She remembers what you just asked, so you can follow on. Ask where an event is on the day it happens and she offers to open maps — say “yes” and she does.',
+      publicOnly: true,
     },
     {
       id: 'miriam-actions',

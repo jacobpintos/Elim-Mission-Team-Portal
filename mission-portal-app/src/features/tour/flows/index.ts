@@ -1,5 +1,5 @@
 import type { UserProfile } from '@/types/user'
-import { visibleTabs, isAdmin, canUseMessages } from '@/lib/roles'
+import { visibleTabs, isAdmin, canUseMessages, isPublicFollower } from '@/lib/roles'
 import type { Tab } from '@/lib/roles'
 import type { TourFlow, TourStep } from '../types'
 import {
@@ -17,6 +17,9 @@ const byId: Record<string, TourFlow> = Object.fromEntries(TAB_FLOWS.map((f) => [
 function stepVisible(step: TourStep, profile: UserProfile | null): boolean {
   if (step.adminOnly && !isAdmin(profile)) return false
   if (step.roles && !step.roles.some((r) => profile?.roles?.includes(r))) return false
+  const follower = isPublicFollower(profile)
+  if (step.teamOnly && follower) return false
+  if (step.publicOnly && !follower) return false
   return true
 }
 
