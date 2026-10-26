@@ -3,7 +3,7 @@ import { ScrollView } from 'react-native'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
 import { RoleCheckboxes } from './RoleCheckboxes'
-import { SexPicker } from './SexPicker'
+import { SexPicker, asksSex } from './SexPicker'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
@@ -66,7 +66,7 @@ export function CreateUserSheet({ open, onClose, initial }: CreateUserSheetProps
         password,
         recoveryEmail: recoveryEmail.trim() || email.trim(),
         roles,
-        ...(sex ? { sex } : {}),
+        ...(sex && asksSex(roles) ? { sex } : {}),
       })
       const { uid } = result.data as { uid: string }
 
@@ -187,12 +187,14 @@ export function CreateUserSheet({ open, onClose, initial }: CreateUserSheetProps
             )}
           </YStack>
 
-          <YStack gap="$1">
-            <Text fontSize="$3" fontWeight="600">
-              Male / Female
-            </Text>
-            <SexPicker value={sex} onChange={setSex} />
-          </YStack>
+          {asksSex(roles) ? (
+            <YStack gap="$1">
+              <Text fontSize="$3" fontWeight="600">
+                Male / Female
+              </Text>
+              <SexPicker value={sex} onChange={setSex} />
+            </YStack>
+          ) : null}
 
           <XStack gap="$2" justifyContent="flex-end">
             <Button size="$3" onPress={onClose} theme="gray">

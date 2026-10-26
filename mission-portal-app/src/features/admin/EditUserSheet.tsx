@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { YStack, XStack, Text, Input, Button, Spinner } from 'tamagui'
 import { Modal } from '@/components/ui/Modal'
 import { RoleCheckboxes } from './RoleCheckboxes'
-import { SexPicker } from './SexPicker'
+import { SexPicker, asksSex } from './SexPicker'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
@@ -94,7 +94,8 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
         displayName: displayName.trim(),
         email: email.trim(),
         roles,
-        sex: sex ?? deleteField(),
+        // None for a public account (asksSex), whatever was set before.
+        sex: sex && asksSex(roles) ? sex : deleteField(),
       })
       await audit(
         'user.updated',
@@ -158,12 +159,14 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
           <RoleCheckboxes selected={roles} onChange={setRoles} />
         </YStack>
 
-        <YStack gap="$1">
-          <Text fontSize="$3" fontWeight="600">
-            Male / Female
-          </Text>
-          <SexPicker value={sex} onChange={setSex} />
-        </YStack>
+        {asksSex(roles) ? (
+          <YStack gap="$1">
+            <Text fontSize="$3" fontWeight="600">
+              Male / Female
+            </Text>
+            <SexPicker value={sex} onChange={setSex} />
+          </YStack>
+        ) : null}
 
         <XStack gap="$2" justifyContent="space-between" alignItems="center">
           {/* Resetting the owner's password would hand their account to whoever

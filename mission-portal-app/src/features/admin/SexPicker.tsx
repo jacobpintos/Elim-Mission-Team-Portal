@@ -11,6 +11,12 @@ const OPTIONS: { value: Sex | null; label: string }[] = [
 ]
 
 /**
+ * Whether an account with these roles is asked it: only one that can be in a
+ * carpool — a member or a guest. Not a public account, which never is.
+ */
+export const asksSex = (roles: readonly string[]) => roles.some((r) => r !== 'public')
+
+/**
  * Male or female, set by an admin (UserProfile.sex).
  *
  * It does one thing: colours this person's card when a carpool is arranged —
