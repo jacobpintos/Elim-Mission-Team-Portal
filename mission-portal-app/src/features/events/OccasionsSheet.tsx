@@ -22,6 +22,15 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 /** The most days each month can have: the 29th of February is someone's birthday. */
 const MOST_DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
+/** When it comes round next: "Sunday, Nov 1" — "Today, Nov 1", "Tomorrow, Nov 1" when it's that close. */
+function comingSaid(o: Occasion, today: string): string {
+  const date = nextDate(o, today)
+  const said = daySaid(date, today)
+  if (said !== 'today' && said !== 'tomorrow') return said
+  const when = said === 'today' ? 'Today' : 'Tomorrow'
+  return `${when}, ${MONTHS[Number(date.slice(5, 7)) - 1]} ${Number(date.slice(8))}`
+}
+
 const blank = (kind: OccasionKind): Occasion => ({
   id: newOccasionId(),
   kind,
@@ -125,7 +134,7 @@ export function OccasionsSheet({
                         {occasionTitle(o, names)}
                       </Text>
                       <Text color={colors.textMuted} fontSize="$2">
-                        {MONTHS[o.month - 1]} {o.day} · next {daySaid(nextDate(o, today), today)}
+                        {comingSaid(o, today)}
                       </Text>
                     </YStack>
                     <Text color={colors.textMuted}>›</Text>
