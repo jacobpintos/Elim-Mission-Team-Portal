@@ -16,7 +16,20 @@ describe('startup steps', () => {
         steps: { server: 31_400, code: 620, firstScreen: 1_510, signedIn: 1_200, profile: 1_330 },
         profileFrom: 'phone',
       })
-    ).toBe('code 0.6s · signed in 1.2s · profile 1.3s (phone) · first screen 1.5s · server 31s')
+    ).toBe('code 0.6s · signed in 1.2s · profile 1.3s (device) · first screen 1.5s · server 31s')
+  })
+
+  it('says when the sign-in check was cut short', () => {
+    expect(
+      describeRun({
+        startedAt: 1,
+        fromLaunch: true,
+        steps: { page: 240, code: 900, checkCut: 4_950, signedIn: 4_960, profile: 5_100 },
+        profileFrom: 'server',
+      })
+    ).toBe(
+      'page 0.2s · code 0.9s · sign-in check cut short 5.0s · signed in 5.0s · profile 5.1s (server)'
+    )
   })
 
   it('shows only the steps reached', () => {

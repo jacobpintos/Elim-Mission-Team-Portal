@@ -71,6 +71,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
             ? ({ ...(snap.data() as UserProfile), uid: fbUser.uid } as UserProfile)
             : null
           markStartup('profile', snap.metadata.fromCache ? 'phone' : 'server')
+          if (!snap.metadata.fromCache) markStartup('server')
           if (!loginAtWritten && userProfile) {
             loginAtWritten = true
             set({ prevLoginAt: userProfile.lastLoginAt ?? null })

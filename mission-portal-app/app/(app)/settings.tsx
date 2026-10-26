@@ -109,10 +109,10 @@ export default function SettingsScreen() {
   // Notifications
   const [notifSearch, setNotifSearch] = useState('')
 
-  // How long the last few openings took on this phone, for admins: where the
+  // How long the last few openings took on this device, for admins: where the
   // time goes when it is slow (lib/startupTimeline).
   const [startups, setStartups] = useState<StartupRun[]>([])
-  const showStartups = Platform.OS !== 'web' && isAdmin(profile)
+  const showStartups = isAdmin(profile)
   useEffect(() => {
     if (!showStartups) return
     recentStartups()
@@ -966,8 +966,8 @@ export default function SettingsScreen() {
         {startups.length > 0 ? (
           <Section title="Opening the app">
             <Text color={colors.textMuted} fontSize="$2">
-              How long the last few openings took on this phone: each step, counted from tapping the
-              icon.
+              How long the last few openings took on this device: each step, counted from tapping
+              the icon.
             </Text>
             {startups.map((run) => (
               <YStack key={run.startedAt} gap="$1">

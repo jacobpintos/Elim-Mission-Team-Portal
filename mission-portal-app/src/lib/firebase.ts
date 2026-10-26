@@ -9,6 +9,8 @@ import {
 import { getStorage } from 'firebase/storage'
 import { getFunctions } from 'firebase/functions'
 import { Platform } from 'react-native'
+import { hurryOpeningCheck } from '@/lib/openingCheck'
+import { markStartup } from '@/lib/startupTimeline'
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY!,
@@ -46,7 +48,11 @@ function getFirebaseAuth() {
   return _auth!
 }
 
+// Opening signed in, Auth checks the saved sign-in with Google first, and a
+// stalled check held the whole app for 30 seconds (openingCheck.ts).
+const stopHurrying = hurryOpeningCheck(() => markStartup('checkCut'))
 export const auth = getFirebaseAuth()
+auth.authStateReady().then(stopHurrying, stopHurrying)
 // ignoreUndefinedProperties lets writes omit undefined fields instead of
 // throwing "Unsupported field value: undefined" — a web-first codebase writes
 // undefined-valued fields in several places (e.g. an unset projectedDate on a

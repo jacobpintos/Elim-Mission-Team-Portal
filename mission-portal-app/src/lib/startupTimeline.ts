@@ -10,7 +10,9 @@ import { parseRuns, type StartupRun, type StartupStep } from './startupSteps'
  * tab, the database's first answer — and from outside a slow start looks the
  * same whichever of them is slow. These say which.
  *
- * Times count from the app's launch, which React Native records natively,
+ * Times count from the app's launch: on the web, from when the page was
+ * asked for (tapping the home-screen icon), which is where the browser's own
+ * clock starts; on a phone, from the launch React Native records natively,
  * where it has it; otherwise from when this module first runs.
  */
 
@@ -22,12 +24,17 @@ const OPENING_MS = 5 * 60_000
 type RNPerformance = {
   now(): number
   rnStartupTiming?: { startTime?: number; executeJavaScriptBundleEntryPointStart?: number }
+  getEntriesByType?: (type: string) => { responseEnd?: number }[]
 }
 
 const perf = (globalThis as { performance?: RNPerformance }).performance
 const now = () => perf?.now() ?? 0
+const onWeb = typeof document !== 'undefined'
 
 const launch = (() => {
+  // The page's clock began when it was asked for, so its zero is the launch,
+  // and this module runs with the app's code.
+  if (onWeb && perf) return { origin: 0, fromLaunch: true, code: now() }
   try {
     const timing = perf?.rnStartupTiming
     const start = timing?.startTime
@@ -50,6 +57,14 @@ const run: StartupRun = {
 }
 if (launch.code !== undefined && launch.code >= launch.origin) {
   run.steps.code = Math.round(launch.code - launch.origin)
+}
+if (onWeb) {
+  try {
+    const page = perf?.getEntriesByType?.('navigation')[0]?.responseEnd
+    if (typeof page === 'number' && page > 0) run.steps.page = Math.round(page)
+  } catch {
+    // Not given; the rest still count.
+  }
 }
 
 let saving: ReturnType<typeof setTimeout> | null = null
