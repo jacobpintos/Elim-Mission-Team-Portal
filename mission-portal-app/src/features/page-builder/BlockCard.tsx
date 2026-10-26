@@ -133,6 +133,7 @@ export function BlockCard({
           <SocialEditor
             data={block.data as never}
             onChange={(d) => onChange({ ...block, data: d })}
+            pageKey={pageKey}
           />
         )
       default:

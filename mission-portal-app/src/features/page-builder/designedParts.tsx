@@ -2,6 +2,7 @@ import { Pressable } from 'react-native'
 import { Image } from 'expo-image'
 import { Text, XStack, YStack } from 'tamagui'
 import { Arrow } from '@/components/ui/Brand'
+import { BRAND_COLORS, BrandMark } from '@/components/ui/BrandMark'
 import { openExternalUrl } from '@/lib/externalUrl'
 import { resolveSocialIcon } from '@/lib/socialIcon'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -77,7 +78,7 @@ export function LinkCard({
   verb: string
 }) {
   const colors = useThemeColors()
-  const icon = resolveSocialIcon(link.icon, link.label)
+  const icon = resolveSocialIcon(link.icon, link.label, link.url)
 
   return (
     <Pressable
@@ -110,7 +111,13 @@ export function LinkCard({
           alignItems="center"
           justifyContent="center"
           overflow="hidden"
-          backgroundColor={icon.kind === 'image' ? colors.border : colors.primary + '1f'}
+          backgroundColor={
+            icon.kind === 'image'
+              ? colors.border
+              : icon.kind === 'brand'
+                ? BRAND_COLORS[icon.brand]
+                : colors.primary + '1f'
+          }
         >
           {icon.kind === 'image' ? (
             <Image
@@ -118,6 +125,8 @@ export function LinkCard({
               style={{ width: 52, height: 52 }}
               contentFit="cover"
             />
+          ) : icon.kind === 'brand' ? (
+            <BrandMark brand={icon.brand} size={52} />
           ) : (
             <Text
               fontSize={icon.kind === 'glyph' ? 24 : 22}

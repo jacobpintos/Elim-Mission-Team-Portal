@@ -4,6 +4,7 @@ import { YStack, XStack, Text } from 'tamagui'
 import { useThemeStore } from '@/stores/themeStore'
 import { autoTextColor } from '@/theme/contrast'
 import { resolveSocialIcon, type ResolvedIcon } from '@/lib/socialIcon'
+import { BRAND_COLORS, BrandMark } from '@/components/ui/BrandMark'
 import type { SocialData } from '@/types/pages'
 import { openExternalUrl } from '@/lib/externalUrl'
 
@@ -29,6 +30,7 @@ function Mark({ icon, color }: { icon: ResolvedIcon; color: string }) {
       <Image source={{ uri: icon.uri }} style={{ width: TILE, height: TILE }} contentFit="cover" />
     )
   }
+  if (icon.kind === 'brand') return <BrandMark brand={icon.brand} size={TILE} />
 
   return (
     <Text fontSize={icon.kind === 'glyph' ? 28 : 24} fontWeight="700" color={color}>
@@ -59,7 +61,7 @@ export function SocialBlock({ data }: SocialBlockProps) {
 
       <XStack flexWrap="wrap" gap="$4">
         {links.map((link, index) => {
-          const icon = resolveSocialIcon(link.icon, link.label)
+          const icon = resolveSocialIcon(link.icon, link.label, link.url)
 
           return (
             <Pressable
@@ -75,7 +77,13 @@ export function SocialBlock({ data }: SocialBlockProps) {
                   borderRadius={TILE / 2}
                   // A pasted logo brings its own background, and painting the
                   // theme colour behind it would fight whatever that is.
-                  backgroundColor={icon.kind === 'image' ? '$gray3' : theme.primary}
+                  backgroundColor={
+                    icon.kind === 'image'
+                      ? '$gray3'
+                      : icon.kind === 'brand'
+                        ? BRAND_COLORS[icon.brand]
+                        : theme.primary
+                  }
                   alignItems="center"
                   justifyContent="center"
                   overflow="hidden"
