@@ -62,17 +62,16 @@ const tinted = (color: string, alpha: string) =>
 
 /**
  * A row of the side menu, shaded so it's plain which one is under the mouse
- * or the finger: every other row faintly, the one under the mouse on a
- * computer, the one being pressed more. The open tab keeps its own colour.
+ * or the finger: the one under the mouse on a computer, the one being
+ * pressed more. The open tab keeps its own colour. (The rows are told apart
+ * by the lines between them.)
  */
 function MenuRow({
   onPress,
-  shaded = false,
   active = false,
   children,
 }: {
   onPress: () => void
-  shaded?: boolean
   active?: boolean
   children: (state: { background: string }) => React.ReactNode
 }) {
@@ -88,9 +87,7 @@ function MenuRow({
             ? tinted(colors.text, '26')
             : hovered
               ? tinted(colors.text, '1a')
-              : shaded
-                ? tinted(colors.text, '0f')
-                : 'transparent'
+              : 'transparent'
         return children({ background })
       }}
     </Pressable>
@@ -392,7 +389,7 @@ export default function AppLayout() {
           {/* Nav items */}
           <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
             <YStack paddingVertical="$2">
-              {tabs.map((tab, i) => {
+              {tabs.map((tab) => {
                 // A tab stays lit while one of the routes it owns is open,
                 // otherwise opening Messages would leave nothing highlighted.
                 const isActive =
@@ -403,7 +400,6 @@ export default function AppLayout() {
                   <MenuRow
                     key={tab}
                     active={isActive}
-                    shaded={i % 2 === 1}
                     onPress={() => {
                       closeDrawer()
                       router.push(`/${tab}`)
@@ -418,6 +414,8 @@ export default function AppLayout() {
                         backgroundColor={background}
                         borderLeftWidth={3}
                         borderLeftColor={isActive ? colors.primary : 'transparent'}
+                        borderBottomWidth={1}
+                        borderBottomColor={colors.border}
                       >
                         <Text
                           color={isActive ? colors.primary : colors.text}
