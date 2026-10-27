@@ -77,7 +77,7 @@ export default function PrivacyPolicyScreen() {
             Privacy Policy
           </Text>
           <Text color={c.textMuted} fontSize={13}>
-            Effective date: October 23, 2026
+            Effective date: October 27, 2026
           </Text>
           <Body>
             This Privacy Policy explains how The Well of Iowa (“we,” “us,” or “our”) collects, uses,
@@ -199,9 +199,9 @@ export default function PrivacyPolicyScreen() {
             </Bullet>
             <Bullet>
               <Text fontWeight="700">Anthropic (Claude), an AI provider</Text> — some requests a
-              team member makes of Miriam are answered with Anthropic&rsquo;s AI model, Claude. What
-              is sent, and when, is set out in section 7. Requests from public accounts are never
-              sent to Anthropic.
+              team member makes of Miriam are answered with Anthropic&rsquo;s AI model, Claude, once
+              they have allowed it. What is sent, and when, is set out in section 7. Requests from
+              public accounts are never sent to Anthropic.
             </Bullet>
             <Bullet>
               <Text fontWeight="700">Lookup services</Text> — to answer some questions the App looks
@@ -302,12 +302,15 @@ export default function PrivacyPolicyScreen() {
             </Bullet>
             <Bullet>
               <Text fontWeight="700">By Anthropic&rsquo;s Claude</Text> — for team accounts only,
-              when a request needs more than Miriam can do herself. We send Anthropic what you said
-              or typed, the last few turns of that conversation, and the information from the App
-              needed to answer it — for example the events, tasks, messages or names it looks up —
-              never more than your own account is allowed to see. Anthropic processes it to produce
-              the answer under its commercial terms, which do not allow it to train its models on
-              this data. Its privacy policy is at anthropic.com/legal/privacy.
+              when a request needs more than Miriam can do herself, and only once you have allowed
+              it: the first time a request needs Claude, Miriam asks you before anything is sent,
+              and you can change your answer at any time in Profile &amp; Settings → Miriam. Until
+              you allow it, nothing is sent to Anthropic. We send Anthropic what you said or typed,
+              the last few turns of that conversation, and the information from the App needed to
+              answer it — for example the events, tasks, messages or names it looks up — never more
+              than your own account is allowed to see. Anthropic processes it to produce the answer
+              under its commercial terms, which do not allow it to train its models on this data.
+              Its privacy policy is at anthropic.com/legal/privacy.
             </Bullet>
           </YStack>
           <Body>

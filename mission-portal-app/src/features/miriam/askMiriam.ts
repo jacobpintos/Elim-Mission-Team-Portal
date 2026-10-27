@@ -7,6 +7,7 @@ import { useMiriamStore } from '@/stores/miriamStore'
 import { screensFor } from '@/lib/miriamScreens'
 import { useAuthStore } from '@/stores/authStore'
 import { appToolsFor, runAppTool } from './appTools'
+import { CAN_ASK_CLAUDE } from '@/lib/claudeConsent'
 
 /** Today on this device's calendar, for "Friday" and "9/25". */
 function localToday(): string {
@@ -22,7 +23,7 @@ function localClock(): string {
 }
 
 /** What this version of the app can show of an answer, beyond what every version can. */
-const CAN = ['link']
+const CAN = ['link', CAN_ASK_CLAUDE]
 
 /** Lookups for the app to run, while the request waits (functions: APP_TOOLS). */
 interface Run {

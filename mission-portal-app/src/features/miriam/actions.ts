@@ -100,6 +100,7 @@ import {
   noteText,
   type DateNote,
 } from '@/lib/dateNotes'
+import { ALLOW_CLAUDE, setClaudeAllowed } from '@/lib/claudeConsent'
 import type {
   AvailResponse,
   CarpoolCarData,
@@ -125,6 +126,8 @@ export type Prepared =
       /** The details, each a line: the message itself, the date. */
       details: string[]
       confirm: string
+      /** The other button, where "Cancel" doesn't fit: "Not now". */
+      cancel?: string
       /** Deleting: shown in red. */
       destructive?: boolean
       /** Does it; what to say when it is done. */
@@ -1885,6 +1888,32 @@ async function changeMyName(profile: UserProfile, input: Record<string, unknown>
 }
 
 /**
+ * Leave for Miriam to send what she can't answer herself on to Claude
+ * (lib/claudeConsent): asked by the server the first time a request needs it,
+ * before anything is sent. Allowed, the request is asked again
+ * (useMiriamActions); not, nothing goes.
+ */
+async function allowClaude(profile: UserProfile) {
+  return {
+    kind: 'ready',
+    title: 'Can I ask Claude to help with this?',
+    // Short lines: the card shows each in a few, on a phone.
+    details: [
+      'For what I can’t work out myself, I send what you asked to Claude, an AI from Anthropic.',
+      'With it goes what the app needs to answer, like your events or tasks — never more than your account can see.',
+      'Anthropic doesn’t train its models on it. The Privacy Policy has more.',
+      'Change this any time in Profile & Settings.',
+    ],
+    confirm: 'Allow',
+    cancel: 'Not now',
+    run: async () => {
+      await setClaudeAllowed(String(profile.uid), true)
+      return 'Thanks — asking now.'
+    },
+  } satisfies Prepared
+}
+
+/**
  * A note on a day of their own calendar (lib/dateNotes). Asked for alone, it
  * is added at once (MiriamButton); as one of several things asked, confirmed
  * like the rest.
@@ -1994,6 +2023,7 @@ const ACTIONS: Record<
   set_my_location: setMyLocation,
   add_date_note: addDateNote,
   remove_date_note: removeDateNote,
+  [ALLOW_CLAUDE]: allowClaude,
 }
 
 /** A change asked for, worked out into exactly what will be done. Never throws. */

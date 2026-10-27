@@ -153,6 +153,9 @@ export interface PublicProfile {
 }
 
 export interface UserProfile {
+  /** Their say on Miriam sending requests on to Claude (functions/src/miriam/consent). */
+  claudeConsent?: { allowed: boolean; at: number }
+
   /** Shown under the name wherever this person is introduced. Set by an admin
    *  on the Leadership Team screen and mirrored into publicProfiles. */
   title?: string

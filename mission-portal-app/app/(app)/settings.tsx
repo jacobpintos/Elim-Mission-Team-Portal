@@ -19,6 +19,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch'
 import { Avatar } from '@/components/ui/Avatar'
 import { isAdmin, isPublic, isSecurity } from '@/lib/roles'
+import { claudeAllowed, setClaudeAllowed } from '@/lib/claudeConsent'
 import { EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
 import { geocodeCity } from '@/lib/geocode'
 import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
@@ -694,6 +695,30 @@ export default function SettingsScreen() {
             />
           </XStack>
         </Section>
+
+        {/* Miriam and Claude: theirs to allow, and to take back (lib/claudeConsent).
+            Never asked of a public account: its requests are never sent to Claude. */}
+        {!pub ? (
+          <Section title="Miriam">
+            <XStack alignItems="center" justifyContent="space-between" gap="$3">
+              <Label>Let Miriam ask Claude</Label>
+              <ToggleSwitch
+                checked={claudeAllowed(profile)}
+                onCheckedChange={(v) =>
+                  setClaudeAllowed(String(profile.uid), v).catch(() =>
+                    toast('That didn’t save — try again in a moment.', 'error')
+                  )
+                }
+              />
+            </XStack>
+            <Text color={colors.textMuted} fontSize="$2">
+              When Miriam can’t answer something herself, she can send what you asked — and what the
+              app needs to answer it — to Claude, an AI from Anthropic, which doesn’t train its
+              models on it. Off, nothing is sent: she answers what she can on her own, and asks you
+              first when a request needs Claude.
+            </Text>
+          </Section>
+        ) : null}
 
         {/* Notifications */}
         {pub ? (

@@ -52,6 +52,7 @@ import { heardRight } from './hearing'
 import { meantInstead } from './notMeant'
 import { aboutScripture } from './own/faith'
 import { withinLimit, type UsageLimit } from '../utils/usageLimit'
+import { ALLOW_CLAUDE, askBeforeClaude } from './consent'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -538,6 +539,15 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
       turn.skill = 'public'
       if (reply.kind === 'answer' && reply.text === PUBLIC_NOT_HERS) turn.outcome = 'couldnt'
       return heardAsText ? { ...reply, understood: heardAsText } : reply
+    }
+
+    // Nothing goes to Anthropic without their leave: asked the first time a
+    // request needs Claude, before it is sent, and sent once they allow it
+    // (./consent). An app built before it could ask carries on as it did.
+    if (askBeforeClaude(req.data?.can, me.data())) {
+      turn.tier = 'none'
+      turn.outcome = 'askedBack'
+      return { kind: 'confirm', name: ALLOW_CLAUDE, input: {}, more: true }
     }
 
     messages = [

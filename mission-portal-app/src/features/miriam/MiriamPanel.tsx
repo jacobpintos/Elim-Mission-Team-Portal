@@ -290,7 +290,7 @@ export function MiriamPanel({
                     style={[styles.small, { borderWidth: 1, borderColor: colors.border }]}
                   >
                     <Text color={ink} fontWeight="700" fontSize="$3">
-                      Cancel
+                      {pending.prepared.cancel ?? 'Cancel'}
                     </Text>
                   </Pressable>
                 </XStack>

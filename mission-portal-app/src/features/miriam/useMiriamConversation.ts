@@ -193,6 +193,8 @@ export function useMiriamConversation(
   } = useMiriamActions(panel, listening, {
     // One of several things asked, done: on to the rest.
     carryOn: () => askClaude(CARRY_ON, false, true),
+    // Claude allowed: the request it was asked for, sent again — not counted twice.
+    askAgain: (asked) => askClaude(asked, false, true),
   })
 
   // Group names, for the recogniser to expect in a request — and, with the

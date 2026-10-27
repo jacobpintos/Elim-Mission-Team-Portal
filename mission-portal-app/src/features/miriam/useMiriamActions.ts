@@ -17,6 +17,7 @@ import { useRemindersStore, type BeforeEach, type ReminderExtra } from '@/stores
 import { prepareAction } from './actions'
 import { recordCard } from './recordTurn'
 import { unlockSpeech, whenSpoken } from './speak'
+import { ALLOW_CLAUDE } from '@/lib/claudeConsent'
 import type { Listening } from './useListening'
 import type { PanelState } from './usePanelState'
 
@@ -35,9 +36,12 @@ export function useMiriamActions(
   listening: Listening,
   {
     carryOn,
+    askAgain,
   }: {
     /** A change done that was one of several asked for: on to the rest (./useMiriamConversation). */
     carryOn: () => Promise<void>
+    /** Claude allowed (./actions: allowClaude): the request it was asked for, sent again. */
+    askAgain: (asked: string) => Promise<void>
   }
 ) {
   const router = useRouter()
@@ -286,6 +290,11 @@ export function useMiriamActions(
     // Done, and it can be taken back: a tap to, while it is shown.
     if (done && takeBack) setUndo({ label: 'Undo', run: takeBack })
     setStage('answered')
+    // Claude allowed: what they asked, sent on now.
+    if (shown.name === ALLOW_CLAUDE && done) {
+      await askAgain(askedRef.current)
+      return
+    }
     // One of several things asked: on to the next, with this one remembered as done.
     if (more && done) {
       useMiriamStore.getState().remember(askedRef.current, said)
@@ -293,11 +302,17 @@ export function useMiriamActions(
     }
   }
   const cancelAction = () => {
+    const askedClaude = pending?.name === ALLOW_CLAUDE
     useMiriamStore.getState().setLastOwn(null)
     recordCard('cancelled')
     endVoiceConfirm()
     setPending(null)
     useMiriamStore.getState().setAwaiting(false)
+    if (askedClaude) {
+      setAnswer('Okay — nothing was sent. I’ll answer what I can on my own.')
+      speak('Okay — nothing was sent.')
+      return
+    }
     setAnswer('Okay — nothing was changed.')
     speak('Okay.')
   }
