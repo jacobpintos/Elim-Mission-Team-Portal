@@ -613,3 +613,52 @@ describe('teams, when someone is on several', () => {
     expect(quickAnswer('what team is Sunny on', as('lee', ['public']))).toBeNull()
   })
 })
+
+describe('church, asked of Miriam', () => {
+  const day = '2026-10-27' // a Tuesday
+  const tmpl = [
+    {
+      id: 'sun',
+      title: 'Sunday Service',
+      isRec: true,
+      recDay: 0,
+      recur: 'weekly',
+      date: '2026-01-04',
+      startTime: '10:00 AM',
+      location: 'The Well',
+      isPublic: true,
+    },
+    // Past, at a venue called "… Church": never what "church" means.
+    {
+      id: 'rally',
+      title: 'Worship Rally',
+      date: '2026-10-10',
+      location: 'River City Church',
+      isPublic: true,
+    },
+  ]
+  const data: QuickData = {
+    templates: tmpl as never,
+    overrides: {},
+    groups: [],
+    viewer: { uid: 'me', roles: ['regular'] },
+    names: new Map(),
+    today: day,
+  }
+
+  it('is the weekly Sunday service, next', () => {
+    expect(quickAnswer('when is church', data)?.text).toBe(
+      'Sunday Service is on Sunday, Nov 1 at 10:00 AM.'
+    )
+    expect(quickAnswer('what time is church', data)?.text).toBe(
+      'Sunday Service is on Sunday, Nov 1 at 10:00 AM.'
+    )
+    expect(quickAnswer('where is church', data)?.text).toBe('Sunday Service is at The Well.')
+  })
+
+  it('still finds an event by its venue when the venue is named', () => {
+    expect(quickAnswer('when is the event at river city church', data)?.text).toMatch(
+      /^Worship Rally is/
+    )
+  })
+})

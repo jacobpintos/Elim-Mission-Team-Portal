@@ -300,10 +300,20 @@ export function titleMatch(title: string, query: string): number {
   return nameScore(title, query)
 }
 
+/** "Church", said for an event: the weekly service on Sunday, whatever it is called. */
+const CHURCH =
+  /^(?:the\s+)?(?:church|church\s+services?|sunday\s+church|services?|worship\s+services?|sunday\s+services?)$/i
+/** A weekly event's name that says it is the service: "Sunday Service", "Sunday Worship". */
+const SERVICE_NAME = /\b(?:service|worship|church|gathering|mass)\b/i
+const weekday = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay()
+/** Whether the words said for an event are "church": the weekly Sunday service (findEvents). */
+export const saysChurch = (query: string) => CHURCH.test(query.trim())
+
 /**
  * Events this person can see whose name — or city, or venue — fits what was
  * said, nearest first, upcoming before past; on one date, if one is given.
- * With nothing said, the next few they can see.
+ * With nothing said, the next few they can see. "Church" is the weekly
+ * Sunday service — not whatever is on at a venue called "… Church".
  */
 export function findEvents(
   templates: EventTemplate[],
@@ -322,6 +332,17 @@ export function findEvents(
     .flatMap((t) => instancesOf(t, from, to, overrides))
     .filter((ev) => canSeeEvent(ev, viewer, groups))
     .filter((ev) => !date || ev.date === date)
+  if (saysChurch(query)) {
+    const sundays = seen.filter(
+      (ev) => ev.isRec && weekday(ev.date) === 0 && (date || ev.date >= today)
+    )
+    if (sundays.length) {
+      const rank = (ev: EventInstance) => (SERVICE_NAME.test(ev.title) ? 0 : 1)
+      return sundays
+        .sort((a, b) => rank(a) - rank(b) || a.date.localeCompare(b.date))
+        .slice(0, limit)
+    }
+  }
   const named = (ev: EventInstance) => [ev.title, ev.city, ev.location].filter(Boolean).join(' ')
   const scored = seen
     .map((ev) => ({ ev, score: query.trim() ? titleMatch(named(ev), query) : 1 }))

@@ -7,6 +7,7 @@ import {
   flightsFor,
   instancesOf,
   lodgingFor,
+  saysChurch,
   seesTeamSide,
   shiftDate,
   teamsOf,
@@ -399,6 +400,8 @@ function answerFor(field: QuickField, ev: EventInstance, data: QuickData, alone:
  * event itself. Empty when it was all its name.
  */
 function besidesItsName(ev: EventInstance, name: string): string[] {
+  // "Church" named the weekly service itself (findEvents), not something on it.
+  if (saysChurch(name)) return []
   const its = [ev.title, ev.city, ev.location].filter(Boolean).join(' ')
   return scheduleWhat(name).filter((w) => nameScore(its, w) < 0.8)
 }
