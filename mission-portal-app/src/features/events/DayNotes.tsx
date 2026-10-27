@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pressable, TextInput } from 'react-native'
+import { Pressable, TextInput, View } from 'react-native'
 import { XStack, YStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useDateNotesStore } from '@/stores/dateNotesStore'
@@ -12,8 +12,16 @@ export const NOTE_COLOR = '#c9a227'
 /**
  * Your notes on a day of the calendar (lib/dateNotes): written, changed and
  * taken away here — or by asking Miriam — and seen by nobody else.
+ * `onEditor`: the note being written, as it appears and goes — for the screen
+ * to keep it above the keyboard.
  */
-export function DayNotes({ date }: { date: string }) {
+export function DayNotes({
+  date,
+  onEditor,
+}: {
+  date: string
+  onEditor?: (editor: View | null) => void
+}) {
   const colors = useThemeColors()
   const all = useDateNotesStore((s) => s.notes)
   const notes = notesOn(all, date)
@@ -61,51 +69,53 @@ export function DayNotes({ date }: { date: string }) {
   }
 
   const editor = (
-    <YStack
-      gap="$2"
-      padding="$2"
-      borderRadius="$2"
-      borderWidth={1}
-      borderColor={NOTE_COLOR}
-      backgroundColor={colors.surface}
-    >
-      <TextInput
-        value={draft}
-        onChangeText={setDraft}
-        placeholder="Bring the projector…"
-        placeholderTextColor={colors.textMuted}
-        multiline
-        autoFocus
-        maxLength={DATE_NOTE_MAX}
-        style={{ color: colors.text, minHeight: 60, fontSize: 15, textAlignVertical: 'top' }}
-      />
-      <XStack gap="$2" justifyContent="flex-end" alignItems="center">
-        {editing && editing !== 'new' ? (
-          <Pressable onPress={() => remove(editing)} hitSlop={6}>
-            <Text color="#e74c3c" fontSize="$2" fontWeight="600" paddingHorizontal="$2">
-              Delete
+    <View ref={onEditor}>
+      <YStack
+        gap="$2"
+        padding="$2"
+        borderRadius="$2"
+        borderWidth={1}
+        borderColor={NOTE_COLOR}
+        backgroundColor={colors.surface}
+      >
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="Bring the projector…"
+          placeholderTextColor={colors.textMuted}
+          multiline
+          autoFocus
+          maxLength={DATE_NOTE_MAX}
+          style={{ color: colors.text, minHeight: 60, fontSize: 15, textAlignVertical: 'top' }}
+        />
+        <XStack gap="$2" justifyContent="flex-end" alignItems="center">
+          {editing && editing !== 'new' ? (
+            <Pressable onPress={() => remove(editing)} hitSlop={6}>
+              <Text color="#e74c3c" fontSize="$2" fontWeight="600" paddingHorizontal="$2">
+                Delete
+              </Text>
+            </Pressable>
+          ) : null}
+          <Pressable onPress={stop} hitSlop={6}>
+            <Text color={colors.textMuted} fontSize="$2" fontWeight="600" paddingHorizontal="$2">
+              Cancel
             </Text>
           </Pressable>
-        ) : null}
-        <Pressable onPress={stop} hitSlop={6}>
-          <Text color={colors.textMuted} fontSize="$2" fontWeight="600" paddingHorizontal="$2">
-            Cancel
-          </Text>
-        </Pressable>
-        <Pressable onPress={save} disabled={!draft.trim()} hitSlop={6}>
-          <XStack
-            backgroundColor={draft.trim() ? colors.primary : colors.border}
-            borderRadius="$2"
-            paddingHorizontal="$3"
-            paddingVertical="$1.5"
-          >
-            <Text color="white" fontSize="$2" fontWeight="700">
-              Save
-            </Text>
-          </XStack>
-        </Pressable>
-      </XStack>
-    </YStack>
+          <Pressable onPress={save} disabled={!draft.trim()} hitSlop={6}>
+            <XStack
+              backgroundColor={draft.trim() ? colors.primary : colors.border}
+              borderRadius="$2"
+              paddingHorizontal="$3"
+              paddingVertical="$1.5"
+            >
+              <Text color="white" fontSize="$2" fontWeight="700">
+                Save
+              </Text>
+            </XStack>
+          </Pressable>
+        </XStack>
+      </YStack>
+    </View>
   )
 
   return (

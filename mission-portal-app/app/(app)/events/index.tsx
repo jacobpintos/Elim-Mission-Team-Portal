@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ScrollView, Pressable, Linking, Platform } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Dimensions, ScrollView, Pressable, Linking, Platform, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
@@ -37,6 +37,7 @@ import {
 import { useOccasionsStore } from '@/stores/occasionsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { OccasionsSheet } from '@/features/events/OccasionsSheet'
+import { useKeyboardInset } from '@/lib/useKeyboardInset'
 
 const VIRTUAL_COLOR = '#8e44ad'
 
@@ -123,6 +124,35 @@ export default function EventsScreen() {
   const users = useUsersStore((s) => s.users)
   const [occasionsOpen, setOccasionsOpen] = useState(false)
   const [editOccasion, setEditOccasion] = useState<Occasion | null>(null)
+
+  // A note being written on a day sits low on the page: kept above the
+  // keyboard, which otherwise covers it — on an iPhone, in the app and the
+  // home-screen web app alike (DayNotes).
+  const scrollRef = useRef<ScrollView>(null)
+  const scrollY = useRef(0)
+  const noteEditor = useRef<View | null>(null)
+  const keyboard = useKeyboardInset()
+  const revealNote = useCallback(() => {
+    noteEditor.current?.measureInWindow((_x, y, _w, h) => {
+      const keyboardTop = Dimensions.get('window').height - keyboard
+      const below = y + h + 16 - keyboardTop
+      if (below > 0) scrollRef.current?.scrollTo({ y: scrollY.current + below, animated: true })
+    })
+  }, [keyboard])
+  useEffect(() => {
+    if (!keyboard || !noteEditor.current) return
+    // Once the keyboard has said how tall it is.
+    const t = setTimeout(revealNote, 60)
+    return () => clearTimeout(t)
+  }, [keyboard, revealNote])
+  const onNoteEditor = useCallback(
+    (editor: View | null) => {
+      noteEditor.current = editor
+      // Opened with the keyboard already up: it says nothing new.
+      if (editor) setTimeout(revealNote, 350)
+    },
+    [revealNote]
+  )
 
   const { instances, templates } = useEventsStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
@@ -481,7 +511,20 @@ export default function EventsScreen() {
 
       {!publicUser ? <AvailQueueBanner uid={uid} /> : null}
 
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        onScroll={(e) => (scrollY.current = e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
+        // Save tapped with the keyboard up saves, rather than only closing it.
+        keyboardShouldPersistTaps="handled"
+        {...(Platform.OS === 'ios' ? { automaticallyAdjustKeyboardInsets: true } : {})}
+        // In a browser the page keeps its height under the keyboard: room to
+        // scroll what is under it into view.
+        contentContainerStyle={
+          Platform.OS === 'web' && keyboard ? { paddingBottom: keyboard } : undefined
+        }
+      >
         {view === 'calendar' ? (
           <YStack padding="$2">
             {/* Day headers */}
@@ -688,7 +731,7 @@ export default function EventsScreen() {
                   </Pressable>
                 ))}
                 <DayTasks tasks={tasksByDate[selectedDay] ?? []} onOpen={openTask} />
-                {keepsNotes ? <DayNotes date={selectedDay} /> : null}
+                {keepsNotes ? <DayNotes date={selectedDay} onEditor={onNoteEditor} /> : null}
               </YStack>
             ) : null}
           </YStack>
