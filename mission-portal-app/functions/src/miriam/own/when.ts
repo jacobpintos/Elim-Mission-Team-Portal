@@ -92,16 +92,110 @@ export function dayIn(text: string, today: string): string | null {
 export interface Span {
   from: string
   to: string
-  /** As said back: "today", "this weekend", "on Friday". */
+  /** As said back: "today", "this weekend", "on Friday", "in the next 30 days". */
   said: string
   next: boolean
+}
+
+/** A list's opening, from what the span is said as: "On this week", "On Friday", "In the next 30 days". */
+export function spanLead(said: string): string {
+  return /^(?:in|on|over)\b/.test(said)
+    ? `${said.charAt(0).toUpperCase()}${said.slice(1)}`
+    : `On ${said}`
+}
+
+const COUNT: Record<string, number> = {
+  a: 1,
+  an: 1,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  twelve: 12,
+  fourteen: 14,
+  fifteen: 15,
+  twenty: 20,
+  thirty: 30,
+  sixty: 60,
+  ninety: 90,
+  couple: 2,
+  'couple of': 2,
+  few: 4,
+}
+const UNIT_DAYS: Record<string, number> = { day: 1, week: 7, month: 30 }
+/** How far "coming up" looks, with no stretch of days said. */
+export const COMING_UP_DAYS = 30
+
+/**
+ * A stretch from today, said as one: "the next 30 days", "the next two
+ * weeks", "the coming month", "my upcoming week", "the week ahead" — not
+ * "next week" or "next month", which are the calendar's (spanIn).
+ */
+function aheadIn(s: string, today: string): Span | null {
+  const counted =
+    /\b(?:next|coming|following|upcoming)\s+(\d{1,3}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fourteen|fifteen|twenty|thirty|sixty|ninety|couple(?: of)?|few)\s+(day|week|month)s?\b/.exec(
+      s
+    )
+  if (counted) {
+    const n = /^\d/.test(counted[1]) ? Number(counted[1]) : COUNT[counted[1]]
+    const unit = counted[2]
+    const days = Math.min(365, Math.max(1, n * UNIT_DAYS[unit]))
+    const single = ['a', 'an', 'one'].includes(counted[1])
+    const said = single ? `in the next ${unit}` : `in the next ${counted[1]} ${unit}s`
+    return { from: today, to: shiftDate(today, days - 1), said, next: false }
+  }
+  const ahead =
+    /\b(?:upcoming|coming)\s+(week|month)\b/.exec(s) ?? /\b(week|month)\s+ahead\b/.exec(s)
+  if (ahead) {
+    const days = UNIT_DAYS[ahead[1]]
+    return {
+      from: today,
+      to: shiftDate(today, days - 1),
+      said: `in the ${ahead[1]} ahead`,
+      next: false,
+    }
+  }
+  return null
 }
 
 /** As the app has them (src/lib/miriamQuick: listAsked): a week runs Sunday to Saturday. */
 export function spanIn(text: string, today: string): Span {
   const s = plainText(text)
+  const said = spanSaid(text, today)
+  if (said) return said
+  // "What's next?", "my next event": the one soonest.
+  if (/\b(?:next|soonest)\b/.test(s)) {
+    return { from: today, to: shiftDate(today, 365), said: '', next: true }
+  }
+  // "What's coming up?": a list, of the next month or so.
+  if (/\b(?:coming up|upcoming)\b/.test(s)) {
+    return {
+      from: today,
+      to: shiftDate(today, COMING_UP_DAYS - 1),
+      said: `in the next ${COMING_UP_DAYS} days`,
+      next: false,
+    }
+  }
+  const day = dayOfWeek(today)
+  return { from: today, to: shiftDate(today, 6 - day), said: 'this week', next: false }
+}
+
+/**
+ * The stretch of days asked about, when one was said — "today", "this
+ * weekend", "next month", "the next 30 days", "on Friday" — or null.
+ */
+export function spanSaid(text: string, today: string): Span | null {
+  const s = plainText(text)
   const day = dayOfWeek(today)
   const one = (d: string, said: string): Span => ({ from: d, to: d, said, next: false })
+  const ahead = aheadIn(s, today)
+  if (ahead) return ahead
   if (/\b(?:today|tonight|this (?:morning|afternoon|evening))\b/.test(s)) return one(today, 'today')
   if (/\b(?:tomorrow|tmrw|tmr)\b/.test(s)) return one(shiftDate(today, 1), 'tomorrow')
   if (/\bnext weekend\b/.test(s)) {
@@ -126,12 +220,15 @@ export function spanIn(text: string, today: string): Span {
     const last = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1, 0))
     return { from: first, to: last.toISOString().slice(0, 10), said: 'next month', next: false }
   }
-  if (/\bthis month\b/.test(s)) {
+  if (/\b(?:this|my|the) month\b/.test(s)) {
     const [y, m] = today.split('-').map(Number)
     const last = new Date(Date.UTC(y, m, 0))
     return { from: today, to: last.toISOString().slice(0, 10), said: 'this month', next: false }
   }
-  const named = /\bthis week\b/.test(s) ? null : dayIn(s, today)
+  if (/\b(?:this|my|the) week\b/.test(s)) {
+    return { from: today, to: shiftDate(today, 6 - day), said: 'this week', next: false }
+  }
+  const named = dayIn(s, today)
   if (named) {
     const label = new Date(`${named}T12:00:00Z`).toLocaleDateString('en-US', {
       weekday: 'long',
@@ -140,10 +237,7 @@ export function spanIn(text: string, today: string): Span {
     })
     return one(named, `on ${label}`)
   }
-  if (!/\bthis week\b/.test(s) && /\b(?:next|coming up|upcoming|soonest)\b/.test(s)) {
-    return { from: today, to: shiftDate(today, 365), said: '', next: true }
-  }
-  return { from: today, to: shiftDate(today, 6 - day), said: 'this week', next: false }
+  return null
 }
 
 export type Repeat = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly'

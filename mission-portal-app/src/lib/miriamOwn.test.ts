@@ -34,7 +34,8 @@ import { SEEDS, type Skill } from '../../functions/src/miriam/own/skills'
 import { skillOfAction } from '../../functions/src/miriam/own/labels'
 import { fakeDb, memoryOwnDb } from './__fixtures__/miriamOwnDb'
 import { seedExamples } from '../../functions/src/miriam/own/understand'
-import { dayIn, reminderIn, spanIn, statusIn } from '../../functions/src/miriam/own/when'
+import { dayIn, reminderIn, spanIn, spanLead, statusIn } from '../../functions/src/miriam/own/when'
+import { shiftDate } from '../../functions/src/miriam/data'
 import {
   bestPassage,
   braveSearch,
@@ -422,6 +423,25 @@ describe('days said', () => {
       to: '2026-10-24',
     })
     expect(spanIn("what's next", TODAY).next).toBe(true)
+    // A stretch said is a list, "next" or "coming up" in it or not.
+    expect(spanIn('what is coming up in the next 30 days', TODAY)).toMatchObject({
+      from: TODAY,
+      to: shiftDate(TODAY, 29),
+      said: 'in the next 30 days',
+      next: false,
+    })
+    expect(spanIn("what's coming up", TODAY)).toMatchObject({
+      next: false,
+      to: shiftDate(TODAY, 29),
+    })
+    expect(spanIn('what does my month ahead look like', TODAY)).toMatchObject({
+      said: 'in the month ahead',
+      next: false,
+    })
+    expect(spanIn('my next event', TODAY).next).toBe(true)
+    expect(spanLead('on Friday')).toBe('On Friday')
+    expect(spanLead('this week')).toBe('On this week')
+    expect(spanLead('in the next 30 days')).toBe('In the next 30 days')
     expect(spanIn('what do I have', TODAY)).toMatchObject({ from: TODAY, to: '2026-10-17' })
   })
 })

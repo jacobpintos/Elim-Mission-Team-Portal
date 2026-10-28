@@ -662,3 +662,50 @@ describe('church, asked of Miriam', () => {
     )
   })
 })
+
+describe('what is coming up, over a stretch of days', () => {
+  it('lists every event in the stretch asked about, not just the next', () => {
+    expect(listAsked('What is coming up in the next 30 days', today)).toEqual({
+      next: false,
+      from: today,
+      to: '2026-11-09',
+      span: 'in the next 30 days',
+    })
+    expect(
+      listAnswer(listAsked('What is coming up in the next 30 days', today)!, data()).text
+    ).toMatch(
+      /^In the next 30 days: Revival in the Heartland, today at 5 PM; Sunday Service, today; Youth Retreat, Friday at 8 AM; Sunday Service, Sunday, Oct 18; Sunday Service, Sunday, Oct 25; and \d+ more\.$/
+    )
+  })
+
+  it('reads the week and the month ahead, and so many days or weeks', () => {
+    expect(listAsked('how does my upcoming week look', today)).toMatchObject({
+      from: today,
+      to: '2026-10-17',
+      span: 'in the week ahead',
+    })
+    expect(listAsked('tell me about my upcoming month', today)).toMatchObject({
+      from: today,
+      to: '2026-11-09',
+      span: 'in the month ahead',
+    })
+    expect(listAsked('what do I have in the next two weeks', today)).toMatchObject({
+      to: '2026-10-24',
+      span: 'in the next two weeks',
+    })
+    expect(listAsked('what’s on next month', today)).toMatchObject({
+      from: '2026-11-01',
+      to: '2026-11-30',
+      span: 'next month',
+    })
+  })
+
+  it('lists what is coming up with no stretch said; the next one only when asked for', () => {
+    expect(listAsked('what’s coming up', today)).toMatchObject({
+      next: false,
+      span: 'in the next 30 days',
+    })
+    expect(listAsked('what is my next event', today)?.next).toBe(true)
+    expect(listAsked('what’s next', today)?.next).toBe(true)
+  })
+})

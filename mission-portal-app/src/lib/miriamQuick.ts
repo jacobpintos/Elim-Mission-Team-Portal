@@ -19,6 +19,7 @@ import {
 } from '../../functions/src/miriam/data'
 import { nameScore } from '../../functions/src/miriam/names'
 import { scheduleAnswer, scheduleWhat } from '../../functions/src/miriam/own/schedule'
+import { COMING_UP_DAYS, spanLead, spanSaid } from '../../functions/src/miriam/own/when'
 import {
   personNamed,
   teamOfAsked,
@@ -639,53 +640,48 @@ export interface ListAsk {
   span: string
 }
 
-/** "What's my next event?", "what's on this week?", "what do I have tomorrow?" */
+/** Just the next one: "what's my next event?", "what's next?", "what do I have next?". */
+const NEXT_ONE =
+  /\b(?:my\s+)?next\s+event\b|^what'?s\s+next\b|\bwhat\s+do\s+i\s+have\s+next(?!\s+(?:week|month|weekend|\d|few|couple|two|three|four|five|six|seven|ten|thirty))\b/
+/** What's ahead, as a list: "what's coming up?", "my upcoming events". */
+const COMING_UP =
+  /\bwhat(?:'s|\s+is)\s+coming\s+up\b|\bwhat\s+do\s+i\s+have\s+coming\s+up\b|\b(?:my\s+|any\s+)?upcoming\s+events\b/
+
+/**
+ * "What's my next event?", "what's on this week?", "what do I have tomorrow?",
+ * "what's coming up in the next 30 days?", "how does my upcoming month look?"
+ * — the stretch of days as the server reads it too (functions/src/miriam/own/when).
+ */
 export function listAsked(text: string, today: string): ListAsk | null {
   const said = clean(text)
-  if (
-    // "What do I have next?" — but "what do I have next week" is the week.
-    /\b(?:my\s+)?next\s+event\b|^what'?s\s+next\b|\bwhat(?:'s|\s+is)\s+coming\s+up\b|\bwhat\s+do\s+i\s+have\s+(?:coming\s+up|next(?!\s+(?:week|month|weekend)))\b/.test(
-      said
-    )
-  ) {
-    return { next: true, from: today, to: shiftDate(today, 365), span: '' }
-  }
+  const one = NEXT_ONE.test(said)
+  const coming = COMING_UP.test(said)
   const asksEvents =
     // "What do I have" — not "what do I have to do", which is their tasks (tasksAsked).
-    /\b(?:what'?s\s+on|what(?:'s|\s+is)\s+happening|what\s+do\s+i\s+have(?!\s+to\b)|what\s+events|any\s+events|my\s+events|my\s+schedule|what'?s\s+(?:going\s+on|planned))\b/.test(
+    (/\b(?:what'?s\s+on|what\s+is\s+on|what(?:'s|\s+is)\s+happening|what\s+do\s+i\s+have(?!\s+to\b)|what\s+events|any\s+events|my\s+events|my\s+schedule|what'?s\s+(?:going\s+on|planned))\b/.test(
       said
-    ) &&
+    ) ||
+      // "How does my week look?", "tell me about my upcoming month".
+      /\bmy\s+(?:upcoming\s+|coming\s+|next\s+)?(?:week|month|weekend)\b/.test(said)) &&
     // "My schedule for the retreat" is that event's (quickAnswer), not their week.
     !/\bschedule\s+(?:for|of|at)\s+(?!(?:today|tonight|tomorrow|this|next|the\s+week|the\s+weekend)\b)/.test(
       said
     )
-  if (!asksEvents) return null
-  const day = new Date(`${today}T12:00:00`).getDay()
-  if (/\btoday\b|\btonight\b/.test(said))
-    return { next: false, from: today, to: today, span: 'today' }
-  if (/\btomorrow\b/.test(said)) {
-    const t = shiftDate(today, 1)
-    return { next: false, from: t, to: t, span: 'tomorrow' }
-  }
-  if (/\bthis\s+weekend\b/.test(said)) {
-    const sat = shiftDate(today, (6 - day + 7) % 7)
+  if (!one && !coming && !asksEvents) return null
+  // A stretch of days said — "in the next 30 days", "this month" — is a list, however it was asked.
+  const span = spanSaid(said, today)
+  if (span) return { next: false, from: span.from, to: span.to, span: span.said }
+  if (one) return { next: true, from: today, to: shiftDate(today, 365), span: '' }
+  if (coming) {
     return {
       next: false,
-      from: day === 0 ? today : sat,
-      to: day === 0 ? today : shiftDate(sat, 1),
-      span: 'this weekend',
+      from: today,
+      to: shiftDate(today, COMING_UP_DAYS - 1),
+      span: `in the next ${COMING_UP_DAYS} days`,
     }
   }
-  if (/\bnext\s+week\b/.test(said)) {
-    const sun = shiftDate(today, 7 - day)
-    return { next: false, from: sun, to: shiftDate(sun, 6), span: 'next week' }
-  }
-  if (/\bthis\s+month\b/.test(said)) {
-    const last = new Date(`${today}T12:00:00`)
-    last.setMonth(last.getMonth() + 1, 0)
-    return { next: false, from: today, to: last.toISOString().slice(0, 10), span: 'this month' }
-  }
-  // "This week", or no span at all: the rest of this week.
+  // No span at all: the rest of this week.
+  const day = new Date(`${today}T12:00:00`).getDay()
   return { next: false, from: today, to: shiftDate(today, 6 - day), span: 'this week' }
 }
 
@@ -725,10 +721,12 @@ export function listAnswer(ask: ListAsk, data: QuickData): QuickAnswer {
       open: { key: ev.instanceKey, section: 'details' },
     }
   }
-  if (all.length === 0) return { text: `Nothing is on ${ask.span}.`, open: null }
+  if (all.length === 0) {
+    return { text: `Nothing is on ${ask.span.replace(/^on /, '')}.`, open: null }
+  }
   const shown = all.slice(0, 5).map((ev) => `${ev.title}, ${whenShort(ev, today)}`)
   const more = all.length > 5 ? `; and ${all.length - 5} more` : ''
-  return { text: `On ${ask.span}: ${shown.join('; ')}${more}.`, open: null }
+  return { text: `${spanLead(ask.span)}: ${shown.join('; ')}${more}.`, open: null }
 }
 
 // --- Your tasks --------------------------------------------------------------

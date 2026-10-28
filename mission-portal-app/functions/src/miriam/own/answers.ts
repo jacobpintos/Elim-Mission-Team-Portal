@@ -10,7 +10,7 @@ import type { Lookups } from '../lookups'
 import type { AppToolName } from '../plan'
 import type { Mention } from './events'
 import type { Skill } from './skills'
-import { dayIn, reminderIn, spanIn, statusIn } from './when'
+import { dayIn, reminderIn, spanIn, spanLead, statusIn } from './when'
 import { hasSheet } from './food'
 import { personAnswer, personAsked, personNamed, teamOfAsked, theirTeamsSaid } from './people'
 import {
@@ -383,10 +383,10 @@ export async function answerFor(skill: Skill, ctx: AnswerContext): Promise<OwnRe
     // Their own notes on those days, said after (src/lib/dateNotes).
     const notes = await lookups.notesBetween(span.from, span.to).catch(() => [])
     const noted = notes.length ? ` ${notesSaid(notes, span.from === span.to, today)}` : ''
-    if (all.length === 0) return said(`Nothing is on ${span.said}.${noted}`)
+    if (all.length === 0) return said(`Nothing is on ${span.said.replace(/^on /, '')}.${noted}`)
     const shown = all.slice(0, 5).map((ev) => `${ev.title}, ${whenShort(ev, today)}`)
     const more = all.length > 5 ? `; and ${all.length - 5} more` : ''
-    return said(`On ${span.said}: ${shown.join('; ')}${more}.${noted}`)
+    return said(`${spanLead(span.said)}: ${shown.join('; ')}${more}.${noted}`)
   }
   if (skill === 'availability') {
     if (!ctx.appTools.includes('set_availability') || !seesTeamSide(ctx.viewer)) return null
