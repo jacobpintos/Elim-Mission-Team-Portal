@@ -20,6 +20,7 @@ import { isPublic, groupDisplayName } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { TeamsEditor } from './TeamsEditor'
 import { DressCodeEditor } from './DressCodeEditor'
+import { ReportTimeEditor, tidyReportTimes } from './ReportTimeEditor'
 import { LodgingEditor } from './LodgingEditor'
 import { FlightEditor } from './FlightEditor'
 import { CarpoolBuilder } from './CarpoolBuilder'
@@ -49,6 +50,7 @@ import type {
   CarpoolCarData,
   EventTeam,
   DressCodeEntry,
+  ReportTimeEntry,
   LodgingEntry,
   FlightEntry,
   ScheduleItem,
@@ -239,6 +241,7 @@ function listsFor(event: EventTemplate | null | undefined, draft?: EventDraft) {
   return {
     teams: draft?.teams ?? event?.teams ?? [],
     dressCode: draft?.dressCode ?? event?.dressCode ?? [],
+    reportTimes: event?.reportTimes ?? [],
     lodgingEntries: draft?.lodging
       ? draft.lodging.map((l, i) => ({
           id: `${Date.now()}_${i}`,
@@ -331,6 +334,7 @@ export function EventFormModal({
   const [lists] = useState(() => listsFor(event, prefill?.draft))
   const [teams, setTeams] = useState<EventTeam[]>(lists.teams)
   const [dressCode, setDressCode] = useState<DressCodeEntry[]>(lists.dressCode)
+  const [reportTimes, setReportTimes] = useState<ReportTimeEntry[]>(lists.reportTimes)
   const [lodgingEntries, setLodgingEntries] = useState<LodgingEntry[]>(lists.lodgingEntries)
   const [flightEntries, setFlightEntries] = useState<FlightEntry[]>(lists.flightEntries)
   const [extraDays, setExtraDays] = useState<ExtraDayRow[]>(lists.extraDays)
@@ -376,6 +380,7 @@ export function EventFormModal({
     const next = listsFor(event, prefill?.draft)
     setTeams(next.teams)
     setDressCode(next.dressCode)
+    setReportTimes(next.reportTimes)
     setLodgingEntries(next.lodgingEntries)
     setFlightEntries(next.flightEntries)
     setExtraDays(next.extraDays)
@@ -495,6 +500,12 @@ export function EventFormModal({
     setSaving(true)
     try {
       const coords = form.isVirtual || saveAsDraft ? null : await geocodeCity(form.city, form.state)
+      // Those set before there was this field go once it has some.
+      const reportTimesNow = tidyReportTimes(reportTimes, teams)
+      const reportTimesSaved = {
+        reportTimes: reportTimesNow,
+        ...(reportTimesNow.length ? { rtp: '', rtm: '' } : {}),
+      }
       const payload = {
         title: form.title,
         date: form.isRec ? '' : displayToIso(form.date),
@@ -525,6 +536,7 @@ export function EventFormModal({
         groups: form.groups,
         teams,
         dressCode,
+        ...reportTimesSaved,
         unpublished: saveAsDraft,
         ...(form.taskTemplateId ? { taskTemplateId: form.taskTemplateId } : {}),
         ...(coords ? { _geocodeLat: coords.lat, _geocodeLng: coords.lng } : {}),
@@ -553,6 +565,7 @@ export function EventFormModal({
           groups: form.groups,
           teams,
           dressCode,
+          ...reportTimesSaved,
           ...(coords ? { _geocodeLat: coords.lat, _geocodeLng: coords.lng } : {}),
         })
         await auditEventSave('occurrenceUpdated', form.title, event?.id ?? instanceKey)
@@ -1100,6 +1113,19 @@ export function EventFormModal({
             borderColor={colors.border}
           />
         </YStack>
+
+        {/* Report Time — for those on it only */}
+        <ReportTimeEditor
+          key={loadedFor ?? 'closed'}
+          entries={reportTimes}
+          onChange={setReportTimes}
+          teams={teams}
+          earlier={
+            [event?.rtp ? `Production ${event.rtp}` : '', event?.rtm ? `Mission ${event.rtm}` : '']
+              .filter(Boolean)
+              .join(', ') || undefined
+          }
+        />
 
         {/* Schedule — optional, built in its own window */}
         <YStack gap="$2">

@@ -89,6 +89,9 @@ export const SEEDS: Record<Skill, string[]> = {
     'what time should we get to {the gala}',
     'is {the cookout} in the morning or afternoon',
     'when do the doors open for {the concert}',
+    'what time do I report for {the concert}',
+    'what is my report time for {the retreat}',
+    'when is call time for {Sunday service}',
     // Said as people talk to a phone: lowercase, run together, half a sentence.
     'lemme know what time {prayer night} is',
     'trying to figure out what time {the cookout} starts',

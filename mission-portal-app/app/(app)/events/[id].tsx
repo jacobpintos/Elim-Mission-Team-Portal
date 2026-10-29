@@ -3,7 +3,7 @@ import { ScrollView, Pressable, Linking, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
-import { useEventsStore, resolveAssignedUids } from '@/stores/eventsStore'
+import { useEventsStore, reportTimesShown, resolveAssignedUids } from '@/stores/eventsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { usePlanningStore } from '@/stores/planningStore'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -124,6 +124,7 @@ export default function EventDetailScreen() {
       assigned: !!uid && resolveAssignedUids(resolved).has(String(uid)),
     })
   const event = allowed ? resolved : null
+  const reportTimes = event ? reportTimesShown(event, profile) : []
 
   const isUnpublished = event?.unpublished === true
 
@@ -168,7 +169,7 @@ export default function EventDetailScreen() {
   const handleExportICS = async () => {
     if (!event) return
     try {
-      await downloadICS(event, { team: isMember })
+      await downloadICS(event, { team: isMember, report: reportTimes })
     } catch {
       toast('Failed to export calendar file', 'error')
     }
@@ -268,16 +269,12 @@ export default function EventDetailScreen() {
             ) : isUnpublished ? (
               <EmptyField label="Start time" />
             ) : null}
-            {isMember && event.rtp ? (
-              <Text color={colors.text} fontSize="$3">
-                Report (Production): {event.rtp}
+            {/* Only for those on it, and admins: the start time is for anyone. */}
+            {reportTimes.map((r) => (
+              <Text key={r.who ?? ''} color={colors.text} fontSize="$3">
+                Report{r.who ? ` (${r.who})` : ''}: {r.time}
               </Text>
-            ) : null}
-            {isMember && event.rtm ? (
-              <Text color={colors.text} fontSize="$3">
-                Report (Mission): {event.rtm}
-              </Text>
-            ) : null}
+            ))}
           </YStack>
 
           {/* Weather */}

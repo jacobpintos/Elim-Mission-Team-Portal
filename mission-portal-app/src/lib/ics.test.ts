@@ -49,13 +49,34 @@ describe('an event as a calendar file', () => {
     )
   })
 
-  it('keeps the team side — report times, dress code, teams — for the team', () => {
+  it('keeps the team side — dress code, teams — for the team', () => {
     const team = line(buildICS(nye, { team: true }), 'DESCRIPTION')
     expect(team).toContain('Teams: WALL TEAM')
-    expect(team).toContain('Report Time (Production): 3:00 PM')
+    expect(team).toContain('Dress Code (Worship): All black')
     expect(team).toContain('\\n')
     const follower = line(buildICS(nye, { team: false }), 'DESCRIPTION')
     expect(follower).not.toMatch(/Teams|Report Time|Dress Code/)
+  })
+
+  it('gives the report times they are shown, and none otherwise', () => {
+    const one = line(
+      buildICS(nye, { team: true, report: [{ who: null, time: '3:00 PM' }] }),
+      'DESCRIPTION'
+    )
+    expect(one).toContain('Report Time: 3:00 PM')
+    const two = line(
+      buildICS(nye, {
+        team: true,
+        report: [
+          { who: 'Worship', time: '3:00 PM' },
+          { who: 'Setup', time: '2:00 PM' },
+        ],
+      }),
+      'DESCRIPTION'
+    )
+    expect(two).toContain('Report Time (Worship): 3:00 PM\\nReport Time (Setup): 2:00 PM')
+    // Its own fields aren't read: only what they're shown.
+    expect(line(buildICS(nye, { team: true }), 'DESCRIPTION')).not.toMatch(/Report Time/)
   })
 
   it('gives an online event its link', () => {

@@ -80,6 +80,12 @@ export interface DressCodeEntry {
   text: string
 }
 
+/** When those on an event are to be there: for a team, or everyone else ('_remainder_'). */
+export interface ReportTimeEntry {
+  group: string // team name | '_remainder_'
+  time: string
+}
+
 export interface ExtraDay {
   date: string // 'YYYY-MM-DD'
   startTime?: string
@@ -102,6 +108,9 @@ export interface EventTemplate {
   virtualLink?: string
   signUpLink?: string
   startTime?: string // '10:00 AM'
+  /** Seen only by those on the event, and admins (miriam/data reportTimesFor). */
+  reportTimes?: ReportTimeEntry[]
+  /** Report times from before there was a field for them: production's and mission's. */
   rtp?: string
   rtm?: string
   dcw?: string

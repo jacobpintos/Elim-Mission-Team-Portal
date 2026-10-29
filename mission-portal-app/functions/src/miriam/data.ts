@@ -18,7 +18,9 @@
  *   (EventDetailModal FlightDisplay, LodgingDisplay, CarpoolReadOnly.)
  * - Food: the sign-up sheet, who brings what, as everyone on it sees it.
  *   (EventDetailModal FoodPanel.)
- * - An event's team side — report times, its schedule, dress code, weather,
+ * - Report times: to those on the event — their team's, or everyone
+ *   else's — and to admins, every one. (reportTimesFor.)
+ * - An event's team side — its schedule, dress code, weather,
  *   food, carpool, teams, lodging, flights, availability — never to an account
  *   holding the public role, whatever else it holds: its page shows them
  *   only when !isPublic(profile). An admin, who opens and edits every
@@ -72,6 +74,13 @@ export interface DressCodeEntry {
   group: string
   text: string
 }
+/** Who it is for — a team's name, or REMAINDER: everyone on the event besides — and when. */
+export interface ReportTimeEntry {
+  group: string
+  time: string
+}
+/** The entry for everyone not named in another — or for everyone, when it's the only one. */
+export const REMAINDER = '_remainder_'
 export interface EventTemplate {
   id: string
   title: string
@@ -86,6 +95,9 @@ export interface EventTemplate {
   state?: string
   isVirtual?: boolean
   startTime?: string
+  /** When those on it are to be there: one for everyone, or one for each team. */
+  reportTimes?: ReportTimeEntry[]
+  /** Report times from before there was a field for them: production's and mission's. */
   rtp?: string
   rtm?: string
   dcw?: string
@@ -468,6 +480,61 @@ export function dressCodeFor(ev: EventTemplate, viewer: Viewer): string[] {
   if (ev.dcm) legacy.push(`Mission: ${ev.dcm}`)
   return legacy
 }
+
+/** A report time as someone is shown it: whose — none when it's simply theirs, or everyone's — and when. */
+export interface ReportTime {
+  who: string | null
+  time: string
+}
+
+/**
+ * When to be there, as this person is shown it. The start time is for anyone
+ * who can see the event; this is only for those on it, and admins.
+ *
+ * Someone on it is shown their team's time, or the one for everyone else —
+ * each of their teams', named, when they are on several with different
+ * times. An admin is shown every one. `onIt`: whether they are on the event
+ * (assignedTo; the app's resolveAssignedUids).
+ */
+export function reportTimesFor(
+  ev: Pick<EventTemplate, 'reportTimes' | 'rtp' | 'rtm' | 'teams'>,
+  viewer: Viewer,
+  onIt: boolean
+): ReportTime[] {
+  const admin = isAdminViewer(viewer)
+  if (!seesTeamSide(viewer) || !(admin || onIt)) return []
+  const entries = (ev.reportTimes ?? []).filter((e) => e.time?.trim())
+  if (!entries.length) {
+    // Set before there was a field for it, for each side of the team.
+    const legacy: ReportTime[] = []
+    if (ev.rtp) legacy.push({ who: 'Production', time: ev.rtp })
+    if (ev.rtm) legacy.push({ who: 'Mission', time: ev.rtm })
+    return legacy
+  }
+  const named = (e: ReportTimeEntry) => ({
+    who: e.group === REMAINDER ? 'Everyone else' : e.group,
+    time: e.time,
+  })
+  if (admin) {
+    return entries.length === 1 && entries[0].group === REMAINDER
+      ? [{ who: null, time: entries[0].time }]
+      : entries.map(named)
+  }
+  const theirs = teamsOf(ev, viewer.uid)
+    .map((t) => entries.find((e) => e.group === t.name))
+    .filter((e): e is ReportTimeEntry => !!e)
+  if (!theirs.length) {
+    const rest = entries.find((e) => e.group === REMAINDER)
+    return rest ? [{ who: null, time: rest.time }] : []
+  }
+  return new Set(theirs.map((e) => e.time)).size === 1
+    ? [{ who: null, time: theirs[0].time }]
+    : theirs.map(named)
+}
+
+/** "5:00 PM", or "Worship: 5:00 PM; Everyone else: 6:00 PM". */
+export const reportTimesSaid = (times: ReportTime[]) =>
+  times.map((t) => (t.who ? `${t.who}: ${t.time}` : t.time)).join('; ')
 
 // --- Getting there and staying ----------------------------------------------
 

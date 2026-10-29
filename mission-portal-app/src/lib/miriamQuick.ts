@@ -6,8 +6,11 @@ import {
   findEvents,
   flightsFor,
   instancesOf,
+  isAdminViewer,
   lodgingFor,
   onceEach,
+  reportTimesFor,
+  reportTimesSaid,
   saysChurch,
   seesTeamSide,
   shiftDate,
@@ -45,6 +48,7 @@ import { scheduleSaid } from './eventSchedule'
 export type QuickField =
   | 'dress'
   | 'time'
+  | 'report'
   | 'place'
   | 'team'
   | 'car'
@@ -84,12 +88,17 @@ const FIELDS: [QuickField, RegExp][] = [
   ['dress', /\b(?:dress\s*code|wear|wearing|attire|outfit)\b/],
   ['team', /\b(?:my\s+team|what\s+team|which\s+team)\b/],
   ['place', /\b(?:where\s+is|where's|wheres|where\s+are\s+we|location|address|venue|directions)\b/],
+  // When to be there, not when it starts: "what time do I report for revival?".
+  [
+    'report',
+    /\b(?:report(?:ing)?\s+time|call\s+time|(?:what\s+time|when)\s+(?:do|should|must|will)\s+(?:i|we)\s+(?:need\s+to\s+|have\s+to\s+)?(?:report|be\s+(?:there|at)|get\s+there|arrive|show\s+up))\b/,
+  ],
   ['time', /^(?:when\s+is|when's|whens|what\s+time)\b|\bstart\s+time\b|\bwhat\s+time\b/],
 ]
 
 /** Asked about many, or something only Claude can work out: left to Claude. */
 const NOT_QUICK =
-  /\b(?:everyone|everybody|who\s+(?:is|isn't|is\s+not)\s+(?:available|coming|going)|availab|unavailable|report\s+time|call\s+time|food|bring|task|due|all\s+(?:the\s+)?events|this\s+week|next\s+week|this\s+month)\b/
+  /\b(?:everyone|everybody|who\s+(?:is|isn't|is\s+not)\s+(?:available|coming|going)|availab|unavailable|food|bring|task|due|all\s+(?:the\s+)?events|this\s+week|next\s+week|this\s+month)\b/
 
 /**
  * Someone else's flight, room, car or team — "Guest User's flight", "where
@@ -224,6 +233,13 @@ const ASKING = new Set([
   ...WEEKDAYS,
 ])
 
+/** The asking in "what time do I need to report for", not the event's name. */
+const REPORT_WORDS = new Set(
+  'time report reporting call when should must will need have be there get arrive show up by'.split(
+    ' '
+  )
+)
+
 /** "the dress code for Revival today", as what is asked, of which day and event. */
 export function quickAsked(text: string, today: string): QuickAsk | null {
   const said = text
@@ -238,7 +254,7 @@ export function quickAsked(text: string, today: string): QuickAsk | null {
   const field = FIELDS.find(([, re]) => re.test(plain))?.[0]
   if (!field) return null
 
-  const ref = eventRef(said, today)
+  const ref = eventRef(said, today, field === 'report' ? REPORT_WORDS : undefined)
   if (!ref) return null
   return { field, ...ref }
 }
@@ -335,6 +351,21 @@ function answerFor(field: QuickField, ev: EventInstance, data: QuickData, alone:
         ? `${title} is ${when} at ${ev.startTime}.`
         : `${title} is ${when}; no time is set.`
     }
+    case 'report': {
+      const when = whenSaid(ev.date, today)
+      const starts = ev.startTime
+        ? `${title} is ${when} at ${ev.startTime}.`
+        : `${title} is ${when}; no time is set.`
+      // Only for those on it, and admins (functions/src/miriam/data reportTimesFor).
+      const onIt = assignedTo(ev, data.groups).has(viewer.uid)
+      if (!onIt && !isAdminViewer(viewer)) return starts
+      const times = reportTimesFor(ev, viewer, onIt)
+      if (!times.length) return `${starts} No report time is set.`
+      const at = ev.startTime ? ` It starts at ${ev.startTime}.` : ''
+      return times.length === 1 && !times[0].who
+        ? `Report for ${title} ${when} at ${times[0].time}.${at}`
+        : `Report times for ${title} ${when}: ${reportTimesSaid(times)}.${at}`
+    }
     case 'place': {
       if (ev.isVirtual)
         return `${title} is virtual${ev.virtualLink ? ' — the link is on its page' : ''}.`
@@ -425,6 +456,7 @@ function scheduleItemAt(ask: QuickAsk, events: EventInstance[]): QuickAnswer | n
 
 /** What an event's page shows only to its team's members, and an admin. */
 const TEAM_SIDE: readonly QuickField[] = [
+  'report',
   'schedule',
   'dress',
   'team',

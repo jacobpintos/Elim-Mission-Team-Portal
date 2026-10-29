@@ -15,7 +15,8 @@ import { availKey, effectiveAvail, getSeriesAvail } from '@/lib/availability'
 import { AvailBadge } from '@/components/ui/AvailBadge'
 import { useUIStore } from '@/stores/uiStore'
 import { confirmAsync } from '@/lib/confirm'
-import { useEventsStore, resolveAssignedUids } from '@/stores/eventsStore'
+import { useAuthStore } from '@/stores/authStore'
+import { useEventsStore, reportTimesShown, resolveAssignedUids } from '@/stores/eventsStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { usePlanningStore } from '@/stores/planningStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -867,6 +868,9 @@ export function EventDetailModal({
   const hasSeriesResponse = event?.isRec
     ? getSeriesAvail(avail, event.templateId ?? event.id, uid) !== null
     : true
+  const profile = useAuthStore((s) => s.profile)
+  // Only for those on it, and admins: the start time is for anyone.
+  const reportTimes = event ? reportTimesShown(event, profile) : []
   const { users } = useUsersStore()
   const myDisplayName = users.find((u) => sameId(u.uid, uid))?.displayName ?? ''
   const { boards } = usePlanningStore()
@@ -901,7 +905,7 @@ export function EventDetailModal({
   const handleExportICS = async () => {
     if (!event) return
     try {
-      await downloadICS(event, { team: isMember })
+      await downloadICS(event, { team: isMember, report: reportTimes })
     } catch {
       toast('Failed to export calendar file', 'error')
     }
@@ -936,16 +940,11 @@ export function EventDetailModal({
                 Start: {event.startTime}
               </Text>
             ) : null}
-            {isMember && event.rtp ? (
-              <Text color={colors.text} fontSize="$3">
-                Report (Production): {event.rtp}
+            {reportTimes.map((r) => (
+              <Text key={r.who ?? ''} color={colors.text} fontSize="$3">
+                Report{r.who ? ` (${r.who})` : ''}: {r.time}
               </Text>
-            ) : null}
-            {isMember && event.rtm ? (
-              <Text color={colors.text} fontSize="$3">
-                Report (Mission): {event.rtm}
-              </Text>
-            ) : null}
+            ))}
           </YStack>
 
           {/* Weather forecast */}

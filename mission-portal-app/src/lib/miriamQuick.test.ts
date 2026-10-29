@@ -762,3 +762,88 @@ describe('a repeating event, listed once', () => {
     expect(titled(onceEach([weekly[0], moved]))).toEqual(['Sunday Service: every Sunday'])
   })
 })
+
+describe('report times, for those on the event', () => {
+  const day = '2026-10-11' // a Sunday
+  const tmpl = [
+    {
+      id: 'out',
+      title: 'Outreach Night',
+      date: '2026-10-16',
+      startTime: '7:00 PM',
+      isPublic: true,
+      users: ['me', 'sam', 'lee', 'kim'],
+      teams: [
+        { name: 'Worship', leaders: ['me'], members: ['sam'] },
+        { name: 'Setup Team', leaders: [], members: ['me'] },
+      ],
+      reportTimes: [
+        { group: 'Worship', time: '5:00 PM' },
+        { group: 'Setup Team', time: '4:00 PM' },
+        { group: '_remainder_', time: '6:00 PM' },
+      ],
+    },
+    {
+      id: 'sun',
+      title: 'Sunday Service',
+      isRec: true,
+      recDay: 0,
+      recur: 'weekly',
+      startTime: '10:00 AM',
+      isPublic: true,
+      users: ['sam'],
+      reportTimes: [{ group: '_remainder_', time: '8:30 AM' }],
+    },
+    { id: 'pic', title: 'Picnic', date: '2026-10-17', startTime: 'Noon', users: ['sam'] },
+  ]
+  const as = (uid: string, roles = ['regular']): QuickData => ({
+    templates: tmpl as never,
+    overrides: {},
+    groups: [],
+    viewer: { uid, roles },
+    names: new Map(),
+    today: day,
+  })
+  const ask = (text: string, uid: string, roles?: string[]) =>
+    quickAnswer(text, as(uid, roles))?.text
+
+  it('gives your team’s, or everyone else’s', () => {
+    expect(ask('what time do I report for outreach night', 'sam')).toBe(
+      'Report for Outreach Night on Friday, Oct 16 at 5:00 PM. It starts at 7:00 PM.'
+    )
+    expect(ask('when is call time for outreach night', 'lee')).toBe(
+      'Report for Outreach Night on Friday, Oct 16 at 6:00 PM. It starts at 7:00 PM.'
+    )
+    expect(ask('when do I need to be there for sunday service', 'sam')).toBe(
+      'Report for Sunday Service today at 8:30 AM. It starts at 10:00 AM.'
+    )
+  })
+
+  it('names each of your teams’ when they differ', () => {
+    expect(ask('report time for outreach night', 'me')).toBe(
+      'Report times for Outreach Night on Friday, Oct 16: Worship: 5:00 PM; Setup Team: 4:00 PM. It starts at 7:00 PM.'
+    )
+  })
+
+  it('gives an admin every one', () => {
+    expect(ask('report time for outreach night', 'boss', ['admin'])).toBe(
+      'Report times for Outreach Night on Friday, Oct 16: Worship: 5:00 PM; Setup Team: 4:00 PM; Everyone else: 6:00 PM. It starts at 7:00 PM.'
+    )
+  })
+
+  it('tells someone not on it only when it starts', () => {
+    expect(ask('what time do I report for sunday service', 'kim')).toBe(
+      'Sunday Service is today at 10:00 AM.'
+    )
+    // A public follower: none of the team side.
+    expect(ask('what time do I report for outreach night', 'pub', ['public'])).toBe(
+      'Sorry, I can’t help with that one — but I can tell you when and where Outreach Night is.'
+    )
+  })
+
+  it('says when there is none', () => {
+    expect(ask('what time do we report for the picnic', 'sam')).toBe(
+      'Picnic is on Saturday, Oct 17 at Noon. No report time is set.'
+    )
+  })
+})

@@ -268,4 +268,28 @@ describe('the briefing, of birthdays, anniversaries and teams', () => {
     expect(b.today[0].chips).toEqual(expect.arrayContaining(['Worship team', 'Setup team']))
     expect(b.spoken).toContain('You’re on Worship and Setup.'.replace('’', "'"))
   })
+
+  it('gives when to be there, to those on the event', () => {
+    const timed = templates.map((t) =>
+      t.id === 'sun'
+        ? {
+            ...t,
+            reportTimes: [
+              { group: 'Worship', time: '8:30 AM' },
+              { group: '_remainder_', time: '9:30 AM' },
+            ],
+          }
+        : t
+    )
+    const b = buildBriefing(input({ templates: timed as never }))
+    expect(b.today[0].chips).toContain('Report 8:30 AM')
+    expect(b.spoken).toContain('Report at 8:30 AM.')
+    // Not someone who isn't on it, though they can see it.
+    const pub = timed.map((t) => (t.id === 'sun' ? { ...t, isPublic: true, users: [] } : t))
+    const other = buildBriefing(
+      input({ templates: pub as never, viewer: { uid: 'kim', roles: ['regular'] } })
+    )
+    expect(other.today.flatMap((e) => e.chips).join()).not.toMatch(/Report/)
+    expect(other.spoken).not.toMatch(/Report/)
+  })
 })

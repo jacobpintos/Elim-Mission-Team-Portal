@@ -4,6 +4,7 @@ import {
   carpoolFor,
   dressCodeFor,
   instancesOf,
+  reportTimesFor,
   seesTeamSide,
   shiftDate,
   type EventInstance,
@@ -229,6 +230,18 @@ const asMember = (viewer: Viewer): Viewer => ({
   roles: seesTeamSide(viewer) ? [] : ['public'],
 })
 
+/**
+ * When they're to be there, if they are on it: "Report 5:00 PM", or — on
+ * teams with different times — "Report times: Worship 5:00 PM, Setup 4:00 PM".
+ */
+function reportSaid(ev: EventInstance, input: BriefingInput): string {
+  const onIt = assignedTo(ev, input.groups).has(input.viewer.uid)
+  const times = reportTimesFor(ev, asMember(input.viewer), onIt)
+  if (!times.length) return ''
+  if (times.length === 1 && !times[0].who) return `Report ${times[0].time}`
+  return `Report times: ${times.map((r) => (r.who ? `${r.who} ${r.time}` : r.time)).join(', ')}`
+}
+
 function eventCard(ev: EventInstance, input: BriefingInput, today: string): BriefEvent {
   const me = asMember(input.viewer)
   const sees = seesTeamSide(input.viewer)
@@ -236,8 +249,10 @@ function eventCard(ev: EventInstance, input: BriefingInput, today: string): Brie
   const dress = dressCodeFor(ev, me)[0]
   const car = ev.carpool ? carpoolFor(ev, me, input.names)[0] : undefined
   const forecast = sees ? input.weather?.[ev.instanceKey] : undefined
+  const report = reportSaid(ev, input)
   const chips = [
     ...teams.map((t) => `${t.name} team`),
+    report,
     dress ?? '',
     car ? car.replace(/\s*\(your car\)/, '') : '',
     forecast ? `${Math.round(forecast.high)}°, ${forecast.label.toLowerCase()}` : '',
@@ -380,6 +395,8 @@ export function buildBriefing(input: BriefingInput): Briefing {
         .filter((c) => c.endsWith(' team'))
         .map((c) => c.replace(/ team$/, ''))
       if (teams.length) bits.push(`You're on ${listed(teams)}.`)
+      const report = reportSaid(ev, input)
+      if (report) bits.push(`${report.replace(/^Report (?=\d)/, 'Report at ')}.`)
       const dress = dressCodeFor(ev, asMember(viewer))[0]
       if (dress) bits.push(`Dress code: ${dress}.`)
       const car = ev.carpool ? carpoolFor(ev, asMember(viewer), input.names)[0] : undefined

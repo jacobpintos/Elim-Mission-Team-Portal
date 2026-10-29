@@ -2082,6 +2082,54 @@ describe('the names Elim and Miriam', () => {
   })
 })
 
+describe('report times', () => {
+  beforeEach(() => forgetCaches())
+  const db = fakeDb({
+    ...CHURCH,
+    users: { ...CHURCH.users, kim: { displayName: 'Kim Park', roles: ['regular'] } },
+    events: {
+      ...CHURCH.events,
+      gala: {
+        title: 'Fall Gala',
+        date: '2026-10-24',
+        startTime: '6:00 PM',
+        isPublic: true,
+        users: ['sarah'],
+        teams: [{ name: 'Worship', leaders: [], members: ['sarah'] }],
+        reportTimes: [
+          { group: 'Worship', time: '4:00 PM' },
+          { group: '_remainder_', time: '5:00 PM' },
+        ],
+      },
+    },
+  })
+  const kim = { uid: 'kim', roles: ['regular'] }
+  const boss = { uid: 'boss', roles: ['admin'] }
+  const ask = (text: string, viewer = sarah) =>
+    ownAnswer(input(text, { viewer, lookups: new Lookups(db, viewer, TODAY) })).then(
+      (o) => (o.result as { text: string } | null)?.text ?? ''
+    )
+
+  it('gives those on the event theirs, and an admin every one', async () => {
+    expect(await ask('what time do I report for the fall gala')).toBe(
+      'Report for Fall Gala on Saturday, October 24 at 4:00 PM. It starts at 6:00 PM.'
+    )
+    expect(await ask('when is call time for the fall gala', boss)).toBe(
+      'Report times for Fall Gala on Saturday, October 24: Worship: 4:00 PM; Everyone else: 5:00 PM. It starts at 6:00 PM.'
+    )
+  })
+
+  it('tells someone who can see it, but isn’t on it, only when it starts', async () => {
+    expect(await ask('what time do I report for the fall gala', kim)).toBe(
+      'Fall Gala is on Saturday, October 24 at 6:00 PM.'
+    )
+    const theirs = await new Lookups(db, kim, TODAY).getEvent('gala_2026-10-24')
+    expect((theirs as Record<string, unknown>).reportTimes).toBeUndefined()
+    const hers = await new Lookups(db, sarah, TODAY).getEvent('gala_2026-10-24')
+    expect((hers as Record<string, unknown>).reportTimes).toBe('4:00 PM')
+  })
+})
+
 describe('a public follower', () => {
   beforeEach(() => forgetCaches())
   const visitor = { uid: 'pub', roles: ['public'] }

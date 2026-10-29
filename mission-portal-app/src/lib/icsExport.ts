@@ -1,9 +1,13 @@
 import { Platform } from 'react-native'
 import { buildICS } from '@/lib/events'
 import type { EventInstance } from '@/types/events'
+import type { ReportTime } from '../../functions/src/miriam/data'
 
-/** `team`: whether they see the event's team side (lib/events buildICS). */
-export async function downloadICS(ev: EventInstance, opts: { team: boolean }): Promise<void> {
+/** `team`: whether they see the event's team side; `report`: their report times (lib/events buildICS). */
+export async function downloadICS(
+  ev: EventInstance,
+  opts: { team: boolean; report?: ReportTime[] }
+): Promise<void> {
   const content = buildICS(ev, opts)
   const filename = `${(ev.title ?? 'event').replace(/[^a-zA-Z0-9_\- ]/g, '_')}_${(ev.date ?? '').replace(/-/g, '')}.ics`
 

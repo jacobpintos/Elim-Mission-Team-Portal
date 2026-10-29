@@ -20,7 +20,14 @@ import { nextId } from '@/lib/counters'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import type { EventTemplate, EventInstance, AvailResponse, InAppNotif } from '@/types/events'
-import { dressCodesOn, teamsOf, teamsSaid } from '../../functions/src/miriam/data'
+import type { UserProfile } from '@/types/user'
+import {
+  dressCodesOn,
+  reportTimesFor,
+  teamsOf,
+  teamsSaid,
+  type ReportTime,
+} from '../../functions/src/miriam/data'
 
 interface EventsStore {
   templates: EventTemplate[]
@@ -187,6 +194,16 @@ export function resolveAssignedUids(t: EventTemplate): Set<string> {
     team.members.forEach((u) => set.add(String(u)))
   })
   return set
+}
+
+/**
+ * The report times this person is shown for an event: theirs, if they are on
+ * it; every one, for an admin; otherwise none (miriam/data reportTimesFor).
+ */
+export function reportTimesShown(ev: EventTemplate, profile: UserProfile | null): ReportTime[] {
+  if (!profile?.uid) return []
+  const uid = String(profile.uid)
+  return reportTimesFor(ev, { uid, roles: profile.roles ?? [] }, resolveAssignedUids(ev).has(uid))
 }
 
 /**

@@ -1,6 +1,9 @@
 import {
   dressCodeFor,
+  isAdminViewer,
   onceEach,
+  reportTimesFor,
+  reportTimesSaid,
   seesTeamSide,
   shiftDate,
   teamsSaid,
@@ -224,6 +227,10 @@ const shownTo = (skill: Skill, viewer: Viewer) => !TEAM_SIDE.includes(skill) || 
 const NOT_SHOWN =
   'Sorry, I can’t help with that one — but I can tell you when and where events are.'
 
+/** Asking when to be there, rather than when it starts. */
+const REPORT_ASKED =
+  /\b(?:be there|get there|arrive|show up|report(?:ing)?|call time|check[ -]?in time)\b/i
+
 /** One event's answer, as the app words it. */
 async function aboutEvent(skill: Skill, ev: EventInstance, ctx: AnswerContext): Promise<OwnResult> {
   const { lookups, viewer, today } = ctx
@@ -240,17 +247,21 @@ async function aboutEvent(skill: Skill, ev: EventInstance, ctx: AnswerContext): 
   }
   switch (skill) {
     case 'event_time': {
-      const details = await lookups.getEvent(ev.instanceKey)
-      const report =
-        'reportTimes' in details &&
-        details.reportTimes &&
-        /\b(?:be there|get there|arrive|show up|report|call time)\b/i.test(ctx.text)
-          ? ` Report time is ${[details.reportTimes.mission, details.reportTimes.production].filter(Boolean).join(', or ')}.`
-          : ''
+      const starts = ev.startTime
+        ? `${title} is ${when} at ${ev.startTime}.`
+        : `${title} is ${when}; no time is set.`
+      // When to be there: only for those on it, and admins (../data reportTimesFor).
+      const onIt = await lookups.isOn(ev)
+      if (!REPORT_ASKED.test(ctx.text) || !(onIt || isAdminViewer(viewer))) {
+        return said(starts, onPage(ev))
+      }
+      const times = reportTimesFor(ev, viewer, onIt)
+      if (!times.length) return said(`${starts} No report time is set.`, onPage(ev))
+      const at = ev.startTime ? ` It starts at ${ev.startTime}.` : ''
       return said(
-        ev.startTime
-          ? `${title} is ${when} at ${ev.startTime}.${report}`
-          : `${title} is ${when}; no time is set.`,
+        times.length === 1 && !times[0].who
+          ? `Report for ${title} ${when} at ${times[0].time}.${at}`
+          : `Report times for ${title} ${when}: ${reportTimesSaid(times)}.${at}`,
         onPage(ev)
       )
     }

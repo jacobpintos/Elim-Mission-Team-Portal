@@ -13,6 +13,8 @@ import {
   foodFor,
   instancesOf,
   lodgingFor,
+  reportTimesFor,
+  reportTimesSaid,
   type EventTemplate,
   type Group,
   type Task,
@@ -303,5 +305,57 @@ describe('an event’s team side', () => {
     expect(seesTeamSide(v)).toBe(true)
     expect(dressCodeFor(ev, v)).toEqual(['Red shirts'])
     expect(carpoolFor(ev, v, names)).toEqual(['Van 1 (your car): driven by Sam Lee, riding: you'])
+  })
+})
+
+describe('report times', () => {
+  const ev = {
+    teams: [
+      { name: 'Worship', leaders: ['a'], members: ['b'] },
+      { name: 'Setup', leaders: [], members: ['a', 'c'] },
+    ],
+    reportTimes: [
+      { group: 'Worship', time: '5:00 PM' },
+      { group: 'Setup', time: '5:00 PM' },
+      { group: '_remainder_', time: '6:00 PM' },
+    ],
+  }
+  const member = (uid: string) => ({ uid, roles: ['regular'] })
+
+  it('are shown only to those on the event, and admins', () => {
+    expect(reportTimesFor(ev, member('b'), true)).toEqual([{ who: null, time: '5:00 PM' }])
+    expect(reportTimesFor(ev, member('x'), false)).toEqual([])
+    expect(reportTimesFor(ev, { uid: 'p', roles: ['public'] }, true)).toEqual([])
+    expect(reportTimesFor(ev, { uid: 'boss', roles: ['admin'] }, false)).toEqual([
+      { who: 'Worship', time: '5:00 PM' },
+      { who: 'Setup', time: '5:00 PM' },
+      { who: 'Everyone else', time: '6:00 PM' },
+    ])
+  })
+
+  it('give someone on several teams one time when they agree, and someone on none everyone else’s', () => {
+    expect(reportTimesFor(ev, member('a'), true)).toEqual([{ who: null, time: '5:00 PM' }])
+    expect(reportTimesFor(ev, member('z'), true)).toEqual([{ who: null, time: '6:00 PM' }])
+    expect(
+      reportTimesFor({ ...ev, reportTimes: ev.reportTimes.slice(0, 2) }, member('z'), true)
+    ).toEqual([])
+  })
+
+  it('one for everyone is said as a time alone, to an admin too', () => {
+    const one = { reportTimes: [{ group: '_remainder_', time: '4:30 PM' }] }
+    expect(reportTimesFor(one, { uid: 'boss', roles: ['admin'] }, false)).toEqual([
+      { who: null, time: '4:30 PM' },
+    ])
+    expect(reportTimesSaid(reportTimesFor(ev, { uid: 'boss', roles: ['admin'] }, false))).toBe(
+      'Worship: 5:00 PM; Setup: 5:00 PM; Everyone else: 6:00 PM'
+    )
+  })
+
+  it('fall back to those set before there was a field for them', () => {
+    expect(reportTimesFor({ rtp: '2:00 PM', rtm: '2:30 PM' }, member('b'), true)).toEqual([
+      { who: 'Production', time: '2:00 PM' },
+      { who: 'Mission', time: '2:30 PM' },
+    ])
+    expect(reportTimesFor({ rtp: '2:00 PM' }, member('x'), false)).toEqual([])
   })
 })

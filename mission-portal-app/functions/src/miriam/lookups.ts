@@ -27,6 +27,8 @@ import {
   type Task,
   type Viewer,
   scheduleFor,
+  reportTimesFor,
+  reportTimesSaid,
   yoursAt,
   seesOwnNotes,
   seesTeamSide,
@@ -282,15 +284,14 @@ export class Lookups {
       : ev.date
     // A public follower is shown what its page shows them: when, where and its links.
     const team = seesTeamSide(this.viewer)
+    const reportTimes = reportTimesFor(ev, this.viewer, await this.isOn(ev))
     return {
       key: ev.instanceKey,
       title: ev.title,
       date: withWeekday(ev.date),
       startTime: ev.startTime || undefined,
-      reportTimes:
-        team && (ev.rtp || ev.rtm)
-          ? { production: ev.rtp || undefined, mission: ev.rtm || undefined }
-          : undefined,
+      // Only for those on it, and admins: not to someone who can just see it.
+      reportTimes: reportTimes.length ? reportTimesSaid(reportTimes) : undefined,
       venue: ev.location || undefined,
       address: [ev.address, ev.city, ev.state].filter(Boolean).join(', ') || undefined,
       virtualMeetingLink: ev.isVirtual ? ev.virtualLink || 'none given' : undefined,

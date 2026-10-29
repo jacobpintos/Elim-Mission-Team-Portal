@@ -1,5 +1,6 @@
 import type { EventTemplate, EventInstance } from '@/types/events'
 import { clockMinutes } from '@/lib/eventSchedule'
+import type { ReportTime } from '../../functions/src/miriam/data'
 
 export const TASK_SECTIONS = [
   { id: 'production', label: 'Production', color: '#f56c5a' },
@@ -168,11 +169,15 @@ export function repeatsSaid(ev: Pick<EventInstance, 'isRec' | 'recur'>): string 
 /**
  * An event as a calendar file, to add to a phone's or computer's calendar.
  *
- * `team`: whether the person saving it sees the event's team side — report
- * times, dress code and teams go in its notes only for them, as its page
- * shows them only to them (events/[id] isMember).
+ * `team`: whether the person saving it sees the event's team side — dress
+ * code and teams go in its notes only for them, as its page shows them only
+ * to them (events/[id] isMember). `report`: the report times they are shown
+ * (eventsStore reportTimesShown) — none unless they are on it.
  */
-export function buildICS(ev: EventInstance, { team }: { team: boolean }): string {
+export function buildICS(
+  ev: EventInstance,
+  { team, report = [] }: { team: boolean; report?: ReportTime[] }
+): string {
   const start = icsStart(ev.date, ev.startTime)
   // Two hours, for a start at a time; the next day, for a day with none (an
   // all-day entry's end is the day after it).
@@ -180,9 +185,8 @@ export function buildICS(ev: EventInstance, { team }: { team: boolean }): string
   const uid_val = `thewell-${ev.id}${ev.instanceKey ?? ev.date ?? ''}-${Date.now()}@missionportal`
   const desc: string[] = []
   if (ev.isVirtual && ev.virtualLink) desc.push(`Join online: ${ev.virtualLink}`)
+  for (const r of report) desc.push(`Report Time${r.who ? ` (${r.who})` : ''}: ${r.time}`)
   if (team) {
-    if (ev.rtp) desc.push(`Report Time (Production): ${ev.rtp}`)
-    if (ev.rtm) desc.push(`Report Time (Mission): ${ev.rtm}`)
     if (ev.dcw) desc.push(`Dress Code (Worship): ${ev.dcw}`)
     if (ev.dcm) desc.push(`Dress Code (Mission): ${ev.dcm}`)
     if (ev.teams?.length) desc.push(`Teams: ${ev.teams.map((t) => t.name).join(', ')}`)
