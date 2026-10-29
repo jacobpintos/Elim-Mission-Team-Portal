@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 import { sendExpoPush } from './push/expoPush'
 import { extractTokens } from './push/notifyCore'
+import { taskSeenBy } from './recordAccess'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -151,6 +152,7 @@ export const sendMeetingRequest = onCall(async (request) => {
     status: 'pending',
     taskType: 'meeting_request',
     meetingRequestId: ref.id,
+    seenBy: taskSeenBy({ assignees: leaders, taskType: 'meeting_request' }),
     _updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   })
   await ref.set({ taskId }, { merge: true })

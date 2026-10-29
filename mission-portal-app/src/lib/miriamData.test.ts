@@ -252,6 +252,18 @@ describe('tasks', () => {
     expect(findTasks(tasks, admin, 'print programs').map((t) => t.id)).toEqual(['t2'])
     expect(findTasks(tasks, sarah, 'sound').map((t) => t.id)).toEqual(['t1'])
   })
+  it('a reimbursement’s, the Accountant and whoever asked — not an admin', () => {
+    const r: Task = {
+      id: 't3',
+      title: 'Reimbursement: Sarah · Fall Gala',
+      status: 'pending',
+      assignees: ['tom'],
+      owner: 'sarah',
+      taskType: 'reimbursement',
+    }
+    expect(canSeeTask(r, sarah)).toBe(true)
+    expect(canSeeTask(r, admin)).toBe(false)
+  })
 })
 
 describe('an event’s team side', () => {

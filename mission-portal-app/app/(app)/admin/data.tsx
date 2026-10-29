@@ -11,15 +11,8 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { saveTextFile } from '@/lib/saveTextFile'
 import { sameId } from '@/lib/ids'
-import {
-  peopleCsv,
-  eventsCsv,
-  availabilityCsv,
-  tasksCsv,
-  reimbursementsCsv,
-} from '@/lib/dataExport'
+import { peopleCsv, eventsCsv, availabilityCsv, tasksCsv } from '@/lib/dataExport'
 import type { EventTemplate, AvailResponse, Task } from '@/types/events'
-import type { Reimbursement } from '@/types/reimbursement'
 import { ADMINS, EVERYONE, mergeEvent } from '../../../functions/src/eventPrivate'
 
 interface BackupStatus {
@@ -29,18 +22,15 @@ interface BackupStatus {
   lastErrorAt?: number
 }
 
-type ExportKey = 'people' | 'events' | 'availability' | 'tasks' | 'reimbursements'
+// Not reimbursements: a request is its asker's and the Accountant's alone,
+// who has them as a spreadsheet on Finance (admin/finance).
+type ExportKey = 'people' | 'events' | 'availability' | 'tasks'
 
 const EXPORTS: { key: ExportKey; label: string; detail: string }[] = [
   { key: 'people', label: 'People', detail: 'Names, emails, roles and titles' },
   { key: 'events', label: 'Events', detail: 'Every event with its dates and place' },
   { key: 'availability', label: 'Availability', detail: 'Every answer, by event and person' },
   { key: 'tasks', label: 'Tasks', detail: 'Tasks, who has them and when they are due' },
-  {
-    key: 'reimbursements',
-    label: 'Reimbursements',
-    detail: 'Every request, what was approved and when it was paid',
-  },
 ]
 
 /**
@@ -109,17 +99,16 @@ export default function AdminData() {
       })
       return availabilityCsv(avail, events, nameOf)
     }
-    if (key === 'tasks') {
-      const [events, taskSnap] = await Promise.all([readEvents(), getDocs(collection(db, 'tasks'))])
-      const tasks = taskSnap.docs.map((d) => ({ ...d.data(), id: d.id }) as Task)
-      const title = (t: Task) => {
-        const id = t.evId ?? t.evTemplateId
-        return id == null ? '' : (events.find((e) => sameId(e.id, id))?.title ?? '')
-      }
-      return tasksCsv(tasks, nameOf, title)
+    const [events, taskSnap] = await Promise.all([readEvents(), getDocs(collection(db, 'tasks'))])
+    const tasks = taskSnap.docs
+      .map((d) => ({ ...d.data(), id: d.id }) as Task)
+      // A reimbursement's is its asker's and the Accountant's alone.
+      .filter((t) => t.taskType !== 'reimbursement')
+    const title = (t: Task) => {
+      const id = t.evId ?? t.evTemplateId
+      return id == null ? '' : (events.find((e) => sameId(e.id, id))?.title ?? '')
     }
-    const snap = await getDocs(collection(db, 'reimbursements'))
-    return reimbursementsCsv(snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Reimbursement))
+    return tasksCsv(tasks, nameOf, title)
   }
 
   const download = async (key: ExportKey) => {

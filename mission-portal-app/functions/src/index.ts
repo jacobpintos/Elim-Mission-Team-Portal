@@ -29,6 +29,7 @@ export {
   settleEventRecords,
   stampAvailRecord,
 } from './eventPrivateSync'
+export { stampTaskRecord, stampSetListRecord } from './recordAccessSync'
 export { onSetListDeleted } from './onSetListDeleted'
 export { textingListDigest } from './push/textingListDigest'
 export { expireAnnouncements } from './expireAnnouncements'
@@ -66,6 +67,7 @@ export {
   answerPayDateChange,
   markReimbursementPaid,
   createExternalExpense,
+  handOverReimbursements,
 } from './reimbursements'
 export { nightlyBackup } from './backups'
 export { purgeOldReceipts } from './reimbursements/retention'

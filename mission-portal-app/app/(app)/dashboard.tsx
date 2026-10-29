@@ -310,8 +310,9 @@ export default function Dashboard() {
                   myAvail={myAvail(ev)}
                   onDetail={() => openDetail(ev)}
                   onAvail={() => setAvailEvent(ev)}
-                  healthStatus={ev.taskTemplateId ? getEventHealthStatus(ev) : undefined}
-                  onShowTasks={ev.taskTemplateId ? () => setKanbanEvent(ev) : undefined}
+                  // How its tasks are going: for admins alone, who see them all.
+                  healthStatus={admin && ev.taskTemplateId ? getEventHealthStatus(ev) : undefined}
+                  onShowTasks={admin && ev.taskTemplateId ? () => setKanbanEvent(ev) : undefined}
                   onWeatherPress={() => setWeatherEvent(ev)}
                   setLists={setListsByEvent.get(String(ev.instanceKey ?? ev.id))}
                 />

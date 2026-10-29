@@ -16,6 +16,7 @@ import { useEventsStore } from '@/stores/eventsStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useTasksStore } from '@/stores/tasksStore'
+import { readSetLists } from '@/stores/worshipStore'
 import { useRemindersStore } from '@/stores/remindersStore'
 import { useDateNotesStore } from '@/stores/dateNotesStore'
 import { canKeepDateNotes } from '@/lib/dateNotes'
@@ -389,9 +390,9 @@ async function attentionFor(
   // Set lists this week with songs that have no chord sheet.
   const lists = await quietly(
     async () =>
-      (await getDocs(collection(db, 'setLists'))).docs
-        .map((d) => ({ ...(d.data() as SetList), id: d.id }))
-        .filter((l) => !!l.eventDate && l.eventDate >= day && l.eventDate <= weekOut),
+      (await readSetLists()).filter(
+        (l) => !!l.eventDate && l.eventDate >= day && l.eventDate <= weekOut
+      ),
     [] as SetList[]
   )
   for (const list of lists.slice(0, 3)) {

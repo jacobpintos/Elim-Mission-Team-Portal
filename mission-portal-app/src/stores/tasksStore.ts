@@ -5,7 +5,10 @@ import { db } from '@/lib/firebase'
 import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { nextId } from '@/lib/counters'
+import { isAdmin } from '@/lib/roles'
+import { useAuthStore } from '@/stores/authStore'
 import type { Task } from '@/types/events'
+import { seesTask, taskSeenBy } from '../../functions/src/recordAccess'
 
 const todayStr = () => new Date().toISOString().split('T')[0]
 const in7 = () => {
@@ -20,6 +23,7 @@ interface TasksStore {
   tasks: Task[]
   loading: boolean
   _unsub: (() => void) | null
+  _unsubAuth: (() => void) | null
   _refCount: number
   // selectors
   myTasks: (uid: string) => Task[]
@@ -41,6 +45,7 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   tasks: [],
   loading: false,
   _unsub: null,
+  _unsubAuth: null,
   _refCount: 0,
 
   myTasks: (uid) => {
@@ -88,11 +93,30 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     set({ _refCount: count })
     if (count > 1) return
     set({ loading: true })
-    const unsub = onSnapshot(collection(db, 'tasks'), (snap) => {
-      const tasks = snap.docs.map((d) => ({ ...(d.data() as Task), id: d.id }))
-      set({ tasks, loading: false })
-    })
-    set({ _unsub: unsub })
+    // The tasks this person may read: their own, and — an admin — every
+    // one but a reimbursement's (functions/src/recordAccess taskSeenBy).
+    // Listened to as whoever is signed in, and again if that, or their
+    // roles, change.
+    let listeningAs: string | null = null
+    const listen = () => {
+      const profile = useAuthStore.getState().profile
+      const as = profile ? `${profile.uid}|${isAdmin(profile)}` : ''
+      if (as === listeningAs) return
+      listeningAs = as
+      get()._unsub?.()
+      set({ _unsub: null, tasks: [] })
+      if (!profile?.uid) return set({ loading: false })
+      const viewer = { uid: String(profile.uid), admin: isAdmin(profile) }
+      const unsub = onSnapshot(collection(db, 'tasks'), (snap) => {
+        const tasks = snap.docs
+          .map((d) => ({ ...(d.data() as Task), id: d.id }))
+          .filter((t) => seesTask(t, viewer))
+        set({ tasks, loading: false })
+      })
+      set({ _unsub: unsub })
+    }
+    listen()
+    set({ _unsubAuth: useAuthStore.subscribe(listen) })
   },
 
   unsubscribe: () => {
@@ -100,7 +124,8 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     set({ _refCount: count })
     if (count === 0) {
       get()._unsub?.()
-      set({ _unsub: null, tasks: [] })
+      get()._unsubAuth?.()
+      set({ _unsub: null, _unsubAuth: null, tasks: [] })
     }
   },
 
@@ -109,17 +134,24 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     await setDoc(doc(db, 'tasks', String(id)), {
       ...data,
       id,
+      // Who may read it (firestore.rules tasks).
+      seenBy: taskSeenBy(data),
       _updatedAt: serverTimestamp(),
     })
     return id
   },
 
   updateTask: async (id, patch) => {
+    const was = get().tasks.find((t) => sameId(t.id, id))
+    // Handed to someone else: who may read it goes with it.
+    const handed = ['assignees', 'lead', 'owner', 'taskType'].some((k) => k in patch)
+    const seenBy = handed && was ? { seenBy: taskSeenBy({ ...was, ...patch }) } : {}
     set((s) => ({
       tasks: s.tasks.map((t) => (sameId(t.id, id) ? { ...t, ...patch } : t)),
     }))
     await updateDoc(doc(db, 'tasks', String(id)), {
       ...patch,
+      ...seenBy,
       _updatedAt: serverTimestamp(),
     })
   },

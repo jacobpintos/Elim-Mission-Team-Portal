@@ -35,6 +35,7 @@ import {
   type Group,
 } from '../../../functions/src/miriam/data'
 import { mergeEvent } from '../../../functions/src/eventPrivate'
+import { seesTask } from '../../../functions/src/recordAccess'
 import { roomName, roomsFor } from '@/lib/miriamAppData'
 import { claimFoodItem, type FoodSignups } from '@/lib/foodSignups'
 import {
@@ -67,7 +68,7 @@ import {
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { extractYouTubeId, useMusicStore } from '@/stores/musicStore'
-import { useWorshipStore } from '@/stores/worshipStore'
+import { seesSetList, useWorshipStore } from '@/stores/worshipStore'
 import { announceSetList } from '@/features/worship/announceSetList'
 import { useIssuesStore } from '@/stores/issuesStore'
 import { useKaizenStore } from '@/stores/kaizenStore'
@@ -308,11 +309,9 @@ async function setTaskStatus(profile: UserProfile, input: Record<string, unknown
   const status = String(input.status ?? '')
   if (!(status in TASK_WORDS)) return cannot('That isn’t a status a task can have.')
   if (isGuest(profile) && !isAdmin(profile)) return cannot('Guests can’t change tasks.')
-  const snap = await getDoc(doc(db, 'tasks', String(input.task_id ?? '')))
-  if (!snap.exists()) return cannot('I couldn’t find that task.')
-  const task = { ...(snap.data() as Task), id: snap.id }
-  const uid = String(profile.uid)
-  if (!isAdmin(profile) && !task.assignees.some((a) => String(a) === uid)) {
+  const task = await taskById(String(input.task_id ?? ''))
+  if (!task) return cannot('I couldn’t find that task.')
+  if (!isAdmin(profile) && !task.assignees.some((a) => String(a) === String(profile.uid))) {
     return cannot('That task isn’t one of yours.')
   }
   if (task.status === status) return cannot(`“${task.title}” is already ${TASK_WORDS[status]}.`)
@@ -998,10 +997,15 @@ async function createTasks(profile: UserProfile, input: Record<string, unknown>)
   } satisfies Prepared
 }
 
+/** A task this person may read (functions/src/recordAccess seesTask); refused, as none. */
 async function taskById(id: string): Promise<Task | null> {
   if (!id) return null
-  const snap = await getDoc(doc(db, 'tasks', id))
-  return snap.exists() ? { ...(snap.data() as Task), id: snap.id } : null
+  const snap = await getDoc(doc(db, 'tasks', id)).catch(() => null)
+  if (!snap?.exists()) return null
+  const task = { ...(snap.data() as Task), id: snap.id }
+  const { profile } = useAuthStore.getState()
+  const viewer = { uid: String(profile?.uid ?? ''), admin: isAdmin(profile) }
+  return seesTask(task, viewer) ? task : null
 }
 
 async function updateTask(profile: UserProfile, input: Record<string, unknown>) {
@@ -1406,8 +1410,10 @@ async function addToSetList(profile: UserProfile, input: Record<string, unknown>
   const no = worshipOnly(profile)
   if (no) return no
   const ref = doc(db, 'setLists', String(input.set_list_id ?? '') || '-')
-  const snap = await getDoc(ref)
-  if (!snap.exists()) return cannot('I couldn’t find that set list.')
+  const snap = await getDoc(ref).catch(() => null)
+  if (!snap?.exists() || !seesSetList({ ...(snap.data() as SetList), id: snap.id })) {
+    return cannot('I couldn’t find that set list.')
+  }
   const list = snap.data() as SetList
   const songs = await songsFor(input.songs)
   if (songs.length === 0) return cannot('There were no songs to add.')
@@ -1616,8 +1622,10 @@ async function editSetList(profile: UserProfile, input: Record<string, unknown>)
   const no = worshipOnly(profile)
   if (no) return no
   const ref = doc(db, 'setLists', String(input.set_list_id ?? '') || '-')
-  const snap = await getDoc(ref)
-  if (!snap.exists()) return cannot('I couldn’t find that set list.')
+  const snap = await getDoc(ref).catch(() => null)
+  if (!snap?.exists() || !seesSetList({ ...(snap.data() as SetList), id: snap.id })) {
+    return cannot('I couldn’t find that set list.')
+  }
   const list = snap.data() as SetList
   const list_ = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : [])
   const removes = list_(input.remove).map((r) => String(r?.title ?? r ?? ''))
@@ -1702,8 +1710,12 @@ async function editSetList(profile: UserProfile, input: Record<string, unknown>)
 async function notifySetList(profile: UserProfile, input: Record<string, unknown>) {
   const no = worshipOnly(profile)
   if (no) return no
-  const snap = await getDoc(doc(db, 'setLists', String(input.set_list_id ?? '') || '-'))
-  if (!snap.exists()) return cannot('I couldn’t find that set list.')
+  const snap = await getDoc(doc(db, 'setLists', String(input.set_list_id ?? '') || '-')).catch(
+    () => null
+  )
+  if (!snap?.exists() || !seesSetList({ ...(snap.data() as SetList), id: snap.id })) {
+    return cannot('I couldn’t find that set list.')
+  }
   const list = snap.data() as SetList
   return {
     kind: 'ready',

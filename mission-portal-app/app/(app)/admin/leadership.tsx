@@ -3,9 +3,10 @@ import { TextInput as RNTextInput } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
 import { Stack } from 'expo-router'
-import { collection, doc, query, updateDoc, where, writeBatch } from 'firebase/firestore'
-import { onSnapshot, getDocs } from '@/lib/liveFirestore'
-import { db } from '@/lib/firebase'
+import { doc, updateDoc } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
+import { onSnapshot } from '@/lib/liveFirestore'
+import { db, functions } from '@/lib/firebase'
 import { useUsersStore } from '@/stores/usersStore'
 import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
@@ -127,23 +128,10 @@ export default function AdminLeadership() {
     setSaving(true)
     try {
       await updateDoc(doc(db, 'config', 'main'), { 'connectConfig.accountant': next })
+      // By the server: a request is its asker's and the Accountant's alone,
+      // so an admin can't read them to move them (functions/src/reimbursements).
       if (previous && next) {
-        const open = await getDocs(
-          query(collection(db, 'reimbursements'), where('accountantUid', '==', previous))
-        )
-        const nextName = users.find((u) => u.uid === next)?.displayName ?? ''
-        const batch = writeBatch(db)
-        let moved = 0
-        open.docs.forEach((d) => {
-          const r = d.data()
-          if (r.status === 'denied' || r.status === 'paid') return
-          batch.update(d.ref, { accountantUid: next, accountantName: nextName })
-          if (r.taskId != null) {
-            batch.update(doc(db, 'tasks', String(r.taskId)), { assignees: [next], lead: next })
-          }
-          moved++
-        })
-        if (moved > 0) await batch.commit()
+        await httpsCallable(functions, 'handOverReimbursements')({ from: previous })
       }
       await audit(
         'leadership.accountant',

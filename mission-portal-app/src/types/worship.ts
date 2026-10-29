@@ -28,4 +28,6 @@ export interface SetList {
   createdBy: string | number
   createdAt: unknown
   updatedAt?: unknown
+  /** Who may read it (functions/src/recordAccess setListSeenBy). */
+  seenBy?: string[]
 }

@@ -24,6 +24,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { isAdmin, isPublic } from '@/lib/roles'
+import { readers, seers } from '@/lib/seenBy'
 import type { EventTemplate, EventInstance, AvailResponse, InAppNotif } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 import {
@@ -34,8 +35,6 @@ import {
   type ReportTime,
 } from '../../functions/src/miriam/data'
 import {
-  ADMINS,
-  EVERYONE,
   eventReaders,
   eventSeenBy,
   mergeEvent,
@@ -113,15 +112,6 @@ function assemble(open: [string, Doc][], closed: Record<string, Doc>) {
 }
 
 /**
- * Who this person counts as, to an event's `seenBy` (firestore.rules seers):
- * themselves, anyone (EVERYONE), and — an admin — every admin (ADMINS).
- */
-function seers(profile: SignedIn): string[] {
-  const uid = String(profile.uid)
-  return isAdmin(profile) ? [uid, EVERYONE, ADMINS] : [uid, EVERYONE]
-}
-
-/**
  * Events, or their availability, that this person may see — those whose
  * `seenBy` names them, anyone, or (an admin) every admin; a draft, only its
  * maker (firestore.rules events and avail, which this query has to match:
@@ -139,10 +129,9 @@ function seenRecords(name: 'events' | 'avail', profile: SignedIn) {
 function privateRecords(profile: ReturnType<typeof useAuthStore.getState>['profile']) {
   if (!profile?.uid) return null
   if (isPublic(profile) && !isAdmin(profile)) return null
-  const uid = String(profile.uid)
   return query(
     collection(db, 'eventPrivate'),
-    where('access', 'array-contains-any', isAdmin(profile) ? [uid, ADMINS] : [uid])
+    where('access', 'array-contains-any', readers(profile))
   )
 }
 

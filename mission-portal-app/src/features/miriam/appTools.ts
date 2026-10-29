@@ -30,6 +30,7 @@ import {
   settingsShown,
 } from '@/lib/miriamAppData'
 import { useEventsStore } from '@/stores/eventsStore'
+import { readSetLists } from '@/stores/worshipStore'
 import type { SetList } from '@/types/worship'
 import type { MeetingRequest } from '@/types/meeting'
 import { tourFor, tourNames } from '@/features/tour/flows'
@@ -373,7 +374,7 @@ export async function runAppTool(name: string, input: Record<string, unknown>): 
       if (reading) store.unsubscribe()
       result = notes.length ? { notes } : { notes: [], note: 'No notes of theirs on those days.' }
     } else if (name === 'read_set_lists') {
-      const lists = await all<SetList>('setLists')
+      const lists = await readSetLists()
       const templates = useEventsStore.getState().templates
       const eventTitle = (l: SetList) =>
         templates.find((t) => String(t.id) === String(l.eventTemplateId ?? ''))?.title ?? ''

@@ -37,6 +37,7 @@
 
 import { nameScore } from './names'
 import { seesDraft } from '../eventPrivate'
+import { seesTask } from '../recordAccess'
 
 export interface Viewer {
   uid: string
@@ -201,6 +202,9 @@ export interface Task {
   dueDate?: string | null
   evTemplateId?: string | number | null
   evDate?: string | null
+  /** Whoever it is done for: who asked to be reimbursed. */
+  owner?: string
+  taskType?: string
 }
 
 const same = (a: unknown, b: unknown) => String(a) === String(b)
@@ -760,8 +764,9 @@ export const TASK_STATUS: Record<Task['status'], string> = {
   behind: 'Behind',
 }
 
+/** Theirs, or — an admin — any but a reimbursement's (../recordAccess seesTask). */
 export function canSeeTask(t: Task, viewer: Viewer): boolean {
-  return isAdminViewer(viewer) || t.assignees.some((a) => same(a, viewer.uid))
+  return seesTask(t, { uid: viewer.uid, admin: isAdminViewer(viewer) })
 }
 
 /** Tasks this person can see whose title fits what was said; open ones first. */

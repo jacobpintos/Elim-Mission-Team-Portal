@@ -206,6 +206,11 @@ export interface Task {
    * someone who can complete it.
    */
   owner?: string
+  /**
+   * Who may read it: its assignees, lead and owner, and every admin but for
+   * a reimbursement's (functions/src/recordAccess taskSeenBy).
+   */
+  seenBy?: string[]
   isPostEvent?: boolean
   doneAt?: unknown
   _updatedAt?: unknown

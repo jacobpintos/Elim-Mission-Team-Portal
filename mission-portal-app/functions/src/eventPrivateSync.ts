@@ -10,6 +10,7 @@ import {
   strays,
   withMoved,
 } from './eventPrivate'
+import { stampSetLists } from './recordAccessSync'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -54,7 +55,7 @@ const unsettled = (open: Doc, closed: Doc | undefined, groups: Group[]) => {
  * One event's records put right (./eventPrivate): any private details left
  * in the event moved to its private record; who may read that — everyone
  * on the event — and who may see the event at all (`seenBy`) worked out
- * afresh, and its availability records told the latter. Nothing written
+ * afresh, and its availability records and set lists told the latter. Nothing written
  * when all is right already. True when something was.
  */
 export async function settleEvent(
@@ -99,7 +100,10 @@ export async function settleEvent(
     return { seenBy: s.seenBy, seenChanged: !s.seenRight }
   })
   if (!done) return false
-  if (done.seenChanged) await stampAvail(db, id, done.seenBy)
+  if (done.seenChanged) {
+    await stampAvail(db, id, done.seenBy)
+    await stampSetLists(db, id, done.seenBy)
+  }
   return true
 }
 

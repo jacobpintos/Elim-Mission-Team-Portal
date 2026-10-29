@@ -4,6 +4,8 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions'
 import { RESEND_API_KEY } from '../email/client'
 import { notifyUser } from '../push/notifyCore'
+import { requireAdmin } from '../owner'
+import { taskSeenBy } from '../recordAccess'
 import {
   MAX_RECEIPTS,
   MAX_REASON,
@@ -41,8 +43,9 @@ if (!admin.apps.length) admin.initializeApp()
  * The request is tracked by a task assigned to the Accountant, so it sits with
  * the rest of their work, has a due date (the pay-by date) and gets the usual
  * reminders. Its `owner` is the person who asked, which puts it on their task
- * list too so they can follow it. Amounts and receipts are kept off the task:
- * tasks are readable by every member, and what someone spent is not.
+ * list too so they can follow it. Amounts and receipts are kept off the task
+ * all the same: only the two of them read it (../recordAccess taskSeenBy), but
+ * the request is where what someone spent is kept.
  */
 
 const COLLECTION = 'reimbursements'
@@ -308,6 +311,7 @@ export const submitReimbursement = onCall(CALL_OPTS, async (req) => {
     taskType: 'reimbursement',
     reimbursementKind: 'internal',
     reimbursementId: ref.id,
+    seenBy: taskSeenBy({ assignees: [accountantUid], owner: uid, taskType: 'reimbursement' }),
     _updatedAt: FieldValue.serverTimestamp(),
   })
 
@@ -649,9 +653,56 @@ export const createExternalExpense = onCall(CALL_OPTS, async (req) => {
     taskType: 'reimbursement',
     reimbursementKind: 'external',
     reimbursementId: ref.id,
+    seenBy: taskSeenBy({ assignees: [uid], taskType: 'reimbursement' }),
     _updatedAt: FieldValue.serverTimestamp(),
   })
 
   logger.info('[createExternalExpense] stored', { id: ref.id, taskId })
   return { id: ref.id, taskId }
+})
+
+// ─── A new Accountant ────────────────────────────────────────────────────────
+
+/**
+ * Requests still open handed to the Accountant just chosen in Admin →
+ * Leadership, from the one before: the new one is who will pay them, so
+ * they move to their task list, and the old one stops being asked.
+ * Finished requests stay as they were, with who handled them.
+ *
+ * Done here because the admin choosing may not read them: a request is the
+ * asker's and the Accountant's alone (firestore.rules reimbursements).
+ */
+export const handOverReimbursements = onCall(async (req) => {
+  await requireAdmin(req.auth?.uid)
+  const db = admin.firestore()
+  const from = clean(req.data?.from, 128)
+  const to = clean((await db.doc('config/main').get()).data()?.connectConfig?.accountant, 128)
+  if (!from || !to || from === to) return { moved: 0 }
+  const [open, toName] = await Promise.all([
+    db.collection(COLLECTION).where('accountantUid', '==', from).get(),
+    nameOf(db, to),
+  ])
+  const batch = db.batch()
+  let moved = 0
+  for (const d of open.docs) {
+    const r = d.data() as StoredRequest
+    if (r.status === 'denied' || r.status === 'paid') continue
+    batch.update(d.ref, { accountantUid: to, accountantName: toName })
+    if (r.taskId != null) {
+      const task = db.doc(`tasks/${r.taskId}`)
+      const t = (await task.get()).data()
+      if (t) {
+        batch.update(task, {
+          assignees: [to],
+          lead: to,
+          seenBy: taskSeenBy({ ...t, assignees: [to], lead: to }),
+          _updatedAt: FieldValue.serverTimestamp(),
+        })
+      }
+    }
+    moved++
+  }
+  if (moved) await batch.commit()
+  logger.info('[handOverReimbursements] moved', { from, to, moved })
+  return { moved }
 })
