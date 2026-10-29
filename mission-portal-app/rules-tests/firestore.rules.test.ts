@@ -442,6 +442,15 @@ describe('what a deleted event takes with it', () => {
         where(documentId(), '<', `${eventId}_${HIGH}`)
       )
     )
+  // As the server reads them: its Admin SDK is not held to these rules, and
+  // no app lists either collection whole (each is read as its event is).
+  const server = async (name: string, eventId: string) => {
+    let found: { docs: { id: string }[] } = { docs: [] }
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      found = await keyed(ctx.firestore() as ReturnType<typeof as>, name, eventId)
+    })
+    return found
+  }
 
   beforeEach(async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
@@ -454,7 +463,7 @@ describe('what a deleted event takes with it', () => {
   })
 
   it('finds every occurrence of the event', async () => {
-    const snap = await keyed(as(ADMIN), 'foodSignups', '4')
+    const snap = await server('foodSignups', '4')
 
     expect(snap.docs.map((d) => d.id).sort()).toEqual(['4_2026-01-01', '4_2026-02-02'])
   })
@@ -462,7 +471,7 @@ describe('what a deleted event takes with it', () => {
   it('does not reach a neighbouring event whose id shares a prefix', async () => {
     // The separator is what makes this safe: "40_..." sorts below "4_" because
     // '0' is below '_', so event 40 cannot be swept up by event 4's delete.
-    const snap = await keyed(as(ADMIN), 'foodSignups', '4')
+    const snap = await server('foodSignups', '4')
     const ids = snap.docs.map((d) => d.id)
 
     expect(ids).not.toContain('40_2026-01-01')
@@ -471,13 +480,13 @@ describe('what a deleted event takes with it', () => {
   })
 
   it('works the same for availability', async () => {
-    const snap = await keyed(as(ADMIN), 'avail', '4')
+    const snap = await server('avail', '4')
 
     expect(snap.docs.map((d) => d.id).sort()).toEqual(['4_2026-01-01', '4_2026-02-02'])
   })
 
   it('finds nothing for an event that never had any', async () => {
-    const snap = await keyed(as(ADMIN), 'foodSignups', '999')
+    const snap = await server('foodSignups', '999')
 
     expect(snap.docs).toHaveLength(0)
   })
@@ -492,7 +501,23 @@ describe('foodSignups — one item at a time, never over someone', () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       // Item 0 already taken; 1 and 2 open.
       await setDoc(doc(ctx.firestore(), 'foodSignups', KEY), { signups: { '0': theirs } })
+      // A public event: its sheet is read by anyone who can see it.
+      await setDoc(doc(ctx.firestore(), 'events', 'ev1'), { title: 'Picnic', seenBy: ['*'] })
     })
+  })
+
+  it('is read as its event is: a non-public one’s, only by those on it', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'events', 'ev7'), {
+        title: 'Staff',
+        seenBy: [MEMBER, '@admins'],
+      })
+      await setDoc(doc(ctx.firestore(), 'foodSignups', 'ev7_2026-10-16'), { signups: {} })
+    })
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'foodSignups', 'ev7_2026-10-16')))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'foodSignups', 'ev7_2026-10-16')))
+    await assertFails(getDoc(doc(as(OUTSIDER), 'foodSignups', 'ev7_2026-10-16')))
+    await assertSucceeds(getDoc(doc(as(OUTSIDER), 'foodSignups', KEY)))
   })
 
   it('lets a member take an open item, as the app does it', async () => {
@@ -581,7 +606,9 @@ describe('carpool — arranged by admins, read by everyone on it', () => {
   beforeEach(async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'carpool', KEY), cars)
-      await setDoc(doc(ctx.firestore(), 'eventPrivate', 'ev1'), { access: [MEMBER, GUEST] })
+      await setDoc(doc(ctx.firestore(), 'eventPrivate', 'ev1'), {
+        access: [MEMBER, GUEST, '@admins'],
+      })
     })
   })
 
@@ -592,12 +619,12 @@ describe('carpool — arranged by admins, read by everyone on it', () => {
 
   it('refuses someone not on the event, as its private details are', async () => {
     await assertFails(getDoc(doc(as(OUTSIDER), 'carpool', KEY)))
-    // An event with no private record yet: only admins.
+    // An event with no private record (every event has one): no one.
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'carpool', 'ev2_2026-10-16'), cars)
     })
     await assertFails(getDoc(doc(as(MEMBER), 'carpool', 'ev2_2026-10-16')))
-    await assertSucceeds(getDoc(doc(as(ADMIN), 'carpool', 'ev2_2026-10-16')))
+    await assertFails(getDoc(doc(as(ADMIN), 'carpool', 'ev2_2026-10-16')))
   })
 
   it('lets an admin arrange them', async () => {
@@ -754,18 +781,146 @@ describe('tasks', () => {
   })
 })
 
-describe('events', () => {
+describe('events — a non-public one seen only by those on it', () => {
+  const PUBLIC = 'public-uid'
+
   beforeEach(async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'events', 'e1'), { title: 'Practice' })
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'users', PUBLIC), { roles: ['public'], displayName: 'Follower' })
+      await setDoc(doc(db, 'users', 'admin2-uid'), { roles: ['admin'], displayName: 'Admin 2' })
+      await setDoc(doc(db, 'events', 'pub'), { title: 'Sunday', isPublic: true, seenBy: ['*'] })
+      await setDoc(doc(db, 'events', 'staff'), {
+        title: 'Staff retreat',
+        seenBy: [MEMBER, '@admins'],
+      })
+      // A draft: its maker's alone, admins or not.
+      await setDoc(doc(db, 'events', 'draft'), {
+        title: 'Draft',
+        unpublished: true,
+        createdBy: 'admin2-uid',
+        seenBy: ['admin2-uid'],
+      })
+      // From before seenBy: no one (every event has been given one).
+      await setDoc(doc(db, 'events', 'old'), { title: 'Old' })
     })
   })
 
-  it('is readable by any signed-in user and writable only by admins', async () => {
-    await assertSucceeds(getDoc(doc(as(MEMBER), 'events/e1')))
-    await assertFails(getDoc(doc(anon(), 'events/e1')))
-    await assertFails(updateDoc(doc(as(MEMBER), 'events/e1'), { title: 'Hacked' }))
-    await assertSucceeds(updateDoc(doc(as(ADMIN), 'events/e1'), { title: 'Moved' }))
+  it('lets anyone signed in see a public one', async () => {
+    await assertSucceeds(getDoc(doc(as(OUTSIDER), 'events/pub')))
+    await assertSucceeds(getDoc(doc(as(PUBLIC), 'events/pub')))
+    await assertFails(getDoc(doc(anon(), 'events/pub')))
+  })
+
+  it('lets only those on a non-public one, and admins, see it at all', async () => {
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'events/staff')))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'events/staff')))
+    await assertFails(getDoc(doc(as(OUTSIDER), 'events/staff')))
+    await assertFails(getDoc(doc(as(PUBLIC), 'events/staff')))
+  })
+
+  it('keeps a draft to whoever made it — not the people on it, nor other admins', async () => {
+    await assertSucceeds(getDoc(doc(as('admin2-uid'), 'events/draft')))
+    await assertFails(getDoc(doc(as(ADMIN), 'events/draft')))
+    await assertFails(getDoc(doc(as(MEMBER), 'events/draft')))
+  })
+
+  it('lists for someone those they may see — and refuses listing them all', async () => {
+    const seen = (uid: string, seers: string[]) =>
+      getDocs(query(collection(as(uid), 'events'), where('seenBy', 'array-contains-any', seers)))
+    expect(
+      (await assertSucceeds(seen(MEMBER, [MEMBER, '*']))).docs.map((d) => d.id).sort()
+    ).toEqual(['pub', 'staff'])
+    expect((await assertSucceeds(seen(OUTSIDER, [OUTSIDER, '*']))).docs.map((d) => d.id)).toEqual([
+      'pub',
+    ])
+    expect((await assertSucceeds(seen(PUBLIC, [PUBLIC, '*']))).docs.map((d) => d.id)).toEqual([
+      'pub',
+    ])
+    expect(
+      (await assertSucceeds(seen(ADMIN, [ADMIN, '*', '@admins']))).docs.map((d) => d.id).sort()
+    ).toEqual(['pub', 'staff'])
+    expect(
+      (await assertSucceeds(seen('admin2-uid', ['admin2-uid', '*', '@admins']))).docs
+        .map((d) => d.id)
+        .sort()
+    ).toEqual(['draft', 'pub', 'staff'])
+    // Not everything: a member can't claim to be every admin, nor anyone list them all.
+    await assertFails(seen(MEMBER, [MEMBER, '*', '@admins']))
+    await assertFails(getDocs(collection(as(MEMBER), 'events')))
+    await assertFails(getDocs(collection(as(ADMIN), 'events')))
+  })
+
+  it('is written by admins alone', async () => {
+    await assertFails(updateDoc(doc(as(MEMBER), 'events/staff'), { title: 'Hacked' }))
+    await assertFails(updateDoc(doc(as(MEMBER), 'events/staff'), { seenBy: ['*'] }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'events/staff'), { title: 'Moved' }))
+  })
+})
+
+describe('availability — read as its event is', () => {
+  const PUBLIC = 'public-uid'
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'users', PUBLIC), { roles: ['public'], displayName: 'Follower' })
+      await setDoc(doc(db, 'avail', 'pub_2026-11-01'), { responses: {}, seenBy: ['*'] })
+      await setDoc(doc(db, 'avail', 'staff_2026-11-20'), {
+        responses: { [MEMBER]: { status: 'yes' } },
+        seenBy: [MEMBER, '@admins'],
+      })
+    })
+  })
+
+  it('lets those who may see the event read it, and lists only theirs', async () => {
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'avail', 'staff_2026-11-20')))
+    await assertFails(getDoc(doc(as(OUTSIDER), 'avail', 'staff_2026-11-20')))
+    await assertSucceeds(getDoc(doc(as(OUTSIDER), 'avail', 'pub_2026-11-01')))
+    const seen = await assertSucceeds(
+      getDocs(
+        query(
+          collection(as(OUTSIDER), 'avail'),
+          where('seenBy', 'array-contains-any', [OUTSIDER, '*'])
+        )
+      )
+    )
+    expect(seen.docs.map((d) => d.id)).toEqual(['pub_2026-11-01'])
+    const admins = await assertSucceeds(
+      getDocs(
+        query(
+          collection(as(ADMIN), 'avail'),
+          where('seenBy', 'array-contains-any', [ADMIN, '*', '@admins'])
+        )
+      )
+    )
+    expect(admins.docs.map((d) => d.id).sort()).toEqual(['pub_2026-11-01', 'staff_2026-11-20'])
+    await assertFails(getDocs(collection(as(MEMBER), 'avail')))
+    await assertFails(getDocs(collection(as(ADMIN), 'avail')))
+  })
+
+  it('is never a public account’s', async () => {
+    await assertFails(getDoc(doc(as(PUBLIC), 'avail', 'pub_2026-11-01')))
+  })
+
+  it('takes anyone’s answer, but not who may see it', async () => {
+    await assertSucceeds(
+      setDoc(
+        doc(as(MEMBER), 'avail', 'staff_2026-11-20'),
+        { responses: { [MEMBER]: { status: 'no' } } },
+        { merge: true }
+      )
+    )
+    await assertSucceeds(
+      setDoc(doc(as(MEMBER), 'avail', 'staff_2026-11-27'), {
+        responses: { [MEMBER]: { status: 'yes' } },
+      })
+    )
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'avail', 'staff_2026-12-04'), { responses: {}, seenBy: ['*'] })
+    )
+    await assertFails(updateDoc(doc(as(MEMBER), 'avail', 'staff_2026-11-20'), { seenBy: ['*'] }))
+    await assertFails(deleteDoc(doc(as(MEMBER), 'avail', 'staff_2026-11-20')))
   })
 })
 
@@ -778,13 +933,16 @@ describe('an event’s private details', () => {
       const db = ctx.firestore()
       await setDoc(doc(db, 'users', PUBLIC), { roles: ['public'], displayName: 'Follower' })
       await setDoc(doc(db, 'users', MIXED), { roles: ['regular', 'public'], displayName: 'Both' })
-      await setDoc(doc(db, 'events', 'e1'), { title: 'Gala', isPublic: true })
+      await setDoc(doc(db, 'events', 'e1'), { title: 'Gala', isPublic: true, seenBy: ['*'] })
       await setDoc(doc(db, 'eventPrivate', 'e1'), {
         reportTimes: [{ group: '_remainder_', time: '5:00 PM' }],
         teams: [{ name: 'Worship', leaders: [], members: [MEMBER] }],
-        access: [MEMBER, GUEST, PUBLIC, MIXED],
+        access: [MEMBER, GUEST, PUBLIC, MIXED, '@admins'],
       })
-      await setDoc(doc(db, 'eventPrivate', 'e2'), { access: [OUTSIDER] })
+      await setDoc(doc(db, 'eventPrivate', 'e2'), { access: [OUTSIDER, '@admins'] })
+      // A draft's: its maker's alone.
+      await setDoc(doc(db, 'users', 'admin2-uid'), { roles: ['admin'], displayName: 'Admin 2' })
+      await setDoc(doc(db, 'eventPrivate', 'd1'), { access: ['admin2-uid'] })
     })
   })
 
@@ -806,15 +964,23 @@ describe('an event’s private details', () => {
   })
 
   it('are listed for someone as those of the events they are on', async () => {
-    const mine = await assertSucceeds(
+    const list = (uid: string, readers: string[]) =>
       getDocs(
-        query(collection(as(MEMBER), 'eventPrivate'), where('access', 'array-contains', MEMBER))
+        query(collection(as(uid), 'eventPrivate'), where('access', 'array-contains-any', readers))
       )
-    )
+    const mine = await assertSucceeds(list(MEMBER, [MEMBER]))
     expect(mine.docs.map((d) => d.id)).toEqual(['e1'])
-    // Not every event's: a listing must say whose.
+    const admins = await assertSucceeds(list(ADMIN, [ADMIN, '@admins']))
+    expect(admins.docs.map((d) => d.id).sort()).toEqual(['e1', 'e2'])
+    // Not every event's: a listing must say whose — an admin's too.
     await assertFails(getDocs(collection(as(MEMBER), 'eventPrivate')))
-    await assertSucceeds(getDocs(collection(as(ADMIN), 'eventPrivate')))
+    await assertFails(getDocs(collection(as(ADMIN), 'eventPrivate')))
+    await assertFails(list(MEMBER, [MEMBER, '@admins']))
+  })
+
+  it('of a draft, are its maker’s alone — not another admin’s', async () => {
+    await assertSucceeds(getDoc(doc(as('admin2-uid'), 'eventPrivate/d1')))
+    await assertFails(getDoc(doc(as(ADMIN), 'eventPrivate/d1')))
   })
 
   it('are written by admins alone', async () => {

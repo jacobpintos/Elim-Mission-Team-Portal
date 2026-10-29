@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView } from 'react-native'
 import { YStack, XStack, Text, Spinner } from 'tamagui'
-import { collection, doc } from 'firebase/firestore'
+import { collection, doc, query, where } from 'firebase/firestore'
 import { onSnapshot, getDocs } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
+import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -19,7 +20,7 @@ import {
 } from '@/lib/dataExport'
 import type { EventTemplate, AvailResponse, Task } from '@/types/events'
 import type { Reimbursement } from '@/types/reimbursement'
-import { mergeEvent } from '../../../functions/src/eventPrivate'
+import { ADMINS, EVERYONE, mergeEvent } from '../../../functions/src/eventPrivate'
 
 interface BackupStatus {
   lastOk?: string
@@ -76,11 +77,18 @@ export default function AdminData() {
     return u?.displayName || u?.email || uid
   }
 
-  // With their private details (functions/src/eventPrivate), as an admin reads them.
+  // As an admin may read them (firestore.rules): every event and its
+  // availability but others' drafts — asked for as the rules require — with
+  // their private details (functions/src/eventPrivate).
+  const me = String(useAuthStore.getState().profile?.uid ?? '')
+  const seenByAdmin = (name: 'events' | 'avail') =>
+    query(collection(db, name), where('seenBy', 'array-contains-any', [me, EVERYONE, ADMINS]))
   const readEvents = async () => {
     const [open, closed] = await Promise.all([
-      getDocs(collection(db, 'events')),
-      getDocs(collection(db, 'eventPrivate')),
+      getDocs(seenByAdmin('events')),
+      getDocs(
+        query(collection(db, 'eventPrivate'), where('access', 'array-contains-any', [me, ADMINS]))
+      ),
     ])
     const privateOf = new Map(closed.docs.map((d) => [d.id, d.data()]))
     return open.docs.map(
@@ -93,10 +101,7 @@ export default function AdminData() {
     if (key === 'people') return peopleCsv(users)
     if (key === 'events') return eventsCsv(await readEvents())
     if (key === 'availability') {
-      const [events, availSnap] = await Promise.all([
-        readEvents(),
-        getDocs(collection(db, 'avail')),
-      ])
+      const [events, availSnap] = await Promise.all([readEvents(), getDocs(seenByAdmin('avail'))])
       const avail: Record<string, Record<string, AvailResponse>> = {}
       availSnap.docs.forEach((d) => {
         const data = d.data() as { responses?: Record<string, AvailResponse> }

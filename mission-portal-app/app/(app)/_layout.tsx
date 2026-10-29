@@ -3,7 +3,7 @@ import { ScrollView, View, Pressable, StyleSheet, Animated, Platform } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { useState, useEffect, useMemo } from 'react'
-import { collection } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { getDocs } from '@/lib/liveFirestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
@@ -30,6 +30,7 @@ import type { Tab } from '@/lib/roles'
 import { isTabVisible } from '@/lib/featureFlags'
 import { INBOX_TITLE } from '@/features/inbox/InboxTabs'
 import { markStartup } from '@/lib/startupTimeline'
+import { EVERYONE } from '../../functions/src/eventPrivate'
 
 const DRAWER_W = 260
 
@@ -175,7 +176,13 @@ export default function AppLayout() {
   useEffect(() => {
     if (!profile || !isPublic(profile)) return
     const today = todayStr()
-    getDocs(collection(db, 'events'))
+    // The public events, as they may see them (firestore.rules events).
+    getDocs(
+      query(
+        collection(db, 'events'),
+        where('seenBy', 'array-contains-any', [String(profile.uid), EVERYONE])
+      )
+    )
       .then((snap) => {
         const templates = snap.docs.map((d) => ({ ...(d.data() as EventTemplate), id: d.id }))
         const todayEvents = allInstances(templates, {}, today, today)

@@ -1,5 +1,5 @@
 rules_version = '2';
-// Last updated: 2026-10-29 — event private details (eventPrivate)
+// Last updated: 2026-10-29 — events seen only by those on them (seenBy)
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -138,33 +138,67 @@ service cloud.firestore {
 
     // Phase 2 additions
 
-    // What anyone who can see an event is shown: its name, when and where,
+    // Who this person counts as, to an event's `seenBy`: themselves, anyone
+    // ('*'), and — an admin — every admin ('@admins').
+    function seers() {
+      return isAdmin()
+        ? [request.auth.uid, '*', '@admins']
+        : [request.auth.uid, '*'];
+    }
+    // And to a private record's `access`: themselves and, an admin, every admin.
+    function readers() {
+      return isAdmin() ? [request.auth.uid, '@admins'] : [request.auth.uid];
+    }
+
+    // Whether this person may see an event at all — that there is one, and
+    // when: `seenBy` names them, or anyone ('*') for a public event, or every
+    // admin ('@admins') for one that isn't; a draft names only whoever made
+    // it, admins or not (functions/src/eventPrivate eventSeenBy, kept by
+    // eventPrivateSync).
+    function seesEvent(data) {
+      return isSignedIn() && data.seenBy.hasAny(seers());
+    }
+
+    // What anyone who may see an event is shown: its name, when and where,
     // its links, who is on it, its food sheet. Its private details are below.
+    //
+    // Everyone, admins too, asks for those they may see —
+    // where('seenBy', 'array-contains-any', seers) — which is what lets this
+    // hold for a query; asked for all of them, they are refused.
     match /events/{id} {
-      allow read: if isSignedIn();
+      allow read: if seesEvent(resource.data);
       allow write: if isAdmin();
     }
 
     // An event's private details — its teams, dress code, report times,
     // schedule, cars, rooms and flights (functions/src/eventPrivate) — for
-    // admins and those on it, on any of its dates. `access` lists them,
-    // kept by functions/src/eventPrivateSync: everyone named on it, in one
-    // of its groups or on one of its teams.
+    // those on it, on any of its dates, and admins ('@admins'); a draft's,
+    // for whoever made it alone. `access` lists them, kept by
+    // functions/src/eventPrivateSync.
     //
     // Not an account holding the public role, on it or not: its page never
     // shows them one (functions/src/miriam/data: seesTeamSide). The app
-    // asks for these with where('access', 'array-contains', uid), which is
-    // what lets the rule below hold for a query, and doesn't ask at all for
-    // a public account.
+    // asks for these with where('access', 'array-contains-any', readers),
+    // which is what lets the rule below hold for a query, and doesn't ask
+    // at all for a public account.
     match /eventPrivate/{id} {
-      allow read: if isAdmin() ||
-        (isSignedIn() && request.auth.uid in resource.data.access && !holdsPublic());
+      allow read: if isSignedIn() && resource.data.access.hasAny(readers()) &&
+        (isAdmin() || !holdsPublic());
       allow write: if isAdmin();
     }
 
+    // Availability, by event and date (`${eventId}_${date}`, `${eventId}_series`):
+    // when it is, and who is coming. Read as its event is (seenBy, copied here
+    // by eventPrivateSync) — never by a public account, whose event pages ask
+    // nothing of them. Anyone signed in answers; who may see it is the
+    // server's to write.
     match /avail/{key} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if seesEvent(resource.data) && (isAdmin() || !holdsPublic());
+      allow create: if isSignedIn() &&
+        (isAdmin() || !request.resource.data.keys().hasAny(['seenBy']));
+      allow update: if isSignedIn() &&
+        (isAdmin() || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['seenBy']));
+      allow delete: if isAdmin();
     }
 
     match /tasks/{id} {
@@ -385,7 +419,10 @@ service cloud.firestore {
     // sheet can't erase what was signed up since. A single sign-up or removal
     // written the old way is still let through, for apps not yet updated.
     match /foodSignups/{key} {
-      allow read: if isSignedIn();
+      // Read as its event is (`${eventId}_${date}`): who brings what says it's on.
+      allow read: if isSignedIn() &&
+        get(/databases/$(database)/documents/events/$(key.split('_')[0])).data.seenBy
+          .hasAny(seers());
       allow create: if isSignedIn() && !isGuest()
         && (isAdmin() || request.resource.data.get('signups', {}).size() <= 1);
       allow update: if isSignedIn() && !isGuest() && (isAdmin() || oneFoodChange());
@@ -409,9 +446,9 @@ service cloud.firestore {
     // Read as the event's private details are (eventPrivate, above): by those
     // on it. Named `${eventId}_${date}`.
     match /carpool/{docId} {
-      allow read: if isAdmin() ||
-        (isSignedIn() && !holdsPublic() &&
-         request.auth.uid in get(/databases/$(database)/documents/eventPrivate/$(docId.split('_')[0])).data.access);
+      allow read: if isSignedIn() && (isAdmin() || !holdsPublic()) &&
+        get(/databases/$(database)/documents/eventPrivate/$(docId.split('_')[0])).data.access
+          .hasAny(readers());
       allow write: if isAdmin();
     }
 

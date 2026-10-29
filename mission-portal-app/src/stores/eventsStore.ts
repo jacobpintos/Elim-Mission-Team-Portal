@@ -34,6 +34,8 @@ import {
   type ReportTime,
 } from '../../functions/src/miriam/data'
 import {
+  ADMINS,
+  EVERYONE,
   eventReaders,
   eventSeenBy,
   mergeEvent,
@@ -111,19 +113,40 @@ function assemble(open: [string, Doc][], closed: Record<string, Doc>) {
 }
 
 /**
- * The private records this person may read: every one, for an admin; those
- * of the events they are on, for anyone else; none for a public account
+ * Who this person counts as, to an event's `seenBy` (firestore.rules seers):
+ * themselves, anyone (EVERYONE), and — an admin — every admin (ADMINS).
+ */
+function seers(profile: SignedIn): string[] {
+  const uid = String(profile.uid)
+  return isAdmin(profile) ? [uid, EVERYONE, ADMINS] : [uid, EVERYONE]
+}
+
+/**
+ * Events, or their availability, that this person may see — those whose
+ * `seenBy` names them, anyone, or (an admin) every admin; a draft, only its
+ * maker (firestore.rules events and avail, which this query has to match:
+ * asked for all of them, anyone is refused, an admin too).
+ */
+function seenRecords(name: 'events' | 'avail', profile: SignedIn) {
+  return query(collection(db, name), where('seenBy', 'array-contains-any', seers(profile)))
+}
+
+/**
+ * The private records this person may read: those of the events they are
+ * on and, an admin, every one but others' drafts; none for a public account
  * (firestore.rules eventPrivate, which this query has to match).
  */
 function privateRecords(profile: ReturnType<typeof useAuthStore.getState>['profile']) {
   if (!profile?.uid) return null
-  if (isAdmin(profile)) return collection(db, 'eventPrivate')
-  if (isPublic(profile)) return null
+  if (isPublic(profile) && !isAdmin(profile)) return null
+  const uid = String(profile.uid)
   return query(
     collection(db, 'eventPrivate'),
-    where('access', 'array-contains', String(profile.uid))
+    where('access', 'array-contains-any', isAdmin(profile) ? [uid, ADMINS] : [uid])
   )
 }
+
+type SignedIn = NonNullable<ReturnType<typeof useAuthStore.getState>['profile']>
 
 const groupsNow = () => useGroupsStore.getState().groups
 
@@ -397,58 +420,89 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
 
     set({ loading: true })
 
-    const unsubTemplates = onSnapshot(collection(db, 'events'), (snap) => {
-      const openDocs = snap.docs.map((d) => [d.id, d.data() as Doc] as [string, Doc])
-      set({ _openDocs: openDocs, ...assemble(openDocs, get()._privateDocs), loading: false })
-    })
-
-    // Their private details (functions/src/eventPrivate): listened to as
-    // whoever is signed in, and again if that, or their roles, change.
+    // The events they may see, their private details and their availability
+    // (firestore.rules events, eventPrivate, avail) — listened to as whoever
+    // is signed in, and again if that, or their roles, change.
     let listeningAs: string | null = null
-    const listenPrivate = () => {
+    const listen = () => {
       const profile = useAuthStore.getState().profile
       const as = profile ? `${profile.uid}|${isAdmin(profile)}|${isPublic(profile)}` : ''
       if (as === listeningAs) return
       listeningAs = as
+      get()._unsubTemplates?.()
       get()._unsubPrivate?.()
-      set({ _unsubPrivate: null, _privateDocs: {}, ...assemble(get()._openDocs, {}) })
-      const records = privateRecords(profile)
-      if (!records) return
-      const unsub = onSnapshot(
-        records,
+      get()._unsubAvail?.()
+      set({
+        _unsubTemplates: null,
+        _unsubPrivate: null,
+        _unsubAvail: null,
+        _openDocs: [],
+        _privateDocs: {},
+        templates: [],
+        overrides: {},
+        avail: {},
+      })
+      if (!profile?.uid) return set({ loading: false })
+      const failed = (what: string) => (err: { code?: string; message: string }) =>
+        console.error(`[EventsStore] ${what}:`, err.code, err.message)
+
+      const unsubTemplates = onSnapshot(
+        seenRecords('events', profile),
         (snap) => {
-          const privateDocs = Object.fromEntries(snap.docs.map((d) => [d.id, d.data() as Doc]))
-          set({ _privateDocs: privateDocs, ...assemble(get()._openDocs, privateDocs) })
+          const openDocs = snap.docs.map((d) => [d.id, d.data() as Doc] as [string, Doc])
+          set({ _openDocs: openDocs, ...assemble(openDocs, get()._privateDocs), loading: false })
         },
-        (err) => console.error('[EventsStore] private details:', err.code, err.message)
+        (err) => {
+          failed('events')(err)
+          set({ loading: false })
+        }
       )
-      set({ _unsubPrivate: unsub })
+
+      const records = privateRecords(profile)
+      const unsubPrivate = records
+        ? onSnapshot(
+            records,
+            (snap) => {
+              const privateDocs = Object.fromEntries(snap.docs.map((d) => [d.id, d.data() as Doc]))
+              set({ _privateDocs: privateDocs, ...assemble(get()._openDocs, privateDocs) })
+            },
+            failed('private details')
+          )
+        : null
+
+      // A public account's event pages ask nothing of them: no availability.
+      const unsubAvail =
+        isPublic(profile) && !isAdmin(profile)
+          ? null
+          : onSnapshot(
+              seenRecords('avail', profile),
+              (snap) => {
+                const snapAvail: Record<string, Record<string, AvailResponse>> = {}
+                snap.docs.forEach((d) => {
+                  const data = d.data() as { responses?: Record<string, AvailResponse> }
+                  snapAvail[d.id] = data.responses ?? {}
+                })
+                // Merge: keep local optimistic entries that are newer than what Firestore returned.
+                set((s) => {
+                  const merged: Record<string, Record<string, AvailResponse>> = { ...snapAvail }
+                  Object.entries(s.avail).forEach(([docKey, responses]) => {
+                    Object.entries(responses).forEach(([respUid, local]) => {
+                      const server = snapAvail[docKey]?.[respUid]
+                      if (!server || local.ts > (server.ts ?? 0)) {
+                        merged[docKey] = { ...(merged[docKey] ?? {}), [respUid]: local }
+                      }
+                    })
+                  })
+                  return { avail: merged }
+                })
+              },
+              failed('availability')
+            )
+
+      set({ _unsubTemplates: unsubTemplates, _unsubPrivate: unsubPrivate, _unsubAvail: unsubAvail })
     }
-    listenPrivate()
-    const unsubAuth = useAuthStore.subscribe(listenPrivate)
-
-    const unsubAvail = onSnapshot(collection(db, 'avail'), (snap) => {
-      const snapAvail: Record<string, Record<string, AvailResponse>> = {}
-      snap.docs.forEach((d) => {
-        const data = d.data() as { responses?: Record<string, AvailResponse> }
-        snapAvail[d.id] = data.responses ?? {}
-      })
-      // Merge: keep local optimistic entries that are newer than what Firestore returned.
-      set((s) => {
-        const merged: Record<string, Record<string, AvailResponse>> = { ...snapAvail }
-        Object.entries(s.avail).forEach(([docKey, responses]) => {
-          Object.entries(responses).forEach(([respUid, local]) => {
-            const server = snapAvail[docKey]?.[respUid]
-            if (!server || local.ts > (server.ts ?? 0)) {
-              merged[docKey] = { ...(merged[docKey] ?? {}), [respUid]: local }
-            }
-          })
-        })
-        return { avail: merged }
-      })
-    })
-
-    set({ _unsubTemplates: unsubTemplates, _unsubAuth: unsubAuth, _unsubAvail: unsubAvail })
+    listen()
+    set({ _unsubAuth: useAuthStore.subscribe(listen) })
   },
 
   unsubscribe: () => {
