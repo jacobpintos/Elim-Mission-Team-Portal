@@ -99,11 +99,13 @@ export default function AdminData() {
       })
       return availabilityCsv(avail, events, nameOf)
     }
-    const [events, taskSnap] = await Promise.all([readEvents(), getDocs(collection(db, 'tasks'))])
-    const tasks = taskSnap.docs
-      .map((d) => ({ ...d.data(), id: d.id }) as Task)
-      // A reimbursement's is its asker's and the Accountant's alone.
-      .filter((t) => t.taskType !== 'reimbursement')
+    // Every one but a reimbursement's, which is its asker's and the
+    // Accountant's alone (firestore.rules tasks).
+    const [events, taskSnap] = await Promise.all([
+      readEvents(),
+      getDocs(query(collection(db, 'tasks'), where('seenBy', 'array-contains', ADMINS))),
+    ])
+    const tasks = taskSnap.docs.map((d) => ({ ...d.data(), id: d.id }) as Task)
     const title = (t: Task) => {
       const id = t.evId ?? t.evTemplateId
       return id == null ? '' : (events.find((e) => sameId(e.id, id))?.title ?? '')

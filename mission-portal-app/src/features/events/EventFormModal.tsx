@@ -43,6 +43,7 @@ import {
   notifyFoodSignupOpen,
 } from '@/lib/taskNotifications'
 import { newLogisticsAssignments } from '@/lib/guestItinerary'
+import { ADMINS } from '../../../functions/src/eventPrivate'
 import type { PendingEventForm } from '@/stores/miriamStore'
 import type { EventDraft, FlightLegDraft } from '@/lib/miriam'
 import type {
@@ -528,7 +529,14 @@ export function EventFormModal({
     const ids = [...new Set([eventId, String(eventId), Number(eventId)])].filter(
       (x) => x !== '' && !Number.isNaN(x)
     )
-    const snap = await getDocs(query(collection(db, 'tasks'), where('evTemplateId', 'in', ids)))
+    // Asked as an admin, as the rules allow (firestore.rules tasks).
+    const snap = await getDocs(
+      query(
+        collection(db, 'tasks'),
+        where('seenBy', 'array-contains', ADMINS),
+        where('evTemplateId', 'in', ids)
+      )
+    )
     return !snap.empty
   }
 

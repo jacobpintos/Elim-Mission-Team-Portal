@@ -150,7 +150,7 @@ service firebase.storage {
     // named. Reading one file is open to signed-in users, as with every path
     // above; listing a folder is not, so a receipt is reached only through the
     // request that names it — and that request is readable only by the person
-    // who asked, the Accountant and admins.
+    // who asked and the Accountant.
     match /reimbursements/{uid}/{file} {
       allow get: if request.auth != null;
       allow list: if request.auth != null && request.auth.uid == uid;

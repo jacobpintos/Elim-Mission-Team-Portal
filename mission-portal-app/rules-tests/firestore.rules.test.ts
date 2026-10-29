@@ -61,13 +61,15 @@ beforeEach(async () => {
     await setDoc(doc(db, 'users', OUTSIDER), { roles: ['regular'], displayName: 'Outsider' })
     await setDoc(doc(db, 'users', GUEST), { roles: ['guest'], displayName: 'Guest' })
     await setDoc(doc(db, 'users', WORSHIP), { roles: ['worship'], displayName: 'Worship' })
-    await setDoc(doc(db, 'setLists', 'sl1'), { title: 'Sunday' })
+    // For no event: anyone who reads set lists at all.
+    await setDoc(doc(db, 'setLists', 'sl1'), { title: 'Sunday', seenBy: ['*'] })
     await setDoc(doc(db, 'chordSheets', 'cs1'), { title: 'Song' })
     await setDoc(doc(db, 'inputList', 'main'), { rows: [] })
     await setDoc(doc(db, 'tasks', 'gt1'), {
       title: 'Do',
       status: 'pending',
       assignees: [MEMBER, GUEST],
+      seenBy: [GUEST, MEMBER, '@admins'],
     })
     await setDoc(doc(db, 'rooms', 'r1'), { name: 'Team', members: [MEMBER], reviewers: [] })
     await setDoc(doc(db, 'rooms', 'r1', 'messages', 'm1'), {
@@ -707,15 +709,68 @@ describe('tasks', () => {
   beforeEach(async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore()
-      await setDoc(doc(db, 'tasks', 't1'), { title: 'Do', status: 'pending', assignees: [MEMBER] })
+      await setDoc(doc(db, 'tasks', 't1'), {
+        title: 'Do',
+        status: 'pending',
+        assignees: [MEMBER],
+        evTemplateId: 'e1',
+        seenBy: [MEMBER, '@admins'],
+      })
       await setDoc(doc(db, 'tasks', 'rt1'), {
         title: 'Reimbursement',
         status: 'pending',
         assignees: [WORSHIP],
         owner: MEMBER,
         taskType: 'reimbursement',
+        seenBy: [MEMBER, WORSHIP],
       })
     })
+  })
+
+  it('is read by those it names, and every admin', async () => {
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'tasks/t1')))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'tasks/t1')))
+    await assertFails(getDoc(doc(as(OUTSIDER), 'tasks/t1')))
+  })
+
+  it("is, for a reimbursement's, read by whoever asked and the Accountant — no admin", async () => {
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'tasks/rt1')))
+    await assertSucceeds(getDoc(doc(as(WORSHIP), 'tasks/rt1')))
+    await assertFails(getDoc(doc(as(ADMIN), 'tasks/rt1')))
+  })
+
+  it('answers only a query for what the rules allow', async () => {
+    // tasksStore: as themselves, and an admin as every admin too.
+    await assertSucceeds(
+      getDocs(
+        query(collection(as(MEMBER), 'tasks'), where('seenBy', 'array-contains-any', [MEMBER]))
+      )
+    )
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(as(ADMIN), 'tasks'),
+          where('seenBy', 'array-contains-any', [ADMIN, '@admins'])
+        )
+      )
+    )
+    // The event form, asking whether an event has tasks yet.
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(as(ADMIN), 'tasks'),
+          where('seenBy', 'array-contains', '@admins'),
+          where('evTemplateId', 'in', ['e1', 1])
+        )
+      )
+    )
+    // Asked for all: refused, an admin too.
+    await assertFails(getDocs(collection(as(MEMBER), 'tasks')))
+    await assertFails(getDocs(collection(as(ADMIN), 'tasks')))
+    // Asked as every admin by someone who isn't one.
+    await assertFails(
+      getDocs(query(collection(as(MEMBER), 'tasks'), where('seenBy', 'array-contains', '@admins')))
+    )
   })
 
   it('lets an assignee flip status but not retitle a task', async () => {
@@ -775,9 +830,21 @@ describe('tasks', () => {
     await assertSucceeds(deleteDoc(doc(as(ADMIN), 'tasks/t1')))
   })
 
-  it('lets an admin change anything', async () => {
+  it("lets an admin change anything but a reimbursement's, which they can't read", async () => {
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'tasks/t1'), { title: 'Changed' }))
-    await assertSucceeds(updateDoc(doc(as(ADMIN), 'tasks/rt1'), { status: 'done' }))
+    await assertFails(updateDoc(doc(as(ADMIN), 'tasks/rt1'), { status: 'done' }))
+    await assertFails(updateDoc(doc(as(ADMIN), 'tasks/rt1'), { assignees: [ADMIN] }))
+    await assertFails(deleteDoc(doc(as(ADMIN), 'tasks/rt1')))
+    // Nor turn one into one.
+    await assertFails(updateDoc(doc(as(ADMIN), 'tasks/t1'), { taskType: 'reimbursement' }))
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'tasks/new2'), {
+        title: 'Forged',
+        status: 'pending',
+        assignees: [ADMIN],
+        taskType: 'reimbursement',
+      })
+    )
   })
 })
 
@@ -1601,6 +1668,66 @@ describe('meetingBlocks — no more requests from this account', () => {
   })
 })
 
+describe('set lists — read as their event is', () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      // For an event WORSHIP is on, and one only ADMIN is.
+      await setDoc(doc(db, 'setLists', 'slOn'), { title: 'Retreat', seenBy: [WORSHIP, '@admins'] })
+      await setDoc(doc(db, 'setLists', 'slOff'), { title: 'Board', seenBy: [ADMIN, '@admins'] })
+    })
+  })
+
+  it('lets the worship team read those of events they may see, and none else', async () => {
+    await assertSucceeds(getDoc(doc(as(WORSHIP), 'setLists/sl1')))
+    await assertSucceeds(getDoc(doc(as(WORSHIP), 'setLists/slOn')))
+    await assertFails(getDoc(doc(as(WORSHIP), 'setLists/slOff')))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'setLists/slOff')))
+  })
+
+  it('keeps them from members who read no set lists, everyone’s or not', async () => {
+    await assertFails(getDoc(doc(as(MEMBER), 'setLists/sl1')))
+  })
+
+  it('answers only a query for what the rules allow', async () => {
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(as(WORSHIP), 'setLists'),
+          where('seenBy', 'array-contains-any', [WORSHIP, '*'])
+        )
+      )
+    )
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(as(GUEST), 'setLists'),
+          where('seenBy', 'array-contains-any', [GUEST, '*'])
+        )
+      )
+    )
+    await assertFails(getDocs(collection(as(WORSHIP), 'setLists')))
+    await assertFails(getDocs(collection(as(ADMIN), 'setLists')))
+  })
+
+  it('lets the worship team make one as theirs alone — the server says who else', async () => {
+    await assertSucceeds(
+      setDoc(doc(as(WORSHIP), 'setLists/new1'), { title: 'Mine', seenBy: [WORSHIP] })
+    )
+    // From an app not yet updated: no one, until the server says.
+    await assertSucceeds(setDoc(doc(as(WORSHIP), 'setLists/new2'), { title: 'Older app' }))
+    await assertFails(setDoc(doc(as(WORSHIP), 'setLists/new3'), { title: 'Wide', seenBy: ['*'] }))
+  })
+
+  it('lets them change one they may read, but not who reads it', async () => {
+    await assertSucceeds(updateDoc(doc(as(WORSHIP), 'setLists/slOn'), { title: 'Edited' }))
+    await assertFails(updateDoc(doc(as(WORSHIP), 'setLists/slOn'), { seenBy: ['*'] }))
+    await assertFails(updateDoc(doc(as(WORSHIP), 'setLists/slOff'), { title: 'Edited' }))
+    await assertFails(deleteDoc(doc(as(WORSHIP), 'setLists/slOff')))
+    await assertSucceeds(deleteDoc(doc(as(WORSHIP), 'setLists/slOn')))
+  })
+})
+
 describe('reimbursements', () => {
   it('lets the person who asked read their request', () => {
     return assertSucceeds(getDoc(doc(as(MEMBER), 'reimbursements/rb1')))
@@ -1610,13 +1737,13 @@ describe('reimbursements', () => {
     return assertSucceeds(getDoc(doc(as(WORSHIP), 'reimbursements/rb1')))
   })
 
-  it('lets an admin read it', () => {
-    return assertSucceeds(getDoc(doc(as(ADMIN), 'reimbursements/rb1')))
-  })
-
-  it('keeps it from every other member', () => {
-    // What someone spent, and their receipts, are why this is not a task.
-    return assertFails(getDoc(doc(as(OUTSIDER), 'reimbursements/rb1')))
+  it('keeps it from every other member, admins included', async () => {
+    // What someone spent, and their receipts, are theirs and the Accountant's.
+    await assertFails(getDoc(doc(as(OUTSIDER), 'reimbursements/rb1')))
+    await assertFails(getDoc(doc(as(ADMIN), 'reimbursements/rb1')))
+    await assertFails(
+      getDocs(query(collection(as(ADMIN), 'reimbursements'), where('accountantUid', '==', WORSHIP)))
+    )
   })
 
   it("answers a member's query for their own requests", () => {
@@ -1658,8 +1785,9 @@ describe('reimbursements', () => {
     )
   })
 
-  it('lets an admin hand a request to a new Accountant, and change nothing else', async () => {
-    await assertSucceeds(
+  it('refuses an admin handing it to a new Accountant: the server does that', async () => {
+    // functions/src/reimbursements handOverReimbursements.
+    await assertFails(
       updateDoc(doc(as(ADMIN), 'reimbursements/rb1'), {
         accountantUid: OUTSIDER,
         accountantName: 'Outsider',

@@ -1,5 +1,14 @@
 import { create } from 'zustand'
-import { collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import {
+  collection,
+  doc,
+  query,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
+  where,
+} from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import { isOverdue } from '@/lib/availability'
@@ -8,7 +17,8 @@ import { nextId } from '@/lib/counters'
 import { isAdmin } from '@/lib/roles'
 import { useAuthStore } from '@/stores/authStore'
 import type { Task } from '@/types/events'
-import { seesTask, taskSeenBy } from '../../functions/src/recordAccess'
+import { readers } from '@/lib/seenBy'
+import { taskSeenBy } from '../../functions/src/recordAccess'
 
 const todayStr = () => new Date().toISOString().split('T')[0]
 const in7 = () => {
@@ -106,13 +116,23 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
       get()._unsub?.()
       set({ _unsub: null, tasks: [] })
       if (!profile?.uid) return set({ loading: false })
-      const viewer = { uid: String(profile.uid), admin: isAdmin(profile) }
-      const unsub = onSnapshot(collection(db, 'tasks'), (snap) => {
-        const tasks = snap.docs
-          .map((d) => ({ ...(d.data() as Task), id: d.id }))
-          .filter((t) => seesTask(t, viewer))
-        set({ tasks, loading: false })
-      })
+      // Asked for as the rules allow (firestore.rules tasks): asked for all,
+      // anyone is refused.
+      const mine = query(
+        collection(db, 'tasks'),
+        where('seenBy', 'array-contains-any', readers(profile))
+      )
+      const unsub = onSnapshot(
+        mine,
+        (snap) => {
+          const tasks = snap.docs.map((d) => ({ ...(d.data() as Task), id: d.id }))
+          set({ tasks, loading: false })
+        },
+        (err) => {
+          console.error('[TasksStore]', err.code, err.message)
+          set({ loading: false })
+        }
+      )
       set({ _unsub: unsub })
     }
     listen()

@@ -1,5 +1,14 @@
 import { create } from 'zustand'
-import { collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import {
+  collection,
+  doc,
+  query,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
+  where,
+} from 'firebase/firestore'
 import { onSnapshot, getDocs } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
@@ -16,25 +25,25 @@ const readsSetLists = (profile: Profile): profile is NonNullable<Profile> =>
 
 /**
  * Those of the events they may see, and those for no event
- * (functions/src/recordAccess setListSeenBy).
+ * (functions/src/recordAccess setListSeenBy) — asked for as the rules
+ * allow (firestore.rules setLists): asked for all, anyone is refused.
  */
-function seenBy(profile: NonNullable<Profile>) {
-  const mine = seers(profile)
-  return (sl: SetList) => !sl.seenBy || sl.seenBy.some((x) => mine.includes(x))
-}
+const seenBy = (profile: NonNullable<Profile>) =>
+  query(collection(db, 'setLists'), where('seenBy', 'array-contains-any', seers(profile)))
 
 /** Whether the person signed in may read this set list. */
 export function seesSetList(sl: SetList): boolean {
   const profile = useAuthStore.getState().profile
-  return readsSetLists(profile) && seenBy(profile)(sl)
+  const mine = readsSetLists(profile) ? seers(profile) : []
+  return (sl.seenBy ?? []).some((x) => mine.includes(x))
 }
 
 /** The set lists this person may read, read once; none for anyone who reads none. */
 export async function readSetLists(): Promise<SetList[]> {
   const profile = useAuthStore.getState().profile
   if (!readsSetLists(profile)) return []
-  const snap = await getDocs(collection(db, 'setLists'))
-  return snap.docs.map((d) => ({ ...(d.data() as SetList), id: d.id })).filter(seenBy(profile))
+  const snap = await getDocs(seenBy(profile))
+  return snap.docs.map((d) => ({ ...(d.data() as SetList), id: d.id }))
 }
 
 interface WorshipStore {
@@ -76,11 +85,17 @@ export const useWorshipStore = create<WorshipStore>((set, get) => ({
       get()._unsub?.()
       set({ _unsub: null, setLists: [] })
       if (!reads) return set({ loading: false })
-      const mine = seenBy(profile)
-      const unsub = onSnapshot(collection(db, 'setLists'), (snap) => {
-        const setLists = snap.docs.map((d) => ({ ...(d.data() as SetList), id: d.id })).filter(mine)
-        set({ setLists, loading: false })
-      })
+      const unsub = onSnapshot(
+        seenBy(profile),
+        (snap) => {
+          const setLists = snap.docs.map((d) => ({ ...(d.data() as SetList), id: d.id }))
+          set({ setLists, loading: false })
+        },
+        (err) => {
+          console.error('[WorshipStore]', err.code, err.message)
+          set({ loading: false })
+        }
+      )
       set({ _unsub: unsub })
     }
     listen()
