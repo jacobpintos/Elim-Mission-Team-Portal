@@ -35,6 +35,7 @@ import {
   teamsOf,
 } from './data'
 import { FORECAST_DAYS, forecastFor } from './weather'
+import { eventAccess, mergeEvent, withoutPrivate } from '../eventPrivate'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Fields = Record<string, any>
@@ -110,22 +111,39 @@ export class Lookups {
     return this.namesP
   }
 
+  /**
+   * Every event — with its private details (../eventPrivate) only where the
+   * database would give them to this person: an admin, or someone on it who
+   * holds no public role (firestore.rules eventPrivate). Anyone else is told
+   * of an event what they could read of it themselves.
+   */
   private eventData() {
-    this.events ??= this.db
-      .collection('events')
-      .get()
-      .then((snap) => {
-        const templates: EventTemplate[] = []
-        const overrides: Record<string, Partial<EventTemplate>> = {}
-        for (const d of snap.docs) {
-          const { overrides: ov, ...t } = d.data() as EventTemplate & {
-            overrides?: Record<string, Partial<EventTemplate>>
-          }
-          templates.push({ ...t, id: d.id })
-          Object.assign(overrides, ov ?? {})
+    this.events ??= Promise.all([
+      this.db.collection('events').get(),
+      this.db.collection('eventPrivate').get(),
+      this.groups(),
+    ]).then(([snap, closed, groups]) => {
+      const privateOf = new Map(closed.docs.map((d) => [d.id, d.data()]))
+      const { uid } = this.viewer
+      const templates: EventTemplate[] = []
+      const overrides: Record<string, Partial<EventTemplate>> = {}
+      for (const d of snap.docs) {
+        const open = d.data()
+        const priv = privateOf.get(d.id)
+        // No private record yet (being moved into one): who is on it, from the event.
+        const access = Array.isArray(priv?.access) ? priv.access : eventAccess(open, groups)
+        const sees =
+          isAdminViewer(this.viewer) || (seesTeamSide(this.viewer) && access.includes(uid))
+        const { overrides: ov, ...t } = (
+          sees ? mergeEvent(open, priv) : withoutPrivate(open)
+        ) as EventTemplate & {
+          overrides?: Record<string, Partial<EventTemplate>>
         }
-        return { templates, overrides }
-      })
+        templates.push({ ...t, id: d.id })
+        Object.assign(overrides, ov ?? {})
+      }
+      return { templates, overrides }
+    })
     return this.events
   }
 
@@ -284,7 +302,11 @@ export class Lookups {
       : ev.date
     // A public follower is shown what its page shows them: when, where and its links.
     const team = seesTeamSide(this.viewer)
-    const reportTimes = reportTimesFor(ev, this.viewer, await this.isOn(ev))
+    const onIt = await this.isOn(ev)
+    // Its private details — teams, dress code, schedule, cars, rooms,
+    // flights — only for those on it, and admins (../eventPrivate).
+    const inner = isAdminViewer(this.viewer) || (team && onIt)
+    const reportTimes = reportTimesFor(ev, this.viewer, onIt)
     return {
       key: ev.instanceKey,
       title: ev.title,
@@ -296,12 +318,16 @@ export class Lookups {
       address: [ev.address, ev.city, ev.state].filter(Boolean).join(', ') || undefined,
       virtualMeetingLink: ev.isVirtual ? ev.virtualLink || 'none given' : undefined,
       signUpLink: ev.signUpLink || undefined,
-      yourTeams: team ? teamsOf(ev, this.viewer.uid).map((t) => t.name) : undefined,
-      dressCode: team ? dressCodeFor(ev, this.viewer) : undefined,
-      schedule: team && ev.schedule?.length ? scheduleFor(ev, firstDay) : undefined,
+      privateDetails:
+        team && !inner
+          ? 'Its teams, dress code, report times, schedule, cars, rooms and flights are only for those on it, and this person is not.'
+          : undefined,
+      yourTeams: inner ? teamsOf(ev, this.viewer.uid).map((t) => t.name) : undefined,
+      dressCode: inner ? dressCodeFor(ev, this.viewer) : undefined,
+      schedule: inner && ev.schedule?.length ? scheduleFor(ev, firstDay) : undefined,
       food: team ? (food ?? undefined) : undefined,
       carpool:
-        team && ev.carpool
+        inner && ev.carpool
           ? {
               meetingPlace: ev.carpoolLoc || undefined,
               cars: carpoolFor(ev, this.viewer, names, perDate ?? undefined),
@@ -309,12 +335,12 @@ export class Lookups {
               carsSet: perDate ? 'for this date, on its page' : 'for every date, in its form',
             }
           : undefined,
-      flights: team && ev.flights ? flightsFor(ev, this.viewer, names) : undefined,
-      lodging: team && ev.lodging ? lodgingFor(ev, this.viewer, names) : undefined,
+      flights: inner && ev.flights ? flightsFor(ev, this.viewer, names) : undefined,
+      lodging: inner && ev.lodging ? lodgingFor(ev, this.viewer, names) : undefined,
       // Everything theirs at it, all together: "what are my responsibilities?".
       yours: team
         ? yoursAt(ev, this.viewer, names, {
-            cars: (perDate ?? ev.carpoolCars ?? []) as Car[],
+            cars: inner ? ((perDate ?? ev.carpoolCars ?? []) as Car[]) : [],
             bringing: food?.mine ?? [],
             tasks: forThisEvent,
           })

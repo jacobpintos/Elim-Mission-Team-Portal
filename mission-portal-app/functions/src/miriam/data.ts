@@ -18,6 +18,10 @@
  *   (EventDetailModal FlightDisplay, LodgingDisplay, CarpoolReadOnly.)
  * - Food: the sign-up sheet, who brings what, as everyone on it sees it.
  *   (EventDetailModal FoodPanel.)
+ * - An event's private details — teams, dress code, report times, schedule,
+ *   cars, rooms, flights — are kept apart from it (../eventPrivate), and
+ *   read only by those on it and admins: the database's rule, which the
+ *   server keeps to as well (./lookups eventData).
  * - Report times: to those on the event — their team's, or everyone
  *   else's — and to admins, every one. (reportTimesFor.)
  * - An event's team side — its schedule, dress code, weather,

@@ -1,5 +1,5 @@
 rules_version = '2';
-// Last updated: 2026-10-14 — added reimbursements
+// Last updated: 2026-10-29 — event private details (eventPrivate)
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -44,6 +44,11 @@ service cloud.firestore {
       return isSignedIn() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
           .hasAny(['admin', 'security', 'regular', 'intern', 'worship']);
+    }
+    // An account holding the public role, whatever else it holds.
+    function holdsPublic() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+        .hasAny(['public']);
     }
     function isWorshipOrAdmin() {
       return isSignedIn() &&
@@ -133,8 +138,27 @@ service cloud.firestore {
 
     // Phase 2 additions
 
+    // What anyone who can see an event is shown: its name, when and where,
+    // its links, who is on it, its food sheet. Its private details are below.
     match /events/{id} {
       allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // An event's private details — its teams, dress code, report times,
+    // schedule, cars, rooms and flights (functions/src/eventPrivate) — for
+    // admins and those on it, on any of its dates. `access` lists them,
+    // kept by functions/src/eventPrivateSync: everyone named on it, in one
+    // of its groups or on one of its teams.
+    //
+    // Not an account holding the public role, on it or not: its page never
+    // shows them one (functions/src/miriam/data: seesTeamSide). The app
+    // asks for these with where('access', 'array-contains', uid), which is
+    // what lets the rule below hold for a query, and doesn't ask at all for
+    // a public account.
+    match /eventPrivate/{id} {
+      allow read: if isAdmin() ||
+        (isSignedIn() && request.auth.uid in resource.data.access && !holdsPublic());
       allow write: if isAdmin();
     }
 
@@ -381,8 +405,13 @@ service cloud.firestore {
     // by admins — on the event's page, or through Miriam — and only read by
     // anyone else, who is shown the car they are in. Was writable by anyone
     // signed in, though nothing in the app let them.
+    //
+    // Read as the event's private details are (eventPrivate, above): by those
+    // on it. Named `${eventId}_${date}`.
     match /carpool/{docId} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin() ||
+        (isSignedIn() && !holdsPublic() &&
+         request.auth.uid in get(/databases/$(database)/documents/eventPrivate/$(docId.split('_')[0])).data.access);
       allow write: if isAdmin();
     }
 

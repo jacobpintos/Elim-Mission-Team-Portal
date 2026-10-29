@@ -85,16 +85,15 @@ export const onEventDeleted = onDocumentDeleted('events/{eventId}', async (event
     snap.docs.forEach((d) => refs.set(d.id, d.ref))
   }
 
-  const keyed = await Promise.all(
-    KEYED_BY_EVENT_AND_DATE.map((c) => keyedDocs(db, c, eventId))
-  )
+  const keyed = await Promise.all(KEYED_BY_EVENT_AND_DATE.map((c) => keyedDocs(db, c, eventId)))
   for (const list of keyed) {
     // Keyed by path rather than id: a food sign-up and an availability doc for
     // the same occurrence share an id, and one would displace the other.
     list.forEach((ref) => refs.set(ref.path, ref))
   }
 
-  if (refs.size === 0) return
+  // Its private record (../eventPrivate): teams, cars, rooms and flights.
+  refs.set(`eventPrivate/${eventId}`, db.doc(`eventPrivate/${eventId}`))
 
   const all = [...refs.values()]
   for (let i = 0; i < all.length; i += BATCH_LIMIT) {

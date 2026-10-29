@@ -34,6 +34,7 @@ import {
   seesTeamSide,
   type Group,
 } from '../../../functions/src/miriam/data'
+import { mergeEvent } from '../../../functions/src/eventPrivate'
 import { roomName, roomsFor } from '@/lib/miriamAppData'
 import { claimFoodItem, type FoodSignups } from '@/lib/foodSignups'
 import {
@@ -155,9 +156,17 @@ const day = (date: string) => FD(date, { weekday: true })
 export async function eventByKey(key: string): Promise<EventInstance | null> {
   const at = key.indexOf('_')
   if (at < 0) return null
-  const snap = await getDoc(doc(db, 'events', key.slice(0, at)))
+  const id = key.slice(0, at)
+  const [snap, closed] = await Promise.all([
+    getDoc(doc(db, 'events', id)),
+    // Its private details, where they may read them (functions/src/eventPrivate).
+    getDoc(doc(db, 'eventPrivate', id)).catch(() => null),
+  ])
   if (!snap.exists()) return null
-  const { overrides, ...tmpl } = snap.data() as EventTemplate & {
+  const { overrides, ...tmpl } = mergeEvent(
+    snap.data(),
+    closed?.exists() ? closed.data() : null
+  ) as unknown as EventTemplate & {
     overrides?: Record<string, Partial<EventTemplate>>
   }
   const date = key.slice(at + 1)

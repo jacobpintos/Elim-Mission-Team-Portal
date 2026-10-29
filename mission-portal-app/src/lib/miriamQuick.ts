@@ -454,6 +454,16 @@ function scheduleItemAt(ask: QuickAsk, events: EventInstance[]): QuickAnswer | n
   return { text: found[0].text, open: { key: found[0].ev.instanceKey, section: 'schedule' } }
 }
 
+/** What only those on an event, and admins, are told (functions/src/eventPrivate). */
+const PRIVATE_SIDE: readonly QuickField[] = [
+  'schedule',
+  'dress',
+  'team',
+  'car',
+  'lodging',
+  'flight',
+]
+
 /** What an event's page shows only to its team's members, and an admin. */
 const TEAM_SIDE: readonly QuickField[] = [
   'report',
@@ -499,7 +509,7 @@ export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
   if (theirs) return theirTeamsAnswer(theirs, data)
   const ask = quickAsked(text, data.today)
   if (!ask) return null
-  const events = eventsFor(ask, data)
+  let events = eventsFor(ask, data)
   // Nothing found, or more than can be said in a breath: Claude works it out.
   if (events.length === 0 || events.length > 3) return null
   // An event's team side, which its page shows only to its team's members
@@ -512,6 +522,23 @@ export function quickAnswer(text: string, data: QuickData): QuickAnswer | null {
           : 'Sorry, I can’t help with that one — but I can tell you when and where those events are.',
       open: null,
     }
+  }
+  // Its private side — only for those on it, and admins: anyone else's app
+  // isn't given it (functions/src/eventPrivate). Of several, theirs.
+  if (PRIVATE_SIDE.includes(ask.field) && !isAdminViewer(data.viewer)) {
+    const theirs = events.filter((ev) => assignedTo(ev, data.groups).has(data.viewer.uid))
+    if (!theirs.length) {
+      const one = events.length === 1 ? events[0] : null
+      return {
+        text: !one
+          ? 'That’s only for those on them — but I can tell you when and where they are.'
+          : ask.field === 'team'
+            ? `You’re not on ${one.title}.`
+            : `That’s only for those on ${one.title} — but I can tell you when and where it is.`,
+        open: one ? { key: one.instanceKey, section: 'details' } : null,
+      }
+    }
+    events = theirs
   }
   // Something on its schedule — "what time is the sermon on New Year's Eve?",
   // "the schedule for Olivia getting here" — not the event's own time, nor all

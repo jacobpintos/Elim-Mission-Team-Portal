@@ -4,10 +4,13 @@ import {
   doc,
   setDoc,
   updateDoc,
-  deleteDoc,
   deleteField,
   arrayUnion,
+  FieldPath,
+  query,
   serverTimestamp,
+  where,
+  writeBatch,
 } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { httpsCallable } from 'firebase/functions'
@@ -17,8 +20,10 @@ import { allInstances } from '@/lib/events'
 import { availKey, seriesAvailKey, getSeriesAvail, AVAIL_LABELS } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { nextId } from '@/lib/counters'
+import { useAuthStore } from '@/stores/authStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useUsersStore } from '@/stores/usersStore'
+import { isAdmin, isPublic } from '@/lib/roles'
 import type { EventTemplate, EventInstance, AvailResponse, InAppNotif } from '@/types/events'
 import type { UserProfile } from '@/types/user'
 import {
@@ -28,6 +33,13 @@ import {
   teamsSaid,
   type ReportTime,
 } from '../../functions/src/miriam/data'
+import {
+  eventAccess,
+  mergeEvent,
+  splitFields,
+  strays,
+  withMoved,
+} from '../../functions/src/eventPrivate'
 
 interface EventsStore {
   templates: EventTemplate[]
@@ -36,7 +48,12 @@ interface EventsStore {
   selectedInstanceKey: string | null
   selectedEvent: EventInstance | null
   loading: boolean
+  /** The events as read, in order, and their private records by id (functions/src/eventPrivate). */
+  _openDocs: [string, Doc][]
+  _privateDocs: Record<string, Doc>
   _unsubTemplates: (() => void) | null
+  _unsubPrivate: (() => void) | null
+  _unsubAuth: (() => void) | null
   _unsubAvail: (() => void) | null
   _refCount: number
   // selectors
@@ -71,6 +88,54 @@ interface EventsStore {
     note: string,
     forceOverrideKeys?: string[]
   ) => Promise<void>
+}
+
+type Doc = Record<string, unknown>
+
+/** The events as the app uses them: each one's private record over its own (functions/src/eventPrivate). */
+function assemble(open: [string, Doc][], closed: Record<string, Doc>) {
+  const templates: EventTemplate[] = []
+  const overrides: Record<string, Partial<EventTemplate>> = {}
+  for (const [id, data] of open) {
+    const { overrides: docOverrides, ...tmpl } = mergeEvent(
+      data,
+      closed[id]
+    ) as unknown as EventTemplate & {
+      overrides?: Record<string, Partial<EventTemplate>>
+    }
+    templates.push({ ...tmpl, id })
+    Object.assign(overrides, docOverrides ?? {})
+  }
+  return { templates, overrides }
+}
+
+/**
+ * The private records this person may read: every one, for an admin; those
+ * of the events they are on, for anyone else; none for a public account
+ * (firestore.rules eventPrivate, which this query has to match).
+ */
+function privateRecords(profile: ReturnType<typeof useAuthStore.getState>['profile']) {
+  if (!profile?.uid) return null
+  if (isAdmin(profile)) return collection(db, 'eventPrivate')
+  if (isPublic(profile)) return null
+  return query(
+    collection(db, 'eventPrivate'),
+    where('access', 'array-contains', String(profile.uid))
+  )
+}
+
+const groupsNow = () => useGroupsStore.getState().groups
+
+/**
+ * Fields and values for an update, as paths rather than dotted text: a
+ * date's key is part of the path, and may hold a character dotted text can't.
+ */
+function fieldUpdates(entries: [string[], unknown][]): [FieldPath, unknown, ...unknown[]] {
+  // Undefined left out, as the app's writes do (lib/firebase: ignoreUndefinedProperties).
+  const [first, ...rest] = entries
+    .filter(([, value]) => value !== undefined)
+    .flatMap(([path, value]) => [new FieldPath(...path), value])
+  return [first as FieldPath, rest[0], ...rest.slice(1)]
 }
 
 async function resolveGeo(city?: string, state?: string) {
@@ -238,7 +303,11 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   selectedInstanceKey: null,
   selectedEvent: null,
   loading: false,
+  _openDocs: [],
+  _privateDocs: {},
   _unsubTemplates: null,
+  _unsubPrivate: null,
+  _unsubAuth: null,
   _unsubAvail: null,
   _refCount: 0,
 
@@ -328,22 +397,34 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     set({ loading: true })
 
     const unsubTemplates = onSnapshot(collection(db, 'events'), (snap) => {
-      const templates: EventTemplate[] = []
-      const overrides: Record<string, Partial<EventTemplate>> = {}
-      snap.docs.forEach((d) => {
-        const data = d.data() as EventTemplate & {
-          overrides?: Record<string, Partial<EventTemplate>>
-        }
-        const { overrides: docOverrides, ...tmpl } = data
-        templates.push({ ...tmpl, id: d.id })
-        if (docOverrides) {
-          Object.entries(docOverrides).forEach(([key, val]) => {
-            overrides[key] = val
-          })
-        }
-      })
-      set({ templates, overrides, loading: false })
+      const openDocs = snap.docs.map((d) => [d.id, d.data() as Doc] as [string, Doc])
+      set({ _openDocs: openDocs, ...assemble(openDocs, get()._privateDocs), loading: false })
     })
+
+    // Their private details (functions/src/eventPrivate): listened to as
+    // whoever is signed in, and again if that, or their roles, change.
+    let listeningAs: string | null = null
+    const listenPrivate = () => {
+      const profile = useAuthStore.getState().profile
+      const as = profile ? `${profile.uid}|${isAdmin(profile)}|${isPublic(profile)}` : ''
+      if (as === listeningAs) return
+      listeningAs = as
+      get()._unsubPrivate?.()
+      set({ _unsubPrivate: null, _privateDocs: {}, ...assemble(get()._openDocs, {}) })
+      const records = privateRecords(profile)
+      if (!records) return
+      const unsub = onSnapshot(
+        records,
+        (snap) => {
+          const privateDocs = Object.fromEntries(snap.docs.map((d) => [d.id, d.data() as Doc]))
+          set({ _privateDocs: privateDocs, ...assemble(get()._openDocs, privateDocs) })
+        },
+        (err) => console.error('[EventsStore] private details:', err.code, err.message)
+      )
+      set({ _unsubPrivate: unsub })
+    }
+    listenPrivate()
+    const unsubAuth = useAuthStore.subscribe(listenPrivate)
 
     const unsubAvail = onSnapshot(collection(db, 'avail'), (snap) => {
       const snapAvail: Record<string, Record<string, AvailResponse>> = {}
@@ -366,7 +447,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       })
     })
 
-    set({ _unsubTemplates: unsubTemplates, _unsubAvail: unsubAvail })
+    set({ _unsubTemplates: unsubTemplates, _unsubAuth: unsubAuth, _unsubAvail: unsubAvail })
   },
 
   unsubscribe: () => {
@@ -374,37 +455,79 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     set({ _refCount: count })
     if (count === 0) {
       get()._unsubTemplates?.()
+      get()._unsubPrivate?.()
+      get()._unsubAuth?.()
       get()._unsubAvail?.()
-      set({ _unsubTemplates: null, _unsubAvail: null, templates: [], avail: {}, overrides: {} })
+      set({
+        _unsubTemplates: null,
+        _unsubPrivate: null,
+        _unsubAuth: null,
+        _unsubAvail: null,
+        _openDocs: [],
+        _privateDocs: {},
+        templates: [],
+        avail: {},
+        overrides: {},
+      })
     }
   },
 
   selectEvent: (key) => set({ selectedInstanceKey: key }),
   setSelectedEvent: (ev) => set({ selectedEvent: ev }),
 
+  // Each event is two records (functions/src/eventPrivate): what anyone who
+  // can see it reads, and its private details — written together.
   createEvent: async (data) => {
     const id = await nextId('nEv')
     const geoFields = await resolveGeo(data.city, data.state)
-    await setDoc(doc(db, 'events', String(id)), {
-      ...data,
+    const { open, closed } = splitFields(data as Doc)
+    const batch = writeBatch(db)
+    batch.set(doc(db, 'events', String(id)), {
+      ...open,
       ...geoFields,
       id,
       _updatedAt: serverTimestamp(),
     })
+    batch.set(doc(db, 'eventPrivate', String(id)), {
+      ...closed,
+      access: eventAccess(data as Doc, groupsNow()),
+    })
+    await batch.commit()
     return id
   },
 
   updateEvent: async (id, patch) => {
+    const key = String(id)
     const old = get().templates.find((t) => sameId(t.id, id))
-    set((s) => ({
-      templates: s.templates.map((t) => (sameId(t.id, id) ? { ...t, ...patch } : t)),
-    }))
-    const geoFields = await resolveGeo(patch.city, patch.state)
-    await updateDoc(doc(db, 'events', String(id)), {
-      ...patch,
-      ...geoFields,
-      _updatedAt: serverTimestamp(),
+    const openNow = get()._openDocs.find(([k]) => k === key)?.[1] ?? {}
+    const closedNow = get()._privateDocs[key] ?? {}
+    const { open, closed } = splitFields(patch as Doc)
+    // Any left in the event — from before, or by an app not yet updated —
+    // moved across with this; what is set now wins over them.
+    const { moved, cleared } = strays(openNow, closedNow)
+    for (const k of Object.keys(closed)) delete moved[k]
+    const openAfter = { ...openNow, ...open }
+    const closedAfter = withMoved(withMoved(closedNow, moved), closed)
+    const access = eventAccess(mergeEvent(openAfter, closedAfter), groupsNow())
+    set((s) => {
+      const openDocs = s._openDocs.map(([k, d]) => [k, k === key ? openAfter : d] as [string, Doc])
+      const privateDocs = { ...s._privateDocs, [key]: { ...closedAfter, access } }
+      return { _openDocs: openDocs, _privateDocs: privateDocs, ...assemble(openDocs, privateDocs) }
     })
+    const geoFields = await resolveGeo(patch.city, patch.state)
+    const batch = writeBatch(db)
+    batch.update(
+      doc(db, 'events', key),
+      ...fieldUpdates([
+        ...Object.entries({ ...open, ...geoFields }).map(
+          ([k, v]) => [[k], v] as [string[], unknown]
+        ),
+        ...cleared.map((p) => [p, deleteField()] as [string[], unknown]),
+        [['_updatedAt'], serverTimestamp()],
+      ])
+    )
+    batch.set(doc(db, 'eventPrivate', key), { ...moved, ...closed, access }, { merge: true })
+    await batch.commit()
     if (old && (patch.teams !== undefined || patch.dressCode !== undefined)) {
       notifyEventChanges(old, { ...old, ...patch }).catch(() => {})
     }
@@ -418,7 +541,10 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
 
   deleteEvent: async (id) => {
     set((s) => ({ templates: s.templates.filter((t) => !sameId(t.id, id)) }))
-    await deleteDoc(doc(db, 'events', String(id)))
+    const batch = writeBatch(db)
+    batch.delete(doc(db, 'events', String(id)))
+    batch.delete(doc(db, 'eventPrivate', String(id)))
+    await batch.commit()
   },
 
   setOverride: async (instanceKey, patch) => {
@@ -428,10 +554,36 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     // detected for changes scoped to a single occurrence (these previously
     // went undetected entirely — setOverride never checked for them).
     const before = get().getInstanceByKey(instanceKey)
-    await updateDoc(doc(db, 'events', templateId), {
-      [`overrides.${instanceKey}`]: patch,
-      _updatedAt: serverTimestamp(),
-    })
+    const openNow = get()._openDocs.find(([k]) => k === templateId)?.[1] ?? {}
+    const closedNow = get()._privateDocs[templateId] ?? {}
+    const { open, closed } = splitFields(patch as Doc)
+    // Left in the event, moved across with this (as in updateEvent) — but
+    // not this date's own: it is written afresh, in both records.
+    const { moved, cleared } = strays(openNow, closedNow)
+    const movedOverrides = moved.overrides as Record<string, Doc> | undefined
+    if (movedOverrides) delete movedOverrides[instanceKey]
+    const keep = cleared.filter((p) => !(p[0] === 'overrides' && p[1] === instanceKey))
+    const overridesOf = (d: Doc) => (d.overrides ?? {}) as Record<string, Doc>
+    const openAfter = { ...openNow, overrides: { ...overridesOf(openNow), [instanceKey]: open } }
+    const closedMoved = withMoved(closedNow, moved)
+    const closedAfter = {
+      ...closedMoved,
+      overrides: { ...overridesOf(closedMoved), [instanceKey]: closed },
+    }
+    const access = eventAccess(mergeEvent(openAfter, closedAfter), groupsNow())
+    const batch = writeBatch(db)
+    batch.update(
+      doc(db, 'events', templateId),
+      ...fieldUpdates([
+        [['overrides', instanceKey], open],
+        ...keep.map((p) => [p, deleteField()] as [string[], unknown]),
+        [['_updatedAt'], serverTimestamp()],
+      ])
+    )
+    const privateRef = doc(db, 'eventPrivate', templateId)
+    batch.set(privateRef, { ...moved, access }, { merge: true })
+    batch.update(privateRef, new FieldPath('overrides', instanceKey), closed)
+    await batch.commit()
     if (
       before &&
       (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined)

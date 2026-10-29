@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 import { RESEND_API_KEY } from '../email/client'
 import { notifyUser } from './notifyCore'
+import { mergeEvent } from '../eventPrivate'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -76,8 +77,11 @@ export const foodSignupReminders = onSchedule(
     const eventsSnap = await db.collection('events').where('date', '==', targetDate).get()
 
     for (const eventDoc of eventsSnap.docs) {
-      const event = eventDoc.data() as EventRaw
-      if (!event.food) continue
+      const stored = eventDoc.data() as EventRaw
+      if (!stored.food) continue
+      // Its teams are in its private record (../eventPrivate).
+      const closed = (await db.collection('eventPrivate').doc(eventDoc.id).get()).data()
+      const event = mergeEvent(stored as Record<string, unknown>, closed) as EventRaw
 
       const items = event.foodItems ?? []
       if (items.length === 0) continue

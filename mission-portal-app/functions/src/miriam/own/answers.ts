@@ -220,6 +220,16 @@ const TEAM_SIDE: readonly Skill[] = [
   'event_weather',
 ]
 
+/** What only those on an event, and admins, are told (../../eventPrivate). */
+const PRIVATE_SIDE: readonly Skill[] = [
+  'event_schedule',
+  'event_dress',
+  'event_team',
+  'event_car',
+  'event_lodging',
+  'event_flight',
+]
+
 /** Whether what `skill` asks of an event is shown to them on its page. */
 const shownTo = (skill: Skill, viewer: Viewer) => !TEAM_SIDE.includes(skill) || seesTeamSide(viewer)
 
@@ -244,6 +254,15 @@ async function aboutEvent(skill: Skill, ev: EventInstance, ctx: AnswerContext): 
           onPage(ev)
         )
       : said(NOT_SHOWN)
+  }
+  // Its private side, which only those on it are given.
+  if (PRIVATE_SIDE.includes(skill) && !isAdminViewer(viewer) && !(await lookups.isOn(ev))) {
+    return said(
+      skill === 'event_team'
+        ? `You’re not on ${title}.`
+        : `That’s only for those on ${title} — but I can tell you when and where it is.`,
+      onPage(ev)
+    )
   }
   switch (skill) {
     case 'event_time': {

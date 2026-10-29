@@ -2130,6 +2130,62 @@ describe('report times', () => {
   })
 })
 
+describe('an event’s private record', () => {
+  beforeEach(() => forgetCaches())
+  // As the server keeps it: the event, and apart from it what only those on it read.
+  const db = fakeDb({
+    ...CHURCH,
+    users: { ...CHURCH.users, kim: { displayName: 'Kim Park', roles: ['regular'] } },
+    events: {
+      ...CHURCH.events,
+      gala: { title: 'Fall Gala', date: '2026-10-24', startTime: '6:00 PM', isPublic: true },
+    },
+    eventPrivate: {
+      gala: {
+        teams: [{ name: 'Worship', leaders: [], members: ['sarah'] }],
+        dressCode: [{ group: '_remainder_', text: 'All black' }],
+        reportTimes: [{ group: '_remainder_', time: '4:00 PM' }],
+        access: ['sarah'],
+      },
+    },
+  })
+  const kim = { uid: 'kim', roles: ['regular'] }
+  const boss = { uid: 'boss', roles: ['admin'] }
+  const ask = (text: string, viewer = sarah) =>
+    ownAnswer(input(text, { viewer, lookups: new Lookups(db, viewer, TODAY) })).then(
+      (o) => (o.result as { text: string } | null)?.text ?? ''
+    )
+
+  it('gives those on the event its details from it', async () => {
+    expect(await ask('what should I wear to the fall gala')).toBe(
+      'The dress code for Fall Gala is All black.'
+    )
+    expect(await ask('what team am I on for the fall gala')).toBe(
+      'You’re on the Worship team for Fall Gala.'
+    )
+    expect(await ask('what should I wear to the fall gala', boss)).toBe(
+      'The dress code for Fall Gala is Everyone else: All black.'
+    )
+  })
+
+  it('tells someone who can see the event, but isn’t on it, none of them', async () => {
+    expect(await ask('what should I wear to the fall gala', kim)).toBe(
+      'That’s only for those on Fall Gala — but I can tell you when and where it is.'
+    )
+    expect(await ask('what team am I on for the fall gala', kim)).toBe('You’re not on Fall Gala.')
+    expect(await ask('when is the fall gala', kim)).toMatch(/October 24 at 6:00 PM/)
+    // Nor are they given to Claude for them.
+    const details = (await new Lookups(db, kim, TODAY).getEvent('gala_2026-10-24')) as Record<
+      string,
+      unknown
+    >
+    for (const k of ['yourTeams', 'dressCode', 'reportTimes', 'schedule']) {
+      expect([k, details[k]]).toEqual([k, undefined])
+    }
+    expect(details.privateDetails).toMatch(/only for those on it/)
+  })
+})
+
 describe('a public follower', () => {
   beforeEach(() => forgetCaches())
   const visitor = { uid: 'pub', roles: ['public'] }

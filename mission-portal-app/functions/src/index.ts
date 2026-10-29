@@ -1,4 +1,4 @@
-export { sendNotification } from './notify'
+export { sendNotification, notifyWorshipTeams } from './notify'
 export { sendContactForm } from './email/sendContactForm'
 export { createPortalUser } from './createPortalUser'
 export { weeklyDigest, monthlyDigest, sendDigestManual } from './digest'
@@ -21,6 +21,12 @@ export {
   onContentUpdated,
 } from './push/publicNotifications'
 export { onEventDeleted } from './onEventDeleted'
+export {
+  settleEventRecord,
+  settleEventAccess,
+  settleGroupAccess,
+  settleEventRecords,
+} from './eventPrivateSync'
 export { onSetListDeleted } from './onSetListDeleted'
 export { textingListDigest } from './push/textingListDigest'
 export { expireAnnouncements } from './expireAnnouncements'

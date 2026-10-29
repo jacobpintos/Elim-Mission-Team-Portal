@@ -66,12 +66,25 @@ const data = (uid = 'me', roles = ['regular']): QuickData => ({
 })
 
 describe('event questions answered on the device', () => {
-  it('gives your own dress code for each event today', () => {
+  it('gives your own dress code today — of the events you’re on', () => {
     const a = quickAnswer('What am I wearing today', data())
-    expect(a?.text).toBe(
-      'Revival in the Heartland: all black. Sunday Service has no dress code set.'
+    expect(a?.text).toBe('The dress code for Revival in the Heartland is all black.')
+    expect(a?.open).toEqual({ key: 'rev_2026-10-11', section: 'dress_code' })
+  })
+
+  it('keeps an event’s private side to those on it', () => {
+    // Sunday Service is public; they aren't on it.
+    expect(quickAnswer('dress code for sunday service', data())?.text).toBe(
+      'That’s only for those on Sunday Service — but I can tell you when and where it is.'
     )
-    expect(a?.open).toBeNull()
+    expect(quickAnswer('what team am I on for sunday service', data())?.text).toBe(
+      'You’re not on Sunday Service.'
+    )
+    expect(quickAnswer('when is sunday service', data())?.text).toMatch(/^Sunday Service is today/)
+    // An admin is given it, on it or not.
+    expect(quickAnswer('dress code for sunday service', data('boss', ['admin']))?.text).toBe(
+      'Sunday Service has no dress code set.'
+    )
   })
 
   it('answers about one event by name, and opens it at what was asked', () => {

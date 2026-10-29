@@ -41,24 +41,15 @@ export async function announceSetList(
       ? worshipUsers.filter((wu) => evUsers.some((eu) => sameId(eu, wu.uid)))
       : []
 
-    // Notify anyone on a team whose NAME contains "worship" for this event
-    // (per spec this is team-name-based, not role-based, so e.g. a
-    // "Worship Band" team member gets it even without the worship role).
-    const worshipTeamUids = new Set<string>()
-    for (const team of evTemplate?.teams ?? []) {
-      if (!team.name?.toLowerCase().includes('worship')) continue
-      ;[...team.leaders, ...team.members].forEach((m) => worshipTeamUids.add(String(m)))
-    }
-    worshipTeamUids.forEach((wuid) => {
-      sendNotif({
-        uid: wuid,
-        type: 'worshipSetAssigned',
-        data: {
-          setListTitle: data.title,
-          eventTitle: evTemplate?.title ?? 'an event',
-        },
-      }).catch(() => {})
-    })
+    // Anyone on a team whose NAME contains "worship" for this event (per spec
+    // team-name-based, not role-based, so e.g. a "Worship Band" team member
+    // gets it even without the worship role). Told by the server: the teams
+    // are in the event's private record, which whoever posts the set list
+    // may not be able to read (functions/src/notify: notifyWorshipTeams).
+    httpsCallable(
+      functions,
+      'notifyWorshipTeams'
+    )({ eventTemplateId: String(data.eventTemplateId), setListTitle: data.title }).catch(() => {})
 
     for (const wu of assignedWorshipUsers) {
       await useTasksStore.getState().createTask({

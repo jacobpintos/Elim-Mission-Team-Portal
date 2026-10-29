@@ -117,13 +117,13 @@ export default function EventDetailScreen() {
   //
   // Treating a refused event as "not found" rather than as a refusal is
   // deliberate: it says nothing about whether the event exists.
-  const allowed =
-    !!resolved &&
-    canViewEvent(resolved, {
-      admin,
-      assigned: !!uid && resolveAssignedUids(resolved).has(String(uid)),
-    })
+  const assigned = !!resolved && !!uid && resolveAssignedUids(resolved).has(String(uid))
+  const allowed = !!resolved && canViewEvent(resolved, { admin, assigned })
   const event = allowed ? resolved : null
+  // Its private details — schedule, dress code, cars, teams, rooms, flights —
+  // are only for those on it, and admins: anyone else's app isn't given them
+  // (functions/src/eventPrivate; firestore.rules eventPrivate).
+  const onIt = admin || (isMember && assigned)
   const reportTimes = event ? reportTimesShown(event, profile) : []
 
   const isUnpublished = event?.unpublished === true
@@ -169,7 +169,7 @@ export default function EventDetailScreen() {
   const handleExportICS = async () => {
     if (!event) return
     try {
-      await downloadICS(event, { team: isMember, report: reportTimes })
+      await downloadICS(event, { team: onIt, report: reportTimes })
     } catch {
       toast('Failed to export calendar file', 'error')
     }
@@ -379,15 +379,15 @@ export default function EventDetailScreen() {
             </YStack>
           ) : null}
 
-          {/* Schedule — members only: what the team does when, not the public's */}
-          {isMember && event.schedule?.length ? (
+          {/* Schedule — those on it only: what the team does when, not the public's */}
+          {onIt && event.schedule?.length ? (
             <Spot lit={lit === 'schedule'} color={colors.primary} name="schedule" onPlaced={placed}>
               <ScheduleDisplay event={event} />
             </Spot>
           ) : null}
 
-          {/* Dress Code — members only */}
-          {isMember ? (
+          {/* Dress Code — those on it only */}
+          {onIt ? (
             <Spot
               lit={lit === 'dress_code'}
               color={colors.primary}
@@ -405,8 +405,8 @@ export default function EventDetailScreen() {
             </Spot>
           ) : null}
 
-          {/* Carpool — members only */}
-          {isMember && event.carpool ? (
+          {/* Carpool — those on it only */}
+          {onIt && event.carpool ? (
             event.carpoolCars && event.carpoolCars.length > 0 ? (
               <CarpoolReadOnly event={event} uid={uid} isAdmin={admin} />
             ) : (
@@ -414,18 +414,18 @@ export default function EventDetailScreen() {
             )
           ) : null}
 
-          {/* Teams — members only */}
-          {isMember && event.teams && event.teams.length > 0 ? (
+          {/* Teams — those on it only */}
+          {onIt && event.teams && event.teams.length > 0 ? (
             <TeamsDisplay event={event} uid={uid} />
           ) : null}
 
-          {/* Lodging — members only */}
-          {isMember && event.lodging && event.lodgingEntries && event.lodgingEntries.length > 0 ? (
+          {/* Lodging — those on it only */}
+          {onIt && event.lodging && event.lodgingEntries && event.lodgingEntries.length > 0 ? (
             <LodgingDisplay event={event} uid={uid} isAdmin={admin} />
           ) : null}
 
-          {/* Flights — members only */}
-          {isMember && event.flights && event.flightEntries && event.flightEntries.length > 0 ? (
+          {/* Flights — those on it only */}
+          {onIt && event.flights && event.flightEntries && event.flightEntries.length > 0 ? (
             <FlightDisplay event={event} uid={uid} isAdmin={admin} />
           ) : null}
 

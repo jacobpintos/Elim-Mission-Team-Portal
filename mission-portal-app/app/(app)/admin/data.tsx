@@ -19,6 +19,7 @@ import {
 } from '@/lib/dataExport'
 import type { EventTemplate, AvailResponse, Task } from '@/types/events'
 import type { Reimbursement } from '@/types/reimbursement'
+import { mergeEvent } from '../../../functions/src/eventPrivate'
 
 interface BackupStatus {
   lastOk?: string
@@ -75,10 +76,18 @@ export default function AdminData() {
     return u?.displayName || u?.email || uid
   }
 
-  const readEvents = async () =>
-    (await getDocs(collection(db, 'events'))).docs.map(
-      (d) => ({ ...d.data(), id: d.id }) as EventTemplate
+  // With their private details (functions/src/eventPrivate), as an admin reads them.
+  const readEvents = async () => {
+    const [open, closed] = await Promise.all([
+      getDocs(collection(db, 'events')),
+      getDocs(collection(db, 'eventPrivate')),
+    ])
+    const privateOf = new Map(closed.docs.map((d) => [d.id, d.data()]))
+    return open.docs.map(
+      (d) =>
+        ({ ...mergeEvent(d.data(), privateOf.get(d.id)), id: d.id }) as unknown as EventTemplate
     )
+  }
 
   const build = async (key: ExportKey): Promise<string> => {
     if (key === 'people') return peopleCsv(users)

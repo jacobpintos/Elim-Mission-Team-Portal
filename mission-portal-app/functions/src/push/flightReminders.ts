@@ -105,7 +105,9 @@ export function upcomingLegs(entry: FlightRaw, now: number) {
     ]
       .map((l) => ({ ...l, departsAt: parseDeparture(l.date, l.time) }))
       // A leg that cannot be read, or has already gone, needs no reminder.
-      .filter((l): l is typeof l & { departsAt: number } => l.departsAt !== null && l.departsAt > now)
+      .filter(
+        (l): l is typeof l & { departsAt: number } => l.departsAt !== null && l.departsAt > now
+      )
   )
 }
 
@@ -121,10 +123,19 @@ async function leadHoursForUser(db: admin.firestore.Firestore, uid: string): Pro
  * flight is entered and re-scheduled if it moves. Each leg records the time
  * its reminder is queued for, and a dispatched task that finds a different
  * time knows the flight changed underneath it and stops.
+ *
+ * The flights are kept in the event's private record (../eventPrivate), but
+ * this still runs as the event is written: saving an event writes both, and
+ * the details an app not yet updated leaves in the event are moved across
+ * with a write to the event too (../eventPrivateSync). Listening to the
+ * private record instead would mean a new function in place of this one,
+ * which a deploy can't remove without someone to confirm it.
  */
 export const onFlightWritten = onDocumentWritten('events/{eventId}', async (event) => {
   const db = admin.firestore()
-  const after = event.data?.after?.data() as EventRaw | undefined
+  if (!event.data?.after?.exists) return
+  const privateRef = db.doc(`eventPrivate/${event.params.eventId}`)
+  const after = (await privateRef.get()).data() as EventRaw | undefined
   if (!after) return
 
   const now = Date.now()
@@ -172,7 +183,7 @@ export const onFlightWritten = onDocumentWritten('events/{eventId}', async (even
   }
 
   if (changed) {
-    await event.data!.after!.ref.update({ flightEntries: updated })
+    await privateRef.update({ flightEntries: updated })
   }
 })
 
@@ -190,9 +201,14 @@ export const flightReminderTask = onTaskDispatched<ReminderPayload>(
     const { eventId, entryId, leg, scheduledFor } = req.data
     const db = admin.firestore()
 
-    const eventSnap = await db.collection('events').doc(eventId).get()
-    const event = eventSnap.data() as EventRaw | undefined
-    if (!event) return
+    const [eventSnap, privateSnap] = await Promise.all([
+      db.collection('events').doc(eventId).get(),
+      db.collection('eventPrivate').doc(eventId).get(),
+    ])
+    const open = eventSnap.data() as EventRaw | undefined
+    if (!open) return
+    // Its flights are in its private record (../eventPrivate).
+    const event: EventRaw = { ...open, ...(privateSnap.data() as EventRaw | undefined) }
 
     const entry = (event.flightEntries ?? []).find((e) => String(e.id ?? 'f') === entryId)
     if (!entry) return
@@ -224,13 +240,16 @@ export const flightReminderTask = onTaskDispatched<ReminderPayload>(
           { eventId, entryId, leg, scheduledFor: wantAt },
           { scheduleTime: new Date(wantAt) }
         )
-      await eventSnap.ref.update({
-        flightEntries: (event.flightEntries ?? []).map((e) =>
-          String(e.id ?? 'f') === entryId
-            ? { ...e, reminderScheduledFor: { ...(e.reminderScheduledFor ?? {}), [leg]: wantAt } }
-            : e
-        ),
-      })
+      await privateSnap.ref.set(
+        {
+          flightEntries: (event.flightEntries ?? []).map((e) =>
+            String(e.id ?? 'f') === entryId
+              ? { ...e, reminderScheduledFor: { ...(e.reminderScheduledFor ?? {}), [leg]: wantAt } }
+              : e
+          ),
+        },
+        { merge: true }
+      )
       return
     }
 

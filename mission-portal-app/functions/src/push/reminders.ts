@@ -5,6 +5,7 @@ import { RESEND_API_KEY } from '../email/client'
 import { notifyUser } from './notifyCore'
 import { clockOf, nextOccurrence, zonedTime, type Repeat } from './reminderTime'
 import { instancesOf, type EventTemplate, type Group } from '../miriam/data'
+import { mergeEvent } from '../eventPrivate'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import {
   beforeEventSaid,
@@ -21,12 +22,18 @@ const TOO_LATE_MS = 12 * 60 * 60 * 1000
 
 /** Every event and group, as a reminder before every event needs them: read once a run. */
 async function eventsAndGroups(db: admin.firestore.Firestore) {
-  const [events, groups] = await Promise.all([
+  const [events, closed, groups] = await Promise.all([
     db.collection('events').get(),
+    // Its teams are in its private record (../eventPrivate): who is on it.
+    db.collection('eventPrivate').get(),
     db.collection('groups').get(),
   ])
+  const privateOf = new Map(closed.docs.map((d) => [d.id, d.data()]))
   return {
-    events: events.docs.map((d) => ({ ...(d.data() as StoredEvent), id: d.id })),
+    events: events.docs.map((d) => ({
+      ...(mergeEvent(d.data(), privateOf.get(d.id)) as StoredEvent),
+      id: d.id,
+    })),
     groups: groups.docs.map((d) => ({ ...(d.data() as Group), id: d.id })),
   }
 }

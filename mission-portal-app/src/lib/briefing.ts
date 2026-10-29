@@ -242,12 +242,17 @@ function reportSaid(ev: EventInstance, input: BriefingInput): string {
   return `Report times: ${times.map((r) => (r.who ? `${r.who} ${r.time}` : r.time)).join(', ')}`
 }
 
+/** On the event themselves: its private details are only for them (functions/src/eventPrivate). */
+const isOn = (ev: EventInstance, input: BriefingInput) =>
+  assignedTo(ev, input.groups).has(input.viewer.uid)
+
 function eventCard(ev: EventInstance, input: BriefingInput, today: string): BriefEvent {
   const me = asMember(input.viewer)
   const sees = seesTeamSide(input.viewer)
-  const teams = sees ? teamsOf(ev, input.viewer.uid) : []
-  const dress = dressCodeFor(ev, me)[0]
-  const car = ev.carpool ? carpoolFor(ev, me, input.names)[0] : undefined
+  const onIt = sees && isOn(ev, input)
+  const teams = onIt ? teamsOf(ev, input.viewer.uid) : []
+  const dress = onIt ? dressCodeFor(ev, me)[0] : undefined
+  const car = onIt && ev.carpool ? carpoolFor(ev, me, input.names)[0] : undefined
   const forecast = sees ? input.weather?.[ev.instanceKey] : undefined
   const report = reportSaid(ev, input)
   const chips = [
@@ -397,9 +402,10 @@ export function buildBriefing(input: BriefingInput): Briefing {
       if (teams.length) bits.push(`You're on ${listed(teams)}.`)
       const report = reportSaid(ev, input)
       if (report) bits.push(`${report.replace(/^Report (?=\d)/, 'Report at ')}.`)
-      const dress = dressCodeFor(ev, asMember(viewer))[0]
+      const onIt = seesTeamSide(viewer) && isOn(ev, input)
+      const dress = onIt ? dressCodeFor(ev, asMember(viewer))[0] : undefined
       if (dress) bits.push(`Dress code: ${dress}.`)
-      const car = ev.carpool ? carpoolFor(ev, asMember(viewer), input.names)[0] : undefined
+      const car = onIt && ev.carpool ? carpoolFor(ev, asMember(viewer), input.names)[0] : undefined
       if (car) bits.push(`Your car: ${car.replace(/\s*\(your car\)/, '')}.`)
       const forecast = seesTeamSide(viewer) ? input.weather?.[ev.instanceKey] : undefined
       if (forecast)
