@@ -33,6 +33,7 @@ import {
   assignedTo,
   canSeeEvent,
   instancesOf,
+  onceEach,
   shiftDate,
   teamsOf,
 } from '../../../functions/src/miriam/data'
@@ -1213,10 +1214,13 @@ async function agendaHere(said: string, here: Here, talk: Talk): Promise<boolean
     return true
   }
   talk.thinking()
-  const shown = events.slice(0, 5)
-  const lines = await Promise.all(shown.map((ev) => agendaLine(ev, here, data)))
-  const count = events.length === 1 ? 'one event' : `${events.length} events`
-  const more = events.length > shown.length ? ` And ${events.length - shown.length} more.` : ''
+  // A repeating event once, with how often: "Sunday Service, every Sunday at 10:00 AM — …".
+  const each = onceEach(events)
+  const firsts = each.slice(0, 5)
+  const shown = firsts.map((x) => x.ev)
+  const lines = await Promise.all(firsts.map(({ ev, every }) => agendaLine(ev, here, data, every)))
+  const count = each.length === 1 ? 'one event' : `${each.length} events`
+  const more = each.length > firsts.length ? ` And ${each.length - firsts.length} more.` : ''
   const text = `${ask.span.charAt(0).toUpperCase()}${ask.span.slice(1)} you have ${count}. ${lines.join(' ')}${more}${noted}`
   const unanswered =
     here.tools.includes('set_availability') && seesTeamSide(data.viewer)
@@ -1233,10 +1237,19 @@ async function agendaHere(said: string, here: Here, talk: Talk): Promise<boolean
   return true
 }
 
-/** One of their events, with what is theirs at it: "Youth Night, Friday at 7 PM — you're on Worship, bringing Chips." */
-async function agendaLine(ev: EventInstance, here: Here, data: QuickData): Promise<string> {
+/**
+ * One of their events, with what is theirs at it: "Youth Night, Friday at 7 PM —
+ * you're on Worship, bringing Chips." `every`: a repeating one, said once —
+ * "every Sunday at 10:00 AM" — with what is theirs at the next of it.
+ */
+async function agendaLine(
+  ev: EventInstance,
+  here: Here,
+  data: QuickData,
+  every: string | null = null
+): Promise<string> {
   const uid = data.viewer.uid
-  const when = `${eventDay(ev, data.today)}${ev.startTime ? ` at ${ev.startTime}` : ''}`
+  const when = every ?? `${eventDay(ev, data.today)}${ev.startTime ? ` at ${ev.startTime}` : ''}`
   // Its team side — team, food, car, availability — is never a public
   // follower's: their event pages don't show it (functions/src/miriam/data: seesTeamSide).
   if (!seesTeamSide(data.viewer)) return `${ev.title}, ${when}.`

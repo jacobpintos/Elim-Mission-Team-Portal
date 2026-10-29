@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { onceEach } from '../../functions/src/miriam/data'
 import {
   availabilityAsked,
   availabilityEvent,
@@ -673,8 +674,9 @@ describe('what is coming up, over a stretch of days', () => {
     })
     expect(
       listAnswer(listAsked('What is coming up in the next 30 days', today)!, data()).text
-    ).toMatch(
-      /^In the next 30 days: Revival in the Heartland, today at 5 PM; Sunday Service, today; Youth Retreat, Friday at 8 AM; Sunday Service, Sunday, Oct 18; Sunday Service, Sunday, Oct 25; and \d+ more\.$/
+    ).toBe(
+      // A repeating event once, with how often.
+      'In the next 30 days: Revival in the Heartland, today at 5 PM; Sunday Service, every Sunday; Youth Retreat, Friday at 8 AM.'
     )
   })
 
@@ -707,5 +709,56 @@ describe('what is coming up, over a stretch of days', () => {
     })
     expect(listAsked('what is my next event', today)?.next).toBe(true)
     expect(listAsked('what’s next', today)?.next).toBe(true)
+  })
+})
+
+describe('a repeating event, listed once', () => {
+  const ev = (over: Record<string, unknown>) =>
+    ({ id: 'x', templateId: 'x', instanceKey: 'x', title: 'X', ...over }) as never
+  const titled = (list: { ev: unknown; every: string | null }[]) =>
+    list.map((x) => `${(x.ev as { title: string }).title}: ${x.every ?? 'once'}`)
+
+  it('says how often, with its time when every one starts then', () => {
+    const weekly = ['2026-10-11', '2026-10-18', '2026-10-25'].map((date) =>
+      ev({
+        templateId: 'sun',
+        instanceKey: `sun_${date}`,
+        title: 'Sunday Service',
+        date,
+        isRec: true,
+        recur: 'weekly',
+        startTime: '10:00 AM',
+      })
+    )
+    const other = ['2026-10-13', '2026-10-27'].map((date) =>
+      ev({
+        templateId: 'bible',
+        instanceKey: `bible_${date}`,
+        title: 'Bible Study',
+        date,
+        isRec: true,
+        recur: 'biweekly',
+        startTime: '7 PM',
+      })
+    )
+    const once = ev({
+      templateId: 'ret',
+      instanceKey: 'ret_2026-10-16',
+      title: 'Retreat',
+      date: '2026-10-16',
+    })
+    const list = [...weekly, ...other, once].sort((a: { date: string }, b: { date: string }) =>
+      a.date.localeCompare(b.date)
+    )
+    expect(titled(onceEach(list))).toEqual([
+      'Sunday Service: every Sunday at 10:00 AM',
+      'Bible Study: every other Tuesday at 7 PM',
+      'Retreat: once',
+    ])
+    // Coming round once in the stretch: its own date, as a one-off is.
+    expect(titled(onceEach([weekly[0]]))).toEqual(['Sunday Service: once'])
+    // One moved to another time: how often, without a time.
+    const moved = { ...(weekly[1] as object), startTime: '6 PM' } as never
+    expect(titled(onceEach([weekly[0], moved]))).toEqual(['Sunday Service: every Sunday'])
   })
 })

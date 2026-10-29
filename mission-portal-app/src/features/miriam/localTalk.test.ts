@@ -793,6 +793,28 @@ describe('what they have coming up', () => {
     ])
   })
 
+  it('a repeating event once, with how often — and what is theirs at the next of it', async () => {
+    const say = conversation({
+      events: [
+        {
+          id: 'svc',
+          title: 'Sunday Service',
+          date: '2026-01-04',
+          isRec: true,
+          recDay: 0,
+          recur: 'weekly',
+          startTime: '10:00 AM',
+          users: ['me'],
+          teams: [{ name: 'Worship', leaders: [], members: ['me'] }],
+        },
+        { id: 'prac', title: 'Band Practice', date: '2026-10-21', users: ['me'] },
+      ],
+    })
+    expect(await say('What do I have in the next 30 days?')).toEqual([
+      'say: In the next 30 days you have 2 events. Sunday Service, every Sunday at 10:00 AM — you’re on Worship, you haven’t said if you can make it. Band Practice, Wednesday, Oct 21 — you haven’t said if you can make it.',
+    ])
+  })
+
   it('nothing on then', async () => {
     const say = conversation({ tools: AVAIL_TOOLS })
     expect(await say("What's my schedule this week?")).toEqual([

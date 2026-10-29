@@ -1,5 +1,6 @@
 import {
   dressCodeFor,
+  onceEach,
   seesTeamSide,
   shiftDate,
   teamsSaid,
@@ -384,8 +385,12 @@ export async function answerFor(skill: Skill, ctx: AnswerContext): Promise<OwnRe
     const notes = await lookups.notesBetween(span.from, span.to).catch(() => [])
     const noted = notes.length ? ` ${notesSaid(notes, span.from === span.to, today)}` : ''
     if (all.length === 0) return said(`Nothing is on ${span.said.replace(/^on /, '')}.${noted}`)
-    const shown = all.slice(0, 5).map((ev) => `${ev.title}, ${whenShort(ev, today)}`)
-    const more = all.length > 5 ? `; and ${all.length - 5} more` : ''
+    // A repeating event once, with how often (../data: onceEach).
+    const each = onceEach(all)
+    const shown = each
+      .slice(0, 5)
+      .map(({ ev, every }) => `${ev.title}, ${every ?? whenShort(ev, today)}`)
+    const more = each.length > 5 ? `; and ${each.length - 5} more` : ''
     return said(`${spanLead(span.said)}: ${shown.join('; ')}${more}.${noted}`)
   }
   if (skill === 'availability') {

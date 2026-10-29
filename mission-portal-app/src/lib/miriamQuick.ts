@@ -7,6 +7,7 @@ import {
   flightsFor,
   instancesOf,
   lodgingFor,
+  onceEach,
   saysChurch,
   seesTeamSide,
   shiftDate,
@@ -724,8 +725,12 @@ export function listAnswer(ask: ListAsk, data: QuickData): QuickAnswer {
   if (all.length === 0) {
     return { text: `Nothing is on ${ask.span.replace(/^on /, '')}.`, open: null }
   }
-  const shown = all.slice(0, 5).map((ev) => `${ev.title}, ${whenShort(ev, today)}`)
-  const more = all.length > 5 ? `; and ${all.length - 5} more` : ''
+  // A repeating event once, with how often: "Sunday Service, every Sunday at 10:00 AM".
+  const each = onceEach(all)
+  const shown = each
+    .slice(0, 5)
+    .map(({ ev, every }) => `${ev.title}, ${every ?? whenShort(ev, today)}`)
+  const more = each.length > 5 ? `; and ${each.length - 5} more` : ''
   return { text: `${spanLead(ask.span)}: ${shown.join('; ')}${more}.`, open: null }
 }
 

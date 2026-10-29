@@ -274,6 +274,53 @@ export function instancesOf(
   return list
 }
 
+/** How often a repeating event comes round: "every Sunday", "every other Sunday", "every month". */
+export function everySaid(ev: EventInstance): string {
+  const day = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][
+    new Date(`${ev.date}T12:00:00Z`).getUTCDay()
+  ]
+  return ev.recur === 'biweekly'
+    ? `every other ${day}`
+    : ev.recur === 'monthly'
+      ? 'every month'
+      : `every ${day}`
+}
+
+/**
+ * A list of events with a repeating one said once, at its first date in it:
+ * where it comes round more than once there, `every` says how often —
+ * "every Sunday at 10:00 AM", the time where each starts at the same one.
+ * A one-off event, or a day of one lasting several, is as it was.
+ */
+export function onceEach<T extends EventInstance>(events: T[]): { ev: T; every: string | null }[] {
+  const series = new Map<string, T[]>()
+  for (const ev of events) {
+    if (!ev.isRec) continue
+    const key = String(ev.templateId)
+    series.set(key, [...(series.get(key) ?? []), ev])
+  }
+  const seen = new Set<string>()
+  const out: { ev: T; every: string | null }[] = []
+  for (const ev of events) {
+    if (!ev.isRec) {
+      out.push({ ev, every: null })
+      continue
+    }
+    const key = String(ev.templateId)
+    if (seen.has(key)) continue
+    seen.add(key)
+    const all = series.get(key) ?? [ev]
+    if (all.length < 2) {
+      out.push({ ev, every: null })
+      continue
+    }
+    const times = new Set(all.map((e) => e.startTime ?? ''))
+    const time = times.size === 1 && ev.startTime ? ` at ${ev.startTime}` : ''
+    out.push({ ev, every: `${everySaid(ev)}${time}` })
+  }
+  return out
+}
+
 /** Everyone on an event: by name, by group and by team. */
 export function assignedTo(ev: EventTemplate, groups: Group[]): Set<string> {
   const out = new Set<string>()
