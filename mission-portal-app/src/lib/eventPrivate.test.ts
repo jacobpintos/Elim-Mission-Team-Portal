@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  EVERYONE,
   eventAccess,
+  eventSeenBy,
   mergeEvent,
   sameAccess,
   splitFields,
@@ -8,6 +10,7 @@ import {
   withMoved,
   withoutPrivate,
 } from '../../functions/src/eventPrivate'
+import { digestEventsFor } from '../../functions/src/digest'
 
 const teams = [{ name: 'Worship', leaders: ['lee'], members: ['sam'] }]
 const groups = [{ id: 'g1', members: ['ann', 'bo'] }]
@@ -144,5 +147,57 @@ describe('details left in the event, moved across', () => {
         { overrides: { k: { dressCode: [] } } }
       )
     ).toEqual({ overrides: { k: { teams, dressCode: [] } }, access: ['x'] })
+  })
+})
+
+describe('who may see an event at all', () => {
+  it('is everyone, for a public one — or one with a public date', () => {
+    expect(eventSeenBy({ isPublic: true, users: ['me'] }, groups)).toEqual([EVERYONE])
+    expect(
+      eventSeenBy({ isPublic: false, overrides: { 'x_2026-11-01': { isPublic: true } } }, groups)
+    ).toEqual([EVERYONE])
+    // A public date that was cancelled doesn't count.
+    expect(
+      eventSeenBy(
+        { users: ['me'], overrides: { 'x_2026-11-01': { isPublic: true, deleted: true } } },
+        groups
+      )
+    ).toEqual(['me'])
+  })
+
+  it('is only those on it, for one that isn’t', () => {
+    expect(eventSeenBy({ isPublic: false, users: ['me'], groups: ['g1'], teams }, groups)).toEqual([
+      'ann',
+      'bo',
+      'lee',
+      'me',
+      'sam',
+    ])
+    expect(eventSeenBy({ title: 'Nobody yet' }, groups)).toEqual([])
+  })
+
+  it('is no one, for a draft — admins see every event regardless', () => {
+    expect(eventSeenBy({ isPublic: true, unpublished: true, users: ['me'] }, groups)).toEqual([])
+  })
+})
+
+describe('the digest email', () => {
+  const events = [
+    { title: 'Sunday', date: '2026-11-01', seenBy: [EVERYONE] },
+    { title: 'Staff retreat', date: '2026-11-02', seenBy: ['sam'] },
+    { title: 'Draft', date: '2026-11-03', unpublished: true, seenBy: [] },
+    // Not yet told who may see it: public or not.
+    { title: 'Older', date: '2026-11-04', isPublic: false },
+    { title: 'Older public', date: '2026-11-05', isPublic: true },
+  ]
+  const titles = (uid: string, roles: string[]) =>
+    digestEventsFor(events, { uid, roles }).map((e) => e.title)
+
+  it('lists only the events each person may see', () => {
+    expect(titles('ann', ['regular'])).toEqual(['Sunday', 'Older public'])
+    expect(titles('sam', ['regular'])).toEqual(['Sunday', 'Staff retreat', 'Older public'])
+    expect(titles('pub', ['public'])).toEqual(['Sunday', 'Older public'])
+    // An admin: all but drafts.
+    expect(titles('boss', ['admin'])).toEqual(['Sunday', 'Staff retreat', 'Older', 'Older public'])
   })
 })

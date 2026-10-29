@@ -164,3 +164,26 @@ export function eventAccess(
 
 export const sameAccess = (a: unknown, b: string[]) =>
   Array.isArray(a) && a.length === b.length && a.every((x, i) => x === b[i])
+
+/** In `seenBy`: an event anyone signed in may see. */
+export const EVERYONE = '*'
+
+/**
+ * Who may see an event at all — that there is one, and when — kept on it
+ * as `seenBy` for the database's rule (firestore.rules events): everyone
+ * (EVERYONE) when it is public, on any of its dates; otherwise only those
+ * on it (eventAccess). A draft, no one: admins see every event regardless.
+ *
+ * The app's own rule (src/lib/events canViewEvent) goes date by date; this
+ * is the event's, so a repeating event with one public date is seen by
+ * everyone — the app still shows them that date alone.
+ */
+export function eventSeenBy(
+  ev: Doc,
+  groups: { id: string | number; members?: unknown[] }[]
+): string[] {
+  if (ev.unpublished === true) return []
+  const isPublic = (part: Doc | undefined) => part?.isPublic === true && part.deleted !== true
+  if (ev.isPublic === true || Object.values(overridesOf(ev)).some(isPublic)) return [EVERYONE]
+  return eventAccess(ev, groups)
+}

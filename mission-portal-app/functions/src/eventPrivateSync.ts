@@ -2,7 +2,7 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
-import { eventAccess, mergeEvent, sameAccess, strays, withMoved } from './eventPrivate'
+import { eventAccess, eventSeenBy, mergeEvent, sameAccess, strays, withMoved } from './eventPrivate'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -13,11 +13,42 @@ async function readGroups(db: admin.firestore.Firestore): Promise<Group[]> {
   return snap.docs.map((d) => ({ ...(d.data() as Omit<Group, 'id'>), id: d.id }))
 }
 
+/** Firestore rejects a batch over 500 writes. */
+const BATCH_LIMIT = 450
+
+type Doc = Record<string, unknown>
+
+/** What putting an event right would change, from copies already read. */
+function settling(open: Doc, closed: Doc | undefined, groups: Group[]) {
+  const { moved, cleared } = strays(open, closed ?? {})
+  const merged = mergeEvent(open, withMoved(closed ?? {}, moved))
+  const access = eventAccess(merged, groups)
+  const seenBy = eventSeenBy(merged, groups)
+  return {
+    moved,
+    cleared,
+    access,
+    seenBy,
+    accessRight: !!closed && sameAccess(closed.access, access),
+    seenRight: sameAccess(open.seenBy, seenBy),
+  }
+}
+
 /**
- * One event's two records put right (./eventPrivate): any private details
- * left in the event moved to its private record, and who may read that —
- * everyone on the event — worked out afresh. Nothing written when both are
- * right already. True when something was.
+ * Whether an event's records need putting right, from copies already read:
+ * so a sweep reads each once, and writes only those that do.
+ */
+const unsettled = (open: Doc, closed: Doc | undefined, groups: Group[]) => {
+  const s = settling(open, closed, groups)
+  return s.cleared.length > 0 || !s.accessRight || !s.seenRight
+}
+
+/**
+ * One event's records put right (./eventPrivate): any private details left
+ * in the event moved to its private record; who may read that — everyone
+ * on the event — and who may see the event at all (`seenBy`) worked out
+ * afresh, and its availability records told the latter. Nothing written
+ * when all is right already. True when something was.
  */
 export async function settleEvent(
   db: admin.firestore.Firestore,
@@ -27,28 +58,65 @@ export async function settleEvent(
   const everyGroup = groups ?? (await readGroups(db))
   const openRef = db.doc(`events/${id}`)
   const closedRef = db.doc(`eventPrivate/${id}`)
-  return db.runTransaction(async (tx) => {
+  const done = await db.runTransaction(async (tx) => {
     const [o, c] = await tx.getAll(openRef, closedRef)
     // Gone, or still being made: its private record waits for it.
-    if (!o.exists) return false
+    if (!o.exists) return null
     const open = o.data() ?? {}
-    const closed = c.data() ?? {}
-    const { moved, cleared } = strays(open, closed)
-    const access = eventAccess(mergeEvent(open, withMoved(closed, moved)), everyGroup)
-    if (c.exists && !cleared.length && sameAccess(closed.access, access)) return false
-    tx.set(closedRef, { ...moved, access }, { merge: true })
-    if (cleared.length) {
-      const [first, ...rest] = cleared.map((path) => new admin.firestore.FieldPath(...path))
-      tx.update(
-        openRef,
-        first,
-        admin.firestore.FieldValue.delete(),
-        ...rest.flatMap((p) => [p, admin.firestore.FieldValue.delete()])
-      )
+    const s = settling(open, c.exists ? c.data() : undefined, everyGroup)
+    if (s.accessRight && s.seenRight && !s.cleared.length) return null
+    if (!s.accessRight || Object.keys(s.moved).length) {
+      tx.set(closedRef, { ...s.moved, access: s.access }, { merge: true })
     }
-    return true
+    const fields: [admin.firestore.FieldPath, unknown][] = [
+      ...s.cleared.map(
+        (path) =>
+          [new admin.firestore.FieldPath(...path), admin.firestore.FieldValue.delete()] as [
+            admin.firestore.FieldPath,
+            unknown,
+          ]
+      ),
+      ...(s.seenRight
+        ? []
+        : [
+            [new admin.firestore.FieldPath('seenBy'), s.seenBy] as [
+              admin.firestore.FieldPath,
+              unknown,
+            ],
+          ]),
+    ]
+    if (fields.length) {
+      const [[first, value], ...rest] = fields
+      tx.update(openRef, first, value, ...rest.flat())
+    }
+    return { seenBy: s.seenBy, seenChanged: !s.seenRight }
   })
+  if (!done) return false
+  if (done.seenChanged) await stampAvail(db, id, done.seenBy)
+  return true
 }
+
+/**
+ * Its availability records (avail/{eventId}_{date}, and _series) told who
+ * may see the event: they say when it is, and who is coming, so they are
+ * read as it is (firestore.rules avail).
+ */
+async function stampAvail(db: admin.firestore.Firestore, eventId: string, seenBy: string[]) {
+  const snap = await db
+    .collection('avail')
+    .where(admin.firestore.FieldPath.documentId(), '>=', `${eventId}_`)
+    .where(admin.firestore.FieldPath.documentId(), '<', `${eventId}_\uf8ff`)
+    .get()
+  const stale = snap.docs.filter((d) => !sameAccess(d.data().seenBy, seenBy))
+  for (let i = 0; i < stale.length; i += BATCH_LIMIT) {
+    const batch = db.batch()
+    stale.slice(i, i + BATCH_LIMIT).forEach((d) => batch.update(d.ref, { seenBy }))
+    await batch.commit()
+  }
+}
+
+/** The event an availability record is for: `${eventId}_${date}`, or `${eventId}_series`. */
+const eventOfAvail = (key: string) => key.slice(0, key.indexOf('_'))
 
 /**
  * An event written: put right. An app not yet updated writes its private
@@ -88,18 +156,64 @@ export const settleGroupAccess = onDocumentWritten('groups/{groupId}', async (ev
 })
 
 /**
- * Whether an event's records need putting right, from copies already read:
- * so a sweep reads each once, and writes only those that do.
+ * An availability record written — a first answer, say — told who may see
+ * its event. Until then only admins can read it.
  */
-function unsettled(
-  open: Record<string, unknown>,
-  closed: Record<string, unknown> | undefined,
-  groups: Group[]
-) {
-  if (!closed) return true
-  const { moved, cleared } = strays(open, closed)
-  if (cleared.length) return true
-  return !sameAccess(closed.access, eventAccess(mergeEvent(open, withMoved(closed, moved)), groups))
+export const stampAvailRecord = onDocumentWritten('avail/{key}', async (event) => {
+  const after = event.data?.after
+  if (!after?.exists) return
+  const ev = (
+    await admin
+      .firestore()
+      .doc(`events/${eventOfAvail(event.params.key)}`)
+      .get()
+  ).data()
+  const seenBy = Array.isArray(ev?.seenBy) ? (ev.seenBy as string[]) : []
+  if (!sameAccess(after.data()?.seenBy, seenBy)) await after.ref.update({ seenBy })
+})
+
+/**
+ * Every event put right; with `avail`, every availability record too —
+ * which the deploy does (scripts/settleAll), so that what the rules ask
+ * for is there before they ask for it. Counts of what was done.
+ */
+export async function settleAll(
+  db: admin.firestore.Firestore,
+  { avail = false }: { avail?: boolean } = {}
+): Promise<{ events: number; settled: number; availStamped: number }> {
+  const [events, closed, groups] = await Promise.all([
+    db.collection('events').get(),
+    db.collection('eventPrivate').get(),
+    readGroups(db),
+  ])
+  const privateOf = new Map(closed.docs.map((d) => [d.id, d.data()]))
+  let settled = 0
+  for (const d of events.docs) {
+    if (!unsettled(d.data(), privateOf.get(d.id), groups)) continue
+    try {
+      if (await settleEvent(db, d.id, groups)) settled++
+    } catch (err) {
+      logger.error('settleAll: failed', { id: d.id, err })
+    }
+  }
+  let availStamped = 0
+  if (avail) {
+    const seenByOf = new Map(
+      (await db.collection('events').get()).docs.map((d) => [d.id, d.data().seenBy])
+    )
+    const stale = (await db.collection('avail').get()).docs.flatMap((d) => {
+      const seenBy = seenByOf.get(eventOfAvail(d.id))
+      const want = Array.isArray(seenBy) ? (seenBy as string[]) : []
+      return sameAccess(d.data().seenBy, want) ? [] : [{ ref: d.ref, want }]
+    })
+    for (let i = 0; i < stale.length; i += BATCH_LIMIT) {
+      const batch = db.batch()
+      stale.slice(i, i + BATCH_LIMIT).forEach((x) => batch.update(x.ref, { seenBy: x.want }))
+      await batch.commit()
+    }
+    availStamped = stale.length
+  }
+  return { events: events.size, settled, availStamped }
 }
 
 /**
@@ -109,22 +223,7 @@ function unsettled(
 export const settleEventRecords = onSchedule(
   { schedule: 'every 30 minutes', timeoutSeconds: 540 },
   async () => {
-    const db = admin.firestore()
-    const [events, closed, groups] = await Promise.all([
-      db.collection('events').get(),
-      db.collection('eventPrivate').get(),
-      readGroups(db),
-    ])
-    const privateOf = new Map(closed.docs.map((d) => [d.id, d.data()]))
-    let settled = 0
-    for (const d of events.docs) {
-      if (!unsettled(d.data(), privateOf.get(d.id), groups)) continue
-      try {
-        if (await settleEvent(db, d.id, groups)) settled++
-      } catch (err) {
-        logger.error('settleEventRecords: failed', { id: d.id, err })
-      }
-    }
-    if (settled) logger.info(`settleEventRecords: settled ${settled} of ${events.size}`)
+    const { events, settled } = await settleAll(admin.firestore())
+    if (settled) logger.info(`settleEventRecords: settled ${settled} of ${events}`)
   }
 )

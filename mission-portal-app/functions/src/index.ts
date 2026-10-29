@@ -26,6 +26,7 @@ export {
   settleEventAccess,
   settleGroupAccess,
   settleEventRecords,
+  stampAvailRecord,
 } from './eventPrivateSync'
 export { onSetListDeleted } from './onSetListDeleted'
 export { textingListDigest } from './push/textingListDigest'

@@ -116,13 +116,28 @@ jobs:
           (github.event_name == 'push' && steps.changed.outputs.functions != '0')
         run: npx firebase-tools deploy --only functions --project ${{ secrets.FIREBASE_PROJECT_ID }}
 
+      # Who may see each event, written on it and on its availability records
+      # (functions/src/scripts/settleAll), before the rules below read it: a
+      # non-public event is read only by those on it. Uses the build the
+      # functions deploy just made. The half-hourly settleEventRecords does the
+      # same for events, as a safety net.
+      - name: Settle events
+        id: settle
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.deploy_functions == true) ||
+          (github.event_name == 'push' && steps.changed.outputs.functions != '0')
+        run: node lib/scripts/settleAll.js
+        working-directory: mission-portal-app/functions
+
       # Deploy Firestore security rules only when the rules file changed (or manually requested).
       # Even when the functions step failed: the two are independent, and a
       # transient Cloud Run error on one function once left a new rule
       # undeployed — and the feature it was for unable to save anything.
+      # Not when settling events failed, though: the rules read what it writes,
+      # and without it members would be shown no events at all.
       - name: Deploy Firestore Rules
         if: |
-          !cancelled() && (
+          !cancelled() && steps.settle.outcome != 'failure' && (
             (github.event_name == 'workflow_dispatch' && inputs.deploy_rules == true) ||
             (github.event_name == 'push' && steps.changed.outputs.rules != '0')
           )

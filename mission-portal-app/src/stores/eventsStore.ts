@@ -35,6 +35,7 @@ import {
 } from '../../functions/src/miriam/data'
 import {
   eventAccess,
+  eventSeenBy,
   mergeEvent,
   splitFields,
   strays,
@@ -486,6 +487,8 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       ...open,
       ...geoFields,
       id,
+      // Who may see it at all (functions/src/eventPrivate eventSeenBy).
+      seenBy: eventSeenBy(data as Doc, groupsNow()),
       _updatedAt: serverTimestamp(),
     })
     batch.set(doc(db, 'eventPrivate', String(id)), {
@@ -506,9 +509,11 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     // moved across with this; what is set now wins over them.
     const { moved, cleared } = strays(openNow, closedNow)
     for (const k of Object.keys(closed)) delete moved[k]
-    const openAfter = { ...openNow, ...open }
+    const openMerged = { ...openNow, ...open }
     const closedAfter = withMoved(withMoved(closedNow, moved), closed)
-    const access = eventAccess(mergeEvent(openAfter, closedAfter), groupsNow())
+    const access = eventAccess(mergeEvent(openMerged, closedAfter), groupsNow())
+    const seenBy = eventSeenBy(mergeEvent(openMerged, closedAfter), groupsNow())
+    const openAfter = { ...openMerged, seenBy }
     set((s) => {
       const openDocs = s._openDocs.map(([k, d]) => [k, k === key ? openAfter : d] as [string, Doc])
       const privateDocs = { ...s._privateDocs, [key]: { ...closedAfter, access } }
@@ -523,6 +528,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
           ([k, v]) => [[k], v] as [string[], unknown]
         ),
         ...cleared.map((p) => [p, deleteField()] as [string[], unknown]),
+        [['seenBy'], seenBy],
         [['_updatedAt'], serverTimestamp()],
       ])
     )
@@ -571,12 +577,14 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       overrides: { ...overridesOf(closedMoved), [instanceKey]: closed },
     }
     const access = eventAccess(mergeEvent(openAfter, closedAfter), groupsNow())
+    const seenBy = eventSeenBy(mergeEvent(openAfter, closedAfter), groupsNow())
     const batch = writeBatch(db)
     batch.update(
       doc(db, 'events', templateId),
       ...fieldUpdates([
         [['overrides', instanceKey], open],
         ...keep.map((p) => [p, deleteField()] as [string[], unknown]),
+        [['seenBy'], seenBy],
         [['_updatedAt'], serverTimestamp()],
       ])
     )

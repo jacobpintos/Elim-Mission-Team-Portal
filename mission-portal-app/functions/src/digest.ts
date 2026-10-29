@@ -5,6 +5,7 @@ import { defineSecret } from 'firebase-functions/params'
 import * as admin from 'firebase-admin'
 import * as crypto from 'crypto'
 import { RESEND_API_KEY, resend, MAIL_FROM } from './email/client'
+import { EVERYONE } from './eventPrivate'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -28,6 +29,33 @@ interface EventDoc {
   date?: string
   location?: string
   startTime?: string
+  isPublic?: boolean
+  unpublished?: boolean
+  /** Who may see it at all (./eventPrivate eventSeenBy). */
+  seenBy?: string[]
+}
+
+/** How many upcoming events each digest lists. */
+const EVENTS_LISTED = 10
+
+/**
+ * The events this person may see, as the app would show them: never a
+ * draft, and a non-public one only to those on it (./eventPrivate).
+ */
+export function digestEventsFor(
+  events: EventDoc[],
+  user: Pick<UserDoc, 'uid' | 'roles'>
+): EventDoc[] {
+  const isAdminUser = (user.roles ?? []).includes('admin')
+  return events
+    .filter((ev) => {
+      if (ev.unpublished === true) return false
+      if (isAdminUser) return true
+      return Array.isArray(ev.seenBy)
+        ? ev.seenBy.includes(EVERYONE) || ev.seenBy.includes(user.uid)
+        : ev.isPublic === true
+    })
+    .slice(0, EVENTS_LISTED)
 }
 
 interface AnnouncementDoc {
@@ -56,7 +84,7 @@ async function getDigestRecipients(type: 'weekly' | 'monthly'): Promise<UserDoc[
   const db = admin.firestore()
   const snap = await db.collection('users').get()
   return snap.docs
-    .map((d) => d.data() as UserDoc)
+    .map((d) => ({ ...(d.data() as UserDoc), uid: d.id }))
     .filter((u) => {
       if (!u.email) return false
       const isPublicUser = (u.roles ?? []).includes('public')
@@ -83,7 +111,8 @@ async function gatherDigestContent(db: admin.firestore.Firestore): Promise<Diges
       .where('date', '>=', nowStr)
       .where('date', '<=', twoWeeksStr)
       .orderBy('date')
-      .limit(10)
+      // More than are listed: each person's list is only those they may see.
+      .limit(100)
       .get()
     events = eventsSnap.docs.map((d) => d.data() as EventDoc)
   } catch {
@@ -250,10 +279,12 @@ async function sendDigestBatch(
     const chunk = recipients.slice(i, i + CHUNK_SIZE)
     const emails = chunk.map((user) => {
       const unsubUrl = buildUnsubscribeUrl(user.uid, type)
+      // Only the events this person may see: one email's list is not another's.
+      const events = digestEventsFor(content.events, user)
       const html =
         type === 'weekly'
-          ? buildWeeklyEmailHtml(user.displayName, content.events, content.announcements, unsubUrl)
-          : buildMonthlyEmailHtml(user.displayName, content.events, content.announcements, unsubUrl)
+          ? buildWeeklyEmailHtml(user.displayName, events, content.announcements, unsubUrl)
+          : buildMonthlyEmailHtml(user.displayName, events, content.announcements, unsubUrl)
 
       return {
         from: MAIL_FROM.value(),
@@ -287,28 +318,22 @@ async function sendDigestBatch(
 }
 
 // Scheduled: Weekly — Monday 8am Central = 13:00 UTC
-export const weeklyDigest = onSchedule(
-  { schedule: '0 13 * * 1', secrets: SECRETS },
-  async () => {
-    const db = admin.firestore()
-    const recipients = await getDigestRecipients('weekly')
-    if (recipients.length === 0) return
-    const content = await gatherDigestContent(db)
-    await sendDigestBatch(recipients, 'weekly', content, db)
-  }
-)
+export const weeklyDigest = onSchedule({ schedule: '0 13 * * 1', secrets: SECRETS }, async () => {
+  const db = admin.firestore()
+  const recipients = await getDigestRecipients('weekly')
+  if (recipients.length === 0) return
+  const content = await gatherDigestContent(db)
+  await sendDigestBatch(recipients, 'weekly', content, db)
+})
 
 // Scheduled: Monthly — 1st of month 8am Central = 13:00 UTC
-export const monthlyDigest = onSchedule(
-  { schedule: '0 13 1 * *', secrets: SECRETS },
-  async () => {
-    const db = admin.firestore()
-    const recipients = await getDigestRecipients('monthly')
-    if (recipients.length === 0) return
-    const content = await gatherDigestContent(db)
-    await sendDigestBatch(recipients, 'monthly', content, db)
-  }
-)
+export const monthlyDigest = onSchedule({ schedule: '0 13 1 * *', secrets: SECRETS }, async () => {
+  const db = admin.firestore()
+  const recipients = await getDigestRecipients('monthly')
+  if (recipients.length === 0) return
+  const content = await gatherDigestContent(db)
+  await sendDigestBatch(recipients, 'monthly', content, db)
+})
 
 // Manual callable — admin only
 export const sendDigestManual = onCall({ secrets: SECRETS }, async (req) => {
