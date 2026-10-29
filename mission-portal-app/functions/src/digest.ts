@@ -5,7 +5,7 @@ import { defineSecret } from 'firebase-functions/params'
 import * as admin from 'firebase-admin'
 import * as crypto from 'crypto'
 import { RESEND_API_KEY, resend, MAIL_FROM } from './email/client'
-import { EVERYONE } from './eventPrivate'
+import { digestEventsFor, type EventDoc } from './digestEvents'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -22,40 +22,6 @@ interface UserDoc {
     weeklyDigest?: boolean
     monthlyDigest?: boolean
   }
-}
-
-interface EventDoc {
-  title?: string
-  date?: string
-  location?: string
-  startTime?: string
-  isPublic?: boolean
-  unpublished?: boolean
-  /** Who may see it at all (./eventPrivate eventSeenBy). */
-  seenBy?: string[]
-}
-
-/** How many upcoming events each digest lists. */
-const EVENTS_LISTED = 10
-
-/**
- * The events this person may see, as the app would show them: never a
- * draft, and a non-public one only to those on it (./eventPrivate).
- */
-export function digestEventsFor(
-  events: EventDoc[],
-  user: Pick<UserDoc, 'uid' | 'roles'>
-): EventDoc[] {
-  const isAdminUser = (user.roles ?? []).includes('admin')
-  return events
-    .filter((ev) => {
-      if (ev.unpublished === true) return false
-      if (isAdminUser) return true
-      return Array.isArray(ev.seenBy)
-        ? ev.seenBy.includes(EVERYONE) || ev.seenBy.includes(user.uid)
-        : ev.isPublic === true
-    })
-    .slice(0, EVENTS_LISTED)
 }
 
 interface AnnouncementDoc {

@@ -13,7 +13,7 @@ import {
   withMoved,
   withoutPrivate,
 } from '../../functions/src/eventPrivate'
-import { digestEventsFor } from '../../functions/src/digest'
+import { digestEventsFor } from '../../functions/src/digestEvents'
 
 const teams = [{ name: 'Worship', leaders: ['lee'], members: ['sam'] }]
 const groups = [{ id: 'g1', members: ['ann', 'bo'] }]
