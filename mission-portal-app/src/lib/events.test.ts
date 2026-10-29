@@ -175,10 +175,10 @@ describe('canViewEvent', () => {
   // /events/<id> rendered whatever the id resolved to — and every signed-in
   // user's app already holds every event, because the store subscribes to the
   // whole collection.
-  const nobody = { admin: false, assigned: false }
+  const nobody = { admin: false, assigned: false, uid: 'me' }
 
   it('lets someone on the event see it', () => {
-    expect(canViewEvent({}, { admin: false, assigned: true })).toBe(true)
+    expect(canViewEvent({}, { admin: false, assigned: true, uid: 'me' })).toBe(true)
   })
 
   it('lets anyone see a public event', () => {
@@ -192,14 +192,23 @@ describe('canViewEvent', () => {
   })
 
   it('lets an admin see anything', () => {
-    expect(canViewEvent({}, { admin: true, assigned: false })).toBe(true)
+    expect(canViewEvent({}, { admin: true, assigned: false, uid: 'me' })).toBe(true)
   })
 
-  it('keeps a draft to admins, even from the people on it', () => {
-    // A draft is the admin's working copy. Being assigned to one does not make
+  it('keeps a draft to its maker — not other admins, nor the people on it', () => {
+    // A draft is its maker's working copy. Being assigned to one does not make
     // it ready to be seen.
-    expect(canViewEvent({ unpublished: true }, { admin: false, assigned: true })).toBe(false)
-    expect(canViewEvent({ unpublished: true }, { admin: true, assigned: false })).toBe(true)
+    const mine = { unpublished: true, createdBy: 'me' }
+    expect(canViewEvent(mine, { admin: true, assigned: false, uid: 'me' })).toBe(true)
+    expect(canViewEvent(mine, { admin: true, assigned: false, uid: 'other' })).toBe(false)
+    expect(canViewEvent(mine, { admin: false, assigned: true, uid: 'sam' })).toBe(false)
+    // One from before drafts said who made them: every admin's, as it was.
+    expect(canViewEvent({ unpublished: true }, { admin: false, assigned: true, uid: 'me' })).toBe(
+      false
+    )
+    expect(canViewEvent({ unpublished: true }, { admin: true, assigned: false, uid: 'me' })).toBe(
+      true
+    )
   })
 
   it('does not let public override a draft', () => {

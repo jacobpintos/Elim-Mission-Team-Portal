@@ -1,5 +1,6 @@
 import type { EventTemplate, EventInstance } from '@/types/events'
 import { clockMinutes } from '@/lib/eventSchedule'
+import { seesDraft } from '../../functions/src/eventPrivate'
 import type { ReportTime } from '../../functions/src/miriam/data'
 
 export const TASK_SECTIONS = [
@@ -113,12 +114,13 @@ export function allInstances(
  * groups store, so the rule can be tested on its own.
  */
 export function canViewEvent(
-  ev: { isPublic?: boolean; unpublished?: boolean },
-  viewer: { admin: boolean; assigned: boolean }
+  ev: { isPublic?: boolean; unpublished?: boolean; createdBy?: string },
+  viewer: { admin: boolean; assigned: boolean; uid: string }
 ): boolean {
-  // A draft is the admin's working copy and is not shown to anyone else,
-  // whoever is on it.
-  if (ev.unpublished === true) return viewer.admin
+  // A draft is its maker's working copy and is not shown to anyone else —
+  // another admin, or whoever is on it — until it is published
+  // (functions/src/eventPrivate seesDraft).
+  if (ev.unpublished === true) return seesDraft(ev, viewer)
   return viewer.admin || viewer.assigned || ev.isPublic === true
 }
 

@@ -157,12 +157,13 @@ export async function eventByKey(key: string): Promise<EventInstance | null> {
   const at = key.indexOf('_')
   if (at < 0) return null
   const id = key.slice(0, at)
+  // Either refused to someone who may not see it: no such event, to them.
   const [snap, closed] = await Promise.all([
-    getDoc(doc(db, 'events', id)),
+    getDoc(doc(db, 'events', id)).catch(() => null),
     // Its private details, where they may read them (functions/src/eventPrivate).
     getDoc(doc(db, 'eventPrivate', id)).catch(() => null),
   ])
-  if (!snap.exists()) return null
+  if (!snap?.exists()) return null
   const { overrides, ...tmpl } = mergeEvent(
     snap.data(),
     closed?.exists() ? closed.data() : null
@@ -339,9 +340,10 @@ async function setAvailability(profile: UserProfile, input: Record<string, unkno
   if (!ev) return cannot('I couldn’t find that event.')
   const note = String(input.note ?? '').trim()
   // As it was, for Undo.
+  // Unreadable a moment after someone first answers, until the server says who may see it.
   const before = (
-    ((await getDoc(doc(db, 'avail', ev.instanceKey.replace(/\//g, '_')))).data()?.responses ??
-      {}) as Record<string, AvailResponse>
+    ((await getDoc(doc(db, 'avail', ev.instanceKey.replace(/\//g, '_'))).catch(() => null))?.data()
+      ?.responses ?? {}) as Record<string, AvailResponse>
   )[String(profile.uid)]
   return {
     kind: 'ready',

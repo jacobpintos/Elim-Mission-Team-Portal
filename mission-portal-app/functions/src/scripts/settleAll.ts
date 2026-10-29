@@ -15,9 +15,9 @@ import { settleAll } from '../eventPrivateSync'
 if (!admin.apps.length) admin.initializeApp()
 
 settleAll(admin.firestore(), { avail: true })
-  .then(({ events, settled, availStamped }) => {
+  .then(({ events, settled, availStamped, draftsFound }) => {
     console.log(
-      `Settled ${settled} of ${events} events; told ${availStamped} availability records who may see them.`
+      `Settled ${settled} of ${events} events; told ${availStamped} availability records who may see them; found the makers of ${draftsFound} drafts.`
     )
     process.exit(0)
   })

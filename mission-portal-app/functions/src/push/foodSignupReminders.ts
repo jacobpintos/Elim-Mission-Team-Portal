@@ -77,8 +77,9 @@ export const foodSignupReminders = onSchedule(
     const eventsSnap = await db.collection('events').where('date', '==', targetDate).get()
 
     for (const eventDoc of eventsSnap.docs) {
-      const stored = eventDoc.data() as EventRaw
-      if (!stored.food) continue
+      const stored = eventDoc.data() as EventRaw & { unpublished?: boolean }
+      // A draft is its maker's alone: nobody is nudged about it.
+      if (!stored.food || stored.unpublished === true) continue
       // Its teams are in its private record (../eventPrivate).
       const closed = (await db.collection('eventPrivate').doc(eventDoc.id).get()).data()
       const event = mergeEvent(stored as Record<string, unknown>, closed) as EventRaw

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Pressable } from 'react-native'
 import { YStack, XStack, Text, Input } from 'tamagui'
-import { collection, doc, setDoc } from 'firebase/firestore'
-import { onSnapshot } from '@/lib/liveFirestore'
+import { collection, doc, query, setDoc, where } from 'firebase/firestore'
+import { getDocs, onSnapshot } from '@/lib/liveFirestore'
 import { Modal } from '@/components/ui/Modal'
 import { db } from '@/lib/firebase'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -493,6 +493,45 @@ export function EventFormModal({
     ).catch(() => {})
   }
 
+  /** The tasks of the template chosen, for an event — and its assignees told. */
+  async function spawnTemplateTasks(eventId: string | number) {
+    const tpl = form.taskTemplateId
+      ? taskTemplates.find((tt) => String(tt.id) === form.taskTemplateId)
+      : null
+    if (!tpl) return
+    const eventDate = form.isRec ? null : displayToIso(form.date) || null
+    for (const taskItem of tpl.tasks ?? []) {
+      if (!taskItem.title.trim()) continue
+      const isPostEvent = (taskItem.daysAfterEvent ?? 0) > 0
+      const dueDate = taskDueDate(eventDate, taskItem)
+      const newTaskId = await createTask({
+        title: taskItem.title,
+        assignees: taskItem.assignees ?? [],
+        lead: (taskItem.assignees ?? [])[0] ?? null,
+        by: profile?.uid ?? '',
+        status: 'pending',
+        evTemplateId: eventId,
+        evDate: eventDate,
+        dueDate,
+        ...(isPostEvent ? { isPostEvent: true } : {}),
+      })
+      // Tasks spawned from a template notify their assignees the same
+      // way a hand-assigned task does. This was the gap that made
+      // assigning yourself a task through an event silently produce
+      // nothing.
+      notifyAssignees(taskItem.assignees ?? [], taskItem.title, newTaskId)
+    }
+  }
+
+  /** Whether an event has tasks already: by its id as a number or as text. */
+  async function hasTasks(eventId: string | number) {
+    const ids = [...new Set([eventId, String(eventId), Number(eventId)])].filter(
+      (x) => x !== '' && !Number.isNaN(x)
+    )
+    const snap = await getDocs(query(collection(db, 'tasks'), where('evTemplateId', 'in', ids)))
+    return !snap.empty
+  }
+
   const doSave = async (finalUsers: (string | number)[], saveAsDraft = false) => {
     // Captured before the write, because the payload sets unpublished and the
     // difference between "updated" and "published" is what it used to be.
@@ -575,16 +614,22 @@ export function EventFormModal({
         await updateEvent(event.id, payload)
         await persistFoodAssignments(String(event.id), event.date ?? displayToIso(form.date))
         // Only what changed — an event is saved many times and re-announcing
-        // every hotel room each save would train people to ignore these.
-        notifyLogisticsAssigned(
-          newLogisticsAssignments(event, {
-            lodgingEntries,
-            flightEntries,
-            carpoolCars: form.carpoolCars,
-          }),
-          form.title,
-          instanceKey ?? String(event.id)
-        )
+        // every hotel room each save would train people to ignore these. A
+        // draft tells no one; published, it tells everyone, and gets its
+        // template's tasks (a draft from before held them already).
+        const publishing = wasDraft && !saveAsDraft
+        if (!saveAsDraft) {
+          notifyLogisticsAssigned(
+            newLogisticsAssignments(publishing ? null : event, {
+              lodgingEntries,
+              flightEntries,
+              carpoolCars: form.carpoolCars,
+            }),
+            form.title,
+            instanceKey ?? String(event.id)
+          )
+        }
+        if (publishing && !(await hasTasks(event.id))) await spawnTemplateTasks(event.id)
         await auditEventSave(
           saveAsDraft ? 'draftSaved' : wasDraft ? 'published' : 'updated',
           form.title,
@@ -593,41 +638,19 @@ export function EventFormModal({
         toast(saveAsDraft ? 'Draft saved' : 'Event updated', 'success')
       } else {
         const newEventId = await createEvent(payload)
-        notifyLogisticsAssigned(
-          newLogisticsAssignments(null, {
-            lodgingEntries,
-            flightEntries,
-            carpoolCars: form.carpoolCars,
-          }),
-          form.title,
-          String(newEventId)
-        )
-        if (form.taskTemplateId && newEventId) {
-          const tpl = taskTemplates.find((tt) => String(tt.id) === form.taskTemplateId)
-          if (tpl) {
-            const eventDate = form.isRec ? null : displayToIso(form.date) || null
-            for (const taskItem of tpl.tasks ?? []) {
-              if (!taskItem.title.trim()) continue
-              const isPostEvent = (taskItem.daysAfterEvent ?? 0) > 0
-              const dueDate = taskDueDate(eventDate, taskItem)
-              const newTaskId = await createTask({
-                title: taskItem.title,
-                assignees: taskItem.assignees ?? [],
-                lead: (taskItem.assignees ?? [])[0] ?? null,
-                by: profile?.uid ?? '',
-                status: 'pending',
-                evTemplateId: newEventId,
-                evDate: eventDate,
-                dueDate,
-                ...(isPostEvent ? { isPostEvent: true } : {}),
-              })
-              // Tasks spawned from a template notify their assignees the same
-              // way a hand-assigned task does. This was the gap that made
-              // assigning yourself a task through an event silently produce
-              // nothing.
-              notifyAssignees(taskItem.assignees ?? [], taskItem.title, newTaskId)
-            }
-          }
+        // A draft is its maker's alone: nobody is told of it, nor given its
+        // tasks, until it is published.
+        if (!saveAsDraft) {
+          notifyLogisticsAssigned(
+            newLogisticsAssignments(null, {
+              lodgingEntries,
+              flightEntries,
+              carpoolCars: form.carpoolCars,
+            }),
+            form.title,
+            String(newEventId)
+          )
+          if (newEventId) await spawnTemplateTasks(newEventId)
         }
         await auditEventSave(saveAsDraft ? 'draftCreated' : 'created', form.title, newEventId)
         toast(saveAsDraft ? 'Draft saved' : 'Event created', 'success')

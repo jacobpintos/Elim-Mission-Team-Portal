@@ -18,6 +18,7 @@ export { broadcastAnnouncement } from './push/sendBroadcast'
 export {
   onAnnouncementPublished,
   onPublicEventCreated,
+  onPublicEventPublished,
   onContentUpdated,
 } from './push/publicNotifications'
 export { onEventDeleted } from './onEventDeleted'

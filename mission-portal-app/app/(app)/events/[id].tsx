@@ -118,7 +118,7 @@ export default function EventDetailScreen() {
   // Treating a refused event as "not found" rather than as a refusal is
   // deliberate: it says nothing about whether the event exists.
   const assigned = !!resolved && !!uid && resolveAssignedUids(resolved).has(String(uid))
-  const allowed = !!resolved && canViewEvent(resolved, { admin, assigned })
+  const allowed = !!resolved && canViewEvent(resolved, { admin, assigned, uid })
   const event = allowed ? resolved : null
   // Its private details — schedule, dress code, cars, teams, rooms, flights —
   // are only for those on it, and admins: anyone else's app isn't given them

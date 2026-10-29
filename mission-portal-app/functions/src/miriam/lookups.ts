@@ -35,7 +35,7 @@ import {
   teamsOf,
 } from './data'
 import { FORECAST_DAYS, forecastFor } from './weather'
-import { eventAccess, mergeEvent, withoutPrivate } from '../eventPrivate'
+import { eventAccess, mergeEvent, seesDraft, withoutPrivate } from '../eventPrivate'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Fields = Record<string, any>
@@ -132,8 +132,10 @@ export class Lookups {
         const priv = privateOf.get(d.id)
         // No private record yet (being moved into one): who is on it, from the event.
         const access = Array.isArray(priv?.access) ? priv.access : eventAccess(open, groups)
+        const admin = isAdminViewer(this.viewer)
         const sees =
-          isAdminViewer(this.viewer) || (seesTeamSide(this.viewer) && access.includes(uid))
+          (admin && (open.unpublished !== true || seesDraft(open, { uid, admin }))) ||
+          (seesTeamSide(this.viewer) && access.includes(uid))
         const { overrides: ov, ...t } = (
           sees ? mergeEvent(open, priv) : withoutPrivate(open)
         ) as EventTemplate & {

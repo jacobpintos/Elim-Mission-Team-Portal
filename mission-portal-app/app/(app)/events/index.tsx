@@ -38,6 +38,7 @@ import { useOccasionsStore } from '@/stores/occasionsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { OccasionsSheet } from '@/features/events/OccasionsSheet'
 import { useKeyboardInset } from '@/lib/useKeyboardInset'
+import { seesDraft } from '../../../functions/src/eventPrivate'
 
 const VIRTUAL_COLOR = '#8e44ad'
 
@@ -252,9 +253,10 @@ export default function EventsScreen() {
 
   const { from, to } = monthRange(calY, calM)
   const allMonthInstances = instances(from, to)
-  // Unpublished drafts: pulled from all templates (not month-scoped) so dateless drafts appear
+  // Unpublished drafts: pulled from all templates (not month-scoped) so dateless drafts appear.
+  // Only their own: a draft is its maker's alone until it is published.
   const unpublishedEvents = admin
-    ? templates.filter((t) => t.unpublished === true && !t.deleted)
+    ? templates.filter((t) => t.unpublished === true && !t.deleted && seesDraft(t, { uid, admin }))
     : []
   // A guest sees only what they were added to. Everyone else also sees public
   // events; for a guest that would surface the whole public calendar, which is

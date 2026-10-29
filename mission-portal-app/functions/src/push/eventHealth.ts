@@ -51,13 +51,17 @@ export const eventHealthCheck = onSchedule(
     const tasks = tasksSnap.docs.map((d) => d.data() as TaskRaw)
 
     for (const evDoc of eventsSnap.docs) {
-      const ev = evDoc.data() as { title?: string; taskTemplateId?: string; deleted?: boolean }
-      if (ev.deleted || !ev.taskTemplateId) continue
+      const ev = evDoc.data() as {
+        title?: string
+        taskTemplateId?: string
+        deleted?: boolean
+        unpublished?: boolean
+      }
+      // A draft is its maker's alone: no other admin is told of it.
+      if (ev.deleted || ev.unpublished === true || !ev.taskTemplateId) continue
 
       const evTasks = tasks.filter(
-        (t) =>
-          String(t.evId ?? '') === evDoc.id ||
-          String(t.evTemplateId ?? '') === evDoc.id
+        (t) => String(t.evId ?? '') === evDoc.id || String(t.evTemplateId ?? '') === evDoc.id
       )
       if (evTasks.length === 0) continue
 

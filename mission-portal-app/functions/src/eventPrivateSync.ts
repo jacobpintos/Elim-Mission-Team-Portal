@@ -2,7 +2,14 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
-import { eventAccess, eventSeenBy, mergeEvent, sameAccess, strays, withMoved } from './eventPrivate'
+import {
+  eventReaders,
+  eventSeenBy,
+  mergeEvent,
+  sameAccess,
+  strays,
+  withMoved,
+} from './eventPrivate'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -22,7 +29,7 @@ type Doc = Record<string, unknown>
 function settling(open: Doc, closed: Doc | undefined, groups: Group[]) {
   const { moved, cleared } = strays(open, closed ?? {})
   const merged = mergeEvent(open, withMoved(closed ?? {}, moved))
-  const access = eventAccess(merged, groups)
+  const access = eventReaders(merged, groups)
   const seenBy = eventSeenBy(merged, groups)
   return {
     moved,
@@ -173,14 +180,52 @@ export const stampAvailRecord = onDocumentWritten('avail/{key}', async (event) =
 })
 
 /**
- * Every event put right; with `avail`, every availability record too —
- * which the deploy does (scripts/settleAll), so that what the rules ask
- * for is there before they ask for it. Counts of what was done.
+ * Who made each draft from before drafts said so, from the audit log: its
+ * "Created draft … (#id)" entry, by the name of the admin who wrote it —
+ * where that name is one admin's alone. Those not found stay every admin's.
+ */
+async function draftMakers(
+  db: admin.firestore.Firestore,
+  ids: string[]
+): Promise<Map<string, string>> {
+  const found = new Map<string, string>()
+  if (!ids.length) return found
+  const [logs, admins] = await Promise.all([
+    db.collection('auditLog').where('action', '==', 'event.draftCreated').get(),
+    db.collection('users').where('roles', 'array-contains', 'admin').get(),
+  ])
+  const byName = new Map<string, string[]>()
+  for (const d of admins.docs) {
+    const name = String(d.data().displayName ?? '').trim()
+    if (name) byName.set(name, [...(byName.get(name) ?? []), d.id])
+  }
+  const entries = logs.docs.map((d) => d.data())
+  for (const id of ids) {
+    const entry = entries.find((l) => String(l.detail ?? '').endsWith(`(#${id})`))
+    const uids = entry ? byName.get(String(entry.name ?? '').trim()) : undefined
+    if (uids?.length === 1) found.set(id, uids[0])
+  }
+  return found
+}
+
+/**
+ * Every event put right; with `avail`, every availability record too, and
+ * the makers of drafts from before drafts said so — which the deploy does
+ * (scripts/settleAll), so that what the rules ask for is there before they
+ * ask for it. Counts of what was done.
  */
 export async function settleAll(
   db: admin.firestore.Firestore,
   { avail = false }: { avail?: boolean } = {}
-): Promise<{ events: number; settled: number; availStamped: number }> {
+): Promise<{ events: number; settled: number; availStamped: number; draftsFound: number }> {
+  let draftsFound = 0
+  if (avail) {
+    const drafts = (await db.collection('events').where('unpublished', '==', true).get()).docs
+    const unknown = drafts.filter((d) => !d.data().createdBy).map((d) => d.id)
+    const makers = await draftMakers(db, unknown)
+    for (const [id, uid] of makers) await db.doc(`events/${id}`).update({ createdBy: uid })
+    draftsFound = makers.size
+  }
   const [events, closed, groups] = await Promise.all([
     db.collection('events').get(),
     db.collection('eventPrivate').get(),
@@ -213,7 +258,7 @@ export async function settleAll(
     }
     availStamped = stale.length
   }
-  return { events: events.size, settled, availStamped }
+  return { events: events.size, settled, availStamped, draftsFound }
 }
 
 /**

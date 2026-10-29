@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ADMINS,
   EVERYONE,
   eventAccess,
+  eventReaders,
   eventSeenBy,
+  seesDraft,
   mergeEvent,
   sameAccess,
   splitFields,
@@ -162,22 +165,36 @@ describe('who may see an event at all', () => {
         { users: ['me'], overrides: { 'x_2026-11-01': { isPublic: true, deleted: true } } },
         groups
       )
-    ).toEqual(['me'])
+    ).toEqual(['me', ADMINS])
   })
 
-  it('is only those on it, for one that isn’t', () => {
+  it('is those on it and the admins, for one that isn’t', () => {
     expect(eventSeenBy({ isPublic: false, users: ['me'], groups: ['g1'], teams }, groups)).toEqual([
       'ann',
       'bo',
       'lee',
       'me',
       'sam',
+      ADMINS,
     ])
-    expect(eventSeenBy({ title: 'Nobody yet' }, groups)).toEqual([])
+    expect(eventSeenBy({ title: 'Nobody yet' }, groups)).toEqual([ADMINS])
   })
 
-  it('is no one, for a draft — admins see every event regardless', () => {
-    expect(eventSeenBy({ isPublic: true, unpublished: true, users: ['me'] }, groups)).toEqual([])
+  it('is whoever made it, for a draft — not other admins, nor those on it', () => {
+    const draft = { isPublic: true, unpublished: true, users: ['me'], createdBy: 'boss' }
+    expect(eventSeenBy(draft, groups)).toEqual(['boss'])
+    expect(eventReaders(draft, groups)).toEqual(['boss'])
+    expect(seesDraft(draft, { uid: 'boss', admin: true })).toBe(true)
+    expect(seesDraft(draft, { uid: 'other', admin: true })).toBe(false)
+    // One from before drafts said who made them: every admin's, as it was.
+    expect(eventSeenBy({ unpublished: true, users: ['me'] }, groups)).toEqual([ADMINS])
+    const old = { unpublished: true }
+    expect(seesDraft(old, { uid: 'other', admin: true })).toBe(true)
+    expect(seesDraft(old, { uid: 'me', admin: false })).toBe(false)
+  })
+
+  it('reads its private record as those on it and the admins, public or not', () => {
+    expect(eventReaders({ isPublic: true, users: ['me'] }, groups)).toEqual(['me', ADMINS])
   })
 })
 

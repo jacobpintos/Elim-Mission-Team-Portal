@@ -6,8 +6,11 @@ import { sendExpoPush } from './expoPush'
 if (!admin.apps.length) admin.initializeApp()
 
 /** Collect Expo push tokens for public users who have a given pref enabled */
-async function getPublicTokens(prefKey: 'publicAnnouncement' | 'publicEvent' | 'contentFeatured'): Promise<string[]> {
-  const snap = await admin.firestore()
+async function getPublicTokens(
+  prefKey: 'publicAnnouncement' | 'publicEvent' | 'contentFeatured'
+): Promise<string[]> {
+  const snap = await admin
+    .firestore()
     .collection('users')
     .where('roles', 'array-contains', 'public')
     .get()
@@ -16,7 +19,9 @@ async function getPublicTokens(prefKey: 'publicAnnouncement' | 'publicEvent' | '
   for (const doc of snap.docs) {
     const data = doc.data()
     if (!data.notificationPrefs?.[prefKey]?.push) continue
-    const pushTokens = data.pushTokens as Record<string, { token: string } | string | null> | undefined
+    const pushTokens = data.pushTokens as
+      | Record<string, { token: string } | string | null>
+      | undefined
     if (!pushTokens) continue
     for (const val of Object.values(pushTokens)) {
       const token = typeof val === 'string' ? val : val?.token
@@ -59,16 +64,14 @@ export const onAnnouncementPublished = onDocumentCreated('announcements/{id}', a
   logger.info(`Public announcement "${title}" sent to ${tokens.length} token(s)`)
 })
 
-/** Fires when a new event is created — notify public users if isPublic: true and within radius (or virtual) */
-export const onPublicEventCreated = onDocumentCreated('events/{id}', async (event) => {
-  const data = event.data?.data()
-  if (!data || !data.isPublic) return
-
+/** Public users told of a public event — those within radius, or all for a virtual one. */
+async function announcePublicEvent(id: string, data: FirebaseFirestore.DocumentData) {
   const isVirtual = !!data.isVirtual
   const eventLat = (data._geocodeLat ?? data.lat) as number | undefined
   const eventLng = (data._geocodeLng ?? data.lng) as number | undefined
 
-  const snap = await admin.firestore()
+  const snap = await admin
+    .firestore()
     .collection('users')
     .where('roles', 'array-contains', 'public')
     .get()
@@ -79,14 +82,18 @@ export const onPublicEventCreated = onDocumentCreated('events/{id}', async (even
     if (!userData.notificationPrefs?.publicEvent?.push) continue
 
     if (!isVirtual && eventLat !== undefined && eventLng !== undefined) {
-      const loc = userData.locationPref as { lat?: number; lng?: number; radius?: number } | undefined
+      const loc = userData.locationPref as
+        | { lat?: number; lng?: number; radius?: number }
+        | undefined
       if (loc?.lat !== undefined && loc?.lng !== undefined) {
         const dist = distanceMiles(loc.lat, loc.lng, eventLat, eventLng)
         if (dist > (loc.radius ?? 50)) continue
       }
     }
 
-    const pushTokens = userData.pushTokens as Record<string, { token: string } | string | null> | undefined
+    const pushTokens = userData.pushTokens as
+      | Record<string, { token: string } | string | null>
+      | undefined
     if (!pushTokens) continue
     for (const val of Object.values(pushTokens)) {
       const token = typeof val === 'string' ? val : val?.token
@@ -102,21 +109,45 @@ export const onPublicEventCreated = onDocumentCreated('events/{id}', async (even
   const body = isVirtual ? 'New virtual event available' : `Event near you: ${data.title ?? ''}`
   await sendExpoPush(tokens, title, body, {
     type: 'publicEvent',
-    id: event.params.id,
+    id,
     // The card is addressed by instance key — templateId_date — and an event
     // with no date of its own has no instance to open, so that falls to the
     // list rather than to a card that would render empty.
-    link: data.date
-      ? `/(app)/events/${event.params.id}_${String(data.date)}`
-      : '/(app)/events',
+    link: data.date ? `/(app)/events/${id}_${String(data.date)}` : '/(app)/events',
   })
   logger.info(`Public event "${title}" sent to ${tokens.length} token(s)`)
+}
+
+/**
+ * A new public event: public users told — not of a draft, which is its
+ * maker's alone until it is published (../eventPrivate).
+ */
+export const onPublicEventCreated = onDocumentCreated('events/{id}', async (event) => {
+  const data = event.data?.data()
+  if (!data || !data.isPublic || data.unpublished === true) return
+  await announcePublicEvent(event.params.id, data)
+})
+
+/** A public draft published: told now, as a new public event is. */
+export const onPublicEventPublished = onDocumentUpdated('events/{id}', async (event) => {
+  const before = event.data?.before.data()
+  const after = event.data?.after.data()
+  if (!after?.isPublic || before?.unpublished !== true || after.unpublished === true) return
+  await announcePublicEvent(event.params.id, after)
 })
 
 /** Fires when music/db is updated — notify public users when new isNew or featured items are added */
 export const onContentUpdated = onDocumentUpdated('music/db', async (event) => {
-  const before = (event.data?.before.data()?.items ?? []) as Array<{ id: string; isNew?: boolean; featured?: boolean }>
-  const after = (event.data?.after.data()?.items ?? []) as Array<{ id: string; isNew?: boolean; featured?: boolean }>
+  const before = (event.data?.before.data()?.items ?? []) as Array<{
+    id: string
+    isNew?: boolean
+    featured?: boolean
+  }>
+  const after = (event.data?.after.data()?.items ?? []) as Array<{
+    id: string
+    isNew?: boolean
+    featured?: boolean
+  }>
 
   const beforeIds = new Set(before.map((i) => i.id))
   const newItems = after.filter((i) => !beforeIds.has(i.id) && (i.isNew || i.featured))
@@ -128,7 +159,10 @@ export const onContentUpdated = onDocumentUpdated('music/db', async (event) => {
 
   const count = newItems.length
   const title = 'New Content Available'
-  const body = count === 1 ? 'A new item has been added to Content.' : `${count} new items have been added to Content.`
+  const body =
+    count === 1
+      ? 'A new item has been added to Content.'
+      : `${count} new items have been added to Content.`
   await sendExpoPush(tokens, title, body, {
     type: 'contentFeatured',
     link: '/(app)/music',

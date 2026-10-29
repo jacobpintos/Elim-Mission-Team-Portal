@@ -7,7 +7,7 @@
  * those screens' rules, so a question can never show more than the app does:
  *
  * - Events: an admin sees every event; anyone else, those they are on — by
- *   name, by group or by team — and public ones. A draft is the admin's
+ *   name, by group or by team — and public ones. A draft is its maker's
  *   alone. (lib/events canViewEvent, stores/eventsStore resolveAssignedUids.)
  * - Dress code: the entry for your team, or for everyone else; an admin sees
  *   them all. (EventDetailModal DressCodeDisplay.)
@@ -36,6 +36,7 @@
  */
 
 import { nameScore } from './names'
+import { seesDraft } from '../eventPrivate'
 
 export interface Viewer {
   uid: string
@@ -112,6 +113,8 @@ export interface EventTemplate {
   dressCode?: DressCodeEntry[]
   isPublic?: boolean
   unpublished?: boolean
+  /** Who made it: a draft is theirs alone until it is published. */
+  createdBy?: string
   deleted?: boolean
   food?: boolean
   carpool?: boolean
@@ -354,7 +357,8 @@ export function assignedTo(ev: EventTemplate, groups: Group[]): Set<string> {
 /** Whether this person may see this event at all: lib/events canViewEvent. */
 export function canSeeEvent(ev: EventTemplate, viewer: Viewer, groups: Group[]): boolean {
   const admin = isAdminViewer(viewer)
-  if (ev.unpublished === true) return admin
+  // A draft is its maker's alone, until it is published (../eventPrivate).
+  if (ev.unpublished === true) return seesDraft(ev, { uid: viewer.uid, admin })
   return admin || ev.isPublic === true || assignedTo(ev, groups).has(viewer.uid)
 }
 

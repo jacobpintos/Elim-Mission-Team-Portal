@@ -1,12 +1,12 @@
 /**
  * An event's private details, kept apart from the event itself.
  *
- * events/{id} is read by every signed-in account: what anyone who can see
- * the event is shown — its name, when and where, its links, who is on it,
- * its food sheet. What only those on it should have — its teams, dress
- * code, report times, schedule, cars, rooms and flights — is kept in
- * eventPrivate/{id}, which only they and admins may read (firestore.rules),
- * with `access`: everyone on it, on any of its dates.
+ * events/{id} holds what anyone who may see the event is shown — its name,
+ * when and where, its links, who is on it, its food sheet — and `seenBy`:
+ * who may (eventSeenBy). What only those on it should have — its teams,
+ * dress code, report times, schedule, cars, rooms and flights — is kept in
+ * eventPrivate/{id}, with `access`: those on it, on any of its dates, and
+ * admins (eventReaders). A draft, either way, is its maker's alone.
  *
  * The app and the server read the two as one (mergeEvent); the app writes
  * each part to its own record (splitFields). An app not yet updated still
@@ -168,11 +168,33 @@ export const sameAccess = (a: unknown, b: string[]) =>
 /** In `seenBy`: an event anyone signed in may see. */
 export const EVERYONE = '*'
 
+/** In `seenBy`, or a private record's `access`: every admin. */
+export const ADMINS = '@admins'
+
+/**
+ * Who a draft is for: whoever made it (`createdBy`), until it is published.
+ * One from before that was kept, whose maker isn't known: every admin, as
+ * every draft once was.
+ */
+export function draftReaders(ev: Doc): string[] {
+  return typeof ev.createdBy === 'string' && ev.createdBy ? [ev.createdBy] : [ADMINS]
+}
+
+/** Whether this person may see a draft: its maker — or, its maker not known, any admin. */
+export function seesDraft(
+  ev: { createdBy?: unknown; unpublished?: unknown },
+  viewer: { uid: string; admin: boolean }
+): boolean {
+  return typeof ev.createdBy === 'string' && ev.createdBy
+    ? ev.createdBy === viewer.uid
+    : viewer.admin
+}
+
 /**
  * Who may see an event at all — that there is one, and when — kept on it
  * as `seenBy` for the database's rule (firestore.rules events): everyone
- * (EVERYONE) when it is public, on any of its dates; otherwise only those
- * on it (eventAccess). A draft, no one: admins see every event regardless.
+ * (EVERYONE) when it is public, on any of its dates; otherwise those on it
+ * (eventAccess) and every admin (ADMINS). A draft: whoever made it.
  *
  * The app's own rule (src/lib/events canViewEvent) goes date by date; this
  * is the event's, so a repeating event with one public date is seen by
@@ -182,8 +204,20 @@ export function eventSeenBy(
   ev: Doc,
   groups: { id: string | number; members?: unknown[] }[]
 ): string[] {
-  if (ev.unpublished === true) return []
+  if (ev.unpublished === true) return draftReaders(ev)
   const isPublic = (part: Doc | undefined) => part?.isPublic === true && part.deleted !== true
   if (ev.isPublic === true || Object.values(overridesOf(ev)).some(isPublic)) return [EVERYONE]
-  return eventAccess(ev, groups)
+  return [...eventAccess(ev, groups), ADMINS]
+}
+
+/**
+ * Who may read an event's private record — kept on it as `access`: those
+ * on it, and every admin; a draft's, whoever made it.
+ */
+export function eventReaders(
+  ev: Doc,
+  groups: { id: string | number; members?: unknown[] }[]
+): string[] {
+  if (ev.unpublished === true) return draftReaders(ev)
+  return [...eventAccess(ev, groups), ADMINS]
 }

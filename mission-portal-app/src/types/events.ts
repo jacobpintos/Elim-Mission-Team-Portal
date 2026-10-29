@@ -136,6 +136,8 @@ export interface EventTemplate {
   extraDays?: ExtraDay[]
   deleted?: boolean
   unpublished?: boolean
+  /** Who made it: a draft is theirs alone until it is published. */
+  createdBy?: string
   overrides?: Record<string, Partial<EventTemplate>>
   planningBoardId?: string | number
   _geocodeLat?: number

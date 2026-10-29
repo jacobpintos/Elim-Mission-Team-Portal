@@ -129,11 +129,7 @@ function addDaysStr(dateStr: string, days: number): string {
  * The stepping mirrors getInstances() in src/lib/events.ts: anchor to recDay,
  * then step by the recurrence, stopping at recEnd.
  */
-export function upcomingDates(
-  t: EventTemplateRaw,
-  fromStr: string,
-  limitStr: string
-): string[] {
+export function upcomingDates(t: EventTemplateRaw, fromStr: string, limitStr: string): string[] {
   if (t.isVirtual) return []
   if (!t._geocodeLat || !t._geocodeLng) return []
   if (t.recEnd && t.recEnd < fromStr) return []
@@ -335,6 +331,8 @@ export async function rebuildWatch(): Promise<WatchDays> {
 
   const byId = new Map<string, { id: string } & EventTemplateRaw>()
   for (const d of [...datedSnap.docs, ...recurringSnap.docs]) {
+    // A draft isn't happening yet, and is its maker's alone.
+    if (d.data().unpublished === true) continue
     byId.set(d.id, { id: d.id, ...(d.data() as EventTemplateRaw) })
   }
 
@@ -397,10 +395,7 @@ async function runWeatherCheck(
   // everyone assigned to the event, notify admins so they can decide how to
   // respond. Delivery goes through notifyUser so it respects each admin's
   // prefs and participates in the batching window.
-  const adminsSnap = await db
-    .collection('users')
-    .where('roles', 'array-contains', 'admin')
-    .get()
+  const adminsSnap = await db.collection('users').where('roles', 'array-contains', 'admin').get()
   const adminUids = adminsSnap.docs.map((d) => d.id)
 
   for (const [, { lat, lng, watched }] of locMap) {

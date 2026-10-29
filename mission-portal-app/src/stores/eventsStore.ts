@@ -34,7 +34,7 @@ import {
   type ReportTime,
 } from '../../functions/src/miriam/data'
 import {
-  eventAccess,
+  eventReaders,
   eventSeenBy,
   mergeEvent,
   splitFields,
@@ -483,17 +483,20 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     const geoFields = await resolveGeo(data.city, data.state)
     const { open, closed } = splitFields(data as Doc)
     const batch = writeBatch(db)
+    // Who made it: a draft is theirs alone until it is published.
+    const createdBy = String(useAuthStore.getState().profile?.uid ?? '')
     batch.set(doc(db, 'events', String(id)), {
       ...open,
       ...geoFields,
       id,
+      ...(createdBy ? { createdBy } : {}),
       // Who may see it at all (functions/src/eventPrivate eventSeenBy).
-      seenBy: eventSeenBy(data as Doc, groupsNow()),
+      seenBy: eventSeenBy({ ...(data as Doc), createdBy }, groupsNow()),
       _updatedAt: serverTimestamp(),
     })
     batch.set(doc(db, 'eventPrivate', String(id)), {
       ...closed,
-      access: eventAccess(data as Doc, groupsNow()),
+      access: eventReaders({ ...(data as Doc), createdBy }, groupsNow()),
     })
     await batch.commit()
     return id
@@ -511,7 +514,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     for (const k of Object.keys(closed)) delete moved[k]
     const openMerged = { ...openNow, ...open }
     const closedAfter = withMoved(withMoved(closedNow, moved), closed)
-    const access = eventAccess(mergeEvent(openMerged, closedAfter), groupsNow())
+    const access = eventReaders(mergeEvent(openMerged, closedAfter), groupsNow())
     const seenBy = eventSeenBy(mergeEvent(openMerged, closedAfter), groupsNow())
     const openAfter = { ...openMerged, seenBy }
     set((s) => {
@@ -534,13 +537,22 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     )
     batch.set(doc(db, 'eventPrivate', key), { ...moved, ...closed, access }, { merge: true })
     await batch.commit()
-    if (old && (patch.teams !== undefined || patch.dressCode !== undefined)) {
+    // A draft is its maker's alone: nobody is told of it until it is
+    // published — and then everyone on it is, as newly added.
+    const draft = (patch.unpublished ?? old?.unpublished) === true
+    const published = old?.unpublished === true && patch.unpublished === false
+    if (!old || draft) return
+    if (published) {
+      notifyEventJoinRemoval(
+        { ...old, users: [], groups: [], teams: [] },
+        { ...old, ...patch }
+      ).catch(() => {})
+      return
+    }
+    if (patch.teams !== undefined || patch.dressCode !== undefined) {
       notifyEventChanges(old, { ...old, ...patch }).catch(() => {})
     }
-    if (
-      old &&
-      (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined)
-    ) {
+    if (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined) {
       notifyEventJoinRemoval(old, { ...old, ...patch }).catch(() => {})
     }
   },
@@ -576,7 +588,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       ...closedMoved,
       overrides: { ...overridesOf(closedMoved), [instanceKey]: closed },
     }
-    const access = eventAccess(mergeEvent(openAfter, closedAfter), groupsNow())
+    const access = eventReaders(mergeEvent(openAfter, closedAfter), groupsNow())
     const seenBy = eventSeenBy(mergeEvent(openAfter, closedAfter), groupsNow())
     const batch = writeBatch(db)
     batch.update(
@@ -594,6 +606,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     await batch.commit()
     if (
       before &&
+      before.unpublished !== true &&
       (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined)
     ) {
       notifyEventJoinRemoval(before, { ...before, ...patch }).catch(() => {})
