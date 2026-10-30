@@ -731,6 +731,41 @@ export async function teach(
   return id
 }
 
+/**
+ * An answer she was taught, changed where it is — its question, its answer,
+ * or both — as it would be taught now: false if it is no longer there.
+ */
+export async function retaught(
+  db: OwnDb,
+  id: string,
+  entry: { q: string; a: string; v: Float32Array; by: string },
+  now = Date.now()
+): Promise<boolean> {
+  const ref = db.doc(TAUGHT_DOC)
+  const found = await db.runTransaction(async (tx) => {
+    const answers = taughtFrom((await tx.get(ref)).data())
+    if (!answers.some((e) => e.id === id)) return false
+    const next = answers.map((e) =>
+      e.id === id
+        ? {
+            ...e,
+            q: entry.q.slice(0, 300),
+            a: entry.a.slice(0, MAX_TAUGHT_ANSWER),
+            v: packVector(entry.v),
+            at: now,
+            by: entry.by,
+          }
+        : e
+    )
+    // Kept whole, or not at all: never cut to fit.
+    if (Buffer.byteLength(JSON.stringify(next), 'utf8') > MAX_TAUGHT_BYTES) throw new Error('full')
+    tx.set(ref, { answers: next })
+    return true
+  })
+  taughtCache = null
+  return found
+}
+
 export async function untaught(db: OwnDb, id: string): Promise<void> {
   const ref = db.doc(TAUGHT_DOC)
   await db.runTransaction(async (tx) => {

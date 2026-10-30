@@ -33,6 +33,7 @@ import {
 } from './pause'
 import {
   fromLeadership,
+  offersMeeting,
   ownAnswer,
   publicAnswer,
   readFor,
@@ -839,7 +840,9 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
             // Read as she read it: the church's leadership on faith, never the
             // same answer back; the web searched again only with more said.
             if (again && (asFaith(skill) === 'faith' || !meant)) {
-              return asFaith(skill) === 'faith' ? fromLeadership(ownInput.can) : said(WEB_AGAIN)
+              return asFaith(skill) === 'faith'
+                ? fromLeadership(ownInput.can, offersMeeting(ownInput.viewer.roles))
+                : said(WEB_AGAIN)
             }
             const asked = meant ? `${fixed.text} — ${meant}` : fixed.text
             const hers = await webOrFaith(skill, asked, ownInput).catch(() => null)

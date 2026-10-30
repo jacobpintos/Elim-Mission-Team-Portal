@@ -34,6 +34,17 @@ describe('Miriam’s voice', () => {
       ])?.id
     ).toBe('g')
   })
+  it('never a voice that works out each sentence’s language, while there is another', () => {
+    // A list of Bible references came out in Spanish.
+    const edge = [
+      v('Multi', 'Microsoft AvaMultilingual Online (Natural) - English (United States)'),
+      v('Ava', 'Microsoft Ava Online (Natural) - English (United States)'),
+      v('Zira', 'Microsoft Zira - English (United States)'),
+    ]
+    expect(pickVoice(edge)?.id).toBe('Ava')
+    expect(pickVoice([edge[0], edge[2]])?.id).toBe('Zira')
+    expect(pickVoice([edge[0]])?.id).toBe('Multi')
+  })
   it('takes a woman’s Google voice on Android, the network one first', () => {
     expect(
       pickVoice([

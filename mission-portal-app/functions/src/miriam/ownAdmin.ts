@@ -10,6 +10,7 @@ import {
   listTaught,
   sameKey,
   MAX_TAUGHT_ANSWER,
+  retaught,
   teach,
   untaught,
   WEB_DOC,
@@ -193,6 +194,27 @@ export const miriamOwnAdmin = onCall(
           throw new HttpsError(
             'resource-exhausted',
             'She has as many answers as she can hold — take one away first.'
+          )
+        }
+        throw err
+      }
+    }
+    if (action === 'retaught') {
+      const id = text(req.data?.id, 40)
+      const q = text(req.data?.question, 300)
+      const a = text(req.data?.answer, MAX_TAUGHT_ANSWER)
+      if (!id) throw new HttpsError('invalid-argument', 'Which one?')
+      if (!q || !a) throw new HttpsError('invalid-argument', 'A question and its answer, both.')
+      try {
+        if (!(await retaught(ownDb, id, { q, a, v: embed(q), by: uid }))) {
+          throw new HttpsError('not-found', 'That answer isn’t there any more.')
+        }
+        return { ok: true }
+      } catch (err) {
+        if (err instanceof Error && err.message === 'full') {
+          throw new HttpsError(
+            'resource-exhausted',
+            'That’s more than she can hold — shorten it, or take another answer away first.'
           )
         }
         throw err

@@ -13,6 +13,7 @@
  * Never a reason to fail: where there is no voice, the answer is still shown.
  */
 import { pickVoice } from '@/lib/miriamVoice'
+import { scriptureForSpeech } from '@/lib/scriptureSpoken'
 
 let unlocked = false
 let held: SpeechSynthesisUtterance[] = []
@@ -69,7 +70,10 @@ function englishVoice(synth: SpeechSynthesis): SpeechSynthesisVoice | null {
   )
 }
 
-export function speak(text: string): void {
+export function speak(said: string): void {
+  // Bible references as a reader says them — and "Jer." no longer taken for
+  // the end of a sentence below.
+  const text = scriptureForSpeech(said)
   const synth = voice()
   if (!synth || !text.trim()) return
   try {

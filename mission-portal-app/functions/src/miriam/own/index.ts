@@ -27,6 +27,8 @@ import {
   isFaithReply,
   LEADERSHIP,
   LEADERSHIP_MEETING,
+  MEETING_OFFER,
+  TO_THE_FORM,
 } from './faith'
 import { CHURCH_SITE, siteKnowledge } from './site'
 import { leaderAnswer, leaderAsked, storyKnowledge } from './leaders'
@@ -122,8 +124,8 @@ export const FOOD_LIVE = false
 /** Her offer of maps, made on an event's day (./answers: event_place). */
 const MAPS_OFFER = /Want me to open maps for it\?$/
 const YES =
-  /^(?:yes|yeah|yep|yup|sure|ok|okay|please|please do|do it|go ahead|yes please|sounds good|absolutely|of course)\b/i
-const NO = /^(?:no|nope|nah|no thanks|not now|never mind|that's ok(?:ay)?)\b/i
+  /^(?:yes|yeah|yep|yup|sure|ok|okay|please|please do|do it|go ahead|yes please|sounds good|absolutely|of course|definitely|i(?:'|’)?d (?:like|love) (?:that|to|it)|i would (?:like|love) (?:that|to|it)|that would be (?:great|good|nice|helpful|wonderful))\b/i
+const NO = /^(?:no|nope|nah|no thanks|not now|not really|never mind|that's ok(?:ay)?)\b/i
 /** Asked plainly to look something up: the web, when no event of theirs is named. */
 const LOOK_IT_UP =
   /^(?:(?:hey|ok|okay)\s+)?(?:miriam[,\s]+)?(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:look\s+up|google|search\s+(?:the\s+)?(?:web|internet|online)\b|search\s+(?:online\s+)?for|look\s+online\s+for|check\s+(?:the\s+)?(?:internet|web)\s+for)\b/i
@@ -182,16 +184,20 @@ const SAID_BACK =
 /** The Connect page, at its form to ask to meet with the leadership. */
 const MEETING_FORM = { kind: 'screen', id: 'connect', section: 'meeting' } as const
 
+/** The church's website, as a button on a version of the app that shows one. */
+const siteLink = (can: readonly string[]) =>
+  can.includes('link')
+    ? ({ kind: 'link', url: CHURCH_SITE, label: 'thewellofiowa.com' } as const)
+    : null
+
 /**
  * Beliefs aren't hers to discuss: the church's leadership, and its website —
- * or, for a public follower (`meeting`), the form to ask to meet with them.
+ * or, for whoever can ask to meet with them (`meeting`: offersMeeting),
+ * whether they'd like to (./faith MEETING_OFFER), listening for the answer.
  */
 export function fromLeadership(can: readonly string[], meeting = false): OwnResult {
-  if (meeting) return said(LEADERSHIP_MEETING, MEETING_FORM)
-  return said(
-    LEADERSHIP,
-    can.includes('link') ? { kind: 'link', url: CHURCH_SITE, label: 'thewellofiowa.com' } : null
-  )
+  if (meeting) return said(LEADERSHIP_MEETING, null, true)
+  return said(LEADERSHIP, siteLink(can))
 }
 
 /** A question of faith answered (./faith), as the app can show it. */
@@ -203,9 +209,9 @@ async function fromFaith(
   meeting = false
 ): Promise<OwnResult> {
   const f = await faithAnswer(text, db, v)
-  // Not enough from the church to answer with: a public follower is taken to
-  // the form to ask to meet with the leadership (fromLeadership).
-  if (f.from === 'leadership' && meeting) return said(DEFER_MEETING, MEETING_FORM)
+  // Not enough from the church to answer with: whoever can ask to meet with
+  // the leadership is asked whether they'd like to (fromLeadership).
+  if (f.from === 'leadership' && meeting) return said(DEFER_MEETING, null, true)
   const r = said(f.text, f.link && can.includes('link') ? { kind: 'link', ...f.link } : null)
   // The church's own answer stays to be read; "reach out to our leadership" goes as any answer does.
   return f.from === 'leadership' ? r : toStay(r)
@@ -320,7 +326,15 @@ async function onFaith(input: OwnInput, last: { said: string; reply: string }): 
 }
 
 /** A public follower reaches the leadership through Connect's meeting form, not the website. */
-const meetingFor = (input: Pick<OwnInput, 'viewer'>) => isPublicFollower(input.viewer.roles)
+/**
+ * Whether this person can ask to meet with the leadership — Connect's form,
+ * which members and public followers have, and a guest doesn't
+ * (src/lib/roles visibleTabs) — and so is offered a meeting (./faith).
+ */
+export const offersMeeting = (roles: readonly string[] | undefined) =>
+  isPublicFollower(roles) ||
+  (roles ?? []).some((r) => ['admin', 'security', 'regular', 'intern', 'worship'].includes(r))
+const meetingFor = (input: Pick<OwnInput, 'viewer'>) => offersMeeting(input.viewer.roles)
 
 /** What she can offer this person (./self), from the lookups their app says they have. */
 const selfFor = (input: Pick<OwnInput, 'viewer' | 'appTools'>): SelfFor => ({
@@ -408,6 +422,16 @@ export async function ownAnswer(input: OwnInput): Promise<Own> {
         }
       }
       return { result: null, read: null, why: 'maps: which event' }
+    }
+    // Her offer of a meeting with the leadership (./faith), answered: the
+    // form to ask for one. (A plain "no" the app answers itself.)
+    if (
+      last.reply.trim().endsWith(MEETING_OFFER) &&
+      (YES.test(text.trim()) || NO.test(text.trim()))
+    ) {
+      return NO.test(text.trim())
+        ? { result: said('Okay.'), read: null, why: 'meeting declined' }
+        : { result: said(TO_THE_FORM, MEETING_FORM), read: null, why: 'meeting' }
     }
     // More asked about an answer on faith — "why?", "what about…", leaning
     // on what was said — she doesn't discuss beliefs: an answer she was taught
@@ -577,11 +601,12 @@ export async function webOrFaith(
   skill: Skill,
   text: string,
   input: Pick<OwnInput, 'db' | 'today' | 'can' | 'web'> &
-    Partial<Pick<OwnInput, 'history'>> & {
-      /** A public follower's: the leadership reached through the meeting form (fromLeadership). */
+    Partial<Pick<OwnInput, 'history' | 'viewer'>> & {
+      /** Whether they're offered a meeting with the leadership (fromLeadership); else as `viewer` is. */
       meeting?: boolean
     }
 ): Promise<OwnResult | null> {
+  const meeting = input.meeting ?? offersMeeting(input.viewer?.roles)
   // On God or the Bible, only the church's own (./faith) — never the web's.
   if (skill === 'faith' || (skill === 'web' && aboutScripture(text))) {
     // More asked after an answer about faith — "why?", "what about…": an
@@ -591,9 +616,9 @@ export async function webOrFaith(
       const taught = await taughtFor(text, () => embed(text), input.db, { strict: true })
       return taught && !justSaid(taught, last.reply)
         ? toStay(said(taught))
-        : fromLeadership(input.can, input.meeting)
+        : fromLeadership(input.can, meeting)
     }
-    return fromFaith(text, input.db, input.can, undefined, input.meeting)
+    return fromFaith(text, input.db, input.can, undefined, meeting)
   }
   if (skill !== 'web') return null
   const key = await braveKeyOf(input.db).catch(() => null)

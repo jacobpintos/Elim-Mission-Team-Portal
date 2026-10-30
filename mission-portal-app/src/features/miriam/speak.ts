@@ -2,6 +2,7 @@ import * as Speech from 'expo-speech'
 import { readySpeaker, SPEAKING_ID } from '@/lib/audioOut'
 import { ownsSpeech, releaseSpeech, speechTakeable, withSpeech } from '@/lib/speechOwner'
 import { pickVoice } from '@/lib/miriamVoice'
+import { scriptureForSpeech } from '@/lib/scriptureSpoken'
 
 /** A phone's voice needs no tap first (speak.web.ts: a browser's does). */
 export function unlockSpeech(): void {}
@@ -78,7 +79,9 @@ export function whenSpoken(): Promise<void> {
  * stops, and doesn't take her own words for someone else's — and the
  * phone's sound can be made ready for her voice (lib/audioOut).
  */
-export function speak(text: string): void {
+export function speak(said: string): void {
+  // Bible references as a reader says them: "Jer. 1:5" is "Jeremiah 1, verse 5".
+  const text = scriptureForSpeech(said)
   chooseVoice()
   const mine = ++turn
   busy = true

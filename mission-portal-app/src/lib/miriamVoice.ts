@@ -71,10 +71,20 @@ function rank(v: VoiceInfo): number {
 
 const usEnglish = (v: VoiceInfo) => /^en[-_]us$/i.test(v.lang)
 
+/**
+ * Edge's "Multilingual" voices ("Microsoft AvaMultilingual Online
+ * (Natural)") work out each sentence's language from its words, so a short
+ * one — a list of Bible references, a name — can come out in Spanish.
+ * Taken only when there is nothing else.
+ */
+const multilingual = (v: VoiceInfo) => /multilingual/i.test(`${v.id} ${v.name}`)
+
 /** The voice to speak in, or null to leave it to the phone or browser. */
 export function pickVoice(voices: VoiceInfo[]): VoiceInfo | null {
   const english = voices.filter(usEnglish)
-  const pool = english.length ? english : voices.filter((v) => /^en/i.test(v.lang))
+  const any = english.length ? english : voices.filter((v) => /^en/i.test(v.lang))
+  const oneLanguage = any.filter((v) => !multilingual(v))
+  const pool = oneLanguage.length ? oneLanguage : any
   const best = [...pool].sort(
     (a, b) => hers(b) - hers(a) || polish(b) - polish(a) || rank(a) - rank(b)
   )[0]

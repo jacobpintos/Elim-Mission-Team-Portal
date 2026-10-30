@@ -15,7 +15,7 @@ import { taughtFound } from './taught'
  *  3. What the church's website says (./site: any page of
  *     thewellofiowa.com), in its words, saying where.
  *  4. If none says enough to answer with confidence: the church's
- *     leadership, and the website.
+ *     leadership — would they like to meet with them? — and the website.
  *
  * Never from anywhere else — not the web, not Claude, not anything she was
  * built knowing. Scripture is the church's to interpret, not hers.
@@ -30,23 +30,32 @@ export interface FaithAnswer {
 }
 
 /**
+ * Asked when she sends someone to the church's leadership, of whoever can ask
+ * to meet with them — the Connect page's form, which members and public
+ * followers have: a yes takes them to it (./index).
+ */
+export const MEETING_OFFER = 'Would you like to schedule a meeting with them?'
+
+/**
  * Said to anything more asked after an answer about faith — "why?", "what
- * about…?": she doesn't discuss beliefs; the church's leadership does.
+ * about…?": she doesn't discuss beliefs; the church's leadership does. To
+ * someone without the meeting form (a guest), with the website.
  */
 export const LEADERSHIP =
   'For more on that, please reach out to our church leadership directly — they’d be glad to talk with you.'
 
-/**
- * The same, to a public follower, who is taken to the Connect page's form to
- * ask to meet with the leadership rather than sent to the website: someone
- * outside the church has no other way to reach them from here.
- */
-export const LEADERSHIP_MEETING =
-  'For more on that, our church leadership would be glad to talk with you — here’s where you can ask to meet with them.'
+/** The same, to whoever has the meeting form: asking whether they'd like to meet. */
+export const LEADERSHIP_MEETING = `For more on that, our church leadership would be glad to talk with you. ${MEETING_OFFER}`
 
 /** Said when neither the church's site nor an answer she was taught says enough to answer with confidence. */
 export const DEFER =
   'I don’t have enough from The Well to answer that confidently — please reach out to our church leadership directly; they’d be glad to talk with you. You can also read what The Well believes at thewellofiowa.com.'
+
+/** The same, to whoever has the meeting form: asking whether they'd like to meet. */
+export const DEFER_MEETING = `I don’t have enough from The Well to answer that confidently. You can read what The Well believes at thewellofiowa.com, and our church leadership would be glad to talk with you. ${MEETING_OFFER}`
+
+/** A meeting offered and taken: the form, opened. */
+export const TO_THE_FORM = 'Here’s the form to ask to meet with our church leadership.'
 
 const siteLabel = (url: string) => {
   try {
@@ -55,10 +64,6 @@ const siteLabel = (url: string) => {
     return 'thewellofiowa.com'
   }
 }
-
-/** DEFER, to a public follower: with the meeting form rather than the website (LEADERSHIP_MEETING). */
-export const DEFER_MEETING =
-  'I don’t have enough from The Well to answer that confidently. Our church leadership would be glad to talk with you — here’s where you can ask to meet with them.'
 
 /** Her answer to a question of faith: the church's own, or its leadership's to give. */
 export async function faithAnswer(

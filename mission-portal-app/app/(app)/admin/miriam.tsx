@@ -62,6 +62,8 @@ export function MiriamAdmin({ call }: { call: Api }) {
   const [answer, setAnswer] = useState('')
   const [key, setKey] = useState('')
   const [busy, setBusy] = useState(false)
+  // A taught answer being changed where it is: its id, and its words as they are being edited.
+  const [editing, setEditing] = useState<Taught | null>(null)
 
   const load = useCallback(
     () =>
@@ -97,6 +99,18 @@ export function MiriamAdmin({ call }: { call: Api }) {
     if (await run({ action: 'teach', question, answer }, 'Taught. She’ll answer it from now on.')) {
       setQuestion('')
       setAnswer('')
+    }
+  }
+
+  const retaught = async () => {
+    if (!editing || !editing.q.trim() || !editing.a.trim()) return
+    if (
+      await run(
+        { action: 'retaught', id: editing.id, question: editing.q, answer: editing.a },
+        'Changed. She’ll answer it this way from now on.'
+      )
+    ) {
+      setEditing(null)
     }
   }
 
@@ -179,34 +193,73 @@ export function MiriamAdmin({ call }: { call: Api }) {
                 Teach her
               </Button>
             </XStack>
-            {data.taught.map((t) => (
-              <YStack
-                key={t.id}
-                borderTopWidth={1}
-                borderTopColor="$borderColor"
-                paddingTop="$2"
-                gap="$1"
-              >
-                <Text fontSize="$3" fontWeight="600">
-                  {t.q}
-                </Text>
-                <Text fontSize="$3" color="$gray11">
-                  {t.a}
-                </Text>
-                {t.a.length === 1200 ? (
-                  // Taught when answers were cut at 1,200 characters.
-                  <Text fontSize="$2" color="$orange10">
-                    This answer was cut short when it was taught. Take it away and teach it again to
-                    keep all of it.
+            {data.taught.map((t) =>
+              editing?.id === t.id ? (
+                <YStack
+                  key={t.id}
+                  borderTopWidth={1}
+                  borderTopColor="$borderColor"
+                  paddingTop="$2"
+                  gap="$2"
+                >
+                  <Input
+                    placeholder="The question"
+                    value={editing.q}
+                    onChangeText={(q) => setEditing({ ...editing, q })}
+                    size="$3"
+                  />
+                  <TextArea
+                    placeholder="Her answer, as she should say it"
+                    value={editing.a}
+                    onChangeText={(a) => setEditing({ ...editing, a })}
+                    numberOfLines={6}
+                    size="$3"
+                  />
+                  <XStack gap="$2">
+                    <Button
+                      size="$2"
+                      theme="active"
+                      onPress={retaught}
+                      disabled={busy || !editing.q.trim() || !editing.a.trim()}
+                    >
+                      Save
+                    </Button>
+                    <Button size="$2" onPress={() => setEditing(null)} disabled={busy}>
+                      Cancel
+                    </Button>
+                  </XStack>
+                </YStack>
+              ) : (
+                <YStack
+                  key={t.id}
+                  borderTopWidth={1}
+                  borderTopColor="$borderColor"
+                  paddingTop="$2"
+                  gap="$1"
+                >
+                  <Text fontSize="$3" fontWeight="600">
+                    {t.q}
                   </Text>
-                ) : null}
-                <XStack>
-                  <Button size="$2" theme="red" onPress={() => untaught(t)} disabled={busy}>
-                    Take away
-                  </Button>
-                </XStack>
-              </YStack>
-            ))}
+                  <Text fontSize="$3" color="$gray11">
+                    {t.a}
+                  </Text>
+                  {t.a.length === 1200 ? (
+                    // Taught when answers were cut at 1,200 characters.
+                    <Text fontSize="$2" color="$orange10">
+                      This answer was cut short when it was taught. Edit it to put back the rest.
+                    </Text>
+                  ) : null}
+                  <XStack gap="$2">
+                    <Button size="$2" onPress={() => setEditing(t)} disabled={busy}>
+                      Edit
+                    </Button>
+                    <Button size="$2" theme="red" onPress={() => untaught(t)} disabled={busy}>
+                      Take away
+                    </Button>
+                  </XStack>
+                </YStack>
+              )
+            )}
           </YStack>
 
           <YStack {...card}>
@@ -218,8 +271,9 @@ export function MiriamAdmin({ call }: { call: Api }) {
               thewellofiowa.com says on any of its pages — in its words, with a link to the page.
               Nothing else: not the web, not Claude. The one thing built in is where the names Elim
               and Miriam come from, as the church gave them; teach her your own answer to either to
-              replace it. If none of these says enough to answer confidently, she asks them to reach
-              out to church leadership, and anything more asked about it goes there too.
+              replace it. If none of these says enough to answer confidently, she points them to
+              church leadership and asks whether they’d like to schedule a meeting — a yes opens the
+              meeting request form — and anything more asked about it goes there too.
             </Text>
             <Text fontSize="$3" fontWeight="600">
               {data.site?.readAt

@@ -28,6 +28,8 @@ import {
   listLearning,
   sameKey,
   taughtAnswers,
+  listTaught,
+  retaught,
   teach,
 } from '../../functions/src/miriam/own/learn'
 import { SEEDS, type Skill } from '../../functions/src/miriam/own/skills'
@@ -56,6 +58,7 @@ import {
   isFaithReply,
   LEADERSHIP,
   LEADERSHIP_MEETING,
+  TO_THE_FORM,
 } from '../../functions/src/miriam/own/faith'
 import {
   ELIM_ANSWER,
@@ -719,6 +722,27 @@ describe('her answers', () => {
     })
   })
 
+  it('an answer taught, changed: said the new way, asked the new way', async () => {
+    const db = memoryOwnDb()
+    const id = await teach(db, {
+      q: 'Where do I park on Sunday?',
+      a: 'Park in the north lot.',
+      v: embed('Where do I park on Sunday?'),
+      by: 'boss',
+    })
+    const changed = {
+      q: 'Where do I park for youth night?',
+      a: 'Park behind the gym — the north lot is closed on Wednesdays.',
+      by: 'boss',
+    }
+    expect(await retaught(db, id, { ...changed, v: embed(changed.q) })).toBe(true)
+    const own = await ownAnswer(input('where should I park for youth night', { db }))
+    expect(own.result).toMatchObject({ text: changed.a })
+    expect((await listTaught(db)).map((t) => [t.id, t.q])).toEqual([[id, changed.q]])
+    // Taken away meanwhile: nothing changed.
+    expect(await retaught(db, 'gone', { ...changed, v: embed(changed.q) })).toBe(false)
+  })
+
   it('a question of faith, taught in other words: her answer', async () => {
     const db = memoryOwnDb()
     await teach(db, {
@@ -734,12 +758,12 @@ describe('her answers', () => {
     // Another subject altogether: the church's leadership's.
     forgetCaches()
     const other = await ownAnswer(input('what do we believe about communion', { db }))
-    expect((other.result as { text: string }).text).toBe(DEFER)
+    expect((other.result as { text: string }).text).toBe(DEFER_MEETING)
   })
 
   it('a question of faith not taught, nor on the church’s site: its leadership', async () => {
     const own = await ownAnswer(input('what does the Bible say about worry'))
-    expect((own.result as { text: string }).text).toBe(DEFER)
+    expect((own.result as { text: string }).text).toBe(DEFER_MEETING)
   })
 
   it('the web, saying where from, with its page to open', async () => {
@@ -794,36 +818,50 @@ describe('her answers', () => {
     ).toBeNull()
   })
 
-  it('a question of faith not hers, from a public follower: the meeting form, not the website', async () => {
+  it('a question of faith not hers: would they like to meet with the leadership?', async () => {
+    const asked = 'what does the Bible say about worry'
+    // A member, and a public follower: asked, and listened to for the answer.
     const visitor = { uid: 'v', roles: ['public'] }
-    const own = await ownAnswer(
-      input('what does the Bible say about worry', {
-        viewer: visitor,
-        lookups: new Lookups(church, visitor, TODAY),
+    for (const extra of [{}, { viewer: visitor, lookups: new Lookups(church, visitor, TODAY) }]) {
+      expect((await ownAnswer(input(asked, extra))).result).toMatchObject({
+        text: DEFER_MEETING,
+        open: null,
+        followUp: true,
       })
-    )
-    expect(own.result).toMatchObject({
-      text: DEFER_MEETING,
-      open: { kind: 'screen', id: 'connect', section: 'meeting' },
-    })
-    // A team member still gets the website.
-    expect((await ownAnswer(input('what does the Bible say about worry'))).result).toMatchObject({
-      text: DEFER,
-      open: { kind: 'link' },
-    })
-    // And more asked after it is the leadership's, by the form too.
+    }
+    // A guest, who has no form to ask with: the website, as before.
+    const guest = { uid: 'g', roles: ['guest'] }
+    expect(
+      (await ownAnswer(input(asked, { viewer: guest, lookups: new Lookups(church, guest, TODAY) })))
+        .result
+    ).toMatchObject({ text: DEFER, open: { kind: 'link' }, followUp: false })
+    // And more asked after it is the leadership's, asked the same.
     const more = await ownAnswer(
       input('but why?', {
         viewer: visitor,
         lookups: new Lookups(church, visitor, TODAY),
-        history: [{ said: 'what does the Bible say about worry', reply: DEFER_MEETING }],
+        history: [{ said: asked, reply: DEFER_MEETING }],
       })
     )
-    expect(more.result).toMatchObject({
-      text: LEADERSHIP_MEETING,
-      open: { kind: 'screen', id: 'connect', section: 'meeting' },
-    })
+    expect(more.result).toMatchObject({ text: LEADERSHIP_MEETING, followUp: true })
     expect(isFaithReply(DEFER_MEETING) && isFaithReply(LEADERSHIP_MEETING)).toBe(true)
+  })
+
+  it('a meeting offered: yes, the form to ask for one; no, okay', async () => {
+    const asked = 'what does the Bible say about worry'
+    for (const yes of ['yes', 'yes please', 'sure', 'I’d like that', 'that would be great']) {
+      const own = await ownAnswer(input(yes, { history: [{ said: asked, reply: DEFER_MEETING }] }))
+      expect(own.result, yes).toMatchObject({
+        text: TO_THE_FORM,
+        open: { kind: 'screen', id: 'connect', section: 'meeting' },
+      })
+    }
+    for (const no of ['no', 'no thanks', 'not really']) {
+      const own = await ownAnswer(
+        input(no, { history: [{ said: 'but why?', reply: LEADERSHIP_MEETING }] })
+      )
+      expect(own.result, no).toMatchObject({ text: 'Okay.', open: null })
+    }
   })
 
   it('who she is: an AI, what she can do — not a question of faith', async () => {
@@ -1354,10 +1392,7 @@ describe('more asked about an answer on faith', () => {
       const own = await ownAnswer(
         input(text, { history: [{ said: 'is God good', reply: godIsGood }] })
       )
-      expect(own.result, text).toMatchObject({
-        text: LEADERSHIP,
-        open: { kind: 'link', url: 'https://thewellofiowa.com' },
-      })
+      expect(own.result, text).toMatchObject({ text: LEADERSHIP_MEETING, followUp: true })
     }
   })
 
@@ -1412,7 +1447,7 @@ describe('more asked about an answer on faith', () => {
       })
     )
     expect(own.why).toBe('faith')
-    expect((own.result as { text: string }).text).toBe(DEFER)
+    expect((own.result as { text: string }).text).toBe(DEFER_MEETING)
   })
 
   it('after an answer she was taught on faith, too', async () => {
@@ -1430,7 +1465,7 @@ describe('more asked about an answer on faith', () => {
         history: [{ said: 'what do we believe about baptism', reply: a }],
       })
     )
-    expect(own.result).toMatchObject({ text: LEADERSHIP })
+    expect(own.result).toMatchObject({ text: LEADERSHIP_MEETING })
     // But an answer taught on something else is talked about as ever.
     forgetCaches()
     const parking = await ownAnswer(
@@ -1508,7 +1543,7 @@ describe('a question taught, asked in other words', () => {
       'but what about the contradictions in it',
     ]) {
       const own = await ownAnswer(input(q, { db, history: [{ said: BIBLE_Q, reply: BIBLE_A }] }))
-      expect(said(own), q).toBe(LEADERSHIP)
+      expect(said(own), q).toBe(LEADERSHIP_MEETING)
     }
   })
 
@@ -1539,10 +1574,10 @@ describe('a question taught, asked in other words', () => {
     expect(await publicAnswer('is the bible without error?', visitor)).toMatchObject({
       text: BIBLE_A,
     })
-    // Its leadership's to answer: the form to ask to meet with them, not the website.
+    // Its leadership's to answer: would they like to meet with them?
     expect(await publicAnswer('do y’all think the bible has mistakes?', visitor)).toMatchObject({
       text: DEFER_MEETING,
-      open: { kind: 'screen', id: 'connect', section: 'meeting' },
+      followUp: true,
     })
     // Not asked: said back as ever.
     expect(await publicAnswer('thanks, God bless', visitor)).toMatchObject({
@@ -1898,7 +1933,7 @@ describe('the church’s beliefs, as taught, asked other ways', () => {
     const db = await taught()
     expect(answered(await ownAnswer(input('is The Well cessationist', { db })))?.stay).toBe(true)
     const deferred = answered(await ownAnswer(input('what does the Bible say about worry', { db })))
-    expect(deferred?.text).toBe(DEFER)
+    expect(deferred?.text).toBe(DEFER_MEETING)
     expect(deferred?.stay).toBeUndefined()
     const parking = answered(await ownAnswer(input('where should I park on sundays', { db })))
     expect(parking?.text).toBe('Park in the north lot.')
@@ -1906,7 +1941,7 @@ describe('the church’s beliefs, as taught, asked other ways', () => {
     const more = answered(
       await ownAnswer(input('why?', { db, history: [{ said: 'is God good', reply: GOD }] }))
     )
-    expect(more?.text).toBe(LEADERSHIP)
+    expect(more?.text).toBe(LEADERSHIP_MEETING)
     expect(more?.stay).toBeUndefined()
   })
 
@@ -1948,7 +1983,7 @@ describe('scripture, never from the web', () => {
 
   it('asked of her, or of Claude, it is the church’s to answer', async () => {
     const own = await ownAnswer(input('look up John 3:16', { web: noWeb }))
-    expect((own.result as { text: string }).text).toBe(DEFER)
+    expect((own.result as { text: string }).text).toBe(DEFER_MEETING)
     const fromClaude = await webOrFaith('web', 'who wrote the book of Romans', {
       db: memoryOwnDb(),
       today: TODAY,
@@ -2078,7 +2113,7 @@ describe('the names Elim and Miriam', () => {
         history: [{ said: 'why are you called Miriam', reply: MIRIAM_ANSWER }],
       })
     )
-    expect(own.result).toMatchObject({ text: LEADERSHIP })
+    expect(own.result).toMatchObject({ text: LEADERSHIP_MEETING })
   })
 })
 
