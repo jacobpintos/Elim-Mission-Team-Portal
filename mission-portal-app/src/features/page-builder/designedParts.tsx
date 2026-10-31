@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Platform, Pressable } from 'react-native'
 import { Image } from 'expo-image'
 import { Text, XStack, YStack } from 'tamagui'
@@ -296,8 +297,16 @@ export function SocialGroupCard({
   const photo = links
     .map((l) => resolveSocialIcon(l.icon, l.label, l.url))
     .find((i) => i.kind === 'image')
-  // Six to a row on a phone's width.
-  const LOGO = 34
+  // The logos sized to the row they have, so all of them stay on one line
+  // even on the narrowest phone (an iPhone mini leaves the row ~200px): as
+  // big as fits, up to 36; before the row is measured, a size that fits six
+  // on any phone. Below 24 they would be too small to tap, and wrap instead.
+  const [row, setRow] = useState(0)
+  const count = links.filter((l) => brandOf(l.url, l.label)).length
+  const roomy = !row || row >= count * 34 + (count - 1) * 8
+  const gap = roomy ? 8 : 6
+  const fit = row ? Math.floor((row - gap * (count - 1)) / Math.max(count, 1)) : 26
+  const LOGO = Math.max(24, Math.min(36, fit))
 
   return (
     <XStack
@@ -340,7 +349,11 @@ export function SocialGroupCard({
             {description}
           </Text>
         ) : null}
-        <XStack flexWrap="wrap" gap={8}>
+        <XStack
+          flexWrap="wrap"
+          gap={gap}
+          onLayout={(e) => setRow(Math.floor(e.nativeEvent.layout.width))}
+        >
           {links.map((link, i) => {
             const brand = brandOf(link.url, link.label)
             if (!brand) return null
