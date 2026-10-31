@@ -4,7 +4,7 @@ import { Text, XStack, YStack } from 'tamagui'
 import { Arrow } from '@/components/ui/Brand'
 import { BRAND_COLORS, BrandMark } from '@/components/ui/BrandMark'
 import { openExternalUrl } from '@/lib/externalUrl'
-import { resolveSocialIcon } from '@/lib/socialIcon'
+import { BRAND_NAMES, brandOf, resolveSocialIcon } from '@/lib/socialIcon'
 import { useThemeColors } from '@/theme/useThemeColors'
 import type { PageBlock } from '@/types/pages'
 import type { GiveWay } from './givingLayout'
@@ -157,6 +157,109 @@ export function LinkCard({
         >
           <Arrow color={colors.primary} />
         </YStack>
+      </XStack>
+    </Pressable>
+  )
+}
+
+/**
+ * One of the church's accounts elsewhere, as a card the way Posts draws its
+ * pages: its photo filling the left of the card — the picture added as the
+ * link's icon in the page builder — with the platform's logo in the photo's
+ * corner, and beside it whose account it is and where: "The Elim Arrival",
+ * "Instagram". With no photo, the platform's own colour and logo stand in.
+ * Tapped, it opens the account.
+ */
+export function SocialCard({ link, width }: { link: GiveWay; width: number | '100%' }) {
+  const colors = useThemeColors()
+  const icon = resolveSocialIcon(link.icon, link.label, link.url)
+  const brand = brandOf(link.url, link.label)
+  const platform = brand ? BRAND_NAMES[brand] : link.handle
+  // Not said twice: a card called "Instagram" needn't say it's on Instagram.
+  const where = platform && platform.toLowerCase() !== link.label.toLowerCase() ? platform : ''
+
+  return (
+    <Pressable
+      onPress={() => openExternalUrl(link.url)}
+      accessibilityRole="link"
+      accessibilityLabel={`${link.label}${platform ? ` on ${platform}` : ''}`}
+      style={(state) => {
+        // react-native-web adds `hovered`; native has no such state.
+        const hovered = (state as { hovered?: boolean }).hovered
+        return {
+          width,
+          opacity: state.pressed ? 0.85 : 1,
+          transform: [{ translateY: hovered ? -2 : 0 }],
+        }
+      }}
+    >
+      <XStack
+        minHeight={88}
+        borderRadius={16}
+        borderWidth={1}
+        borderColor={colors.border}
+        backgroundColor={colors.surface}
+        overflow="hidden"
+      >
+        <YStack
+          width={104}
+          alignSelf="stretch"
+          position="relative"
+          overflow="hidden"
+          alignItems="center"
+          justifyContent="center"
+          backgroundColor={
+            icon.kind === 'image'
+              ? colors.border
+              : brand
+                ? BRAND_COLORS[brand]
+                : colors.primary + '33'
+          }
+        >
+          {icon.kind === 'image' ? (
+            <Image
+              source={{ uri: icon.uri }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+              contentFit="cover"
+              accessibilityLabel={link.label}
+            />
+          ) : brand ? (
+            <BrandMark brand={brand} size={56} />
+          ) : (
+            <Text fontSize={28} fontWeight="800" color={colors.primary}>
+              {icon.kind === 'glyph' || icon.kind === 'initial' ? icon.text : ''}
+            </Text>
+          )}
+          {/* The platform, in the photo's corner. */}
+          {icon.kind === 'image' && brand ? (
+            <YStack
+              position="absolute"
+              right={6}
+              bottom={6}
+              width={26}
+              height={26}
+              borderRadius={7}
+              overflow="hidden"
+              borderWidth={1.5}
+              borderColor="#FFFFFF"
+            >
+              <BrandMark brand={brand} size={23} />
+            </YStack>
+          ) : null}
+        </YStack>
+        <XStack flex={1} minWidth={0} alignItems="center" gap={10} paddingHorizontal={16}>
+          <YStack flex={1} minWidth={0} gap={3}>
+            <Text fontSize={16} fontWeight="700" color={colors.text} numberOfLines={2}>
+              {link.label}
+            </Text>
+            {where ? (
+              <Text fontSize={13} color={colors.textMuted} numberOfLines={1}>
+                {where}
+              </Text>
+            ) : null}
+          </YStack>
+          <Arrow color={colors.textMuted} />
+        </XStack>
       </XStack>
     </Pressable>
   )

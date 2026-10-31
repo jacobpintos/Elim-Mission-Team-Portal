@@ -22,6 +22,11 @@ export interface ConnectLayout {
   /** The church's accounts elsewhere, from the page's social blocks. */
   links: GiveWay[]
   linksHeading: string | null
+  /**
+   * The same, kept as the page groups them: each social block its own group,
+   * under its own heading — "The Elim Arrival", then "The Well of Iowa".
+   */
+  linkGroups: { heading: string | null; links: GiveWay[] }[]
   story: TextData[]
   actions: ButtonData[]
   /** Everything else, in page order, drawn by the ordinary block renderers. */
@@ -52,6 +57,7 @@ export function composeConnect(blocks: PageBlock[]): ConnectLayout {
     meeting: null,
     links: [],
     linksHeading: null,
+    linkGroups: [],
     story: [],
     actions: [],
     rest: [],
@@ -78,15 +84,19 @@ export function composeConnect(blocks: PageBlock[]): ConnectLayout {
       case 'social': {
         const data = block.data as SocialData
         layout.linksHeading ??= data.heading?.trim() || null
+        const group: GiveWay[] = []
         for (const link of data.links ?? []) {
           if (!link.url?.trim()) continue
-          layout.links.push({
+          group.push({
             label: link.label?.trim() || giveHandle(link.url),
             url: link.url.trim(),
             icon: link.icon ?? '',
             handle: giveHandle(link.url),
           })
         }
+        layout.links.push(...group)
+        if (group.length)
+          layout.linkGroups.push({ heading: data.heading?.trim() || null, links: group })
         break
       }
       case 'text':

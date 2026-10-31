@@ -16,7 +16,27 @@
  */
 
 /** A platform whose logo the app draws itself. */
-export type Brand = 'venmo' | 'cashapp'
+export type Brand =
+  | 'venmo'
+  | 'cashapp'
+  | 'facebook'
+  | 'instagram'
+  | 'youtube'
+  | 'tiktok'
+  | 'spotify'
+  | 'applemusic'
+
+/** What each is called, as a card says where a link goes: "Facebook". */
+export const BRAND_NAMES: Record<Brand, string> = {
+  venmo: 'Venmo',
+  cashapp: 'Cash App',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  spotify: 'Spotify',
+  applemusic: 'Apple Music',
+}
 
 export type ResolvedIcon =
   | { kind: 'image'; uri: string }
@@ -52,10 +72,17 @@ function hostOf(url: string): string {
 const onSite = (host: string, site: string) => host === site || host.endsWith(`.${site}`)
 
 /** Which platform a link is: by where it goes, or failing that by what it is called. */
-function brandOf(url: string, ...names: string[]): Brand | null {
+export function brandOf(url: string, ...names: string[]): Brand | null {
   const host = hostOf(url)
   if (onSite(host, 'venmo.com')) return 'venmo'
   if (onSite(host, 'cash.app') || onSite(host, 'cash.me')) return 'cashapp'
+  if (['facebook.com', 'fb.com', 'fb.me', 'fb.watch'].some((s) => onSite(host, s)))
+    return 'facebook'
+  if (onSite(host, 'instagram.com') || onSite(host, 'instagr.am')) return 'instagram'
+  if (onSite(host, 'youtube.com') || onSite(host, 'youtu.be')) return 'youtube'
+  if (onSite(host, 'tiktok.com')) return 'tiktok'
+  if (onSite(host, 'spotify.com') || onSite(host, 'spotify.link')) return 'spotify'
+  if (onSite(host, 'music.apple.com')) return 'applemusic'
   for (const name of names) {
     if (/\bvenmo\b/i.test(name)) return 'venmo'
     if (/\bcash\s?app\b|\bsquare\s?cash\b/i.test(name)) return 'cashapp'

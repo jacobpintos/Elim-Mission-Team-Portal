@@ -42,6 +42,26 @@ describe('composeConnect', () => {
     expect(d.rest.map((b) => b.id)).toEqual([5, 6])
   })
 
+  it('keeps each block of social links as its own group, under its own heading', () => {
+    const d = composeConnect([
+      block(1, 'social', {
+        heading: 'The Elim Arrival',
+        links: [
+          { icon: '', label: 'The Elim Arrival', url: 'http://instagram.com/theelimarrival' },
+          { icon: '', label: 'Elim Worship', url: 'http://youtube.com/theelimarrival' },
+        ],
+      }),
+      block(2, 'social', {
+        heading: 'The Well of Iowa',
+        links: [{ icon: '', label: 'Pastor Ajai', url: 'https://www.facebook.com/share/x/' }],
+      }),
+    ])
+    expect(d.linkGroups.map((g) => [g.heading, g.links.map((l) => l.label)])).toEqual([
+      ['The Elim Arrival', ['The Elim Arrival', 'Elim Worship']],
+      ['The Well of Iowa', ['Pastor Ajai']],
+    ])
+  })
+
   it('makes cards of social links and keeps text, buttons and anything else', () => {
     const d = composeConnect([
       block(1, 'social', {
@@ -55,6 +75,7 @@ describe('composeConnect', () => {
     ])
     expect(d.links.map((l) => [l.label, l.handle])).toEqual([['Facebook', 'facebook.com']])
     expect(d.linksHeading).toBe('Follow along')
+    expect(d.linkGroups).toEqual([{ heading: 'Follow along', links: d.links }])
     expect(d.story.map((t) => t.heading)).toEqual(['Our leaders'])
     expect(d.actions.map((a) => a.label)).toEqual(['Email us'])
     expect(d.rest.map((b) => b.id)).toEqual([4])

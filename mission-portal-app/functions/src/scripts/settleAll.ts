@@ -16,6 +16,7 @@ import { settleAll } from '../eventPrivateSync'
 import { stampAll } from '../recordAccessSync'
 import { stampRooms } from '../rooms'
 import { writeDirectory } from '../publicProfiles'
+import { addConnectSocials } from '../connectSocials'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -29,6 +30,7 @@ settleAll(db, { avail: true })
     console.log(`Told ${tasks} tasks and ${setLists} set lists who may read them.`)
     console.log(`Told ${await stampRooms(db)} conversations what they are.`)
     console.log(`Wrote ${(await writeDirectory(db)).written} directory entries afresh.`)
+    console.log(`Connect page socials: ${await addConnectSocials(db)}.`)
     process.exit(0)
   })
   .catch((err) => {
