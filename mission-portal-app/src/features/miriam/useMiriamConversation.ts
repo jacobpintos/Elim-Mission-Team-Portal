@@ -437,9 +437,10 @@ export function useMiriamConversation(
       const music = useMusicStore.getState()
       if (music.items.length === 0) await music.load()
       const items = useMusicStore.getState().items
-      // Asked this way before, and it turned out to mean one: that one.
+      // Asked this way before, and it turned out to mean one: that one —
+      // but "play me a song" is any song, each time.
       const key = playKey(play)
-      const learned = (await loadPlays()).find((p) => p.key === key)
+      const learned = play.random ? null : (await loadPlays()).find((p) => p.key === key)
       const item =
         (learned && items.find((m) => String(m.id) === learned.id)) || playPick(play, items)
       if (item) {
@@ -1011,7 +1012,7 @@ export function useMiriamConversation(
           // Asked for in a way she couldn't place, and Claude found which:
           // remembered, so asked the same way again she plays it herself.
           const asked = playAsked(withoutHerName(said))
-          if (asked) void rememberPlay(playKey(asked), String(item.id))
+          if (asked && !asked.random) void rememberPlay(playKey(asked), String(item.id))
           noteDone(`Playing “${item.title}” from Content.`)
           setVideo(item)
           setOpen(false)

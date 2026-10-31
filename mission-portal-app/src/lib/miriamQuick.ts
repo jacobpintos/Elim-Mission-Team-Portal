@@ -871,7 +871,20 @@ export interface PlayAsk {
   query: string
   /** As said, for a title: "revive me". */
   title: string
+  /**
+   * None in particular: "play me a song", "play some music", "play a random
+   * sermon" — one picked at random (playPick), and never remembered as what
+   * the words mean (playKey: the app's own plays, learned).
+   */
+  random?: true
 }
+
+/** Any song: "a song", "me a song", "some music", "something", "a random worship song". */
+const ANY_SONG =
+  /^(?:(?:me|us)\s+)?(?:(?:a|an|any|some|one)\s+)?(?:(?:random|good|nice|worship|different|other)\s+)*(?:songs?|tunes?|tracks?|music|something|anything)(?:\s+(?:at\s+random|for\s+(?:me|us)|please))*$/
+/** Any of a kind, said as such: "a random sermon", "any podcast". */
+const ANY_OF_KIND =
+  /^(?:(?:me|us)\s+)?(?:(?:a\s+)?random|any)\s+(?:sermon|message|podcast|episode)s?(?:\s+(?:for\s+(?:me|us)|please))*$/
 
 const PLAY_WORDS = new Set([
   'the',
@@ -952,6 +965,8 @@ export function playAsked(
 ): PlayAsk | null {
   const said = clean(text)
   let rest = said.match(/^(?:play|watch|listen\s+to|put\s+on)\s+(.+)$/)?.[1]
+  // None in particular, asked to be played — not "show me something".
+  const played = !!rest
   if (!rest) {
     // Opened, as a video: "open the Revive Me video", "pull up the latest sermon".
     const m = said.match(
@@ -967,6 +982,9 @@ export function playAsked(
     : /\b(?:podcast|episode)\b/.test(rest)
       ? 'podcast'
       : null
+  if (played && (ANY_SONG.test(rest) || ANY_OF_KIND.test(rest))) {
+    return { kind: kind ?? 'music', latest: false, query: '', title: '', random: true }
+  }
   const latest =
     /\b(?:latest|last|newest|recent|from\s+(?:this\s+)?sunday|sunday'?s|this\s+(?:past\s+)?(?:week|sunday))\b/.test(
       rest
@@ -1004,10 +1022,19 @@ export interface PlayItem {
 export function playPick<T extends PlayItem>(
   ask: PlayAsk,
   items: T[],
-  { exact: exactOnly = false }: { exact?: boolean } = {}
+  {
+    exact: exactOnly = false,
+    pick = Math.random,
+  }: {
+    exact?: boolean
+    /** For tests: where in the list a random one is taken from, 0 to 1. */
+    pick?: () => number
+  } = {}
 ): T | null {
   const newest = (a: T, b: T) => (b.year ?? 0) - (a.year ?? 0) || (b.month ?? 0) - (a.month ?? 0)
   let pool = items.filter((m) => !ask.kind || m.type === ask.kind)
+  // None in particular: any of them.
+  if (ask.random) return pool.length ? pool[Math.floor(pick() * pool.length) % pool.length] : null
   if (ask.title) {
     // Its title, as said: "Revive Me" — not "Revive Us Again"; "The Good
     // Shepherd" as "good shepherd", as said without its "the".

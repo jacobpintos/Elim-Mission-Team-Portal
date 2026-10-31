@@ -432,6 +432,42 @@ describe('playing from Content', () => {
     expect(playPick(playAsked('play revive')!, videos)).toBeNull()
     expect(playPick(playAsked('play a sermon')!, items)).toBeNull()
   })
+  it('plays any song, when none is named — a different one each time', () => {
+    const songs = [
+      ...items,
+      { id: 'r1', type: 'music', title: 'Revive Me', year: 2024 },
+      { id: 'r2', type: 'music', title: 'Ignite', year: 2026 },
+    ]
+    for (const asked of [
+      'Play me a song',
+      'play a song',
+      'play some music',
+      'play music',
+      'play something',
+      'play me something',
+      'play a random song',
+      'play any worship song',
+      'play some songs for me',
+      'put on some music',
+    ]) {
+      const ask = playAsked(asked)
+      expect(ask, asked).toMatchObject({ kind: 'music', random: true })
+      // A song, never a sermon or podcast.
+      expect(['d', 'r1', 'r2'], asked).toContain(playPick(ask!, songs)?.id)
+    }
+    const ask = playAsked('play me a song')!
+    expect(playPick(ask, songs, { pick: () => 0 })?.id).toBe('d')
+    expect(playPick(ask, songs, { pick: () => 0.99 })?.id).toBe('r2')
+    // Of a kind, when said as such.
+    expect(playAsked('play a random sermon')).toMatchObject({ kind: 'sermon', random: true })
+    expect(['a', 'b']).toContain(playPick(playAsked('play a random sermon')!, songs)?.id)
+    expect(playPick(playAsked('play any podcast')!, songs)?.id).toBe('c')
+    // Still not any: a name, "a sermon" (offered), or "show me something".
+    expect(playAsked('play something by nobody')?.random).toBeUndefined()
+    expect(playAsked('play a sermon')?.random).toBeUndefined()
+    expect(playAsked('show me something', { openAny: true })?.random).toBeUndefined()
+    expect(playAsked('play revive me')?.random).toBeUndefined()
+  })
   it('leaves chord sheets to "open", and queueing to the sheet', () => {
     expect(playAsked('open Revive Me')).toBeNull()
     expect(playAsked('open above all in E')).toBeNull()
