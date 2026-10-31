@@ -1,9 +1,9 @@
-import { Pressable } from 'react-native'
+import { Platform, Pressable } from 'react-native'
 import { Image } from 'expo-image'
 import { Text, XStack, YStack } from 'tamagui'
 import { Arrow } from '@/components/ui/Brand'
 import { BRAND_COLORS, BrandMark } from '@/components/ui/BrandMark'
-import { openExternalUrl } from '@/lib/externalUrl'
+import { openExternalUrl, webLink } from '@/lib/externalUrl'
 import { BRAND_NAMES, brandOf, resolveSocialIcon } from '@/lib/socialIcon'
 import { useThemeColors } from '@/theme/useThemeColors'
 import type { PageBlock } from '@/types/pages'
@@ -82,7 +82,9 @@ export function LinkCard({
 
   return (
     <Pressable
-      onPress={() => openExternalUrl(link.url)}
+      // On the web, a real link (lib/externalUrl webLink); on the phone, opened when pressed.
+      {...webLink(link.url)}
+      onPress={Platform.OS === 'web' ? undefined : () => openExternalUrl(link.url)}
       accessibilityRole="link"
       accessibilityLabel={`${verb} ${link.label}`}
       style={(state) => {
@@ -180,7 +182,9 @@ export function SocialCard({ link, width }: { link: GiveWay; width: number | '10
 
   return (
     <Pressable
-      onPress={() => openExternalUrl(link.url)}
+      // On the web, a real link (lib/externalUrl webLink); on the phone, opened when pressed.
+      {...webLink(link.url)}
+      onPress={Platform.OS === 'web' ? undefined : () => openExternalUrl(link.url)}
       accessibilityRole="link"
       accessibilityLabel={`${link.label}${platform ? ` on ${platform}` : ''}`}
       style={(state) => {

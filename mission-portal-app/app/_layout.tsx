@@ -19,6 +19,8 @@ import {
   REMINDER_SNOOZE,
 } from '@/lib/reminderActions'
 import { registerServiceWorker } from '@/lib/serviceWorker'
+// On the web, outside links followed as links (lib/webLinking.web).
+import '@/lib/webLinking'
 import { useThemeStore } from '@/stores/themeStore'
 import { ToastContainer } from '@/components/ui/Toast'
 

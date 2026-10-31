@@ -41,7 +41,46 @@ export function toExternalUrl(raw: string | null | undefined): string | null {
 export async function openExternalUrl(raw: string | null | undefined): Promise<void> {
   const url = toExternalUrl(raw)
   if (!url) return
+  if (followAsLink(url)) return
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { Linking } = require('react-native')
   await Linking.openURL(url).catch(() => {})
+}
+
+/** Opened beside the app, as a link to somewhere else is. */
+const NEW_TAB = { target: '_blank', rel: 'noopener noreferrer' } as const
+
+/**
+ * On the web, an address followed as a link is — an <a href> clicked — rather
+ * than by window.open, which react-native-web's Linking uses. Opened from the
+ * app on an iPhone's home screen, a window.open whose address opens another
+ * app (Facebook, Instagram, Spotify) leaves a blank browser sheet over the app
+ * when they come back to it; a link does not (WebKit bug 250651). False where
+ * there is no page to put a link on: the phone app, which opens it itself.
+ */
+export function followAsLink(url: string): boolean {
+  if (typeof document === 'undefined' || !document.body) return false
+  const a = document.createElement('a')
+  a.href = url
+  a.target = NEW_TAB.target
+  a.rel = NEW_TAB.rel
+  a.style.display = 'none'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  return true
+}
+
+/**
+ * On the web, what makes a pressable a real link to the address — an <a href>
+ * that react-native-web draws for `href` — for the same reason as above,
+ * and so it can be long-pressed, copied or opened in a tab like any link.
+ * Nothing on the phone, where onPress opens it.
+ */
+export function webLink(raw: string | null | undefined): {
+  href?: string
+  hrefAttrs?: typeof NEW_TAB
+} {
+  const url = toExternalUrl(raw)
+  return url && typeof document !== 'undefined' ? { href: url, hrefAttrs: NEW_TAB } : {}
 }
