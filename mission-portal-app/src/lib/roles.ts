@@ -95,6 +95,12 @@ export function canUseMessages(u: UserProfile | null): boolean {
 }
 
 /**
+ * Whether someone can be messaged — has Messages: by their roles when known
+ * (an admin's view), else as the directory says (canUseMessages, mirrored).
+ */
+export const canBeMessaged = (u: UserProfile) => (u.roles ? canUseMessages(u) : u.messages === true)
+
+/**
  * The menu entry standing in for the public-facing section.
  *
  * While that section is hidden, the slot "Public Facing" occupied is given to

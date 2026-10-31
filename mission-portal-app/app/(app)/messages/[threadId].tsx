@@ -24,10 +24,15 @@ import { sameId } from '@/lib/ids'
 import { partitionHiddenMessages } from '@/lib/moderation'
 import { useBackTo } from '@/lib/useBackTo'
 import { uriToBlob } from '@/lib/uriToBlob'
+import { confirmAsync } from '@/lib/confirm'
+import { roomKind, roomTitle } from '@/lib/rooms'
 import { updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore'
+import { onSnapshot } from '@/lib/liveFirestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
-import type { Message, MessageAttachment } from '@/types/events'
+import { RoomAvatar } from '@/features/messages/RoomAvatar'
+import { pickCover, setRoomCover } from '@/features/messages/roomCover'
+import type { Message, MessageAttachment, Room } from '@/types/events'
 import { DictateButton } from '@/components/ui/Dictation'
 
 export default function ThreadScreen() {
@@ -70,10 +75,17 @@ export default function ThreadScreen() {
   } = partitionHiddenMessages(messages, profile?.blockedUsers, profile?.reportedMessages)
   const hiddenCount = blockedCount + reportedCount
 
-  const room = rooms.find((r) => sameId(r.id, threadId))
+  // One they are in, from their list; or — for an admin — one reported to
+  // them, read from Moderation, which isn't on it.
+  const listed = rooms.find((r) => sameId(r.id, threadId))
+  const [reportedRoom, setReportedRoom] = useState<Room | null>(null)
+  const room = listed ?? reportedRoom
+  const member = !!room && room.members.some((m) => sameId(m, uid))
+  const dm = !!room && roomKind(room) === 'dm'
+  const title = room ? roomTitle(room, uid, users) : 'Messages'
 
   useEffect(() => {
-    subscribe(uid, admin)
+    subscribe(uid)
     subUsers()
     if (threadId) openRoom(threadId)
     return () => {
@@ -82,15 +94,25 @@ export default function ThreadScreen() {
       unsubUsers()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId, uid, admin])
+  }, [threadId, uid])
 
-  // Mark messages as read when they arrive
   useEffect(() => {
-    if (messages.length > 0 && uid) {
+    if (!admin || !threadId || listed) return
+    return onSnapshot(
+      doc(db, 'rooms', String(threadId)),
+      (snap) => setReportedRoom(snap.exists() ? { ...(snap.data() as Room), id: snap.id } : null),
+      () => setReportedRoom(null)
+    )
+  }, [admin, threadId, listed])
+
+  // Mark messages as read when they arrive — theirs to read, not an admin's
+  // looking into a report.
+  useEffect(() => {
+    if (messages.length > 0 && uid && member) {
       markRead(uid).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, uid])
+  }, [messages.length, uid, member])
 
   const handleSend = async () => {
     const trimmed = text.trim()
@@ -135,21 +157,31 @@ export default function ThreadScreen() {
     }
   }
 
-  const isFlagged = (room?.reviewers?.length ?? 0) > 0
+  const isFlagged = room?.reported === true || (room?.reviewers?.length ?? 0) > 0
 
-  const handleFlagForReview = async () => {
-    if (!room || !admin) return
-    // Already flagged: send the admin to the queue rather than silently
-    // re-flagging, which is the only place the flag can be acted on or cleared.
+  /**
+   * The conversation reported to the admins, by anyone in it: they may read
+   * it until they have reviewed it and cleared the report (Moderation) —
+   * otherwise only those in a conversation ever read it.
+   */
+  const handleReport = async () => {
+    if (!room) return
     if (isFlagged) {
-      router.push('/(app)/messages/moderation' as never)
+      if (admin) router.push('/(app)/messages/moderation' as never)
+      else toast('Reported — the admins are reviewing it', 'info')
       return
     }
+    const ok = await confirmAsync(
+      'Report this conversation to the admins? They’ll be able to read it until they’ve reviewed it.',
+      { title: 'Report conversation', confirmLabel: 'Report', destructive: true }
+    )
+    if (!ok) return
     try {
       await updateDoc(doc(db, 'rooms', String(room.id)), {
         reviewers: arrayUnion(uid),
+        reported: true,
       })
-      // Alert the other admins that this chat needs review.
+      // The admins told it needs review.
       const sendNotif = httpsCallable(functions, 'sendNotification')
       users
         .filter((u) => u.roles?.includes('admin') && !sameId(u.uid, uid))
@@ -157,12 +189,25 @@ export default function ThreadScreen() {
           sendNotif({
             uid: String(u.uid),
             type: 'chatFlagged',
-            data: { roomName: room.name ?? '', roomId: String(room.id) },
+            data: { roomName: dm ? '' : (room.name ?? ''), roomId: String(room.id) },
           }).catch(() => {})
         })
-      toast('Room flagged — review it in Admin → Moderation', 'info')
+      toast('Reported — the admins will review it', 'info')
     } catch {
-      toast('Failed to flag room', 'error')
+      toast('Failed to report the conversation', 'error')
+    }
+  }
+
+  /** A group chat's cover photo, changed by anyone in it. */
+  const handleCover = async () => {
+    if (!room || dm || !member) return
+    try {
+      const picked = await pickCover()
+      if (!picked) return
+      await setRoomCover(String(room.id), picked)
+      toast('Cover photo changed', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Couldn’t change the cover photo', 'error')
     }
   }
 
@@ -205,8 +250,8 @@ export default function ThreadScreen() {
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
-      <ScreenTitle options={{ title: room?.name ?? 'Messages' }} />
-      {/* Chat header: room name + admin flag button */}
+      <ScreenTitle options={{ title }} />
+      {/* Chat header: who it is with, or the group — and reporting it */}
       <XStack
         paddingHorizontal="$3"
         paddingVertical="$2"
@@ -234,27 +279,65 @@ export default function ThreadScreen() {
             </Text>
           </XStack>
         </Pressable>
-        <Text color={colors.text} fontWeight="600" fontSize="$3" numberOfLines={1} flex={1}>
-          {room?.name ?? 'Messages'}
-        </Text>
+        <XStack flex={1} alignItems="center" gap="$2">
+          {room ? (
+            // A group's picture: tapped, its cover photo changed.
+            <Pressable
+              onPress={handleCover}
+              disabled={dm || !member}
+              accessibilityRole={dm || !member ? undefined : 'button'}
+              accessibilityLabel={dm || !member ? undefined : 'Change cover photo'}
+            >
+              <View>
+                <RoomAvatar room={room} uid={uid} people={users} size={34} />
+                {!dm && member ? (
+                  <View style={[styles.camera, { backgroundColor: colors.surface }]}>
+                    <Text fontSize={9}>📷</Text>
+                  </View>
+                ) : null}
+              </View>
+            </Pressable>
+          ) : null}
+          <Text color={colors.text} fontWeight="600" fontSize="$3" numberOfLines={1} flex={1}>
+            {title}
+          </Text>
+        </XStack>
         <Pressable onPress={() => setShowMembers(true)} hitSlop={8} style={{ marginLeft: 8 }}>
           <Text color={colors.primary} fontSize="$2">
             👥 People
           </Text>
         </Pressable>
-        <Pressable onPress={handleToggleMute} hitSlop={8} style={{ marginLeft: 8 }}>
-          <Text color={isMuted ? colors.textMuted : colors.primary} fontSize="$2">
-            {isMuted ? '🔕 Muted' : '🔔 Mute'}
-          </Text>
-        </Pressable>
-        {admin ? (
-          <Pressable onPress={handleFlagForReview} hitSlop={8} style={{ marginLeft: 8 }}>
+        {member ? (
+          <Pressable onPress={handleToggleMute} hitSlop={8} style={{ marginLeft: 8 }}>
+            <Text color={isMuted ? colors.textMuted : colors.primary} fontSize="$2">
+              {isMuted ? '🔕 Muted' : '🔔 Mute'}
+            </Text>
+          </Pressable>
+        ) : null}
+        {member || (admin && isFlagged) ? (
+          <Pressable onPress={handleReport} hitSlop={8} style={{ marginLeft: 8 }}>
             <Text color={isFlagged ? '#e67e22' : colors.primary} fontSize="$2">
-              {isFlagged ? '🚩 Flagged' : 'Flag'}
+              {isFlagged ? '🚩 Reported' : 'Report'}
             </Text>
           </Pressable>
         ) : null}
       </XStack>
+
+      {/* An admin reading a conversation reported to them, without being in it. */}
+      {room && !member ? (
+        <XStack
+          paddingHorizontal="$3"
+          paddingVertical="$2"
+          backgroundColor={colors.surface}
+          borderBottomWidth={1}
+          borderBottomColor={colors.border}
+        >
+          <Text color={colors.textMuted} fontSize="$2" flex={1}>
+            You can read this conversation because it was reported to the admins, until the report
+            is cleared. Only the people in it can write here.
+          </Text>
+        </XStack>
+      ) : null}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -331,64 +414,66 @@ export default function ThreadScreen() {
           )}
         </View>
 
-        {/* Input row */}
-        <XStack
-          padding="$2"
-          gap="$2"
-          alignItems="flex-end"
-          borderTopWidth={1}
-          borderTopColor={colors.border}
-          backgroundColor={colors.surface}
-        >
-          <Pressable onPress={handleImageAttachment}>
-            <XStack
-              width={36}
-              height={36}
-              borderRadius={18}
-              backgroundColor={colors.border}
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Text fontSize="$3">📎</Text>
-            </XStack>
-          </Pressable>
+        {/* Input row — for those in the conversation */}
+        {member ? (
+          <XStack
+            padding="$2"
+            gap="$2"
+            alignItems="flex-end"
+            borderTopWidth={1}
+            borderTopColor={colors.border}
+            backgroundColor={colors.surface}
+          >
+            <Pressable onPress={handleImageAttachment}>
+              <XStack
+                width={36}
+                height={36}
+                borderRadius={18}
+                backgroundColor={colors.border}
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Text fontSize="$3">📎</Text>
+              </XStack>
+            </Pressable>
 
-          {/* Dictation, beside the attachment: a reply said rather than typed. */}
-          <DictateButton value={text} onChangeText={setText} multiline />
+            {/* Dictation, beside the attachment: a reply said rather than typed. */}
+            <DictateButton value={text} onChangeText={setText} multiline />
 
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.background,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={text}
-            onChangeText={setText}
-            placeholder="Message…"
-            placeholderTextColor={colors.textMuted}
-            multiline
-            maxLength={2000}
-            onSubmitEditing={Platform.OS === 'web' ? handleSend : undefined}
-          />
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+              value={text}
+              onChangeText={setText}
+              placeholder="Message…"
+              placeholderTextColor={colors.textMuted}
+              multiline
+              maxLength={2000}
+              onSubmitEditing={Platform.OS === 'web' ? handleSend : undefined}
+            />
 
-          <Pressable onPress={handleSend} disabled={!text.trim() || sending}>
-            <XStack
-              width={36}
-              height={36}
-              borderRadius={18}
-              backgroundColor={text.trim() && !sending ? colors.primary : colors.border}
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Text color="white" fontSize="$3">
-                ↑
-              </Text>
-            </XStack>
-          </Pressable>
-        </XStack>
+            <Pressable onPress={handleSend} disabled={!text.trim() || sending}>
+              <XStack
+                width={36}
+                height={36}
+                borderRadius={18}
+                backgroundColor={text.trim() && !sending ? colors.primary : colors.border}
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Text color="white" fontSize="$3">
+                  ↑
+                </Text>
+              </XStack>
+            </Pressable>
+          </XStack>
+        ) : null}
       </KeyboardAvoidingView>
 
       <RoomMembersSheet
@@ -413,6 +498,16 @@ export default function ThreadScreen() {
 }
 
 const styles = StyleSheet.create({
+  camera: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   input: {
     flex: 1,
     minHeight: 36,

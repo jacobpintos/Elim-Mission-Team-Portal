@@ -1,7 +1,8 @@
 /**
  * Every event's records put right, availability records too
  * (../eventPrivateSync settleAll), and every task and set list told who may
- * read it (../recordAccessSync stampAll) — run by the deploy, after the
+ * read it (../recordAccessSync stampAll), and every conversation what it is
+ * (../rooms stampRooms) — run by the deploy, after the
  * functions and before the rules, so that who may see each is written on it
  * before the rules start reading it.
  *
@@ -13,6 +14,8 @@
 import * as admin from 'firebase-admin'
 import { settleAll } from '../eventPrivateSync'
 import { stampAll } from '../recordAccessSync'
+import { stampRooms } from '../rooms'
+import { writeDirectory } from '../publicProfiles'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -24,6 +27,8 @@ settleAll(db, { avail: true })
     )
     const { tasks, setLists } = await stampAll(db)
     console.log(`Told ${tasks} tasks and ${setLists} set lists who may read them.`)
+    console.log(`Told ${await stampRooms(db)} conversations what they are.`)
+    console.log(`Wrote ${(await writeDirectory(db)).written} directory entries afresh.`)
     process.exit(0)
   })
   .catch((err) => {

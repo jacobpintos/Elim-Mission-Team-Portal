@@ -12,10 +12,11 @@ import {
   startAfter,
   where,
 } from 'firebase/firestore'
-import { onSnapshot, getDocs } from '@/lib/liveFirestore'
+import { onSnapshot, getDocs, getDoc } from '@/lib/liveFirestore'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { db } from '@/lib/firebase'
 import { MESSAGES_PAGE_SIZE } from '@/lib/messages'
+import { directWith, dmId } from '@/lib/rooms'
 import type { Room, Message, MessageAttachment } from '@/types/events'
 
 interface MessagesStore {
@@ -37,7 +38,12 @@ interface MessagesStore {
   _refCount: number
   subscribe: (uid: string, admin?: boolean) => void
   unsubscribe: () => void
-  createRoom: (name: string, members: string[]) => Promise<void>
+  /**
+   * A conversation started by `creator`: with one other person, a direct
+   * message — the one they have already, if so; with more, a group chat,
+   * which needs a name. Its id.
+   */
+  startChat: (creator: string, others: string[], name?: string) => Promise<string>
   openRoom: (roomId: string | number) => void
   closeRoom: () => void
   loadMore: () => Promise<void>
@@ -67,7 +73,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
 
   roomById: (id) => get().rooms.find((r) => sameId(r.id, id)),
 
-  subscribe: (uid, admin = false) => {
+  subscribe: (uid) => {
     // Reference counted. Messages and Moderation are two subtabs of the same
     // Inbox tab and both want the room list, so moving between them subscribes
     // again before the screen being left unsubscribes — and an unconditional
@@ -76,20 +82,18 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
     const count = get()._refCount + 1
     set({ _refCount: count })
     if (count > 1) return
-    if (!uid && !admin) {
+    if (!uid) {
       set({ _refCount: count - 1 })
       return
     }
     set({ loading: true, roomsError: null })
 
-    // The rules allow reading a room only if you are a member of it, or an
-    // admin. Firestore refuses any query it cannot prove is safe, so an
-    // unfiltered `collection('rooms')` read is denied outright for non-admins —
-    // which silently produced an empty room list for every ordinary member.
-    // Filtering by membership makes the query provably satisfiable, and mirrors
-    // the rule exactly. Admins can still read the whole collection.
-    const base = collection(db, 'rooms')
-    const q = admin ? base : query(base, where('members', 'array-contains', uid))
+    // Only the conversations they are in — admins too: what is said in a
+    // chat is for those in it (firestore.rules rooms). One reported to the
+    // admins is reached from Moderation instead (stores/moderationStore).
+    // Firestore refuses any query it cannot prove is safe, so the query
+    // asks by membership, as the rule does.
+    const q = query(collection(db, 'rooms'), where('members', 'array-contains', uid))
 
     const unsub = onSnapshot(
       q,
@@ -123,14 +127,42 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
     })
   },
 
-  createRoom: async (name, members) => {
-    await addDoc(collection(db, 'rooms'), {
-      name: name.trim(),
-      members,
+  startChat: async (creator, others, name = '') => {
+    const people = [...new Set(others.map(String))].filter((p) => p && p !== String(creator))
+    if (people.length === 0) throw new Error('Choose who to message.')
+    const fresh = {
       call: false,
       reviewers: [],
+      reported: false,
+      createdBy: String(creator),
       updatedAt: serverTimestamp(),
+    }
+    if (people.length === 1) {
+      const known = directWith(get().rooms, creator, people[0])
+      if (known) return String(known.id)
+      // Started by the other person, and not listed here yet: theirs. A room
+      // that isn't there can't be read, so a refusal is "not there".
+      const id = dmId(creator, people[0])
+      const there = await getDoc(doc(db, 'rooms', id))
+        .then((d) => d.exists())
+        .catch(() => false)
+      if (!there) {
+        await setDoc(doc(db, 'rooms', id), {
+          ...fresh,
+          kind: 'dm',
+          members: [String(creator), people[0]],
+        })
+      }
+      return id
+    }
+    if (!name.trim()) throw new Error('A group chat needs a name.')
+    const ref = await addDoc(collection(db, 'rooms'), {
+      ...fresh,
+      kind: 'group',
+      name: name.trim(),
+      members: [String(creator), ...people],
     })
+    return ref.id
   },
 
   openRoom: (roomId) => {

@@ -1,3 +1,4 @@
+import { roomKind } from './rooms'
 import type { Announcement, Room, Message } from '@/types/events'
 import type { IssueReport, KaizenCard, PlanningBoard } from '@/types/operations'
 import type { InventoryCategory, InventoryItem, ReorderItem } from '@/types/inventory'
@@ -95,9 +96,12 @@ export function announcementsFound(
     }))
 }
 
-/** A conversation's name: its own, or else the other people in it. */
+/**
+ * A conversation's name: a group chat's own, or else the other people in it —
+ * a direct message's is always the other person (lib/rooms).
+ */
 export function roomName(room: Room, uid: string, names: ReadonlyMap<string, string>): string {
-  if (room.name?.trim()) return room.name
+  if (roomKind(room) === 'group' && room.name?.trim()) return room.name
   const others = room.members.filter((m) => String(m) !== uid)
   return others.map((m) => names.get(String(m)) ?? 'someone').join(', ') || 'Just you'
 }

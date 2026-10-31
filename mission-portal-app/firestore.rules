@@ -234,14 +234,52 @@ service cloud.firestore {
            .hasOnly(['status', 'doneAt', 'projectedDate', 'overdueNotified', '_updatedAt']));
     }
 
+    // Conversations (src/lib/rooms): a direct message between two people —
+    // kind 'dm', its id dm_<uid>_<uid> so the two have only one, no name — or
+    // a group chat of more than two: kind 'group', named, perhaps with a
+    // cover photo. Anyone on the team may start one they are in; a guest or
+    // a public account may not.
+    function newRoom(d, id) {
+      return d.members.hasAny([request.auth.uid])
+        && d.keys().hasOnly(['kind', 'name', 'photoURL', 'members', 'call', 'reviewers',
+                             'reported', 'createdBy', 'updatedAt'])
+        && d.get('createdBy', request.auth.uid) == request.auth.uid
+        && d.get('reviewers', []).size() == 0
+        && d.get('reported', false) == false
+        && ((d.get('kind', '') == 'dm' && d.members.size() == 2
+             && !d.keys().hasAny(['name', 'photoURL'])
+             && id in ['dm_' + d.members[0] + '_' + d.members[1],
+                       'dm_' + d.members[1] + '_' + d.members[0]])
+            || (d.get('kind', '') == 'group' && d.members.size() > 2));
+    }
+
+    // Someone in a conversation: muting it for themselves, or reporting it
+    // to the admins — adding themselves to who reported it, never taking a
+    // report back (an admin clears it, from Moderation).
+    function mutesOrReports() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['reviewers', 'reported', 'mutedBy', 'updatedAt'])
+        && request.resource.data.get('reviewers', []).hasAll(resource.data.get('reviewers', []))
+        && (request.resource.data.get('reported', false) == true
+            || request.resource.data.get('reported', false) == resource.data.get('reported', false));
+    }
+
+    // A group chat's name and cover photo, by anyone in it. A direct message has neither.
+    function namesGroup() {
+      return resource.data.get('kind', 'group') == 'group'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'photoURL', 'updatedAt']);
+    }
+
     match /rooms/{id} {
       allow read: if isSignedIn() && (isAdmin() ||
         resource.data.members.hasAny([request.auth.uid]));
       allow write: if isAdmin();
+      allow create: if isSignedIn() && !isGuest() && !holdsPublic() &&
+        newRoom(request.resource.data, id);
       allow update: if isSignedIn() &&
         resource.data.members.hasAny([request.auth.uid]) &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['reviewers', 'updatedAt']);
+        (mutesOrReports() || namesGroup());
 
       match /messages/{msgId} {
         allow read: if isSignedIn() && (isAdmin() ||

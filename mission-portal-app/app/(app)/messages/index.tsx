@@ -10,11 +10,22 @@ import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
-import { isAdmin } from '@/lib/roles'
+import { canBeMessaged, isReadOnly } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
+import { roomKind, roomTitle } from '@/lib/rooms'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { Image } from '@/components/ui/Image'
 import { InboxTabs, INBOX_TITLE } from '@/features/inbox/InboxTabs'
 import { RecipientPicker } from '@/components/ui/RecipientPicker'
+import { RoomAvatar } from '@/features/messages/RoomAvatar'
+import { pickCover, setRoomCover, type PickedPhoto } from '@/features/messages/roomCover'
+import type { Room } from '@/types/events'
+
+/** When a room last had something said in it, for the newest first. */
+const lastActive = (r: Room) => {
+  const at = r.updatedAt as { toMillis?: () => number } | number | undefined
+  return typeof at === 'number' ? at : (at?.toMillis?.() ?? 0)
+}
 
 export default function MessagesIndex() {
   const colors = useThemeColors()
@@ -22,20 +33,20 @@ export default function MessagesIndex() {
   const router = useRouter()
   const { profile } = useAuthStore()
   const uid = profile?.uid ?? ''
-  const admin = isAdmin(profile)
   const toast = useUIStore((s) => s.toast)
 
-  const { rooms, roomsError, loading, subscribe, unsubscribe, createRoom } = useMessagesStore()
+  const { rooms, roomsError, loading, subscribe, unsubscribe, startChat } = useMessagesStore()
   const { users, subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
   const { groups, subscribe: subGroups, unsubscribe: unsubGroups } = useGroupsStore()
 
   const [showCreate, setShowCreate] = useState(false)
   const [roomName, setRoomName] = useState('')
   const [selectedMembers, setSelectedMembers] = useState<string[]>([])
+  const [cover, setCover] = useState<PickedPhoto | null>(null)
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    subscribe(uid, admin)
+    subscribe(uid)
     subUsers()
     subGroups()
     return () => {
@@ -44,11 +55,10 @@ export default function MessagesIndex() {
       unsubGroups()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uid, admin])
+  }, [uid])
 
-  // Only show rooms the current user is a member of
-  const myRooms = rooms.filter((r) => r.members.some((m) => sameId(m, uid)))
-  // Admins see every room; everyone else sees the ones they are in.
+  // Only the conversations they are in — admins too (stores/messagesStore):
+  // one reported to the admins is reached from Moderation.
   //
   // Flagged rooms used to be lifted into a separate red band at the top. It
   // repeated rooms that were already in the list below, opened to the same
@@ -56,32 +66,54 @@ export default function MessagesIndex() {
   // Moderation screen. All it really conveyed was that something needed
   // attention, which the count on the Moderation tab now says without
   // reordering this list.
-  const displayRooms = admin ? rooms : myRooms
+  const displayRooms = rooms
+    .filter((r) => r.members.some((m) => sameId(m, uid)))
+    .sort((a, b) => lastActive(b) - lastActive(a))
+
+  // Everyone chosen but themselves: one is a direct message, more a group chat.
+  const others = selectedMembers.filter((m) => !sameId(m, uid))
+  const direct = others.length === 1
+  const group = others.length > 1
+  const ready = direct || (group && !!roomName.trim())
+
+  const closeCreate = () => {
+    setShowCreate(false)
+    setRoomName('')
+    setSelectedMembers([])
+    setCover(null)
+  }
+
+  const chooseCover = async () => {
+    try {
+      const picked = await pickCover()
+      if (picked) setCover(picked)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Couldn’t open your photos', 'error')
+    }
+  }
 
   const handleCreate = async () => {
-    if (!roomName.trim()) {
-      toast('Room name is required', 'error')
-      return
-    }
-    if (selectedMembers.length === 0) {
-      toast('Select at least one member', 'error')
-      return
-    }
+    if (!ready) return
     setCreating(true)
     try {
-      await createRoom(roomName.trim(), selectedMembers)
-      toast('Room created', 'success')
-      setShowCreate(false)
-      setRoomName('')
-      setSelectedMembers([])
-    } catch {
-      toast('Failed to create room', 'error')
+      const id = await startChat(uid, others, group ? roomName.trim() : '')
+      if (group && cover) {
+        await setRoomCover(id, cover).catch(() =>
+          toast('The group chat was made, but its cover photo didn’t upload', 'error')
+        )
+      }
+      closeCreate()
+      router.push(`/messages/${id}`)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Couldn’t start the conversation', 'error')
     } finally {
       setCreating(false)
     }
   }
 
-  const nonPublicUsers = users.filter((u) => !u.roles?.includes('public'))
+  // Only those who have Messages: not a public follower, nor an intern who has none.
+  const nonPublicUsers = users.filter((u) => canBeMessaged(u) && !sameId(u.uid, uid))
+  const otherName = direct ? users.find((u) => sameId(u.uid, others[0]))?.displayName : undefined
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>
@@ -90,7 +122,7 @@ export default function MessagesIndex() {
 
       {loading ? (
         <YStack flex={1} alignItems="center" justifyContent="center">
-          <Text color={colors.textMuted}>Loading rooms…</Text>
+          <Text color={colors.textMuted}>Loading conversations…</Text>
         </YStack>
       ) : roomsError ? (
         // Distinguish "we could not load your rooms" from "you have none" —
@@ -107,81 +139,82 @@ export default function MessagesIndex() {
       ) : displayRooms.length === 0 ? (
         <YStack flex={1} alignItems="center" justifyContent="center" padding="$4">
           <Text color={colors.textMuted} textAlign="center">
-            You are not in any message rooms.
+            No conversations yet.
           </Text>
         </YStack>
       ) : (
         <ScrollView style={{ flex: 1 }}>
           <YStack>
-            {displayRooms.map((room) => (
-              <Pressable key={String(room.id)} onPress={() => router.push(`/messages/${room.id}`)}>
-                <XStack
-                  padding="$3"
-                  gap="$3"
-                  alignItems="center"
-                  borderBottomWidth={1}
-                  borderBottomColor={colors.border}
-                  backgroundColor={colors.background}
+            {displayRooms.map((room) => {
+              const dm = roomKind(room) === 'dm'
+              return (
+                <Pressable
+                  key={String(room.id)}
+                  onPress={() => router.push(`/messages/${room.id}`)}
                 >
-                  <YStack
-                    width={46}
-                    height={46}
-                    borderRadius={23}
-                    backgroundColor={colors.primary + '33'}
+                  <XStack
+                    padding="$3"
+                    gap="$3"
                     alignItems="center"
-                    justifyContent="center"
+                    borderBottomWidth={1}
+                    borderBottomColor={colors.border}
+                    backgroundColor={colors.background}
                   >
-                    <Text color={colors.primary} fontWeight="700" fontSize="$4">
-                      {(room.name ?? '?').charAt(0).toUpperCase()}
-                    </Text>
-                  </YStack>
-                  <YStack flex={1} gap={2}>
-                    <XStack justifyContent="space-between" alignItems="center">
-                      <Text color={colors.text} fontWeight="700" fontSize="$4">
-                        {room.name}
-                      </Text>
-                      {room.call ? (
-                        <XStack
-                          backgroundColor={colors.primary}
-                          borderRadius={99}
-                          paddingHorizontal="$2"
-                          paddingVertical={2}
+                    <RoomAvatar room={room} uid={uid} people={users} size={46} />
+                    <YStack flex={1} gap={2}>
+                      <XStack justifyContent="space-between" alignItems="center">
+                        <Text
+                          color={colors.text}
+                          fontWeight="700"
+                          fontSize="$4"
+                          numberOfLines={1}
+                          flex={1}
                         >
-                          <Text color="white" fontSize={10}>
-                            📞 Call
-                          </Text>
-                        </XStack>
-                      ) : null}
-                    </XStack>
-                    <Text color={colors.textMuted} fontSize="$2">
-                      {room.members.length} members
-                    </Text>
-                  </YStack>
-                </XStack>
-              </Pressable>
-            ))}
+                          {roomTitle(room, uid, users)}
+                        </Text>
+                        {room.call ? (
+                          <XStack
+                            backgroundColor={colors.primary}
+                            borderRadius={99}
+                            paddingHorizontal="$2"
+                            paddingVertical={2}
+                          >
+                            <Text color="white" fontSize={10}>
+                              📞 Call
+                            </Text>
+                          </XStack>
+                        ) : null}
+                      </XStack>
+                      <Text color={colors.textMuted} fontSize="$2">
+                        {dm ? 'Direct message' : `Group chat · ${room.members.length} people`}
+                      </Text>
+                    </YStack>
+                  </XStack>
+                </Pressable>
+              )
+            })}
           </YStack>
         </ScrollView>
       )}
 
-      {/* Admin FAB to create room */}
-      {admin ? (
+      {/* Anyone on the team may start a conversation; a guest only reads. */}
+      {!isReadOnly(profile) ? (
         <Pressable
           onPress={() => setShowCreate(true)}
           style={[styles.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 16 }]}
         >
           <Text color="white" fontWeight="700" fontSize="$3">
-            ⊕ New Room
+            ⊕ New message
           </Text>
         </Pressable>
       ) : null}
 
-      {/* Create Room Modal */}
+      {/* New conversation: one person, a direct message; more, a group chat */}
       <FullScreenOverlay
         visible={showCreate}
         animationType="slide"
         transparent
-        onRequestClose={() => setShowCreate(false)}
+        onRequestClose={closeCreate}
       >
         <View style={styles.overlay}>
           <YStack
@@ -195,41 +228,21 @@ export default function MessagesIndex() {
           >
             <XStack justifyContent="space-between" alignItems="center">
               <Text color={colors.text} fontSize="$5" fontWeight="700">
-                New Room
+                {group ? 'New group chat' : 'New message'}
               </Text>
-              <Pressable onPress={() => setShowCreate(false)}>
+              <Pressable onPress={closeCreate}>
                 <Text color={colors.textMuted} fontSize="$4">
                   ✕
                 </Text>
               </Pressable>
             </XStack>
 
-            <YStack gap="$1">
-              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                ROOM NAME
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    color: colors.text,
-                    borderColor: colors.border,
-                    backgroundColor: colors.background,
-                  },
-                ]}
-                value={roomName}
-                onChangeText={setRoomName}
-                placeholder="e.g. Worship Team"
-                placeholderTextColor={colors.textMuted}
-              />
-            </YStack>
-
             {/* No flex:1 here — inside the modal's auto-height (maxHeight-only)
                 container a flex:1 child collapses to zero on native, hiding the
                 member list. The inner ScrollView's maxHeight bounds it instead. */}
             <YStack gap="$1" flexShrink={1}>
               <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                MEMBERS ({selectedMembers.length} selected)
+                TO ({others.length} chosen)
               </Text>
               <RecipientPicker
                 users={nonPublicUsers.map((u) => ({
@@ -246,21 +259,65 @@ export default function MessagesIndex() {
                 onChange={setSelectedMembers}
                 placeholder="Search people or groups…"
               />
+              <Text color={colors.textMuted} fontSize="$1">
+                One person is a direct message; two or more make a group chat.
+              </Text>
             </YStack>
 
-            <Pressable
-              onPress={handleCreate}
-              disabled={creating || !roomName.trim() || selectedMembers.length === 0}
-            >
+            {group ? (
+              <>
+                <YStack gap="$1">
+                  <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
+                    GROUP NAME
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.background,
+                      },
+                    ]}
+                    value={roomName}
+                    onChangeText={setRoomName}
+                    placeholder="e.g. Worship Team"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </YStack>
+                <XStack gap="$3" alignItems="center">
+                  {cover ? (
+                    <Image
+                      source={{ uri: cover.uri }}
+                      style={{ width: 44, height: 44, borderRadius: 22 }}
+                      contentFit="cover"
+                    />
+                  ) : null}
+                  <Pressable onPress={chooseCover}>
+                    <Text color={colors.primary} fontSize="$3" fontWeight="600">
+                      {cover ? 'Change cover photo' : '📷 Add a cover photo (optional)'}
+                    </Text>
+                  </Pressable>
+                </XStack>
+              </>
+            ) : null}
+
+            <Pressable onPress={handleCreate} disabled={creating || !ready}>
               <XStack
                 backgroundColor={colors.primary}
                 borderRadius="$2"
                 paddingVertical="$3"
                 justifyContent="center"
-                opacity={creating || !roomName.trim() || selectedMembers.length === 0 ? 0.5 : 1}
+                opacity={creating || !ready ? 0.5 : 1}
               >
                 <Text color="white" fontWeight="700" fontSize="$3">
-                  {creating ? 'Creating…' : 'Create Room'}
+                  {creating
+                    ? 'Starting…'
+                    : group
+                      ? 'Create group chat'
+                      : otherName
+                        ? `Message ${otherName}`
+                        : 'Message'}
                 </Text>
               </XStack>
             </Pressable>

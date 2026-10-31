@@ -1,3 +1,4 @@
+import { roomKind } from '@/lib/rooms'
 import type { Announcement, CarpoolCarData, Message, PostPage, Room, Task } from '@/types/events'
 import { visibleTabs } from '@/lib/roles'
 import { isTabVisible } from '@/lib/featureFlags'
@@ -1932,7 +1933,7 @@ async function readConversation(
     talk.say(`I couldn’t read your conversation with ${fit.name} just now.`)
     return
   }
-  const oneToOne = fit.room.members.length <= 2 && !fit.room.name?.trim()
+  const oneToOne = roomKind(fit.room) === 'dm'
   const shownOthers = others.slice(0, 2).map((o) => convoSaid(o, uid, names))
   const also = shownOthers.length
     ? ` You also have ${listed(shownOthers)} — ask for ${shownOthers.length === 1 ? 'it' : 'one'} by name if you meant that.`

@@ -14,7 +14,7 @@ import { db, functions } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
 import { sameId } from '@/lib/ids'
 import { useTasksStore } from '@/stores/tasksStore'
-import { sendMessageAs } from '@/stores/messagesStore'
+import { sendMessageAs, useMessagesStore } from '@/stores/messagesStore'
 import type {
   KaizenCard,
   KaizenStatus,
@@ -208,20 +208,17 @@ export const useKaizenStore = create<KaizenStore>((set, get) => ({
     ])
     const members = [...memberSet]
 
-    // Create a group room so the message appears in everyone's Messages tab
-    const roomId = await nextId('nRoom')
-    const roomName = `Kaizen Deletion: ${card.title}`
-    await setDoc(doc(db, 'rooms', String(roomId)), {
-      id: roomId,
-      name: roomName,
-      members,
-      call: false,
-      reviewers: [],
-      updatedAt: serverTimestamp(),
-    })
-
-    const msgText = `The kaizen card "${card.title}" has been deleted.\n\nReason: ${reason}`
-    await sendMessageAs(roomId, String(deletedBy), msgText)
+    // Told in Messages: a direct message to the one who submitted it, or a
+    // group chat with them and those who voted for it. Their own card,
+    // with no votes: nobody to tell.
+    const others = members.filter((m) => m !== String(deletedBy))
+    if (others.length > 0) {
+      const roomId = await useMessagesStore
+        .getState()
+        .startChat(String(deletedBy), others, `Kaizen Deletion: ${card.title}`)
+      const msgText = `The kaizen card "${card.title}" has been deleted.\n\nReason: ${reason}`
+      await sendMessageAs(roomId, String(deletedBy), msgText)
+    }
 
     await deleteDoc(doc(db, 'kaizen', String(id)))
   },

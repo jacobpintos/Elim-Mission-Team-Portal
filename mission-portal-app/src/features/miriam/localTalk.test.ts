@@ -66,8 +66,9 @@ const names = new Map([
   ['pj', 'Pastor John'],
 ])
 
+/** A named one is a group chat (lib/rooms), however few are in it. */
 const room = (id: string, members: string[], name = ''): Room =>
-  ({ id, name, members, call: false, reviewers: [] }) as Room
+  ({ id, name, members, call: false, reviewers: [], ...(name ? { kind: 'group' } : {}) }) as Room
 const msg = (from: string, text: string, ago: number, read = false): Message => ({
   uid: from,
   text,

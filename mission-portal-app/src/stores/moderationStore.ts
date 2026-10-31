@@ -13,7 +13,7 @@ import { db } from '@/lib/firebase'
  * Two things land in that queue, by two different routes:
  *
  * - a report someone filed about a single message, still open
- * - a whole conversation an admin flagged for review from the chat header
+ * - a whole conversation someone in it reported, from the chat header
  *
  * Both are admin-only reads. Nothing here subscribes for anyone else, and the
  * rules would refuse it if it tried.
@@ -88,12 +88,10 @@ export const useModerationStore = create<ModerationStore>((set, get) => ({
       (err) => failed('reports', err)
     )
 
-    // "Has anyone flagged this room" cannot be asked as "is the array
-    // non-empty", so it is asked as "is it something other than empty".
-    // Firestore's != also drops documents where the field is absent, which is
-    // every room nobody has ever flagged — exactly what should be left out.
+    // Conversations reported to the admins: the only ones an admin not in
+    // them may read (firestore.rules rooms), asked for as the rule allows.
     const unsubRooms = onSnapshot(
-      query(collection(db, 'rooms'), where('reviewers', '!=', [])),
+      query(collection(db, 'rooms'), where('reported', '==', true)),
       (snap) => set({ flaggedRooms: snap.size }),
       (err) => failed('rooms', err)
     )

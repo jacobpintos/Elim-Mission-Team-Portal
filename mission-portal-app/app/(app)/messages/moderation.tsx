@@ -2,18 +2,19 @@ import { useEffect, useState } from 'react'
 import { ScrollView, Pressable } from 'react-native'
 import { useRouter } from 'expo-router'
 import { YStack, XStack, Text, Spinner, Image } from 'tamagui'
-import { collection, orderBy, query, doc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { collection, orderBy, query, doc, updateDoc, deleteDoc, where } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useUsersStore } from '@/stores/usersStore'
-import { useMessagesStore } from '@/stores/messagesStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { confirmAsync } from '@/lib/confirm'
 import { audit } from '@/lib/audit'
 import { sameId } from '@/lib/ids'
+import { roomTitle } from '@/lib/rooms'
+import type { Room } from '@/types/events'
 import { MODERATION_SLA_HOURS } from '@/lib/orgInfo'
 import type { ContentReport } from '@/lib/moderation'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -55,7 +56,7 @@ export default function AdminModeration() {
   const router = useRouter()
   const { profile } = useAuthStore()
   const { users, subscribe, unsubscribe } = useUsersStore()
-  const { rooms, subscribe: subRooms, unsubscribe: unsubRooms } = useMessagesStore()
+  const [flaggedRooms, setFlaggedRooms] = useState<Room[]>([])
   const toast = useUIStore((s) => s.toast)
   const [reports, setReports] = useState<ContentReport[]>([])
   const [loading, setLoading] = useState(true)
@@ -73,12 +74,18 @@ export default function AdminModeration() {
 
   useEffect(() => {
     subscribe()
-    subRooms(profile?.uid ?? '', true)
     const q = query(collection(db, 'contentReports'), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setReports(snap.docs.map((d) => ({ ...(d.data() as ContentReport), id: d.id })))
       setLoading(false)
     })
+    // Conversations reported to the admins — the only ones an admin not in
+    // them may read, until the report is cleared (firestore.rules rooms).
+    const unsubRooms = onSnapshot(
+      query(collection(db, 'rooms'), where('reported', '==', true)),
+      (snap) => setFlaggedRooms(snap.docs.map((d) => ({ ...(d.data() as Room), id: d.id }))),
+      () => setFlaggedRooms([])
+    )
     return () => {
       unsub()
       unsubscribe()
@@ -87,26 +94,25 @@ export default function AdminModeration() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Rooms an admin flagged for review from the chat header. This is a separate
+  // Conversations someone in them reported from the chat header. A separate
   // mechanism from per-message reports — it marks a whole conversation — and
-  // this is the only place the flag can be cleared.
-  const flaggedRooms = rooms.filter((r) => (r.reviewers?.length ?? 0) > 0)
-
+  // this is the only place the report can be cleared, which ends the admins'
+  // reading of it.
   const clearRoomFlag = async (roomId: string | number, roomName: string) => {
     const ok = await confirmAsync(
-      `Clear the review flag on "${roomName}"? The conversation stays; only the flag is removed.`,
-      { title: 'Clear flag', confirmLabel: 'Clear flag' }
+      `Clear the report on "${roomName}"? The conversation stays, and only the people in it can read it again.`,
+      { title: 'Clear report', confirmLabel: 'Clear report' }
     )
     if (!ok) return
     setBusy(String(roomId))
     try {
-      await updateDoc(doc(db, 'rooms', String(roomId)), { reviewers: [] })
+      await updateDoc(doc(db, 'rooms', String(roomId)), { reviewers: [], reported: false })
       await audit(
         'moderation.roomFlagCleared',
         `Cleared review flag on room "${roomName}"`,
         profile?.displayName ?? ''
       )
-      toast('Flag cleared', 'success')
+      toast('Report cleared', 'success')
     } catch {
       toast('Failed to clear flag', 'error')
     } finally {
@@ -268,7 +274,7 @@ export default function AdminModeration() {
         {flaggedRooms.length > 0 ? (
           <YStack gap="$2">
             <Text color={colors.text} fontSize="$3" fontWeight="700">
-              🚩 Flagged conversations ({flaggedRooms.length})
+              🚩 Reported conversations ({flaggedRooms.length})
             </Text>
             {flaggedRooms.map((room) => (
               <YStack
@@ -281,10 +287,10 @@ export default function AdminModeration() {
                 borderColor="#e67e22"
               >
                 <Text color={colors.text} fontSize="$4" fontWeight="600">
-                  {room.name ?? 'Conversation'}
+                  {roomTitle(room, profile?.uid ?? '', users)}
                 </Text>
                 <Text color={colors.textMuted} fontSize="$2">
-                  Flagged by {(room.reviewers ?? []).map((r) => nameFor(String(r))).join(', ')}
+                  Reported by {(room.reviewers ?? []).map((r) => nameFor(String(r))).join(', ')}
                   {room.members ? ` · ${room.members.length} members` : ''}
                 </Text>
                 <XStack gap="$2" marginTop="$1">
@@ -306,7 +312,9 @@ export default function AdminModeration() {
                   </Pressable>
                   <Pressable
                     style={{ flex: 1 }}
-                    onPress={() => clearRoomFlag(room.id, room.name ?? 'Conversation')}
+                    onPress={() =>
+                      clearRoomFlag(room.id, roomTitle(room, profile?.uid ?? '', users))
+                    }
                     disabled={busy === String(room.id)}
                   >
                     <XStack
@@ -319,7 +327,7 @@ export default function AdminModeration() {
                       opacity={busy === String(room.id) ? 0.5 : 1}
                     >
                       <Text color={colors.text} fontSize="$3" fontWeight="700">
-                        Clear flag
+                        Clear report
                       </Text>
                     </XStack>
                   </Pressable>

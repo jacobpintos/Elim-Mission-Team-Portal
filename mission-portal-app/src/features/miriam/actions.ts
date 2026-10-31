@@ -1745,13 +1745,16 @@ async function startChat(profile: UserProfile, input: Record<string, unknown>) {
   const people = idList(input.people_ids).filter((p) => p !== uid)
   if (people.length === 0) return cannot('Who should be in it?')
   const name = String(input.name ?? '').trim()
+  // With one person, a direct message, which has no name; with more, a group chat, which does.
+  const direct = people.length === 1
+  if (!direct && !name) return cannot('What should the group chat be called?')
   return {
     kind: 'ready',
-    title: name ? `Start the chat “${name}”?` : `Start a chat with ${listNames(people)}?`,
-    details: [`With ${listNames(people)}, and you`],
+    title: direct ? `Message ${listNames(people)}?` : `Start the group chat “${name}”?`,
+    details: [direct ? 'A direct message' : `With ${listNames(people)}, and you`],
     confirm: 'Start it',
     run: async () => {
-      await useMessagesStore.getState().createRoom(name, [uid, ...people])
+      await useMessagesStore.getState().startChat(uid, people, name)
       return 'Started — it’s in your messages.'
     },
   } satisfies Prepared

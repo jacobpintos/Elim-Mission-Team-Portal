@@ -1,3 +1,4 @@
+import { roomKind } from './rooms'
 import type { Announcement, Message, Room } from '@/types/events'
 import { fits, roomName } from './miriamAppData'
 import { nameScore } from '../../functions/src/miriam/names'
@@ -230,7 +231,7 @@ export function conversationPicked(
   who: string
 ): Picked<RoomFit> {
   const fitsOf = rooms.map((room) => ({ room, name: roomName(room, uid, names) }))
-  const oneToOne = (r: RoomFit) => r.room.members.length <= 2 && !r.room.name?.trim()
+  const oneToOne = (r: RoomFit) => roomKind(r.room) === 'dm'
   // By its name: a group's own, or a one-to-one's other person — every word
   // of it, for a person: "Sarah Miller" is not Sarah Kim.
   const byName = pickBest(fitsOf, (r) => r.name, who, 3, 0.75)

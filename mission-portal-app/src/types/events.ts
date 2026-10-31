@@ -218,10 +218,23 @@ export interface Task {
 
 export interface Room {
   id: string | number
-  name: string
+  /**
+   * A direct message — two people, no name — or a group chat: more than two,
+   * named, with a cover photo if one was added (lib/rooms). Absent on rooms
+   * from before; told by how many are in them.
+   */
+  kind?: 'dm' | 'group'
+  /** A group chat's; a direct message has none. */
+  name?: string
+  /** A group chat's cover photo. */
+  photoURL?: string
   members: (string | number)[]
   call: boolean
+  /** Who reported the conversation to the admins. */
   reviewers: (string | number)[]
+  /** Reported to the admins, who may read it until they clear it (firestore.rules rooms). */
+  reported?: boolean
+  createdBy?: string
   mutedBy?: (string | number)[]
   updatedAt?: unknown
 }

@@ -32,6 +32,7 @@ export function mergeUsers(directory: PublicProfile[], full: UserProfile[]): Use
       displayName: p.displayName,
       photoURL: p.photoURL,
       title: p.title,
+      messages: p.messages,
     } as UserProfile)
   }
   for (const u of full) byUid.set(String(u.uid), u)

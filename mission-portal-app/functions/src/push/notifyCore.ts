@@ -157,7 +157,10 @@ export function inAppMessage(type: NotificationType, data: Record<string, unknow
     case 'taskComplete':
       return `Task completed: ${data.taskTitle ?? 'A task'}`
     case 'newMessage':
-      return `New message in ${data.roomName ?? 'a room'}${data.senderName ? ` from ${data.senderName}` : ''}`
+      // A direct message's has no room name: "New message from Sam".
+      return data.roomName
+        ? `New message in ${data.roomName}${data.senderName ? ` from ${data.senderName}` : ''}`
+        : `New message${data.senderName ? ` from ${data.senderName}` : ''}`
     case 'eventReminder':
       return `Reminder: ${data.eventTitle ?? 'An event'} is coming up`
     case 'announcement':
@@ -183,7 +186,9 @@ export function inAppMessage(type: NotificationType, data: Record<string, unknow
     case 'eventHealthBehind':
       return `${data.eventTitle ?? 'An event'} has fallen behind schedule`
     case 'chatFlagged':
-      return `Chat "${data.roomName ?? ''}" was flagged for review`
+      return data.roomName
+        ? `Chat "${data.roomName}" was reported for review`
+        : 'A conversation was reported for review'
     case 'securityReport':
       return String(data.message ?? 'Security report update')
     case 'weatherAlertAdmin':
@@ -285,9 +290,7 @@ export async function deliverNotification(
   const profile = userSnap.data()
   if (!profile) return
 
-  const prefs = profile.notificationPrefs?.[type] as
-    | { push?: boolean; email?: boolean }
-    | undefined
+  const prefs = profile.notificationPrefs?.[type] as { push?: boolean; email?: boolean } | undefined
   const notifMsg = inAppMessage(type, data)
 
   await db.doc(`notifs/${uid}`).set(
@@ -378,7 +381,9 @@ export async function notifyUser(
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(batchRef)
-    const state = snap.data() as { windowEndAt?: number; pending?: Array<Record<string, unknown>> } | undefined
+    const state = snap.data() as
+      | { windowEndAt?: number; pending?: Array<Record<string, unknown>> }
+      | undefined
     const windowActive = !!state?.windowEndAt && state.windowEndAt > now
 
     if (!windowActive) {

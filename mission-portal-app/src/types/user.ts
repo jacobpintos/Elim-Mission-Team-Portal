@@ -150,6 +150,8 @@ export interface PublicProfile {
    * rules on `users` shut out.
    */
   title?: string
+  /** Has Messages, so can be messaged (functions/src/publicProfiles hasMessages). */
+  messages?: boolean
 }
 
 export interface UserProfile {
@@ -169,6 +171,11 @@ export interface UserProfile {
   email: string
   displayName: string
   photoURL?: string
+  /**
+   * From the directory, for someone whose roles aren't known here: has
+   * Messages, so can be messaged (functions/src/publicProfiles hasMessages).
+   */
+  messages?: boolean
   roles: Role[]
   onboardingComplete: boolean
   notificationPrefs: NotificationPrefs

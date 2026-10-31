@@ -25,7 +25,12 @@ export const onMessageCreated = onDocumentCreated(
     const db = admin.firestore()
     const roomSnap = await db.doc(`rooms/${roomId}`).get()
     const room = roomSnap.data() as
-      | { name?: string; members?: (string | number)[]; mutedBy?: (string | number)[] }
+      | {
+          kind?: 'dm' | 'group'
+          name?: string
+          members?: (string | number)[]
+          mutedBy?: (string | number)[]
+        }
       | undefined
     if (!room) return
 
@@ -46,9 +51,11 @@ export const onMessageCreated = onDocumentCreated(
       senderName = (sender?.displayName as string) || (sender?.email as string) || ''
     }
 
+    // A direct message has no name: "New message from Sam".
+    const kind = room.kind ?? ((room.members ?? []).length === 2 ? 'dm' : 'group')
     for (const uid of recipients) {
       await notifyUser(uid, 'newMessage', {
-        roomName: room.name ?? 'a room',
+        roomName: kind === 'group' ? (room.name ?? 'a group chat') : '',
         roomId,
         senderName,
         link: `/(app)/messages/${roomId}`,

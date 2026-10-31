@@ -71,7 +71,12 @@ beforeEach(async () => {
       assignees: [MEMBER, GUEST],
       seenBy: [GUEST, MEMBER, '@admins'],
     })
-    await setDoc(doc(db, 'rooms', 'r1'), { name: 'Team', members: [MEMBER], reviewers: [] })
+    await setDoc(doc(db, 'rooms', 'r1'), {
+      kind: 'dm',
+      members: [MEMBER, WORSHIP],
+      reviewers: [],
+      reported: false,
+    })
     await setDoc(doc(db, 'rooms', 'r1', 'messages', 'm1'), {
       uid: MEMBER,
       text: 'hello',
@@ -142,22 +147,105 @@ describe('rooms', () => {
     await assertFails(getDocs(collection(as(MEMBER), 'rooms')))
   })
 
-  it('only admins may create or delete rooms', async () => {
-    await assertFails(
-      setDoc(doc(as(MEMBER), 'rooms/r2'), { name: 'x', members: [], reviewers: [] })
-    )
+  const dm = `dm_${[MEMBER, OUTSIDER].sort().join('_')}`
+  const fresh = { call: false, reviewers: [], reported: false }
+
+  it('lets anyone on the team start a direct message they are in — one per pair', async () => {
     await assertSucceeds(
-      setDoc(doc(as(ADMIN), 'rooms/r2'), { name: 'x', members: [], reviewers: [] })
+      setDoc(doc(as(MEMBER), 'rooms', dm), { ...fresh, kind: 'dm', members: [MEMBER, OUTSIDER] })
+    )
+    // Under another id, it would be a second one between them.
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'rooms/elsewhere'), {
+        ...fresh,
+        kind: 'dm',
+        members: [MEMBER, OUTSIDER],
+      })
+    )
+    // A direct message has no name, and is two people.
+    const pair = `dm_${[MEMBER, WORSHIP].sort().join('_')}`
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'rooms', pair), {
+        ...fresh,
+        kind: 'dm',
+        name: 'Us',
+        members: [MEMBER, WORSHIP],
+      })
+    )
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'rooms', pair), {
+        ...fresh,
+        kind: 'dm',
+        members: [MEMBER, WORSHIP, OUTSIDER],
+      })
     )
   })
 
-  it('lets a member flag their room for review but not rename it', async () => {
-    await assertSucceeds(updateDoc(doc(as(MEMBER), 'rooms/r1'), { reviewers: [MEMBER] }))
-    // Only reviewers/updatedAt are allowed through that carve-out.
+  it('lets anyone on the team start a group chat of more than two, with them in it', async () => {
+    const group = { ...fresh, kind: 'group', name: 'Setup crew' }
+    await assertSucceeds(
+      setDoc(doc(as(MEMBER), 'rooms/g2'), { ...group, members: [MEMBER, OUTSIDER, WORSHIP] })
+    )
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'rooms/g3'), { ...group, members: [MEMBER, OUTSIDER] })
+    )
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'rooms/g4'), { ...group, members: [OUTSIDER, WORSHIP, ADMIN] })
+    )
+    // Not already reported, nor as someone else.
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'rooms/g5'), {
+        ...group,
+        reported: true,
+        members: [MEMBER, OUTSIDER, WORSHIP],
+      })
+    )
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'rooms/g6'), {
+        ...group,
+        createdBy: OUTSIDER,
+        members: [MEMBER, OUTSIDER, WORSHIP],
+      })
+    )
+    // A guest doesn't start conversations.
+    await assertFails(
+      setDoc(doc(as(GUEST), 'rooms/g7'), { ...group, members: [GUEST, MEMBER, OUTSIDER] })
+    )
+  })
+
+  it('lets anyone in a group chat rename it or change its cover — not a direct message', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'rooms/g1'), {
+        ...fresh,
+        kind: 'group',
+        name: 'Crew',
+        members: [MEMBER, OUTSIDER, WORSHIP],
+      })
+      await setDoc(doc(ctx.firestore(), 'rooms', dm), {
+        ...fresh,
+        kind: 'dm',
+        members: [MEMBER, OUTSIDER],
+      })
+    })
+    await assertSucceeds(updateDoc(doc(as(OUTSIDER), 'rooms/g1'), { name: 'Setup crew' }))
+    await assertSucceeds(
+      updateDoc(doc(as(MEMBER), 'rooms/g1'), { photoURL: 'https://example.com/c.jpg' })
+    )
+    await assertFails(updateDoc(doc(as(MEMBER), 'rooms/g1'), { members: [MEMBER, ADMIN] }))
+    await assertFails(updateDoc(doc(as(MEMBER), 'rooms', dm), { name: 'Us' }))
+    await assertFails(updateDoc(doc(as(GUEST), 'rooms/g1'), { name: 'Mine' }))
+  })
+
+  it('lets anyone in a conversation report it, but never take a report back', async () => {
+    await assertSucceeds(
+      updateDoc(doc(as(MEMBER), 'rooms/r1'), { reviewers: [MEMBER], reported: true })
+    )
+    await assertFails(updateDoc(doc(as(MEMBER), 'rooms/r1'), { reported: false }))
+    await assertFails(updateDoc(doc(as(MEMBER), 'rooms/r1'), { reviewers: [] }))
     await assertFails(updateDoc(doc(as(MEMBER), 'rooms/r1'), { name: 'renamed' }))
   })
 
-  it('does not let a non-member flag a room', async () => {
+  it('does not let a non-member report a room', async () => {
     await assertFails(updateDoc(doc(as(OUTSIDER), 'rooms/r1'), { reviewers: [OUTSIDER] }))
   })
 })

@@ -27,6 +27,22 @@ export interface PublicProfile {
   displayName: string
   photoURL?: string
   title?: string
+  /** Has Messages, so can be messaged: whom a member may start a conversation with. */
+  messages?: true
+}
+
+const MEMBER_ROLES = ['admin', 'security', 'regular', 'intern', 'worship']
+
+/**
+ * Whether someone has Messages (as src/lib/roles canUseMessages): a member
+ * — but an intern who is only that — or a guest; never a public follower.
+ */
+export function hasMessages(roles: unknown): boolean {
+  const held = Array.isArray(roles) ? roles.map(String) : []
+  const member = held.some((r) => MEMBER_ROLES.includes(r))
+  if (!member) return held.includes('guest')
+  if (held.includes('admin')) return true
+  return !(held.includes('intern') && !held.includes('regular'))
 }
 
 /**
@@ -36,7 +52,10 @@ export interface PublicProfile {
  * falls back to the uid either way, and an empty entry would claim the name is
  * known to be nothing.
  */
-export function profileFrom(uid: string, data: FirebaseFirestore.DocumentData): PublicProfile | null {
+export function profileFrom(
+  uid: string,
+  data: FirebaseFirestore.DocumentData
+): PublicProfile | null {
   const displayName = typeof data.displayName === 'string' ? data.displayName.trim() : ''
   if (!displayName) return null
   const photoURL = typeof data.photoURL === 'string' ? data.photoURL : undefined
@@ -47,6 +66,7 @@ export function profileFrom(uid: string, data: FirebaseFirestore.DocumentData): 
   const profile: PublicProfile = { uid, displayName }
   if (photoURL) profile.photoURL = photoURL
   if (title) profile.title = title
+  if (hasMessages(data.roles)) profile.messages = true
   return profile
 }
 
@@ -60,7 +80,8 @@ export function sameProfile(a: PublicProfile | null, b: PublicProfile | null): b
     a.uid === b.uid &&
     a.displayName === b.displayName &&
     a.photoURL === b.photoURL &&
-    a.title === b.title
+    a.title === b.title &&
+    a.messages === b.messages
   )
 }
 
@@ -114,6 +135,19 @@ export const backfillPublicProfiles = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'Admins only.')
   }
 
+  const done = await writeDirectory(db)
+  logger.info('[publicProfiles] backfill complete', done)
+  return done
+})
+
+/**
+ * Every user's directory entry written afresh — by the backfill above, and by
+ * the deploy (scripts/settleAll), so an entry gains what the mirror has come
+ * to say (`messages`) without waiting for its user to be edited.
+ */
+export async function writeDirectory(
+  db: FirebaseFirestore.Firestore
+): Promise<{ written: number; skipped: number; total: number }> {
   const snap = await db.collection('users').get()
   let written = 0
   let skipped = 0
@@ -136,7 +170,5 @@ export const backfillPublicProfiles = onCall(async (request) => {
     }
   }
   if (pending > 0) await batch.commit()
-
-  logger.info('[publicProfiles] backfill complete', { written, skipped })
   return { written, skipped, total: snap.size }
-})
+}
