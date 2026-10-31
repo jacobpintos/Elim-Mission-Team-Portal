@@ -269,6 +269,98 @@ export function SocialCard({ link, width }: { link: GiveWay; width: number | '10
   )
 }
 
+/**
+ * A group of the church's accounts as one card — one ministry on several
+ * platforms (connectLayout oneCard): its photo on the left, as SocialCard's,
+ * its name, and a logo for each platform; each logo opens that account.
+ */
+export function SocialGroupCard({
+  name,
+  links,
+  width,
+}: {
+  name: string
+  links: GiveWay[]
+  width: number | '100%'
+}) {
+  const colors = useThemeColors()
+  // The group's photo: the first one any of its links has.
+  const photo = links
+    .map((l) => resolveSocialIcon(l.icon, l.label, l.url))
+    .find((i) => i.kind === 'image')
+  // Six to a row on a phone's width.
+  const LOGO = 34
+
+  return (
+    <XStack
+      width={width}
+      minHeight={104}
+      borderRadius={16}
+      borderWidth={1}
+      borderColor={colors.border}
+      backgroundColor={colors.surface}
+      overflow="hidden"
+    >
+      <YStack
+        width={104}
+        alignSelf="stretch"
+        position="relative"
+        overflow="hidden"
+        alignItems="center"
+        justifyContent="center"
+        backgroundColor={photo ? colors.border : colors.primary + '33'}
+      >
+        {photo?.kind === 'image' ? (
+          <Image
+            source={{ uri: photo.uri }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            contentFit="cover"
+            accessibilityLabel={name}
+          />
+        ) : (
+          <Text fontSize={28} fontWeight="800" color={colors.primary}>
+            {Array.from(name)[0]?.toUpperCase() ?? '?'}
+          </Text>
+        )}
+      </YStack>
+      <YStack flex={1} minWidth={0} justifyContent="center" gap={12} padding={16}>
+        <Text fontSize={17} fontWeight="700" color={colors.text} numberOfLines={2}>
+          {name}
+        </Text>
+        <XStack flexWrap="wrap" gap={8}>
+          {links.map((link, i) => {
+            const brand = brandOf(link.url, link.label)
+            if (!brand) return null
+            return (
+              <Pressable
+                key={`${link.url}-${i}`}
+                // On the web, a real link (lib/externalUrl webLink); on the phone, opened when pressed.
+                {...webLink(link.url)}
+                onPress={Platform.OS === 'web' ? undefined : () => openExternalUrl(link.url)}
+                accessibilityRole="link"
+                accessibilityLabel={`${link.label} on ${BRAND_NAMES[brand]}`}
+                style={(state) => {
+                  const hovered = (state as { hovered?: boolean }).hovered
+                  return {
+                    width: LOGO,
+                    height: LOGO,
+                    borderRadius: 9,
+                    overflow: 'hidden',
+                    opacity: state.pressed ? 0.75 : 1,
+                    transform: [{ translateY: hovered ? -2 : 0 }],
+                  }
+                }}
+              >
+                <BrandMark brand={brand} size={LOGO} />
+              </Pressable>
+            )
+          })}
+        </XStack>
+      </YStack>
+    </XStack>
+  )
+}
+
 /** A block the design has no section for, drawn as the page builder draws it. */
 export function renderRestBlock(block: PageBlock) {
   switch (block.type) {

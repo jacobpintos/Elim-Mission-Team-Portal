@@ -10,7 +10,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import { autoTextColor } from '@/theme/contrast'
 import type { PageBlock } from '@/types/pages'
 import { composeConnect, directionsQuery, directionsUrl } from './connectLayout'
-import { HeroPill, renderRestBlock, SocialCard } from './designedParts'
+import { HeroPill, renderRestBlock, SocialCard, SocialGroupCard } from './designedParts'
 import { MeetingBlock } from './BlockRenderer/MeetingBlock'
 import { useMiriamStore } from '@/stores/miriamStore'
 
@@ -287,25 +287,35 @@ export function ConnectDesign({
           gap={wide ? 36 : 30}
         >
           <Overline color={primary}>Follow along</Overline>
-          {layout.linkGroups.map((group, g) => (
-            <YStack key={g} gap={16}>
-              {group.heading ? (
-                <Text
-                  fontSize={wide ? 28 : 24}
-                  fontWeight="800"
-                  color={colors.text}
-                  letterSpacing={-0.4}
-                >
-                  {group.heading}
-                </Text>
-              ) : null}
-              <XStack flexWrap="wrap" gap={16}>
-                {group.links.map((link, i) => (
-                  <SocialCard key={`${link.url}-${i}`} link={link} width={linkWidth} />
-                ))}
-              </XStack>
-            </YStack>
-          ))}
+          {layout.linkGroups.map((group, g) =>
+            // One ministry on several platforms: one card, a logo for each.
+            group.together ? (
+              <SocialGroupCard
+                key={g}
+                name={group.heading ?? group.links[0].label}
+                links={group.links}
+                width={wide ? Math.min(column, 640) : '100%'}
+              />
+            ) : (
+              <YStack key={g} gap={16}>
+                {group.heading ? (
+                  <Text
+                    fontSize={wide ? 28 : 24}
+                    fontWeight="800"
+                    color={colors.text}
+                    letterSpacing={-0.4}
+                  >
+                    {group.heading}
+                  </Text>
+                ) : null}
+                <XStack flexWrap="wrap" gap={16}>
+                  {group.links.map((link, i) => (
+                    <SocialCard key={`${link.url}-${i}`} link={link} width={linkWidth} />
+                  ))}
+                </XStack>
+              </YStack>
+            )
+          )}
         </YStack>
       ) : null}
 

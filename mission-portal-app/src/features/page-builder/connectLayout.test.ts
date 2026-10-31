@@ -62,6 +62,35 @@ describe('composeConnect', () => {
     ])
   })
 
+  it('makes one card of a group on several platforms — not of two Facebook pages', () => {
+    const d = composeConnect([
+      block(1, 'social', {
+        heading: 'The Elim Arrival',
+        links: [
+          { icon: '', label: 'The Elim Arrival', url: 'https://www.facebook.com/share/a/' },
+          { icon: '', label: 'The Elim Arrival', url: 'http://instagram.com/theelimarrival' },
+          { icon: '', label: 'Elim Worship', url: 'http://youtube.com/theelimarrival' },
+        ],
+      }),
+      block(2, 'social', {
+        heading: 'The Well of Iowa',
+        links: [
+          { icon: '', label: 'Pastor Ajai', url: 'https://www.facebook.com/share/b/' },
+          { icon: '', label: 'The Well of Iowa', url: 'https://www.facebook.com/share/c/' },
+        ],
+      }),
+      // A site the app has no logo for: its own card.
+      block(3, 'social', {
+        heading: 'Elsewhere',
+        links: [
+          { icon: '', label: 'Shop', url: 'https://theelimstore.com' },
+          { icon: '', label: 'Instagram', url: 'https://instagram.com/x' },
+        ],
+      }),
+    ])
+    expect(d.linkGroups.map((g) => g.together)).toEqual([true, false, false])
+  })
+
   it('makes cards of social links and keeps text, buttons and anything else', () => {
     const d = composeConnect([
       block(1, 'social', {
@@ -75,7 +104,7 @@ describe('composeConnect', () => {
     ])
     expect(d.links.map((l) => [l.label, l.handle])).toEqual([['Facebook', 'facebook.com']])
     expect(d.linksHeading).toBe('Follow along')
-    expect(d.linkGroups).toEqual([{ heading: 'Follow along', links: d.links }])
+    expect(d.linkGroups).toEqual([{ heading: 'Follow along', links: d.links, together: false }])
     expect(d.story.map((t) => t.heading)).toEqual(['Our leaders'])
     expect(d.actions.map((a) => a.label)).toEqual(['Email us'])
     expect(d.rest.map((b) => b.id)).toEqual([4])

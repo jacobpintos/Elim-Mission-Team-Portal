@@ -8,6 +8,7 @@ import type {
   TextData,
   TwoColData,
 } from '@/types/pages'
+import { brandOf } from '@/lib/socialIcon'
 import { giveHandle, type GiveWay } from './givingLayout'
 
 /** The Connect page, sorted into the parts the design lays out. */
@@ -26,11 +27,33 @@ export interface ConnectLayout {
    * The same, kept as the page groups them: each social block its own group,
    * under its own heading — "The Elim Arrival", then "The Well of Iowa".
    */
-  linkGroups: { heading: string | null; links: GiveWay[] }[]
+  linkGroups: LinkGroup[]
   story: TextData[]
   actions: ButtonData[]
   /** Everything else, in page order, drawn by the ordinary block renderers. */
   rest: PageBlock[]
+}
+
+export interface LinkGroup {
+  heading: string | null
+  links: GiveWay[]
+  /**
+   * One card for the group, a logo for each link (oneCard): one account —
+   * or one ministry — on each of several platforms.
+   */
+  together: boolean
+}
+
+/**
+ * Whether a group is shown as one card, its platforms' logos on it: when it
+ * has more than one link, each on a platform the app knows, and no platform
+ * twice — two Facebook logos side by side couldn't be told apart, so two
+ * people's Facebook pages stay two cards.
+ */
+export function oneCard(links: GiveWay[]): boolean {
+  if (links.length < 2) return false
+  const brands = links.map((l) => brandOf(l.url, l.label))
+  return brands.every(Boolean) && new Set(brands).size === brands.length
 }
 
 /**
@@ -95,8 +118,13 @@ export function composeConnect(blocks: PageBlock[]): ConnectLayout {
           })
         }
         layout.links.push(...group)
-        if (group.length)
-          layout.linkGroups.push({ heading: data.heading?.trim() || null, links: group })
+        if (group.length) {
+          layout.linkGroups.push({
+            heading: data.heading?.trim() || null,
+            links: group,
+            together: oneCard(group),
+          })
+        }
         break
       }
       case 'text':
