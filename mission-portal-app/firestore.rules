@@ -271,26 +271,43 @@ service cloud.firestore {
           .hasOnly(['name', 'photoURL', 'updatedAt']);
     }
 
+    // A conversation is read by those in it, and no one else — admins no more
+    // than anyone. Unless someone in it reported it: then the admins may read
+    // it too, until one of them clears the report (Moderation), and may do
+    // nothing else to it but that, or delete it. Asked for by membership, or
+    // — an admin's — where('reported', '==', true).
+    function inRoom(id) {
+      return get(/databases/$(database)/documents/rooms/$(id)).data.members
+        .hasAny([request.auth.uid]);
+    }
+    function reportedRoom(data) {
+      return isAdmin() && data.get('reported', false) == true;
+    }
+
     match /rooms/{id} {
-      allow read: if isSignedIn() && (isAdmin() ||
-        resource.data.members.hasAny([request.auth.uid]));
-      allow write: if isAdmin();
+      allow read: if isSignedIn() &&
+        (resource.data.members.hasAny([request.auth.uid]) || reportedRoom(resource.data));
       allow create: if isSignedIn() && !isGuest() && !holdsPublic() &&
         newRoom(request.resource.data, id);
-      allow update: if isSignedIn() &&
-        resource.data.members.hasAny([request.auth.uid]) &&
-        (mutesOrReports() || namesGroup());
+      allow update: if isSignedIn() && (
+        (resource.data.members.hasAny([request.auth.uid]) && (mutesOrReports() || namesGroup())) ||
+        // The report cleared.
+        (reportedRoom(resource.data) &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['reviewers', 'reported', 'updatedAt']) &&
+         request.resource.data.get('reported', false) == false));
+      allow delete: if isAdmin();
 
       match /messages/{msgId} {
-        allow read: if isSignedIn() && (isAdmin() ||
-          get(/databases/$(database)/documents/rooms/$(id)).data.members
-            .hasAny([request.auth.uid]));
-        allow create: if isSignedIn() && (isAdmin() ||
-          get(/databases/$(database)/documents/rooms/$(id)).data.members
-            .hasAny([request.auth.uid]));
-        allow update: if isSignedIn() &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['readBy']);
+        allow read: if isSignedIn() && (inRoom(id) ||
+          reportedRoom(get(/databases/$(database)/documents/rooms/$(id)).data));
+        // Said by someone in it, as themselves.
+        allow create: if isSignedIn() && inRoom(id) &&
+          request.resource.data.uid == request.auth.uid;
+        // Marked read by someone in it.
+        allow update: if isSignedIn() && inRoom(id) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy']);
+        // A reported message taken down (Moderation).
         allow delete: if isAdmin();
       }
     }

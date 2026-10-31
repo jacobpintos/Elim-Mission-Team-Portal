@@ -132,8 +132,10 @@ describe('rooms', () => {
     await assertFails(getDoc(doc(as(OUTSIDER), 'rooms/r1')))
   })
 
-  it('lets an admin read any room', async () => {
-    await assertSucceeds(getDoc(doc(as(ADMIN), 'rooms/r1')))
+  it('keeps an admin out of a conversation they are not in', async () => {
+    await assertFails(getDoc(doc(as(ADMIN), 'rooms/r1')))
+    await assertFails(getDoc(doc(as(ADMIN), 'rooms/r1/messages/m1')))
+    await assertFails(getDocs(collection(as(ADMIN), 'rooms')))
   })
 
   it('refuses rooms to signed-out users', async () => {
@@ -268,6 +270,13 @@ describe('messages', () => {
   it('lets a member mark a message read but not edit its text', async () => {
     await assertSucceeds(updateDoc(doc(as(MEMBER), 'rooms/r1/messages/m1'), { readBy: [MEMBER] }))
     await assertFails(updateDoc(doc(as(MEMBER), 'rooms/r1/messages/m1'), { text: 'edited' }))
+    await assertFails(updateDoc(doc(as(OUTSIDER), 'rooms/r1/messages/m1'), { readBy: [OUTSIDER] }))
+  })
+
+  it('lets a member post only as themselves', async () => {
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'rooms/r1/messages/m3'), { uid: WORSHIP, text: 'not me', ts: 3 })
+    )
   })
 
   it('only admins may delete a message', async () => {
@@ -734,44 +743,68 @@ describe('carpool — arranged by admins, read by everyone on it', () => {
   })
 })
 
-describe('flagged conversations — the other half of the queue', () => {
+describe('reported conversations — the other half of the queue', () => {
   beforeEach(async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore()
-      await setDoc(doc(db, 'rooms', 'never'), { name: 'never flagged', members: [MEMBER] })
+      const group = { kind: 'group', call: false, members: [MEMBER, OUTSIDER, WORSHIP] }
+      await setDoc(doc(db, 'rooms', 'never'), { ...group, name: 'never reported', reviewers: [] })
       await setDoc(doc(db, 'rooms', 'cleared'), {
-        name: 'flag cleared',
-        members: [MEMBER],
+        ...group,
+        name: 'report cleared',
         reviewers: [],
+        reported: false,
       })
       await setDoc(doc(db, 'rooms', 'flagged'), {
-        name: 'flagged',
-        members: [MEMBER],
-        reviewers: [ADMIN],
+        ...group,
+        name: 'reported',
+        reviewers: [MEMBER],
+        reported: true,
       })
+      await setDoc(doc(db, 'rooms', 'flagged', 'messages', 'm1'), {
+        uid: OUTSIDER,
+        text: 'x',
+        ts: 1,
+      })
+      await setDoc(doc(db, 'rooms', 'never', 'messages', 'm1'), { uid: OUTSIDER, text: 'y', ts: 1 })
     })
   })
 
-  const flaggedOnly = (db: ReturnType<typeof as>) =>
-    getDocs(query(collection(db, 'rooms'), where('reviewers', '!=', [])))
+  const reportedOnly = (db: ReturnType<typeof as>) =>
+    getDocs(query(collection(db, 'rooms'), where('reported', '==', true)))
 
-  it('lets an admin ask which rooms are flagged', async () => {
-    await assertSucceeds(flaggedOnly(as(ADMIN)))
+  it('lets an admin ask which conversations are reported — and finds only those', async () => {
+    const snap = await assertSucceeds(reportedOnly(as(ADMIN)))
+    expect(snap.docs.map((d) => d.id)).toEqual(['flagged'])
   })
 
   it('does not let an ordinary member run it', async () => {
-    // An unfiltered rooms query is refused for anyone who is not an admin,
-    // which is why the badge only ever subscribes for one.
-    await assertFails(flaggedOnly(as(MEMBER)))
+    await assertFails(reportedOnly(as(GUEST)))
   })
 
-  it('finds flagged rooms and skips both kinds of unflagged', async () => {
-    // "Non-empty array" cannot be asked directly, so it is asked as "not
-    // empty". That has to skip a room nobody ever flagged — where the field
-    // is absent entirely — as well as one whose flag was cleared to [].
-    const snap = await flaggedOnly(as(ADMIN))
+  it('lets an admin read a reported conversation, and nothing else of anyone’s', async () => {
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'rooms/flagged')))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'rooms/flagged/messages/m1')))
+    await assertFails(getDoc(doc(as(ADMIN), 'rooms/never')))
+    await assertFails(getDoc(doc(as(ADMIN), 'rooms/never/messages/m1')))
+    await assertFails(getDoc(doc(as(ADMIN), 'rooms/cleared')))
+    await assertFails(getDocs(collection(as(ADMIN), 'rooms')))
+  })
 
-    expect(snap.docs.map((d) => d.id)).toEqual(['flagged'])
+  it('lets an admin clear a report — and do nothing else to the conversation', async () => {
+    await assertFails(updateDoc(doc(as(ADMIN), 'rooms/flagged'), { name: 'renamed' }))
+    // Nor join it, to read it after the report is cleared.
+    await assertFails(
+      updateDoc(doc(as(ADMIN), 'rooms/flagged'), { members: [MEMBER, OUTSIDER, WORSHIP, ADMIN] })
+    )
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'rooms/flagged/messages/m2'), { uid: ADMIN, text: 'hi', ts: 2 })
+    )
+    await assertSucceeds(
+      updateDoc(doc(as(ADMIN), 'rooms/flagged'), { reviewers: [], reported: false })
+    )
+    await assertFails(getDoc(doc(as(ADMIN), 'rooms/flagged')))
+    await assertFails(updateDoc(doc(as(ADMIN), 'rooms/never'), { reported: false }))
   })
 })
 

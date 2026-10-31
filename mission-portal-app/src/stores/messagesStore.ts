@@ -175,12 +175,18 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       limit(MESSAGES_PAGE_SIZE)
     )
 
-    const unsub = onSnapshot(q, (snap) => {
-      const msgs = snap.docs.map((d) => d.data() as Message).reverse()
-      const hasMore = snap.docs.length >= MESSAGES_PAGE_SIZE
-      const oldestTs = msgs.length > 0 ? msgs[0].ts : null
-      set({ messages: msgs, msgLoading: false, hasMore, _oldestTs: oldestTs })
-    })
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const msgs = snap.docs.map((d) => d.data() as Message).reverse()
+        const hasMore = snap.docs.length >= MESSAGES_PAGE_SIZE
+        const oldestTs = msgs.length > 0 ? msgs[0].ts : null
+        set({ messages: msgs, msgLoading: false, hasMore, _oldestTs: oldestTs })
+      },
+      // Refused — a conversation they aren't in, or one whose report was
+      // cleared: none shown, not the copy this device kept from before.
+      () => set({ messages: [], msgLoading: false, hasMore: false, _oldestTs: null })
+    )
 
     set({ _unsubMessages: unsub })
 
