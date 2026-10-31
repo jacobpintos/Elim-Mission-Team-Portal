@@ -62,6 +62,34 @@ describe('composeConnect', () => {
     ])
   })
 
+  it('carries the descriptions the page gives a group and each link', () => {
+    const d = composeConnect([
+      block(1, 'social', {
+        heading: 'The Well of Iowa',
+        description: '  Our church family online.  ',
+        links: [
+          {
+            icon: '',
+            label: 'Pastor Ajai',
+            url: 'https://www.facebook.com/share/b/',
+            description: 'Teaching and updates',
+          },
+          {
+            icon: '',
+            label: 'The Well of Iowa',
+            url: 'https://www.facebook.com/share/c/',
+            description: ' ',
+          },
+        ],
+      }),
+    ])
+    expect(d.linkGroups[0].description).toBe('Our church family online.')
+    expect(d.linkGroups[0].links.map((l) => l.description)).toEqual([
+      'Teaching and updates',
+      undefined,
+    ])
+  })
+
   it('makes one card of a group on several platforms — not of two Facebook pages', () => {
     const d = composeConnect([
       block(1, 'social', {
@@ -104,7 +132,9 @@ describe('composeConnect', () => {
     ])
     expect(d.links.map((l) => [l.label, l.handle])).toEqual([['Facebook', 'facebook.com']])
     expect(d.linksHeading).toBe('Follow along')
-    expect(d.linkGroups).toEqual([{ heading: 'Follow along', links: d.links, together: false }])
+    expect(d.linkGroups).toEqual([
+      { heading: 'Follow along', description: null, links: d.links, together: false },
+    ])
     expect(d.story.map((t) => t.heading)).toEqual(['Our leaders'])
     expect(d.actions.map((a) => a.label)).toEqual(['Email us'])
     expect(d.rest.map((b) => b.id)).toEqual([4])

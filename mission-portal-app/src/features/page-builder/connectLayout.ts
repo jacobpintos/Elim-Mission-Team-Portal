@@ -36,6 +36,8 @@ export interface ConnectLayout {
 
 export interface LinkGroup {
   heading: string | null
+  /** A line or two about the group, under its heading or on its card. */
+  description: string | null
   links: GiveWay[]
   /**
    * One card for the group, a logo for each link (oneCard): one account —
@@ -115,12 +117,14 @@ export function composeConnect(blocks: PageBlock[]): ConnectLayout {
             url: link.url.trim(),
             icon: link.icon ?? '',
             handle: giveHandle(link.url),
+            ...(link.description?.trim() ? { description: link.description.trim() } : {}),
           })
         }
         layout.links.push(...group)
         if (group.length) {
           layout.linkGroups.push({
             heading: data.heading?.trim() || null,
+            description: data.description?.trim() || null,
             links: group,
             together: oneCard(group),
           })

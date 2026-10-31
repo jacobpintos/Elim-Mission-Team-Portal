@@ -252,10 +252,15 @@ export function SocialCard({ link, width }: { link: GiveWay; width: number | '10
           ) : null}
         </YStack>
         <XStack flex={1} minWidth={0} alignItems="center" gap={10} paddingHorizontal={16}>
-          <YStack flex={1} minWidth={0} gap={3}>
+          <YStack flex={1} minWidth={0} gap={3} paddingVertical={12}>
             <Text fontSize={16} fontWeight="700" color={colors.text} numberOfLines={2}>
               {link.label}
             </Text>
+            {link.description ? (
+              <Text fontSize={14} lineHeight={19} color={colors.text} opacity={0.85}>
+                {link.description}
+              </Text>
+            ) : null}
             {where ? (
               <Text fontSize={13} color={colors.textMuted} numberOfLines={1}>
                 {where}
@@ -276,10 +281,13 @@ export function SocialCard({ link, width }: { link: GiveWay; width: number | '10
  */
 export function SocialGroupCard({
   name,
+  description,
   links,
   width,
 }: {
   name: string
+  /** A line or two about the group, under its name. */
+  description?: string | null
   links: GiveWay[]
   width: number | '100%'
 }) {
@@ -327,6 +335,11 @@ export function SocialGroupCard({
         <Text fontSize={17} fontWeight="700" color={colors.text} numberOfLines={2}>
           {name}
         </Text>
+        {description ? (
+          <Text fontSize={14} lineHeight={19} color={colors.text} opacity={0.85} marginTop={-6}>
+            {description}
+          </Text>
+        ) : null}
         <XStack flexWrap="wrap" gap={8}>
           {links.map((link, i) => {
             const brand = brandOf(link.url, link.label)

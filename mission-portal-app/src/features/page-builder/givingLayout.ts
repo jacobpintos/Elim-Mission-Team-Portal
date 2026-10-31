@@ -16,6 +16,8 @@ export interface GiveWay {
   icon: string
   /** The account as people know it — `@name`, `$name` — or the site's own name. */
   handle: string
+  /** A line or two about it, as the page gives it (Connect's cards). */
+  description?: string
 }
 
 /** The Giving page, sorted into the parts the design lays out. */

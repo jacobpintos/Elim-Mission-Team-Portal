@@ -119,7 +119,9 @@ export interface MeetingData extends Record<string, unknown> {
 
 export interface SocialData extends Record<string, unknown> {
   heading?: string
-  links?: { icon: string; label: string; url: string }[]
+  /** A line or two about the group, under its heading (Connect). */
+  description?: string
+  links?: { icon: string; label: string; url: string; description?: string }[]
 }
 
 export interface PageData {

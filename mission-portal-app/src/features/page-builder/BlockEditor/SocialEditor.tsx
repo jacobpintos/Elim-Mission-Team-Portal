@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Image } from 'expo-image'
-import { YStack, XStack, Text, Input, Button } from 'tamagui'
+import { YStack, XStack, Text, Input, Button, TextArea } from 'tamagui'
 import type { SocialData } from '@/types/pages'
 import { useUIStore } from '@/stores/uiStore'
 import { pickAndUploadPageImages, deletePageImage } from '@/lib/pageImageUpload'
@@ -24,7 +24,7 @@ export function SocialEditor({ data, onChange, pageKey }: SocialEditorProps) {
 
   const updateLink = (
     index: number,
-    patch: Partial<{ icon: string; label: string; url: string }>
+    patch: Partial<{ icon: string; label: string; url: string; description: string }>
   ) => {
     const updated = [...links]
     updated[index] = { ...updated[index], ...patch }
@@ -67,6 +67,19 @@ export function SocialEditor({ data, onChange, pageKey }: SocialEditorProps) {
           placeholder="Connect With Us"
           value={data.heading ?? ''}
           onChangeText={(v) => onChange({ ...data, heading: v })}
+          size="$3"
+        />
+      </YStack>
+
+      <YStack gap="$1">
+        <Text fontSize="$3" fontWeight="600">
+          Description
+        </Text>
+        <TextArea
+          placeholder="Optional — a line or two about these, shown under the heading (or on their card)"
+          value={data.description ?? ''}
+          onChangeText={(v) => onChange({ ...data, description: v })}
+          numberOfLines={2}
           size="$3"
         />
       </YStack>
@@ -123,9 +136,10 @@ export function SocialEditor({ data, onChange, pageKey }: SocialEditorProps) {
             autoCapitalize="none"
           />
           <Text fontSize="$1" color="$gray10">
-            Venmo and Cash App links show their own logos. For any other, upload the platform&apos;s
-            logo or paste its address, or type an emoji; left blank, the button shows the first
-            letter of the label.
+            Facebook, Instagram, YouTube, TikTok, Spotify, Apple Music, Venmo and Cash App links
+            show their own logos. For any other, upload a logo or paste its address, or type an
+            emoji; left blank, the button shows the first letter of the label. On Connect, a picture
+            uploaded here is the card&apos;s photo.
           </Text>
           <Input
             placeholder="Label (e.g. Facebook)"
@@ -139,6 +153,13 @@ export function SocialEditor({ data, onChange, pageKey }: SocialEditorProps) {
             onChangeText={(v) => updateLink(index, { url: v })}
             size="$3"
             autoCapitalize="none"
+          />
+          <TextArea
+            placeholder="Description — optional, shown on its card"
+            value={link.description ?? ''}
+            onChangeText={(v) => updateLink(index, { description: v })}
+            numberOfLines={2}
+            size="$3"
           />
         </YStack>
       ))}

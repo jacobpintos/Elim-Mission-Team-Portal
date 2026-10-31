@@ -293,6 +293,7 @@ export function ConnectDesign({
               <SocialGroupCard
                 key={g}
                 name={group.heading ?? group.links[0].label}
+                description={group.description}
                 links={group.links}
                 width={wide ? Math.min(column, 640) : '100%'}
               />
@@ -306,6 +307,17 @@ export function ConnectDesign({
                     letterSpacing={-0.4}
                   >
                     {group.heading}
+                  </Text>
+                ) : null}
+                {group.description ? (
+                  <Text
+                    fontSize={16}
+                    lineHeight={24}
+                    color={colors.textMuted}
+                    marginTop={-8}
+                    maxWidth={720}
+                  >
+                    {group.description}
                   </Text>
                 ) : null}
                 <XStack flexWrap="wrap" gap={16}>
