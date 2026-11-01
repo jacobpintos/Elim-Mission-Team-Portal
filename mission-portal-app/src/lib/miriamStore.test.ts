@@ -52,6 +52,18 @@ describe('storeAsked', () => {
     expect(storeAsked('Is the store open on Sunday?')).toBeNull()
     expect(storeAsked('What is Revive Me about?')).toBeNull()
   })
+
+  it('leaves a sale to put up or take down to the admin’s action, never answered as a question', () => {
+    expect(storeAsked('Put all the merch on sale for 10% off until tomorrow')).toBeNull()
+    expect(storeAsked('Hey Miriam, can you put the Elim Store on sale this weekend?')).toBeNull()
+    expect(storeAsked('Start a sale at the Elim Store')).toBeNull()
+    expect(storeAsked('Let’s run a merch sale through Sunday')).toBeNull()
+    expect(storeAsked('End the Elim Store sale')).toBeNull()
+    expect(storeAsked('Take down the merch sale')).toBeNull()
+    expect(storeAsked('I want to extend the Elim Store sale')).toBeNull()
+    // Asked, still answered.
+    expect(storeAsked('Is the merch on sale?')).toBe('sale')
+  })
 })
 
 describe('storeReply', () => {

@@ -76,6 +76,28 @@ export function saleEndsLabel(endsOn: string, now: Date = new Date()): string {
 }
 
 /**
+ * A sale's last day, given as YYYY-MM-DD (Miriam's post_store_sale), with
+ * when it comes down: 'invalid' for no real day ("2026-02-31"), 'past' for
+ * one already over — a sale that ended yesterday would notify everyone who
+ * asked and never be seen.
+ */
+export function lastDayOf(
+  iso: string,
+  now: Date = new Date()
+): { endsOn: string; endsAt: number } | 'invalid' | 'past' {
+  const endsOn = iso.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(endsOn)) return 'invalid'
+  const day = localDate(endsOn)
+  if (
+    day.getMonth() + 1 !== Number(endsOn.slice(5, 7)) ||
+    day.getDate() !== Number(endsOn.slice(8))
+  )
+    return 'invalid'
+  const endsAt = endOfDay(endsOn)
+  return endsAt <= now.getTime() ? 'past' : { endsOn, endsAt }
+}
+
+/**
  * Check a sale as an admin typed it, returning its end date or what is wrong.
  *
  * The date is typed MM/DD/YY, as the event form takes dates, and has to be

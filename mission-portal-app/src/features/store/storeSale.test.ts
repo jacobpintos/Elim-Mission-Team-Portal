@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { activeSale, endOfDay, readSale, saleEndsLabel, type StoreSale } from './storeSale'
+import {
+  activeSale,
+  endOfDay,
+  lastDayOf,
+  readSale,
+  saleEndsLabel,
+  type StoreSale,
+} from './storeSale'
 
 const sale = (over: Partial<StoreSale>): StoreSale => ({
   id: 's',
@@ -80,5 +87,34 @@ describe('readSale', () => {
     expect(readSale('Sale', '10/22/26', NOW)).toEqual({
       error: 'The last day of the sale has already passed.',
     })
+  })
+})
+
+describe('lastDayOf', () => {
+  // Saturday, October 31st 2026, in the evening.
+  const now = new Date(2026, 9, 31, 20)
+
+  it('takes a real day, today or later, and ends the sale as that day ends', () => {
+    expect(lastDayOf('2026-11-01', now)).toEqual({
+      endsOn: '2026-11-01',
+      endsAt: endOfDay('2026-11-01'),
+    })
+    // Today is still a day of the sale.
+    expect(lastDayOf('2026-10-31', now)).toEqual({
+      endsOn: '2026-10-31',
+      endsAt: endOfDay('2026-10-31'),
+    })
+  })
+
+  it('turns away a day already over', () => {
+    expect(lastDayOf('2026-10-30', now)).toBe('past')
+  })
+
+  it('turns away what isn’t a day', () => {
+    expect(lastDayOf('', now)).toBe('invalid')
+    expect(lastDayOf('tomorrow', now)).toBe('invalid')
+    expect(lastDayOf('2026-02-31', now)).toBe('invalid')
+    expect(lastDayOf('2026-13-01', now)).toBe('invalid')
+    expect(lastDayOf('11/01/26', now)).toBe('invalid')
   })
 })

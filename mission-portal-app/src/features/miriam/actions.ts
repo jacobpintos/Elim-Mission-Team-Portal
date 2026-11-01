@@ -91,6 +91,9 @@ import {
   type Livestream,
 } from '@/lib/livestream'
 import type { MeetingRequest } from '@/types/meeting'
+import { readElimStore } from '@/features/store/readElimStore'
+import { lastDayOf, saleEndsLabel } from '@/features/store/storeSale'
+import { endSale, postSale, updateSale } from '@/features/store/storeWrites'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -1818,6 +1821,100 @@ async function takeDownLivestream(profile: UserProfile) {
   } satisfies Prepared
 }
 
+/**
+ * A sale at the Elim Store, as its Sale editor puts one up (features/store
+ * SaleEditor): the line at the top of the store tab and its last day. A new
+ * one replaces the one up, and tells everyone who asked to hear about sales
+ * (functions/src/push/storeSaleNotifications, on its creation); `change`
+ * corrects or extends the one up instead, and tells nobody again.
+ *
+ * The app only announces it: theelimstore.com holds the prices, so the card
+ * says they're changed there.
+ */
+async function postStoreSale(profile: UserProfile, input: Record<string, unknown>) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const { sale: live } = await readElimStore()
+  const change = input.change === true
+  if (change && !live) return cannot('There’s no sale up at the Elim Store to change.')
+  const message =
+    String(input.message ?? '')
+      .trim()
+      .slice(0, 200) || (change && live ? live.message : '')
+  if (!message) return cannot('What should the sale say? For example, “10% off all T-shirts”.')
+  const asked = String(input.last_day ?? '').trim()
+  const last =
+    change && live && !asked ? { endsOn: live.endsOn, endsAt: live.endsAt } : lastDayOf(asked)
+  if (last === 'invalid') return cannot('What’s the last day of the sale?')
+  if (last === 'past') return cannot('That day has already passed — what’s the sale’s last day?')
+  const ends = saleEndsLabel(last.endsOn)
+
+  if (change && live) {
+    const before = { message: live.message, endsOn: live.endsOn, endsAt: live.endsAt }
+    return {
+      kind: 'ready',
+      title: 'Change the Elim Store sale?',
+      details: [message, ends, 'Nobody is notified again.'],
+      confirm: 'Change it',
+      run: async () => {
+        await updateSale(live.id, { message, ...last })
+        return `Changed. The sale now ${ends[0].toLowerCase()}${ends.slice(1)}.`
+      },
+      undo: async () => {
+        await updateSale(live.id, before)
+        return 'Okay — the sale is back as it was.'
+      },
+    } satisfies Prepared
+  }
+
+  let posted = ''
+  return {
+    kind: 'ready',
+    title: live ? 'Replace the Elim Store sale?' : 'Put up this sale at the Elim Store?',
+    details: [
+      message,
+      ends,
+      ...(live ? [`In place of “${live.message}”.`] : []),
+      'It shows at the top of the store tab, and everyone who asked to hear about sales is notified.',
+      'Prices at theelimstore.com stay as they are — change them there.',
+    ],
+    confirm: 'Post it',
+    run: async () => {
+      posted = await postSale({ message, ...last, createdBy: String(profile.uid) })
+      return 'The sale is up on the Elim Store tab. Remember to change the prices at theelimstore.com.'
+    },
+    // Taken down again — but only where none was replaced: putting an old
+    // sale back would be a new one, and tell everyone again.
+    ...(live
+      ? {}
+      : {
+          undo: async () => {
+            if (posted) await endSale(posted)
+            return 'Okay — the sale is down.'
+          },
+        }),
+  } satisfies Prepared
+}
+
+/** The sale up at the Elim Store, taken down before its last day. */
+async function endStoreSale(profile: UserProfile) {
+  const no = adminOnly(profile)
+  if (no) return no
+  const { sale } = await readElimStore()
+  if (!sale) return cannot('There’s no sale up at the Elim Store.')
+  return {
+    kind: 'ready',
+    title: `Take down “${sale.message.trim()}”?`,
+    details: [`${saleEndsLabel(sale.endsOn)} — it comes off the store tab now instead.`],
+    confirm: 'Take it down',
+    destructive: true,
+    run: async () => {
+      await endSale(sale.id)
+      return 'The sale is down.'
+    },
+  } satisfies Prepared
+}
+
 /** A meeting request sent to them: said they'll answer it, or marked answered. */
 async function meetingRequest(profile: UserProfile, input: Record<string, unknown>) {
   const snap = await getDoc(doc(db, 'meetingRequests', String(input.request_id ?? '') || '-'))
@@ -2044,6 +2141,8 @@ const ACTIONS: Record<
   start_chat: startChat,
   post_livestream: postLivestream,
   take_down_livestream: takeDownLivestream,
+  post_store_sale: postStoreSale,
+  end_store_sale: endStoreSale,
   meeting_request: meetingRequest,
   change_my_name: changeMyName,
   set_my_location: setMyLocation,

@@ -21,11 +21,12 @@ export async function postSale(sale: {
   endsOn: string
   endsAt: number
   createdBy?: string
-}): Promise<void> {
+}): Promise<string> {
   const old = await getDocs(collection(db, 'storeSales'))
   await Promise.all(old.docs.map((d) => deleteDoc(d.ref)))
   const id = `sale-${Date.now().toString(36)}`
   await setDoc(doc(db, 'storeSales', id), { ...sale, createdAt: Date.now() })
+  return id
 }
 
 /** Correct the sale that is on. An update, so nobody is notified again. */

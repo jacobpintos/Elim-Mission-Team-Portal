@@ -529,6 +529,8 @@ export type ActionName =
   | 'start_chat'
   | 'post_livestream'
   | 'take_down_livestream'
+  | 'post_store_sale'
+  | 'end_store_sale'
   // Worship
   | 'edit_set_list'
   | 'notify_set_list'
@@ -566,6 +568,8 @@ export const ACTIONS: readonly ActionName[] = [
   'start_chat',
   'post_livestream',
   'take_down_livestream',
+  'post_store_sale',
+  'end_store_sale',
   'edit_set_list',
   'notify_set_list',
   'send_message',
@@ -1214,6 +1218,36 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
     take_down_livestream: {
       name: 'take_down_livestream',
       description: 'Take down the livestream card that is up (admins only).' + ADMINS,
+      strict: true,
+      input_schema: objectOf({}),
+    },
+    post_store_sale: {
+      name: 'post_store_sale',
+      description:
+        'Put up a sale at the Elim Store (admins only): its line at the top of the store tab, with its last day — it comes down by itself once that day is over, and everyone who asked to hear about sales is told. For "put all T-shirts on sale for 10% off until tomorrow". It announces the sale; the prices themselves are set at theelimstore.com, which the app doesn’t change. A sale that is up is replaced — or, to correct or extend it ("make it 20%", "keep the sale going through Sunday"), change: true, and nobody is told again.' +
+        ACTS,
+      strict: true,
+      input_schema: objectOf({
+        message: {
+          type: 'string',
+          description:
+            'The sale as the tab shows it, short and plain: "10% off all T-shirts". With change, "" keeps its words.',
+        },
+        last_day: {
+          type: 'string',
+          description:
+            'YYYY-MM-DD, its last day: "until tomorrow" is tomorrow, "this weekend" the Sunday, "for a week" six days on. With change, "" keeps its last day.',
+        },
+        change: {
+          type: 'boolean',
+          description: 'True to correct or extend the sale that is up, not put up a new one.',
+        },
+      }),
+    },
+    end_store_sale: {
+      name: 'end_store_sale',
+      description:
+        'Take down the Elim Store sale that is up, before its last day (admins only).' + ACTS,
       strict: true,
       input_schema: objectOf({}),
     },

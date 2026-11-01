@@ -33,6 +33,14 @@ const BROWSE =
 const ABOUT =
   /^(?:what(?:'|’)?s|what\s+is|what\s+exactly\s+is|tell\s+me\s+about|explain|describe)\b|\bwhat\s+(?:the\s+)?(?:elim|merch)\s*store\s+is\b|\babout\s+(?:the\s+)?(?:elim|merch)\s*store\b/
 
+/**
+ * Doing something to it, not asking about it: "put the merch on sale",
+ * "end the Elim Store sale". An admin's to have done (Miriam's
+ * post_store_sale), never answered with whether a sale is on.
+ */
+const COMMAND =
+  /^(?:(?:i\s+(?:want|need|would\s+like|'d\s+like|’d\s+like)\s+to|let(?:'|’)?s|go\s+ahead\s+and)\s+)?(?:put|mark|start|run|set\s+up|create|make|add|post|launch|begin|end|stop|cancel|take\s+down|remove|extend|change|update|close|discount|knock)\b/
+
 /** Opening it: the screen's to answer (lib/miriamQuick: screenAsked). */
 const OPENING = /^(?:open|show|go|take|bring|pull)\b/
 
@@ -50,7 +58,7 @@ const tidy = (text: string) =>
 /** What is being asked about the Elim Store, when it is named; null for anything else. */
 export function storeAsked(text: string): StoreAsk | null {
   const t = tidy(text)
-  if (!NAMED.test(t)) return null
+  if (!NAMED.test(t) || COMMAND.test(t)) return null
   if (SALE.test(t) && !/\bfor\s+sale\b/.test(t)) return 'sale'
   if (BROWSE.test(t)) return 'browse'
   if (OPENING.test(t)) return null

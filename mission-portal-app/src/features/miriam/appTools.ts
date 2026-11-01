@@ -97,6 +97,8 @@ export type AppToolName =
   | 'start_chat'
   | 'post_livestream'
   | 'take_down_livestream'
+  | 'post_store_sale'
+  | 'end_store_sale'
   | 'meeting_request'
   | 'change_my_name'
   | 'add_date_note'
@@ -124,6 +126,8 @@ const ADMIN_ACTIONS: AppToolName[] = [
   'start_chat',
   'post_livestream',
   'take_down_livestream',
+  'post_store_sale',
+  'end_store_sale',
 ]
 
 /** The lookups — and changes — this person's screens allow. */
