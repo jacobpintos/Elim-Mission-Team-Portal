@@ -50,7 +50,14 @@ export function screensFor(profile: UserProfile | null): MiriamScreen[] {
     screens.push({ id: 'messages', label: 'Messages', path: '/messages' })
   }
   if (tabs.includes('issues')) {
-    screens.push({ id: 'kaizen', label: 'Operations — Kaizen', path: '/issues/kaizen' })
+    screens.push(
+      { id: 'kaizen', label: 'Operations — Kaizen', path: '/issues/kaizen' },
+      {
+        id: 'production',
+        label: 'Operations — Production Checklist',
+        path: '/issues/production',
+      }
+    )
     if (admin) {
       screens.push(
         { id: 'planning', label: 'Operations — Planning', path: '/issues/planning' },

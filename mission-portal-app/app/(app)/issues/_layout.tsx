@@ -8,6 +8,8 @@ import { useThemeColors } from '@/theme/useThemeColors'
 const ALL_TABS = [
   { key: 'index', label: 'Issues', path: '/(app)/issues' },
   { key: 'kaizen', label: 'Kaizen', path: '/(app)/issues/kaizen' },
+  // A church member's own site, shown as it is (features/production).
+  { key: 'production', label: 'Production Checklist', path: '/(app)/issues/production' },
   { key: 'planning', label: 'Planning', path: '/(app)/issues/planning', adminOnly: true },
   // Moved here from Role-Specific. It stays admin-only: this hides the tab,
   // and the screen itself redirects anyone else who reaches the route.
