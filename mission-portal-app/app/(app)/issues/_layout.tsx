@@ -6,10 +6,11 @@ import { isAdmin } from '@/lib/roles'
 import { useThemeColors } from '@/theme/useThemeColors'
 
 const ALL_TABS = [
-  { key: 'index', label: 'Issues', path: '/(app)/issues' },
+  // What Operations opens on: a church member's own site, shown as it is
+  // (features/production).
+  { key: 'index', label: 'Production Checklist', path: '/(app)/issues' },
+  { key: 'list', label: 'Issues', path: '/(app)/issues/list' },
   { key: 'kaizen', label: 'Kaizen', path: '/(app)/issues/kaizen' },
-  // A church member's own site, shown as it is (features/production).
-  { key: 'production', label: 'Production Checklist', path: '/(app)/issues/production' },
   { key: 'planning', label: 'Planning', path: '/(app)/issues/planning', adminOnly: true },
   // Moved here from Role-Specific. It stays admin-only: this hides the tab,
   // and the screen itself redirects anyone else who reaches the route.
@@ -24,10 +25,14 @@ export default function IssuesLayout() {
   const admin = isAdmin(profile)
 
   const tabs = ALL_TABS.filter((t) => !t.adminOnly || admin)
+  // An issue opened from the list (./[id]) is under Issues.
+  const last = pathname.split('/').pop() ?? ''
   const activeKey =
     pathname === '/(app)/issues' || pathname.endsWith('/issues')
       ? 'index'
-      : (pathname.split('/').pop() ?? 'index')
+      : tabs.some((t) => t.key === last)
+        ? last
+        : 'list'
 
   return (
     <YStack flex={1} backgroundColor={colors.background}>

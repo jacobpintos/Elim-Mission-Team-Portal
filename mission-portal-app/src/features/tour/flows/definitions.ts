@@ -130,8 +130,14 @@ export const operationsFlow: TourFlow = {
   title: 'Operations',
   steps: [
     {
-      id: 'ops-intro',
+      id: 'ops-production',
       route: '/issues',
+      title: 'Production Checklist',
+      body: 'Operations opens on the production checklist, built by a member of the church and shown here as it is.',
+    },
+    {
+      id: 'ops-intro',
+      route: '/issues/list',
       title: 'Operations & Issues',
       body: 'Track anything that needs fixing or following up. Issues are color-coded by category and filtered by status so nothing falls through the cracks.',
       bullets: [
@@ -142,7 +148,7 @@ export const operationsFlow: TourFlow = {
     },
     {
       id: 'ops-workflow',
-      route: '/issues',
+      route: '/issues/list',
       title: 'From issue to resolution',
       body: 'Each issue moves through a clear workflow, and corrective actions can become tasks assigned to people.',
       bullets: [

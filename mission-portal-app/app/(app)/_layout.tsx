@@ -544,7 +544,7 @@ export default function AppLayout() {
                 <Tabs.Screen name="messages/moderation" options={{ href: null }} />
                 <Tabs.Screen name="issues/[id]" options={{ href: null }} />
                 <Tabs.Screen name="issues/kaizen" options={{ href: null }} />
-                <Tabs.Screen name="issues/production" options={{ href: null }} />
+                <Tabs.Screen name="issues/list" options={{ href: null }} />
                 <Tabs.Screen name="issues/planning" options={{ href: null }} />
                 <Tabs.Screen name="issues/inventory" options={{ href: null }} />
                 <Tabs.Screen name="pages/[slug]" options={{ href: null }} />

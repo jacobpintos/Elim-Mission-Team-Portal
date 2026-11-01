@@ -266,6 +266,19 @@ describe('screens asked for by name', () => {
     expect(screenAsked('show me my tasks', screens)).toBe('assignments')
     expect(screenAsked('open profile & settings', screens)).toBe('settings')
   })
+  it('opens Operations on its production checklist, and Issues on its own tab', () => {
+    const ops = [
+      { id: 'issues', label: 'Operations' },
+      { id: 'issues_list', label: 'Operations — Issues' },
+      { id: 'kaizen', label: 'Operations — Kaizen' },
+    ]
+    expect(screenAsked('open operations', ops)).toBe('issues')
+    expect(screenAsked('open the production checklist', ops)).toBe('issues')
+    expect(screenAsked('take me to the checklist', ops)).toBe('issues')
+    expect(screenAsked('open issues', ops)).toBe('issues_list')
+    expect(screenAsked('show me reported issues', ops)).toBe('issues_list')
+    expect(screenAsked('open kaizen', ops)).toBe('kaizen')
+  })
   it('leaves songs, other people’s screens and questions alone', () => {
     expect(screenAsked('open Above All', screens)).toBeNull()
     expect(screenAsked('open the admin panel', screens)).toBeNull()

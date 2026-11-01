@@ -50,13 +50,11 @@ export function screensFor(profile: UserProfile | null): MiriamScreen[] {
     screens.push({ id: 'messages', label: 'Messages', path: '/messages' })
   }
   if (tabs.includes('issues')) {
+    // Operations opens on the Production Checklist (app/(app)/issues/index);
+    // its Issues list is a tab of its own.
     screens.push(
-      { id: 'kaizen', label: 'Operations — Kaizen', path: '/issues/kaizen' },
-      {
-        id: 'production',
-        label: 'Operations — Production Checklist',
-        path: '/issues/production',
-      }
+      { id: 'issues_list', label: 'Operations — Issues', path: '/issues/list' },
+      { id: 'kaizen', label: 'Operations — Kaizen', path: '/issues/kaizen' }
     )
     if (admin) {
       screens.push(
