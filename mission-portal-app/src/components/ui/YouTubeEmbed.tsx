@@ -2,6 +2,7 @@ import { Pressable, View, Platform, Linking } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { XStack, Text } from 'tamagui'
 import { extractYouTubeId } from '@/stores/musicStore'
+import { startsWithSound, youTubeEmbedUrl } from '@/lib/autoplay'
 
 /**
  * A YouTube video playing inside the app, on native and on the web.
@@ -92,7 +93,12 @@ export function YouTubeEmbed({ url }: { url: string }) {
     )
   }
 
-  const embedUrl = `https://www.youtube.com/embed/${id}?autoplay=1`
+  // Started by itself only where a browser allows it with sound; on an
+  // iPhone it comes up ready to tap instead (lib/autoplay).
+  const embedUrl = youTubeEmbedUrl(
+    id,
+    startsWithSound(typeof navigator === 'undefined' ? undefined : navigator)
+  )
   return (
     <iframe
       src={embedUrl}
