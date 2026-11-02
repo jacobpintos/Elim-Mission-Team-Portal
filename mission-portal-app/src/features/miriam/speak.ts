@@ -3,6 +3,7 @@ import { readySpeaker, SPEAKING_ID } from '@/lib/audioOut'
 import { ownsSpeech, releaseSpeech, speechTakeable, withSpeech } from '@/lib/speechOwner'
 import { pickVoice } from '@/lib/miriamVoice'
 import { scriptureForSpeech } from '@/lib/scriptureSpoken'
+import { saleLingoForSpeech } from '@/lib/saleSpoken'
 
 /** A phone's voice needs no tap first (speak.web.ts: a browser's does). */
 export function unlockSpeech(): void {}
@@ -81,7 +82,8 @@ export function whenSpoken(): Promise<void> {
  */
 export function speak(said: string): void {
   // Bible references as a reader says them: "Jer. 1:5" is "Jeremiah 1, verse 5".
-  const text = scriptureForSpeech(said)
+  // Scripture references, and sale lingo ("BOGO 1/2 off"), as a person would say them.
+  const text = saleLingoForSpeech(scriptureForSpeech(said))
   chooseVoice()
   const mine = ++turn
   busy = true

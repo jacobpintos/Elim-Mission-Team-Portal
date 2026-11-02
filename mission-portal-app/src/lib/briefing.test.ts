@@ -396,7 +396,7 @@ describe('a sale at the Elim Store, in the briefing', () => {
     const b = buildBriefing(input({ sale }))
     expect(b.sale).toEqual(sale)
     expect(b.spoken).toContain(
-      'The Elim Store has a sale on: 10% off all T-shirts, until tomorrow.'
+      'There’s a sale at the Elim Store: 10% off all T-shirts. It ends tomorrow.'
     )
     expect(b.segments.find((s) => s.ids.includes('sale'))).toBeTruthy()
   })
@@ -411,7 +411,7 @@ describe('a sale at the Elim Store, in the briefing', () => {
     )
     expect(b.sale?.href).toBe('/store')
     expect(b.spoken).toContain(
-      'The Elim Store has a sale on: 10% off all T-shirts, until tomorrow.'
+      'There’s a sale at the Elim Store: 10% off all T-shirts. It ends tomorrow.'
     )
   })
 
@@ -442,6 +442,52 @@ describe('invitations to the next Sunday service, in an admin’s briefing', () 
     expect(one.spoken).toContain('1 person invited someone to the next Sunday service.')
     expect(buildBriefing(input({ invited: null })).news.some((n) => n.kind === 'invites')).toBe(
       false
+    )
+  })
+})
+
+describe('asking for the briefing, however it’s put', () => {
+  it('a rundown, a recap, a summary of the day', () => {
+    for (const said of [
+      'daily rundown',
+      'Give me my daily rundown',
+      'what’s my daily rundown?',
+      'Can you give me a rundown of my day',
+      'the rundown for today',
+      'rundown please',
+      'daily run down',
+      'morning recap',
+      'today’s summary',
+      'a summary of my day',
+      'daily update',
+      'my day’s overview',
+      'monthly rundown',
+      'daily rundwon',
+    ])
+      expect(briefingAsked(said), said).toBe(true)
+  })
+
+  it('not a summary or update of something else', () => {
+    for (const said of [
+      'update the event',
+      'give me a summary of the sermon',
+      'what’s the rundown for revival',
+      'summary',
+      'send an update to the worship team',
+    ])
+      expect(briefingAsked(said), said).toBe(false)
+  })
+})
+
+describe('a sale, said', () => {
+  it('reads right whether it’s written as a phrase or a sentence', () => {
+    const b = (message: string) =>
+      buildBriefing(input({ sale: { message, until: 'tomorrow', href: '/store' } })).spoken
+    expect(b('All shirts are 10% off.')).toContain(
+      'There’s a sale at the Elim Store: All shirts are 10% off. It ends tomorrow.'
+    )
+    expect(b('Half off every hat!')).toContain(
+      'There’s a sale at the Elim Store: Half off every hat. It ends tomorrow.'
     )
   })
 })

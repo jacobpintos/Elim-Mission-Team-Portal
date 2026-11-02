@@ -76,7 +76,7 @@ describe('storeReply', () => {
 
   it('gives the sale and its last day, and opens the store to see it', () => {
     expect(storeReply('sale', store, sale, now)).toEqual({
-      text: 'Yes — Half off every hat, until Sunday, November 1st. Here’s the store.',
+      text: 'Yes! There’s a sale at the Elim Store: Half off every hat. It ends Sunday, November 1st. Here’s the store.',
       open: true,
     })
   })
@@ -87,7 +87,7 @@ describe('storeReply', () => {
       open: true,
     })
     expect(storeReply('browse', store, sale, now).text).toBe(
-      'Here’s the Elim Store, with handmade clothing and books by Pastor Ajai. There’s a sale on: Half off every hat, until Sunday, November 1st.'
+      'Here’s the Elim Store, with handmade clothing and books by Pastor Ajai. There’s a sale on: Half off every hat. It ends Sunday, November 1st.'
     )
   })
 

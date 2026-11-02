@@ -14,6 +14,7 @@ import {
   teamsOf,
 } from '../../functions/src/miriam/data'
 import { nudgeSaid, occasionsSoon, type Occasion, type OccasionNudge } from './occasions'
+import { saleSaid } from './miriamStore'
 
 /**
  * Miriam's daily briefing — "what do I need to know today?" — put together
@@ -37,10 +38,42 @@ export function briefingAsked(text: string): boolean {
     .split(' ')
     .map(spelled)
     .join(' ')
-  return /^(?:(?:can|could|would)\s+you\s+)?(?:give\s+me\s+)?(?:(?:my|the|a|today's|this\s+month's)\s+)?(?:daily\s+|morning\s+|monthly\s+)?briefing(?:\s+for\s+(?:today|the\s+month|this\s+month))?(?:\s+please)?$|^brief\s+me\b|\bwhat(?:'s|\s+is)\s+(?:happening|on|coming\s+up)\s+this\s+month\b|\bwhat\s+do\s+i\s+need\s+to\s+know\b|\bhow(?:'s|\s+is|\s+does)\s+my\s+day\s+look(?:ing)?\b|\bwhat(?:'s|\s+is)\s+my\s+day\s+look(?:ing)?\s+like\b|\bwhat(?:'s|\s+is)\s+(?:on\s+)?my\s+(?:day|agenda)\b|^good\s+morning(?:\s+miriam)?$|\bcatch\s+me\s+up\b/.test(
-    said
-  )
+  return BRIEFING_ASKED.some((re) => re.test(said))
 }
+
+/** What may come before it: "can you give me", "what's", "let's hear". */
+const ASKING = String.raw`(?:(?:can|could|would)\s+you\s+)?(?:(?:give|get|show|read)\s+me\s+|what(?:'s|\s+is)\s+|let's\s+(?:hear|have|do)\s+)?`
+/** Whose and which: "my", "today's", "the daily", "this month's". */
+const WHICH = String.raw`(?:(?:my|the|a|today's|this\s+month's)\s+)?`
+const WHEN = String.raw`(?:daily|morning|monthly|day's)`
+/** What it's called: "briefing", "rundown" — on its own or with a day or month. */
+const NAMED = String.raw`(?:briefing|rundown|run-down|run\s+down|lowdown)`
+/** Called this only with a day or month to it: a "summary" alone could be of anything. */
+const NAMED_WHEN = String.raw`(?:recap|summary|overview|update|report|digest)`
+/** What it's for, after it: "for today", "of my day", "for the month". */
+const FOR = String.raw`(?:\s+(?:for|of|on)\s+(?:today|the\s+day|my\s+day|the\s+month|this\s+month))?`
+
+const BRIEFING_ASKED: RegExp[] = [
+  // "briefing", "daily rundown", "give me my morning briefing", "what's the rundown for today"
+  new RegExp(String.raw`^${ASKING}${WHICH}(?:${WHEN}\s+)?${NAMED}${FOR}(?:\s+please)?$`),
+  // "daily recap", "today's summary", "a summary of my day", "monthly update"
+  new RegExp(String.raw`^${ASKING}${WHICH}${WHEN}\s+${NAMED_WHEN}${FOR}(?:\s+please)?$`),
+  // "today's summary", "this month's recap"
+  new RegExp(
+    String.raw`^${ASKING}(?:today's|this\s+month's)\s+(?:${WHEN}\s+)?${NAMED_WHEN}(?:\s+please)?$`
+  ),
+  new RegExp(
+    String.raw`^${ASKING}${WHICH}${NAMED_WHEN}\s+(?:for|of|on)\s+(?:today|the\s+day|my\s+day|the\s+month|this\s+month)(?:\s+please)?$`
+  ),
+  /^brief\s+me\b/,
+  /\bwhat(?:'s|\s+is)\s+(?:happening|on|coming\s+up)\s+this\s+month\b/,
+  /\bwhat\s+do\s+i\s+need\s+to\s+know\b/,
+  /\bhow(?:'s|\s+is|\s+does)\s+my\s+day\s+look(?:ing)?\b/,
+  /\bwhat(?:'s|\s+is)\s+my\s+day\s+look(?:ing)?\s+like\b/,
+  /\bwhat(?:'s|\s+is)\s+(?:on\s+)?my\s+(?:day|agenda)\b/,
+  /^good\s+morning(?:\s+miriam)?$/,
+  /\bcatch\s+me\s+up\b/,
+]
 
 /**
  * Words that ask for the briefing, as typed in a hurry or heard a little
@@ -55,6 +88,7 @@ const BRIEFING_WORDS: [string, number][] = [
   ['daily', 1],
   ['morning', 1],
   ['monthly', 1],
+  ['rundown', 1],
 ]
 
 function spelled(word: string): string {
@@ -514,7 +548,7 @@ export function buildBriefing(input: BriefingInput): Briefing {
       `You have ${plural(unreadTotal, 'unread message')}.`
     )
   const sale = input.sale ?? null
-  if (sale) say([R.sale()], saleSaid(sale))
+  if (sale) say([R.sale()], storeSaleSaid(sale))
   for (const f of food) {
     const when = f.date === today ? 'today' : weekday(f.date)
     say(
@@ -550,9 +584,8 @@ export function buildBriefing(input: BriefingInput): Briefing {
   }
 }
 
-/** "The Elim Store has a sale on: 10% off all T-shirts, until tomorrow." */
-const saleSaid = (sale: BriefSale) =>
-  `The Elim Store has a sale on: ${sale.message.trim().replace(/[.!]+$/, '')}, until ${sale.until}.`
+/** "There’s a sale at the Elim Store: All shirts are 10% off. It ends tomorrow." (lib/miriamStore) */
+const storeSaleSaid = (sale: BriefSale) => saleSaid(sale.message, sale.until)
 
 /** The date in an instance key (`<templateId>_<YYYY-MM-DD>`). */
 const eventsKeyDate = (key: string) => key.slice(key.lastIndexOf('_') + 1)
@@ -663,7 +696,7 @@ function buildMonthly(input: BriefingInput): Briefing {
       `New in Content: ${listed(added.map((c) => c.title))}.`
     )
   const sale = input.sale ?? null
-  if (sale) say([R.sale()], saleSaid(sale))
+  if (sale) say([R.sale()], storeSaleSaid(sale))
 
   return {
     period: 'month',

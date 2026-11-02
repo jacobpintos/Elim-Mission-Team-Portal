@@ -14,6 +14,7 @@
  */
 import { pickVoice } from '@/lib/miriamVoice'
 import { scriptureForSpeech } from '@/lib/scriptureSpoken'
+import { saleLingoForSpeech } from '@/lib/saleSpoken'
 
 let unlocked = false
 let held: SpeechSynthesisUtterance[] = []
@@ -73,7 +74,8 @@ function englishVoice(synth: SpeechSynthesis): SpeechSynthesisVoice | null {
 export function speak(said: string): void {
   // Bible references as a reader says them — and "Jer." no longer taken for
   // the end of a sentence below.
-  const text = scriptureForSpeech(said)
+  // Scripture references, and sale lingo ("BOGO 1/2 off"), as a person would say them.
+  const text = saleLingoForSpeech(scriptureForSpeech(said))
   const synth = voice()
   if (!synth || !text.trim()) return
   try {

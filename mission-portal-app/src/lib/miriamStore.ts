@@ -116,8 +116,19 @@ const listed = (items: string[]) =>
 const midSentence = (title: string) =>
   /^[A-Z][a-z]/.test(title) ? title[0].toLowerCase() + title.slice(1) : title
 
-/** The sale's own words, without the full stop it may end in, to say inside a sentence. */
-const saleWords = (sale: StoreSale) => sale.message.trim().replace(/[.!]+$/, '')
+/**
+ * A sale, as she says it: its own words after a colon — however the admin
+ * put them, "10% off all T-shirts" or "All shirts are 10% off" — and when it
+ * ends as a sentence of its own. Fitted into hers ("has a sale on all shirts
+ * are 10% off, until…"), a sale written as a sentence read wrong.
+ *
+ * `at`: said of the Elim Store by name ("There’s a sale at the Elim Store:
+ * …"), or where the store has just been named ("There’s a sale on: …").
+ */
+export function saleSaid(message: string, until: string, at = true): string {
+  const words = message.trim().replace(/[.!]+$/, '')
+  return `There’s a sale ${at ? 'at the Elim Store' : 'on'}: ${words}. It ends ${until}.`
+}
 
 /** The answer to a question about the store, from the store as it stands and its sale. */
 export function storeReply(
@@ -130,7 +141,7 @@ export function storeReply(
 
   if (ask === 'sale') {
     return sale
-      ? { text: `Yes — ${saleWords(sale)}, until ${ends}. Here’s the store.`, open: true }
+      ? { text: `Yes! ${saleSaid(sale.message, ends)} Here’s the store.`, open: true }
       : { text: 'There’s no sale at the Elim Store right now.', open: false }
   }
 
@@ -138,9 +149,7 @@ export function storeReply(
     const shelves = store.shelves.filter((s) => s.items.length && s.title.trim())
     const carries = listed(shelves.map((s) => midSentence(s.title.trim())))
     const here = carries ? `Here’s the Elim Store, with ${carries}.` : 'Here’s the Elim Store.'
-    const onSale = sale
-      ? `There’s a sale on: ${saleWords(sale)}, until ${ends}.`
-      : 'There’s no sale on right now.'
+    const onSale = sale ? saleSaid(sale.message, ends, false) : 'There’s no sale on right now.'
     return { text: `${here} ${onSale}`, open: true }
   }
 
