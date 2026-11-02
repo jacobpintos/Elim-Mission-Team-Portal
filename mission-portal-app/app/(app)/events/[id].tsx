@@ -280,8 +280,10 @@ export default function EventDetailScreen() {
             </XStack>
           ) : null}
 
-          {/* What a public event says about itself. */}
-          {event.description?.trim() ? <EventAbout text={event.description} /> : null}
+          {/* What a public event says about itself — while it is public (as its form shows it). */}
+          {event.isPublic && event.description?.trim() ? (
+            <EventAbout text={event.description} />
+          ) : null}
 
           {/* Weather */}
           {weather ? (

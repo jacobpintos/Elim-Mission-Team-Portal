@@ -74,6 +74,13 @@ describe('nextSundayService', () => {
     expect(nextSundayService([service], {}, new Date(2026, 10, 8, 11))?.date).toBe('2026-11-15')
   })
 
+  it('only ever a public one: a service made private, or a Sunday of it, is passed over', () => {
+    const made = { ...service, isPublic: false } as unknown as EventTemplate
+    expect(nextSundayService([made], {}, monday)).toBeNull()
+    const thatSunday = { 'svc_2026-11-08': { isPublic: false } }
+    expect(nextSundayService([service], thatSunday, monday)?.date).toBe('2026-11-15')
+  })
+
   it('the public one before a team’s, and none when there is none', () => {
     const teamCall = {
       ...service,

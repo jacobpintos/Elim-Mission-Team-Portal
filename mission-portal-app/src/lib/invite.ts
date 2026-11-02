@@ -64,10 +64,12 @@ export function placeOf(
 }
 
 /**
- * The next Sunday service on the calendar, from now: "Sunday Service" by
- * name, a public one before any other; else a public service, gathering or
- * worship on a Sunday. One already begun today is past — the next week's is
- * the one to invite to. Null when the calendar has none in the next six weeks.
+ * The next public Sunday service on the calendar, from now: "Sunday Service"
+ * by name; else a service, gathering or worship on a Sunday. Only a public one
+ * — or a public date of one — is anyone's to invite a friend to: one made
+ * private, or a Sunday of it that is, is passed over. One already begun today
+ * is past — the next week's is the one to invite to. Null when the calendar
+ * has none in the next six weeks.
  */
 export function nextSundayService(
   templates: EventTemplate[],
@@ -78,6 +80,7 @@ export function nextSundayService(
   const nowMinutes = now.getHours() * 60 + now.getMinutes()
   const sundays = allInstances(templates, overrides, today, addDays(today, 42)).filter((ev) => {
     if ((ev as { unpublished?: boolean }).unpublished === true) return false
+    if (ev.isPublic !== true) return false
     if (!isSunday(ev.date)) return false
     if (ev.date !== today) return true
     const start = minutes(ev.startTime)
@@ -85,11 +88,7 @@ export function nextSundayService(
   })
   const named = (ev: EventInstance) => /\bsunday\s+service\b/i.test(ev.title)
   const service = (ev: EventInstance) => /\b(?:service|gathering|worship|church)\b/i.test(ev.title)
-  const ev =
-    sundays.find((e) => named(e) && e.isPublic === true) ??
-    sundays.find(named) ??
-    sundays.find((e) => service(e) && e.isPublic === true) ??
-    null
+  const ev = sundays.find(named) ?? sundays.find(service) ?? null
   if (!ev) return null
   return {
     key: ev.instanceKey,

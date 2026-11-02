@@ -115,7 +115,10 @@ export function EventHero({
   const onPrimary = useThemeStore((s) => s.theme.onPrimaryOverride) ?? autoTextColor(primary)
   const day = event.date ? new Date(`${event.date}T12:00:00`) : null
   const town = [event.city, event.state].filter(Boolean).join(', ')
+  // Its public page's: shown while it — this date of it — is public, and kept
+  // for when it is again (the form shows them only then too).
   const facebook = event.isPublic ? event.facebookUrl?.trim() : ''
+  const cover = event.isPublic ? event.coverImage : undefined
 
   const button = (label: string, solid: boolean, icon?: React.ReactNode) => (
     <XStack
@@ -143,9 +146,9 @@ export function EventHero({
       borderColor={colors.border}
       backgroundColor={colors.surface}
     >
-      {event.coverImage ? (
+      {cover ? (
         <Image
-          source={{ uri: event.coverImage }}
+          source={{ uri: cover }}
           style={{ width: '100%', aspectRatio: 16 / 9, maxHeight: 360 }}
           contentFit="cover"
           accessibilityLabel={event.title}
