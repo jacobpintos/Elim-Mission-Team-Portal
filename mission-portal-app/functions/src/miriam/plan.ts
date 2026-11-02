@@ -423,7 +423,7 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
           understood: {
             type: 'string',
             description:
-              'When you read a word differently from how it was heard: the request as you understood it ("create an event named Test"); otherwise "".',
+              'When you read a word differently from how it was heard: the request as you understood it ("create an event named Test"); "daily briefing" when they asked for their briefing; otherwise "".',
           },
           skill: {
             type: 'string',

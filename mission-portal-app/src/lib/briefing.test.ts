@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { briefingAsked, buildBriefing, type BriefingInput } from './briefing'
+import { briefingAsked, briefingUnderstood, buildBriefing, type BriefingInput } from './briefing'
 
 const today = '2026-10-18' // a Sunday
 const templates = [
@@ -463,8 +463,37 @@ describe('asking for the briefing, however it’s put', () => {
       'my day’s overview',
       'monthly rundown',
       'daily rundwon',
+      'tell me my daily rundown',
+      'Can you tell me my daily briefing please',
+      'pull up my briefing',
+      'read me my morning briefing',
+      'I’d like my daily rundown',
+      'I want to hear my briefing',
+      'can I get my daily rundown',
+      'let me hear the rundown for today',
+      'go over my daily briefing',
+      'run me through my day’s summary',
+      'play my briefing',
+      'hit me with the daily rundown',
+      'tell me about my day',
+      'go over today',
     ])
       expect(briefingAsked(said), said).toBe(true)
+  })
+
+  it('in Claude’s account of what they asked, before its colon', () => {
+    for (const understood of [
+      'Give me my daily rundown: what I have today, and my open tasks.',
+      'daily briefing',
+      'Daily briefing — today’s events and tasks',
+    ])
+      expect(briefingUnderstood(understood), understood).toBe(true)
+    for (const understood of [
+      'Create an event named Test',
+      'Summary: what the sermon on Sunday was about',
+      'Tell me the rundown for revival',
+    ])
+      expect(briefingUnderstood(understood), understood).toBe(false)
   })
 
   it('not a summary or update of something else', () => {
@@ -474,6 +503,10 @@ describe('asking for the briefing, however it’s put', () => {
       'what’s the rundown for revival',
       'summary',
       'send an update to the worship team',
+      'tell me about revival',
+      'pull up the rundown for revival',
+      'open the event',
+      'I want to update my profile',
     ])
       expect(briefingAsked(said), said).toBe(false)
   })

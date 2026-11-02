@@ -41,8 +41,21 @@ export function briefingAsked(text: string): boolean {
   return BRIEFING_ASKED.some((re) => re.test(said))
 }
 
-/** What may come before it: "can you give me", "what's", "let's hear". */
-const ASKING = String.raw`(?:(?:can|could|would)\s+you\s+)?(?:(?:give|get|show|read)\s+me\s+|what(?:'s|\s+is)\s+|let's\s+(?:hear|have|do)\s+)?`
+/**
+ * Claude's account of what they asked for, when it was the briefing: "Give
+ * me my daily rundown: what I have today, and my open tasks." — the asking
+ * comes before the colon or dash, and what it's for after it.
+ */
+export function briefingUnderstood(understood: string): boolean {
+  const asked = understood.split(/:|\s[—–-]\s|;/)[0]
+  return briefingAsked(understood) || briefingAsked(asked)
+}
+
+/**
+ * What may come before it: "can you give me", "tell me", "what's", "let's
+ * hear", "pull up", "I'd like", "can I get", "go over", "run me through".
+ */
+const ASKING = String.raw`(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)?(?:(?:give|get|show|read|tell|send|play|bring)\s+me\s+|(?:pull|bring)\s+up\s+|(?:open|start|do|play|read)\s+|what(?:'s|\s+is)\s+|let's\s+(?:hear|have|do|see)\s+|let\s+me\s+(?:hear|have|see)\s+|(?:i\s+(?:want|need)|i'd\s+like)\s+(?:to\s+(?:hear|see|get)\s+)?|(?:can|could|may)\s+i\s+(?:get|have|hear|see)\s+|go\s+over\s+|run\s+(?:me\s+)?through\s+|hit\s+me\s+with\s+)?`
 /** Whose and which: "my", "today's", "the daily", "this month's". */
 const WHICH = String.raw`(?:(?:my|the|a|today's|this\s+month's)\s+)?`
 const WHEN = String.raw`(?:daily|morning|monthly|day's)`
@@ -73,6 +86,7 @@ const BRIEFING_ASKED: RegExp[] = [
   /\bwhat(?:'s|\s+is)\s+(?:on\s+)?my\s+(?:day|agenda)\b/,
   /^good\s+morning(?:\s+miriam)?$/,
   /\bcatch\s+me\s+up\b/,
+  /^(?:(?:can|could|would)\s+you\s+)?(?:tell\s+me\s+about|go\s+over|walk\s+me\s+through)\s+(?:my\s+day|today)$/,
 ]
 
 /**

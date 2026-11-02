@@ -39,7 +39,7 @@ import { directionsUrl, googleDirectionsUrl, placeOf } from '@/lib/directions'
 import { openDirections } from '@/lib/location'
 import { canKeepDateNotes, isDay, noteText } from '@/lib/dateNotes'
 import { minutesBeforeSaid, reminderAsked, reminderWhen, type Repeat } from '@/lib/reminders'
-import { briefingAsked } from '@/lib/briefing'
+import { briefingAsked, briefingUnderstood } from '@/lib/briefing'
 import { localToday } from '@/lib/events'
 import { asksAQuestion, songAsked, songThen } from '@/lib/miriamSongs'
 import { looksLikeLyrics, slidesAsked, slidesAsking, type SlidesAsk } from '@/lib/lyricSlides'
@@ -984,7 +984,7 @@ export function useMiriamConversation(
       // Claude worked out it was the briefing she was asked for, in words she
       // didn't place herself ("gibe me my daily breifing"): the briefing,
       // as she gives it, rather than Claude's account of their day.
-      if (result.kind === 'answer' && result.understood && briefingAsked(result.understood)) {
+      if (result.kind === 'answer' && result.understood && briefingUnderstood(result.understood)) {
         await giveBriefing(typing)
         return
       }
