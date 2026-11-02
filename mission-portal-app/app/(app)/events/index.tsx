@@ -157,16 +157,14 @@ export default function EventsScreen() {
 
   const { instances, templates } = useEventsStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
-  const configStore = useConfigStore()
   const { subscribe: subConfig, unsubscribe: unsubConfig } = useConfigStore()
   const { subscribe: subGroups, unsubscribe: unsubGroups, getMemberUids } = useGroupsStore()
 
-  // Admin uses Firestore-synced cal; non-admin uses local state
-  const [localY, setLocalY] = useState(() => new Date().getFullYear())
-  const [localM, setLocalM] = useState(() => new Date().getMonth() + 1)
-
-  const calY = admin ? configStore.calY : localY
-  const calM = admin ? configStore.calM : localM
+  // The month shown: this month, whenever the calendar is opened — for
+  // everyone, admins too. An admin's used to be kept in config/main, shared
+  // by every admin, so it opened on whatever month any admin last looked at.
+  const [calY, setCalY] = useState(() => new Date().getFullYear())
+  const [calM, setCalM] = useState(() => new Date().getMonth() + 1)
 
   const { setSelectedEvent } = useEventsStore()
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
@@ -222,16 +220,13 @@ export default function EventsScreen() {
   useEffect(() => {
     if (!isDay(askedDay)) return
     const [y, m] = askedDay.split('-').map(Number)
-    if (admin) useConfigStore.getState().setCalMonth(y, m)
-    else {
-      // Brought here by a link, not a change of this screen's own state.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLocalY(y)
-      setLocalM(m)
-    }
+    // Brought here by a link, not a change of this screen's own state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCalY(y)
+    setCalM(m)
     setSelectedDay(askedDay)
     setView('calendar')
-  }, [askedDay, admin])
+  }, [askedDay])
 
   useEffect(() => {
     if (!seesOcc) return
@@ -335,21 +330,15 @@ export default function EventsScreen() {
   const prevMonth = () => {
     const nm = calM === 1 ? 12 : calM - 1
     const ny = calM === 1 ? calY - 1 : calY
-    if (admin) configStore.setCalMonth(ny, nm)
-    else {
-      setLocalM(nm)
-      setLocalY(ny)
-    }
+    setCalM(nm)
+    setCalY(ny)
   }
 
   const nextMonth = () => {
     const nm = calM === 12 ? 1 : calM + 1
     const ny = calM === 12 ? calY + 1 : calY
-    if (admin) configStore.setCalMonth(ny, nm)
-    else {
-      setLocalM(nm)
-      setLocalY(ny)
-    }
+    setCalM(nm)
+    setCalY(ny)
   }
 
   const dayStr = (day: number) =>

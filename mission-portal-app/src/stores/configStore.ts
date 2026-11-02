@@ -20,7 +20,6 @@ interface ConfigStore {
   _refCount: number
   subscribe: () => void
   unsubscribe: () => void
-  setCalMonth: (y: number, m: number) => void
   setCcliLicense: (license: string) => Promise<void>
   markPageSeen: (uid: string, pageId: string) => Promise<void>
 }
@@ -95,15 +94,6 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       // change, and holding them means a screen that reopens shows the right
       // thing immediately instead of flashing a default.
     }
-  },
-
-  setCalMonth: (y, m) => {
-    set({ calY: y, calM: m })
-    updateDoc(doc(db, 'config', 'main'), {
-      calY: y,
-      calM: m,
-      updatedAt: serverTimestamp(),
-    }).catch(() => {})
   },
 
   setCcliLicense: async (license) => {
