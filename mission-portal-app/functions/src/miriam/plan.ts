@@ -478,6 +478,7 @@ export type AppToolName =
   | 'read_meeting_requests'
   | 'read_date_notes'
   | 'read_store'
+  | 'read_blocked_dates'
   | ActionName
 
 /**
@@ -520,6 +521,7 @@ export type ActionName =
   | 'create_reminder'
   | 'report_security'
   | 'set_availability_range'
+  | 'unblock_dates'
   | 'meeting_request'
   | 'change_my_name'
   | 'add_date_note'
@@ -560,6 +562,7 @@ export const ACTIONS: readonly ActionName[] = [
   'create_reminder',
   'report_security',
   'set_availability_range',
+  'unblock_dates',
   'meeting_request',
   'change_my_name',
   'add_date_note',
@@ -1112,7 +1115,9 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
     set_availability_range: {
       name: 'set_availability_range',
       description:
-        'Answer their availability for every event of theirs between two dates: "I’m out all of November", "I can’t do anything next week".' +
+        'Answer their availability for every event of theirs between two dates: "I’m out all of November", "I can’t do anything next week", "I’m on vacation the 17th through the 21st". ' +
+        'Status "no" blocks those days off for them, for whatever reason — a vacation, work, family: they show as not available for everything they are on then, and for anything added later; the note is the reason, in a few words ("Vacation"), or "". ' +
+        'Their blocked-off days: read_blocked_dates; to open them again: unblock_dates.' +
         ACTS,
       strict: true,
       input_schema: objectOf({
@@ -1120,6 +1125,18 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
         to: { type: 'string', description: 'YYYY-MM-DD, the last day.' },
         status: { type: 'string', enum: ['yes', 'no', 'partial', 'tbd'] },
         note: { type: 'string', description: 'What they said about it, if anything; "".' },
+      }),
+    },
+    unblock_dates: {
+      name: 'unblock_dates',
+      description:
+        'Open days they had blocked off again ("I’m not going on vacation after all", "remove my blocked-off dates in November"): every block of theirs with a day between from and to — "" for both, every one still to come. ' +
+        'Their answers for those days go back to what they were.' +
+        ACTS,
+      strict: true,
+      input_schema: objectOf({
+        from: { type: 'string', description: 'YYYY-MM-DD, or "".' },
+        to: { type: 'string', description: 'YYYY-MM-DD, or "".' },
       }),
     },
     meeting_request: {
@@ -1299,6 +1316,13 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
         required: ['from', 'to'],
         additionalProperties: false,
       },
+    },
+    read_blocked_dates: {
+      name: 'read_blocked_dates',
+      description:
+        'The days they have blocked off, still to come — each stretch’s first and last day and the reason they gave. For "when am I blocked off?", "do I have anything blocked off in December?"',
+      strict: true,
+      input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
     },
     read_store: {
       name: 'read_store',

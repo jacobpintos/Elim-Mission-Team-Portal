@@ -385,6 +385,30 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Days someone has blocked off (functions/src/blockedDates): theirs to
+    // add and remove, and every admin's to see — and remove. The server
+    // answers "Not available" for them on their events in those days
+    // (functions/src/blockedDatesSync). Not a public account's or a guest's,
+    // who are asked no availability. Changed only by removing and adding.
+    function isDay(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+    match /blockedDates/{id} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if seesOccasions()
+        && request.resource.data.keys().hasOnly(['uid', 'from', 'to', 'reason', 'at'])
+        && request.resource.data.keys().hasAll(['uid', 'from', 'to', 'reason', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && isDay(request.resource.data.from)
+        && isDay(request.resource.data.to)
+        && request.resource.data.to >= request.resource.data.from
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() <= 120
+        && request.resource.data.at == request.time;
+      allow update: if false;
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
     match /meetingRequests/{id} {
       allow read: if isAdmin() || (isSignedIn() && request.auth.uid in resource.data.leaders);
       allow create: if false;

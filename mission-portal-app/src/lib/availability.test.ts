@@ -8,6 +8,7 @@ import {
   isOverdue,
   teamAvailStatus,
   availPickRank,
+  availabilityByAnswer,
 } from './availability'
 import type { EventInstance, AvailResponse } from '@/types/events'
 
@@ -170,5 +171,45 @@ describe('availPickRank', () => {
       .slice()
       .sort((a, b) => availPickRank(a) - availPickRank(b))
     expect(order).toEqual(['yes', 'partial', 'tbd', null, 'no'])
+  })
+})
+
+describe('availabilityByAnswer — everyone on a date, by what they said', () => {
+  const ev = {
+    id: 't1',
+    title: 'Revival',
+    date: '2026-11-18',
+    instanceKey: 't1_2026-11-18',
+    templateId: 't1',
+    isRec: true,
+  } as unknown as EventInstance
+  const r = (status: AvailResponse['status'], uid: string, more: Partial<AvailResponse> = {}) => ({
+    status,
+    note: '',
+    uid,
+    ts: 1,
+    ...more,
+  })
+  const names: Record<string, string> = { a: 'Zack', b: 'Bianca', c: 'Sam', d: 'Andy', e: 'Mia' }
+
+  it('the date’s answer, else the series’, and nobody left out', () => {
+    const avail = {
+      't1_2026-11-18': {
+        a: r('no', 'a', { note: 'Vacation', source: 'blocked', block: 'b1' }),
+        b: r('partial', 'b', { note: 'after 7' }),
+      },
+      t1_series: { a: r('yes', 'a'), c: r('yes', 'c'), d: r('tbd', 'd') },
+    }
+    const by = availabilityByAnswer(avail, ev, ['a', 'b', 'c', 'd', 'e'], (u) => names[u])
+    expect(by.yes.map((p) => p.name)).toEqual(['Sam'])
+    expect(by.no).toEqual([{ uid: 'a', name: 'Zack', note: 'Vacation', blocked: true }])
+    expect(by.partial).toEqual([{ uid: 'b', name: 'Bianca', note: 'after 7', blocked: false }])
+    expect(by.tbd.map((p) => p.name)).toEqual(['Andy'])
+    expect(by.none.map((p) => p.name)).toEqual(['Mia'])
+  })
+
+  it('in order of name', () => {
+    const by = availabilityByAnswer({}, ev, ['a', 'b', 'c'], (u) => names[u])
+    expect(by.none.map((p) => p.name)).toEqual(['Bianca', 'Sam', 'Zack'])
   })
 })

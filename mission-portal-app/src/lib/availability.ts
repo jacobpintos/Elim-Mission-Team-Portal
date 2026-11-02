@@ -116,3 +116,47 @@ export function availPickRank(status: AvailResponse['status'] | null): number {
 function todayStr() {
   return new Date().toISOString().split('T')[0]
 }
+
+/** An answer, or none given: how an admin counts those on an event. */
+export type AvailBucket = AvailResponse['status'] | 'none'
+
+/** In the order an admin reads them: who can, who can't, who might, who hasn't said. */
+export const AVAIL_BUCKETS: AvailBucket[] = ['yes', 'no', 'partial', 'tbd', 'none']
+
+export interface AvailPerson {
+  uid: string
+  name: string
+  note: string
+  /** Answered by days they blocked off, not by hand. */
+  blocked: boolean
+}
+
+/**
+ * Everyone on one date of an event by what they answered for it (effectiveAvail:
+ * the date's answer, else the series'), each list by name. For an admin.
+ */
+export function availabilityByAnswer(
+  avail: Record<string, Record<string, AvailResponse>>,
+  ev: EventInstance,
+  uids: Iterable<string>,
+  nameOf: (uid: string) => string
+): Record<AvailBucket, AvailPerson[]> {
+  const out: Record<AvailBucket, AvailPerson[]> = {
+    yes: [],
+    no: [],
+    partial: [],
+    tbd: [],
+    none: [],
+  }
+  for (const uid of uids) {
+    const r = effectiveAvail(avail, ev, uid)
+    out[r?.status ?? 'none'].push({
+      uid,
+      name: nameOf(uid),
+      note: r?.note?.trim() ?? '',
+      blocked: r?.source === 'blocked',
+    })
+  }
+  for (const list of Object.values(out)) list.sort((a, b) => a.name.localeCompare(b.name))
+  return out
+}

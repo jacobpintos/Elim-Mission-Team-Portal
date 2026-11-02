@@ -9,6 +9,7 @@ import { usePlanningStore } from '@/stores/planningStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { AvailBadge } from '@/components/ui/AvailBadge'
+import { AvailSummary } from '@/features/events/AvailSummary'
 import { AvailModal } from '@/features/events/AvailModal'
 import { EventFormModal } from '@/features/events/EventFormModal'
 import { EventAbout, EventHero } from '@/features/events/EventHero'
@@ -405,7 +406,11 @@ export default function EventDetailScreen() {
                       {myAvail.note}
                     </Text>
                   ) : null}
-                  {event.isRec && instanceAvail ? (
+                  {myAvail?.source === 'blocked' ? (
+                    <Text color={colors.textMuted} fontSize={11}>
+                      (days you blocked off)
+                    </Text>
+                  ) : event.isRec && instanceAvail ? (
                     <Text color={colors.textMuted} fontSize={11}>
                       (this date only)
                     </Text>
@@ -470,6 +475,18 @@ export default function EventDetailScreen() {
                 </XStack>
               </Pressable>
             </YStack>
+          ) : null}
+
+          {/* Admins: who on it can come, can't, partly, isn't sure, or hasn't said — tap for names */}
+          {admin && !isUnpublished ? (
+            <Spot
+              lit={lit === 'team_availability'}
+              color={colors.primary}
+              name="team_availability"
+              onPlaced={placed}
+            >
+              <AvailSummary event={event} />
+            </Spot>
           ) : null}
 
           {/* Admin Edit */}

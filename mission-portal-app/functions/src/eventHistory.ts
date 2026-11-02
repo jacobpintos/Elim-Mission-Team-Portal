@@ -55,13 +55,15 @@ async function datedBefore(
  *   repeating one's end — deleted, and with it (./onEventDeleted) its tasks,
  *   answers, sign-ups, private record, invitations and pictures.
  * - Invitations' records 90 days after their date.
+ * - Dates someone blocked off (./blockedDates), the day after the last of
+ *   them: what they answered is gone by then, as above.
  *
  * Counts of what went, for the log.
  */
 export async function cleanUpEventHistory(db: admin.firestore.Firestore, now: Date = new Date()) {
   const today = iowaToday(now)
   const keepFrom = monthsBefore(today, KEEP_EVENT_MONTHS)
-  const done = { events: 0, availability: 0, foodSignups: 0, invites: 0 }
+  const done = { events: 0, availability: 0, foodSignups: 0, invites: 0, blockedDates: 0 }
 
   const events = await db.collection('events').get()
   for (const doc of events.docs) {
@@ -74,7 +76,7 @@ export async function cleanUpEventHistory(db: admin.firestore.Firestore, now: Da
     // Availability: of each date of a series, once the date has gone; of a
     // one-off event — every day of it — once its last day has.
     const last = lastDayOf(ev)
-    const availBefore = ev.isRec ? today : last && last < today ? '' : null
+    const availBefore = ev.isRec ? today : last && last < today ? '\uf8ff' : null
     if (availBefore) {
       const old = await datedBefore(db, 'avail', doc.id, availBefore)
       await deleteAll(db, old)
@@ -99,6 +101,13 @@ export async function cleanUpEventHistory(db: admin.firestore.Firestore, now: Da
     done.invites += old.size
     if (old.size < 400) break
   }
+
+  const blocksOver = await db.collection('blockedDates').where('to', '<', today).get()
+  await deleteAll(
+    db,
+    blocksOver.docs.map((d) => d.ref)
+  )
+  done.blockedDates = blocksOver.size
   return done
 }
 

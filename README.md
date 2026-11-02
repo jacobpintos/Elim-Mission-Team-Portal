@@ -112,8 +112,23 @@ Every step sends a push notification to the other person. Amounts and receipts a
 - **Food sign-ups** for dates of a repeating event are cleared after 12 months.
 - **Events** are deleted 12 months after their last day. For a one-off event that's its last date; for a repeating event it's the end date it was given. A repeating event with no end date, and a draft with no date, are never deleted.
 - **Invitation records** (who invited someone, to which date) are cleared 90 days after their date.
+- **Blocked-off dates** are cleared the day after the last blocked day.
 
 Deleting an event, whether an admin does it or it's past its 12 months, also removes its tasks, availability, food sign-ups, private details (teams, cars, rooms, flights) and invitation records. Its cover photo goes too, unless another event uses the same one, along with its flight and hotel pictures. Anything removed by mistake can be restored from the nightly backups for 30 days.
+
+---
+
+## Blocked-off dates
+
+Anyone on the team can block off days they can't make, for any reason, from **Events → Block off dates** or by telling Miriam ("I'm away November 17 through 21"). Each block is a record of its own in `blockedDates`, holding the person, the first and last day, and an optional reason.
+
+`onBlockedDatesWritten` (`functions/src/blockedDatesSync.ts`) answers **Not Available** for them on every event they're on in those days, from today on, with the reason as the note:
+
+- **A new block** replaces whatever they had answered for those dates. The earlier answer is kept with it.
+- **An event added, moved, or given new people** (directly, by group or by team) is answered too, through the event triggers in `eventPrivateSync.ts`. This happens only where they haven't already answered that date.
+- **Removing a block** takes back its answers and puts back any it replaced. An answer they changed by hand since is left alone, and so are days already past.
+
+Admins see these answers like any other, with the reason as the note.
 
 ---
 

@@ -1967,3 +1967,65 @@ describe('invites — counted for the admins', () => {
     await assertFails(deleteDoc(doc(as(ADMIN), 'invites/i1')))
   })
 })
+
+describe('blockedDates — days someone can’t make', () => {
+  const block = (uid: string, over: Record<string, unknown> = {}) => ({
+    uid,
+    from: '2026-11-17',
+    to: '2026-11-21',
+    reason: 'Vacation',
+    at: serverTimestamp(),
+    ...over,
+  })
+
+  it('lets a member, or the worship team, block off their own days', async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER), 'blockedDates/b1'), block(MEMBER)))
+    await assertSucceeds(
+      setDoc(doc(as(WORSHIP), 'blockedDates/b2'), block(WORSHIP, { reason: '' }))
+    )
+    await assertSucceeds(
+      setDoc(
+        doc(as(ADMIN), 'blockedDates/b3'),
+        block(ADMIN, { from: '2026-12-01', to: '2026-12-01' })
+      )
+    )
+  })
+
+  it('not anyone else’s, nor days that aren’t days, nor a guest or a stranger', async () => {
+    await assertFails(setDoc(doc(as(MEMBER), 'blockedDates/x1'), block(OUTSIDER)))
+    await assertFails(setDoc(doc(as(ADMIN), 'blockedDates/x2'), block(MEMBER)))
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'blockedDates/x3'), block(MEMBER, { to: '2026-11-01' }))
+    )
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'blockedDates/x4'), block(MEMBER, { from: '11/17/26' }))
+    )
+    await assertFails(
+      setDoc(doc(as(MEMBER), 'blockedDates/x5'), block(MEMBER, { reason: 'x'.repeat(121) }))
+    )
+    await assertFails(setDoc(doc(as(MEMBER), 'blockedDates/x6'), block(MEMBER, { at: 1 })))
+    await assertFails(setDoc(doc(as(MEMBER), 'blockedDates/x7'), block(MEMBER, { status: 'no' })))
+    const { reason: _r, ...noReason } = block(MEMBER)
+    await assertFails(setDoc(doc(as(MEMBER), 'blockedDates/x8'), noReason))
+    await assertFails(setDoc(doc(as(GUEST), 'blockedDates/x9'), block(GUEST)))
+    await assertFails(
+      setDoc(doc(env.unauthenticatedContext().firestore(), 'blockedDates/x10'), block('x'))
+    )
+  })
+
+  it('is read by its owner and admins, removed by them, and never changed', async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER), 'blockedDates/b1'), block(MEMBER)))
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'blockedDates/b1')))
+    await assertSucceeds(
+      getDocs(query(collection(as(MEMBER), 'blockedDates'), where('uid', '==', MEMBER)))
+    )
+    await assertSucceeds(getDocs(collection(as(ADMIN), 'blockedDates')))
+    await assertFails(getDoc(doc(as(OUTSIDER), 'blockedDates/b1')))
+    await assertFails(getDocs(collection(as(OUTSIDER), 'blockedDates')))
+    await assertFails(updateDoc(doc(as(MEMBER), 'blockedDates/b1'), { to: '2026-11-30' }))
+    await assertFails(deleteDoc(doc(as(OUTSIDER), 'blockedDates/b1')))
+    await assertSucceeds(deleteDoc(doc(as(MEMBER), 'blockedDates/b1')))
+    await assertSucceeds(setDoc(doc(as(MEMBER), 'blockedDates/b2'), block(MEMBER)))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'blockedDates/b2')))
+  })
+})

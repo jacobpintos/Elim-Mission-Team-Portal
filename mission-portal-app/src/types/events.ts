@@ -165,7 +165,12 @@ export interface AvailResponse {
   note: string
   uid: string
   ts: number
-  source?: 'instance' | 'series'
+  /** 'blocked': given for them by dates they blocked off (functions/src/blockedDates). */
+  source?: 'instance' | 'series' | 'blocked'
+  /** The block that gave it. */
+  block?: string
+  /** What they had said before the block answered: put back when it's lifted. */
+  was?: Omit<AvailResponse, 'was'>
 }
 
 export interface AvailDoc {

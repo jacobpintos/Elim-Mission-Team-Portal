@@ -37,6 +37,13 @@ import {
 import { useOccasionsStore } from '@/stores/occasionsStore'
 import { useUsersStore } from '@/stores/usersStore'
 import { OccasionsSheet } from '@/features/events/OccasionsSheet'
+import {
+  BLOCKED_COLOR,
+  BlockDatesSheet,
+  blockedDaysBetween,
+} from '@/features/events/BlockDatesSheet'
+import { blockCovers } from '../../../functions/src/blockedDates'
+import { useBlockedDatesStore } from '@/stores/blockedDatesStore'
 import { useKeyboardInset } from '@/lib/useKeyboardInset'
 import { seesDraft } from '../../../functions/src/eventPrivate'
 
@@ -125,6 +132,10 @@ export default function EventsScreen() {
   const users = useUsersStore((s) => s.users)
   const [occasionsOpen, setOccasionsOpen] = useState(false)
   const [editOccasion, setEditOccasion] = useState<Occasion | null>(null)
+  // Days you can't make: blocked off, and marked on the calendar (BlockDatesSheet).
+  const blocksDays = seesOcc
+  const myBlocks = useBlockedDatesStore((s) => s.blocks)
+  const [blockOpen, setBlockOpen] = useState(false)
 
   // A note being written on a day sits low on the page: kept above the
   // keyboard, which otherwise covers it — on an iPhone, in the app and the
@@ -235,6 +246,12 @@ export default function EventsScreen() {
   }, [seesOcc])
 
   useEffect(() => {
+    if (!blocksDays || !uid) return
+    useBlockedDatesStore.getState().subscribe(uid)
+    return () => useBlockedDatesStore.getState().unsubscribe()
+  }, [blocksDays, uid])
+
+  useEffect(() => {
     if (publicUser || !uid) return
     const tasks = useTasksStore.getState()
     const notes = useDateNotesStore.getState()
@@ -283,6 +300,7 @@ export default function EventsScreen() {
   const notesByDate: Record<string, DateNote[]> = {}
   monthNotes.forEach((n) => (notesByDate[n.date] ??= []).push(n))
   const names = new Map(users.map((u) => [String(u.uid), u.displayName]))
+  const blockedDays = blocksDays ? blockedDaysBetween(myBlocks, from, to) : new Set<string>()
   const monthOccasions = seesOcc ? occasionsBetween(occasions, from, to) : []
   const occasionsByDate: Record<string, Occasion[]> = {}
   monthOccasions.forEach((f) => (occasionsByDate[f.date] ??= []).push(f.occasion))
@@ -407,6 +425,22 @@ export default function EventsScreen() {
               </XStack>
             </Pressable>
           ))}
+          {blocksDays ? (
+            <Pressable onPress={() => setBlockOpen(true)} accessibilityRole="button">
+              <XStack
+                paddingHorizontal="$3"
+                paddingVertical="$1"
+                borderRadius="$2"
+                borderWidth={1}
+                borderColor={colors.border}
+                marginLeft="$1"
+              >
+                <Text color={colors.text} fontSize="$2" fontWeight="600">
+                  Block off dates
+                </Text>
+              </XStack>
+            </Pressable>
+          ) : null}
         </XStack>
         {guest ? (
           <XStack gap="$1">
@@ -545,6 +579,7 @@ export default function EventsScreen() {
                   const dayOccasions = occasionsByDate[ds] ?? []
                   const isSelected = selectedDay === ds
                   const isToday = ds === new Date().toISOString().split('T')[0]
+                  const isBlocked = blockedDays.has(ds)
 
                   return (
                     <Pressable
@@ -557,7 +592,13 @@ export default function EventsScreen() {
                         minHeight={50}
                         padding={4}
                         borderRadius="$2"
-                        backgroundColor={isSelected ? colors.primary + '33' : 'transparent'}
+                        backgroundColor={
+                          isSelected
+                            ? colors.primary + '33'
+                            : isBlocked
+                              ? BLOCKED_COLOR + '2a'
+                              : 'transparent'
+                        }
                         borderWidth={isToday ? 2 : 0}
                         borderColor={colors.primary}
                         alignItems="center"
@@ -570,6 +611,16 @@ export default function EventsScreen() {
                         >
                           {day}
                         </Text>
+                        {isBlocked ? (
+                          // A day you blocked off: a grey band under the date.
+                          <YStack
+                            width={14}
+                            height={3}
+                            borderRadius={2}
+                            backgroundColor={BLOCKED_COLOR}
+                            pointerEvents="none"
+                          />
+                        ) : null}
                         {dayOccasions.length ? (
                           // A cake for a birthday, a ring for an anniversary: one of each kind.
                           <Text fontSize={10} lineHeight={12} pointerEvents="none">
@@ -642,6 +693,9 @@ export default function EventsScreen() {
                   ...(keepsNotes
                     ? [{ label: 'My note', color: NOTE_COLOR, shape: 'bar' as const }]
                     : []),
+                  ...(blocksDays && myBlocks.length
+                    ? [{ label: 'Blocked off', color: BLOCKED_COLOR, shape: 'bar' as const }]
+                    : []),
                   ...(seesOcc
                     ? [
                         { label: 'Birthday', emoji: OCCASION_ICON.birthday },
@@ -658,6 +712,31 @@ export default function EventsScreen() {
                 <Text color={colors.text} fontWeight="700" fontSize="$3">
                   {FD(selectedDay, { weekday: true })}
                 </Text>
+                {blockedDays.has(selectedDay) ? (
+                  <Pressable onPress={() => setBlockOpen(true)}>
+                    <XStack
+                      backgroundColor={BLOCKED_COLOR + '22'}
+                      borderRadius="$2"
+                      padding="$2"
+                      borderWidth={1}
+                      borderColor={BLOCKED_COLOR}
+                      gap="$2"
+                      alignItems="center"
+                    >
+                      <Text flex={1} color={colors.text} fontSize="$2">
+                        You blocked this day off
+                        {(() => {
+                          const b = myBlocks.find((x) => blockCovers(x, selectedDay))
+                          return b?.reason ? ` — ${b.reason}` : ''
+                        })()}
+                        . You show as Not Available for anything on it.
+                      </Text>
+                      <Text color={colors.primary} fontSize="$2" fontWeight="600">
+                        Manage
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                ) : null}
                 {(occasionsByDate[selectedDay] ?? []).map((o) => (
                   <Pressable key={o.id} disabled={!openOccasion} onPress={() => openOccasion?.(o)}>
                     <XStack
@@ -940,6 +1019,15 @@ export default function EventsScreen() {
           </YStack>
         ) : null}
       </ScrollView>
+
+      {blocksDays ? (
+        <BlockDatesSheet
+          open={blockOpen}
+          onClose={() => setBlockOpen(false)}
+          uid={uid}
+          startOn={selectedDay}
+        />
+      ) : null}
 
       {admin ? (
         <OccasionsSheet

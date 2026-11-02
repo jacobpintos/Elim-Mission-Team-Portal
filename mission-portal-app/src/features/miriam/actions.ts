@@ -19,7 +19,7 @@ import { ALL_ROLES } from '@/features/admin/RoleCheckboxes'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
 import { allInstances, localToday } from '@/lib/events'
-import { AVAIL_LABELS } from '@/lib/availability'
+import { AVAIL_LABELS, effectiveAvail } from '@/lib/availability'
 import { isAdmin, isGuest, isPublic, isSecurity, isWorship, visibleTabs } from '@/lib/roles'
 import {
   notificationKeysFor,
@@ -96,7 +96,9 @@ import { lastDayOf, saleEndsLabel } from '@/features/store/storeSale'
 import { endSale, postSale, updateSale } from '@/features/store/storeWrites'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useTasksStore } from '@/stores/tasksStore'
-import { useEventsStore } from '@/stores/eventsStore'
+import { notifyAssignedAdmins, useEventsStore } from '@/stores/eventsStore'
+import { readBlocks, useBlockedDatesStore } from '@/stores/blockedDatesStore'
+import { blockProblem, blockSpan } from '../../../functions/src/blockedDates'
 import { useDateNotesStore } from '@/stores/dateNotesStore'
 import {
   canKeepDateNotes,
@@ -1567,6 +1569,102 @@ const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2
 /** The most events one availability answer covers. */
 const MAX_RANGE_EVENTS = 40
 
+/**
+ * Days they can't make, blocked off (functions/src/blockedDates): "Not
+ * available" for everything of theirs then, and for anything put there
+ * later — as Events' "Block off dates" does. Undone by removing it.
+ */
+async function blockOffDays(profile: UserProfile, from: string, to: string, reason: string) {
+  if (isGuest(profile) && !isAdmin(profile)) return cannot(TEAM_ONLY)
+  const today = localToday()
+  const problem = blockProblem(from, to, today)
+  if (problem)
+    return cannot(
+      problem === 'Pick the first and last day.'
+        ? 'I couldn’t tell which dates you meant.'
+        : problem
+    )
+  const uid = String(profile.uid)
+  const blocks = await readBlocks(uid).catch(() => [])
+  if (blocks.some((b) => b.from <= from && b.to >= to)) {
+    return cannot(`You already have ${blockSpan({ from, to })} blocked off.`)
+  }
+  const span = blockSpan({ from, to })
+  const { avail } = useEventsStore.getState()
+  const mine = useEventsStore
+    .getState()
+    .myInstances(uid, from, to)
+    .filter((ev) => ev.unpublished !== true)
+    .sort((a, b) => a.date.localeCompare(b.date))
+  let id = ''
+  return {
+    kind: 'ready',
+    title: `Block off ${from === to ? day(from) : `${day(from)} – ${day(to)}`}?`,
+    details: [
+      'You’ll show as Not Available for everything you’re on then — and anything added later.',
+      ...(reason ? [`Reason: ${reason}`] : []),
+      ...(mine.length
+        ? mine.slice(0, 8).map((ev) => `${ev.title} — ${day(ev.date)}`)
+        : ['You’re not on anything then yet.']),
+      ...(mine.length > 8 ? [`and ${mine.length - 8} more`] : []),
+    ],
+    confirm: 'Block off',
+    run: async () => {
+      id = await useBlockedDatesStore.getState().add(uid, from, to, reason)
+      for (const ev of mine) {
+        if (effectiveAvail(avail, ev, uid)?.status !== 'no') {
+          notifyAssignedAdmins(ev, uid, 'no').catch(() => {})
+        }
+      }
+      return `Done — ${span} is blocked off.`
+    },
+    undo: async () => {
+      if (id) await useBlockedDatesStore.getState().remove(id)
+      return `${span} is open again.`
+    },
+  } satisfies Prepared
+}
+
+/** Days they'd blocked off, open again: every block of theirs with a day in the stretch said. */
+async function unblockDates(profile: UserProfile, input: Record<string, unknown>) {
+  const uid = String(profile.uid)
+  const today = localToday()
+  const from = isDay(input.from) ? input.from : today
+  const to = isDay(input.to) ? input.to : '9999-12-31'
+  const found = (await readBlocks(uid).catch(() => [])).filter(
+    (b) => b.to >= today && b.from <= to && b.to >= from
+  )
+  if (!found.length) {
+    return cannot(
+      isDay(input.from) || isDay(input.to)
+        ? 'You don’t have any days blocked off then.'
+        : 'You don’t have any days blocked off.'
+    )
+  }
+  return {
+    kind: 'ready',
+    title:
+      found.length === 1
+        ? `Open ${blockSpan(found[0])} again?`
+        : `Open these ${found.length} stretches again?`,
+    details: [
+      ...found.map((b) => `${blockSpan(b)}${b.reason ? ` — ${b.reason}` : ''}`),
+      'Your answers for those days go back to what they were.',
+    ],
+    confirm: 'Open them',
+    run: async () => {
+      for (const b of found) await useBlockedDatesStore.getState().remove(b.id)
+      return found.length === 1
+        ? `${blockSpan(found[0])} is open again.`
+        : 'Those days are open again.'
+    },
+    undo: async () => {
+      for (const b of found) await useBlockedDatesStore.getState().add(uid, b.from, b.to, b.reason)
+      return 'Blocked off again.'
+    },
+  } satisfies Prepared
+}
+
 /** One answer for every event of theirs between two dates: "I'm out all of November". */
 async function setAvailabilityRange(profile: UserProfile, input: Record<string, unknown>) {
   const status = String(input.status ?? '') as AvailResponse['status']
@@ -1576,6 +1674,8 @@ async function setAvailabilityRange(profile: UserProfile, input: Record<string, 
     return cannot('I couldn’t tell which dates you meant.')
   }
   const note = String(input.note ?? '').trim()
+  // Not available: the days blocked off — for events put there later, too.
+  if (status === 'no') return blockOffDays(profile, input.from, input.to, note)
   const uid = String(profile.uid)
   const { templates, overrides } = useEventsStore.getState()
   const groups = useGroupsStore.getState().groups as unknown as Group[]
@@ -2136,6 +2236,7 @@ const ACTIONS: Record<
   report_security: reportSecurity,
   delete_event: deleteEvent,
   set_availability_range: setAvailabilityRange,
+  unblock_dates: unblockDates,
   edit_set_list: editSetList,
   notify_set_list: notifySetList,
   start_chat: startChat,

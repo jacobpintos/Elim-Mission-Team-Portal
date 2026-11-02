@@ -11,6 +11,7 @@ import {
   withMoved,
 } from './eventPrivate'
 import { stampSetLists } from './recordAccessSync'
+import { activeBlocks, applyBlocksToEvent } from './blockedDatesSync'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -135,16 +136,38 @@ const eventOfAvail = (key: string) => key.slice(0, key.indexOf('_'))
  */
 export const settleEventRecord = onDocumentWritten('events/{eventId}', async (event) => {
   if (!event.data?.after?.exists) return
-  if (await settleEvent(admin.firestore(), event.params.eventId)) {
+  const db = admin.firestore()
+  if (await settleEvent(db, event.params.eventId)) {
     logger.info('settleEventRecord: settled', { id: event.params.eventId })
   }
+  await blocksOn(db, event.params.eventId)
 })
 
 /** Its private record written: who is on its teams may have changed. */
 export const settleEventAccess = onDocumentWritten('eventPrivate/{eventId}', async (event) => {
   if (!event.data?.after?.exists) return
-  await settleEvent(admin.firestore(), event.params.eventId)
+  const db = admin.firestore()
+  await settleEvent(db, event.params.eventId)
+  await blocksOn(db, event.params.eventId)
 })
+
+/**
+ * Dates blocked off by those on an event, answered for on it
+ * (./blockedDatesSync): it may be new, moved into them, or have them on it
+ * now. Never in the way of the event itself.
+ */
+async function blocksOn(
+  db: admin.firestore.Firestore,
+  eventId: string,
+  opts?: Parameters<typeof applyBlocksToEvent>[2]
+) {
+  try {
+    const written = await applyBlocksToEvent(db, eventId, opts)
+    if (written) logger.info('blocked dates answered', { eventId, written })
+  } catch (err) {
+    logger.error('blocked dates: failed', { eventId, err })
+  }
+}
 
 /** A group's members changed: so has who is on each event it is on. */
 export const settleGroupAccess = onDocumentWritten('groups/{groupId}', async (event) => {
@@ -153,7 +176,11 @@ export const settleGroupAccess = onDocumentWritten('groups/{groupId}', async (ev
   if (JSON.stringify(before ?? []) === JSON.stringify(after ?? [])) return
   const db = admin.firestore()
   const gid = event.params.groupId
-  const [events, groups] = await Promise.all([db.collection('events').get(), readGroups(db)])
+  const [events, groups, blocks] = await Promise.all([
+    db.collection('events').get(),
+    readGroups(db),
+    activeBlocks(db),
+  ])
   const onIt = (part: { groups?: unknown[] } | undefined) =>
     (part?.groups ?? []).some((g) => String(g) === gid)
   for (const d of events.docs) {
@@ -163,6 +190,8 @@ export const settleGroupAccess = onDocumentWritten('groups/{groupId}', async (ev
     }
     if (!onIt(ev) && !Object.values(ev.overrides ?? {}).some(onIt)) continue
     await settleEvent(db, d.id, groups)
+    // Someone new to the group may have dates blocked off on its events.
+    if (blocks.length) await blocksOn(db, d.id, { blocks })
   }
 })
 

@@ -42,6 +42,7 @@ import type { Announcement, Message, Room } from '@/types/events'
 import type { IssueReport, KaizenCard, PlanningBoard } from '@/types/operations'
 import type { InventoryCategory, InventoryItem, ReorderItem } from '@/types/inventory'
 import { seesTeamSide } from '../../../functions/src/miriam/data'
+import { readBlocks } from '@/stores/blockedDatesStore'
 
 /**
  * Miriam's lookups that run here, in the app, as the person signed in
@@ -60,6 +61,7 @@ export type AppToolName =
   | 'read_meeting_requests'
   | 'read_date_notes'
   | 'read_store'
+  | 'read_blocked_dates'
   // Changes: offered as these are, made only once confirmed (./actions.ts).
   | 'send_message'
   | 'post_announcement'
@@ -92,6 +94,7 @@ export type AppToolName =
   | 'report_security'
   | 'delete_event'
   | 'set_availability_range'
+  | 'unblock_dates'
   | 'edit_set_list'
   | 'notify_set_list'
   | 'start_chat'
@@ -177,6 +180,8 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   // A concern for security: anyone, as the drawer's Report a Concern is.
   tools.push('report_security')
   if (tabs.includes('events') && member) tools.push('set_availability_range')
+  // Days blocked off: their own, as Events' "Block off dates" — not a guest's (firestore.rules blockedDates).
+  if (tabs.includes('events') && member && !guest) tools.push('read_blocked_dates', 'unblock_dates')
   // Meeting requests are sent to leaders by name; anyone but a guest may be one.
   if (!guest) tools.push('read_meeting_requests', 'meeting_request')
   if (tabs.includes('settings')) tools.push('change_my_name')
@@ -377,6 +382,14 @@ export async function runAppTool(name: string, input: Record<string, unknown>): 
         .map((n) => ({ id: n.id, date: n.date, text: n.text }))
       if (reading) store.unsubscribe()
       result = notes.length ? { notes } : { notes: [], note: 'No notes of theirs on those days.' }
+    } else if (name === 'read_blocked_dates') {
+      const today = localToday()
+      const blocks = (await readBlocks(String(profile.uid)))
+        .filter((b) => b.to >= today)
+        .map((b) => ({ first_day: b.from, last_day: b.to, reason: b.reason }))
+      result = blocks.length
+        ? { blocked_off: blocks }
+        : { blocked_off: [], note: 'They have no days blocked off.' }
     } else if (name === 'read_set_lists') {
       const lists = await readSetLists()
       const templates = useEventsStore.getState().templates

@@ -163,7 +163,7 @@ async function resolveGeo(city?: string, state?: string) {
 // prior one. Routed through sendNotification (batched, rsvpNonAvailable) so
 // it respects prefs and the shared batching window, unlike the old
 // direct-to-notifs write this replaces.
-async function notifyAssignedAdmins(
+export async function notifyAssignedAdmins(
   ev: EventInstance,
   changerUid: string,
   newStatus: AvailResponse['status']
