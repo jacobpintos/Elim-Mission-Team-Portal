@@ -73,8 +73,9 @@ class MiriamWakeModule : Module() {
       ),
       maxActivePaths = 4,
       keywordsFile = "$MODEL/keywords.txt",
-      keywordsScore = 2.0f,
-      keywordsThreshold = 0.25f,
+      // As the web's (src/lib/wakeEngine.web.ts), where why is written down.
+      keywordsScore = 2.5f,
+      keywordsThreshold = 0.15f,
       numTrailingBlanks = 1,
     )
     return KeywordSpotter(assets, config).also { spotter = it }

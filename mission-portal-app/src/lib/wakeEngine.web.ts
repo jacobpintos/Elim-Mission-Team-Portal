@@ -13,8 +13,27 @@ import type { WakeEngine } from './wakeEngine'
 
 /** Where the build lives (public/miriam-wake). */
 const BASE = '/miriam-wake/'
-/** "Hey Miriam" in the model's word pieces, with how hard to listen for it. */
-const KEYWORDS = '▁HE Y ▁MI RI A M :2.0 #0.25 @HEY_MIRIAM'
+/**
+ * "Hey Miriam" in the model's word pieces — the same list as the phones'
+ * (modules/miriam-wake/ios/model/miriam-wake/keywords.txt), and the same
+ * settings (SCORE, THRESHOLD).
+ *
+ * Asked for as "▁HE Y ▁MI RI A M" alone, at 0.25, it was missed one time in
+ * two or three. The soft "h" of "hey" is the first thing a phone's noise
+ * suppression clips as someone starts to speak, and the model then hears
+ * "a Miriam"; and her name is heard Miriam, Meriam or Mariam as people say
+ * it. So each greeting with each — and listened for a little harder.
+ * Measured on the model with synthetic speech: heard 69% of the time from
+ * 33%, 63% from 24% said quietly, with no more false wakes on other speech
+ * ("hey Marian" aside, which it can't tell from her name).
+ */
+const GREETINGS = ['▁HE Y', '▁HI', '▁A']
+const NAMES = ['▁MI RI A M', '▁ME RI A M', '▁MA RI A M']
+const KEYWORDS = GREETINGS.flatMap((g) => NAMES.map((n) => `${g} ${n} @HEY_MIRIAM`)).join('\n')
+/** How strongly the phrase is favoured over what else it might be (sherpa-onnx's default is 1). */
+const SCORE = 2.5
+/** How sure it must be: lower hears more, and wakes more by mistake. */
+const THRESHOLD = 0.15
 const RATE = 16000
 
 interface KwsStream {
@@ -83,8 +102,8 @@ function load(): Promise<Kws> {
             },
             maxActivePaths: 4,
             numTrailingBlanks: 1,
-            keywordsScore: 2.0,
-            keywordsThreshold: 0.25,
+            keywordsScore: SCORE,
+            keywordsThreshold: THRESHOLD,
             keywords: KEYWORDS,
           })
         )

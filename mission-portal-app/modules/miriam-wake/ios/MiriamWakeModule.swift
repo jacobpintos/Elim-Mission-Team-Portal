@@ -104,8 +104,9 @@ public class MiriamWakeModule: Module {
     config.model_config.model_type = cString("zipformer2")
     config.max_active_paths = 4
     config.num_trailing_blanks = 1
-    config.keywords_score = 2.0
-    config.keywords_threshold = 0.25
+    // As the web's (src/lib/wakeEngine.web.ts), where why is written down.
+    config.keywords_score = 2.5
+    config.keywords_threshold = 0.15
     config.keywords_file = cString(keywords)
 
     guard let made = SherpaOnnxCreateKeywordSpotter(&config) else {
