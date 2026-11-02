@@ -72,3 +72,4 @@ export {
 export { nightlyBackup } from './backups'
 export { purgeOldReceipts } from './reimbursements/retention'
 export { publicEvent } from './publicEvent'
+export { eventHistoryCleanup } from './eventHistory'

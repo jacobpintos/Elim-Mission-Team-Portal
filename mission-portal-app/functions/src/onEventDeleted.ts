@@ -1,6 +1,7 @@
 import { onDocumentDeleted } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
+import { COVER_FOLDER, coverUrlsOf, storagePathOf, travelFoldersOf } from './eventRetention'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -64,9 +65,22 @@ async function keyedDocs(
  * silently deleted no tasks at all.
  */
 export const onEventDeleted = onDocumentDeleted('events/{eventId}', async (event) => {
-  const db = admin.firestore()
-  const eventId = event.params.eventId
+  await removeEventLeftovers(admin.firestore(), event.params.eventId, event.data?.data())
+})
 
+/**
+ * Everything of a deleted event (`data`: the event as it was): its tasks,
+ * availability, food sign-ups and private record; the records of invitations
+ * to it (lib/inviteLog); and its pictures — its cover photo, unless another
+ * event has it too, and its flight and hotel pictures (./eventRetention).
+ * Run by the trigger above, whichever way an event goes — by an admin, or
+ * kept past its time (./eventHistory).
+ */
+export async function removeEventLeftovers(
+  db: admin.firestore.Firestore,
+  eventId: string,
+  data: Record<string, unknown> | undefined
+): Promise<void> {
   const numericId = Number(eventId)
   const idValues: (string | number)[] = Number.isFinite(numericId)
     ? [eventId, numericId]
@@ -92,8 +106,19 @@ export const onEventDeleted = onDocumentDeleted('events/{eventId}', async (event
     list.forEach((ref) => refs.set(ref.path, ref))
   }
 
-  // Its private record (../eventPrivate): teams, cars, rooms and flights.
-  refs.set(`eventPrivate/${eventId}`, db.doc(`eventPrivate/${eventId}`))
+  // Invitations to any date of it: counted for the admins, nothing to count now.
+  const invites = await db
+    .collection('invites')
+    .where('eventKey', '>=', `${eventId}_`)
+    .where('eventKey', '<', `${eventId}_\uf8ff`)
+    .get()
+  invites.docs.forEach((d) => refs.set(d.ref.path, d.ref))
+
+  // Its private record (../eventPrivate): teams, cars, rooms and flights —
+  // read first, for the pictures its flights and rooms have.
+  const privateRef = db.doc(`eventPrivate/${eventId}`)
+  const privateDoc = (await privateRef.get().catch(() => null))?.data()
+  refs.set(privateRef.path, privateRef)
 
   const all = [...refs.values()]
   for (let i = 0; i < all.length; i += BATCH_LIMIT) {
@@ -102,5 +127,40 @@ export const onEventDeleted = onDocumentDeleted('events/{eventId}', async (event
     await batch.commit()
   }
 
-  logger.info(`onEventDeleted: removed ${refs.size} document(s) belonging to event ${eventId}`)
-})
+  const files = await removePictures(db, data, privateDoc)
+  logger.info(
+    `onEventDeleted: removed ${refs.size} document(s) and ${files} picture folder(s) of event ${eventId}`
+  )
+}
+
+/** Its pictures: each step on its own, so one that fails leaves the rest done. */
+async function removePictures(
+  db: admin.firestore.Firestore,
+  data: Record<string, unknown> | undefined,
+  privateDoc: Record<string, unknown> | undefined
+): Promise<number> {
+  const bucket = admin.storage().bucket()
+  let removed = 0
+  for (const folder of travelFoldersOf(privateDoc)) {
+    try {
+      await bucket.deleteFiles({ prefix: folder })
+      removed++
+    } catch (err) {
+      logger.warn(`onEventDeleted: couldn't remove ${folder}`, err)
+    }
+  }
+  for (const url of coverUrlsOf(data)) {
+    const path = storagePathOf(url)
+    if (!path?.startsWith(COVER_FOLDER)) continue
+    try {
+      // Another event with the same photo keeps it.
+      const shared = await db.collection('events').where('coverImage', '==', url).limit(1).get()
+      if (!shared.empty) continue
+      await bucket.file(path).delete({ ignoreNotFound: true })
+      removed++
+    } catch (err) {
+      logger.warn(`onEventDeleted: couldn't remove ${path}`, err)
+    }
+  }
+  return removed
+}

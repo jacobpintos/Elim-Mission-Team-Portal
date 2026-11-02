@@ -104,6 +104,19 @@ Every step sends a push notification to the other person. Amounts and receipts a
 
 ---
 
+## Event history
+
+**Every night at 3:15 am Central**, `eventHistoryCleanup` (`functions/src/eventHistory.ts`) clears what's no longer needed:
+
+- **Availability** for a date is cleared the day after it. For a one-off event, that's the day after its last day, so a multi-day event keeps every day's answers until it's over. For a repeating event, each date's answers are cleared the day after that date. Its standing answer for the whole series stays.
+- **Food sign-ups** for dates of a repeating event are cleared after 12 months.
+- **Events** are deleted 12 months after their last day. For a one-off event that's its last date; for a repeating event it's the end date it was given. A repeating event with no end date, and a draft with no date, are never deleted.
+- **Invitation records** (who invited someone, to which date) are cleared 90 days after their date.
+
+Deleting an event, whether an admin does it or it's past its 12 months, also removes its tasks, availability, food sign-ups, private details (teams, cars, rooms, flights) and invitation records. Its cover photo goes too, unless another event uses the same one, along with its flight and hotel pictures. Anything removed by mistake can be restored from the nightly backups for 30 days.
+
+---
+
 ## Backups
 
 **Every night at 2:30 am Central**, `nightlyBackup` exports the whole Firestore database to the project's Storage bucket under `backups/firestore/YYYY-MM-DD/`. It keeps the last 30 nights. Older copies are removed only after a new one has succeeded. **Admin → Data** shows when the last backup ran, and shows it in red if it failed.
