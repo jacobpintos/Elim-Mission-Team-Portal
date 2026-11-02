@@ -1,5 +1,4 @@
 import { Linking, Pressable, View } from 'react-native'
-import { Image } from 'expo-image'
 import Svg, { Path } from 'react-native-svg'
 import { Text, XStack, YStack } from 'tamagui'
 import { BrandMark as ChurchMark, Overline } from '@/components/ui/Brand'
@@ -8,6 +7,7 @@ import { webLink } from '@/lib/externalUrl'
 import { useThemeStore } from '@/stores/themeStore'
 import { autoTextColor } from '@/theme/contrast'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { CoverPhoto } from './CoverPhoto'
 import { EventInvite } from './EventInvite'
 import type { EventInstance } from '@/types/events'
 
@@ -147,12 +147,7 @@ export function EventHero({
       backgroundColor={colors.surface}
     >
       {cover ? (
-        <Image
-          source={{ uri: cover }}
-          style={{ width: '100%', aspectRatio: 16 / 9, maxHeight: 360 }}
-          contentFit="cover"
-          accessibilityLabel={event.title}
-        />
+        <CoverPhoto uri={cover} label={event.title} />
       ) : (
         // No photo: the theme's colour, with the date on a calendar leaf.
         <XStack

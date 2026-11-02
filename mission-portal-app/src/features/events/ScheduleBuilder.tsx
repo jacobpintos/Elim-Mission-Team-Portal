@@ -51,6 +51,12 @@ export function ScheduleBuilder({
   const [day, setDay] = useState(0)
   // A new row's time takes the cursor as it appears.
   const [focus, setFocus] = useState<string | null>(null)
+  // Rows whose end time and note are open. Shown only when asked for, or
+  // already filled in: always shown, the second line of a row read as a
+  // second row — "6:00 PM, Rehearsal" typed into one's end time and note.
+  const [extraOpen, setExtraOpen] = useState<Set<string>>(new Set())
+  const showsExtra = (it: ScheduleItem) =>
+    extraOpen.has(it.id) || !!it.endTime?.trim() || !!it.notes?.trim()
 
   const onDay = (it: ScheduleItem) => Math.min(it.day ?? 0, dayCount - 1) === day
   const shown = items.filter(onDay)
@@ -239,27 +245,45 @@ export function ScheduleBuilder({
                       </Text>
                     </Pressable>
                   </XStack>
-                  <XStack gap="$2" alignItems="center">
-                    <TextInput
-                      value={it.endTime ?? ''}
-                      onChangeText={(endTime) => update(it.id, { endTime })}
-                      onBlur={() => update(it.id, { endTime: tidyTime(it.endTime ?? '') })}
-                      placeholder="Ends"
-                      placeholderTextColor={colors.textMuted}
-                      style={input(styles.time)}
-                      accessibilityLabel="When it ends"
-                    />
-                    <TextInput
-                      value={it.notes ?? ''}
-                      onChangeText={(notes) => update(it.id, { notes })}
-                      placeholder="Notes (optional)"
-                      placeholderTextColor={colors.textMuted}
-                      style={input(styles.flex)}
-                      accessibilityLabel="Notes"
-                    />
-                    {/* Lines the note up under what's happening. */}
-                    <View style={{ width: 16 }} />
-                  </XStack>
+                  {showsExtra(it) ? (
+                    // The same row's end and note: labelled, smaller, under it.
+                    <XStack gap="$2" alignItems="center" paddingLeft={2}>
+                      <Text color={colors.textMuted} fontSize="$2" width={40}>
+                        Until
+                      </Text>
+                      <TextInput
+                        value={it.endTime ?? ''}
+                        onChangeText={(endTime) => update(it.id, { endTime })}
+                        onBlur={() => update(it.id, { endTime: tidyTime(it.endTime ?? '') })}
+                        placeholder="8:00 PM"
+                        placeholderTextColor={colors.textMuted}
+                        style={[input(styles.small), { width: 88 }]}
+                        accessibilityLabel="When it ends"
+                      />
+                      <TextInput
+                        value={it.notes ?? ''}
+                        onChangeText={(notes) => update(it.id, { notes })}
+                        placeholder="Note — where, who"
+                        placeholderTextColor={colors.textMuted}
+                        style={[input(styles.small), { flex: 1 }]}
+                        accessibilityLabel="Note"
+                      />
+                      {/* Lines the note up under what's happening. */}
+                      <View style={{ width: 16 }} />
+                    </XStack>
+                  ) : (
+                    <Pressable
+                      onPress={() => setExtraOpen((open) => new Set(open).add(it.id))}
+                      accessibilityRole="button"
+                      accessibilityLabel="Add an end time or note to this"
+                      hitSlop={6}
+                      style={{ alignSelf: 'flex-start', paddingLeft: 2 }}
+                    >
+                      <Text color={colors.textMuted} fontSize="$2">
+                        + End time or note
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
               ))}
               {shown.length === 0 ? (
@@ -322,6 +346,13 @@ const styles = StyleSheet.create({
   },
   time: {
     width: 104,
+  },
+  // A row's end and note: smaller than its time and what's happening, so
+  // they read as part of it rather than as another row.
+  small: {
+    minHeight: 32,
+    fontSize: 13,
+    minWidth: 0,
   },
   // Free to shrink: a text box on the web is otherwise as wide as its default
   // size, which put the end of each row past the window on a phone.

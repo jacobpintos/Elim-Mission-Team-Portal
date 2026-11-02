@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Pressable } from 'react-native'
 import { YStack, XStack, Text, Input, TextArea } from 'tamagui'
-import { Image } from 'expo-image'
+import { CoverPhoto } from './CoverPhoto'
 import { isFacebookUrl, tidyFacebookUrl } from '@/lib/eventLinks'
 import { pickAndUploadPageImages } from '@/lib/pageImageUpload'
 import { collection, doc, query, setDoc, where } from 'firebase/firestore'
@@ -1525,12 +1525,7 @@ export function EventFormModal({
                 Cover photo
               </Text>
               {form.coverImage ? (
-                <Image
-                  source={{ uri: form.coverImage }}
-                  style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 10 }}
-                  contentFit="cover"
-                  alt="The event’s cover photo"
-                />
+                <CoverPhoto uri={form.coverImage} label="The event’s cover photo" radius={10} />
               ) : null}
               <XStack gap="$2">
                 <Pressable
