@@ -142,7 +142,7 @@ export function MiriamPanel({
         gap="$2"
         width="94%"
         maxWidth={560}
-        accessibilityRole="alert"
+        role="alert"
       >
         <XStack alignItems="center" gap="$2.5">
           <MiriamBadge
@@ -176,239 +176,6 @@ export function MiriamPanel({
                   : 'Ask or say what to do — “What’s the dress code for Revival in the Heartland?”'}
               </Text>
             ) : null}
-            {answer ? (
-              // A walkthrough runs long: scrolled within the bar rather than cut off —
-              // and an answer on faith, left open to be read, given more room.
-              <ScrollView style={{ maxHeight: stay ? 420 : 260 }} nestedScrollEnabled>
-                <Text color={ink} fontSize="$3" fontWeight="600">
-                  {answer}
-                </Text>
-              </ScrollView>
-            ) : null}
-            {said && !shownAlready(said, answer) ? (
-              // What she said that isn't on screen in so many words — her
-              // briefing read out, a briefing button's result — written out.
-              <ScrollView style={{ maxHeight: briefing ? 150 : 220 }} nestedScrollEnabled>
-                <Text color={ink} fontSize="$3" fontWeight="600" accessibilityLiveRegion="polite">
-                  {said}
-                </Text>
-              </ScrollView>
-            ) : null}
-            {stage === 'answered' && correctable ? (
-              <Pressable
-                onPress={notMeant}
-                accessibilityRole="button"
-                accessibilityLabel="That’s not what I meant — ask again"
-                hitSlop={8}
-                style={{ alignSelf: 'flex-start', paddingVertical: 2 }}
-              >
-                <Text color={soft} fontSize="$2" textDecorationLine="underline">
-                  Not what I meant
-                </Text>
-              </Pressable>
-            ) : null}
-            {stage === 'answered' && choices.length ? (
-              <YStack gap="$1.5" paddingTop="$1.5">
-                {choices.map((c) => (
-                  <Pressable
-                    key={c.key}
-                    onPress={() => pick(c)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${c.title}, ${FD(c.date, { weekday: true })}`}
-                    style={[styles.choice, { borderColor: colors.primary }]}
-                  >
-                    <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
-                      {c.title}
-                    </Text>
-                    <Text color={colors.textMuted} fontSize="$2">
-                      {FD(c.date, { weekday: true })}
-                    </Text>
-                  </Pressable>
-                ))}
-              </YStack>
-            ) : null}
-            {stage === 'answered' && undo ? (
-              <Pressable
-                onPress={undoLast}
-                accessibilityRole="button"
-                style={[
-                  styles.small,
-                  {
-                    borderWidth: 1,
-                    borderColor: colors.primary,
-                    alignSelf: 'flex-start',
-                    marginTop: 6,
-                  },
-                ]}
-              >
-                <Text color={colors.primary} fontWeight="700" fontSize="$2">
-                  {undo.label}
-                </Text>
-              </Pressable>
-            ) : null}
-            {stage === 'answered' && link ? (
-              <Pressable
-                onPress={() => Linking.openURL(link.url).catch(() => {})}
-                accessibilityRole="link"
-                accessibilityLabel={`${link.label ?? 'Open the link'} for ${link.name}`}
-                style={[styles.choice, { borderColor: colors.primary, marginTop: 6 }]}
-              >
-                <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
-                  {link.label ?? 'Open the link'} — {link.name}
-                </Text>
-              </Pressable>
-            ) : null}
-            {(stage === 'answered' || confirmByVoice) && pending?.prepared.kind === 'ready' ? (
-              <YStack gap="$1.5" paddingTop="$1.5">
-                {pending.prepared.details.length ? (
-                  <YStack style={[styles.choice, { borderColor: colors.border }]} gap="$1">
-                    {pending.prepared.details.map((line, i) => (
-                      <Text key={i} color={ink} fontSize="$3" numberOfLines={8}>
-                        {line}
-                      </Text>
-                    ))}
-                  </YStack>
-                ) : null}
-                <XStack gap="$2">
-                  <Pressable
-                    onPress={() => confirmAction()}
-                    accessibilityRole="button"
-                    style={[
-                      styles.small,
-                      {
-                        backgroundColor: pending.prepared.destructive ? '#c0392b' : colors.primary,
-                      },
-                    ]}
-                  >
-                    <Text color="white" fontWeight="700" fontSize="$3">
-                      {pending.prepared.confirm}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={cancelAction}
-                    accessibilityRole="button"
-                    style={[styles.small, { borderWidth: 1, borderColor: colors.border }]}
-                  >
-                    <Text color={ink} fontWeight="700" fontSize="$3">
-                      {pending.prepared.cancel ?? 'Cancel'}
-                    </Text>
-                  </Pressable>
-                </XStack>
-              </YStack>
-            ) : null}
-            {stage === 'answered' && pending?.prepared.kind === 'choose' ? (
-              <YStack gap="$1.5" paddingTop="$1.5">
-                {pending.prepared.options.map((o) => (
-                  <Pressable
-                    key={o.label}
-                    onPress={() => offerAction(pending.name, o.input)}
-                    accessibilityRole="button"
-                    style={[styles.choice, { borderColor: colors.primary }]}
-                  >
-                    <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
-                      {o.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </YStack>
-            ) : null}
-            {stage === 'answered' && songGuesses.length ? (
-              <YStack gap="$1.5" paddingTop="$1.5">
-                {songGuesses.map((sheet) => (
-                  <Pressable
-                    key={String(sheet.id)}
-                    onPress={() => pickSong(sheet)}
-                    accessibilityRole="button"
-                    accessibilityLabel={sheet.title}
-                    style={[styles.choice, { borderColor: colors.primary }]}
-                  >
-                    <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
-                      {sheet.title}
-                    </Text>
-                    {sheet.artist ? (
-                      <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
-                        {sheet.artist}
-                      </Text>
-                    ) : null}
-                  </Pressable>
-                ))}
-              </YStack>
-            ) : null}
-            {stage === 'answered' && videoGuesses.length ? (
-              <YStack gap="$1.5" paddingTop="$1.5">
-                {videoGuesses.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    onPress={() => pickVideo(item)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Play ${item.title}`}
-                    style={[styles.choice, { borderColor: colors.primary }]}
-                  >
-                    <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    {item.preacher || item.host || item.album ? (
-                      <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
-                        {item.preacher || item.host || item.album}
-                      </Text>
-                    ) : null}
-                  </Pressable>
-                ))}
-              </YStack>
-            ) : null}
-            {stage === 'answered' && slides ? (
-              // Lyric slides made: as they'll show, to look over — then the file.
-              <YStack gap="$1.5" paddingTop="$1.5">
-                <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled>
-                  <YStack gap="$1.5">
-                    {slides.slides.map((slide, i) => (
-                      <View
-                        key={i}
-                        style={styles.slide}
-                        accessible
-                        accessibilityLabel={`Slide ${i + 1}: ${
-                          slide.kind === 'title'
-                            ? [slide.title, slide.artist].filter(Boolean).join(', ')
-                            : slide.lines.join(' ')
-                        }`}
-                      >
-                        {slide.kind === 'title' ? (
-                          <>
-                            <Text color="white" fontWeight="800" fontSize="$4" textAlign="center">
-                              {slide.title}
-                            </Text>
-                            {slide.artist ? (
-                              <Text color="#BFBFBF" fontSize="$1" textAlign="center">
-                                {slide.artist}
-                              </Text>
-                            ) : null}
-                          </>
-                        ) : (
-                          <Text color="white" fontWeight="800" fontSize="$2" textAlign="center">
-                            {slide.lines.join('\n')}
-                          </Text>
-                        )}
-                      </View>
-                    ))}
-                  </YStack>
-                </ScrollView>
-                <XStack gap="$2" alignItems="center">
-                  <Pressable
-                    onPress={saveSlides}
-                    accessibilityRole="button"
-                    accessibilityHint="A PowerPoint file, which Google Slides opens too"
-                    style={[styles.small, { backgroundColor: colors.primary }]}
-                  >
-                    <Text color="white" fontWeight="700" fontSize="$2">
-                      {Platform.OS === 'web' ? '⬇ Download slides' : 'Share slides'}
-                    </Text>
-                  </Pressable>
-                  <Text color={soft} fontSize="$1" flex={1}>
-                    A PowerPoint file. For Google Slides, upload it to Drive and open it there.
-                  </Text>
-                </XStack>
-              </YStack>
-            ) : null}
           </YStack>
           {stage === 'listening' && heard ? (
             <Pressable
@@ -418,18 +185,6 @@ export function MiriamPanel({
             >
               <Text color={called ? colors.primary : 'white'} fontWeight="700" fontSize="$2">
                 Done
-              </Text>
-            </Pressable>
-          ) : null}
-          {stage === 'answered' ? (
-            <Pressable
-              onPress={() => listen()}
-              accessibilityRole="button"
-              accessibilityLabel="Ask again"
-              style={[styles.small, { backgroundColor: colors.primary }]}
-            >
-              <Text color="white" fontWeight="700" fontSize="$2">
-                {available ? '🎤 Again' : 'Again'}
               </Text>
             </Pressable>
           ) : null}
@@ -445,6 +200,260 @@ export function MiriamPanel({
             </Text>
           </Pressable>
         </XStack>
+
+        {/* Her answer and what comes with it, the bar's full width — beside the
+            badge and the buttons it was a narrow column, a long answer on
+            faith a tall strip of a few words a line. */}
+        {answer ? (
+          // A walkthrough runs long: scrolled within the bar rather than cut off —
+          // and an answer on faith, left open to be read, given more room.
+          <ScrollView style={{ maxHeight: stay ? 420 : 260 }} nestedScrollEnabled>
+            <Text color={ink} fontSize="$3" fontWeight="600">
+              {answer}
+            </Text>
+          </ScrollView>
+        ) : null}
+        {said && !shownAlready(said, answer) ? (
+          // What she said that isn't on screen in so many words — her
+          // briefing read out, a briefing button's result — written out.
+          <ScrollView style={{ maxHeight: briefing ? 150 : 220 }} nestedScrollEnabled>
+            <Text color={ink} fontSize="$3" fontWeight="600" accessibilityLiveRegion="polite">
+              {said}
+            </Text>
+          </ScrollView>
+        ) : null}
+        {stage === 'answered' && choices.length ? (
+          <YStack gap="$1.5" paddingTop="$1.5">
+            {choices.map((c) => (
+              <Pressable
+                key={c.key}
+                onPress={() => pick(c)}
+                accessibilityRole="button"
+                accessibilityLabel={`${c.title}, ${FD(c.date, { weekday: true })}`}
+                style={[styles.choice, { borderColor: colors.primary }]}
+              >
+                <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
+                  {c.title}
+                </Text>
+                <Text color={colors.textMuted} fontSize="$2">
+                  {FD(c.date, { weekday: true })}
+                </Text>
+              </Pressable>
+            ))}
+          </YStack>
+        ) : null}
+        {stage === 'answered' && undo ? (
+          <Pressable
+            onPress={undoLast}
+            accessibilityRole="button"
+            style={[
+              styles.small,
+              {
+                borderWidth: 1,
+                borderColor: colors.primary,
+                alignSelf: 'flex-start',
+                marginTop: 6,
+              },
+            ]}
+          >
+            <Text color={colors.primary} fontWeight="700" fontSize="$2">
+              {undo.label}
+            </Text>
+          </Pressable>
+        ) : null}
+        {stage === 'answered' && link ? (
+          <Pressable
+            onPress={() => Linking.openURL(link.url).catch(() => {})}
+            accessibilityRole="link"
+            accessibilityLabel={`${link.label ?? 'Open the link'} for ${link.name}`}
+            style={[styles.choice, { borderColor: colors.primary, marginTop: 6 }]}
+          >
+            <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
+              {link.label ?? 'Open the link'} — {link.name}
+            </Text>
+          </Pressable>
+        ) : null}
+        {(stage === 'answered' || confirmByVoice) && pending?.prepared.kind === 'ready' ? (
+          <YStack gap="$1.5" paddingTop="$1.5">
+            {pending.prepared.details.length ? (
+              <YStack style={[styles.choice, { borderColor: colors.border }]} gap="$1">
+                {pending.prepared.details.map((line, i) => (
+                  <Text key={i} color={ink} fontSize="$3" numberOfLines={8}>
+                    {line}
+                  </Text>
+                ))}
+              </YStack>
+            ) : null}
+            <XStack gap="$2">
+              <Pressable
+                onPress={() => confirmAction()}
+                accessibilityRole="button"
+                style={[
+                  styles.small,
+                  {
+                    backgroundColor: pending.prepared.destructive ? '#c0392b' : colors.primary,
+                  },
+                ]}
+              >
+                <Text color="white" fontWeight="700" fontSize="$3">
+                  {pending.prepared.confirm}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={cancelAction}
+                accessibilityRole="button"
+                style={[styles.small, { borderWidth: 1, borderColor: colors.border }]}
+              >
+                <Text color={ink} fontWeight="700" fontSize="$3">
+                  {pending.prepared.cancel ?? 'Cancel'}
+                </Text>
+              </Pressable>
+            </XStack>
+          </YStack>
+        ) : null}
+        {stage === 'answered' && pending?.prepared.kind === 'choose' ? (
+          <YStack gap="$1.5" paddingTop="$1.5">
+            {pending.prepared.options.map((o) => (
+              <Pressable
+                key={o.label}
+                onPress={() => offerAction(pending.name, o.input)}
+                accessibilityRole="button"
+                style={[styles.choice, { borderColor: colors.primary }]}
+              >
+                <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
+                  {o.label}
+                </Text>
+              </Pressable>
+            ))}
+          </YStack>
+        ) : null}
+        {stage === 'answered' && songGuesses.length ? (
+          <YStack gap="$1.5" paddingTop="$1.5">
+            {songGuesses.map((sheet) => (
+              <Pressable
+                key={String(sheet.id)}
+                onPress={() => pickSong(sheet)}
+                accessibilityRole="button"
+                accessibilityLabel={sheet.title}
+                style={[styles.choice, { borderColor: colors.primary }]}
+              >
+                <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
+                  {sheet.title}
+                </Text>
+                {sheet.artist ? (
+                  <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                    {sheet.artist}
+                  </Text>
+                ) : null}
+              </Pressable>
+            ))}
+          </YStack>
+        ) : null}
+        {stage === 'answered' && videoGuesses.length ? (
+          <YStack gap="$1.5" paddingTop="$1.5">
+            {videoGuesses.map((item) => (
+              <Pressable
+                key={item.id}
+                onPress={() => pickVideo(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`Play ${item.title}`}
+                style={[styles.choice, { borderColor: colors.primary }]}
+              >
+                <Text color={colors.primary} fontWeight="700" fontSize="$3" numberOfLines={1}>
+                  {item.title}
+                </Text>
+                {item.preacher || item.host || item.album ? (
+                  <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
+                    {item.preacher || item.host || item.album}
+                  </Text>
+                ) : null}
+              </Pressable>
+            ))}
+          </YStack>
+        ) : null}
+        {stage === 'answered' && slides ? (
+          // Lyric slides made: as they'll show, to look over — then the file.
+          <YStack gap="$1.5" paddingTop="$1.5">
+            <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled>
+              <YStack gap="$1.5">
+                {slides.slides.map((slide, i) => (
+                  <View
+                    key={i}
+                    style={styles.slide}
+                    accessible
+                    accessibilityLabel={`Slide ${i + 1}: ${
+                      slide.kind === 'title'
+                        ? [slide.title, slide.artist].filter(Boolean).join(', ')
+                        : slide.lines.join(' ')
+                    }`}
+                  >
+                    {slide.kind === 'title' ? (
+                      <>
+                        <Text color="white" fontWeight="800" fontSize="$4" textAlign="center">
+                          {slide.title}
+                        </Text>
+                        {slide.artist ? (
+                          <Text color="#BFBFBF" fontSize="$1" textAlign="center">
+                            {slide.artist}
+                          </Text>
+                        ) : null}
+                      </>
+                    ) : (
+                      <Text color="white" fontWeight="800" fontSize="$2" textAlign="center">
+                        {slide.lines.join('\n')}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </YStack>
+            </ScrollView>
+            <XStack gap="$2" alignItems="center">
+              <Pressable
+                onPress={saveSlides}
+                accessibilityRole="button"
+                accessibilityHint="A PowerPoint file, which Google Slides opens too"
+                style={[styles.small, { backgroundColor: colors.primary }]}
+              >
+                <Text color="white" fontWeight="700" fontSize="$2">
+                  {Platform.OS === 'web' ? '⬇ Download slides' : 'Share slides'}
+                </Text>
+              </Pressable>
+              <Text color={soft} fontSize="$1" flex={1}>
+                A PowerPoint file. For Google Slides, upload it to Drive and open it there.
+              </Text>
+            </XStack>
+          </YStack>
+        ) : null}
+
+        {stage === 'answered' ? (
+          <XStack alignItems="center" justifyContent="space-between" gap="$3">
+            {correctable ? (
+              <Pressable
+                onPress={notMeant}
+                accessibilityRole="button"
+                accessibilityLabel="That’s not what I meant — ask again"
+                hitSlop={8}
+                style={{ paddingVertical: 2 }}
+              >
+                <Text color={soft} fontSize="$2" textDecorationLine="underline">
+                  Not what I meant
+                </Text>
+              </Pressable>
+            ) : (
+              <View />
+            )}
+            <Pressable
+              onPress={() => listen()}
+              accessibilityRole="button"
+              accessibilityLabel="Ask again"
+              style={[styles.small, { backgroundColor: colors.primary }]}
+            >
+              <Text color="white" fontWeight="700" fontSize="$2">
+                {available ? '🎤 Again' : 'Again'}
+              </Text>
+            </Pressable>
+          </XStack>
+        ) : null}
 
         {stage === 'typing' ? (
           <XStack gap="$2" alignItems="flex-end">

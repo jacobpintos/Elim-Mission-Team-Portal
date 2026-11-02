@@ -25,6 +25,11 @@ export function FloatingLayer({
     const el = document.createElement('div')
     el.style.cssText =
       'position:absolute;top:0;left:0;right:0;bottom:0;z-index:10000;display:flex;flex-direction:column;pointer-events:none'
+    // The app's typeface comes from Tamagui's font_body class on a wrapper
+    // inside #root, and this layer is appended to the body, outside it — so
+    // Miriam's bar was drawn in the browser's default serif. Brought along,
+    // as FullScreenOverlay.web does.
+    el.className = 'font_body'
     return el
   })
 
