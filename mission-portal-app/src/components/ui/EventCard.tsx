@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { sameId } from '@/lib/ids'
 import type { EventInstance, AvailResponse } from '@/types/events'
 import { openExternalUrl } from '@/lib/externalUrl'
+import { EventInvite } from '@/features/events/EventInvite'
 
 interface EventCardProps {
   event: EventInstance
@@ -225,6 +226,8 @@ export function EventCard({
             ) : null}
           </XStack>
         ) : null}
+        {/* A public event: anyone may bring a friend (features/events EventInvite). */}
+        {!mini && event.isPublic ? <EventInvite event={event} /> : null}
       </YStack>
     </Pressable>
   )

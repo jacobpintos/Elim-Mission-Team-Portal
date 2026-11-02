@@ -365,6 +365,26 @@ service cloud.firestore {
     // limit, takes the sender's name and address from their account rather
     // than the form, and creates the task that goes with it — none of which a
     // direct write would do.
+    // An invitation sent from the app — Invite a friend, on Connect, an event's
+    // page or its card (src/lib/inviteLog): who sent one, to which event and
+    // date, and how. Only the sender records their own, and only the fields an
+    // invite has; nobody but an admin reads them back — what an admin's
+    // briefing counts ("3 people invited someone to the next Sunday service").
+    match /invites/{id} {
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'eventKey', 'date', 'channel', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.eventKey is string
+        && request.resource.data.eventKey.size() > 0
+        && request.resource.data.eventKey.size() <= 200
+        && request.resource.data.date is string
+        && request.resource.data.date.size() == 10
+        && request.resource.data.channel in ['text', 'facebook', 'email']
+        && request.resource.data.at == request.time;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
     match /meetingRequests/{id} {
       allow read: if isAdmin() || (isSignedIn() && request.auth.uid in resource.data.leaders);
       allow create: if false;

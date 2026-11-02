@@ -128,6 +128,12 @@ export interface EventTemplate {
   teams?: EventTeam[]
   dressCode?: DressCodeEntry[]
   isPublic?: boolean
+  /** What it is, for anyone who sees it — a public event's page shows it (app/(app)/events/[id]). */
+  description?: string
+  /** Its event on Facebook, for a public event: "Going" there, and shared from there. */
+  facebookUrl?: string
+  /** A photo across the top of its page and card, uploaded by an admin. */
+  coverImage?: string
   taskTemplateId?: string
   lodging?: boolean
   lodgingEntries?: LodgingEntry[]

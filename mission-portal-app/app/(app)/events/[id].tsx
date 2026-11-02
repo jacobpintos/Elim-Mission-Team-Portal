@@ -11,6 +11,7 @@ import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { AvailBadge } from '@/components/ui/AvailBadge'
 import { AvailModal } from '@/features/events/AvailModal'
 import { EventFormModal } from '@/features/events/EventFormModal'
+import { EventAbout, EventHero } from '@/features/events/EventHero'
 import { WeatherDetailSheet } from '@/features/events/WeatherDetailSheet'
 import { PlanningBoardCanvas } from '@/features/planning/PlanningBoardCanvas'
 import { ScheduleDisplay } from '@/features/events/ScheduleDisplay'
@@ -23,7 +24,6 @@ import {
   CarpoolReadOnly,
   CarpoolPanel,
 } from '@/features/events/EventDetailModal'
-import { FD } from '@/lib/format'
 import { openLocationInMaps, eventMapQuery } from '@/lib/location'
 import { downloadICS } from '@/lib/icsExport'
 import { availKey, effectiveAvail, getSeriesAvail } from '@/lib/availability'
@@ -211,7 +211,14 @@ export default function EventDetailScreen() {
         </XStack>
       </Pressable>
       <ScrollView ref={scrollRef} style={{ flex: 1, backgroundColor: colors.background }}>
-        <YStack padding="$4" gap="$4" paddingBottom="$8">
+        <YStack
+          padding="$4"
+          gap="$4"
+          paddingBottom="$8"
+          width="100%"
+          maxWidth={760}
+          alignSelf="center"
+        >
           {/* Unpublished banner */}
           {isUnpublished ? (
             <XStack
@@ -250,32 +257,31 @@ export default function EventDetailScreen() {
             </XStack>
           ) : null}
 
-          {/* Date & Time */}
-          <YStack gap="$2">
-            <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-              DATE & TIME
-            </Text>
-            {event.date ? (
-              <Text color={colors.text} fontSize="$3">
-                {FD(event.date, { weekday: true })}
-              </Text>
-            ) : isUnpublished ? (
-              <EmptyField label="Date" />
-            ) : null}
-            {event.startTime ? (
-              <Text color={colors.text} fontSize="$3">
-                Start: {event.startTime}
-              </Text>
-            ) : isUnpublished ? (
-              <EmptyField label="Start time" />
-            ) : null}
-            {/* Only for those on it, and admins: the start time is for anyone. */}
-            {reportTimes.map((r) => (
-              <Text key={r.who ?? ''} color={colors.text} fontSize="$3">
-                Report{r.who ? ` (${r.who})` : ''}: {r.time}
-              </Text>
-            ))}
-          </YStack>
+          {/* The event, as a card: photo, name, when, where, and what to do from here. */}
+          <EventHero
+            event={event}
+            report={reportTimes.map((r) => `Report${r.who ? ` (${r.who})` : ''}: ${r.time}`)}
+            onDirections={
+              !event.isVirtual && (event.location || event.address || event.city)
+                ? () => openLocationInMaps(eventMapQuery(event))
+                : null
+            }
+            onCalendar={isUnpublished ? null : handleExportICS}
+          />
+
+          {/* A draft: what still needs filling in before it can be published. */}
+          {isUnpublished ? (
+            <XStack gap="$2" flexWrap="wrap">
+              {!event.date ? <EmptyField label="Date" /> : null}
+              {!event.startTime ? <EmptyField label="Start time" /> : null}
+              {!event.isVirtual && !event.location ? <EmptyField label="Venue name" /> : null}
+              {!event.isVirtual && !event.city ? <EmptyField label="City & state" /> : null}
+              {event.isVirtual && !event.virtualLink ? <EmptyField label="Meeting link" /> : null}
+            </XStack>
+          ) : null}
+
+          {/* What a public event says about itself. */}
+          {event.description?.trim() ? <EventAbout text={event.description} /> : null}
 
           {/* Weather */}
           {weather ? (
@@ -317,66 +323,6 @@ export default function EventDetailScreen() {
                 </XStack>
               </Pressable>
             </Spot>
-          ) : null}
-
-          {/* Location */}
-          {event.location || event.address || event.city || isUnpublished ? (
-            <YStack gap="$2">
-              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                LOCATION
-              </Text>
-              {event.location ? (
-                <Text color={colors.text} fontSize="$3">
-                  {event.location}
-                </Text>
-              ) : isUnpublished && !event.isVirtual ? (
-                <EmptyField label="Venue name" />
-              ) : null}
-              {event.address ? (
-                <Text color={colors.text} fontSize="$3">
-                  {event.address}
-                </Text>
-              ) : null}
-              {event.city ? (
-                <Text color={colors.text} fontSize="$3">
-                  {event.city}
-                  {event.state ? `, ${event.state}` : ''}
-                </Text>
-              ) : isUnpublished && !event.isVirtual ? (
-                <EmptyField label="City & state" />
-              ) : null}
-              {event.location || event.city ? (
-                <Pressable onPress={() => openLocationInMaps(eventMapQuery(event))}>
-                  <Text color={colors.primary} textDecorationLine="underline" fontSize="$2">
-                    Get Directions →
-                  </Text>
-                </Pressable>
-              ) : null}
-            </YStack>
-          ) : null}
-
-          {/* Virtual */}
-          {event.isVirtual ? (
-            <YStack gap="$1">
-              <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                VIRTUAL EVENT
-              </Text>
-              <XStack gap="$2" alignItems="center">
-                <Text fontSize="$3">🖥</Text>
-                <Text color={colors.text} fontSize="$3">
-                  Virtual Event
-                </Text>
-              </XStack>
-              {event.virtualLink ? (
-                <Pressable onPress={() => Linking.openURL(event.virtualLink!)}>
-                  <Text color={colors.primary} textDecorationLine="underline" fontSize="$3">
-                    {event.virtualLink}
-                  </Text>
-                </Pressable>
-              ) : isUnpublished ? (
-                <EmptyField label="Meeting link" />
-              ) : null}
-            </YStack>
           ) : null}
 
           {/* Schedule — those on it only: what the team does when, not the public's */}
@@ -522,27 +468,6 @@ export default function EventDetailScreen() {
                 </XStack>
               </Pressable>
             </YStack>
-          ) : null}
-
-          {/* ICS Export */}
-          {!isUnpublished ? (
-            <Pressable onPress={handleExportICS}>
-              <XStack
-                backgroundColor={colors.surface}
-                borderWidth={1}
-                borderColor={colors.border}
-                borderRadius="$2"
-                paddingHorizontal="$3"
-                paddingVertical="$2"
-                alignSelf="flex-start"
-                gap="$2"
-              >
-                <Text>📅</Text>
-                <Text color={colors.text} fontSize="$3">
-                  Add to Calendar (.ics)
-                </Text>
-              </XStack>
-            </Pressable>
           ) : null}
 
           {/* Admin Edit */}

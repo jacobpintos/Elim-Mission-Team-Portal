@@ -1928,3 +1928,42 @@ describe('backupStatus', () => {
     await assertFails(setDoc(doc(as(ADMIN), 'backupStatus/latest'), { lastOk: '2026-01-01' }))
   })
 })
+
+describe('invites — counted for the admins', () => {
+  const invite = (uid: string, over: Record<string, unknown> = {}) => ({
+    uid,
+    eventKey: 'svc_2026-11-08',
+    date: '2026-11-08',
+    channel: 'text',
+    at: serverTimestamp(),
+    ...over,
+  })
+
+  it('lets anyone signed in record their own invitation, as it is', async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER), 'invites/i1'), invite(MEMBER)))
+    await assertSucceeds(
+      setDoc(doc(as(OUTSIDER), 'invites/i2'), invite(OUTSIDER, { channel: 'facebook' }))
+    )
+  })
+
+  it('not someone else’s, nor anything but an invitation', async () => {
+    await assertFails(setDoc(doc(as(MEMBER), 'invites/i3'), invite(OUTSIDER)))
+    await assertFails(setDoc(doc(as(MEMBER), 'invites/i4'), invite(MEMBER, { channel: 'fax' })))
+    await assertFails(setDoc(doc(as(MEMBER), 'invites/i5'), invite(MEMBER, { message: 'hi' })))
+    await assertFails(setDoc(doc(as(MEMBER), 'invites/i6'), invite(MEMBER, { at: 1 })))
+    await assertFails(
+      setDoc(doc(env.unauthenticatedContext().firestore(), 'invites/i7'), invite('x'))
+    )
+  })
+
+  it('is read back by admins alone, and never changed', async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER), 'invites/i1'), invite(MEMBER)))
+    await assertSucceeds(
+      getDocs(query(collection(as(ADMIN), 'invites'), where('eventKey', '==', 'svc_2026-11-08')))
+    )
+    await assertFails(getDoc(doc(as(MEMBER), 'invites/i1')))
+    await assertFails(getDocs(collection(as(MEMBER), 'invites')))
+    await assertFails(updateDoc(doc(as(MEMBER), 'invites/i1'), { channel: 'email' }))
+    await assertFails(deleteDoc(doc(as(ADMIN), 'invites/i1')))
+  })
+})

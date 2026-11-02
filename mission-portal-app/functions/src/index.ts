@@ -71,3 +71,4 @@ export {
 } from './reimbursements'
 export { nightlyBackup } from './backups'
 export { purgeOldReceipts } from './reimbursements/retention'
+export { publicEvent } from './publicEvent'

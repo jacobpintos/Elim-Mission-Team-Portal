@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Pressable } from 'react-native'
-import { YStack, XStack, Text, Input } from 'tamagui'
+import { YStack, XStack, Text, Input, TextArea } from 'tamagui'
+import { Image } from 'expo-image'
+import { isFacebookUrl, tidyFacebookUrl } from '@/lib/eventLinks'
+import { pickAndUploadPageImages } from '@/lib/pageImageUpload'
 import { collection, doc, query, setDoc, where } from 'firebase/firestore'
 import { getDocs, onSnapshot } from '@/lib/liveFirestore'
 import { Modal } from '@/components/ui/Modal'
@@ -94,6 +97,10 @@ type FormData = {
   flights: boolean
   isVirtual: boolean
   virtualLink: string
+  /** A public event's: what it is, its Facebook event, and the photo across its page. */
+  description: string
+  facebookUrl: string
+  coverImage: string
   taskTemplateId: string
   users: (string | number)[]
   groups: string[]
@@ -170,6 +177,9 @@ function blankForm(
     flights: event?.flights ?? false,
     isVirtual: event?.isVirtual ?? false,
     virtualLink: event?.virtualLink ?? '',
+    description: event?.description ?? '',
+    facebookUrl: event?.facebookUrl ?? '',
+    coverImage: event?.coverImage ?? '',
     taskTemplateId: event?.taskTemplateId ?? '',
     users: event?.users ?? [],
     groups: event?.groups ?? [],
@@ -342,6 +352,8 @@ export function EventFormModal({
   const [schedule, setSchedule] = useState<ScheduleItem[]>(lists.schedule)
   // The schedule builder, open in its own window.
   const [buildingSchedule, setBuildingSchedule] = useState(false)
+  // A cover photo on its way up.
+  const [uploadingCover, setUploadingCover] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editScope, setEditScope] = useState<'instance' | 'all'>(instanceKey ? 'instance' : 'all')
 
@@ -579,6 +591,9 @@ export function EventFormModal({
         flightEntries: form.flights ? flightEntries : [],
         isVirtual: form.isVirtual,
         virtualLink: form.virtualLink,
+        description: form.description.trim(),
+        facebookUrl: tidyFacebookUrl(form.facebookUrl),
+        coverImage: form.coverImage,
         users: finalUsers,
         groups: form.groups,
         teams,
@@ -599,6 +614,9 @@ export function EventFormModal({
           isPublic: form.isPublic,
           isVirtual: form.isVirtual,
           virtualLink: form.isVirtual ? form.virtualLink : '',
+          description: form.description.trim(),
+          facebookUrl: tidyFacebookUrl(form.facebookUrl),
+          coverImage: form.coverImage,
           food: form.food,
           foodItems: form.food ? form.foodItems.filter((s) => s.trim()) : [],
           carpool: form.carpool,
@@ -710,6 +728,10 @@ export function EventFormModal({
       }
       if (form.isVirtual && !form.virtualLink.trim()) {
         toast('Meeting link is required for virtual events', 'error')
+        return
+      }
+      if (form.facebookUrl.trim() && !isFacebookUrl(form.facebookUrl)) {
+        toast('The Facebook event link should be a facebook.com address', 'error')
         return
       }
       if (form.food && !form.foodItems.some((i) => i.trim())) {
@@ -1484,6 +1506,108 @@ export function EventFormModal({
             </XStack>
           </Pressable>
         </XStack>
+
+        {/* What a public event shows the public: what it is, its photo, its Facebook event. */}
+        {form.isPublic ? (
+          <YStack
+            gap="$3"
+            padding="$3"
+            borderRadius="$3"
+            borderWidth={1}
+            borderColor={colors.border}
+            backgroundColor={colors.surface}
+          >
+            <Text color={colors.textMuted} fontSize="$2" fontWeight="700" letterSpacing={0.5}>
+              ON ITS PUBLIC PAGE
+            </Text>
+            <YStack gap="$1.5">
+              <Text color={colors.text} fontSize="$3">
+                Cover photo
+              </Text>
+              {form.coverImage ? (
+                <Image
+                  source={{ uri: form.coverImage }}
+                  style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 10 }}
+                  contentFit="cover"
+                  alt="The event’s cover photo"
+                />
+              ) : null}
+              <XStack gap="$2">
+                <Pressable
+                  disabled={uploadingCover}
+                  onPress={async () => {
+                    setUploadingCover(true)
+                    try {
+                      const [picked] = await pickAndUploadPageImages('event-covers')
+                      if (picked) field('coverImage')(picked.url)
+                    } catch (err) {
+                      toast(err instanceof Error ? err.message : 'The photo didn’t upload', 'error')
+                    } finally {
+                      setUploadingCover(false)
+                    }
+                  }}
+                >
+                  <XStack
+                    borderWidth={1}
+                    borderColor={colors.primary}
+                    borderRadius="$2"
+                    paddingHorizontal="$3"
+                    paddingVertical="$2"
+                    opacity={uploadingCover ? 0.6 : 1}
+                  >
+                    <Text color={colors.primary} fontWeight="600" fontSize="$3">
+                      {uploadingCover
+                        ? 'Uploading…'
+                        : form.coverImage
+                          ? 'Change photo'
+                          : 'Upload a photo'}
+                    </Text>
+                  </XStack>
+                </Pressable>
+                {form.coverImage && !uploadingCover ? (
+                  <Pressable onPress={() => field('coverImage')('')}>
+                    <XStack paddingHorizontal="$3" paddingVertical="$2">
+                      <Text color={colors.textMuted} fontSize="$3">
+                        Remove
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                ) : null}
+              </XStack>
+            </YStack>
+            <YStack gap="$1">
+              <Text color={colors.text} fontSize="$3">
+                Description
+              </Text>
+              <TextArea
+                value={form.description}
+                onChangeText={field('description')}
+                placeholder="What it is, who it’s for, what to expect"
+                placeholderTextColor={colors.textMuted as never}
+                minHeight={96}
+                backgroundColor={colors.background}
+                color={colors.text}
+                borderColor={colors.border}
+              />
+            </YStack>
+            <YStack gap="$1">
+              <Text color={colors.text} fontSize="$3">
+                Facebook event link
+              </Text>
+              <Input
+                value={form.facebookUrl}
+                onChangeText={field('facebookUrl')}
+                placeholder="https://facebook.com/events/…"
+                placeholderTextColor={colors.textMuted as never}
+                autoCapitalize="none"
+                keyboardType="url"
+                backgroundColor={colors.background}
+                color={colors.text}
+                borderColor={colors.border}
+              />
+            </YStack>
+          </YStack>
+        ) : null}
 
         {/* Virtual Event toggle + sub-field */}
         <XStack gap="$3" alignItems="center" justifyContent="space-between">

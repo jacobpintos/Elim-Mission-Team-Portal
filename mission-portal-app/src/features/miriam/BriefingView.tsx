@@ -287,7 +287,9 @@ export function BriefingView({
                       ? '#f0a070'
                       : n.kind === 'content'
                         ? '#9b7be0'
-                        : '#5b8def'
+                        : n.kind === 'invites'
+                          ? '#27ae60'
+                          : '#5b8def'
                   }
                   title={n.title}
                   sub={n.sub}

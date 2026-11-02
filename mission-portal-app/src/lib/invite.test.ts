@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
+  eventInviteMessage,
+  eventPageUrl,
   facebookShareUrl,
   inviteMessage,
   mailUrl,
@@ -34,6 +36,8 @@ const monday = new Date(2026, 10, 2, 12)
 describe('nextSundayService', () => {
   it('is the coming Sunday’s, where the calendar says it is', () => {
     expect(nextSundayService([service], {}, monday)).toEqual({
+      key: 'svc_2026-11-08',
+      title: 'Sunday Service',
       date: '2026-11-08',
       startTime: '10:00 AM',
       place: 'The Midnight Gem, 120 SW 5th St, Des Moines, IA',
@@ -51,6 +55,8 @@ describe('nextSundayService', () => {
       },
     }
     expect(nextSundayService([service], moved, monday)).toEqual({
+      key: 'svc_2026-11-08',
+      title: 'Sunday Service',
       date: '2026-11-08',
       startTime: '9:30 AM',
       place: 'Grace Hall, 45 Elm Ave, Ankeny, IA',
@@ -91,7 +97,7 @@ describe('inviteMessage', () => {
         'Hi! I’d love for you to come to church with me this Sunday, November 8 at 10:00 AM. We’ll be at The Midnight Gem, 120 SW 5th St, Des Moines, IA.',
         '',
         'Get to know us before you come:',
-        'The Well: https://thewellia.com',
+        'The Well: https://thewellofiowa.com',
         'Elim on Facebook: https://www.facebook.com/share/1EE9JBSnjC/',
         'Elim on YouTube: https://youtube.com/theelimarrival',
         '',
@@ -102,7 +108,7 @@ describe('inviteMessage', () => {
 
   it('says no place it doesn’t know, and sends them to the site for one', () => {
     const m = inviteMessage(null, links, monday)
-    expect(m.body).toContain('one Sunday. When and where we meet is at https://thewellia.com.')
+    expect(m.body).toContain('one Sunday. When and where we meet is at https://thewellofiowa.com.')
     expect(m.body).not.toMatch(/Midnight Gem/)
   })
 
@@ -111,8 +117,51 @@ describe('inviteMessage', () => {
     expect(mailUrl('Join me', 'Line 1\nLine 2')).toBe(
       'mailto:?subject=Join%20me&body=Line%201%0ALine%202'
     )
-    expect(facebookShareUrl('https://thewellia.com')).toBe(
-      'https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fthewellia.com'
+    expect(facebookShareUrl('https://thewellofiowa.com')).toBe(
+      'https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fthewellofiowa.com'
     )
+  })
+})
+
+describe('eventInviteMessage', () => {
+  const gala = {
+    title: 'Harvest Night',
+    date: '2026-11-21',
+    startTime: '6 PM',
+    location: 'Grace Hall',
+    address: '45 Elm Ave',
+    city: 'Ankeny',
+    state: 'IA',
+  }
+  const page = eventPageUrl('https://mission-team-portal.web.app/', 'gala_2026-11-21')
+
+  it('invites them to its day, time and place, with its page to see the rest', () => {
+    expect(page).toBe('https://mission-team-portal.web.app/invite/gala_2026-11-21')
+    const m = eventInviteMessage(gala, page, monday)
+    expect(m.subject).toBe('Join me at Harvest Night')
+    expect(m.body).toBe(
+      [
+        'Hi! I’d love for you to come to Harvest Night with me Saturday, November 21 at 6 PM. It’s at Grace Hall, 45 Elm Ave, Ankeny, IA.',
+        '',
+        'All the details: https://mission-team-portal.web.app/invite/gala_2026-11-21',
+        '',
+        'Hope to see you there!',
+      ].join('\n')
+    )
+  })
+
+  it('this week by its weekday, online when it is, and with its Facebook event', () => {
+    const m = eventInviteMessage(
+      {
+        ...gala,
+        date: '2026-11-06',
+        isVirtual: true,
+        facebookUrl: 'https://facebook.com/events/42',
+      },
+      page,
+      monday
+    )
+    expect(m.body).toContain('with me this Friday, November 6 at 6 PM. It’s online.')
+    expect(m.body).toContain('On Facebook: https://facebook.com/events/42')
   })
 })

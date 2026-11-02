@@ -421,3 +421,27 @@ describe('a sale at the Elim Store, in the briefing', () => {
     expect(b.spoken).not.toContain('Elim Store')
   })
 })
+
+describe('invitations to the next Sunday service, in an admin’s briefing', () => {
+  it('says how many have invited someone, and goes to the service', () => {
+    const b = buildBriefing(
+      input({ invited: { count: 3, date: '2026-10-25', href: '/events/svc_2026-10-25' } })
+    )
+    const row = b.news.find((n) => n.kind === 'invites')
+    expect(row).toEqual({
+      kind: 'invites',
+      title: '3 people invited someone to the next Sunday service',
+      sub: 'Sunday, October 25',
+      href: '/events/svc_2026-10-25',
+    })
+    expect(b.spoken).toContain('3 people invited someone to the next Sunday service.')
+  })
+
+  it('one person as one, and nothing when nobody has', () => {
+    const one = buildBriefing(input({ invited: { count: 1, date: '2026-10-25', href: '/x' } }))
+    expect(one.spoken).toContain('1 person invited someone to the next Sunday service.')
+    expect(buildBriefing(input({ invited: null })).news.some((n) => n.kind === 'invites')).toBe(
+      false
+    )
+  })
+})

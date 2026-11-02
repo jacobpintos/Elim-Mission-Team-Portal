@@ -9,7 +9,7 @@ import type { EventInstance, EventTemplate } from '@/types/events'
  */
 
 /** The church's site, and Elim's pages, as the invitation links them. */
-export const THE_WELL_SITE = 'https://thewellia.com'
+export const THE_WELL_SITE = 'https://thewellofiowa.com'
 export const ELIM_FACEBOOK = 'https://www.facebook.com/share/1EE9JBSnjC/'
 export const ELIM_YOUTUBE = 'https://youtube.com/theelimarrival'
 
@@ -21,6 +21,9 @@ export interface InviteLinks {
 
 /** The service invited to: its day, time and where — as that day's calendar entry has them. */
 export interface NextService {
+  /** Its date's key (`<templateId>_<YYYY-MM-DD>`): the event page's, and what an invite is counted against. */
+  key: string
+  title: string
   date: string
   startTime: string | null
   /** "The Midnight Gem, 120 SW 5th St, Des Moines, IA"; null online or unsaid. */
@@ -45,7 +48,9 @@ function minutes(time: string | undefined): number | null {
 }
 
 /** Where it is, from the day's own entry: its venue, street, and town — each once. */
-function placeOf(ev: EventInstance): string | null {
+export function placeOf(
+  ev: Pick<EventInstance, 'location' | 'address' | 'city' | 'state'>
+): string | null {
   const town = [ev.city, ev.state].filter(Boolean).join(', ')
   const parts: string[] = []
   for (const part of [ev.location, ev.address, town]) {
@@ -87,6 +92,8 @@ export function nextSundayService(
     null
   if (!ev) return null
   return {
+    key: ev.instanceKey,
+    title: ev.title,
     date: ev.date,
     startTime: ev.startTime?.trim() || null,
     place: ev.isVirtual ? null : placeOf(ev),
@@ -94,15 +101,14 @@ export function nextSundayService(
   }
 }
 
-/** The day as said: "today", "this Sunday, November 8", "Sunday, November 15". */
+/** The day as said: "today", "this Sunday, November 8", "Saturday, November 21". */
 function whenSaid(date: string, now: Date): string {
   const today = localDate(now)
   if (date === today) return 'today'
-  const md = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-  })
-  return date <= addDays(today, 6) ? `this Sunday, ${md}` : `Sunday, ${md}`
+  const d = new Date(`${date}T12:00:00`)
+  const md = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'long' })
+  return date <= addDays(today, 6) ? `this ${weekday}, ${md}` : `${weekday}, ${md}`
 }
 
 /** The invitation: a subject for an email, and the message itself. */
@@ -140,6 +146,54 @@ export function inviteMessage(
     body: `Hi! I’d love for you to come to church with me ${when}${time}.${where}\n\n${learn}\n\nHope to see you there!`,
   }
 }
+
+/** A public event invited to, from its page or its card. */
+export interface InvitedEvent {
+  title: string
+  date: string
+  startTime?: string | null
+  location?: string
+  address?: string
+  city?: string
+  state?: string
+  isVirtual?: boolean
+  facebookUrl?: string
+}
+
+/**
+ * An invitation to a public event: its day, time and place as its date has
+ * them, and its page in the app (pageUrl) — and its Facebook event, where it
+ * has one — to see the rest.
+ */
+export function eventInviteMessage(
+  ev: InvitedEvent,
+  pageUrl: string,
+  now: Date = new Date()
+): { subject: string; body: string } {
+  const when = whenSaid(ev.date, now)
+  const time = ev.startTime?.trim() ? ` at ${ev.startTime.trim()}` : ''
+  const place = ev.isVirtual ? null : placeOf(ev)
+  const where = ev.isVirtual ? ' It’s online.' : place ? ` It’s at ${place}.` : ''
+  const facebook = ev.facebookUrl?.trim()
+  return {
+    subject: `Join me at ${ev.title}`,
+    body: [
+      `Hi! I’d love for you to come to ${ev.title} with me ${when}${time}.${where}`,
+      '',
+      `All the details: ${pageUrl}`,
+      ...(facebook ? [`On Facebook: ${facebook}`] : []),
+      '',
+      'Hope to see you there!',
+    ].join('\n'),
+  }
+}
+
+/**
+ * A public event's page for anyone it's sent to — no account needed
+ * (app/(public)/invite/[key]), at the app's address.
+ */
+export const eventPageUrl = (origin: string, key: string) =>
+  `${origin.replace(/\/+$/, '')}/invite/${encodeURIComponent(key)}`
 
 /** A text with the message written in: the Messages app, or the phone's own. */
 export const smsUrl = (body: string) => `sms:?&body=${encodeURIComponent(body)}`

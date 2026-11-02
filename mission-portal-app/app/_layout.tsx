@@ -54,8 +54,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // readable while signed in — Settings links to them, and App Review expects
     // both to be reachable from inside the app.
     const isLegal = inAuth && (seg[1] === 'privacy' || seg[1] === 'terms')
+    // A public event an invitation links to: for anyone, signed in or not
+    // (app/(public)/invite) — whoever was invited needn't have an account.
+    const isInvite = seg[0] === '(public)' && seg[1] === 'invite'
 
-    if (!fbUser && !inAuth && !atRoot) {
+    if (!fbUser && !inAuth && !atRoot && !isInvite) {
       router.replace('/')
     } else if (fbUser && profile && inAuth && !isLegal) {
       // Navigate directly to avoid competing with index.tsx's <Redirect>

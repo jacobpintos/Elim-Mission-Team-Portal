@@ -140,6 +140,8 @@ export interface BriefingInput {
   newContent?: { id: string; title: string }[]
   /** The Elim Store's sale, if one is on and they have the store (features/miriam/briefingData). */
   sale?: BriefSale | null
+  /** An admin's: how many have invited someone to the next Sunday service (lib/inviteLog). */
+  invited?: { count: number; date: string; href: string } | null
 }
 
 /** A sale at the Elim Store: its words, its last day as said ("tomorrow"), and where the store is. */
@@ -188,7 +190,7 @@ export interface Briefing {
   /** Their notes on today, as written. */
   notes: { id: string; text: string }[]
   news: {
-    kind: 'announcement' | 'messages' | 'content'
+    kind: 'announcement' | 'messages' | 'content' | 'invites'
     title: string
     sub: string
     href: string
@@ -380,6 +382,16 @@ export function buildBriefing(input: BriefingInput): Briefing {
     sub: 'Announcement',
     href: '/announce',
   }))
+  // People bringing friends to the next Sunday service: an admin's to know.
+  const invited = input.invited?.count ? input.invited : null
+  if (invited) {
+    news.push({
+      kind: 'invites',
+      title: `${plural(invited.count, 'person', 'people')} invited someone to the next Sunday service`,
+      sub: longDate(invited.date),
+      href: invited.href,
+    })
+  }
   const unreadTotal = input.unread.reduce((n, u) => n + u.count, 0)
   if (unreadTotal) {
     news.push({
@@ -490,6 +502,11 @@ export function buildBriefing(input: BriefingInput): Briefing {
     say(
       news.flatMap((n, i) => (n.kind === 'announcement' ? [R.news(i)] : [])),
       `${announcements.length === 1 ? 'A new announcement' : `${announcements.length} new announcements`}: ${listed(announcements.map((a) => a.title))}.`
+    )
+  if (invited)
+    say(
+      news.flatMap((n, i) => (n.kind === 'invites' ? [R.news(i)] : [])),
+      `${plural(invited.count, 'person', 'people')} invited someone to the next Sunday service.`
     )
   if (unreadTotal)
     say(

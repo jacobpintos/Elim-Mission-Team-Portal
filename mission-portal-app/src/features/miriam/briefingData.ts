@@ -9,6 +9,7 @@ import { useMusicStore, type MusicItem } from '@/stores/musicStore'
 import { readElimStore } from '@/features/store/readElimStore'
 import { saleEndSaid } from '@/lib/miriamStore'
 import { screensFor } from '@/lib/miriamScreens'
+import { nextSundayService } from '@/lib/invite'
 import { announcementsShown, roomName } from '@/lib/miriamAppData'
 import { buildBriefing, type AttentionItem, type Briefing, type FoodNudge } from '@/lib/briefing'
 import { fetchWeather } from '@/lib/weather'
@@ -185,10 +186,16 @@ export async function gatherBriefing(): Promise<
       }, null)
     : null
 
+  // An admin's: how many have invited someone to the next Sunday service.
+  const invited = isAdmin(profile)
+    ? await quietly(() => invitedToNextService(events, evOverrides, now), null)
+    : null
+
   const briefing = buildBriefing({
     monthly,
     newContent,
     sale,
+    invited,
     now,
     firstName: (profile.displayName ?? '').split(' ')[0],
     viewer,
@@ -224,6 +231,25 @@ export async function gatherBriefing(): Promise<
     occasions,
   })
   return { ...briefing, asks }
+}
+
+/**
+ * How many people have invited someone to the next Sunday service (lib/invite
+ * nextSundayService) — each once, however many they invited (lib/inviteLog).
+ * Null when nobody has, or there's no service on the calendar.
+ */
+async function invitedToNextService(
+  templates: EventTemplate[],
+  overrides: Record<string, Partial<EventTemplate>>,
+  now: Date
+): Promise<{ count: number; date: string; href: string } | null> {
+  const service = nextSundayService(templates as never, overrides as never, now)
+  if (!service) return null
+  const sent = await getDocs(query(collection(db, 'invites'), where('eventKey', '==', service.key)))
+  const people = new Set(sent.docs.map((d) => String(d.data().uid ?? '')).filter(Boolean))
+  return people.size
+    ? { count: people.size, date: service.date, href: `/events/${service.key}` }
+    : null
 }
 
 /** Marked new in Content, and not past the day it stops being (app/(app)/music: isItemNew). */

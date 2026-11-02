@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, useWindowDimensions, Pressable, Linking, Image, View } from 'react-native'
 import { YStack, XStack, Text, H3, Input } from 'tamagui'
+import { EventInvite } from '@/features/events/EventInvite'
 import { useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -339,6 +340,9 @@ function PubHomeContent() {
                     </Text>
                   </Pressable>
                 ) : null}
+                <YStack marginTop="$1.5">
+                  <EventInvite event={ev} />
+                </YStack>
               </YStack>
             ))
           )}
@@ -608,6 +612,9 @@ function PubHomeContent() {
                     </Text>
                   </Pressable>
                 ) : null}
+                <YStack marginTop="$1.5">
+                  <EventInvite event={ev} />
+                </YStack>
               </YStack>
             ))
           )}
