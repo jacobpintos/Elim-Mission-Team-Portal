@@ -12,6 +12,7 @@ import type { PageBlock } from '@/types/pages'
 import { composeConnect, directionsQuery, directionsUrl } from './connectLayout'
 import { HeroPill, renderRestBlock, SocialCard, SocialGroupCard } from './designedParts'
 import { MeetingBlock } from './BlockRenderer/MeetingBlock'
+import { InviteFriend } from './InviteFriend'
 import { useMiriamStore } from '@/stores/miriamStore'
 
 const lines = (text: string | undefined) =>
@@ -192,29 +193,34 @@ export function ConnectDesign({
                     {line}
                   </Text>
                 ))}
-                {query ? (
-                  <XStack marginTop={8}>
-                    <Pressable
-                      onPress={() => openExternalUrl(directionsUrl(query))}
-                      accessibilityRole="link"
-                      accessibilityLabel={`Directions to ${query}`}
-                    >
-                      <XStack
-                        backgroundColor={primary}
-                        borderRadius={999}
-                        paddingHorizontal={22}
-                        paddingVertical={13}
-                        gap={10}
-                        alignItems="center"
+                {/* Get directions, where the page says where; and Invite a friend. */}
+                <InviteFriend
+                  groups={layout.linkGroups}
+                  primary={primary}
+                  before={
+                    query ? (
+                      <Pressable
+                        onPress={() => openExternalUrl(directionsUrl(query))}
+                        accessibilityRole="link"
+                        accessibilityLabel={`Directions to ${query}`}
                       >
-                        <Text color={onPrimary} fontSize={15} fontWeight="800">
-                          Get directions
-                        </Text>
-                        <Arrow color={onPrimary} />
-                      </XStack>
-                    </Pressable>
-                  </XStack>
-                ) : null}
+                        <XStack
+                          backgroundColor={primary}
+                          borderRadius={999}
+                          paddingHorizontal={22}
+                          paddingVertical={13}
+                          gap={10}
+                          alignItems="center"
+                        >
+                          <Text color={onPrimary} fontSize={15} fontWeight="800">
+                            Get directions
+                          </Text>
+                          <Arrow color={onPrimary} />
+                        </XStack>
+                      </Pressable>
+                    ) : null
+                  }
+                />
               </YStack>
               {visit.rightImage ? (
                 <View
