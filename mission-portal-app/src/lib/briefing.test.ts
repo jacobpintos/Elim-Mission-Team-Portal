@@ -293,3 +293,131 @@ describe('the briefing, of birthdays, anniversaries and teams', () => {
     expect(other.spoken).not.toMatch(/Report/)
   })
 })
+
+describe('a public follower’s monthly briefing', () => {
+  // Sunday, November 1st 2026, in the evening.
+  const now = new Date(2026, 10, 1, 19, 0)
+  const publicEvents = [
+    {
+      id: 'svc',
+      title: 'Sunday Service',
+      isRec: true,
+      recur: 'weekly',
+      recDay: 0,
+      date: '2026-01-04',
+      startTime: '10:00 AM',
+      location: 'The Midnight Gem',
+      isPublic: true,
+    },
+    {
+      id: 'nye',
+      title: 'New Years Eve',
+      date: '2026-11-20',
+      startTime: '5 PM',
+      location: 'The Midnight Gem',
+      isPublic: true,
+    },
+    // Not public: not theirs to be told of.
+    { id: 'team', title: 'Team Dinner', date: '2026-11-10', startTime: '6 PM', users: ['sam'] },
+    // A month and more away.
+    { id: 'far', title: 'Spring Revival', date: '2027-01-15', isPublic: true },
+  ]
+  const monthly = (over: Partial<BriefingInput> = {}) =>
+    buildBriefing(
+      input({
+        now,
+        monthly: true,
+        viewer: { uid: 'me', roles: ['public'] },
+        templates: publicEvents as never,
+        tasks: [],
+        reminders: [],
+        unread: [],
+        weather: {},
+        announcements: [{ id: 'a', title: 'Christmas service times', ts: 1 }],
+        newContent: [{ id: 'v', title: 'Revive Me (Live)' }],
+        ...over,
+      })
+    )
+
+  it('lays out the month ahead: each event once, a weekly one with its other dates', () => {
+    const b = monthly()
+    expect(b.period).toBe('month')
+    expect(b.greeting).toBe('Good evening, Jacob')
+    expect(b.dateLine).toBe('November 2026 · 2 events coming up')
+    expect(b.upcoming.map((e) => [e.title, e.time, e.meridiem])).toEqual([
+      ['Sunday Service', 'Sun', 'Nov 1'],
+      ['New Years Eve', 'Fri', 'Nov 20'],
+    ])
+    expect(b.upcoming[0].chips).toEqual(['Also Nov 8, Nov 15, Nov 22 & Nov 29'])
+    // Nothing of a day: no tasks, reminders or team side.
+    expect(b.today).toEqual([])
+    expect(b.tasks).toEqual([])
+    expect(b.needs).toBe(0)
+  })
+
+  it('says what was announced this past month and what’s new in Content', () => {
+    const b = monthly()
+    expect(b.news.map((n) => [n.kind, n.title, n.href])).toEqual([
+      ['announcement', 'Christmas service times', '/announce'],
+      ['content', 'Revive Me (Live)', '/music'],
+    ])
+    expect(b.spoken).toContain('Good evening, Jacob. Here’s your month.')
+    expect(b.spoken).toContain('There are 2 events coming up.')
+    expect(b.spoken).toContain(
+      'Sunday Service on Sunday, November 1 at 10:00 AM, at The Midnight Gem, and 4 more times after that.'
+    )
+    expect(b.spoken).toContain('An announcement this past month: Christmas service times.')
+    expect(b.spoken).toContain('New in Content: Revive Me (Live).')
+  })
+
+  it('says so plainly when nothing is on', () => {
+    const b = monthly({ templates: [] as never, announcements: [], newContent: [] })
+    expect(b.dateLine).toBe('November 2026 · Nothing on the calendar yet')
+    expect(b.spoken).toBe(
+      'Good evening, Jacob. Here’s your month. Nothing is on the calendar for the month ahead yet.'
+    )
+  })
+
+  it('is asked for as the month’s', () => {
+    for (const said of [
+      'give me my monthly briefing',
+      'monthly briefing',
+      'what’s happening this month',
+      'what is coming up this month?',
+    ])
+      expect(briefingAsked(said), said).toBe(true)
+  })
+})
+
+describe('a sale at the Elim Store, in the briefing', () => {
+  const sale = { message: '10% off all T-shirts.', until: 'tomorrow', href: '/public/store' }
+
+  it('is in the day’s, with its last day and where the store is', () => {
+    const b = buildBriefing(input({ sale }))
+    expect(b.sale).toEqual(sale)
+    expect(b.spoken).toContain(
+      'The Elim Store has a sale on: 10% off all T-shirts, until tomorrow.'
+    )
+    expect(b.segments.find((s) => s.ids.includes('sale'))).toBeTruthy()
+  })
+
+  it('is in the month’s', () => {
+    const b = buildBriefing(
+      input({
+        monthly: true,
+        viewer: { uid: 'me', roles: ['public'] },
+        sale: { ...sale, href: '/store' },
+      })
+    )
+    expect(b.sale?.href).toBe('/store')
+    expect(b.spoken).toContain(
+      'The Elim Store has a sale on: 10% off all T-shirts, until tomorrow.'
+    )
+  })
+
+  it('is nowhere when none is on', () => {
+    const b = buildBriefing(input())
+    expect(b.sale).toBeNull()
+    expect(b.spoken).not.toContain('Elim Store')
+  })
+})

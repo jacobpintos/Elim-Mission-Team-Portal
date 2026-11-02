@@ -108,7 +108,11 @@ export function MiriamButton() {
         visible={briefing.offerBriefing && !open}
         onRequestClose={briefing.dismissOffer}
       >
-        <MorningOffer onShow={briefing.openBriefing} onDismiss={briefing.dismissOffer} />
+        <MorningOffer
+          onShow={briefing.openBriefing}
+          onDismiss={briefing.dismissOffer}
+          monthly={briefing.monthly}
+        />
       </FloatingLayer>
       <VideoPlayerModal
         url={video?.youtubeUrl ?? null}

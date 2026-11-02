@@ -141,7 +141,7 @@ describe('the tour for someone who follows the church in the app', () => {
 
   it('never calls them public users, or offers them what is the team’s or the admins’', () => {
     expect(said).not.toMatch(
-      /public users?|dress code|availability|tasks?\b|teams?\b|briefing|worship\b|admins?\b|planning board|retreat|move it to friday|editable/i
+      /public users?|dress code|availability|tasks?\b|teams?\b|daily briefing|worship\b|admins?\b|planning board|retreat|move it to friday|editable/i
     )
   })
 

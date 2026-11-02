@@ -556,10 +556,30 @@ export function MiriamPanel({
   )
 }
 
-/** The morning offer of her briefing: small, at the top, gone at a tap. */
-export function MorningOffer({ onShow, onDismiss }: { onShow: () => void; onDismiss: () => void }) {
+/**
+ * The morning offer of her briefing: small, at the top, gone at a tap. A
+ * public follower's is the month's (features/miriam/useBriefing), offered at
+ * whatever hour they first open the app that month.
+ */
+export function MorningOffer({
+  onShow,
+  onDismiss,
+  monthly = false,
+}: {
+  onShow: () => void
+  onDismiss: () => void
+  monthly?: boolean
+}) {
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
+  const hour = new Date().getHours()
+  const greeting = !monthly
+    ? 'Good morning'
+    : hour < 12
+      ? 'Good morning'
+      : hour < 17
+        ? 'Good afternoon'
+        : 'Good evening'
   return (
     <View style={[styles.anchor, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
       <XStack
@@ -578,10 +598,10 @@ export function MorningOffer({ onShow, onDismiss }: { onShow: () => void; onDism
         <MiriamBadge color={colors.primary} letter="white" pulsing={false} />
         <YStack flex={1}>
           <Text color={colors.text} fontWeight="700" fontSize="$4">
-            Good morning
+            {greeting}
           </Text>
           <Text color={colors.textMuted} fontSize="$2">
-            Want your briefing for today?
+            {monthly ? 'Want your briefing for this month?' : 'Want your briefing for today?'}
           </Text>
         </YStack>
         <Pressable
@@ -596,7 +616,7 @@ export function MorningOffer({ onShow, onDismiss }: { onShow: () => void; onDism
         <Pressable
           onPress={onDismiss}
           accessibilityRole="button"
-          accessibilityLabel="Not today"
+          accessibilityLabel={monthly ? 'Not now' : 'Not today'}
           hitSlop={8}
           style={styles.close}
         >

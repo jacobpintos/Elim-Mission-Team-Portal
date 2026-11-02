@@ -37,7 +37,7 @@ export function briefingAsked(text: string): boolean {
     .split(' ')
     .map(spelled)
     .join(' ')
-  return /^(?:(?:can|could|would)\s+you\s+)?(?:give\s+me\s+)?(?:(?:my|the|a|today's)\s+)?(?:daily\s+|morning\s+)?briefing(?:\s+for\s+today)?(?:\s+please)?$|^brief\s+me\b|\bwhat\s+do\s+i\s+need\s+to\s+know\b|\bhow(?:'s|\s+is|\s+does)\s+my\s+day\s+look(?:ing)?\b|\bwhat(?:'s|\s+is)\s+my\s+day\s+look(?:ing)?\s+like\b|\bwhat(?:'s|\s+is)\s+(?:on\s+)?my\s+(?:day|agenda)\b|^good\s+morning(?:\s+miriam)?$|\bcatch\s+me\s+up\b/.test(
+  return /^(?:(?:can|could|would)\s+you\s+)?(?:give\s+me\s+)?(?:(?:my|the|a|today's|this\s+month's)\s+)?(?:daily\s+|morning\s+|monthly\s+)?briefing(?:\s+for\s+(?:today|the\s+month|this\s+month))?(?:\s+please)?$|^brief\s+me\b|\bwhat(?:'s|\s+is)\s+(?:happening|on|coming\s+up)\s+this\s+month\b|\bwhat\s+do\s+i\s+need\s+to\s+know\b|\bhow(?:'s|\s+is|\s+does)\s+my\s+day\s+look(?:ing)?\b|\bwhat(?:'s|\s+is)\s+my\s+day\s+look(?:ing)?\s+like\b|\bwhat(?:'s|\s+is)\s+(?:on\s+)?my\s+(?:day|agenda)\b|^good\s+morning(?:\s+miriam)?$|\bcatch\s+me\s+up\b/.test(
     said
   )
 }
@@ -54,6 +54,7 @@ const BRIEFING_WORDS: [string, number][] = [
   ['give', 1],
   ['daily', 1],
   ['morning', 1],
+  ['monthly', 1],
 ]
 
 function spelled(word: string): string {
@@ -129,6 +130,23 @@ export interface BriefingInput {
   notes?: { id: string; date: string; text: string; at: number }[]
   /** Birthdays and anniversaries on the calendar, for those who see them (lib/occasions): this week's are said. */
   occasions?: Occasion[]
+  /**
+   * The month's briefing rather than the day's — a public follower's, who has
+   * no tasks, team or day-to-day to be told of: the events of the month ahead,
+   * and what's new (buildMonthly).
+   */
+  monthly?: boolean
+  /** Videos new in Content, for the month's briefing. */
+  newContent?: { id: string; title: string }[]
+  /** The Elim Store's sale, if one is on and they have the store (features/miriam/briefingData). */
+  sale?: BriefSale | null
+}
+
+/** A sale at the Elim Store: its words, its last day as said ("tomorrow"), and where the store is. */
+export interface BriefSale {
+  message: string
+  until: string
+  href: string
 }
 
 /** An event of theirs with open food items, and one of them suggested. */
@@ -152,6 +170,8 @@ export interface BriefEvent {
 }
 
 export interface Briefing {
+  /** The day's briefing, or a public follower's month's (BriefingInput.monthly). */
+  period: 'day' | 'month'
   greeting: string
   /** The day it is for: YYYY-MM-DD. */
   date: string
@@ -161,16 +181,25 @@ export interface Briefing {
   today: BriefEvent[]
   /** Nothing today: the next thing coming up. */
   next: BriefEvent | null
+  /** The month's briefing: the events of the month ahead, each once. */
+  upcoming: BriefEvent[]
   tasks: (BriefTask & { due: 'overdue' | 'today' | 'week'; label: string })[]
   reminders: BriefReminder[]
   /** Their notes on today, as written. */
   notes: { id: string; text: string }[]
-  news: { kind: 'announcement' | 'messages'; title: string; sub: string; href: string }[]
+  news: {
+    kind: 'announcement' | 'messages' | 'content'
+    title: string
+    sub: string
+    href: string
+  }[]
   attention: AttentionItem[]
   /** Food still open on their events: a suggestion each. */
   food: FoodNudge[]
   /** Birthdays and anniversaries this week: whom to wish well. */
   occasions: OccasionNudge[]
+  /** A sale on at the Elim Store. */
+  sale: BriefSale | null
   spoken: string
   /**
    * What is said, in the order it is said, each with the items on screen it
@@ -181,7 +210,7 @@ export interface Briefing {
 }
 
 export interface BriefingSegment {
-  /** The rows it is about: "head", "ev:<key>", "task:<id>", "rem:<id>", "note:<id>", "occ:<key>", "news:<n>", "food:<eventKey>", "att:<n>". */
+  /** The rows it is about: "head", "ev:<key>", "task:<id>", "rem:<id>", "note:<id>", "occ:<key>", "news:<n>", "sale", "food:<eventKey>", "att:<n>". */
   ids: string[]
   text: string
 }
@@ -194,6 +223,7 @@ export const briefingRowId = {
   note: (id: string) => `note:${id}`,
   occasion: (key: string) => `occ:${key}`,
   news: (n: number) => `news:${n}`,
+  sale: () => 'sale',
   food: (eventKey: string) => `food:${eventKey}`,
   attention: (n: number) => `att:${n}`,
 }
@@ -296,6 +326,7 @@ function eventsBetween(input: BriefingInput, from: string, to: string): EventIns
 }
 
 export function buildBriefing(input: BriefingInput): Briefing {
+  if (input.monthly) return buildMonthly(input)
   const { now, viewer, groups } = input
   const today = localDate(now)
   const hour = now.getHours()
@@ -465,6 +496,8 @@ export function buildBriefing(input: BriefingInput): Briefing {
       news.flatMap((n, i) => (n.kind === 'messages' ? [R.news(i)] : [])),
       `You have ${plural(unreadTotal, 'unread message')}.`
     )
+  const sale = input.sale ?? null
+  if (sale) say([R.sale()], saleSaid(sale))
   for (const f of food) {
     const when = f.date === today ? 'today' : weekday(f.date)
     say(
@@ -479,12 +512,14 @@ export function buildBriefing(input: BriefingInput): Briefing {
     )
 
   return {
+    period: 'day',
     greeting,
     date: today,
     dateLine: `${longDate(today)}${needs ? ` · ${plural(needs, 'thing')} ${needs === 1 ? 'needs' : 'need'} you` : ' · You’re caught up'}`,
     needs,
     today: today_,
     next,
+    upcoming: [],
     tasks,
     reminders,
     notes,
@@ -492,10 +527,145 @@ export function buildBriefing(input: BriefingInput): Briefing {
     attention,
     food,
     occasions,
+    sale,
     spoken: segments.map((x) => x.text).join(' '),
     segments,
   }
 }
 
+/** "The Elim Store has a sale on: 10% off all T-shirts, until tomorrow." */
+const saleSaid = (sale: BriefSale) =>
+  `The Elim Store has a sale on: ${sale.message.trim().replace(/[.!]+$/, '')}, until ${sale.until}.`
+
 /** The date in an instance key (`<templateId>_<YYYY-MM-DD>`). */
 const eventsKeyDate = (key: string) => key.slice(key.lastIndexOf('_') + 1)
+
+/** How far ahead the month's briefing looks. */
+const MONTH_DAYS = 30
+/** At most this many of the month's events on its screen, and said aloud. */
+const MONTH_SHOWN = 8
+const MONTH_SAID = 5
+
+/**
+ * A public follower's briefing, offered once a month (features/miriam
+ * useBriefing): the events of the month ahead — a weekly one once, with its
+ * other dates — what was announced this past month, and what's new in
+ * Content. Nothing of a day: they have no tasks, team, car or reminders.
+ */
+function buildMonthly(input: BriefingInput): Briefing {
+  const { now } = input
+  const today = localDate(now)
+  const hour = now.getHours()
+  const greeting = `Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}${input.firstName ? `, ${input.firstName}` : ''}`
+  const month = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  // Each event once — its first date in the month — with its others after it.
+  const all = eventsBetween(input, today, shiftDate(today, MONTH_DAYS))
+  const firsts: EventInstance[] = []
+  const more = new Map<string, string[]>()
+  for (const ev of all) {
+    const id = ev.templateId
+    if (more.has(id)) more.get(id)!.push(ev.date)
+    else {
+      more.set(id, [])
+      firsts.push(ev)
+    }
+  }
+  const shortDay = (date: string) =>
+    new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const shown = firsts.slice(0, MONTH_SHOWN)
+  const upcoming = shown.map((ev) => {
+    // Each by its day — today's too, in a list of days.
+    const card = eventCard(ev, input, '')
+    const also = more.get(ev.templateId) ?? []
+    return also.length
+      ? {
+          ...card,
+          chips: [...card.chips, `Also ${listed(also.map(shortDay)).replace(/ and /, ' & ')}`],
+        }
+      : card
+  })
+
+  const news: Briefing['news'] = [
+    ...input.announcements.slice(0, 3).map((a) => ({
+      kind: 'announcement' as const,
+      title: a.title,
+      sub: 'Announcement',
+      href: '/announce',
+    })),
+    ...(input.newContent ?? []).slice(0, 3).map((c) => ({
+      kind: 'content' as const,
+      title: c.title,
+      sub: 'New in Content',
+      href: '/music',
+    })),
+  ]
+
+  const segments: BriefingSegment[] = []
+  const say = (ids: string[], text: string) => segments.push({ ids, text })
+  const R = briefingRowId
+  say(['head'], `${greeting}. Here’s your month.`)
+  if (shown.length) {
+    say(
+      shown.map((ev) => R.event(ev.instanceKey)),
+      firsts.length === 1
+        ? 'There’s one event coming up.'
+        : `There are ${firsts.length} events coming up.`
+    )
+    shown.slice(0, MONTH_SAID).forEach((ev, i) => {
+      const card = upcoming[i]
+      const place = ev.isVirtual
+        ? ', online'
+        : card.place && card.place !== ev.startTime
+          ? `, at ${card.place}`
+          : ''
+      const again = (more.get(ev.templateId) ?? []).length
+      say(
+        [R.event(ev.instanceKey)],
+        `${ev.title} on ${longDate(ev.date)}${ev.startTime ? ` at ${ev.startTime}` : ''}${place}${again ? `, and ${again === 1 ? 'once more' : `${again} more times`} after that` : ''}.`
+      )
+    })
+    if (firsts.length > MONTH_SAID)
+      say(
+        shown.slice(MONTH_SAID).map((ev) => R.event(ev.instanceKey)),
+        `And ${plural(firsts.length - MONTH_SAID, 'more')} on the calendar.`
+      )
+  } else {
+    say(['head'], 'Nothing is on the calendar for the month ahead yet.')
+  }
+  const announced = news.filter((n) => n.kind === 'announcement')
+  if (announced.length)
+    say(
+      news.flatMap((n, i) => (n.kind === 'announcement' ? [R.news(i)] : [])),
+      `${announced.length === 1 ? 'An announcement' : `${announced.length} announcements`} this past month: ${listed(announced.map((a) => a.title))}.`
+    )
+  const added = news.filter((n) => n.kind === 'content')
+  if (added.length)
+    say(
+      news.flatMap((n, i) => (n.kind === 'content' ? [R.news(i)] : [])),
+      `New in Content: ${listed(added.map((c) => c.title))}.`
+    )
+  const sale = input.sale ?? null
+  if (sale) say([R.sale()], saleSaid(sale))
+
+  return {
+    period: 'month',
+    greeting,
+    date: today,
+    dateLine: `${month} · ${firsts.length ? `${plural(firsts.length, 'event')} coming up` : 'Nothing on the calendar yet'}`,
+    needs: 0,
+    today: [],
+    next: null,
+    upcoming,
+    tasks: [],
+    reminders: [],
+    notes: [],
+    news,
+    attention: [],
+    food: [],
+    occasions: [],
+    sale,
+    spoken: segments.map((x) => x.text).join(' '),
+    segments,
+  }
+}

@@ -391,9 +391,15 @@ export function useMiriamConversation(
     if (local && (BRIEFING_OFF.test(said) || BRIEFING_ON.test(said))) {
       const off = BRIEFING_OFF.test(said)
       AsyncStorage.setItem(BRIEFING_OFF_KEY, off ? '1' : '0').catch(() => {})
+      // A public follower's is the month's (./useBriefing).
+      const monthly = briefing.monthly
       const text = off
-        ? 'Okay — I won’t offer your briefing in the mornings. Ask for it any time.'
-        : 'Okay — I’ll offer your briefing the first time you open the app each morning.'
+        ? monthly
+          ? 'Okay — I won’t offer your monthly briefing. Ask for it any time.'
+          : 'Okay — I won’t offer your briefing in the mornings. Ask for it any time.'
+        : monthly
+          ? 'Okay — I’ll offer your briefing the first time you open the app each month.'
+          : 'Okay — I’ll offer your briefing the first time you open the app each morning.'
       setAnswer(text)
       speak(text)
       setStage('answered')

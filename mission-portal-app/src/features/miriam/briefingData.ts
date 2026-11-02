@@ -4,7 +4,11 @@ import { db, functions } from '@/lib/firebase'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
 import { MESSAGES_PAGE_SIZE } from '@/lib/messages'
 import { partitionHiddenMessages } from '@/lib/moderation'
-import { isAdmin, isGuest, isWorship, visibleTabs } from '@/lib/roles'
+import { isAdmin, isGuest, isPublicFollower, isWorship, visibleTabs } from '@/lib/roles'
+import { useMusicStore, type MusicItem } from '@/stores/musicStore'
+import { readElimStore } from '@/features/store/readElimStore'
+import { saleEndSaid } from '@/lib/miriamStore'
+import { screensFor } from '@/lib/miriamScreens'
 import { announcementsShown, roomName } from '@/lib/miriamAppData'
 import { buildBriefing, type AttentionItem, type Briefing, type FoodNudge } from '@/lib/briefing'
 import { fetchWeather } from '@/lib/weather'
@@ -48,6 +52,8 @@ import type { AvailabilityQuestion } from './localTalk'
 
 /** "New" in the briefing: since this long ago. */
 const NEW_MS = 36 * 60 * 60 * 1000
+/** In the month's briefing (a public follower's): this past month. */
+const NEW_THIS_MONTH_MS = 31 * 24 * 60 * 60 * 1000
 /** Waited for a store to load, at most. */
 const LOAD_WAIT_MS = 3000
 /** A forecast waited for, at most. */
@@ -99,6 +105,8 @@ export async function gatherBriefing(): Promise<
   const now = new Date()
   const day = today()
 
+  // A public follower's is the month's: what's on and what's new, not the day's.
+  const monthly = isPublicFollower(profile)
   const keepsNotes = canKeepDateNotes(profile)
   await Promise.all([
     loaded(() => useEventsStore.getState().templates.length > 0),
@@ -123,7 +131,7 @@ export async function gatherBriefing(): Promise<
         (d) => ({ ...(d.data() as Announcement), id: d.id }) as Announcement
       )
       return announcementsShown(all, profile, day)
-        .filter((a) => now.getTime() - a.ts < NEW_MS)
+        .filter((a) => now.getTime() - a.ts < (monthly ? NEW_THIS_MONTH_MS : NEW_MS))
         .map((a) => ({ id: String(a.id), title: a.title, ts: a.ts }))
     }, []),
     quietly(() => unreadFor(uid, names, profile), []),
@@ -153,7 +161,34 @@ export async function gatherBriefing(): Promise<
     ? await quietly(() => useOccasionsStore.getState().read(), [])
     : []
 
+  // New in Content, as its screen marks them: for the month's briefing.
+  const newContent = monthly
+    ? await quietly(async () => {
+        const music = useMusicStore.getState()
+        if (music.items.length === 0) await music.load()
+        return useMusicStore
+          .getState()
+          .items.filter((m) => isNewNow(m, now))
+          .map((m) => ({ id: String(m.id), title: m.title }))
+      }, [])
+    : []
+
+  // A sale on at the Elim Store, for anyone who has the store: where it is
+  // for them — a public follower's tab, a member's Public Facing page.
+  const store = screensFor(profile).find((s) => s.id === 'store')
+  const sale = store
+    ? await quietly(async () => {
+        const on = (await readElimStore(now.getTime())).sale
+        return on
+          ? { message: on.message, until: saleEndSaid(on.endsOn, now), href: store.path }
+          : null
+      }, null)
+    : null
+
   const briefing = buildBriefing({
+    monthly,
+    newContent,
+    sale,
     now,
     firstName: (profile.displayName ?? '').split(' ')[0],
     viewer,
@@ -189,6 +224,12 @@ export async function gatherBriefing(): Promise<
     occasions,
   })
   return { ...briefing, asks }
+}
+
+/** Marked new in Content, and not past the day it stops being (app/(app)/music: isItemNew). */
+function isNewNow(item: MusicItem, now: Date): boolean {
+  if (!item.isNew) return false
+  return item.newUntil ? new Date(item.newUntil) >= now : true
 }
 
 /**

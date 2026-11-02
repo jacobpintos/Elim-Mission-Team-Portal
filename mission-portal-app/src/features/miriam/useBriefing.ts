@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { AttentionItem, Briefing, FoodNudge } from '@/lib/briefing'
 import { localToday } from '@/lib/events'
 import { useAuthStore } from '@/stores/authStore'
+import { isPublicFollower } from '@/lib/roles'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { prepareAction } from './actions'
 import { appToolsFor } from './appTools'
@@ -14,20 +15,27 @@ import type { PanelState } from './usePanelState'
 
 /** The day the briefing was last offered on this device, and whether it is offered at all. */
 const BRIEFING_DAY_KEY = 'miriam_briefing_day'
+/** The month a public follower's briefing was last offered: "2026-11". */
+const BRIEFING_MONTH_KEY = 'miriam_briefing_month'
 export const BRIEFING_OFF_KEY = 'miriam_briefing_off'
 /** Offered from the morning into early afternoon; later, the day is mostly done. */
 const OFFER_FROM_HOUR = 5
 const OFFER_UNTIL_HOUR = 14
-/** "Stop offering my briefing", "offer my briefing every morning". */
+/** The month's, any time but the middle of the night: a month isn't over by the afternoon. */
+const MONTH_OFFER_UNTIL_HOUR = 22
+const thisMonth = () => localToday().slice(0, 7)
+/** "Stop offering my briefing", "offer my briefing every morning" (or month). */
 export const BRIEFING_OFF =
-  /\b(?:stop|don'?t|do\s+not|quit)\s+(?:offering|showing|giving)\s+(?:me\s+)?(?:my|the)\s+(?:morning\s+|daily\s+)?briefing\b|\bturn\s+off\s+(?:my|the)\s+(?:morning\s+|daily\s+)?briefing\b/i
+  /\b(?:stop|don'?t|do\s+not|quit)\s+(?:offering|showing|giving)\s+(?:me\s+)?(?:my|the)\s+(?:morning\s+|daily\s+|monthly\s+)?briefing\b|\bturn\s+off\s+(?:my|the)\s+(?:morning\s+|daily\s+|monthly\s+)?briefing\b/i
 export const BRIEFING_ON =
-  /\b(?:offer|show|give)\s+(?:me\s+)?(?:my|the)\s+briefing\s+(?:each|every)\s+(?:morning|day)\b|\bturn\s+on\s+(?:my|the)\s+(?:morning\s+|daily\s+)?briefing\b/i
+  /\b(?:offer|show|give)\s+(?:me\s+)?(?:my|the)\s+briefing\s+(?:each|every)\s+(?:morning|day|month)\b|\bturn\s+on\s+(?:my|the)\s+(?:morning\s+|daily\s+|monthly\s+)?briefing\b/i
 
 /**
  * Miriam's daily briefing (lib/briefing): offered the first time the app is
  * opened in a morning, shown on a screen of its own (./BriefingScreen), and
- * read out a part at a time.
+ * read out a part at a time. A public follower's is the month's instead,
+ * offered the first time the app is opened in a month: they have no day-to-day
+ * to be told of, and a briefing every morning would be the same each time.
  */
 export function useBriefing(
   panel: PanelState,
@@ -85,23 +93,30 @@ export function useBriefing(
     if (!briefing) briefRun.current++
   }, [briefing])
 
-  // The first time the app is opened in a morning, the day's briefing offered — once a day.
+  // Whose briefing is the month's: a public follower's.
+  const monthly = useAuthStore((s) => isPublicFollower(s.profile))
+
+  // The first time the app is opened in a morning, the day's briefing offered
+  // — once a day; a public follower's, the first time in a month.
   useEffect(() => {
     if (!appActive) return
     const hour = new Date().getHours()
-    if (hour < OFFER_FROM_HOUR || hour >= OFFER_UNTIL_HOUR) return
+    if (hour < OFFER_FROM_HOUR || hour >= (monthly ? MONTH_OFFER_UNTIL_HOUR : OFFER_UNTIL_HOUR))
+      return
+    const key = monthly ? BRIEFING_MONTH_KEY : BRIEFING_DAY_KEY
+    const now = monthly ? thisMonth() : localToday()
     let cancelled = false
-    Promise.all([AsyncStorage.getItem(BRIEFING_DAY_KEY), AsyncStorage.getItem(BRIEFING_OFF_KEY)])
-      .then(([day, off]) => {
-        if (cancelled || off === '1' || day === localToday()) return
-        AsyncStorage.setItem(BRIEFING_DAY_KEY, localToday()).catch(() => {})
+    Promise.all([AsyncStorage.getItem(key), AsyncStorage.getItem(BRIEFING_OFF_KEY)])
+      .then(([last, off]) => {
+        if (cancelled || off === '1' || last === now) return
+        AsyncStorage.setItem(key, now).catch(() => {})
         setOfferBriefing(true)
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [appActive])
+  }, [appActive, monthly])
 
   /**
    * The briefing read aloud a part at a time (lib/briefing: segments), each
@@ -182,7 +197,9 @@ export function useBriefing(
     setOfferBriefing(false)
     stopWake()
     sentRef.current = true
-    askedRef.current = 'What do I need to know today?'
+    askedRef.current = monthly
+      ? 'What do I need to know this month?'
+      : 'What do I need to know today?'
     setHeard('')
     setAnswer(null)
     setChoices([])
@@ -240,6 +257,7 @@ export function useBriefing(
 
   return {
     briefedFoodRef,
+    monthly,
     offerBriefing,
     dismissOffer,
     reading,

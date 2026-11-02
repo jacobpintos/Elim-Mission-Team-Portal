@@ -92,9 +92,20 @@ export function BriefingView({
         </XStack>
       ) : null}
 
-      {b.today.length || b.next ? (
-        <Section title={b.today.length ? 'TODAY' : 'NEXT UP'} colors={colors}>
-          {(b.today.length ? b.today : [b.next!]).map((ev) => (
+      {b.period === 'month' ? (
+        b.upcoming.length ? null : (
+          <Text color={colors.textMuted} fontSize="$3">
+            Nothing is on the calendar for the month ahead yet.
+          </Text>
+        )
+      ) : null}
+
+      {b.upcoming.length || b.today.length || b.next ? (
+        <Section
+          title={b.period === 'month' ? 'THIS MONTH' : b.today.length ? 'TODAY' : 'NEXT UP'}
+          colors={colors}
+        >
+          {(b.period === 'month' ? b.upcoming : b.today.length ? b.today : [b.next!]).map((ev) => (
             <Focus key={ev.key} id={R.event(ev.key)}>
               <Pressable
                 onPress={() => onOpen(miriamHref({ kind: 'event', key: ev.key, section: null }))}
@@ -257,7 +268,10 @@ export function BriefingView({
       ) : null}
 
       {b.news.length ? (
-        <Section title="NEW SINCE YESTERDAY" colors={colors}>
+        <Section
+          title={b.period === 'month' ? 'NEW THIS MONTH' : 'NEW SINCE YESTERDAY'}
+          colors={colors}
+        >
           <YStack
             style={[
               styles.list,
@@ -268,7 +282,13 @@ export function BriefingView({
               <Focus key={`${n.kind}${i}`} id={R.news(i)}>
                 <Row
                   colors={colors}
-                  dot={n.kind === 'announcement' ? '#f0a070' : '#5b8def'}
+                  dot={
+                    n.kind === 'announcement'
+                      ? '#f0a070'
+                      : n.kind === 'content'
+                        ? '#9b7be0'
+                        : '#5b8def'
+                  }
                   title={n.title}
                   sub={n.sub}
                   last={i === b.news.length - 1}
@@ -276,6 +296,28 @@ export function BriefingView({
                 />
               </Focus>
             ))}
+          </YStack>
+        </Section>
+      ) : null}
+
+      {b.sale ? (
+        <Section title="ELIM STORE SALE" colors={colors}>
+          <YStack
+            style={[
+              styles.list,
+              { borderColor: colors.border, backgroundColor: colors.background },
+            ]}
+          >
+            <Focus id={R.sale()}>
+              <Row
+                colors={colors}
+                dot={colors.primary}
+                title={b.sale.message}
+                sub={`Until ${b.sale.until}`}
+                last
+                onPress={() => onOpen(b.sale!.href)}
+              />
+            </Focus>
           </YStack>
         </Section>
       ) : null}
