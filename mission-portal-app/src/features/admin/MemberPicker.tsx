@@ -3,6 +3,7 @@ import { ScrollView, Pressable } from 'react-native'
 import { XStack, YStack, Text, Input, Button } from 'tamagui'
 import { useUsersStore } from '@/stores/usersStore'
 import type { UserProfile } from '@/types/user'
+import { personLabel } from '@/lib/personLabel'
 
 interface MemberPickerProps {
   selected: string[]
@@ -58,7 +59,7 @@ export function MemberPicker({ selected, onChange, label }: MemberPickerProps) {
               gap="$1"
             >
               <Text color="white" fontSize="$2">
-                {u.displayName || u.email || u.uid}
+                {personLabel(u)}
               </Text>
               <Pressable onPress={() => removeSelected(u.uid)}>
                 <Text color="white" fontSize="$2" fontWeight="700">
@@ -95,12 +96,12 @@ export function MemberPicker({ selected, onChange, label }: MemberPickerProps) {
                   justifyContent="center"
                 >
                   <Text fontSize="$2" fontWeight="700" color={isSelected ? 'white' : '$gray11'}>
-                    {(u.displayName || u.email || u.uid).slice(0, 2).toUpperCase()}
+                    {(u.displayName || u.email || '?').slice(0, 2).toUpperCase()}
                   </Text>
                 </YStack>
                 <YStack flex={1}>
                   <Text fontSize="$3" color={isSelected ? 'white' : '$color'}>
-                    {u.displayName || u.email || u.uid}
+                    {personLabel(u)}
                   </Text>
                   <Text fontSize="$2" color={isSelected ? 'rgba(255,255,255,0.7)' : '$gray10'}>
                     {u.email ?? ''}

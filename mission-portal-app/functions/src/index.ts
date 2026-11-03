@@ -43,6 +43,7 @@ export { weatherAlertCheck, weatherAlertNow, onEventWrittenWeather } from './wea
 export { updateUserEmail } from './updateUserEmail'
 export { resetUserPassword } from './resetUserPassword'
 export { auditAuthUsers } from './auditAuthUsers'
+export { removeStrayMembers } from './strayMembersSync'
 export { createAuthForOrphans } from './createAuthForOrphans'
 export { deleteAuthAccount } from './deleteAuthAccount'
 export { deleteOwnAccount } from './deleteOwnAccount'

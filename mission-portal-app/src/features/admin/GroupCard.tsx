@@ -1,6 +1,7 @@
 import { XStack, YStack, Text, Button } from 'tamagui'
 import { useUsersStore } from '@/stores/usersStore'
 import { groupDisplayName, countsTowardAllGroup } from '@/lib/roles'
+import { personLabel } from '@/lib/personLabel'
 
 interface GroupDoc {
   id: string
@@ -16,7 +17,6 @@ interface GroupCardProps {
 
 export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
   const loading = useUsersStore((s) => s.loading)
-  const getDisplayName = useUsersStore((s) => s.displayName)
   const getUser = useUsersStore((s) => s.getUser)
   // 'All' and 'Guest' are structural: user creation puts new accounts into one
   // or the other, so neither can be renamed or deleted out from under it.
@@ -75,7 +75,11 @@ export function GroupCard({ group, onEdit, onDelete }: GroupCardProps) {
       {members.length > 0 && (
         <XStack flexWrap="wrap" gap="$1">
           {members.slice(0, 20).map((uid) => {
-            const name = loading ? '…' : getDisplayName(uid)
+            // Named; or an account with no name ("Unnamed account …"); or a uid
+            // with no account behind it, left by one deleted some other way —
+            // the account check (Users → Auth Sync Audit) removes those.
+            const user = loading ? null : getUser(uid)
+            const name = loading ? '…' : user ? personLabel(user) : 'Removed account'
             return (
               <XStack
                 key={uid}

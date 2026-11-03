@@ -2,6 +2,8 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
 
+import { teamsWithoutAll } from './accountAudit'
+
 if (!admin.apps.length) admin.initializeApp()
 
 /**
@@ -49,6 +51,21 @@ export const deleteOwnAccount = onCall(async (req) => {
     }
   } catch (err) {
     logger.error(`deleteOwnAccount: failed clearing messages for ${uid}`, err)
+  }
+
+  // 1b. Out of every group and common team, as an admin's Delete takes them
+  //     (src/lib/userRemoval): left in, their uid stayed in a group's
+  //     members — counted, and shown as a bare id.
+  try {
+    const groups = await db.collection('groups').where('members', 'array-contains', uid).get()
+    for (const g of groups.docs) {
+      await g.ref.update({ members: admin.firestore.FieldValue.arrayRemove(uid) })
+    }
+    const main = await db.doc('config/main').get()
+    const teams = teamsWithoutAll(main.data()?.COMMON_TEAMS, new Set([uid]))
+    if (teams) await main.ref.update({ COMMON_TEAMS: teams })
+  } catch (err) {
+    logger.error(`deleteOwnAccount: failed taking ${uid} out of groups`, err)
   }
 
   // 2. Per-user documents keyed by uid.

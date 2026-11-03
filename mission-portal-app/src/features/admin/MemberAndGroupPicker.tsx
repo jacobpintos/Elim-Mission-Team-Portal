@@ -4,6 +4,7 @@ import { XStack, YStack, Text, Input } from 'tamagui'
 import { useUsersStore } from '@/stores/usersStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { groupDisplayName } from '@/lib/roles'
+import { personLabel } from '@/lib/personLabel'
 
 interface MemberAndGroupPickerProps {
   selectedUsers: string[]
@@ -79,7 +80,7 @@ export function MemberAndGroupPicker({
               gap="$1"
             >
               <Text color="white" fontSize="$2">
-                {u.displayName || u.email || u.uid}
+                {personLabel(u)}
               </Text>
               <Pressable onPress={() => toggleUser(u.uid)}>
                 <Text color="white" fontSize="$2" fontWeight="700">
@@ -174,12 +175,12 @@ export function MemberAndGroupPicker({
                         justifyContent="center"
                       >
                         <Text fontSize="$1" fontWeight="700" color={isSel ? 'white' : '$gray11'}>
-                          {(u.displayName || u.email || u.uid).slice(0, 2).toUpperCase()}
+                          {(u.displayName || u.email || '?').slice(0, 2).toUpperCase()}
                         </Text>
                       </YStack>
                       <YStack flex={1}>
                         <Text fontSize="$3" color={isSel ? 'white' : '$color'}>
-                          {u.displayName || u.email || u.uid}
+                          {personLabel(u)}
                         </Text>
                         <Text fontSize="$2" color={isSel ? 'rgba(255,255,255,0.7)' : '$gray10'}>
                           {u.email ?? ''}

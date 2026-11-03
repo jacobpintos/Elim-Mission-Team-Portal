@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin'
 import { ASKED, ASKED_KEEP_DAYS } from './miriam/own/asked'
 import { EVENTS, EVENTS_KEEP_DAYS } from './miriam/stats'
 import { USAGE_LIMITS } from './utils/usageLimit'
+import { removeStrays } from './strayMembersSync'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -174,4 +175,12 @@ export const dailyCleanup = onSchedule('0 2 * * *', async () => {
   }
 
   await batchDelete(toDelete)
+
+  // ── Members of groups and common teams with no account behind them ─────────
+  // (./strayMembersSync): one gone some way other than an admin's Delete.
+  try {
+    await removeStrays(db)
+  } catch (err) {
+    console.error('[dailyCleanup] stray members not removed', err)
+  }
 })
