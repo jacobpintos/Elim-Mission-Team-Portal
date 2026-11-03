@@ -9,6 +9,12 @@ import {
   MIN_IMAGE_HEIGHT,
   MAX_IMAGE_HEIGHT,
   FALLBACK_IMAGE_HEIGHT,
+  cardVideoHeight,
+  durationSaid,
+  MIN_VIDEO_HEIGHT,
+  MAX_VIDEO_HEIGHT,
+  sizeSaid,
+  videoType,
 } from './announcementImage'
 
 describe('naturalHeight', () => {
@@ -145,5 +151,34 @@ describe('notExpired', () => {
   it('leaves a list with no dates untouched', () => {
     const items: { id: string; expiresAt?: string }[] = [{ id: 'a' }, { id: 'b' }]
     expect(notExpired(items, '2026-08-26')).toHaveLength(2)
+  })
+})
+
+describe('a video in a card', () => {
+  it('at its own proportions, whole — between the bounds', () => {
+    expect(cardVideoHeight({ width: 1280, height: 720 }, 600)).toBe(338)
+    // A phone held upright: as tall as a card allows, shown whole on black.
+    expect(cardVideoHeight({ width: 720, height: 1280 }, 600)).toBe(MAX_VIDEO_HEIGHT)
+    // A very wide one: never a sliver.
+    expect(cardVideoHeight({ width: 3000, height: 400 }, 360)).toBe(MIN_VIDEO_HEIGHT)
+    // Its size not known: 16:9.
+    expect(cardVideoHeight(null, 640)).toBe(360)
+    expect(cardVideoHeight({}, 0)).toBe(MIN_VIDEO_HEIGHT)
+  })
+
+  it('its length and size, said', () => {
+    expect(durationSaid(42)).toBe('0:42')
+    expect(durationSaid(725)).toBe('12:05')
+    expect(durationSaid(3730)).toBe('1:02:10')
+    expect(sizeSaid(23.4 * 1024 * 1024)).toBe('23 MB')
+    expect(sizeSaid(640 * 1024)).toBe('640 KB')
+  })
+
+  it('stored as the video it is, whatever the picker said', () => {
+    expect(videoType('video/quicktime', 'IMG_1.MOV')).toBe('video/quicktime')
+    expect(videoType(null, 'IMG_1.MOV')).toBe('video/quicktime')
+    expect(videoType('', 'clip.webm')).toBe('video/webm')
+    expect(videoType(undefined, undefined)).toBe('video/mp4')
+    expect(videoType('application/octet-stream', 'clip.mp4')).toBe('video/mp4')
   })
 })

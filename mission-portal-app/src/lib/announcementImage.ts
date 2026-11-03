@@ -101,3 +101,49 @@ export function isExpired(expiresAt: string | undefined | null, todayStr: string
 export function notExpired<T extends { expiresAt?: string }>(items: T[], todayStr: string): T[] {
   return items.filter((a) => !isExpired(a.expiresAt, todayStr))
 }
+
+/** The shortest and tallest a video is drawn: it is shown whole, never cropped. */
+export const MIN_VIDEO_HEIGHT = 180
+export const MAX_VIDEO_HEIGHT = 560
+
+/**
+ * How tall to draw a video in a card of the given width: its own proportions,
+ * kept between the bounds — a tall phone video fits within them on black,
+ * as a player shows it. 16:9 when its size isn't known.
+ */
+export function cardVideoHeight(
+  attachment: Pick<AnnouncementAttachment, 'width' | 'height'> | null | undefined,
+  cardWidth: number
+): number {
+  const natural =
+    naturalHeight(attachment, cardWidth) ??
+    (Number.isFinite(cardWidth) && cardWidth > 0 ? Math.round((cardWidth * 9) / 16) : null)
+  if (!natural) return MIN_VIDEO_HEIGHT
+  return Math.min(MAX_VIDEO_HEIGHT, Math.max(MIN_VIDEO_HEIGHT, natural))
+}
+
+/** "0:42", "12:05", "1:02:10": a video's length, said. */
+export function durationSaid(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const ss = String(s % 60).padStart(2, '0')
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
+}
+
+/** The largest video an announcement takes: storage.rules holds the same. */
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024
+
+/** "23 MB", "640 KB": a file's size, said. */
+export function sizeSaid(bytes: number): string {
+  return bytes >= 1024 * 1024
+    ? `${Math.round(bytes / (1024 * 1024))} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`
+}
+
+/** The content type a video is stored with: what the picker said, or from its name. */
+export function videoType(mimeType?: string | null, fileName?: string | null): string {
+  if (mimeType?.startsWith('video/')) return mimeType
+  const ext = fileName?.split('.').pop()?.toLowerCase()
+  return ext === 'mov' ? 'video/quicktime' : ext === 'webm' ? 'video/webm' : 'video/mp4'
+}

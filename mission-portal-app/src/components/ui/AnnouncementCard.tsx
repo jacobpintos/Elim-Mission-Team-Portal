@@ -6,7 +6,8 @@ import { Img } from '@/components/ui/Img'
 import { Avatar } from '@/components/ui/Avatar'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useUsersStore } from '@/stores/usersStore'
-import { cardImageHeight } from '@/lib/announcementImage'
+import { cardImageHeight, cardVideoHeight } from '@/lib/announcementImage'
+import { AnnouncementVideo } from '@/components/ui/AnnouncementVideo'
 import { sameId } from '@/lib/ids'
 import { postedWhen } from '@/features/announce/postedWhen'
 import type { Announcement } from '@/types/events'
@@ -57,8 +58,8 @@ interface AnnouncementCardProps {
 }
 
 /**
- * An announcement, as a card: its photo across the top — or, with none, a
- * band of the theme's colour — who posted it and when, its title and words.
+ * An announcement, as a card: its photo or video across the top — or, with
+ * neither, a band of the theme's colour — who posted it and when, its title and words.
  * For an admin, below a rule: who it went to, when it goes, and Edit and
  * Delete. One card for Announcements, its composer's preview, and Home.
  *
@@ -111,6 +112,11 @@ export function AnnouncementCard({
   const photoHeight = photo
     ? Math.min(cardImageHeight(a.attachment, cardWidth), compact ? 260 : Infinity)
     : 0
+  // A video: whole, at its own proportions (lib/announcementImage cardVideoHeight).
+  const video = a.attachment?.type === 'video' && a.attachment.url ? a.attachment : null
+  const videoHeight = video
+    ? Math.min(cardVideoHeight(video, cardWidth), compact ? 260 : Infinity)
+    : 0
   const chip = audience ?? (a.isPublic ? 'Public' : null)
   const admin = !!(onEdit || onDelete || expiry)
   const paragraphs = a.body
@@ -160,6 +166,13 @@ export function AnnouncementCard({
               }}
             />
           </Pressable>
+        ) : video ? (
+          <AnnouncementVideo
+            url={video.url}
+            height={videoHeight}
+            duration={video.duration}
+            title={a.title}
+          />
         ) : (
           <View style={{ height: 5, backgroundColor: colors.primary }} />
         )}

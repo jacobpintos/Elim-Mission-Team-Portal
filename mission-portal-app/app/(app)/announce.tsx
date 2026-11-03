@@ -28,8 +28,15 @@ import {
   notExpired,
   MIN_IMAGE_HEIGHT,
   MAX_IMAGE_HEIGHT,
+  MAX_VIDEO_BYTES,
+  durationSaid,
+  sizeSaid,
 } from '@/lib/announcementImage'
-import { uploadAnnouncementImage, deleteAnnouncementImage } from '@/lib/announcementUpload'
+import {
+  uploadAnnouncementImage,
+  uploadAnnouncementVideo,
+  deleteAnnouncementImage,
+} from '@/lib/announcementUpload'
 import { todayStr } from '@/lib/events'
 import { confirmAsync } from '@/lib/confirm'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
@@ -97,6 +104,8 @@ export default function AnnounceScreen() {
   const [aExpires, setAExpires] = useState('')
   const [aAttachment, setAAttachment] = useState<AnnouncementAttachment | null>(null)
   const [photoBusy, setPhotoBusy] = useState(false)
+  // A video's upload, 0 to 1, while it goes: it takes long enough to need saying.
+  const [videoProgress, setVideoProgress] = useState<number | null>(null)
   // The announcement photo opened full screen, if any.
   const [viewing, setViewing] = useState<string | null>(null)
   // Fixed when the composer opens. Reading the clock during render is impure
@@ -170,6 +179,36 @@ export default function AnnounceScreen() {
     }
   }
 
+  /**
+   * Pick a video and upload it, as a photo is (above). On an iPhone it is
+   * made H.264 at 720p as it is picked: what every browser plays — an
+   * iPhone's own HEVC doesn't play in Chrome — and a fraction of the size.
+   */
+  const handlePickVideo = async () => {
+    setPhotoBusy(true)
+    try {
+      const ImagePicker = await import('expo-image-picker')
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['videos'],
+        videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,
+      })
+      if (result.canceled || result.assets.length === 0) return
+
+      setVideoProgress(0)
+      const folder = editing ? String(editing.id) : `draft_${uid}_${Date.now()}`
+      const next = await uploadAnnouncementVideo(folder, result.assets[0], setVideoProgress)
+      if (aAttachment?.url && aAttachment.url !== next.url) {
+        await deleteAnnouncementImage(aAttachment.url)
+      }
+      setAAttachment(next)
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to add the video', 'error')
+    } finally {
+      setVideoProgress(null)
+      setPhotoBusy(false)
+    }
+  }
+
   const handleRemovePhoto = async () => {
     const url = aAttachment?.url
     setAAttachment(null)
@@ -229,7 +268,7 @@ export default function AnnounceScreen() {
 
   const handleDelete = async (a: Announcement) => {
     const ok = await confirmAsync(
-      `Delete "${a.title}"? This cannot be undone${a.attachment ? ', and its photo is deleted too' : ''}.`,
+      `Delete "${a.title}"? This cannot be undone${a.attachment ? `, and its ${a.attachment.type === 'video' ? 'video' : 'photo'} is deleted too` : ''}.`,
       { destructive: true }
     )
     if (!ok) return
@@ -436,28 +475,35 @@ export default function AnnounceScreen() {
                   </Pressable>
                 </XStack>
 
-                {/* Photo */}
+                {/* Photo or video */}
                 <YStack gap="$2">
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
-                    PHOTO
+                    PHOTO OR VIDEO
                   </Text>
 
-                  <XStack gap="$2">
-                    <Pressable onPress={handlePickPhoto} disabled={photoBusy}>
-                      <XStack
-                        backgroundColor={colors.background}
-                        borderWidth={1}
-                        borderColor={colors.border}
-                        borderRadius="$2"
-                        paddingHorizontal="$3"
-                        paddingVertical="$2"
-                        opacity={photoBusy ? 0.5 : 1}
-                      >
-                        <Text color={colors.text} fontSize="$2" fontWeight="600">
-                          {photoBusy ? 'Uploading…' : aAttachment ? 'Replace photo' : 'Add photo'}
-                        </Text>
-                      </XStack>
-                    </Pressable>
+                  <XStack gap="$2" flexWrap="wrap">
+                    {(
+                      [
+                        ['image', 'photo', handlePickPhoto],
+                        ['video', 'video', handlePickVideo],
+                      ] as const
+                    ).map(([kind, word, pick]) => (
+                      <Pressable key={kind} onPress={pick} disabled={photoBusy}>
+                        <XStack
+                          backgroundColor={colors.background}
+                          borderWidth={1}
+                          borderColor={colors.border}
+                          borderRadius="$2"
+                          paddingHorizontal="$3"
+                          paddingVertical="$2"
+                          opacity={photoBusy ? 0.5 : 1}
+                        >
+                          <Text color={colors.text} fontSize="$2" fontWeight="600">
+                            {aAttachment?.type === kind ? `Replace ${word}` : `Add ${word}`}
+                          </Text>
+                        </XStack>
+                      </Pressable>
+                    ))}
                     {aAttachment ? (
                       <Pressable onPress={handleRemovePhoto} disabled={photoBusy}>
                         <XStack
@@ -475,7 +521,27 @@ export default function AnnounceScreen() {
                     ) : null}
                   </XStack>
 
-                  {aAttachment ? (
+                  {photoBusy ? (
+                    <Text color={colors.textMuted} fontSize="$2">
+                      {videoProgress !== null
+                        ? `Uploading the video… ${Math.round(videoProgress * 100)}%`
+                        : 'Uploading…'}
+                    </Text>
+                  ) : null}
+
+                  {aAttachment?.type === 'video' ? (
+                    <Text color={colors.textMuted} fontSize={11}>
+                      {[
+                        'Video',
+                        aAttachment.duration ? durationSaid(aAttachment.duration) : null,
+                        aAttachment.size ? sizeSaid(aAttachment.size) : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}{' '}
+                      — shown whole, at its own shape. Up to {sizeSaid(MAX_VIDEO_BYTES)}; MP4 plays
+                      everywhere.
+                    </Text>
+                  ) : aAttachment ? (
                     <YStack gap="$2">
                       <XStack alignItems="center" gap="$2">
                         <Text color={colors.textMuted} fontSize="$2" flex={1}>
@@ -553,8 +619,8 @@ export default function AnnounceScreen() {
                   />
                   <Text color={colors.textMuted} fontSize={11}>
                     Shown through the whole of this day, then permanently deleted overnight —
-                    together with its photo. This cannot be undone. Leave blank to keep it until you
-                    remove it yourself.
+                    together with its photo or video. This cannot be undone. Leave blank to keep it
+                    until you remove it yourself.
                   </Text>
                 </YStack>
 

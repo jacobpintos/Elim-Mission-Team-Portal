@@ -287,11 +287,16 @@ export interface Announcement {
 }
 
 export interface AnnouncementAttachment {
-  type: 'image' | 'file'
+  /** A photo, or a video (played in the card: components/ui/AnnouncementVideo). */
+  type: 'image' | 'file' | 'video'
   url: string
   name?: string
+  /** A video's length, in seconds, from the picker. */
+  duration?: number
+  /** Its size in bytes, as uploaded: for the composer to say. */
+  size?: number
   /**
-   * The photo's own pixel size, recorded at upload.
+   * The photo's (or video's) own pixel size, recorded at upload.
    *
    * Kept so a card can work out the height that preserves the proportions
    * without downloading the image and measuring it first — which would mean

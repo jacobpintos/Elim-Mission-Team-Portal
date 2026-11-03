@@ -153,6 +153,23 @@ describe('announcement photos', () => {
   it('refuses one at or over the 10MB cap', async () => {
     await assertFails(uploadBytes(ref(as(OWNER), path), blob(10 * 1024 * 1024), IMAGE))
   })
+
+  it('takes a video, up to 100MB', async () => {
+    const video = 'announcements/a1/clip.mp4'
+    const mp4 = { contentType: 'video/mp4' }
+    await assertSucceeds(
+      uploadBytes(ref(as(OWNER), video), blob(20 * 1024 * 1024, 'video/mp4'), mp4)
+    )
+    await assertSucceeds(
+      uploadBytes(ref(as(OWNER), 'announcements/a1/clip.mov'), blob(2048, 'video/quicktime'), {
+        contentType: 'video/quicktime',
+      })
+    )
+    await assertFails(
+      uploadBytes(ref(as(OWNER), video), blob(100 * 1024 * 1024 + 1, 'video/mp4'), mp4)
+    )
+    await assertFails(uploadBytes(ref(anon(), video), blob(2048, 'video/mp4'), mp4))
+  })
 })
 
 describe.each(['eventFlights', 'eventLodging'])('%s images', (folder) => {
