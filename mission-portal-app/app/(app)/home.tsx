@@ -181,10 +181,17 @@ function PubHomeContent() {
               <Text color={colors.textMuted}>No recent announcements.</Text>
             </YStack>
           ) : unseenAnns.length <= 3 ? (
-            unseenAnns.map((ann) => <AnnouncementCard key={String(ann.id)} announcement={ann} />)
+            unseenAnns.map((ann) => (
+              <AnnouncementCard
+                key={String(ann.id)}
+                announcement={ann}
+                compact
+                onPress={() => router.push('/announce')}
+              />
+            ))
           ) : (
             <Pressable onPress={() => router.push('/announce')}>
-              <AnnouncementCard announcement={unseenAnns[0]} />
+              <AnnouncementCard announcement={unseenAnns[0]} compact />
               <YStack
                 backgroundColor={colors.surface}
                 borderRadius="$3"
@@ -804,7 +811,14 @@ function TeamHomeContent() {
                 <Text color={colors.textMuted}>No announcements.</Text>
               </YStack>
             ) : (
-              myAnns.map((ann) => <AnnouncementCard key={String(ann.id)} announcement={ann} />)
+              myAnns.map((ann) => (
+                <AnnouncementCard
+                  key={String(ann.id)}
+                  announcement={ann}
+                  compact
+                  onPress={() => router.push('/announce')}
+                />
+              ))
             )}
           </YStack>
         </XStack>

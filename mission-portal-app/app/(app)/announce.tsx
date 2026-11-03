@@ -8,8 +8,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
-import { YStack, XStack, Text, Image } from 'tamagui'
-import { Stack } from 'expo-router'
+import { YStack, XStack, Text } from 'tamagui'
 import { useAuthStore } from '@/stores/authStore'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -34,15 +33,10 @@ import { uploadAnnouncementImage, deleteAnnouncementImage } from '@/lib/announce
 import { todayStr } from '@/lib/events'
 import { confirmAsync } from '@/lib/confirm'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
+import { AnnouncementCard, ANNOUNCEMENT_MAX_WIDTH } from '@/components/ui/AnnouncementCard'
+import { expirySaid } from '@/features/announce/postedWhen'
 import type { Announcement, AnnouncementAttachment } from '@/types/events'
 import { WithDictation } from '@/components/ui/Dictation'
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-function formatTs(ts: number): string {
-  const d = new Date(ts)
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
-}
 
 export default function AnnounceScreen() {
   const colors = useThemeColors()
@@ -68,16 +62,13 @@ export default function AnnounceScreen() {
 
   useEffect(() => {
     subscribe()
-    if (admin) {
-      subUsers()
-      subGroups()
-    }
+    // Who posted each one: the directory every account may read (stores/usersStore).
+    subUsers()
+    if (admin) subGroups()
     return () => {
       unsubscribe()
-      if (admin) {
-        unsubUsers()
-        unsubGroups()
-      }
+      unsubUsers()
+      if (admin) unsubGroups()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin])
@@ -254,6 +245,16 @@ export default function AnnounceScreen() {
     }
   }
 
+  /** Who it went to, for an admin: "Public", "All members", "Sam Holub", "5 people". */
+  const audienceCount = (ids: (string | number)[]) =>
+    ids.length === 0
+      ? 'All members'
+      : ids.length === 1
+        ? displayName(ids[0])
+        : `${ids.length} people`
+  const audienceSaid = (a: Announcement) =>
+    a.isPublic ? 'Public' : audienceCount(a.audience ?? [])
+
   const nonPublicUsers = users.filter((u) => !u.roles?.includes('public'))
   const displayName = (id: string | number) => {
     const u = users.find((x) => sameId(x.uid, id))
@@ -301,99 +302,28 @@ export default function AnnounceScreen() {
         </YStack>
       ) : (
         <ScrollView style={{ flex: 1 }}>
-          <YStack padding="$3" gap="$3">
+          <YStack
+            padding="$3"
+            gap="$4"
+            width="100%"
+            maxWidth={ANNOUNCEMENT_MAX_WIDTH + 24}
+            alignSelf="center"
+          >
             {visible.map((a) => (
-              <YStack
+              <AnnouncementCard
                 key={String(a.id)}
-                backgroundColor={colors.surface}
-                borderRadius="$3"
-                padding="$4"
-                gap="$2"
-                borderWidth={1}
-                borderColor={colors.border}
-              >
-                <XStack justifyContent="space-between" alignItems="flex-start">
-                  <Text color={colors.text} fontWeight="700" fontSize="$4" flex={1}>
-                    {a.title}
-                  </Text>
-                  {a.isPublic ? (
-                    <XStack
-                      backgroundColor={colors.primary + '22'}
-                      borderRadius={99}
-                      paddingHorizontal="$2"
-                      paddingVertical={2}
-                    >
-                      <Text color={colors.primary} fontSize={10} fontWeight="600">
-                        PUBLIC
-                      </Text>
-                    </XStack>
-                  ) : null}
-                </XStack>
-
-                {/* `src`, not `source` — Tamagui's Image rebuilds its own
-                    source from `src` and overwrites anything passed as
-                    `source`, rendering an empty box at the requested size.
-                    resizeMode 'cover' is what keeps the proportions when the
-                    admin has set a height: it crops rather than stretches. */}
-                {a.attachment?.type === 'image' && a.attachment.url ? (
-                  // Tap to open it full screen, where it can be zoomed, saved
-                  // and copied. A card photo is often cropped to a chosen
-                  // height, so this is the only way to see the whole thing.
-                  <Pressable
-                    onPress={() => setViewing(a.attachment?.url ?? null)}
-                    accessibilityLabel="Open image"
-                  >
-                    <Image
-                      src={a.attachment.url}
-                      width={cardWidth}
-                      height={cardImageHeight(a.attachment, cardWidth)}
-                      resizeMode="cover"
-                      borderRadius="$2"
-                    />
-                  </Pressable>
-                ) : null}
-
-                <Text color={colors.text} fontSize="$3" lineHeight={20}>
-                  {a.body}
-                </Text>
-
-                <XStack justifyContent="space-between" alignItems="center" marginTop="$1">
-                  <YStack flex={1}>
-                    <Text color={colors.textMuted} fontSize="$2">
-                      {formatTs(a.ts)}
-                      {a.by ? ` · ${displayName(a.by)}` : ''}
-                      {a.editedTs ? ' · edited' : ''}
-                    </Text>
-                    {/* Only admins see this, and only they can act on it —
-                        it is the warning that the announcement is about to be
-                        deleted for good, in time to change the date. */}
-                    {admin && a.expiresAt ? (
-                      <Text
-                        color={a.expiresAt < today ? '#c0392b' : colors.textMuted}
-                        fontSize={11}
-                      >
-                        {a.expiresAt < today
-                          ? `Expired ${a.expiresAt} — deletes overnight`
-                          : `Deletes after ${a.expiresAt}`}
-                      </Text>
-                    ) : null}
-                  </YStack>
-                  {admin ? (
-                    <XStack gap="$3">
-                      <Pressable onPress={() => openEdit(a)}>
-                        <Text color={colors.primary} fontSize="$2">
-                          Edit
-                        </Text>
-                      </Pressable>
-                      <Pressable onPress={() => handleDelete(a)}>
-                        <Text color="#c0392b" fontSize="$2">
-                          Delete
-                        </Text>
-                      </Pressable>
-                    </XStack>
-                  ) : null}
-                </XStack>
-              </YStack>
+                announcement={a}
+                onOpenImage={setViewing}
+                {...(admin
+                  ? {
+                      audience: audienceSaid(a),
+                      // The warning that it is about to be deleted for good, in time to change the date.
+                      expiry: a.expiresAt ? expirySaid(a.expiresAt, today) : null,
+                      onEdit: () => openEdit(a),
+                      onDelete: () => handleDelete(a),
+                    }
+                  : {})}
+              />
             ))}
           </YStack>
         </ScrollView>
@@ -634,51 +564,29 @@ export default function AnnounceScreen() {
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     PREVIEW
                   </Text>
-                  <YStack
-                    backgroundColor={colors.surface}
-                    borderRadius="$3"
-                    padding="$4"
-                    gap="$2"
-                    borderWidth={1}
-                    borderColor={colors.border}
-                  >
-                    <XStack justifyContent="space-between" alignItems="flex-start">
-                      <Text color={colors.text} fontWeight="700" fontSize="$4" flex={1}>
-                        {aTitle.trim() || 'Announcement title'}
-                      </Text>
-                      {aPublic ? (
-                        <XStack
-                          backgroundColor={colors.primary + '22'}
-                          borderRadius={99}
-                          paddingHorizontal="$2"
-                          paddingVertical={2}
-                        >
-                          <Text color={colors.primary} fontSize={10} fontWeight="600">
-                            PUBLIC
-                          </Text>
-                        </XStack>
-                      ) : null}
-                    </XStack>
-
-                    {aAttachment?.type === 'image' && aAttachment.url ? (
-                      <Image
-                        src={aAttachment.url}
-                        width={cardWidth}
-                        height={cardImageHeight(aAttachment, cardWidth)}
-                        resizeMode="cover"
-                        borderRadius="$2"
-                      />
-                    ) : null}
-
-                    <Text color={colors.text} fontSize="$3" lineHeight={20}>
-                      {aBody.trim() || 'Your announcement will look like this.'}
-                    </Text>
-
-                    <Text color={colors.textMuted} fontSize="$2" marginTop="$1">
-                      {formatTs(composerTs)}
-                      {profile?.displayName ? ` · ${profile.displayName}` : ''}
-                    </Text>
-                  </YStack>
+                  <AnnouncementCard
+                    width={cardWidth}
+                    announcement={{
+                      id: editing?.id ?? 'preview',
+                      title: aTitle.trim() || 'Announcement title',
+                      body: aBody.trim() || 'Your announcement will look like this.',
+                      isPublic: aPublic,
+                      audience: aPublic ? [] : aAudience,
+                      attachment: aAttachment,
+                      by: uid,
+                      ts: editing?.ts ?? composerTs,
+                    }}
+                    author={
+                      profile?.displayName
+                        ? {
+                            name: profile.displayName,
+                            photo: (profile as { photoURL?: string }).photoURL,
+                            title: (profile as { title?: string }).title,
+                          }
+                        : undefined
+                    }
+                    audience={aPublic ? 'Public' : audienceCount(aAudience)}
+                  />
                 </YStack>
 
                 {!aPublic ? (
