@@ -155,8 +155,19 @@ service cloud.firestore {
     // admin ('@admins') for one that isn't; a draft names only whoever made
     // it, admins or not (functions/src/eventPrivate eventSeenBy, kept by
     // eventPrivateSync).
+    //
+    // A public follower — the public role and no other — sees public events
+    // only: a member made public keeps their uid on the team events they
+    // were on (by name, group or team) until those change, and was still let
+    // read them. It asks for where('seenBy', 'array-contains-any', ['*']).
     function seesEvent(data) {
-      return isSignedIn() && data.seenBy.hasAny(seers());
+      return isSignedIn() && (data.seenBy.hasAny(['*']) ||
+        (data.seenBy.hasAny(seers()) && !followerOnly()));
+    }
+    function followerOnly() {
+      let roles = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles;
+      return roles.hasAny(['public']) &&
+        !roles.hasAny(['admin', 'security', 'regular', 'intern', 'worship', 'guest']);
     }
 
     // What anyone who may see an event is shown: its name, when and where,
@@ -526,9 +537,8 @@ service cloud.firestore {
     // written the old way is still let through, for apps not yet updated.
     match /foodSignups/{key} {
       // Read as its event is (`${eventId}_${date}`): who brings what says it's on.
-      allow read: if isSignedIn() &&
-        get(/databases/$(database)/documents/events/$(key.split('_')[0])).data.seenBy
-          .hasAny(seers());
+      allow read: if seesEvent(
+        get(/databases/$(database)/documents/events/$(key.split('_')[0])).data);
       allow create: if isSignedIn() && !isGuest()
         && (isAdmin() || request.resource.data.get('signups', {}).size() <= 1);
       allow update: if isSignedIn() && !isGuest() && (isAdmin() || oneFoodChange());

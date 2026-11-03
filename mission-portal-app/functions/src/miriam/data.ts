@@ -358,12 +358,20 @@ export function assignedTo(ev: EventTemplate, groups: Group[]): Set<string> {
   return out
 }
 
+/** The public role and no other (src/lib/roles isPublicFollower; firestore.rules followerOnly). */
+const followerOnly = (v: Viewer) =>
+  v.roles.includes('public') &&
+  !v.roles.some((r) => ['admin', 'security', 'regular', 'intern', 'worship', 'guest'].includes(r))
+
 /** Whether this person may see this event at all: lib/events canViewEvent. */
 export function canSeeEvent(ev: EventTemplate, viewer: Viewer, groups: Group[]): boolean {
   const admin = isAdminViewer(viewer)
   // A draft is its maker's alone, until it is published (../eventPrivate).
   if (ev.unpublished === true) return seesDraft(ev, { uid: viewer.uid, admin })
-  return admin || ev.isPublic === true || assignedTo(ev, groups).has(viewer.uid)
+  if (admin || ev.isPublic === true) return true
+  // A public follower sees public events only — even one still named on a
+  // team event, from before they were made public (firestore.rules seesEvent).
+  return !followerOnly(viewer) && assignedTo(ev, groups).has(viewer.uid)
 }
 
 /** How well an event's or task's name answers a name said for it, 0 to 1 (./names). */

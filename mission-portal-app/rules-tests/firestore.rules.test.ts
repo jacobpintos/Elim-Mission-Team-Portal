@@ -1022,9 +1022,10 @@ describe('events — a non-public one seen only by those on it', () => {
     expect((await assertSucceeds(seen(OUTSIDER, [OUTSIDER, '*']))).docs.map((d) => d.id)).toEqual([
       'pub',
     ])
-    expect((await assertSucceeds(seen(PUBLIC, [PUBLIC, '*']))).docs.map((d) => d.id)).toEqual([
-      'pub',
-    ])
+    // A public account asks for public events alone (stores/eventsStore seenRecords):
+    // it may still be named on team events, from before it was made public.
+    expect((await assertSucceeds(seen(PUBLIC, ['*']))).docs.map((d) => d.id)).toEqual(['pub'])
+    await assertFails(seen(PUBLIC, [PUBLIC, '*']))
     expect(
       (await assertSucceeds(seen(ADMIN, [ADMIN, '*', '@admins']))).docs.map((d) => d.id).sort()
     ).toEqual(['pub', 'staff'])
@@ -1037,6 +1038,25 @@ describe('events — a non-public one seen only by those on it', () => {
     await assertFails(seen(MEMBER, [MEMBER, '*', '@admins']))
     await assertFails(getDocs(collection(as(MEMBER), 'events')))
     await assertFails(getDocs(collection(as(ADMIN), 'events')))
+  })
+
+  it('a member made public no longer sees the team events still naming them', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      // On it by name, group or team before being made public: still in seenBy.
+      await setDoc(doc(db, 'events', 'men'), {
+        title: 'Men’s breakfast',
+        seenBy: [PUBLIC, MEMBER, '@admins'],
+      })
+      await setDoc(doc(db, 'foodSignups', 'men_2026-11-20'), { signups: { eggs: MEMBER } })
+      await setDoc(doc(db, 'foodSignups', 'pub_2026-11-22'), { signups: {} })
+    })
+    await assertFails(getDoc(doc(as(PUBLIC), 'events/men')))
+    await assertFails(getDoc(doc(as(PUBLIC), 'foodSignups/men_2026-11-20')))
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'events/men')))
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'foodSignups/men_2026-11-20')))
+    // Public events, and their sheets, as before.
+    await assertSucceeds(getDoc(doc(as(PUBLIC), 'foodSignups/pub_2026-11-22')))
   })
 
   it('is written by admins alone', async () => {

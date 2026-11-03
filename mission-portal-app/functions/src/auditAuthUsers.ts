@@ -96,10 +96,11 @@ export const auditAuthUsers = onCall(async (req) => {
     })
 
   // Group and common-team members with no profile and no account (./accountAudit).
-  const { strays: strayMembers } = await findStrays(admin.firestore(), {
-    profiles: fsUids,
+  // And public accounts still named in them, made public since they were put there.
+  const { strays: strayMembers, publicMembers } = await findStrays(admin.firestore(), {
+    profiles: new Map(fsSnap.docs.map((d) => [d.id, d.data()])),
     accounts: authUids,
   })
 
-  return { orphanFirestore, orphanAuth, blankAccounts, strayMembers }
+  return { orphanFirestore, orphanAuth, blankAccounts, strayMembers, publicMembers }
 })

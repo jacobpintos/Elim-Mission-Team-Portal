@@ -23,7 +23,7 @@ import { nextId } from '@/lib/counters'
 import { useAuthStore } from '@/stores/authStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useUsersStore } from '@/stores/usersStore'
-import { isAdmin, isPublic } from '@/lib/roles'
+import { isAdmin, isPublic, isPublicFollower } from '@/lib/roles'
 import { readers, seers } from '@/lib/seenBy'
 import type { EventTemplate, EventInstance, AvailResponse, InAppNotif } from '@/types/events'
 import type { UserProfile } from '@/types/user'
@@ -35,6 +35,7 @@ import {
   type ReportTime,
 } from '../../functions/src/miriam/data'
 import {
+  EVERYONE,
   eventReaders,
   eventSeenBy,
   mergeEvent,
@@ -118,7 +119,10 @@ function assemble(open: [string, Doc][], closed: Record<string, Doc>) {
  * asked for all of them, anyone is refused, an admin too).
  */
 function seenRecords(name: 'events' | 'avail', profile: SignedIn) {
-  return query(collection(db, name), where('seenBy', 'array-contains-any', seers(profile)))
+  // A public follower sees public events only, whatever they are still named
+  // on (firestore.rules seesEvent): they ask for those alone, as the rules require.
+  const as = isPublicFollower(profile) ? [EVERYONE] : seers(profile)
+  return query(collection(db, name), where('seenBy', 'array-contains-any', as))
 }
 
 /**

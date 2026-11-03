@@ -36,7 +36,7 @@ import {
   type NWSAlert,
 } from '@/lib/weather'
 import { canViewEvent } from '@/lib/events'
-import { isAdmin, isPublic } from '@/lib/roles'
+import { isAdmin, isPublic, isPublicFollower } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { useUIStore } from '@/stores/uiStore'
 
@@ -118,7 +118,13 @@ export default function EventDetailScreen() {
   //
   // Treating a refused event as "not found" rather than as a refusal is
   // deliberate: it says nothing about whether the event exists.
-  const assigned = !!resolved && !!uid && resolveAssignedUids(resolved).has(String(uid))
+  // A public follower isn't "on" a team event, though still named on one from
+  // before they were made public: they see public events only (firestore.rules seesEvent).
+  const assigned =
+    !!resolved &&
+    !!uid &&
+    !isPublicFollower(profile) &&
+    resolveAssignedUids(resolved).has(String(uid))
   const allowed = !!resolved && canViewEvent(resolved, { admin, assigned, uid })
   const event = allowed ? resolved : null
   // Its private details — schedule, dress code, cars, teams, rooms, flights —

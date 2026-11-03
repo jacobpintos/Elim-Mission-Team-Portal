@@ -1592,7 +1592,7 @@ describe('a question taught, asked in other words', () => {
 
 describe('answered from the event itself', () => {
   beforeEach(() => forgetCaches())
-  const db = fakeDb({
+  const church = {
     users: {
       jacob: { displayName: 'Jacob Pintos', roles: ['admin'] },
       mitch: { displayName: 'Mitch Moylan', roles: ['regular'] },
@@ -1657,11 +1657,17 @@ describe('answered from the event itself', () => {
         ],
       },
     },
+  }
+  const db = fakeDb(church)
+  // New Years Eve open to all: what a public follower can see of it.
+  const open = fakeDb({
+    ...church,
+    events: { ...church.events, nye: { ...church.events.nye, isPublic: true } },
   })
-  const as = (uid: string, roles: string[]) => {
+  const as = (uid: string, roles: string[], from = db) => {
     const viewer = { uid, roles }
     return (text: string) =>
-      ownAnswer(input(text, { viewer, lookups: new Lookups(db, viewer, TODAY) }))
+      ownAnswer(input(text, { viewer, lookups: new Lookups(from, viewer, TODAY) }))
   }
   const jacob = as('jacob', ['admin'])
   const said = async (q: string, ask = jacob) =>
@@ -1710,7 +1716,7 @@ describe('answered from the event itself', () => {
   })
 
   it('none of its schedule to a public follower, as its page shows them none', async () => {
-    const dana = as('dana', ['public'])
+    const dana = as('dana', ['public'], open)
     expect((await said('When does Olivia arrive for New Years Eve', dana)) ?? '').not.toMatch(
       /schedule/
     )
@@ -1790,9 +1796,22 @@ describe('answered from the event itself', () => {
     }
   })
 
-  it('none of the team’s side to a public follower on it, as its page shows them none', async () => {
-    // Dana was a member, put on the team, then made a public follower: still on the event.
+  it('nothing of a team event to a public follower left on it', async () => {
+    // Dana was a member, put on the team, then made a public follower: still
+    // named on it. Not hers to see now, as the calendar and its rules have it.
     const dana = as('dana', ['public'])
+    for (const q of [
+      'when is new years eve',
+      'what team am I on for new years eve',
+      'what are my responsibilities for new years eve',
+    ]) {
+      expect((await said(q, dana)) ?? '').not.toMatch(/December 31|Production|Audio|Rouge|10:30/)
+    }
+  })
+
+  it('none of the team’s side to a public follower on it, as its page shows them none', async () => {
+    // Open to all, and Dana — a member made a public follower — still on its team.
+    const dana = as('dana', ['public'], open)
     expect(await said('what team am I on for new years eve', dana)).toBe(
       'Sorry, I can’t help with that one — but I can tell you when and where New Years Eve is.'
     )

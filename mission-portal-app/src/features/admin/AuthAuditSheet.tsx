@@ -42,12 +42,16 @@ type BlankAccount = {
 /** A uid in groups or common teams with no profile and no account (functions/src/accountAudit). */
 type StrayMember = { uid: string; in: string[] }
 
+/** A public account still in groups or common teams: made public since (functions/src/strayMembersSync). */
+type PublicMember = { uid: string; name: string; in: string[] }
+
 type AuditResult = {
   orphanFirestore: OrphanFirestoreDoc[]
   orphanAuth: OrphanAuthAccount[]
   // Absent from a server not yet updated.
   blankAccounts?: BlankAccount[]
   strayMembers?: StrayMember[]
+  publicMembers?: PublicMember[]
 }
 
 /** "Nov 2, 2026" from Auth's date string; "" for none. */
@@ -283,11 +287,11 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
       const removed = (res.data as { removed: number }).removed
       await audit(
         'groups.strayMembersRemoved',
-        `Removed ${removed} members with no account from groups and common teams`,
+        `Removed ${removed} members with no account, or made public, from groups and common teams`,
         profile?.displayName ?? ''
       )
       toast(`Removed ${removed} from groups and teams`, 'success')
-      setResult((r) => (r ? { ...r, strayMembers: [] } : r))
+      setResult((r) => (r ? { ...r, strayMembers: [], publicMembers: [] } : r))
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Could not remove them', 'error')
     } finally {
@@ -594,6 +598,49 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
                     >
                       <Text fontSize="$2" fontWeight="600">
                         {m.uid}
+                      </Text>
+                      <Text fontSize="$2" color="$gray10">
+                        In {m.in.join(', ')}
+                      </Text>
+                    </YStack>
+                  ))
+                )}
+              </YStack>
+
+              {/* Public accounts still in groups: a member made public since */}
+              <YStack gap="$2">
+                <XStack justifyContent="space-between" alignItems="center" gap="$2">
+                  <YStack flex={1}>
+                    <Text fontWeight="700" fontSize="$4">
+                      Non-Members Still in Groups ({(result.publicMembers ?? []).length})
+                    </Text>
+                    <Text fontSize="$2" color="$gray10">
+                      Public accounts left in a group or common team after being made non-members.
+                      Taken out of groups — and group chats — when made public now, and each night.
+                    </Text>
+                  </YStack>
+                  {(result.publicMembers ?? []).length > 0 && (
+                    <Button size="$3" theme="red" onPress={removeStrays} disabled={deleting}>
+                      {deleting ? <Spinner size="small" /> : 'Remove Them'}
+                    </Button>
+                  )}
+                </XStack>
+                {(result.publicMembers ?? []).length === 0 ? (
+                  <Text color="$green10" fontSize="$3">
+                    None — all clear
+                  </Text>
+                ) : (
+                  (result.publicMembers ?? []).map((m) => (
+                    <YStack
+                      key={m.uid}
+                      borderWidth={1}
+                      borderColor="$borderColor"
+                      borderRadius="$3"
+                      padding="$3"
+                      gap={2}
+                    >
+                      <Text fontSize="$3" fontWeight="600">
+                        {m.name}
                       </Text>
                       <Text fontSize="$2" color="$gray10">
                         In {m.in.join(', ')}

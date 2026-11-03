@@ -9,7 +9,7 @@ import { sameId } from '@/lib/ids'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { EventFormModal } from '@/features/events/EventFormModal'
 import { AvailQueueBanner } from '@/features/events/AvailQueueBanner'
-import { isAdmin, isPublic, isGuest } from '@/lib/roles'
+import { isAdmin, isPublic, isGuest, isPublicFollower } from '@/lib/roles'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { FD } from '@/lib/format'
@@ -283,7 +283,9 @@ export default function EventsScreen() {
     // Without the toggle they would either be shown every public event by
     // default, or have no way to reach one at all.
     if (guest) return guestScope === 'mine' ? invited : invited || ev.isPublic
-    return ev.isPublic || admin || invited
+    // A public follower: public events only, even one still named on from
+    // before they were made public (firestore.rules seesEvent).
+    return ev.isPublic || admin || (!isPublicFollower(profile) && invited)
   })
 
   // Group events by date string

@@ -76,6 +76,19 @@ export function teamsWithoutAll(teams: unknown, uids: Set<string>): unknown[] | 
   return changed ? next : null
 }
 
+/** Roles that make an account one of the team (src/lib/roles MEMBER_ROLES). */
+export const MEMBER_ROLES = ['admin', 'security', 'regular', 'intern', 'worship']
+
+/**
+ * A public account and nothing more — a follower, not on the team (src/lib/
+ * roles isPublicFollower). Groups and common teams are the team's: one made
+ * public has no place in them, though its uid was left there.
+ */
+export function isPublicOnly(roles: unknown): boolean {
+  const r = Array.isArray(roles) ? roles.map(String) : []
+  return r.includes('public') && !r.some((x) => MEMBER_ROLES.includes(x) || x === 'guest')
+}
+
 /** A profile with nothing to know it by: no name, and no email. */
 export function isBlank(profile: { displayName?: unknown; email?: unknown }): boolean {
   const said = (v: unknown) => typeof v === 'string' && v.trim().length > 0

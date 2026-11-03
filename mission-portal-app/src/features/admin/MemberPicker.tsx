@@ -35,7 +35,13 @@ export function MemberPicker({ selected, onChange, label }: MemberPickerProps) {
     onChange(safeSelected.filter((id) => id !== uid))
   }
 
-  const selectedUsers = nonPublic.filter((u) => safeSelected.includes(u.uid))
+  // Everyone in it, shown: one made a public account since, or with no account
+  // left, was in the list but nowhere to be seen — and couldn't be taken out.
+  const selectedUsers = safeSelected.map(
+    (uid) =>
+      users.find((u) => String(u.uid) === uid) ??
+      ({ uid, displayName: 'Removed account' } as UserProfile)
+  )
 
   return (
     <YStack gap="$2">

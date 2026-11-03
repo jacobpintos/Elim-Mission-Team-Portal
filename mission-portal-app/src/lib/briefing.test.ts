@@ -85,9 +85,17 @@ describe('the daily briefing', () => {
     expect(b.needs).toBe(3)
     expect(b.dateLine).toBe('Sunday, October 18 · 3 things need you')
   })
-  it('shows a public follower none of an event’s team side, as its page shows them none', () => {
+  it('shows a public follower none of the team’s events they were left on', () => {
     // Made a public follower after being put on the team and in a car.
     const b = buildBriefing(input({ viewer: { uid: 'me', roles: ['public'] } }))
+    expect(b.today).toEqual([])
+    expect(b.spoken).not.toMatch(/Sunday Service|Revival|Worship\.|Black jeans|truck|68/)
+  })
+  it('shows a public follower a public event, and none of its team side', () => {
+    const open = templates.map((t) => ({ ...t, isPublic: true }))
+    const b = buildBriefing(
+      input({ viewer: { uid: 'me', roles: ['public'] }, templates: open as never })
+    )
     expect(b.today.map((e) => e.chips)).toEqual([[], []])
     expect(b.spoken).not.toMatch(/Worship\.|Black jeans|truck|68/)
   })

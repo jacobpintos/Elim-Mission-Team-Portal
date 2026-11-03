@@ -133,8 +133,21 @@ describe('event questions answered on the device', () => {
     expect(quickAnswer('When is Revival', data())?.directions).toBeUndefined()
   })
 
-  it('tells a public follower none of an event’s team side, as its page shows them none', () => {
+  it('tells a public follower nothing of the team’s events they were left on', () => {
+    // Made a public follower after being put on them: not theirs to see now.
     const pub = data('me', ['public'])
+    for (const q of [
+      'when is revival in the heartland',
+      'what team am I on for revival in the heartland',
+      'who am I riding with to the youth retreat',
+    ]) {
+      expect(quickAnswer(q, pub)?.text ?? '', q).not.toMatch(/5 PM|Worship|Van|Revival|Retreat/)
+    }
+  })
+
+  it('tells a public follower none of an event’s team side, as its page shows them none', () => {
+    const open = templates.map((t) => ({ ...t, isPublic: true }))
+    const pub = { ...data('me', ['public']), templates: open as never }
     for (const q of [
       'what’s the dress code for revival in the heartland',
       'who am I riding with to the youth retreat',
@@ -238,7 +251,8 @@ describe('an event’s schedule', () => {
   })
 
   it('keeps it from a public follower, as the event’s page does', () => {
-    const pub = { ...data('me', ['public']), templates: [...templates, camp] as never }
+    const open = [...templates, camp].map((t) => ({ ...t, isPublic: true }))
+    const pub = { ...data('me', ['public']), templates: open as never }
     expect(quickAnswer('What’s the schedule for family camp?', pub)?.text).toBe(
       'Sorry, I can’t help with that one — but I can tell you when and where Family Camp is.'
     )

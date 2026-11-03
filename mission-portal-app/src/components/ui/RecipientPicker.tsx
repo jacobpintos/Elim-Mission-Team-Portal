@@ -3,6 +3,8 @@ import { TextInput, Pressable, ScrollView, View } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { groupDisplayName } from '@/lib/roles'
+import { useUsersStore } from '@/stores/usersStore'
+import { personLabel } from '@/lib/personLabel'
 
 interface UserLike {
   uid: string | number
@@ -59,9 +61,12 @@ export function RecipientPicker({
       )
     : users
 
+  // Someone chosen who isn't among those offered — made a public account
+  // since, say — by their name from everyone, never their bare uid.
+  const everyone = useUsersStore((s) => s.users)
   const nameFor = (uid: string) => {
-    const u = userById.get(uid)
-    return u?.displayName || u?.email || uid
+    const u = userById.get(uid) ?? everyone.find((x) => String(x.uid) === uid)
+    return u ? personLabel(u) : 'Removed account'
   }
 
   const toggleUser = (uid: string) => {

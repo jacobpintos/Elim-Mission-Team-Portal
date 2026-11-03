@@ -5,6 +5,7 @@ import {
   isBlank,
   strayMembers,
   teamsWithoutAll,
+  isPublicOnly,
 } from '../../functions/src/accountAudit'
 
 describe('someone, as a picker shows them', () => {
@@ -55,5 +56,15 @@ describe('the account check: members with no account, accounts with no name', ()
     expect(isBlank({ displayName: '  ' })).toBe(true)
     expect(isBlank({ email: 'x@y.org' })).toBe(false)
     expect(isBlank({ displayName: 'Sam' })).toBe(false)
+  })
+})
+
+describe('a public account and nothing more', () => {
+  it('is public with no member role, nor a guest', () => {
+    expect(isPublicOnly(['public'])).toBe(true)
+    expect(isPublicOnly(['public', 'regular'])).toBe(false)
+    expect(isPublicOnly(['public', 'guest'])).toBe(false)
+    expect(isPublicOnly(['regular'])).toBe(false)
+    expect(isPublicOnly(undefined)).toBe(false)
   })
 })

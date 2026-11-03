@@ -117,6 +117,12 @@ describe('who may ask Miriam anything', () => {
 })
 
 describe('events, as the app shows them', () => {
+  it('a member made public sees public events only — though still in the group', () => {
+    const glenn: Viewer = { uid: 'sarah', roles: ['public'] }
+    expect(canSeeEvent(revival, glenn, groups)).toBe(false) // still in All, made public
+    expect(canSeeEvent(open, glenn, groups)).toBe(true)
+  })
+
   it('shows people the events they are on, and public ones; drafts to admins', () => {
     expect(canSeeEvent(revival, sarah, groups)).toBe(true) // by group
     expect(canSeeEvent(revival, guest, groups)).toBe(false)
