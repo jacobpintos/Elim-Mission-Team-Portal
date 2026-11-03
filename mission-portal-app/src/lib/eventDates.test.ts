@@ -85,3 +85,44 @@ describe('extra day rows', () => {
     expect(fromExtraDayRows(toExtraDayRows(stored))).toEqual(stored)
   })
 })
+
+describe('a date as typed into a date field', () => {
+  it('takes it however it comes', async () => {
+    const { typedDateToIso } = await import('./eventDates')
+    expect(typedDateToIso('11/20/26')).toBe('2026-11-20')
+    expect(typedDateToIso('1/5/26')).toBe('2026-01-05')
+    expect(typedDateToIso('11/5/26')).toBe('2026-11-05')
+    expect(typedDateToIso('01/5/2026')).toBe('2026-01-05')
+    expect(typedDateToIso(' 2026-11-20 ')).toBe('2026-11-20')
+    expect(typedDateToIso('')).toBe('')
+  })
+
+  it('not a day that does not exist, nor anything else', async () => {
+    const { typedDateToIso } = await import('./eventDates')
+    expect(typedDateToIso('2/30/26')).toBeNull()
+    expect(typedDateToIso('13/1/26')).toBeNull()
+    expect(typedDateToIso('next friday')).toBeNull()
+    expect(typedDateToIso('2026-02-30')).toBeNull()
+  })
+})
+
+describe('a date with no year', () => {
+  it('is the next one to come: this year, unless it has passed', async () => {
+    const { typedDateToIso, displayToIso } = await import('./eventDates')
+    expect(typedDateToIso('11/20', '2026-11-03')).toBe('2026-11-20')
+    expect(typedDateToIso('11/3', '2026-11-03')).toBe('2026-11-03')
+    expect(typedDateToIso('11/2', '2026-11-03')).toBe('2027-11-02')
+    expect(typedDateToIso('1/5', '2026-11-03')).toBe('2027-01-05')
+    expect(typedDateToIso('12/31', '2026-12-31')).toBe('2026-12-31')
+    expect(displayToIso('3/1', { upcomingFrom: '2026-11-03' })).toBe('2027-03-01')
+    // A day that is not one in the year it comes: not a date.
+    expect(typedDateToIso('2/29', '2026-11-03')).toBeNull()
+    expect(typedDateToIso('2/29', '2027-11-03')).toBe('2028-02-29')
+  })
+
+  it('but needs its year where a date has been, not to come', async () => {
+    const { displayToIso } = await import('./eventDates')
+    expect(displayToIso('11/20')).toBe('')
+    expect(displayToIso('11/20/26')).toBe('2026-11-20')
+  })
+})

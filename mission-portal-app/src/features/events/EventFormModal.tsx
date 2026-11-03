@@ -35,11 +35,12 @@ import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import { taskDueDate } from '@/lib/events'
 import {
   isoToDisplay,
-  displayToIso,
+  typedDateToIso,
   toExtraDayRows,
   fromExtraDayRows,
   type ExtraDayRow,
 } from '@/lib/eventDates'
+import { DateField } from '@/components/ui/DateField'
 import {
   notifyAssignees,
   notifyLogisticsAssigned,
@@ -59,6 +60,12 @@ import type {
   FlightEntry,
   ScheduleItem,
 } from '@/types/events'
+
+/**
+ * A date as typed in the form, as stored — 11/20/26, 1/5/26, or 11/20 for
+ * the next one to come (lib/eventDates typedDateToIso); '' for one that isn't.
+ */
+const formIso = (typed: string) => typedDateToIso(typed) || ''
 
 interface GroupDoc {
   id: string
@@ -407,6 +414,17 @@ export function EventFormModal({
   }
   if (!open && loadedFor !== null) setLoadedFor(null)
 
+  /** A date field's box, drawn as the form's other inputs are. */
+  const dateInput = (backgroundColor: string) => ({
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    color: colors.text,
+    borderColor: colors.border,
+    backgroundColor,
+  })
   const field = (key: keyof FormData) => (val: string | boolean | number) =>
     setForm((f) => {
       const next = { ...f, [key]: val } as FormData
@@ -482,7 +500,7 @@ export function EventFormModal({
   // The event's days, as its schedule names them: its date, then any extra
   // days in the order the form lists them. A recurring event has the one.
   const scheduleDays = dayNames(
-    form.isRec ? [null] : [displayToIso(form.date), ...extraDays.map((d) => displayToIso(d.date))]
+    form.isRec ? [null] : [formIso(form.date), ...extraDays.map((d) => formIso(d.date))]
   )
   // Who can be put in a car: everyone on the event, its teams included — as
   // the event's page counts them (resolveAssignedUids).
@@ -512,7 +530,7 @@ export function EventFormModal({
       ? taskTemplates.find((tt) => String(tt.id) === form.taskTemplateId)
       : null
     if (!tpl) return
-    const eventDate = form.isRec ? null : displayToIso(form.date) || null
+    const eventDate = form.isRec ? null : formIso(form.date) || null
     for (const taskItem of tpl.tasks ?? []) {
       if (!taskItem.title.trim()) continue
       const isPostEvent = (taskItem.daysAfterEvent ?? 0) > 0
@@ -567,7 +585,7 @@ export function EventFormModal({
       }
       const payload = {
         title: form.title,
-        date: form.isRec ? '' : displayToIso(form.date),
+        date: form.isRec ? '' : formIso(form.date),
         location: form.location,
         address: form.address,
         city: form.city,
@@ -638,7 +656,7 @@ export function EventFormModal({
         onClose()
       } else if (event) {
         await updateEvent(event.id, payload)
-        await persistFoodAssignments(String(event.id), event.date ?? displayToIso(form.date))
+        await persistFoodAssignments(String(event.id), event.date ?? formIso(form.date))
         // Only what changed — an event is saved many times and re-announcing
         // every hotel room each save would train people to ignore these. A
         // draft tells no one; published, it tells everyone, and gets its
@@ -708,8 +726,8 @@ export function EventFormModal({
         toast('City and state are required for in-person events', 'error')
         return
       }
-      if (!form.isRec && !displayToIso(form.date)) {
-        toast('Date is required — use MM/DD/YY format', 'error')
+      if (!form.isRec && !formIso(form.date)) {
+        toast('Date is required — like 11/20/26 or 11/20, or pick it from the calendar', 'error')
         return
       }
       if (!form.isVirtual && !form.location.trim()) {
@@ -722,8 +740,8 @@ export function EventFormModal({
       }
       // Rows with an unreadable date are dropped on save, so a mistyped one
       // would otherwise disappear without a word.
-      if (!form.isRec && extraDays.some((d) => d.date.trim() && !displayToIso(d.date))) {
-        toast('An extra day has an invalid date — use MM/DD/YY format', 'error')
+      if (!form.isRec && extraDays.some((d) => d.date.trim() && !formIso(d.date))) {
+        toast('An extra day’s date isn’t one — try 11/20/26 or 11/20', 'error')
         return
       }
       if (form.isVirtual && !form.virtualLink.trim()) {
@@ -740,8 +758,8 @@ export function EventFormModal({
       }
     } else {
       // Draft: only check date format if a date was entered
-      if (!form.isRec && form.date && !displayToIso(form.date)) {
-        toast('Invalid date — use MM/DD/YY format', 'error')
+      if (!form.isRec && form.date && !formIso(form.date)) {
+        toast('That date isn’t one — try 11/20/26 or 11/20', 'error')
         return
       }
     }
@@ -1004,13 +1022,11 @@ export function EventFormModal({
             <Text color={colors.text} fontSize="$3">
               Date (MM/DD/YY) {!form.isRec ? '*' : ''}
             </Text>
-            <Input
+            <DateField
               value={form.date}
-              onChangeText={field('date')}
-              placeholder=""
-              backgroundColor={colors.surface}
-              color={colors.text}
-              borderColor={colors.border}
+              onChange={field('date')}
+              accessibilityLabel="Date"
+              inputStyle={dateInput(colors.surface)}
             />
 
             {/* Extra days — a trip or a conference is one event across several
@@ -1043,13 +1059,12 @@ export function EventFormModal({
                         </Text>
                       </Pressable>
                     </XStack>
-                    <Input
+                    <DateField
                       value={day.date}
-                      onChangeText={(v) => updateExtraDay(day.id, { date: v })}
+                      onChange={(v) => updateExtraDay(day.id, { date: v })}
                       placeholder="Date (MM/DD/YY)"
-                      backgroundColor={colors.background}
-                      color={colors.text}
-                      borderColor={colors.border}
+                      accessibilityLabel={`Day ${idx + 2} date`}
+                      inputStyle={dateInput(colors.background)}
                     />
                     <Input
                       value={day.startTime}

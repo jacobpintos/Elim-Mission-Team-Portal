@@ -38,6 +38,8 @@ import {
   deleteAnnouncementImage,
 } from '@/lib/announcementUpload'
 import { todayStr } from '@/lib/events'
+import { isoToDisplay, typedDateToIso } from '@/lib/eventDates'
+import { DateField } from '@/components/ui/DateField'
 import { confirmAsync } from '@/lib/confirm'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import { AnnouncementCard, ANNOUNCEMENT_MAX_WIDTH } from '@/components/ui/AnnouncementCard'
@@ -140,7 +142,8 @@ export default function AnnounceScreen() {
     setABody(a.body)
     setAPublic(a.isPublic)
     setAAudience((a.audience ?? []).map(String))
-    setAExpires(a.expiresAt ?? '')
+    // Shown as it's typed: 11/20/26.
+    setAExpires(a.expiresAt ? isoToDisplay(a.expiresAt) : '')
     setAAttachment(a.attachment)
     setComposerTs(a.ts)
     setShowCreate(true)
@@ -228,8 +231,10 @@ export default function AnnounceScreen() {
       toast('Title and body are required', 'error')
       return
     }
-    if (aExpires && !/^\d{4}-\d{2}-\d{2}$/.test(aExpires)) {
-      toast('Expiry date must be YYYY-MM-DD', 'error')
+    // However it was typed — 11/20/26, 1/5/26 — or picked from the calendar.
+    const expiresAt = typedDateToIso(aExpires)
+    if (expiresAt === null) {
+      toast('That expiry date isn’t one — try 11/20/26, or pick it from the calendar', 'error')
       return
     }
     setCreating(true)
@@ -240,7 +245,7 @@ export default function AnnounceScreen() {
         isPublic: aPublic,
         audience: aPublic ? [] : aAudience,
         attachment: aAttachment,
-        ...(aExpires ? { expiresAt: aExpires } : {}),
+        ...(expiresAt ? { expiresAt } : {}),
       }
 
       if (editing) {
@@ -249,7 +254,7 @@ export default function AnnounceScreen() {
         // day the admin has just decided against.
         await updateAnnouncement(editing.id, {
           ...shared,
-          expiresAt: aExpires || '',
+          expiresAt,
           editedTs: Date.now(),
         })
         toast('Announcement updated', 'success')
@@ -602,8 +607,12 @@ export default function AnnounceScreen() {
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     EXPIRES (OPTIONAL)
                   </Text>
-                  <TextInput
-                    style={[
+                  <DateField
+                    value={aExpires}
+                    onChange={setAExpires}
+                    min={today}
+                    accessibilityLabel="Expires"
+                    inputStyle={[
                       styles.input,
                       {
                         color: colors.text,
@@ -611,11 +620,6 @@ export default function AnnounceScreen() {
                         backgroundColor: colors.background,
                       },
                     ]}
-                    value={aExpires}
-                    onChangeText={setAExpires}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={colors.textMuted}
-                    autoCapitalize="none"
                   />
                   <Text color={colors.textMuted} fontSize={11}>
                     Shown through the whole of this day, then permanently deleted overnight —
