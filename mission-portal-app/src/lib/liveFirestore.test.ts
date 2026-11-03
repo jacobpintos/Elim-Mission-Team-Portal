@@ -250,6 +250,81 @@ describe('listening, native', () => {
   })
 })
 
+describe('the server confirming what Firestore already had', () => {
+  /** A list as Firestore sends it to a listener asked for metadata changes: with what changed. */
+  const withChanges = (snap: Snap, changed: number) => ({
+    ...snap,
+    docChanges: () => Array.from({ length: changed }, () => ({ type: 'added' })),
+  })
+
+  it('asks Firestore for its metadata changes, whatever the screen asked', () => {
+    onSnapshot(sheets, () => {})
+    expect(live[0].args[1]).toEqual({ includeMetadataChanges: true })
+  })
+
+  it('replaces the kept answer when the server confirms, with nothing new in it', async () => {
+    // An event made on the web while the app was closed: Firestore has it,
+    // from the server, before the server has said its answer is complete —
+    // and saying so changes nothing in the list.
+    await keepFromServer(
+      sheets,
+      querySnap(false, [{ path: 'chordSheets/1', data: { title: 'Old' } }])
+    )
+    const seen: Snap[] = []
+    onSnapshot(sheets, (s) => seen.push(s as never))
+    await tick()
+    const fresh = [
+      { path: 'chordSheets/1', data: { title: 'Old' } },
+      { path: 'chordSheets/2', data: { title: 'Made on the web' } },
+    ]
+    live[live.length - 1].next(withChanges(querySnap(true, fresh), 2))
+    expect(seen.map(titles)).toEqual([['Old']])
+    live[live.length - 1].next(withChanges(querySnap(false, fresh), 0))
+    expect(seen.map(titles)).toEqual([['Old'], ['Old', 'Made on the web']])
+    await tick()
+    const again: Snap[] = []
+    onSnapshot(sheets, (s) => again.push(s as never))
+    await tick()
+    expect(again.map(titles)).toEqual([['Old', 'Made on the web']])
+  })
+
+  it('once the server has spoken, passes on changes to the data, not to where it came from', async () => {
+    const seen: Snap[] = []
+    onSnapshot(sheets, (s) => seen.push(s as never))
+    await tick()
+    const a = [{ path: 'chordSheets/1', data: { title: 'A' } }]
+    live[0].next(withChanges(querySnap(false, a), 1))
+    live[0].next(withChanges(querySnap(true, a), 0)) // signal lost
+    live[0].next(withChanges(querySnap(false, a), 0)) // and back
+    live[0].next(
+      withChanges(querySnap(false, [{ path: 'chordSheets/1', data: { title: 'B' } }]), 1)
+    )
+    expect(seen.map(titles)).toEqual([['A'], ['B']])
+  })
+
+  it('a document likewise: its data changing, not its metadata', async () => {
+    const seen: Snap[] = []
+    onSnapshot(profile, (s) => seen.push(s as never))
+    await tick()
+    live[0].next(docSnap(false, { displayName: 'Band' }))
+    live[0].next(docSnap(true, { displayName: 'Band' }))
+    live[0].next(docSnap(false, { displayName: 'Band' }))
+    live[0].next(docSnap(false, { displayName: 'Worship Band' }))
+    const names = seen.map((s) => (s as { data: () => { displayName: string } }).data().displayName)
+    expect(names).toEqual(['Band', 'Worship Band'])
+  })
+
+  it('a screen that asked for metadata changes gets them all', async () => {
+    const seen: Snap[] = []
+    onSnapshot(sheets, { includeMetadataChanges: true }, (s) => seen.push(s as never))
+    await tick()
+    const a = [{ path: 'chordSheets/1', data: { title: 'A' } }]
+    live[0].next(withChanges(querySnap(false, a), 1))
+    live[0].next(withChanges(querySnap(false, a), 0))
+    expect(seen).toHaveLength(2)
+  })
+})
+
 describe('reading once, native', () => {
   it("keeps what getDoc reads, and answers from it when there's no signal", async () => {
     reads.getDoc.mockResolvedValueOnce(docSnap(false, { title: 'Music' }))
