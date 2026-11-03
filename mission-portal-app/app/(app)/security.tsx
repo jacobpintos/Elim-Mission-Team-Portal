@@ -103,6 +103,7 @@ export default function SecurityScreen() {
           uid: String(u.uid),
           type: 'announcement',
           data: {
+            link: '/(app)/security',
             title: '🚨 Security Report',
             body: `New incident at ${data.location}: ${data.description.slice(0, 80)}${data.description.length > 80 ? '…' : ''}`,
           },
@@ -128,6 +129,7 @@ export default function SecurityScreen() {
           uid: String(u.uid),
           type: 'announcement',
           data: {
+            link: '/(app)/security',
             title: '🚨 Responding to Incident',
             body: `${displayName} is on the way to: ${report.location}`,
           },
@@ -140,6 +142,7 @@ export default function SecurityScreen() {
           uid: report.reportedBy,
           type: 'announcement',
           data: {
+            link: '/(app)/security',
             title: '🚨 Help is on the way',
             body: `${displayName} is heading to ${report.location}`,
           },
@@ -164,14 +167,22 @@ export default function SecurityScreen() {
         sendNotif({
           uid: String(u.uid),
           type: 'announcement',
-          data: { title: '✓ Incident Resolved', body },
+          data: {
+            link: '/(app)/security',
+            title: '✓ Incident Resolved',
+            body,
+          },
         }).catch(() => {})
       })
       if (report.reportedBy && !securityUsers.some((u) => String(u.uid) === report.reportedBy)) {
         sendNotif({
           uid: report.reportedBy,
           type: 'announcement',
-          data: { title: '✓ Your report has been resolved', body },
+          data: {
+            link: '/(app)/security',
+            title: '✓ Your report has been resolved',
+            body,
+          },
         }).catch(() => {})
       }
 

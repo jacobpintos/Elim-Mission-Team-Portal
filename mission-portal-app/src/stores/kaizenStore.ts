@@ -192,6 +192,7 @@ export const useKaizenStore = create<KaizenStore>((set, get) => ({
       ts: Date.now(),
       type: 'kaizen_verification',
       read: false,
+      link: `/(app)/issues/kaizen?id=${encodeURIComponent(String(id))}`,
     }
     await notifyUser(adminUid, notif)
   },

@@ -42,6 +42,7 @@ async function notifyReporterResolved(report: ContentReport) {
       type: 'announcement',
       data: {
         title: 'Your report has been reviewed',
+        link: '/(app)/messages',
         body: 'Thank you for reporting. We reviewed the message and have taken any action we judged necessary. We do not share what was decided about another member.',
       },
     })
@@ -142,6 +143,7 @@ export default function AdminModeration() {
         type: 'announcement',
         data: {
           title: 'Warning from the Mission Portal team',
+          link: '/(app)/messages',
           body: `A message you sent was reported for "${report.reason}" and breaks the Terms of Use. Please review them. Repeated breaches can get your account removed.`,
         },
       })

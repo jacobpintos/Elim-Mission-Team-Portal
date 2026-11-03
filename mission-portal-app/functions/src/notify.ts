@@ -79,6 +79,7 @@ export const notifyWorshipTeams = onCall({ secrets: [RESEND_API_KEY] }, async (r
     await notifyUser(uid, 'worshipSetAssigned', {
       setListTitle: typeof setListTitle === 'string' ? setListTitle.slice(0, 200) : 'A set list',
       eventTitle: ev.title ?? 'an event',
+      link: '/(app)/worship',
     }).catch((err) => logger.error('notifyWorshipTeams: not told', { uid, err }))
   }
   return { told: uids.size }

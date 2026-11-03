@@ -16,7 +16,7 @@ import { onSnapshot } from '@/lib/liveFirestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { geocodeCity } from '@/lib/geocode'
-import { allInstances } from '@/lib/events'
+import { allInstances, localToday } from '@/lib/events'
 import { availKey, seriesAvailKey, getSeriesAvail, AVAIL_LABELS } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { nextId } from '@/lib/counters'
@@ -196,6 +196,8 @@ export async function notifyAssignedAdmins(
           userName: changerName,
           eventTitle: ev.title,
           statusLabel: AVAIL_LABELS[newStatus].toLowerCase(),
+          // Its page, at who can and can't come (AvailSummary).
+          link: `/(app)/events/${encodeURIComponent(ev.instanceKey)}?focus=team_availability`,
         },
       }).catch(() => {})
     )
@@ -254,11 +256,22 @@ async function notifyEventChanges(old: EventTemplate, updated: EventTemplate) {
         ts: Date.now(),
         type: 'event_update',
         read: false,
-        link: '/(app)/events',
+        link: eventLink(updated),
       }
       return setDoc(doc(db, 'notifs', uid), { items: arrayUnion(notif) }, { merge: true })
     })
   )
+}
+
+/**
+ * Where a notification about an event opens: its page — a one-off's date, a
+ * repeating one's next — or, with no date to go to, the calendar.
+ */
+function eventLink(ev: EventTemplate): string {
+  const today = localToday()
+  const next = allInstances([ev], useEventsStore.getState().overrides, today, '9999-12-31')[0]
+  const key = next?.instanceKey ?? (!ev.isRec && ev.date ? `${ev.id}_${ev.date}` : null)
+  return key ? `/(app)/events/${encodeURIComponent(key)}` : '/(app)/events'
 }
 
 /** Union of every uid assigned to an event via direct users, groups, or teams. */
@@ -301,7 +314,11 @@ async function notifyEventJoinRemoval(old: EventTemplate, updated: EventTemplate
 
   await Promise.all([
     ...joins.map((uid) =>
-      sendNotif({ uid, type: 'eventJoin', data: { eventTitle: updated.title } }).catch(() => {})
+      sendNotif({
+        uid,
+        type: 'eventJoin',
+        data: { eventTitle: updated.title, link: eventLink(updated) },
+      }).catch(() => {})
     ),
     ...removals.map((uid) =>
       sendNotif({ uid, type: 'eventRemoved', data: { eventTitle: updated.title } }).catch(() => {})

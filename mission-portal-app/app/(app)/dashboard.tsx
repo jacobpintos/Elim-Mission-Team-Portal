@@ -19,7 +19,8 @@ import { sameId } from '@/lib/ids'
 import { isOverdue } from '@/lib/availability'
 import { isAdmin, isGuest } from '@/lib/roles'
 import { usePWAInstallPrompt } from '@/lib/pwaInstall'
-import type { EventInstance } from '@/types/events'
+import type { EventInstance, InAppNotif } from '@/types/events'
+import { notifTarget } from '@/lib/notifTarget'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { useWorshipStore } from '@/stores/worshipStore'
 import { guestLodging, guestFlights, worshipEventsFor } from '@/lib/guestItinerary'
@@ -48,6 +49,11 @@ export default function Dashboard() {
   const { instances, avail, setSelectedEvent } = useEventsStore()
   const { tasks } = useTasksStore()
   const { items: notifs, markRead } = useNotifsStore()
+  /** A notification tapped: read, and what it's about opened (functions/src/push/notifLinks). */
+  const openNotif = (n: InAppNotif) => {
+    markRead(n.id).catch(() => {})
+    router.push(notifTarget(n) as never)
+  }
   const { setLists, subscribe: subWorship, unsubscribe: unsubWorship } = useWorshipStore()
   const { subscribe: subEvents, unsubscribe: unsubEvents } = useEventsStore()
   const { subscribe: subTasks, unsubscribe: unsubTasks } = useTasksStore()
@@ -348,7 +354,7 @@ export default function Dashboard() {
                 overflow="hidden"
               >
                 {unreadNotifs.map((n) => (
-                  <NotificationRow key={n.id} notif={n} onPress={() => markRead(n.id)} />
+                  <NotificationRow key={n.id} notif={n} onPress={() => openNotif(n)} />
                 ))}
               </YStack>
             )}

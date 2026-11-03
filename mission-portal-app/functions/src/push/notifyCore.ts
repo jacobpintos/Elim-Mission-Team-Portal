@@ -2,6 +2,7 @@ import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
 import { resend, MAIL_FROM } from '../email/client'
 import { sendExpoPush, type InterruptionLevel } from './expoPush'
+import { notifLink } from './notifLinks'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -292,6 +293,8 @@ export async function deliverNotification(
 
   const prefs = profile.notificationPrefs?.[type] as { push?: boolean; email?: boolean } | undefined
   const notifMsg = inAppMessage(type, data)
+  // What it's about, opened by a tap on it in the app's list or on the push (./notifLinks).
+  const link = notifLink(type, data)
 
   await db.doc(`notifs/${uid}`).set(
     {
@@ -301,6 +304,7 @@ export async function deliverNotification(
         ts: Date.now(),
         type,
         read: false,
+        link,
       }),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     },
@@ -333,6 +337,7 @@ export async function deliverNotification(
           {
             type,
             ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v ?? '')])),
+            link,
           },
           {
             interruptionLevel: interruptionLevelFor(type, profile),

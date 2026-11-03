@@ -29,7 +29,7 @@ export async function announceSetList(
     sendNotif({
       uid: String(u.uid),
       type: 'announcement',
-      data: { title: 'New Set List', body: data.title },
+      data: { title: 'New Set List', body: data.title, link: '/(app)/worship' },
     }).catch(() => {})
   })
 
