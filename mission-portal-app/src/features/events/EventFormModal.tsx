@@ -385,6 +385,18 @@ export function EventFormModal({
   const [arrangingCars, setArrangingCars] = useState(false)
   // The carpool planned from the team's vehicles (src/custom: The Well), open.
   const [planningCars, setPlanningCars] = useState(false)
+  // The builder as Auto-fill opens it: with no cars (Start over manually), or
+  // the plan's cars and drivers set up in its Auto-assign (Pick cars & drivers).
+  const [builderStart, setBuilderStart] = useState<{
+    cars: CarpoolCarData[]
+    auto: boolean
+  } | null>(null)
+  const openBuilder = (start: { cars: CarpoolCarData[]; auto: boolean }) => {
+    setForm((f) => ({ ...f, carpool: true }))
+    setPlanningCars(false)
+    setBuilderStart(start)
+    setArrangingCars(true)
+  }
   // Admin-assigned food items, keyed by item index. Written into the same
   // foodSignups doc that self-signup uses, so both routes agree on who is
   // bringing what.
@@ -1941,21 +1953,28 @@ export function EventFormModal({
               setForm((f) => ({ ...f, carpool: true, carpoolCars: cars }))
               setPlanningCars(false)
             }}
+            onManual={() => openBuilder({ cars: [], auto: false })}
+            onPickCars={(cars) => openBuilder({ cars, auto: true })}
             onClose={() => setPlanningCars(false)}
           />
         ) : null}
         {arrangingCars ? (
           <CarpoolBuilder
             subtitle={form.title.trim() || undefined}
-            cars={form.carpoolCars}
+            cars={builderStart?.cars ?? form.carpoolCars}
             people={carpoolUids.map(carpoolPeopleOf)}
             lookup={carpoolPeopleOf}
             rideKey={carsRideKey}
+            startAuto={builderStart?.auto}
             onSave={(cars) => {
               setForm((f) => ({ ...f, carpoolCars: cars }))
               setArrangingCars(false)
+              setBuilderStart(null)
             }}
-            onClose={() => setArrangingCars(false)}
+            onClose={() => {
+              setArrangingCars(false)
+              setBuilderStart(null)
+            }}
           />
         ) : null}
 

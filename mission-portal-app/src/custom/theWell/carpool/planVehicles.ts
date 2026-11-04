@@ -51,6 +51,18 @@ export interface PlanInput {
   bring?: Record<string, boolean>
   /** Who can't drive this time: they ride. */
   cantDrive?: readonly string[]
+  /** Vehicles left out by hand: they don't go, whatever else would bring them. */
+  leaveOut?: readonly string[]
+  /**
+   * A vehicle's driver chosen by hand, by its id: they drive it, whoever they
+   * are — the rules are for choosing, and a person may choose as they like.
+   */
+  driverOf?: Record<string, string>
+  /**
+   * The vehicle chosen by hand to pull each trailer asked for, by its id: it
+   * goes, and pulls it — whatever it's listed as able to pull.
+   */
+  trailerOf?: Partial<Record<'small' | 'big', string>>
   /** Vehicles added by hand: they go. */
   add?: readonly string[]
   /** Children in a vehicle, by its id: it goes, and they take seats in it. */
@@ -85,12 +97,20 @@ export interface Plan {
   /** How many are in a vehicle with the other sex: what the plan couldn't avoid. */
   mixed: number
   /** Vehicles not going, and why. */
-  left: { vehicle: Vehicle; why: 'not needed' | 'no driver going' | 'not brought' }[]
+  left: {
+    vehicle: Vehicle
+    why: 'not needed' | 'no driver going' | 'not brought' | 'left out'
+  }[]
+  /** Who could drive each vehicle going, by its id, for its driver to be changed by hand. */
+  canDrive: Record<string, string[]>
   /** What it couldn't do: "No one going can pull the big trailer." */
   problems: string[]
   /** The notes kept for people in the vehicles (Admin → Vehicles), by uid. */
   notes: { uid: string; note: string }[]
 }
+
+/** A trailer, as the carpool says what a vehicle pulls. */
+export const TRAILER_SAID = { small: 'Small trailer', big: 'Big trailer' } as const
 
 /** Past this many vehicles to choose among, only the biggest are tried: the rest can still be added by hand. */
 const MOST_TRIED = 14
@@ -137,13 +157,34 @@ export function planVehicles(input: PlanInput): Plan {
   const problems: string[] = []
   const left: Plan['left'] = []
 
+  // A driver chosen by hand, if they're going: theirs to drive, whatever the rules say.
+  const handPicked = (v: Vehicle) => {
+    const uid = input.driverOf?.[v.id]
+    return uid && going.has(uid) ? uid : undefined
+  }
   const eligible = new Map(
-    input.vehicles.map((v) => [v.id, driversFor(v, input.vehicles, going, cantDrive)])
+    input.vehicles.map((v) => {
+      const uid = handPicked(v)
+      return [v.id, uid ? [uid] : driversFor(v, input.vehicles, going, cantDrive)]
+    })
   )
+  /** Who may drive it, pulling a trailer or not. */
+  const ableFor = (v: Vehicle, trailer: boolean) =>
+    handPicked(v)
+      ? eligible.get(v.id)!
+      : eligible.get(v.id)!.filter((u) => !trailer || !noTrailer.has(u))
+  /** Chosen by hand to pull a trailer asked for. */
+  const pullsByHand = (v: Vehicle) =>
+    (input.trailers.small && input.trailerOf?.small === v.id) ||
+    (input.trailers.big && input.trailerOf?.big === v.id)
   const required: Vehicle[] = []
   const optional: Vehicle[] = []
   for (const v of input.vehicles) {
-    const forced = (input.add ?? []).includes(v.id) || kids(v) > 0
+    if ((input.leaveOut ?? []).includes(v.id)) {
+      left.push({ vehicle: v, why: 'left out' })
+      continue
+    }
+    const forced = (input.add ?? []).includes(v.id) || kids(v) > 0 || pullsByHand(v)
     if (v.ask && !input.bring?.[v.id] && !forced) {
       left.push({ vehicle: v, why: 'not brought' })
       continue
@@ -173,12 +214,12 @@ export function planVehicles(input: PlanInput): Plan {
     let best: Omit<Choice, 'spare'> | null = null
     // Each way the trailers can go, best first: a vehicle pulling one is
     // driven only by someone who can pull a trailer.
-    for (const trailers of trailerOptions(set, needed)) {
+    for (const trailers of trailerOptions(set, needed, input.trailerOf)) {
       // Each vehicle's driver is a man, a woman, or either: tried each way it
       // can be. For one men and women share, it doesn't matter which; nor
       // for a driver who may ride with either sex, or whose sex isn't said.
       const options = set.map((v, i) => {
-        const list = eligible.get(v.id)!.filter((u) => !trailers[i] || !noTrailer.has(u))
+        const list = ableFor(v, !!trailers[i])
         if (v.mixedSex) return [['any', list] as [string, string[]]]
         const bySex = new Map<string, string[]>()
         for (const u of list) {
@@ -272,6 +313,7 @@ export function planVehicles(input: PlanInput): Plan {
       left,
       problems,
       notes: [],
+      canDrive: {},
     }
   }
 
@@ -324,7 +366,10 @@ export function planVehicles(input: PlanInput): Plan {
 
   return {
     vehicles: planned,
-    cars: assigned.cars,
+    // What each pulls, said on the carpool.
+    cars: assigned.cars.map((c, i) =>
+      planned[i].trailer ? { ...c, pulling: TRAILER_SAID[planned[i].trailer!] } : c
+    ),
     noRoom: assigned.noRoom,
     full,
     offer,
@@ -336,6 +381,14 @@ export function planVehicles(input: PlanInput): Plan {
         (r) => r.note && assigned.cars.some((c) => c.driver === r.uid || c.riders.includes(r.uid))
       )
       .map((r) => ({ uid: r.uid, note: r.note! })),
+    canDrive: Object.fromEntries(
+      planned.map((p) => [
+        p.vehicle.id,
+        driversFor(p.vehicle, input.vehicles, going, cantDrive).filter(
+          (u) => !p.trailer || !noTrailer.has(u)
+        ),
+      ])
+    ),
   }
 }
 
@@ -351,20 +404,31 @@ const MOST_TRAILER_WAYS = 12
  * vehicle for the small, keeping one that can pull either for the big. None
  * when they can't go at all.
  */
-function trailerOptions(set: Vehicle[], needed: TrailersNeeded): ('small' | 'big' | null)[][] {
+function trailerOptions(
+  set: Vehicle[],
+  needed: TrailersNeeded,
+  byHand: Partial<Record<'small' | 'big', string>> = {}
+): ('small' | 'big' | null)[][] {
   const none = set.map((): 'small' | 'big' | null => null)
   if (!needed.big && !needed.small) return [none]
   // Those preferred for trailers first; then, for the small, a small-only
-  // one, keeping one that can pull either for the big.
-  const at = (size: 'small' | 'big', not = -1) =>
-    set
-      .map((v, i) => (i !== not && canPull(v, size) ? i : -1))
+  // one, keeping one that can pull either for the big. One chosen by hand
+  // pulls it, and only it.
+  const at = (size: 'small' | 'big', not = -1) => {
+    const chosen = set.findIndex((v) => v.id === byHand[size])
+    if (chosen >= 0 && chosen !== not) return [chosen]
+    // Nor the one chosen by hand for the other.
+    const other = size === 'big' ? 'small' : 'big'
+    const taken = needed[other] ? set.findIndex((v) => v.id === byHand[other]) : -1
+    return set
+      .map((v, i) => (i !== not && i !== taken && canPull(v, size) ? i : -1))
       .filter((i) => i >= 0)
       .sort(
         (a, b) =>
           Number(!set[a].preferTrailer) - Number(!set[b].preferTrailer) ||
           Number(set[a].trailer === 'both') - Number(set[b].trailer === 'both')
       )
+  }
   const out: ('small' | 'big' | null)[][] = []
   for (const big of needed.big ? at('big') : [-1]) {
     for (const small of needed.small ? at('small', big) : [-1]) {

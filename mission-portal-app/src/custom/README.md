@@ -19,6 +19,13 @@ for that organization and left out of everyone else's build.
 
 ## The Well (`theWell/`)
 
+Turning an event's carpool on opens Auto-fill (`carpool/VehiclePlanner.tsx`):
+the carpool planned from the vehicles, done, with its questions (trailers,
+"Bring the Elim Van?") answered None and No above it. Every part of it can be
+changed there, and then: Use this plan, Pick cars & drivers (the builder's
+Auto-assign, with the plan's vehicles and drivers to change and the riders
+filled again), or Start over manually (the builder, with no cars).
+
 | Feature             | Where                                                                                                                | What it keeps                                                  |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | Vehicles            | Admin → Vehicles (`vehicles/`)                                                                                       | `vehicles/{id}` in Firestore, admins only (`firestore.rules`)  |
@@ -29,7 +36,10 @@ Special rules for people (`people/`) sit under the vehicles, in Admin → Vehicl
 kept in `carpoolPeople/{uid}` (admins only): doesn't drive, can't pull a
 trailer, can ride with the other sex, keep with, keep apart, and a note shown
 on the plan. The planner follows all of them; the app's own Auto-assign and
-Miriam's carpools follow the seating ones, through `carpool.ts`. People who
+Miriam's carpools follow the seating ones, through `carpool.ts`. They are for
+the app's own choosing only: whatever is arranged by hand is left as it was
+put — anyone going can be picked to drive any vehicle in Auto-fill, or put in
+any car in Auto-assign, which fills the rest around them. People who
 share a last name may ride together whatever their sex, and a car with a man
 and a woman of one family in it is open to anyone — that one is the app's own
 (features/events/carpoolAssign), for everyone.

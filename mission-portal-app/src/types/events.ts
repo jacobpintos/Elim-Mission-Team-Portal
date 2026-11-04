@@ -48,6 +48,8 @@ export interface CarpoolCarData {
   riders: string[]
   /** Children riding along. They have no accounts, so they are names, typed on their cards. */
   children?: CarpoolChild[]
+  /** What it pulls, said beside it: "Small trailer". */
+  pulling?: string
 }
 
 export interface CarpoolChild {

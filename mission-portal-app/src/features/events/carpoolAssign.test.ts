@@ -218,4 +218,40 @@ describe('auto-assigning the cars', () => {
     const other = autoAssign({ ...input, seed: 12 })
     expect(Math.abs(arrangementCost(other, input.people) - best)).toBeLessThan(1)
   })
+
+  it('keeps those put in a car by hand where they were put, and fills around them', () => {
+    // Beth put in with the men, by hand: she stays, the rules aside.
+    const cars = [{ ...car('van', 4, 'd1'), riders: ['beth'] }, car('truck', 4, 'd2')]
+    const people = [...men('d1', 'd2', 'a', 'b', 'c'), ...women('beth', 'fay')]
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const { cars: out, noRoom } = autoAssign({ cars, people, seed })
+      expect(out[0].riders).toContain('beth')
+      expect(out[0].riders.length).toBeLessThanOrEqual(3)
+      expect(noRoom).toEqual([])
+      // Everyone seated once.
+      const seated = out.flatMap((c) => c.riders)
+      expect(new Set(seated).size).toBe(seated.length)
+      expect(new Set(seated)).toEqual(new Set(['a', 'b', 'c', 'beth', 'fay']))
+    }
+  })
+
+  it('keeps those put in a car by hand there even past its seats, and never twice', () => {
+    const cars = [
+      { ...car('small', 2, 'd1'), riders: ['a', 'b'] },
+      { ...car('big', 5, 'd2'), riders: ['a'] },
+    ]
+    const { cars: out } = autoAssign({ cars, people: men('d1', 'd2', 'a', 'b', 'c'), seed: 1 })
+    expect(ridersOf(out, 'small')).toEqual(['a', 'b'])
+    expect(ridersOf(out, 'big')).toEqual(['c'])
+  })
+
+  it('keeps what a car pulls', () => {
+    const { cars } = autoAssign({
+      cars: [{ ...car('truck', 5, 'd1'), pulling: 'Small trailer' }, car('van', 5, 'd2')],
+      people: men('d1', 'd2', 'a'),
+      seed: 1,
+    })
+    expect(cars[0].pulling).toBe('Small trailer')
+    expect(cars[1].pulling).toBeUndefined()
+  })
 })

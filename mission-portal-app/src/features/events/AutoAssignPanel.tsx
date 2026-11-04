@@ -32,7 +32,11 @@ interface SetupCar {
   label: string
   seats: string
   driver: string
+  /** Put in it by hand: kept there, and the rest filled around them. */
+  riders: string[]
   children: CarpoolChild[]
+  /** What it pulls, as typed: "Small trailer". */
+  pulling: string
 }
 
 /** The most usual drivers offered at once. */
@@ -48,12 +52,16 @@ const asAssignCar = (car: SetupCar): AssignCar => ({
   label: car.label.trim(),
   seats: seatsOf(car),
   driver: car.driver,
+  riders: car.riders,
   children: car.children.filter((k) => k.name.trim()),
+  pulling: car.pulling,
 })
 
 /**
  * Auto-assign, set up: the cars first — each one's name, how many it holds,
- * its driver and any children riding in it — then who isn't riding. Then
+ * its driver, anyone put in it by hand and any children riding in it — then
+ * who isn't riding. Whoever is chosen goes where they were put, whatever the
+ * rules: they are for the filling. Then
  * everyone else is put in a car (./carpoolAssign): not a car full while
  * another has room, men with men and women with women, and not the same
  * people together as last time — family (a shared last name) together
@@ -91,7 +99,10 @@ export function AutoAssignPanel({
       label: c.label,
       seats: c.seats ? String(c.seats) : '',
       driver: c.driver,
+      // Its riders filled again: only its driver and children kept.
+      riders: [],
       children: c.children ?? [],
+      pulling: c.pulling ?? '',
     }))
   )
   const [leftOut, setLeftOut] = useState<string[]>([])
@@ -117,6 +128,16 @@ export function AutoAssignPanel({
 
   const onEvent = useMemo(() => new Set(people.map((p) => p.uid)), [people])
   const driving = new Set(cars.map((c) => c.driver).filter(Boolean))
+  /** Who can be put in a car by hand: anyone not driving, riding elsewhere, or not riding. */
+  const placeable = (car: SetupCar) =>
+    people.filter(
+      (p) => !driving.has(p.uid) && !car.riders.includes(p.uid) && !leftOut.includes(p.uid)
+    )
+  /** Where someone put by hand is now, said beside their name. */
+  const placedIn = (uid: string) => {
+    const i = cars.findIndex((c) => c.riders.includes(uid))
+    return i < 0 ? '' : `in ${carName(asCarData([cars[i]])[0], i)}`
+  }
   const known = memory ?? emptyMemory()
   // The team's cars not set up yet, and who usually drives — on this event, and not driving yet.
   const named = new Set(cars.map((c) => carKey(c.label)).filter(Boolean))
@@ -131,6 +152,24 @@ export function AutoAssignPanel({
 
   const change = (id: string, part: Partial<SetupCar>) =>
     setCars((cs) => cs.map((c) => (c.id === id ? { ...c, ...part } : c)))
+  /** Driving it: and so riding in none. */
+  const setDriver = (id: string, uid: string) =>
+    setCars((cs) =>
+      cs.map((c) =>
+        c.id === id
+          ? { ...c, driver: uid, riders: c.riders.filter((u) => u !== uid) }
+          : { ...c, riders: c.riders.filter((u) => u !== uid) }
+      )
+    )
+  /** Put in this car by hand: out of any other they were in. */
+  const putIn = (id: string, uid: string) =>
+    setCars((cs) =>
+      cs.map((c) =>
+        c.id === id
+          ? { ...c, riders: [...c.riders.filter((u) => u !== uid), uid] }
+          : { ...c, riders: c.riders.filter((u) => u !== uid) }
+      )
+    )
   const asCarData = (cs: SetupCar[]): CarpoolCarData[] =>
     cs.map((c) => ({ id: c.id, label: c.label, driver: c.driver, riders: [] }))
   const addCar = (label = '', seatsSaid?: number, driver = '') =>
@@ -141,13 +180,15 @@ export function AutoAssignPanel({
         label,
         seats: seatsSaid ? String(seatsSaid) : '',
         driver: driver && onEvent.has(driver) && !cs.some((c) => c.driver === driver) ? driver : '',
+        riders: [],
         children: [],
+        pulling: '',
       },
     ])
   /** Someone made a driver: of the first car with none, or of a car of their own. */
   const drive = (uid: string) => {
     const free = cars.find((c) => !c.driver)
-    if (free) change(free.id, { driver: uid })
+    if (free) setDriver(free.id, uid)
     else addCar(`${personFor(uid).name.split(' ')[0]}’s car`, undefined, uid)
   }
   const addChild = (car: SetupCar) => {
@@ -227,9 +268,9 @@ export function AutoAssignPanel({
   return (
     <YStack flex={1} gap="$2">
       <Text color={colors.textMuted} fontSize="$3">
-        Set up the cars, and anyone not riding. Everyone else is put in a car — no car full while
-        another has room, men with men and women with women, and not with the same people as last
-        time.
+        Set up the cars — their drivers, and anyone you want in one — and anyone not riding. Who you
+        choose goes where you put them. Everyone else is put in a car — no car full while another
+        has room, men with men and women with women, and not with the same people as last time.
       </Text>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 10 }}>
         {label('CARS')}
@@ -292,11 +333,46 @@ export function AutoAssignPanel({
                   <NameTyper
                     placeholder="Type the driver’s name"
                     candidates={people.filter((p) => !driving.has(p.uid))}
-                    where={() => ''}
-                    onPick={(uid) => change(car.id, { driver: uid })}
+                    where={placedIn}
+                    onPick={(uid) => setDriver(car.id, uid)}
                   />
                 </View>
               )}
+            </XStack>
+            <XStack alignItems="center" gap="$2" flexWrap="wrap">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="700">
+                IN IT
+              </Text>
+              {car.riders.map((uid) =>
+                personChip(
+                  uid,
+                  () => change(car.id, { riders: car.riders.filter((u) => u !== uid) }),
+                  'this car'
+                )
+              )}
+              <View style={{ flex: 1, minWidth: 180 }}>
+                <NameTyper
+                  placeholder={
+                    car.riders.length ? '+ Someone else in it' : 'Anyone to put in it (optional)'
+                  }
+                  candidates={placeable(car)}
+                  where={placedIn}
+                  onPick={(uid) => putIn(car.id, uid)}
+                />
+              </View>
+            </XStack>
+            <XStack alignItems="center" gap="$2" flexWrap="wrap">
+              <Text color={colors.textMuted} fontSize="$2" fontWeight="700">
+                PULLING
+              </Text>
+              <TextInput
+                value={car.pulling}
+                onChangeText={(text) => change(car.id, { pulling: text })}
+                placeholder="Nothing — or e.g. Small trailer"
+                placeholderTextColor={colors.textMuted}
+                style={[...inputStyle, { flex: 1, minWidth: 160 }]}
+                accessibilityLabel="What this car pulls"
+              />
             </XStack>
             <XStack alignItems="center" gap="$2" flexWrap="wrap">
               <Text color={colors.textMuted} fontSize="$2" fontWeight="700">
@@ -381,8 +457,13 @@ export function AutoAssignPanel({
             <NameTyper
               placeholder="Someone not riding — type a name"
               candidates={people.filter((p) => !driving.has(p.uid) && !leftOut.includes(p.uid))}
-              where={() => ''}
-              onPick={(uid) => setLeftOut((l) => [...l, uid])}
+              where={placedIn}
+              onPick={(uid) => {
+                setLeftOut((l) => [...l, uid])
+                setCars((cs) =>
+                  cs.map((c) => ({ ...c, riders: c.riders.filter((u) => u !== uid) }))
+                )
+              }}
             />
           </View>
         </XStack>

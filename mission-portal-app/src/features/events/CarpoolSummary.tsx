@@ -50,6 +50,11 @@ export function CarpoolSummary({
             <Text color={colors.text} fontWeight="700" fontSize="$3">
               🚗 {carName(car, i)}
             </Text>
+            {car.pulling?.trim() ? (
+              <Text color={colors.text} fontSize="$3">
+                Pulls: {car.pulling.trim()}
+              </Text>
+            ) : null}
             <Text color={colors.text} fontSize="$3">
               {car.driver ? `Driver: ${nameOf(car.driver)}` : 'No driver yet'}
             </Text>
@@ -90,7 +95,7 @@ export function CarpoolSummary({
               paddingVertical="$2"
             >
               <Text color="white" fontSize="$3" fontWeight="600">
-                {cars.length ? 'Plan again from vehicles' : 'Plan from vehicles'}
+                {cars.length ? 'Auto-fill again' : 'Auto-fill'}
               </Text>
             </XStack>
           </Pressable>

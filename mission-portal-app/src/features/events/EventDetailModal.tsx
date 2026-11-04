@@ -674,6 +674,11 @@ function CarCard({
         {carName(car, index)}
         {mine ? ' ← Your car' : ''}
       </Text>
+      {car.pulling?.trim() ? (
+        <Text color={colors.textMuted} fontSize="$2">
+          Pulls: {car.pulling.trim()}
+        </Text>
+      ) : null}
       {car.driver ? (
         <Text color={colors.text} fontSize="$3">
           🚗 {nameOf(car.driver)}
@@ -762,6 +767,17 @@ export function CarpoolPanel({
   const [arranging, setArranging] = useState(false)
   // Planned from the team's vehicles (src/custom: The Well), for this date.
   const [planning, setPlanning] = useState(false)
+  // The builder as Auto-fill opens it: with no cars (Start over manually), or
+  // the plan's cars and drivers set up in its Auto-assign (Pick cars & drivers).
+  const [builderStart, setBuilderStart] = useState<{
+    cars: CarpoolCarData[]
+    auto: boolean
+  } | null>(null)
+  const openBuilder = (start: { cars: CarpoolCarData[]; auto: boolean }) => {
+    setPlanning(false)
+    setBuilderStart(start)
+    setArranging(true)
+  }
   const avail = useEventsStore((s) => s.avail)
   // Groups on the event count as on it, so they are listened to while an
   // admin has this open — and this is drawn again when they come in.
@@ -796,6 +812,7 @@ export function CarpoolPanel({
   // The cars show as saved straight away, as the listener above would have them.
   const save = (updated: CarpoolCarData[]) => {
     setArranging(false)
+    setBuilderStart(null)
     setCars(updated)
     setDoc(doc(db, 'carpool', carpoolKey), { cars: updated }).catch(() =>
       toast('Failed to save carpool', 'error')
@@ -853,18 +870,24 @@ export function CarpoolPanel({
             setPlanning(false)
             save(planned)
           }}
+          onManual={() => openBuilder({ cars: [], auto: false })}
+          onPickCars={(planned) => openBuilder({ cars: planned, auto: true })}
           onClose={() => setPlanning(false)}
         />
       ) : null}
       {isAdmin && arranging ? (
         <CarpoolBuilder
           subtitle={`${event.title} — ${FD(event.date)}`}
-          cars={cars}
+          cars={builderStart?.cars ?? cars}
           people={eventUids.map(personOf)}
           lookup={personOf}
           rideKey={carpoolKey}
+          startAuto={builderStart?.auto}
           onSave={save}
-          onClose={() => setArranging(false)}
+          onClose={() => {
+            setArranging(false)
+            setBuilderStart(null)
+          }}
         />
       ) : null}
     </YStack>

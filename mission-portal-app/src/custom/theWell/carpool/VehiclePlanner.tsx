@@ -10,8 +10,8 @@ import { CARD_COLORS, cardColorsFor } from '@/features/events/carpoolCards'
 import type { CarpoolPerson } from '@/features/events/CarpoolBuilder'
 import type { AvailResponse, CarpoolCarData, CarpoolChild } from '@/types/events'
 import { useVehiclesStore } from '../vehicles/vehiclesStore'
-import type { TrailersNeeded } from '../vehicles/types'
-import { planVehicles } from './planVehicles'
+import { canPull, type TrailersNeeded } from '../vehicles/types'
+import { planVehicles, TRAILER_SAID } from './planVehicles'
 import { usePersonRulesStore } from '../people/personRulesStore'
 import { familyName } from '@/features/events/carpoolAssign'
 
@@ -37,17 +37,31 @@ export interface VehiclePlannerProps {
   /** The event and date, as its cars are remembered: its own last arrangement isn't another time. */
   rideKey?: string
   onUse: (cars: CarpoolCarData[]) => void
+  /** Start over, by hand: the carpool builder with no cars. */
+  onManual: () => void
+  /** The cars and drivers to be chosen by hand, and the riders filled again: Auto-assign, from these. */
+  onPickCars: (cars: CarpoolCarData[]) => void
   onClose: () => void
 }
 
 /**
- * Custom: The Well. A carpool planned from the team's vehicles (./planVehicles):
- * first the questions — which trailers, and "Bring the Elim Van?" — then the
- * plan: each vehicle with its driver and who rides, to change before it is
- * used. A driver who can't drive this time is swapped out ("Can't drive"),
- * children are added to a vehicle, and when a vehicle is full the next is
- * offered. "Use this plan" hands the cars to the event's carpool, where they
- * can still be arranged by hand before the event is saved.
+ * Custom: The Well. Auto-fill: a carpool planned from the team's vehicles
+ * (./planVehicles), opened done — with its questions above it, which
+ * trailers and "Bring the Elim Van?", answered None and No until changed,
+ * the plan worked out again as each is.
+ *
+ * Everything in it can be changed by whoever is making the event: a
+ * vehicle's driver (Change driver), one who can't drive this time (swapped
+ * out, to ride), a vehicle left out or brought, children added, the next
+ * vehicle offered when one is full, which vehicle pulls each trailer. The
+ * rules (Admin → Vehicles) are for the plan's own choosing; what's changed
+ * by hand isn't held to them — anyone going can be picked to drive any
+ * vehicle, and any vehicle to pull a trailer. Then:
+ *  - Use this plan: the cars into the event's carpool, still to be arranged
+ *    by hand there before the event is saved;
+ *  - Pick cars & drivers: the builder's Auto-assign, with these vehicles and
+ *    drivers to change, and the riders filled again;
+ *  - Start over manually: the builder, with no cars.
  */
 export function VehiclePlanner({
   subtitle,
@@ -55,6 +69,8 @@ export function VehiclePlanner({
   statusOf,
   rideKey,
   onUse,
+  onManual,
+  onPickCars,
   onClose,
 }: VehiclePlannerProps) {
   const colors = useThemeColors()
@@ -62,9 +78,16 @@ export function VehiclePlanner({
   const { vehicles, loaded, subscribe, unsubscribe } = useVehiclesStore()
   // Special rules for people (Admin → Vehicles), followed in the plan.
   const personRules = usePersonRulesStore((s) => s.rules)
-  const [step, setStep] = useState<'ask' | 'plan'>('ask')
-  const [trailers, setTrailers] = useState<Trailers | null>(null)
+  // The questions, answered None and No until changed.
+  const [trailers, setTrailers] = useState<Trailers>('none')
   const [bring, setBring] = useState<Record<string, boolean>>({})
+  // Changed by hand: vehicles left out, drivers chosen, whose driver is being picked.
+  const [leaveOut, setLeaveOut] = useState<string[]>([])
+  const [driverOf, setDriverOf] = useState<Record<string, string>>({})
+  const [picking, setPicking] = useState<string | null>(null)
+  // Which vehicle pulls each trailer, chosen by hand; and which is being chosen.
+  const [trailerOf, setTrailerOf] = useState<Partial<Record<'small' | 'big', string>>>({})
+  const [pickingTrailer, setPickingTrailer] = useState<'small' | 'big' | null>(null)
   const [countUnsure, setCountUnsure] = useState(true)
   const [cantDrive, setCantDrive] = useState<string[]>([])
   const [added, setAdded] = useState<string[]>([])
@@ -97,17 +120,19 @@ export function VehiclePlanner({
     (p) => statusOf(p.uid) !== 'no' && (countUnsure || !unsure.includes(p))
   )
   const asked = vehicles.filter((v) => v.ask)
-  const ready = trailers !== null && asked.every((v) => bring[v.id] !== undefined)
 
   const plan = useMemo(
     () =>
-      step === 'plan' && trailers
+      loaded
         ? planVehicles({
             vehicles,
             people: going.map((p) => ({ uid: p.uid, sex: p.sex, family: familyName(p.name) })),
             trailers: needed(trailers),
             bring,
             cantDrive,
+            leaveOut,
+            driverOf,
+            trailerOf,
             add: added,
             children,
             together,
@@ -118,7 +143,10 @@ export function VehiclePlanner({
     // Worked out again when anything it is planned from changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      step,
+      loaded,
+      leaveOut,
+      driverOf,
+      trailerOf,
       trailers,
       vehicles,
       bring,
@@ -146,6 +174,115 @@ export function VehiclePlanner({
   }
   const removeChild = (vehicleId: string, id: string) =>
     setChildren((c) => ({ ...c, [vehicleId]: (c[vehicleId] ?? []).filter((k) => k.id !== id) }))
+
+  // Changed by hand, it stays as it was changed: no rule says otherwise.
+  /** They drive it: it goes, and they drive nothing else. */
+  const chooseDriver = (vehicleId: string, uid: string) => {
+    setDriverOf((d) => ({
+      ...Object.fromEntries(Object.entries(d).filter(([, u]) => u !== uid)),
+      [vehicleId]: uid,
+    }))
+    setCantDrive((c) => c.filter((u) => u !== uid))
+    setLeaveOut((l) => l.filter((x) => x !== vehicleId))
+    setAdded((a) => (a.includes(vehicleId) ? a : [...a, vehicleId]))
+    setPicking(null)
+  }
+  /** It pulls that trailer: it goes, and pulls nothing else. */
+  const choosePuller = (size: 'small' | 'big', vehicleId: string) => {
+    setTrailerOf((t) => {
+      const next = { ...t, [size]: vehicleId }
+      const other = size === 'small' ? 'big' : 'small'
+      if (next[other] === vehicleId) delete next[other]
+      return next
+    })
+    setLeaveOut((l) => l.filter((x) => x !== vehicleId))
+    setPickingTrailer(null)
+  }
+  /** Which vehicle can be picked to pull it: any of them — those listed as able first. */
+  const trailerPicker = (size: 'small' | 'big', current?: string) => {
+    const others = vehicles.filter((v) => v.id !== current)
+    const able = others.filter((v) => canPull(v, size))
+    const rest = others.filter((v) => !canPull(v, size))
+    const row = (list: typeof vehicles) => (
+      <XStack gap="$2" flexWrap="wrap">
+        {list.map((v) => choice(`${size}:${v.id}`, v.name, false, () => choosePuller(size, v.id)))}
+      </XStack>
+    )
+    return (
+      <YStack gap="$1.5">
+        {able.length ? (
+          <>
+            <Text color={colors.textMuted} fontSize="$2">
+              Listed as able to pull it:
+            </Text>
+            {row(able)}
+          </>
+        ) : null}
+        {rest.length ? (
+          <>
+            <Text color={colors.textMuted} fontSize="$2">
+              {able.length ? 'Any other:' : 'Which vehicle pulls it:'}
+            </Text>
+            {row(rest)}
+          </>
+        ) : null}
+      </YStack>
+    )
+  }
+  /** They ride this time: chosen to drive nothing. */
+  const notDriving = (uid: string) => {
+    setCantDrive((c) => (c.includes(uid) ? c : [...c, uid]))
+    setDriverOf((d) => Object.fromEntries(Object.entries(d).filter(([, u]) => u !== uid)))
+  }
+  /** Who is driving which vehicle now, by uid. */
+  const drivingNow = new Map((plan?.vehicles ?? []).map((pv) => [pv.driver, pv.vehicle]))
+
+  /** Who can be picked to drive it: anyone going — those it's kept for first. */
+  const driverPicker = (vehicleId: string, vehicleName: string, current?: string) => {
+    const listed = (plan?.canDrive[vehicleId] ?? []).filter((u) => u !== current)
+    const others = going
+      .map((p) => p.uid)
+      .filter((u) => u !== current && !listed.includes(u))
+      .sort((a, b) => nameOf(a).localeCompare(nameOf(b)))
+    const chip = (u: string) => {
+      const other = drivingNow.get(u)
+      return (
+        <Pressable
+          key={u}
+          onPress={() => chooseDriver(vehicleId, u)}
+          accessibilityRole="button"
+          accessibilityLabel={`${nameOf(u)} drives ${vehicleName}`}
+        >
+          {personCard(u, other && other.id !== vehicleId ? `drives ${other.name}` : undefined)}
+        </Pressable>
+      )
+    }
+    return (
+      <YStack gap="$1.5">
+        {listed.length ? (
+          <>
+            <Text color={colors.textMuted} fontSize="$2">
+              Drivers kept for it:
+            </Text>
+            <View style={styles.wrap}>{listed.map(chip)}</View>
+          </>
+        ) : null}
+        {others.length ? (
+          <>
+            <Text color={colors.textMuted} fontSize="$2">
+              {listed.length ? 'Anyone else going:' : 'Who drives it — anyone going:'}
+            </Text>
+            <View style={styles.wrap}>{others.map(chip)}</View>
+          </>
+        ) : null}
+        {!listed.length && !others.length ? (
+          <Text color={colors.textMuted} fontSize="$2">
+            No one else is going.
+          </Text>
+        ) : null}
+      </YStack>
+    )
+  }
 
   const label = (text: string) => (
     <Text color={colors.textMuted} fontSize="$2" fontWeight="700" letterSpacing={0.5}>
@@ -190,7 +327,7 @@ export function VehiclePlanner({
       </Text>
     </Pressable>
   )
-  const personCard = (uid: string) => {
+  const personCard = (uid: string, aside?: string) => {
     const p = byUid.get(uid)
     const tint = cardColorsFor(p?.sex)
     return (
@@ -206,6 +343,11 @@ export function VehiclePlanner({
       >
         <Text color={tint?.text ?? colors.text} fontSize="$3" fontWeight="600" numberOfLines={1}>
           {nameOf(uid)}
+          {aside ? (
+            <Text color={tint?.text ?? colors.textMuted} fontSize="$2" fontWeight="400">
+              {` · ${aside}`}
+            </Text>
+          ) : null}
         </Text>
       </View>
     )
@@ -256,7 +398,7 @@ export function VehiclePlanner({
           <XStack alignItems="center" gap="$2">
             <YStack flex={1}>
               <Text color={colors.text} fontSize="$6" fontWeight="700">
-                Plan the carpool
+                Auto-fill
               </Text>
               {subtitle ? (
                 <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
@@ -294,37 +436,69 @@ export function VehiclePlanner({
               </Pressable>
             ) : null}
 
-            {step === 'ask' ? (
-              <YStack gap="$3">
-                {label('TRAILERS NEEDED')}
-                <XStack gap="$2" flexWrap="wrap">
-                  {TRAILER_CHOICES.map((t) =>
-                    choice(t.key, t.label, trailers === t.key, () => setTrailers(t.key))
-                  )}
-                </XStack>
-                {asked.map((v) => (
-                  <YStack key={v.id} gap="$2">
-                    {label(`BRING THE ${v.name.toUpperCase()}?`)}
-                    <Text color={colors.textMuted} fontSize="$3">
-                      {v.seats} seats
-                      {v.anyDriver ? ' · anyone who drives another vehicle may drive it' : ''}
-                    </Text>
-                    <XStack gap="$2">
-                      {choice(`${v.id}:yes`, 'Yes', bring[v.id] === true, () =>
-                        setBring((b) => ({ ...b, [v.id]: true }))
-                      )}
-                      {choice(`${v.id}:no`, 'No', bring[v.id] === false, () =>
-                        setBring((b) => ({ ...b, [v.id]: false }))
-                      )}
-                    </XStack>
-                  </YStack>
-                ))}
-                {loaded && vehicles.length <= asked.length
-                  ? note(
-                      'Only the Elim Van is in the list. Add the team’s vehicles in Admin → Vehicles.'
-                    )
-                  : null}
-              </YStack>
+            <YStack
+              gap="$2"
+              padding="$2.5"
+              borderRadius={12}
+              borderWidth={1}
+              borderColor={colors.border}
+            >
+              {label('TRAILERS NEEDED')}
+              <XStack gap="$2" flexWrap="wrap">
+                {TRAILER_CHOICES.map((t) =>
+                  choice(t.key, t.label, trailers === t.key, () => setTrailers(t.key))
+                )}
+              </XStack>
+              {(['big', 'small'] as const)
+                .filter((size) => needed(trailers)[size])
+                .map((size) => {
+                  const by = plan?.vehicles.find((pv) => pv.trailer === size)?.vehicle
+                  return (
+                    <YStack key={size} gap="$1.5">
+                      <XStack alignItems="center" gap="$2" flexWrap="wrap">
+                        <Text color={colors.text} fontSize="$3" fontWeight="600" flexShrink={1}>
+                          {TRAILER_SAID[size]}:{' '}
+                          {by ? `pulled by ${by.name}` : 'no vehicle pulling it yet'}
+                        </Text>
+                        <Pressable
+                          onPress={() => setPickingTrailer((p) => (p === size ? null : size))}
+                          accessibilityRole="button"
+                          accessibilityState={{ expanded: pickingTrailer === size }}
+                          accessibilityLabel={`Choose which vehicle pulls the ${size} trailer`}
+                          hitSlop={6}
+                        >
+                          <Text color={colors.primary} fontSize="$3" fontWeight="700">
+                            {by ? 'Change' : 'Pick a vehicle'}
+                          </Text>
+                        </Pressable>
+                      </XStack>
+                      {pickingTrailer === size ? trailerPicker(size, by?.id) : null}
+                    </YStack>
+                  )
+                })}
+              {asked.map((v) => (
+                <YStack key={v.id} gap="$1.5">
+                  {label(`BRING THE ${v.name.toUpperCase()}? · ${v.seats} SEATS`)}
+                  <XStack gap="$2">
+                    {choice(`${v.id}:yes`, 'Yes', bring[v.id] === true, () =>
+                      setBring((b) => ({ ...b, [v.id]: true }))
+                    )}
+                    {choice(`${v.id}:no`, 'No', bring[v.id] !== true, () =>
+                      setBring((b) => ({ ...b, [v.id]: false }))
+                    )}
+                  </XStack>
+                </YStack>
+              ))}
+            </YStack>
+            {loaded && vehicles.length <= asked.length
+              ? note(
+                  'Only the Elim Van is in the list. Add the team’s vehicles in Admin → Vehicles.'
+                )
+              : null}
+            {!loaded ? (
+              <Text color={colors.textMuted} fontSize="$3">
+                Planning from the vehicles…
+              </Text>
             ) : plan ? (
               <YStack gap="$2.5">
                 {plan.problems.map((p) => note(p))}
@@ -382,13 +556,43 @@ export function VehiclePlanner({
                         <Text color={colors.text} fontSize="$5" fontWeight="700" flexShrink={1}>
                           🚐 {pv.vehicle.name}
                         </Text>
-                        <Text
-                          color={load >= pv.vehicle.seats ? '#B45309' : colors.textMuted}
-                          fontSize="$3"
-                          fontWeight="700"
-                        >
-                          {load} of {pv.vehicle.seats}
-                        </Text>
+                        <XStack alignItems="baseline" gap="$3">
+                          <Text
+                            color={load >= pv.vehicle.seats ? '#B45309' : colors.textMuted}
+                            fontSize="$3"
+                            fontWeight="700"
+                          >
+                            {load} of {pv.vehicle.seats}
+                          </Text>
+                          <Pressable
+                            onPress={() => {
+                              setLeaveOut((l) => [...l, pv.vehicle.id])
+                              setAdded((a) => a.filter((x) => x !== pv.vehicle.id))
+                              setDriverOf((d) => {
+                                const rest = { ...d }
+                                delete rest[pv.vehicle.id]
+                                return rest
+                              })
+                              setTrailerOf((t) =>
+                                Object.fromEntries(
+                                  Object.entries(t).filter(([, id]) => id !== pv.vehicle.id)
+                                )
+                              )
+                              setChildren((c) => {
+                                const rest = { ...c }
+                                delete rest[pv.vehicle.id]
+                                return rest
+                              })
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Leave ${pv.vehicle.name} out`}
+                            hitSlop={6}
+                          >
+                            <Text color={colors.primary} fontSize="$3" fontWeight="700">
+                              Leave out
+                            </Text>
+                          </Pressable>
+                        </XStack>
                       </XStack>
                       {pv.trailer || pv.vehicle.mixedSex || pv.vehicle.fillFirst ? (
                         <Text color={colors.text} fontSize="$3" fontWeight="600">
@@ -407,7 +611,19 @@ export function VehiclePlanner({
                         </Text>
                         {personCard(pv.driver)}
                         <Pressable
-                          onPress={() => setCantDrive((c) => [...c, pv.driver])}
+                          onPress={() =>
+                            setPicking((v) => (v === pv.vehicle.id ? null : pv.vehicle.id))
+                          }
+                          accessibilityRole="button"
+                          accessibilityState={{ expanded: picking === pv.vehicle.id }}
+                          hitSlop={6}
+                        >
+                          <Text color={colors.primary} fontSize="$3" fontWeight="700">
+                            Change driver
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => notDriving(pv.driver)}
                           accessibilityRole="button"
                           accessibilityHint={`Another driver is found for ${pv.vehicle.name}, and ${nameOf(pv.driver)} rides`}
                           hitSlop={6}
@@ -417,8 +633,11 @@ export function VehiclePlanner({
                           </Text>
                         </Pressable>
                       </XStack>
+                      {picking === pv.vehicle.id
+                        ? driverPicker(pv.vehicle.id, pv.vehicle.name, pv.driver)
+                        : null}
                       <View style={styles.wrap}>
-                        {car.riders.map(personCard)}
+                        {car.riders.map((u) => personCard(u))}
                         {kids.map((k) => (
                           <View
                             key={k.id}
@@ -505,38 +724,58 @@ export function VehiclePlanner({
                   <YStack gap="$1.5">
                     {label('NOT GOING')}
                     {plan.left.map(({ vehicle, why }) => (
-                      <XStack
-                        key={vehicle.id}
-                        alignItems="center"
-                        justifyContent="space-between"
-                        gap="$2"
-                      >
-                        <Text color={colors.text} fontSize="$3" flex={1}>
-                          {vehicle.name} · {vehicle.seats} seats ·{' '}
-                          <Text color={colors.textMuted} fontSize="$3">
-                            {why}
+                      <YStack key={vehicle.id} gap="$1.5">
+                        <XStack alignItems="center" justifyContent="space-between" gap="$2">
+                          <Text color={colors.text} fontSize="$3" flex={1}>
+                            {vehicle.name} · {vehicle.seats} seats ·{' '}
+                            <Text color={colors.textMuted} fontSize="$3">
+                              {why}
+                            </Text>
                           </Text>
-                        </Text>
-                        {why === 'not needed' ? (
-                          <Pressable
-                            onPress={() => setAdded((a) => [...a, vehicle.id])}
-                            accessibilityRole="button"
-                          >
-                            <Text color={colors.primary} fontSize="$3" fontWeight="700">
-                              Bring it
-                            </Text>
-                          </Pressable>
-                        ) : why === 'not brought' ? (
-                          <Pressable
-                            onPress={() => setBring((b) => ({ ...b, [vehicle.id]: true }))}
-                            accessibilityRole="button"
-                          >
-                            <Text color={colors.primary} fontSize="$3" fontWeight="700">
-                              Bring it
-                            </Text>
-                          </Pressable>
-                        ) : null}
-                      </XStack>
+                          {why === 'not needed' ? (
+                            <Pressable
+                              onPress={() => setAdded((a) => [...a, vehicle.id])}
+                              accessibilityRole="button"
+                            >
+                              <Text color={colors.primary} fontSize="$3" fontWeight="700">
+                                Bring it
+                              </Text>
+                            </Pressable>
+                          ) : why === 'left out' ? (
+                            <Pressable
+                              onPress={() => setLeaveOut((l) => l.filter((x) => x !== vehicle.id))}
+                              accessibilityRole="button"
+                            >
+                              <Text color={colors.primary} fontSize="$3" fontWeight="700">
+                                Bring it
+                              </Text>
+                            </Pressable>
+                          ) : why === 'not brought' ? (
+                            <Pressable
+                              onPress={() => setBring((b) => ({ ...b, [vehicle.id]: true }))}
+                              accessibilityRole="button"
+                            >
+                              <Text color={colors.primary} fontSize="$3" fontWeight="700">
+                                Bring it
+                              </Text>
+                            </Pressable>
+                          ) : (
+                            <Pressable
+                              onPress={() =>
+                                setPicking((v) => (v === vehicle.id ? null : vehicle.id))
+                              }
+                              accessibilityRole="button"
+                              accessibilityState={{ expanded: picking === vehicle.id }}
+                              accessibilityHint="Pick anyone going to drive it"
+                            >
+                              <Text color={colors.primary} fontSize="$3" fontWeight="700">
+                                Bring it
+                              </Text>
+                            </Pressable>
+                          )}
+                        </XStack>
+                        {picking === vehicle.id ? driverPicker(vehicle.id, vehicle.name) : null}
+                      </YStack>
                     ))}
                   </YStack>
                 ) : null}
@@ -545,19 +784,19 @@ export function VehiclePlanner({
           </ScrollView>
 
           <XStack gap="$2" justifyContent="flex-end" flexWrap="wrap">
-            {step === 'ask' ? (
-              button('Plan', () => setStep('plan'), true, !ready || !loaded)
-            ) : (
-              <>
-                {button('Back', () => setStep('ask'))}
-                {button('Re-plan', () => setSeed((s) => (s * 48271) % 2147483647))}
-                {button(
-                  'Use this plan',
-                  () => plan && onUse(plan.cars),
-                  true,
-                  !plan || plan.vehicles.length === 0
-                )}
-              </>
+            {button('Start over manually', onManual)}
+            {button(
+              'Pick cars & drivers',
+              () => plan && onPickCars(plan.cars),
+              false,
+              !plan || plan.vehicles.length === 0
+            )}
+            {button('Re-plan', () => setSeed((sd) => (sd * 48271) % 2147483647))}
+            {button(
+              'Use this plan',
+              () => plan && onUse(plan.cars),
+              true,
+              !plan || plan.vehicles.length === 0
             )}
           </XStack>
         </YStack>

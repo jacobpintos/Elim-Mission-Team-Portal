@@ -60,6 +60,8 @@ interface CarpoolBuilderProps {
    * (lib/carpoolMemory): its own last arrangement isn't another time together.
    */
   rideKey?: string
+  /** Opened on Auto-assign, its cars and drivers set up from `cars`: chosen there, and the riders filled again. */
+  startAuto?: boolean
   onSave: (cars: CarpoolCarData[]) => void
   onClose: () => void
 }
@@ -98,6 +100,7 @@ export function CarpoolBuilder({
   people,
   lookup,
   rideKey,
+  startAuto = false,
   onSave,
   onClose,
 }: CarpoolBuilderProps) {
@@ -122,7 +125,7 @@ export function CarpoolBuilder({
   // The car's name being typed: its box outlined in the theme's colour.
   const [naming, setNaming] = useState(false)
   // Auto-assign being set up (./AutoAssignPanel), and what it said when done.
-  const [auto, setAuto] = useState(false)
+  const [auto, setAuto] = useState(startAuto)
   const [assigned, setAssigned] = useState<string | null>(null)
 
   const rootRef = useRef<View>(null)
@@ -658,6 +661,24 @@ export function CarpoolBuilder({
                         </Pressable>
                       </XStack>
 
+                      {label('PULLING')}
+                      <TextInput
+                        key={`pulling:${selected.id}`}
+                        value={selected.pulling ?? ''}
+                        onChangeText={(pulling) => updateCar(selected.id, { pulling })}
+                        placeholder="Nothing — or e.g. Small trailer"
+                        placeholderTextColor={colors.textMuted}
+                        style={[
+                          styles.input,
+                          {
+                            color: colors.text,
+                            backgroundColor: colors.background,
+                            borderColor: colors.textMuted,
+                          },
+                        ]}
+                        accessibilityLabel="What this car pulls"
+                      />
+
                       {label('DRIVER')}
                       <View ref={driverRef} collapsable={false} style={zoneStyle('driver')}>
                         {selected.driver ? (
@@ -871,6 +892,11 @@ export function CarpoolBuilder({
                       >
                         <Text color={colors.text} fontSize="$4" fontWeight="700">
                           🚗 {carName(car, i)}
+                          {car.pulling?.trim() ? (
+                            <Text color={colors.textMuted} fontSize="$3" fontWeight="600">
+                              {` · pulls ${car.pulling.trim()}`}
+                            </Text>
+                          ) : null}
                         </Text>
                         <Text color={colors.textMuted} fontSize="$3">
                           {car.driver ? `${personFor(car.driver).name} driving` : 'No driver yet'}

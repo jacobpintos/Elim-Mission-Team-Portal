@@ -36,7 +36,14 @@ export interface AssignCar {
   seats: number
   /** '' for none yet: one of its riders, to be picked. */
   driver: string
+  /**
+   * Put in it by hand: they stay where they were put, whatever the rules —
+   * the rest are filled around them.
+   */
+  riders?: readonly string[]
   children?: CarpoolChild[]
+  /** What it pulls ("Small trailer"): carried through, as it was. */
+  pulling?: string
   /** Men and women ride in it together (the Elim Van): nobody in it counts as mixed. */
   mixedSex?: boolean
   /**
@@ -123,21 +130,32 @@ const seatsOf = (car: AssignCar) =>
 
 export function autoAssign(input: AssignInput): AssignResult {
   const drivers = new Set(input.cars.map((c) => c.driver).filter(Boolean))
+  // Put in a car by hand, each in one only: kept there, and never moved.
+  const placed = new Set<string>()
+  const fixed = input.cars.map((c) =>
+    [...new Set(c.riders ?? [])].filter((u) => {
+      if (!u || drivers.has(u) || placed.has(u)) return false
+      placed.add(u)
+      return true
+    })
+  )
   const left = new Set(input.leftOut ?? [])
   const random = seeded(input.seed ?? 1)
   const riders = shuffle(
     [...new Set(input.people.map((p) => p.uid))].filter(
-      (u) => u && !drivers.has(u) && !left.has(u)
+      (u) => u && !drivers.has(u) && !placed.has(u) && !left.has(u)
     ),
     random
   )
   const context = costContext(input.people, input.rules, input.together)
   /** Who rides at all — in a car or driving one: a pair kept together can only be where both are. */
-  const riding = new Set([...drivers, ...riders])
-  const costOf = (car: AssignCar, inIt: string[]) => carCost(car, inIt, context, riding)
-
+  const riding = new Set([...drivers, ...placed, ...riders])
   const cars = input.cars
-  const room = cars.map(roomFor)
+  // Each car's cost with those put in it by hand: the rest are placed around them.
+  const costOf = (car: AssignCar, inIt: string[]) =>
+    carCost(car, [...fixed[cars.indexOf(car)], ...inIt], context, riding)
+
+  const room = cars.map((car, i) => Math.max(0, roomFor(car) - fixed[i].length))
   const inCar: string[][] = cars.map(() => [])
   const noRoom: string[] = []
 
@@ -228,8 +246,9 @@ export function autoAssign(input: AssignInput): AssignResult {
       label: car.label,
       seats: seatsOf(car),
       driver: car.driver,
-      riders: inCar[i],
+      riders: [...fixed[i], ...inCar[i]],
       ...(car.children?.length ? { children: car.children } : {}),
+      ...(car.pulling?.trim() ? { pulling: car.pulling.trim() } : {}),
     })),
     noRoom,
   }

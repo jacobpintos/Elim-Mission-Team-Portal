@@ -313,4 +313,101 @@ describe('planning a carpool from the vehicles', () => {
       planVehicles({ vehicles: [], people: men('a'), trailers: NO_TRAILERS }).problems
     ).toEqual(['No vehicles yet — add them in Admin → Vehicles.'])
   })
+
+  describe('changed by hand', () => {
+    const few = [vehicle('odyssey', 7, ['andy']), vehicle('corolla', 5, ['dan', 'sam'])]
+    const going = men('andy', 'sam', 'dan', 'tom')
+
+    it('leaves out a vehicle left out, and says so', () => {
+      const plan = planVehicles({
+        vehicles: few,
+        people: going,
+        trailers: NO_TRAILERS,
+        leaveOut: ['odyssey'],
+      })
+      expect(ids(plan)).toEqual(['corolla'])
+      expect(plan.left).toContainEqual({ vehicle: few[0], why: 'left out' })
+    })
+
+    it('has the driver chosen drive it — anyone going, kept for it or not, whatever the rules', () => {
+      // Tom isn't one of the Corolla's drivers, and doesn't drive at all by the rules.
+      const plan = planVehicles({
+        vehicles: few,
+        people: going,
+        trailers: NO_TRAILERS,
+        driverOf: { corolla: 'tom' },
+        add: ['corolla'],
+        rules: [{ uid: 'tom', noDrive: true }],
+      })
+      expect(plan.cars.find((c) => c.id === 'corolla')?.driver).toBe('tom')
+    })
+
+    it('brings a vehicle no one kept for it is going to drive, once someone is chosen', () => {
+      const plan = planVehicles({
+        vehicles: [...few, vehicle('civic', 5, ['beth'])],
+        people: going,
+        trailers: NO_TRAILERS,
+        driverOf: { civic: 'sam' },
+        add: ['civic'],
+      })
+      expect(ids(plan)).toContain('civic')
+      expect(plan.cars.find((c) => c.id === 'civic')?.driver).toBe('sam')
+    })
+
+    it('has a trailer pulled by the driver chosen, though the rules say they can’t', () => {
+      const plan = planVehicles({
+        vehicles: [vehicle('f150', 5, ['sam'], 'both')],
+        people: going,
+        trailers: { small: true, big: false },
+        driverOf: { f150: 'andy' },
+        rules: [{ uid: 'andy', noTrailer: true }],
+      })
+      expect(plan.vehicles[0].trailer).toBe('small')
+      expect(plan.vehicles[0].driver).toBe('andy')
+    })
+
+    it('has the vehicle chosen pull the trailer — brought for it, able or not — and says so', () => {
+      const trucks = [
+        vehicle('f150', 5, ['sam'], 'both'),
+        vehicle('corolla', 5, ['dan']),
+        vehicle('odyssey', 7, ['andy']),
+      ]
+      const plan = planVehicles({
+        vehicles: trucks,
+        people: going,
+        trailers: { small: true, big: false },
+        trailerOf: { small: 'corolla' },
+      })
+      expect(ids(plan)).toContain('corolla')
+      expect(plan.vehicles.find((pv) => pv.vehicle.id === 'corolla')?.trailer).toBe('small')
+      expect(plan.vehicles.filter((pv) => pv.trailer)).toHaveLength(1)
+      expect(plan.cars.find((c) => c.id === 'corolla')?.pulling).toBe('Small trailer')
+    })
+
+    it('keeps one chosen for one trailer from being given the other', () => {
+      const trucks = [vehicle('f150', 5, ['sam'], 'both'), vehicle('ram', 5, ['dan'], 'both')]
+      for (const seed of [1, 2, 3]) {
+        const plan = planVehicles({
+          vehicles: trucks,
+          people: going,
+          trailers: { small: true, big: true },
+          trailerOf: { small: 'f150' },
+          seed,
+        })
+        expect(plan.vehicles.find((pv) => pv.vehicle.id === 'f150')?.trailer).toBe('small')
+        expect(plan.vehicles.find((pv) => pv.vehicle.id === 'ram')?.trailer).toBe('big')
+        expect(plan.cars.find((c) => c.id === 'ram')?.pulling).toBe('Big trailer')
+      }
+    })
+
+    it('lists who it is kept for, as drivers to change to', () => {
+      const plan = planVehicles({ vehicles: few, people: going, trailers: NO_TRAILERS })
+      for (const pv of plan.vehicles) {
+        expect(plan.canDrive[pv.vehicle.id]).toContain(pv.driver)
+      }
+      if (ids(plan).includes('corolla')) {
+        expect([...plan.canDrive.corolla].sort()).toEqual(['dan', 'sam'])
+      }
+    })
+  })
 })

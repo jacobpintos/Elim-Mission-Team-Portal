@@ -130,9 +130,9 @@ export function PersonRulesSection() {
         Special rules for people
       </Text>
       <Text fontSize="$3" color={colors.textMuted}>
-        For driving and seating, followed when a carpool is planned. People who share a last name
-        may already ride together whatever their sex, and a car with a husband and wife (or any man
-        and woman of one family) in it may take anyone.
+        For driving and seating, followed when the app fills a carpool — never for what’s arranged
+        by hand. People who share a last name may already ride together whatever their sex, and a
+        car with a husband and wife (or any man and woman of one family) in it may take anyone.
       </Text>
 
       {draft ? (
