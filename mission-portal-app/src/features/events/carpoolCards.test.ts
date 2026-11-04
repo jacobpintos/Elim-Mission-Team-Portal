@@ -4,13 +4,16 @@ import {
   cardColorsFor,
   CARD_COLORS,
   carName,
+  carProblems,
   childNames,
   headCount,
   matchesSearch,
   moveTo,
   newCar,
+  overSeats,
   newChild,
   spotOf,
+  swapPlaces,
   tidyCars,
   unplaced,
 } from './carpoolCards'
@@ -150,5 +153,46 @@ describe('carpool cards', () => {
     expect(matchesSearch('Jacob Pintos', 'jacob smith')).toBe(false)
     expect(matchesSearch('José Núñez', 'jose nunez')).toBe(true)
     expect(matchesSearch('Anyone', '')).toBe(true)
+  })
+
+  describe('what keeps cars from being saved', () => {
+    it('says a car with no driver, and one with more in it than it holds', () => {
+      const cars = [
+        car('a', 'd1', ['r1', 'r2'], { seats: 3 }),
+        car('b', '', ['r3']),
+        car('c', 'd2', ['r4', 'r5', 'r6'], { seats: 3, label: 'Van' }),
+      ]
+      expect(cars.map(overSeats)).toEqual([0, 0, 1])
+      expect(carProblems(cars)).toEqual([
+        'Car 2 has no driver.',
+        'Van has 4 in 3 seats — 1 too many.',
+      ])
+      expect(carProblems([cars[0]])).toEqual([])
+    })
+
+    it('keeps what a car pulls when it is tidied for saving', () => {
+      expect(tidyCars([{ ...car('a', 'd1'), pulling: ' Small trailer ' }])[0].pulling).toBe(
+        'Small trailer'
+      )
+      expect(tidyCars([{ ...car('a', 'd1'), pulling: '  ' }])[0]).not.toHaveProperty('pulling')
+    })
+  })
+
+  it('swaps two people’s places — a driver for a passenger, or a seat for none', () => {
+    const cars = [car('a', 'dan', ['sam', 'ann']), car('b', 'bo', ['cy'])]
+    // A passenger and a driver in another car.
+    const one = swapPlaces(cars, 'sam', 'bo')
+    expect(one[0]).toMatchObject({ driver: 'dan', riders: ['bo', 'ann'] })
+    expect(one[1]).toMatchObject({ driver: 'sam', riders: ['cy'] })
+    // A driver and a passenger in their own car.
+    expect(swapPlaces(cars, 'dan', 'ann')[0]).toMatchObject({
+      driver: 'ann',
+      riders: ['sam', 'dan'],
+    })
+    // Someone with no seat takes one; whoever had it goes without.
+    const seated = swapPlaces(cars, 'joe', 'cy')
+    expect(seated[1].riders).toEqual(['joe'])
+    expect(spotOf(seated, 'cy')).toEqual({ kind: 'pool' })
+    expect(swapPlaces(cars, 'sam', 'sam')).toBe(cars)
   })
 })

@@ -75,6 +75,16 @@ export function moveTo(cars: CarpoolCarData[], uid: string, to: Spot): CarpoolCa
   })
 }
 
+/**
+ * Two people's places swapped — a driver's seat for a passenger's, one car
+ * for another, or a seat for none (whoever had one goes without).
+ */
+export function swapPlaces(cars: CarpoolCarData[], a: string, b: string): CarpoolCarData[] {
+  if (!a || !b || a === b) return cars
+  const other = (u: string) => (u === a ? b : u === b ? a : u)
+  return cars.map((c) => ({ ...c, driver: other(c.driver), riders: c.riders.map(other) }))
+}
+
 /** Everyone in a car, as driver or passenger. */
 export const placedUids = (cars: CarpoolCarData[]) =>
   new Set(cars.flatMap((c) => [c.driver, ...c.riders].filter(Boolean)))
@@ -129,7 +139,28 @@ export function tidyCars(cars: CarpoolCarData[]): CarpoolCarData[] {
     }
     if (c.seats) car.seats = c.seats
     if (children.length) car.children = children
+    if (c.pulling?.trim()) car.pulling = c.pulling.trim()
     return car
+  })
+}
+
+/** How many more are in a car than it holds: 0 when it fits, or its size isn't said. */
+export const overSeats = (car: CarpoolCarData) =>
+  car.seats ? Math.max(0, headCount(car) - car.seats) : 0
+
+/**
+ * What keeps cars arranged by hand from being saved, a line a car: one with
+ * no driver, or more in it than it holds. Either is fine while people are
+ * being moved about — not once they're saved. Empty when they can be.
+ */
+export function carProblems(cars: CarpoolCarData[]): string[] {
+  return cars.flatMap((car, i) => {
+    const name = carName(car, i)
+    const over = overSeats(car)
+    return [
+      ...(car.driver ? [] : [`${name} has no driver.`]),
+      ...(over ? [`${name} has ${headCount(car)} in ${car.seats} seats — ${over} too many.`] : []),
+    ]
   })
 }
 

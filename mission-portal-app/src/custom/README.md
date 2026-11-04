@@ -24,7 +24,12 @@ the carpool planned from the vehicles, done, with its questions (trailers,
 "Bring the Elim Van?") answered None and No above it. Every part of it can be
 changed there, and then: Use this plan, Pick cars & drivers (the builder's
 Auto-assign, with the plan's vehicles and drivers to change and the riders
-filled again), or Start over manually (the builder, with no cars).
+filled again), or Start over manually (the builder, with no cars). Anyone
+can be dragged (or tapped, then sent) to another vehicle, onto someone to swap
+places, or into a driver's seat; from the first move on nobody else moves on
+their own, and Re-plan arranges everyone again in the same vehicles. A vehicle
+may sit with no driver, or too many in it, while people are moved — it says
+so, and the plan can't be used (nor the builder's cars saved) until it's fixed.
 
 | Feature             | Where                                                                                                                | What it keeps                                                  |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |

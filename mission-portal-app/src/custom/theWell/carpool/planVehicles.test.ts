@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ELIM_VAN } from '../vehicles/elimVan'
 import type { Vehicle } from '../vehicles/types'
-import { driversFor, planVehicles, type PlanPerson } from './planVehicles'
+import { driversFor, NO_DRIVER, planVehicles, type PlanPerson } from './planVehicles'
 
 const men = (...uids: string[]): PlanPerson[] => uids.map((uid) => ({ uid, sex: 'male' }))
 const women = (...uids: string[]): PlanPerson[] => uids.map((uid) => ({ uid, sex: 'female' }))
@@ -427,6 +427,36 @@ describe('planning a carpool from the vehicles', () => {
       expect(more.vehicles).toHaveLength(4)
       expect(ids(more)).toEqual([...ids(plan), offer].sort())
       expect(more.full).toEqual([])
+    })
+
+    it('keeps riders where they were put by hand — past its seats, even — and fills around them', () => {
+      const plan = planVehicles({
+        vehicles: few,
+        people: [...going, ...women('beth', 'fay')],
+        trailers: NO_TRAILERS,
+        add: ['odyssey', 'corolla'],
+        driverOf: { odyssey: 'andy', corolla: 'dan' },
+        placed: { beth: 'corolla', sam: 'corolla', tom: 'corolla', fay: 'corolla', x: 'corolla' },
+      })
+      const corolla = plan.cars.find((c) => c.id === 'corolla')!
+      // Four put in a five-seater with its driver: all kept; no one going isn't placed.
+      expect([...corolla.riders].sort()).toEqual(['beth', 'fay', 'sam', 'tom'])
+      expect(plan.cars.find((c) => c.id === 'odyssey')!.riders).toEqual([])
+    })
+
+    it('lets a vehicle be without a driver for now, when its driver is moved out by hand', () => {
+      const plan = planVehicles({
+        vehicles: few,
+        people: going,
+        trailers: NO_TRAILERS,
+        add: ['odyssey', 'corolla'],
+        driverOf: { odyssey: NO_DRIVER, corolla: NO_DRIVER },
+        placed: { andy: 'corolla' },
+      })
+      expect(ids(plan)).toEqual(['corolla', 'odyssey'])
+      for (const car of plan.cars) expect(car.driver).toBe('')
+      expect(plan.cars.find((c) => c.id === 'corolla')!.riders).toContain('andy')
+      expect(plan.cars.flatMap((c) => c.riders).sort()).toEqual(['andy', 'dan', 'sam', 'tom'])
     })
 
     it('lists who it is kept for, as drivers to change to', () => {

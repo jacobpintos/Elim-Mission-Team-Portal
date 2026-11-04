@@ -56,8 +56,16 @@ export interface PlanInput {
   /**
    * A vehicle's driver chosen by hand, by its id: they drive it, whoever they
    * are — the rules are for choosing, and a person may choose as they like.
+   * NO_DRIVER ('') for none, for now: its driver moved out by hand, and no
+   * one put in yet — said, and not to be saved that way.
    */
   driverOf?: Record<string, string>
+  /**
+   * Riders put in a vehicle by hand, by uid: the vehicle's id. They stay
+   * where they were put, if it goes — past its seats, even — and everyone
+   * else is filled in around them.
+   */
+  placed?: Record<string, string>
   /**
    * The vehicle chosen by hand to pull each trailer asked for, by its id: it
    * goes, and pulls it — whatever it's listed as able to pull.
@@ -79,6 +87,7 @@ export interface PlanInput {
 
 export interface PlannedVehicle {
   vehicle: Vehicle
+  /** NO_DRIVER ('') for none yet, by hand: to be put in before it's used. */
   driver: string
   /** The trailer it pulls, if any. */
   trailer: 'small' | 'big' | null
@@ -108,6 +117,9 @@ export interface Plan {
   /** The notes kept for people in the vehicles (Admin → Vehicles), by uid. */
   notes: { uid: string; note: string }[]
 }
+
+/** A vehicle with no driver for now, its driver moved out by hand: driverOf's ''. */
+export const NO_DRIVER = ''
 
 /** A trailer, as the carpool says what a vehicle pulls. */
 export const TRAILER_SAID = { small: 'Small trailer', big: 'Big trailer' } as const
@@ -157,20 +169,22 @@ export function planVehicles(input: PlanInput): Plan {
   const problems: string[] = []
   const left: Plan['left'] = []
 
-  // A driver chosen by hand, if they're going: theirs to drive, whatever the rules say.
-  const handPicked = (v: Vehicle) => {
+  // A driver chosen by hand, if they're going: theirs to drive, whatever the
+  // rules say — or none for now, moved out by hand.
+  const handPicked = (v: Vehicle): string | undefined => {
     const uid = input.driverOf?.[v.id]
+    if (uid === NO_DRIVER) return NO_DRIVER
     return uid && going.has(uid) ? uid : undefined
   }
   const eligible = new Map(
     input.vehicles.map((v) => {
       const uid = handPicked(v)
-      return [v.id, uid ? [uid] : driversFor(v, input.vehicles, going, cantDrive)]
+      return [v.id, uid !== undefined ? [uid] : driversFor(v, input.vehicles, going, cantDrive)]
     })
   )
   /** Who may drive it, pulling a trailer or not. */
   const ableFor = (v: Vehicle, trailer: boolean) =>
-    handPicked(v)
+    handPicked(v) !== undefined
       ? eligible.get(v.id)!
       : eligible.get(v.id)!.filter((u) => !trailer || !noTrailer.has(u))
   /** Chosen by hand to pull a trailer asked for. */
@@ -329,6 +343,9 @@ export function planVehicles(input: PlanInput): Plan {
       label: p.vehicle.name,
       seats: p.vehicle.seats,
       driver: p.driver,
+      riders: Object.entries(input.placed ?? {})
+        .filter(([uid, id]) => id === p.vehicle.id && going.has(uid))
+        .map(([uid]) => uid),
       children: input.children?.[p.vehicle.id] ?? [],
       mixedSex: !!p.vehicle.mixedSex,
       fillFirst: !!p.vehicle.fillFirst,
@@ -460,6 +477,12 @@ function matchDrivers(
     if (n === order.length) return true
     const i = order[n]
     for (const u of lists[i]) {
+      // None for now, by hand: as many vehicles as that's so for.
+      if (u === NO_DRIVER) {
+        out[i] = u
+        if (go(n + 1)) return true
+        continue
+      }
       if (used.has(u)) continue
       used.add(u)
       out[i] = u

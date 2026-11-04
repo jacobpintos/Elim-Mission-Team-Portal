@@ -26,10 +26,12 @@ import {
   CARD_COLORS,
   cardColorsFor,
   carName,
+  carProblems,
   headCount,
   matchesSearch,
   moveTo,
   newCar,
+  overSeats,
   newChild,
   spotOf,
   tidyCars,
@@ -189,6 +191,9 @@ export function CarpoolBuilder({
   }
 
   const dirty = JSON.stringify(tidyCars(cars)) !== JSON.stringify(tidyCars(initialCars))
+  // A car with no driver, or more in it than it holds: fine while people are
+  // moved about, but not to be saved.
+  const problems = carProblems(cars)
 
   // ── Changing the cars ─────────────────────────────────────────────────
 
@@ -427,10 +432,14 @@ export function CarpoolBuilder({
                 </YStack>
                 <Pressable
                   onPress={() => onSave(tidyCars(cars))}
+                  disabled={problems.length > 0}
                   accessibilityRole="button"
+                  accessibilityState={{ disabled: problems.length > 0 }}
+                  accessibilityHint={problems.length ? problems.join(' ') : undefined}
                   style={[
                     styles.button,
                     { backgroundColor: colors.primary, borderColor: colors.primary },
+                    problems.length > 0 && { opacity: 0.5 },
                   ]}
                 >
                   <Text color={colors.onPrimary} fontWeight="700" fontSize="$3">
@@ -449,12 +458,26 @@ export function CarpoolBuilder({
                 </Pressable>
               </XStack>
 
+              {problems.length ? (
+                <YStack gap="$0.5">
+                  {problems.map((p) => (
+                    <Text key={p} color="$red10" fontSize="$3" fontWeight="600">
+                      {p}
+                    </Text>
+                  ))}
+                  <Text color={colors.textMuted} fontSize="$2">
+                    Fix {problems.length === 1 ? 'this' : 'these'} to save.
+                  </Text>
+                </YStack>
+              ) : null}
+
               {/* The cars: as many lines as they take, so every one, and
                   "+ Add car" after them, is always in sight. */}
               <View ref={tabsRef} collapsable={false} style={styles.tabs}>
                 {cars.map((car, i) => {
                   const on = car.id === selectedId
                   const over = hover === `car:${car.id}`
+                  const wrong = !car.driver || overSeats(car) > 0
                   return (
                     <Pressable
                       key={car.id}
@@ -489,16 +512,26 @@ export function CarpoolBuilder({
                       <View
                         style={[
                           styles.count,
-                          { backgroundColor: on ? 'rgba(255,255,255,0.28)' : colors.surface },
+                          {
+                            backgroundColor: wrong
+                              ? '#DC2626'
+                              : on
+                                ? 'rgba(255,255,255,0.28)'
+                                : colors.surface,
+                          },
                         ]}
-                        accessibilityLabel={`${headCount(car)} in this car`}
+                        accessibilityLabel={`${headCount(car)} in this car${
+                          car.driver ? '' : ', no driver'
+                        }${overSeats(car) ? `, ${overSeats(car)} too many` : ''}`}
                       >
                         <Text
-                          color={on ? colors.onPrimary : colors.text}
+                          color={wrong ? 'white' : on ? colors.onPrimary : colors.text}
                           fontSize="$2"
                           fontWeight="700"
                         >
                           {headCount(car)}
+                          {car.seats ? `/${car.seats}` : ''}
+                          {car.driver ? '' : ' · no driver'}
                         </Text>
                       </View>
                     </Pressable>
@@ -899,7 +932,13 @@ export function CarpoolBuilder({
                           ) : null}
                         </Text>
                         <Text color={colors.textMuted} fontSize="$3">
-                          {car.driver ? `${personFor(car.driver).name} driving` : 'No driver yet'}
+                          {car.driver ? (
+                            `${personFor(car.driver).name} driving`
+                          ) : (
+                            <Text color="$red10" fontWeight="700">
+                              No driver
+                            </Text>
+                          )}
                           {car.riders.length
                             ? ` · ${car.riders.length} passenger${car.riders.length === 1 ? '' : 's'}`
                             : ''}
@@ -907,6 +946,11 @@ export function CarpoolBuilder({
                             ? ` · ${car.children.length} ${car.children.length === 1 ? 'child' : 'children'}`
                             : ''}
                           {car.seats ? ` · ${headCount(car)} of ${car.seats} seats` : ''}
+                          {overSeats(car) ? (
+                            <Text color="$red10" fontWeight="700">
+                              {` — ${overSeats(car)} too many`}
+                            </Text>
+                          ) : null}
                         </Text>
                         {car.riders.length && car.driver ? (
                           <Text color={colors.textMuted} fontSize="$2" numberOfLines={2}>
