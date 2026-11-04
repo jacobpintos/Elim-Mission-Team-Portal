@@ -116,6 +116,19 @@ describe('auto-assigning the cars', () => {
     ).toBe('Pick a driver for bus and Van from those in them.')
   })
 
+  it('fills a car filled first before the others, men and women together where it may', () => {
+    const van = { ...car('van', 15, 'vd'), mixedSex: true, fillFirst: true }
+    const { cars, noRoom } = autoAssign({
+      cars: [van, car('civic', 5, 'wd')],
+      people: [...men('vd', 'm1', 'm2', 'm3', 'm4'), ...women('wd', 'w1', 'w2', 'w3')],
+      seed: 5,
+    })
+    expect(noRoom).toEqual([])
+    // Everyone rides in the van: the Civic goes with its driver alone.
+    expect(ridersOf(cars, 'van')).toEqual(['m1', 'm2', 'm3', 'm4', 'w1', 'w2', 'w3'])
+    expect(ridersOf(cars, 'civic')).toEqual([])
+  })
+
   it('gives the same arrangement for the same seed, and one no worse for another', () => {
     const input = {
       cars: [car('a', 5, 'd1'), car('b', 6, 'd2'), car('c', 4, 'd3')],

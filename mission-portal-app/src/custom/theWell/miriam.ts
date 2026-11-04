@@ -22,6 +22,8 @@ const known = (ids: unknown): string[] => {
 }
 const trailerOf = (v: unknown): TrailerAbility | null =>
   v === 'none' || v === 'small' || v === 'both' ? v : null
+/** "yes" or "no" as said; null to leave it. */
+const yesNo = (v: unknown): boolean | null => (v === 'yes' ? true : v === 'no' ? false : null)
 const seatsOf = (v: unknown): number => {
   const n = Math.round(Number(v))
   return Number.isFinite(n) && n > 0 && n <= 60 ? n : 0
@@ -34,7 +36,10 @@ export function vehicleLine(v: Vehicle): string {
     : v.drivers.length
       ? v.drivers.map(nameOf).join(', ')
       : 'no drivers yet'
-  return `${v.name} · ${v.seats} seats · ${TRAILER_LABELS[v.trailer]} · Drivers: ${drivers}`
+  const how = [v.mixedSex ? 'men and women together' : '', v.fillFirst ? 'filled first' : '']
+    .filter(Boolean)
+    .join(', ')
+  return `${v.name} · ${v.seats} seats · ${TRAILER_LABELS[v.trailer]}${how ? ` · ${how}` : ''} · Drivers: ${drivers}`
 }
 
 /** The vehicle named, as said: its name in full, or the only one whose name has those words. */
@@ -61,6 +66,8 @@ export async function vehiclesForMiriam() {
         ? ['anyone who may drive another vehicle', ...v.drivers.map(nameOf)]
         : v.drivers.map(nameOf),
       asked_each_time: !!v.ask,
+      men_and_women_together: !!v.mixedSex,
+      filled_first: !!v.fillFirst,
       ...(v.notes ? { notes: v.notes } : {}),
     })),
   }
@@ -85,6 +92,8 @@ export async function addVehicle(profile: UserProfile, input: Record<string, unk
     seats: seats || 5,
     drivers: known(input.driver_ids),
     trailer: trailerOf(input.trailer) ?? 'none',
+    ...(yesNo(input.men_and_women_together) ? { mixedSex: true } : {}),
+    ...(yesNo(input.fill_first) ? { fillFirst: true } : {}),
     ...(String(input.notes ?? '').trim() ? { notes: String(input.notes).trim() } : {}),
   }
   const { save, remove } = useVehiclesStore.getState()
@@ -128,8 +137,12 @@ export async function updateVehicle(profile: UserProfile, input: Record<string, 
   const seats = seatsOf(input.seats)
   const trailer = trailerOf(input.trailer)
   const notes = String(input.notes ?? '').trim()
+  const together = yesNo(input.men_and_women_together)
+  const first = yesNo(input.fill_first)
   const after: Vehicle = {
     ...before,
+    ...(together !== null ? { mixedSex: together } : {}),
+    ...(first !== null ? { fillFirst: first } : {}),
     ...(newName ? { name: newName } : {}),
     ...(seats ? { seats } : {}),
     ...(trailer ? { trailer } : {}),
@@ -153,6 +166,16 @@ export async function updateVehicle(profile: UserProfile, input: Record<string, 
           .filter((u) => before.drivers.includes(u))
           .map(nameOf)
           .join(', ')}`
+      : '',
+    together !== null && together !== !!before.mixedSex
+      ? together
+        ? 'Men and women may ride in it together'
+        : 'Men’s or women’s only, by its driver'
+      : '',
+    first !== null && first !== !!before.fillFirst
+      ? first
+        ? 'Filled first when it goes'
+        : 'No longer filled first'
       : '',
     notes && notes !== before.notes ? `Notes: ${notes}` : '',
   ].filter(Boolean)

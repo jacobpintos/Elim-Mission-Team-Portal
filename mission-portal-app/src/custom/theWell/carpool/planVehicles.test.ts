@@ -88,6 +88,24 @@ describe('planning a carpool from the vehicles', () => {
     expect(withVan.noRoom).toEqual([])
   })
 
+  it('with the Elim Van going: men and women together in it, filled first, so fewer cars go', () => {
+    const plan = planVehicles({
+      vehicles: fleet,
+      people: team,
+      trailers: NO_TRAILERS,
+      bring: { [ELIM_VAN.id]: true },
+    })
+    // 19 people: the van's 15 and one more vehicle, not the four it takes without it.
+    expect(plan.vehicles).toHaveLength(2)
+    expect(plan.mixed).toBe(0)
+    expect(plan.noRoom).toEqual([])
+    const van = plan.cars.find((c) => c.id === ELIM_VAN.id)!
+    expect(1 + van.riders.length).toBe(15)
+    // A full van is what it should be: nothing offered for it.
+    expect(plan.full).not.toContain(ELIM_VAN.id)
+    expect(plan.offer).toBeNull()
+  })
+
   it('takes the vehicle of a driver who is going, when its owner isn’t', () => {
     const borrowed = vehicle('suburban', 8, ['owner', 'kim'])
     const plan = planVehicles({
@@ -140,6 +158,23 @@ describe('planning a carpool from the vehicles', () => {
     })
     expect(again.vehicles[0].driver).toBe(other)
     expect(again.cars[0].riders).toContain(driver)
+  })
+
+  it('never brings the Elim Van in another’s place, nor offers it, unless it was asked for', () => {
+    // Sam can't drive: his truck has no one else to drive it. The van could
+    // take everyone, with Andy or Dan driving — but it wasn't asked for.
+    for (const bring of [undefined, { [ELIM_VAN.id]: false }]) {
+      const plan = planVehicles({
+        vehicles: fleet,
+        people: men('sam', 'andy', 'a', 'b', 'c', 'd', 'e', 'f', 'g'),
+        trailers: NO_TRAILERS,
+        bring,
+        cantDrive: ['sam'],
+      })
+      expect(ids(plan)).not.toContain(ELIM_VAN.id)
+      expect(plan.offer?.id).not.toBe(ELIM_VAN.id)
+      expect(plan.left).toContainEqual({ vehicle: fleet[5], why: 'not brought' })
+    }
   })
 
   it('brings a vehicle added by hand, or with children in it', () => {

@@ -1,3 +1,5 @@
+import { ELIM_VAN_ID } from './elimVan'
+
 /**
  * Custom: The Well. A vehicle the team can bring to an event, as an admin
  * keeps it (Admin → Vehicles): whose it is doesn't matter, only who may drive
@@ -22,6 +24,17 @@ export interface Vehicle {
   anyDriver?: boolean
   /** Asked about each time a carpool is planned: "Bring the Elim Van?" */
   ask?: boolean
+  /**
+   * Men and women may ride in it together (the Elim Van): it is filled with
+   * whoever the other vehicles can't keep apart, and nobody in it counts as
+   * mixed. Others are men's or women's, by their driver.
+   */
+  mixedSex?: boolean
+  /**
+   * Filled before the others when it goes (the Elim Van), so fewer cars are
+   * needed — full is what it should be, and no reason to bring another.
+   */
+  fillFirst?: boolean
   /** Anything else to know: "Needs gas card", "Tow hitch is 2 inch". */
   notes?: string
 }
@@ -55,6 +68,13 @@ export function vehicleFrom(id: string, data: Record<string, unknown> | undefine
     trailer,
     ...(d.anyDriver === true ? { anyDriver: true } : {}),
     ...(d.ask === true ? { ask: true } : {}),
+    // The Elim Van kept before these were asked: men and women together, and filled first.
+    ...(d.mixedSex === true || (d.mixedSex === undefined && id === ELIM_VAN_ID)
+      ? { mixedSex: true }
+      : {}),
+    ...(d.fillFirst === true || (d.fillFirst === undefined && id === ELIM_VAN_ID)
+      ? { fillFirst: true }
+      : {}),
     ...(typeof d.notes === 'string' && d.notes.trim() ? { notes: d.notes.trim() } : {}),
   }
 }
@@ -68,6 +88,8 @@ export function vehicleData(v: Vehicle): Record<string, unknown> {
     trailer: v.trailer,
     anyDriver: !!v.anyDriver,
     ask: !!v.ask,
+    mixedSex: !!v.mixedSex,
+    fillFirst: !!v.fillFirst,
     notes: v.notes?.trim() ?? '',
   }
 }

@@ -15,15 +15,19 @@ import { canPull, type TrailersNeeded, type Vehicle } from '../vehicles/types'
  *    (`cantDrive`) isn't asked to, and rides instead.
  *  - The trailers asked for: the big one behind a vehicle that can pull it,
  *    the small one behind another that can.
- *  - Vehicles asked about ("Bring the Elim Van?") only when the answer is yes;
- *    one added by hand, or with children in it, always.
+ *  - Vehicles asked about ("Bring the Elim Van?") only when the answer is yes
+ *    — never chosen in another's place when a driver can't drive, nor offered
+ *    when one is full; one added by hand, or with children in it, always.
  *
  * And then, in this order:
  *  1. Men with men and women with women: as few as can be in a vehicle with
- *     the other sex (each vehicle's driver decides whose it is).
+ *     the other sex (each vehicle's driver decides whose it is). A vehicle
+ *     men and women may share (the Elim Van) takes whoever the others can't
+ *     keep apart, and nobody in it counts.
  *  2. As few vehicles as possible.
  *  3. No vehicle full: the most seats to spare. When a vehicle is full all the
- *     same, the next one to bring is offered (`offer`).
+ *     same, the next one to bring is offered (`offer`). A vehicle filled
+ *     first (the Elim Van) is filled before the rest instead, so fewer go.
  *
  * Pure: nothing read or written.
  */
@@ -144,9 +148,11 @@ export function planVehicles(input: PlanInput): Plan {
   ): Omit<Choice, 'spare'> | null => {
     const trailers = trailersFor(set, needed)
     if (!trailers) return null
-    // Each vehicle's driver is a man, a woman, or one not said: tried each way it can be.
+    // Each vehicle's driver is a man, a woman, or one not said: tried each way
+    // it can be. For one men and women share, it doesn't matter which.
     const options = set.map((v) => {
       const list = eligible.get(v.id)!
+      if (v.mixedSex) return [['any', list] as [string, string[]]]
       const bySex = new Map<string, string[]>()
       for (const u of list) {
         const s = sexOf.get(u) ?? 'unknown'
@@ -242,12 +248,17 @@ export function planVehicles(input: PlanInput): Plan {
       seats: p.vehicle.seats,
       driver: p.driver,
       children: input.children?.[p.vehicle.id] ?? [],
+      mixedSex: !!p.vehicle.mixedSex,
+      fillFirst: !!p.vehicle.fillFirst,
     })),
     people,
     together: input.together,
     seed: input.seed,
   })
+  // Full, of those that shouldn't be: a vehicle filled first (the Elim Van) is meant to be.
+  const fillsFirst = new Set(planned.filter((p) => p.vehicle.fillFirst).map((p) => p.vehicle.id))
   const full = assigned.cars
+    .filter((c) => !fillsFirst.has(c.id))
     .filter(
       (c) => (c.driver ? 1 : 0) + c.riders.length + (c.children?.length ?? 0) >= (c.seats ?? 0)
     )
@@ -343,7 +354,8 @@ function matchDrivers(
 /**
  * How many must ride with the other sex, at least, with drivers of these
  * sexes: the men beyond the men's vehicles' seats, and the women beyond the
- * women's — less what vehicles whose driver's sex isn't known can take.
+ * women's — less what vehicles men and women may share, or whose driver's
+ * sex isn't known, can take.
  */
 function mixedFor(
   set: Vehicle[],
@@ -357,7 +369,8 @@ function mixedFor(
   let open = 0
   set.forEach((v, i) => {
     const seats = Math.max(0, v.seats - kids(v))
-    if (sexes[i] === 'male') mens += seats
+    if (v.mixedSex) open += seats
+    else if (sexes[i] === 'male') mens += seats
     else if (sexes[i] === 'female') womens += seats
     else open += seats
   })

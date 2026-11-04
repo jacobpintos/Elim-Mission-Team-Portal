@@ -25,8 +25,10 @@ for that organization and left out of everyone else's build.
 | Miriam and vehicles | `add_vehicle`, `update_vehicle`, `remove_vehicle`, `read_vehicles` (`miriam.ts`, and `functions/src/miriam/plan.ts`) | The same `vehicles` documents                                  |
 
 The Elim Van (`vehicles/elimVan.ts`) is the church's own: 15 seats, driven by
-anyone who may drive another of the vehicles, and asked about each time a
-carpool is planned ("Bring the Elim Van?").
+anyone who may drive another of the vehicles, carrying men and women together,
+and filled first when it goes so fewer cars are needed. It is asked about each
+time a carpool is planned ("Bring the Elim Van?"), and never brought in another
+vehicle's place when a driver can't drive.
 
 ## Adding an organization
 

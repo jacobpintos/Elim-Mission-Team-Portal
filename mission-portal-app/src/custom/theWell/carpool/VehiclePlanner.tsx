@@ -371,9 +371,15 @@ export function VehiclePlanner({
                           {load} of {pv.vehicle.seats}
                         </Text>
                       </XStack>
-                      {pv.trailer ? (
+                      {pv.trailer || pv.vehicle.mixedSex || pv.vehicle.fillFirst ? (
                         <Text color={colors.text} fontSize="$3" fontWeight="600">
-                          Pulls the {pv.trailer} trailer
+                          {[
+                            pv.trailer ? `Pulls the ${pv.trailer} trailer` : '',
+                            pv.vehicle.mixedSex ? 'Men and women together' : '',
+                            pv.vehicle.fillFirst ? 'Filled first' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </Text>
                       ) : null}
                       <XStack alignItems="center" gap="$2" flexWrap="wrap">

@@ -2,8 +2,9 @@ import type { Vehicle } from './types'
 
 /**
  * Custom: The Well. The Elim Van: the church's own, seating 15, driven by
- * anyone who may drive another of the vehicles, and asked about each time a
- * carpool is planned ("Bring the Elim Van?").
+ * anyone who may drive another of the vehicles, carrying men and women
+ * together, filled first when it goes so fewer cars are needed, and asked
+ * about each time a carpool is planned ("Bring the Elim Van?").
  *
  * It is in the list from the start, as this, until an admin changes it — its
  * seats, what it can pull, drivers of its own — and then it is kept as they
@@ -19,6 +20,8 @@ export const ELIM_VAN: Vehicle = {
   trailer: 'none',
   anyDriver: true,
   ask: true,
+  mixedSex: true,
+  fillFirst: true,
 }
 
 /** The vehicles as kept, with the Elim Van as it starts if it hasn't been kept yet. */

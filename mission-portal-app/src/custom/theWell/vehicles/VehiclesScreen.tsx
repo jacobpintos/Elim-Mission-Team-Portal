@@ -107,6 +107,31 @@ export function VehiclesScreen() {
     }
   }
 
+  /** A setting that is on or off, said plainly. */
+  const toggle = (label: string, hint: string, on: boolean, set: (on: boolean) => void) => (
+    <Pressable
+      onPress={() => set(!on)}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: on }}
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+    >
+      <XStack alignItems="center" gap="$3">
+        <View style={[styles.track, { backgroundColor: on ? colors.primary : colors.border }]}>
+          <View style={[styles.knob, on && styles.knobOn]} />
+        </View>
+        <YStack flex={1}>
+          <Text fontSize="$3" fontWeight="600" color={colors.text}>
+            {label}
+          </Text>
+          <Text fontSize="$2" color={colors.textMuted}>
+            {hint}
+          </Text>
+        </YStack>
+      </XStack>
+    </Pressable>
+  )
+
   // A new vehicle being set up: shown at the top, before it is kept.
   const unsaved = draft && !vehicles.some((v) => v.id === draft.id) ? [draft] : []
   const input = [
@@ -161,6 +186,8 @@ export function VehiclesScreen() {
                   </XStack>
                   <Text fontSize="$3" color={colors.textMuted}>
                     {TRAILER_LABELS[v.trailer]}
+                    {v.mixedSex ? ' · Men and women together' : ''}
+                    {v.fillFirst ? ' · Filled first' : ''}
                     {v.ask ? ' · Asked about each time' : ''}
                   </Text>
                   <Text fontSize="$3" color={colors.text}>
@@ -235,6 +262,18 @@ export function VehiclesScreen() {
                     )
                   })}
                 </XStack>
+                {toggle(
+                  'Men and women may ride together',
+                  'Otherwise it is a men’s or a women’s vehicle, by its driver.',
+                  !!shown!.mixedSex,
+                  (on) => setDraft((d) => (d ? { ...d, mixedSex: on } : d))
+                )}
+                {toggle(
+                  'Fill it first',
+                  'When it goes, it is filled before the others, so fewer cars are needed.',
+                  !!shown!.fillFirst,
+                  (on) => setDraft((d) => (d ? { ...d, fillFirst: on } : d))
+                )}
                 {shown!.anyDriver ? (
                   <Text fontSize="$3" color={colors.textMuted}>
                     Anyone who may drive another of the vehicles may drive this one. Add others
@@ -340,6 +379,21 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     justifyContent: 'center',
+  },
+  track: {
+    width: 40,
+    height: 24,
+    borderRadius: 12,
+    padding: 3,
+  },
+  knob: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'white',
+  },
+  knobOn: {
+    marginLeft: 16,
   },
   button: {
     minHeight: 38,

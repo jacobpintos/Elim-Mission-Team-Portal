@@ -32,6 +32,13 @@ export interface AssignCar {
   /** '' for none yet: one of its riders, to be picked. */
   driver: string
   children?: CarpoolChild[]
+  /** Men and women ride in it together (the Elim Van): nobody in it counts as mixed. */
+  mixedSex?: boolean
+  /**
+   * Filled before the others (the Elim Van, when it goes), so fewer cars are
+   * needed: full is no fault in it, and it isn't kept even with them.
+   */
+  fillFirst?: boolean
 }
 
 export interface AssignPerson {
@@ -110,8 +117,11 @@ export function autoAssign(input: AssignInput): AssignResult {
         again += Math.min(MOST_AGAIN, together.get(pairKey(adults[i], adults[j])) ?? 0)
       }
     }
+    const mixing = car.mixedSex ? 0 : MIXED * Math.min(men, women)
+    // Filled first: a seat taken in it costs nothing, so it takes all it can.
+    if (car.fillFirst) return mixing + AGAIN * again
     return (
-      MIXED * Math.min(men, women) +
+      mixing +
       (inIt.length > 0 && load >= seats ? FULL : 0) +
       EVEN * (load / seats) ** 2 +
       AGAIN * again
@@ -237,7 +247,11 @@ export function driverToPick(cars: CarpoolCarData[]): string {
 export function arrangementCost(
   result: AssignResult,
   people: AssignPerson[],
-  together: ReadonlyMap<string, number> = new Map()
+  together: ReadonlyMap<string, number> = new Map(),
+  /** Cars men and women may share, by id. */
+  mixedSex: ReadonlySet<string> = new Set(),
+  /** Cars filled first, by id. */
+  fillFirst: ReadonlySet<string> = new Set()
 ): number {
   const sexOf = new Map(people.map((p) => [p.uid, p.sex]))
   let total = NO_ROOM * result.noRoom.length
@@ -253,11 +267,13 @@ export function arrangementCost(
         again += Math.min(MOST_AGAIN, together.get(pairKey(adults[i], adults[j])) ?? 0)
       }
     }
-    total +=
-      MIXED * Math.min(men, women) +
-      (car.riders.length > 0 && load >= seats ? FULL : 0) +
-      EVEN * (load / seats) ** 2 +
-      AGAIN * again
+    const mixing = mixedSex.has(car.id) ? 0 : MIXED * Math.min(men, women)
+    total += fillFirst.has(car.id)
+      ? mixing + AGAIN * again
+      : mixing +
+        (car.riders.length > 0 && load >= seats ? FULL : 0) +
+        EVEN * (load / seats) ** 2 +
+        AGAIN * again
   }
   return total
 }

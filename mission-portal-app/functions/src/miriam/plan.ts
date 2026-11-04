@@ -1390,8 +1390,8 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
     read_vehicles: {
       name: 'read_vehicles',
       description:
-        'The team’s vehicles (Admin → Vehicles), which carpools are planned from: each one’s name, its seats (the driver counted), who may drive it, what it can pull (no trailer, the small trailer only, or the small and the big), and notes. ' +
-        'The Elim Van may be driven by anyone who may drive another vehicle. Read it before changing one.',
+        'The team’s vehicles (Admin → Vehicles), which carpools are planned from: each one’s name, its seats (the driver counted), who may drive it, what it can pull (no trailer, the small trailer only, or the small and the big), whether men and women ride in it together, whether it is filled first, and notes. ' +
+        'The Elim Van may be driven by anyone who may drive another vehicle, carries men and women together, and is filled first when it goes. Read it before changing one.',
       strict: true,
       input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
     },
@@ -1412,6 +1412,17 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
             'What it can pull: none; small (the small trailer only); both (the small or the big); "" if not said.',
         },
         driver_ids: ids('Who may drive it; [] if not said.'),
+        men_and_women_together: {
+          type: 'string',
+          enum: ['yes', 'no', ''],
+          description:
+            'yes when men and women may ride in it together (like the Elim Van); "" if not said.',
+        },
+        fill_first: {
+          type: 'string',
+          enum: ['yes', 'no', ''],
+          description: 'yes when it is filled before the others, so fewer cars go; "" if not said.',
+        },
         notes: { type: 'string', description: 'Anything else said about it; "" if nothing.' },
       }),
     },
@@ -1432,6 +1443,16 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
         },
         add_driver_ids: ids('People who may now drive it; [] if none.'),
         remove_driver_ids: ids('People who may no longer drive it; [] if none.'),
+        men_and_women_together: {
+          type: 'string',
+          enum: ['yes', 'no', ''],
+          description: 'Whether men and women may ride in it together; "" to keep it.',
+        },
+        fill_first: {
+          type: 'string',
+          enum: ['yes', 'no', ''],
+          description: 'Whether it is filled before the others when it goes; "" to keep it.',
+        },
         notes: { type: 'string', description: '"" to keep them.' },
       }),
     },
