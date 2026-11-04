@@ -39,6 +39,7 @@ import { ScheduleDisplay } from './ScheduleDisplay'
 
 import { openExternalUrl } from '@/lib/externalUrl'
 import { rememberRide } from '@/lib/carpoolMemoryDb'
+import { CustomCarpoolPlanner } from '@/custom/ui'
 import { dressCodesOn, teamsOf } from '../../../functions/src/miriam/data'
 
 export function TeamsDisplay({ event, uid }: { event: EventInstance; uid: string }) {
@@ -759,6 +760,9 @@ export function CarpoolPanel({
   const toast = useUIStore((s) => s.toast)
   const [cars, setCars] = useState<CarpoolCarData[]>([])
   const [arranging, setArranging] = useState(false)
+  // Planned from the team's vehicles (src/custom: The Well), for this date.
+  const [planning, setPlanning] = useState(false)
+  const avail = useEventsStore((s) => s.avail)
   // Groups on the event count as on it, so they are listened to while an
   // admin has this open — and this is drawn again when they come in.
   useGroupsStore((s) => s.groups)
@@ -836,8 +840,22 @@ export function CarpoolPanel({
           nameOf={getName}
           unplaced={notInACar.map(personOf)}
           onArrange={() => setArranging(true)}
+          onPlan={CustomCarpoolPlanner ? () => setPlanning(true) : undefined}
         />
       )}
+      {isAdmin && planning && CustomCarpoolPlanner ? (
+        <CustomCarpoolPlanner
+          subtitle={`${event.title} — ${FD(event.date)}`}
+          people={eventUids.map(personOf)}
+          statusOf={(u) => effectiveAvail(avail, event, u)?.status ?? null}
+          rideKey={carpoolKey}
+          onUse={(planned) => {
+            setPlanning(false)
+            save(planned)
+          }}
+          onClose={() => setPlanning(false)}
+        />
+      ) : null}
       {isAdmin && arranging ? (
         <CarpoolBuilder
           subtitle={`${event.title} — ${FD(event.date)}`}

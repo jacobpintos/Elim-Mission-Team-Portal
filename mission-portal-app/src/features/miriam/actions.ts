@@ -99,6 +99,7 @@ import { useTasksStore } from '@/stores/tasksStore'
 import { notifyAssignedAdmins, resolveAssignedUids, useEventsStore } from '@/stores/eventsStore'
 import { rememberRide } from '@/lib/carpoolMemoryDb'
 import { fillCars, noRoomSaid } from './carpoolAuto'
+import { CUSTOM_ACTIONS } from '@/custom/miriam'
 import { driverToPick } from '@/features/events/carpoolAssign'
 import { readBlocks, useBlockedDatesStore } from '@/stores/blockedDatesStore'
 import { blockProblem, blockSpan } from '../../../functions/src/blockedDates'
@@ -2272,6 +2273,8 @@ const ACTIONS: Record<
   add_date_note: addDateNote,
   remove_date_note: removeDateNote,
   [ALLOW_CLAUDE]: allowClaude,
+  // This organization's own (src/custom): The Well's vehicles.
+  ...CUSTOM_ACTIONS,
 }
 
 /** A change asked for, worked out into exactly what will be done. Never throws. */

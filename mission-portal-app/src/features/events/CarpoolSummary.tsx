@@ -22,12 +22,15 @@ export function CarpoolSummary({
   nameOf,
   unplaced = [],
   onArrange,
+  onPlan,
 }: {
   cars: CarpoolCarData[]
   nameOf: (uid: string) => string
   /** Who is on the event and not in a car yet. */
   unplaced?: CarpoolPerson[]
   onArrange: () => void
+  /** Planned from the team's vehicles, where this build has them (src/custom: The Well). */
+  onPlan?: () => void
 }) {
   const colors = useThemeColors()
   return (
@@ -75,20 +78,37 @@ export function CarpoolSummary({
           </Text>
         </YStack>
       ) : null}
-      <Pressable onPress={onArrange} accessibilityRole="button">
-        <XStack
-          borderWidth={1}
-          borderColor={colors.primary}
-          borderRadius="$2"
-          paddingHorizontal="$3"
-          paddingVertical="$2"
-          alignSelf="flex-start"
-        >
-          <Text color={colors.primary} fontSize="$3" fontWeight="600">
-            {cars.length ? 'Arrange cars' : '+ Add cars'}
-          </Text>
-        </XStack>
-      </Pressable>
+      <XStack gap="$2" flexWrap="wrap">
+        {onPlan ? (
+          <Pressable onPress={onPlan} accessibilityRole="button">
+            <XStack
+              borderWidth={1}
+              borderColor={colors.primary}
+              backgroundColor={colors.primary}
+              borderRadius="$2"
+              paddingHorizontal="$3"
+              paddingVertical="$2"
+            >
+              <Text color="white" fontSize="$3" fontWeight="600">
+                {cars.length ? 'Plan again from vehicles' : 'Plan from vehicles'}
+              </Text>
+            </XStack>
+          </Pressable>
+        ) : null}
+        <Pressable onPress={onArrange} accessibilityRole="button">
+          <XStack
+            borderWidth={1}
+            borderColor={colors.primary}
+            borderRadius="$2"
+            paddingHorizontal="$3"
+            paddingVertical="$2"
+          >
+            <Text color={colors.primary} fontSize="$3" fontWeight="600">
+              {cars.length ? 'Arrange cars' : '+ Add cars'}
+            </Text>
+          </XStack>
+        </Pressable>
+      </XStack>
     </YStack>
   )
 }

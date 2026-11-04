@@ -698,6 +698,32 @@ describe('foodSignups — one item at a time, never over someone', () => {
   })
 })
 
+describe('vehicles (custom: The Well) — kept and read by admins', () => {
+  const van = {
+    name: 'Elim Van',
+    seats: 15,
+    drivers: [],
+    trailer: 'none',
+    anyDriver: true,
+    ask: true,
+  }
+
+  it('lets an admin keep and read them', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'vehicles', 'elim-van'), van))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'vehicles', 'elim-van')))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'vehicles', 'elim-van')))
+  })
+
+  it('refuses anyone else', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'vehicles', 'elim-van'), van)
+    })
+    await assertFails(getDoc(doc(as(MEMBER), 'vehicles', 'elim-van')))
+    await assertFails(setDoc(doc(as(MEMBER), 'vehicles', 'elim-van'), van))
+    await assertFails(getDoc(doc(as(GUEST), 'vehicles', 'elim-van')))
+  })
+})
+
 describe('carpool memory — the team’s cars, drivers and who rode together, for admins', () => {
   const memory = { cars: {}, rides: { ev1_2026_10_16: { at: 1, cars: [] } } }
 

@@ -563,6 +563,7 @@ export default function AppLayout() {
                 <Tabs.Screen name="admin/digests" options={{ href: null }} />
                 <Tabs.Screen name="admin/licensing" options={{ href: null }} />
                 <Tabs.Screen name="admin/leadership" options={{ href: null }} />
+                <Tabs.Screen name="admin/vehicles" options={{ href: null }} />
                 <Tabs.Screen name="public/posts" options={{ href: null }} />
                 <Tabs.Screen name="posts/[pageId]" options={{ href: null }} />
                 <Tabs.Screen name="public/connect" options={{ href: null }} />

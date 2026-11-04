@@ -521,6 +521,8 @@ export type AppToolName =
   | 'read_date_notes'
   | 'read_store'
   | 'read_blocked_dates'
+  // Custom: The Well (src/custom) — offered only by its build's app.
+  | 'read_vehicles'
   | ActionName
 
 /**
@@ -578,6 +580,10 @@ export type ActionName =
   // Worship
   | 'edit_set_list'
   | 'notify_set_list'
+  // Custom: The Well (src/custom): the team's vehicles, admins'
+  | 'add_vehicle'
+  | 'update_vehicle'
+  | 'remove_vehicle'
 
 export const ACTIONS: readonly ActionName[] = [
   'create_user',
@@ -623,6 +629,9 @@ export const ACTIONS: readonly ActionName[] = [
   'set_availability',
   'sign_up_food',
   'change_notification',
+  'add_vehicle',
+  'update_vehicle',
+  'remove_vehicle',
 ]
 
 /** Settings' notification switches (src/lib/notificationKeys.ts). */
@@ -1376,6 +1385,65 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
         'The days they have blocked off, still to come — each stretch’s first and last day and the reason they gave. For "when am I blocked off?", "do I have anything blocked off in December?"',
       strict: true,
       input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    },
+    // Custom: The Well (src/custom). Offered only where the app has them: its build, to admins.
+    read_vehicles: {
+      name: 'read_vehicles',
+      description:
+        'The team’s vehicles (Admin → Vehicles), which carpools are planned from: each one’s name, its seats (the driver counted), who may drive it, what it can pull (no trailer, the small trailer only, or the small and the big), and notes. ' +
+        'The Elim Van may be driven by anyone who may drive another vehicle. Read it before changing one.',
+      strict: true,
+      input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    },
+    add_vehicle: {
+      name: 'add_vehicle',
+      description: 'Add a vehicle to the team’s list.' + ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        name: { type: 'string', description: 'Its name, as they call it: "Andy’s Odyssey".' },
+        seats: {
+          type: 'integer',
+          description: 'The most it holds, the driver counted; 0 if not said.',
+        },
+        trailer: {
+          type: 'string',
+          enum: ['none', 'small', 'both', ''],
+          description:
+            'What it can pull: none; small (the small trailer only); both (the small or the big); "" if not said.',
+        },
+        driver_ids: ids('Who may drive it; [] if not said.'),
+        notes: { type: 'string', description: 'Anything else said about it; "" if nothing.' },
+      }),
+    },
+    update_vehicle: {
+      name: 'update_vehicle',
+      description:
+        'Change one of the team’s vehicles — its name, seats, what it can pull, notes, or who may drive it (drivers added or taken off). Its name from read_vehicles.' +
+        ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        vehicle: { type: 'string', description: 'Its name, as read_vehicles gives it.' },
+        new_name: { type: 'string', description: '"" to keep it.' },
+        seats: { type: 'integer', description: 'The driver counted; 0 to keep it.' },
+        trailer: {
+          type: 'string',
+          enum: ['none', 'small', 'both', ''],
+          description: 'none, small (only), or both; "" to keep it.',
+        },
+        add_driver_ids: ids('People who may now drive it; [] if none.'),
+        remove_driver_ids: ids('People who may no longer drive it; [] if none.'),
+        notes: { type: 'string', description: '"" to keep them.' },
+      }),
+    },
+    remove_vehicle: {
+      name: 'remove_vehicle',
+      description:
+        'Take a vehicle off the team’s list. Not the Elim Van, which can be changed but not removed.' +
+        ADMINS,
+      strict: true,
+      input_schema: objectOf({
+        vehicle: { type: 'string', description: 'Its name, as read_vehicles gives it.' },
+      }),
     },
     read_store: {
       name: 'read_store',

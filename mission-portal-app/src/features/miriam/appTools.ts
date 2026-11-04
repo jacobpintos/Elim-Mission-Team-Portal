@@ -43,6 +43,8 @@ import type { IssueReport, KaizenCard, PlanningBoard } from '@/types/operations'
 import type { InventoryCategory, InventoryItem, ReorderItem } from '@/types/inventory'
 import { seesTeamSide } from '../../../functions/src/miriam/data'
 import { readBlocks } from '@/stores/blockedDatesStore'
+import { hasCustom } from '@/custom'
+import { CUSTOM_LOOKUPS } from '@/custom/miriam'
 
 /**
  * Miriam's lookups that run here, in the app, as the person signed in
@@ -106,6 +108,11 @@ export type AppToolName =
   | 'change_my_name'
   | 'add_date_note'
   | 'remove_date_note'
+  // Custom: The Well (src/custom): the team's vehicles, admins'
+  | 'read_vehicles'
+  | 'add_vehicle'
+  | 'update_vehicle'
+  | 'remove_vehicle'
 
 /** Admins' changes: offered to admins only (./actions.ts checks again). */
 const ADMIN_ACTIONS: AppToolName[] = [
@@ -165,6 +172,10 @@ export function appToolsFor(profile: UserProfile | null): AppToolName[] {
   })
   if (canUseMessages(profile)) tools.push('send_message')
   if (admin) tools.push('post_announcement', ...ADMIN_ACTIONS)
+  // The team's vehicles: custom to The Well, and in its build only (src/custom).
+  if (admin && hasCustom('vehicles')) {
+    tools.push('read_vehicles', 'add_vehicle', 'update_vehicle', 'remove_vehicle')
+  }
   if (tabs.includes('assignments') && !guest) tools.push('set_task_status')
   if (tabs.includes('events') && member) tools.push('set_availability')
   if (tabs.includes('events') && member && !guest) tools.push('sign_up_food')
@@ -398,6 +409,9 @@ export async function runAppTool(name: string, input: Record<string, unknown>): 
       const date = typeof input.date === 'string' ? input.date : ''
       const found = setListsFound(lists, eventTitle, q, date, todayStr())
       result = found.length ? { setLists: found } : { setLists: [], note: 'No set list fits that.' }
+    } else if (CUSTOM_LOOKUPS[name]) {
+      // This organization's own (src/custom): The Well's vehicles.
+      result = await CUSTOM_LOOKUPS[name]()
     } else {
       // A change is never run from here: it is confirmed first (./actions.ts).
       result = { error: 'That is not a lookup.' }

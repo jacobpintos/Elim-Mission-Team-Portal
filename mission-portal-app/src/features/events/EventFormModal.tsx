@@ -10,7 +10,8 @@ import { Modal } from '@/components/ui/Modal'
 import { db } from '@/lib/firebase'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useEventsStore, resolveAssignedUids } from '@/stores/eventsStore'
-import { teamAvailStatus } from '@/lib/availability'
+import { getSeriesAvail, teamAvailStatus } from '@/lib/availability'
+import { CustomCarpoolPlanner } from '@/custom/ui'
 import { useUsersStore } from '@/stores/usersStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -382,6 +383,8 @@ export function EventFormModal({
    */
   // The carpool builder, open in its own window.
   const [arrangingCars, setArrangingCars] = useState(false)
+  // The carpool planned from the team's vehicles (src/custom: The Well), open.
+  const [planningCars, setPlanningCars] = useState(false)
   // Admin-assigned food items, keyed by item index. Written into the same
   // foodSignups doc that self-signup uses, so both routes agree on who is
   // bringing what.
@@ -414,6 +417,7 @@ export function EventFormModal({
     setFoodAssignees({})
     setFoodPickerIndex(null)
     setArrangingCars(false)
+    setPlanningCars(false)
     setBuildingSchedule(false)
     setUserSearch('')
     setLiveFill(null)
@@ -585,6 +589,21 @@ export function EventFormModal({
   const scheduleDays = dayNames(
     form.isRec ? [null] : [formIso(form.date), ...extraDays.map((d) => formIso(d.date))]
   )
+  // The event (or the one date of it) the cars are for, as they are remembered (lib/carpoolMemory).
+  const carsRideKey =
+    instanceKey && editScope === 'instance' ? instanceKey : event ? String(event.id) : undefined
+  /**
+   * Someone's answer for the event, for the carpool planner: the date being
+   * edited, else the event's own date — and a repeating event's answer for
+   * every date. None for an event not saved yet.
+   */
+  const answerFor = (uid: string) => {
+    if (!event) return null
+    const day = instanceKey ?? (!event.isRec && event.date ? `${event.id}_${event.date}` : null)
+    const own = day ? avail[day.replace(/\//g, '_')]?.[uid] : null
+    const series = event.isRec ? getSeriesAvail(avail, event.id, uid) : null
+    return (own ?? series)?.status ?? null
+  }
   // Who can be put in a car: everyone on the event, its teams included — as
   // the event's page counts them (resolveAssignedUids).
   const carpoolUids = [
@@ -1871,7 +1890,17 @@ export function EventFormModal({
           <Text color={colors.text} fontSize="$3" flex={1}>
             Carpool available
           </Text>
-          <Pressable onPress={() => field('carpool')(!form.carpool)}>
+          <Pressable
+            onPress={() => {
+              const on = !form.carpool
+              // Turned on with no cars yet: planned from the team's vehicles,
+              // where this build has them (src/custom: The Well).
+              if (on && CustomCarpoolPlanner && form.carpoolCars.length === 0) {
+                setPlanningCars(true)
+              }
+              field('carpool')(on)
+            }}
+          >
             <XStack
               paddingHorizontal="$3"
               paddingVertical="$1"
@@ -1896,6 +1925,23 @@ export function EventFormModal({
             nameOf={(uid) => carpoolPeopleOf(uid).name}
             unplaced={unplaced(form.carpoolCars, carpoolUids).map(carpoolPeopleOf)}
             onArrange={() => setArrangingCars(true)}
+            onPlan={CustomCarpoolPlanner ? () => setPlanningCars(true) : undefined}
+          />
+        ) : null}
+        {planningCars && CustomCarpoolPlanner ? (
+          <CustomCarpoolPlanner
+            subtitle={[form.title.trim(), form.isRec ? 'every date' : form.date]
+              .filter(Boolean)
+              .join(' — ')}
+            people={carpoolUids.map(carpoolPeopleOf)}
+            statusOf={answerFor}
+            rideKey={carsRideKey}
+            onUse={(cars) => {
+              // Only those it planned, with what was blank when it opened gone.
+              setForm((f) => ({ ...f, carpool: true, carpoolCars: cars }))
+              setPlanningCars(false)
+            }}
+            onClose={() => setPlanningCars(false)}
           />
         ) : null}
         {arrangingCars ? (
@@ -1904,13 +1950,7 @@ export function EventFormModal({
             cars={form.carpoolCars}
             people={carpoolUids.map(carpoolPeopleOf)}
             lookup={carpoolPeopleOf}
-            rideKey={
-              instanceKey && editScope === 'instance'
-                ? instanceKey
-                : event
-                  ? String(event.id)
-                  : undefined
-            }
+            rideKey={carsRideKey}
             onSave={(cars) => {
               setForm((f) => ({ ...f, carpoolCars: cars }))
               setArrangingCars(false)

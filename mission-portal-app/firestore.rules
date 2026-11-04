@@ -568,6 +568,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Custom: The Well (src/custom). Its vehicles — each one's seats, who may
+    // drive it and what it can pull — kept and read by admins, who plan the
+    // carpools from them (Admin → Vehicles, and Miriam for an admin).
+    match /vehicles/{vehicleId} {
+      allow read, write: if isAdmin();
+    }
+
     // What the carpools have been (src/lib/carpoolMemory): the team's cars by
     // name and size, who drives, and who has ridden with whom — for arranging
     // the next. One document, kept and read by admins, who arrange them.

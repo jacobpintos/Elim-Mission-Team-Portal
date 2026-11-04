@@ -11,6 +11,7 @@
  * admin area.
  */
 import { PUBLIC_SURFACE_ENABLED, EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
+import { ORG } from '@/custom'
 
 export interface AdminSection {
   /** Last path segment, used to mark the active tab. */
@@ -50,13 +51,17 @@ const SECTIONS: AdminSection[] = [
  * Analytics reports on public users and nothing else, so it goes wherever the
  * public-facing surface goes. Digests are email, and follow that flag.
  */
-export const ADMIN_SECTIONS: AdminSection[] = SECTIONS.filter((s) => {
-  // Finance is the Accountant's, not every admin's: see adminSectionsFor.
-  if (s.key === 'finance') return false
-  if (s.key === 'analytics') return PUBLIC_SURFACE_ENABLED
-  if (s.key === 'digests') return EMAIL_FEATURES_ENABLED
-  return true
-})
+export const ADMIN_SECTIONS: AdminSection[] = [
+  ...SECTIONS.filter((s) => {
+    // Finance is the Accountant's, not every admin's: see adminSectionsFor.
+    if (s.key === 'finance') return false
+    if (s.key === 'analytics') return PUBLIC_SURFACE_ENABLED
+    if (s.key === 'digests') return EMAIL_FEATURES_ENABLED
+    return true
+  }),
+  // This organization's own (src/custom): The Well's Vehicles.
+  ...ORG.adminSections,
+]
 
 /**
  * The admin sections a given person sees.
