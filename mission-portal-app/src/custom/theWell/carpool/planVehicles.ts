@@ -2,6 +2,7 @@ import type { CarpoolCarData, CarpoolChild } from '@/types/events'
 import type { Sex } from '@/types/user'
 import { autoAssign } from '@/features/events/carpoolAssign'
 import { canPull, type TrailersNeeded, type Vehicle } from '../vehicles/types'
+import { seatingRulesFrom, type PersonRules } from '../people/types'
 
 /**
  * Custom: The Well. A carpool planned from the team's vehicles (Admin →
@@ -35,6 +36,8 @@ import { canPull, type TrailersNeeded, type Vehicle } from '../vehicles/types'
 export interface PlanPerson {
   uid: string
   sex?: Sex
+  /** Their last name (features/events/carpoolAssign familyName): family may ride together. */
+  family?: string
 }
 
 export interface PlanInput {
@@ -52,6 +55,11 @@ export interface PlanInput {
   children?: Record<string, CarpoolChild[]>
   /** How many times two have ridden together before (lib/carpoolMemory). */
   together?: ReadonlyMap<string, number>
+  /**
+   * Special rules for people (Admin → Vehicles): who doesn't drive, who can't
+   * pull a trailer, who may ride with either sex, who together, who apart.
+   */
+  rules?: PersonRules[]
   seed?: number
 }
 
@@ -78,6 +86,8 @@ export interface Plan {
   left: { vehicle: Vehicle; why: 'not needed' | 'no driver going' | 'not brought' }[]
   /** What it couldn't do: "No one going can pull the big trailer." */
   problems: string[]
+  /** The notes kept for people in the vehicles (Admin → Vehicles), by uid. */
+  notes: { uid: string; note: string }[]
 }
 
 /** Past this many vehicles to choose among, only the biggest are tried: the rest can still be added by hand. */
@@ -108,7 +118,15 @@ export function planVehicles(input: PlanInput): Plan {
   const people = [...new Map(input.people.map((p) => [p.uid, p])).values()]
   const going = new Set(people.map((p) => p.uid))
   const sexOf = new Map(people.map((p) => [p.uid, p.sex]))
-  const cantDrive = new Set(input.cantDrive ?? [])
+  const rules = input.rules ?? []
+  // Never asked to drive: those who don't, and those who can't this time.
+  const cantDrive = new Set([
+    ...(input.cantDrive ?? []),
+    ...rules.filter((r) => r.noDrive).map((r) => r.uid),
+  ])
+  const noTrailer = new Set(rules.filter((r) => r.noTrailer).map((r) => r.uid))
+  // May ride with either sex: counted as neither.
+  const either = new Set(rules.filter((r) => r.eitherSex).map((r) => r.uid))
   const kids = (v: Vehicle) => input.children?.[v.id]?.length ?? 0
   const allKids = Object.values(input.children ?? {}).reduce((n, k) => n + k.length, 0)
   const need = people.length + allKids
@@ -138,44 +156,48 @@ export function planVehicles(input: PlanInput): Plan {
   }
   const tried = [...optional].sort((a, b) => b.seats - a.seats).slice(0, MOST_TRIED)
 
-  const men = people.filter((p) => p.sex === 'male').length
-  const women = people.filter((p) => p.sex === 'female').length
+  const men = people.filter((p) => p.sex === 'male' && !either.has(p.uid)).length
+  const women = people.filter((p) => p.sex === 'female' && !either.has(p.uid)).length
 
   /** The best drivers and trailers for these vehicles: fewest mixed. Null when there aren't drivers enough, or trailers can't be pulled. */
   const fit = (
     set: Vehicle[],
     needed: TrailersNeeded = input.trailers
   ): Omit<Choice, 'spare'> | null => {
-    const trailers = trailersFor(set, needed)
-    if (!trailers) return null
-    // Each vehicle's driver is a man, a woman, or one not said: tried each way
-    // it can be. For one men and women share, it doesn't matter which.
-    const options = set.map((v) => {
-      const list = eligible.get(v.id)!
-      if (v.mixedSex) return [['any', list] as [string, string[]]]
-      const bySex = new Map<string, string[]>()
-      for (const u of list) {
-        const s = sexOf.get(u) ?? 'unknown'
-        bySex.set(s, [...(bySex.get(s) ?? []), u])
-      }
-      return [...bySex.entries()]
-    })
     let best: Omit<Choice, 'spare'> | null = null
-    const pick: string[] = new Array(set.length).fill('')
-    const walk = (i: number) => {
-      if (i === set.length) {
-        const drivers = matchDrivers(set, pick, options)
-        if (!drivers) return
-        const mixed = mixedFor(set, pick, kids, men, women)
-        if (!best || mixed < best.mixed) best = { set, drivers, trailers, mixed }
-        return
+    // Each way the trailers can go, best first: a vehicle pulling one is
+    // driven only by someone who can pull a trailer.
+    for (const trailers of trailerOptions(set, needed)) {
+      // Each vehicle's driver is a man, a woman, or either: tried each way it
+      // can be. For one men and women share, it doesn't matter which; nor
+      // for a driver who may ride with either sex, or whose sex isn't said.
+      const options = set.map((v, i) => {
+        const list = eligible.get(v.id)!.filter((u) => !trailers[i] || !noTrailer.has(u))
+        if (v.mixedSex) return [['any', list] as [string, string[]]]
+        const bySex = new Map<string, string[]>()
+        for (const u of list) {
+          const sx = either.has(u) ? 'any' : (sexOf.get(u) ?? 'any')
+          bySex.set(sx, [...(bySex.get(sx) ?? []), u])
+        }
+        return [...bySex.entries()]
+      })
+      const pick: string[] = new Array(set.length).fill('')
+      const walk = (i: number) => {
+        if (i === set.length) {
+          const drivers = matchDrivers(set, pick, options)
+          if (!drivers) return
+          const mixed = mixedFor(set, pick, kids, men, women)
+          if (!best || mixed < best.mixed) best = { set, drivers, trailers, mixed }
+          return
+        }
+        for (const [sx] of options[i]) {
+          pick[i] = sx
+          walk(i + 1)
+        }
       }
-      for (const [sex] of options[i]) {
-        pick[i] = sex
-        walk(i + 1)
-      }
+      walk(0)
+      if (best && (best as Omit<Choice, 'spare'>).mixed === 0) break
     }
-    walk(0)
     return best
   }
 
@@ -215,8 +237,10 @@ export function planVehicles(input: PlanInput): Plan {
       problems.push('No vehicle with a driver going can pull the big trailer.')
     } else if (input.trailers.small && !all.some((v) => canPull(v, 'small'))) {
       problems.push('No vehicle with a driver going can pull the small trailer.')
-    } else {
+    } else if (input.trailers.small && input.trailers.big) {
       problems.push('Both trailers need two vehicles that can pull them, with a driver each.')
+    } else {
+      problems.push('No one going who may pull a trailer can drive a vehicle that can pull it.')
     }
     best = most({ small: false, big: false })
   }
@@ -232,6 +256,7 @@ export function planVehicles(input: PlanInput): Plan {
       mixed: 0,
       left,
       problems,
+      notes: [],
     }
   }
 
@@ -253,6 +278,7 @@ export function planVehicles(input: PlanInput): Plan {
     })),
     people,
     together: input.together,
+    rules: seatingRulesFrom(rules),
     seed: input.seed,
   })
   // Full, of those that shouldn't be: a vehicle filled first (the Elim Van) is meant to be.
@@ -290,34 +316,40 @@ export function planVehicles(input: PlanInput): Plan {
     mixed: chosen.mixed,
     left,
     problems,
+    notes: rules
+      .filter(
+        (r) => r.note && assigned.cars.some((c) => c.driver === r.uid || c.riders.includes(r.uid))
+      )
+      .map((r) => ({ uid: r.uid, note: r.note! })),
   }
 }
 
-/** Which vehicle pulls which trailer: the big behind one that can, the small behind another. Null when they can't be. */
-function trailersFor(set: Vehicle[], needed: TrailersNeeded): ('small' | 'big' | null)[] | null {
-  const out: ('small' | 'big' | null)[] = set.map(() => null)
-  if (needed.big) {
-    // The big one behind a vehicle that can pull only the… both can; keep a
-    // small-only one free for the small trailer by taking a "both" first.
-    const i = set.findIndex((v) => canPull(v, 'big'))
-    if (i < 0) return null
-    // With the small one wanted too, the big goes behind a "both" that leaves
-    // another able to pull the small.
-    if (needed.small) {
-      const bigs = set.map((v, j) => (canPull(v, 'big') ? j : -1)).filter((j) => j >= 0)
-      const choice = bigs.find((j) => set.some((v, x) => x !== j && canPull(v, 'small')))
-      if (choice === undefined) return null
-      out[choice] = 'big'
-    } else out[i] = 'big'
-  }
-  if (needed.small) {
-    // A small-only vehicle first, keeping one that can pull either for the big.
-    const order = set
-      .map((v, j) => ({ v, j }))
-      .filter(({ v, j }) => out[j] === null && canPull(v, 'small'))
-      .sort((a, b) => Number(a.v.trailer === 'both') - Number(b.v.trailer === 'both'))
-    if (!order.length) return null
-    out[order[0].j] = 'small'
+/** The most ways of pulling the trailers tried for one set of vehicles. */
+const MOST_TRAILER_WAYS = 12
+
+/**
+ * Each way the trailers asked for can go — the big behind a vehicle that can
+ * pull it, the small behind another that can — best first: a small-only
+ * vehicle for the small, keeping one that can pull either for the big. None
+ * when they can't go at all.
+ */
+function trailerOptions(set: Vehicle[], needed: TrailersNeeded): ('small' | 'big' | null)[][] {
+  const none = set.map((): 'small' | 'big' | null => null)
+  if (!needed.big && !needed.small) return [none]
+  const at = (size: 'small' | 'big', not = -1) =>
+    set
+      .map((v, i) => (i !== not && canPull(v, size) ? i : -1))
+      .filter((i) => i >= 0)
+      .sort((a, b) => Number(set[a].trailer === 'both') - Number(set[b].trailer === 'both'))
+  const out: ('small' | 'big' | null)[][] = []
+  for (const big of needed.big ? at('big') : [-1]) {
+    for (const small of needed.small ? at('small', big) : [-1]) {
+      const way = [...none]
+      if (big >= 0) way[big] = 'big'
+      if (small >= 0) way[small] = 'small'
+      out.push(way)
+      if (out.length >= MOST_TRAILER_WAYS) return out
+    }
   }
   return out
 }

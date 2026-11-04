@@ -9,7 +9,10 @@ import type { Sex } from '@/types/user'
  * What it looks for, most first:
  *  1. Everyone in a car, as far as the seats go. Who doesn't fit is said.
  *  2. Men with men and women with women, the driver counted: a car is as
- *     mixed as the fewer of the two in it.
+ *     mixed as the fewest who would have to leave it for none to be. Two who
+ *     share a last name — a family — may ride together whatever their sex,
+ *     and so may anyone allowed to ride with either (`rules.eitherSex`).
+ *     Those to be kept together are, and those to be kept apart are.
  *  3. No car full while another has room: cars filled about as evenly as
  *     their sizes allow.
  *  4. Not the same people together every time: two who have ridden together
@@ -44,6 +47,32 @@ export interface AssignCar {
 export interface AssignPerson {
   uid: string
   sex?: Sex
+  /** Their last name, as familyName gives it: two who share one may ride together whatever their sex. */
+  family?: string
+}
+
+/** Seating rules for particular people (src/custom: The Well's, from Admin → Vehicles). */
+export interface SeatingRules {
+  /** May ride with men or women: counted as neither. */
+  eitherSex?: ReadonlySet<string>
+  /** Two to put in the same car. */
+  together?: readonly (readonly [string, string])[]
+  /** Two never to put in the same car. */
+  apart?: readonly (readonly [string, string])[]
+}
+
+/**
+ * A family, by the last name: the last word of a name of two words or more,
+ * as a key — "Sam Hart" and "Beth Hart" share "hart". A single name has none.
+ */
+export function familyName(name: string | undefined | null): string {
+  const parts = (name ?? '')
+    .toLowerCase()
+    .replace(/[’]/g, "'")
+    .split(/\s+/)
+    .map((w) => w.replace(/[^a-z'-]/g, ''))
+    .filter(Boolean)
+  return parts.length >= 2 ? parts[parts.length - 1] : ''
 }
 
 export interface AssignInput {
@@ -54,6 +83,8 @@ export interface AssignInput {
   leftOut?: readonly string[]
   /** How many times two have ridden together before, by pairKey. */
   together?: ReadonlyMap<string, number>
+  /** Rules for particular people: who may ride with either sex, who together, who apart. */
+  rules?: SeatingRules
   /** For the shuffle between arrangements as good as each other. */
   seed?: number
 }
@@ -73,6 +104,8 @@ export const DEFAULT_SEATS = 5
 // How much each counts against an arrangement (see above).
 const NO_ROOM = 1000
 const MIXED = 6
+/** Two to be kept together, apart; or two to be kept apart, together. */
+const RULE = 8
 const FULL = 3
 const EVEN = 4
 const AGAIN = 1
@@ -87,7 +120,6 @@ const seatsOf = (car: AssignCar) =>
   Number.isFinite(car.seats) && car.seats > 0 ? Math.floor(car.seats) : DEFAULT_SEATS
 
 export function autoAssign(input: AssignInput): AssignResult {
-  const sexOf = new Map(input.people.map((p) => [p.uid, p.sex]))
   const drivers = new Set(input.cars.map((c) => c.driver).filter(Boolean))
   const left = new Set(input.leftOut ?? [])
   const random = seeded(input.seed ?? 1)
@@ -97,36 +129,10 @@ export function autoAssign(input: AssignInput): AssignResult {
     ),
     random
   )
-  const together = input.together ?? new Map<string, number>()
-
-  /** What one car's riders cost (see above). */
-  const costOf = (car: AssignCar, inIt: string[]) => {
-    const seats = seatsOf(car)
-    const load = (car.driver ? 1 : 0) + (car.children?.length ?? 0) + inIt.length
-    const adults = car.driver ? [car.driver, ...inIt] : inIt
-    let men = 0
-    let women = 0
-    for (const u of adults) {
-      const sex = sexOf.get(u)
-      if (sex === 'male') men++
-      else if (sex === 'female') women++
-    }
-    let again = 0
-    for (let i = 0; i < adults.length; i++) {
-      for (let j = i + 1; j < adults.length; j++) {
-        again += Math.min(MOST_AGAIN, together.get(pairKey(adults[i], adults[j])) ?? 0)
-      }
-    }
-    const mixing = car.mixedSex ? 0 : MIXED * Math.min(men, women)
-    // Filled first: a seat taken in it costs nothing, so it takes all it can.
-    if (car.fillFirst) return mixing + AGAIN * again
-    return (
-      mixing +
-      (inIt.length > 0 && load >= seats ? FULL : 0) +
-      EVEN * (load / seats) ** 2 +
-      AGAIN * again
-    )
-  }
+  const context = costContext(input.people, input.rules, input.together)
+  /** Who rides at all — in a car or driving one: a pair kept together can only be where both are. */
+  const riding = new Set([...drivers, ...riders])
+  const costOf = (car: AssignCar, inIt: string[]) => carCost(car, inIt, context, riding)
 
   const cars = input.cars
   const room = cars.map(roomFor)
@@ -251,31 +257,128 @@ export function arrangementCost(
   /** Cars men and women may share, by id. */
   mixedSex: ReadonlySet<string> = new Set(),
   /** Cars filled first, by id. */
-  fillFirst: ReadonlySet<string> = new Set()
+  fillFirst: ReadonlySet<string> = new Set(),
+  rules?: SeatingRules
 ): number {
-  const sexOf = new Map(people.map((p) => [p.uid, p.sex]))
+  const context = costContext(people, rules, together)
+  const riding = new Set(result.cars.flatMap((c) => [c.driver, ...c.riders].filter(Boolean)))
   let total = NO_ROOM * result.noRoom.length
   for (const car of result.cars) {
-    const seats = car.seats ?? DEFAULT_SEATS
-    const load = (car.driver ? 1 : 0) + (car.children?.length ?? 0) + car.riders.length
-    const adults = car.driver ? [car.driver, ...car.riders] : car.riders
-    const men = adults.filter((u) => sexOf.get(u) === 'male').length
-    const women = adults.filter((u) => sexOf.get(u) === 'female').length
-    let again = 0
-    for (let i = 0; i < adults.length; i++) {
-      for (let j = i + 1; j < adults.length; j++) {
-        again += Math.min(MOST_AGAIN, together.get(pairKey(adults[i], adults[j])) ?? 0)
-      }
-    }
-    const mixing = mixedSex.has(car.id) ? 0 : MIXED * Math.min(men, women)
-    total += fillFirst.has(car.id)
-      ? mixing + AGAIN * again
-      : mixing +
-        (car.riders.length > 0 && load >= seats ? FULL : 0) +
-        EVEN * (load / seats) ** 2 +
-        AGAIN * again
+    total += carCost(
+      {
+        id: car.id,
+        label: car.label,
+        seats: car.seats ?? DEFAULT_SEATS,
+        driver: car.driver,
+        children: car.children,
+        mixedSex: mixedSex.has(car.id),
+        fillFirst: fillFirst.has(car.id),
+      },
+      car.riders,
+      context,
+      riding
+    )
   }
   return total
+}
+
+/** What a car's cost is worked out from: who is who, and the rules for them. */
+interface CostContext {
+  sexOf: ReadonlyMap<string, Sex | undefined>
+  familyOf: ReadonlyMap<string, string>
+  either: ReadonlySet<string>
+  /** Each person's partners to keep with, and to keep from. */
+  withOf: ReadonlyMap<string, readonly string[]>
+  apartOf: ReadonlyMap<string, readonly string[]>
+  history: ReadonlyMap<string, number>
+}
+
+function costContext(
+  people: AssignPerson[],
+  rules: SeatingRules | undefined,
+  history: ReadonlyMap<string, number> = new Map()
+): CostContext {
+  const pairsBy = (pairs: readonly (readonly [string, string])[] | undefined) => {
+    const out = new Map<string, string[]>()
+    for (const [a, b] of pairs ?? []) {
+      if (!a || !b || a === b) continue
+      out.set(a, [...(out.get(a) ?? []), b])
+      out.set(b, [...(out.get(b) ?? []), a])
+    }
+    return out
+  }
+  return {
+    sexOf: new Map(people.map((p) => [p.uid, p.sex])),
+    familyOf: new Map(people.filter((p) => p.family).map((p) => [p.uid, p.family!])),
+    either: rules?.eitherSex ?? new Set(),
+    withOf: pairsBy(rules?.together),
+    apartOf: pairsBy(rules?.apart),
+    history,
+  }
+}
+
+/** What one car costs with these in it (see autoAssign). */
+function carCost(car: AssignCar, inIt: string[], c: CostContext, riding: ReadonlySet<string>) {
+  const seats = seatsOf(car)
+  const load = (car.driver ? 1 : 0) + (car.children?.length ?? 0) + inIt.length
+  const adults = car.driver ? [car.driver, ...inIt] : inIt
+  const here = new Set(adults)
+  let again = 0
+  for (let i = 0; i < adults.length; i++) {
+    for (let j = i + 1; j < adults.length; j++) {
+      again += Math.min(MOST_AGAIN, c.history.get(pairKey(adults[i], adults[j])) ?? 0)
+    }
+  }
+  // Kept together, but not here together; kept apart, but here together.
+  let broken = 0
+  for (const u of adults) {
+    for (const w of c.withOf.get(u) ?? []) if (riding.has(w) && !here.has(w)) broken++
+    for (const w of c.apartOf.get(u) ?? []) if (here.has(w)) broken++
+  }
+  const mixing = car.mixedSex ? 0 : MIXED * mixedIn(adults, c)
+  const rules = RULE * broken
+  // Filled first: a seat taken in it costs nothing, so it takes all it can.
+  if (car.fillFirst) return mixing + rules + AGAIN * again
+  return (
+    mixing +
+    rules +
+    (inIt.length > 0 && load >= seats ? FULL : 0) +
+    EVEN * (load / seats) ** 2 +
+    AGAIN * again
+  )
+}
+
+/**
+ * How mixed a car is: the fewest who would have to leave it for no man to
+ * ride with a woman he isn't family to. Anyone who may ride with either sex
+ * isn't counted. With no families, that is the fewer of the men and women.
+ */
+function mixedIn(adults: string[], c: CostContext): number {
+  const men = adults.filter((u) => c.sexOf.get(u) === 'male' && !c.either.has(u))
+  const women = adults.filter((u) => c.sexOf.get(u) === 'female' && !c.either.has(u))
+  if (!men.length || !women.length) return 0
+  const clash = (m: string, w: string) => {
+    const f = c.familyOf.get(m)
+    return !(f && f === c.familyOf.get(w))
+  }
+  // The most pairs that clash with no one in two of them (a matching): as
+  // many must leave, one from each, and that many is enough (König).
+  const partner = new Map<string, string>()
+  const reach = (m: string, seen: Set<string>): boolean => {
+    for (const w of women) {
+      if (seen.has(w) || !clash(m, w)) continue
+      seen.add(w)
+      const other = partner.get(w)
+      if (!other || reach(other, seen)) {
+        partner.set(w, m)
+        return true
+      }
+    }
+    return false
+  }
+  let n = 0
+  for (const m of men) if (reach(m, new Set())) n++
+  return n
 }
 
 /** A small, fast generator from a seed (mulberry32): the same seed, the same numbers. */

@@ -5,6 +5,8 @@ import type { Prepared } from '@/features/miriam/actions'
 import { ELIM_VAN_ID } from './vehicles/elimVan'
 import { TRAILER_LABELS, type TrailerAbility, type Vehicle } from './vehicles/types'
 import { newVehicleId, readVehicles, useVehiclesStore } from './vehicles/vehiclesStore'
+import { readPersonRules } from './people/personRulesStore'
+import { eitherSexLabel } from './people/types'
 
 /**
  * Custom: The Well. Miriam and the team's vehicles (functions/src/miriam/plan:
@@ -54,10 +56,23 @@ function vehicleNamed(vehicles: Vehicle[], said: string): Vehicle | Vehicle[] | 
   return fits.length === 1 ? fits[0] : fits.length ? fits : null
 }
 
-/** read_vehicles: the list, as Miriam reads it. */
+/** read_vehicles: the list, as Miriam reads it — and special rules for people. */
 export async function vehiclesForMiriam() {
-  const vehicles = await readVehicles()
+  const [vehicles, rules] = await Promise.all([readVehicles(), readPersonRules()])
+  const sexOf = (uid: string) =>
+    useUsersStore.getState().users.find((u) => String(u.uid) === uid)?.sex
   return {
+    special_rules_for_people: rules.map((r) => ({
+      name: nameOf(r.uid),
+      rules: [
+        r.noDrive ? 'doesn’t drive' : '',
+        r.noTrailer && !r.noDrive ? 'can’t pull a trailer' : '',
+        r.eitherSex ? eitherSexLabel(sexOf(r.uid)).toLowerCase() : '',
+        r.keepWith?.length ? `keep with ${r.keepWith.map(nameOf).join(', ')}` : '',
+        r.keepApart?.length ? `keep apart from ${r.keepApart.map(nameOf).join(', ')}` : '',
+        r.note ?? '',
+      ].filter(Boolean),
+    })),
     vehicles: vehicles.map((v) => ({
       name: v.name,
       seats: v.seats,

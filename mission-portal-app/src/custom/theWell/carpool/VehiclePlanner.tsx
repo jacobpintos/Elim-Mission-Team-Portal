@@ -12,6 +12,8 @@ import type { AvailResponse, CarpoolCarData, CarpoolChild } from '@/types/events
 import { useVehiclesStore } from '../vehicles/vehiclesStore'
 import type { TrailersNeeded } from '../vehicles/types'
 import { planVehicles } from './planVehicles'
+import { usePersonRulesStore } from '../people/personRulesStore'
+import { familyName } from '@/features/events/carpoolAssign'
 
 type Trailers = 'none' | 'small' | 'big' | 'both'
 const TRAILER_CHOICES: { key: Trailers; label: string }[] = [
@@ -58,6 +60,8 @@ export function VehiclePlanner({
   const colors = useThemeColors()
   const insets = useSafeAreaInsets()
   const { vehicles, loaded, subscribe, unsubscribe } = useVehiclesStore()
+  // Special rules for people (Admin → Vehicles), followed in the plan.
+  const personRules = usePersonRulesStore((s) => s.rules)
   const [step, setStep] = useState<'ask' | 'plan'>('ask')
   const [trailers, setTrailers] = useState<Trailers | null>(null)
   const [bring, setBring] = useState<Record<string, boolean>>({})
@@ -71,11 +75,13 @@ export function VehiclePlanner({
 
   useEffect(() => {
     subscribe()
+    usePersonRulesStore.getState().subscribe()
     let live = true
     readCarpoolMemory().then((m) => live && setTogether(togetherCounts(m, rideKey)))
     return () => {
       live = false
       unsubscribe()
+      usePersonRulesStore.getState().unsubscribe()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -98,19 +104,32 @@ export function VehiclePlanner({
       step === 'plan' && trailers
         ? planVehicles({
             vehicles,
-            people: going.map((p) => ({ uid: p.uid, sex: p.sex })),
+            people: going.map((p) => ({ uid: p.uid, sex: p.sex, family: familyName(p.name) })),
             trailers: needed(trailers),
             bring,
             cantDrive,
             add: added,
             children,
             together,
+            rules: personRules,
             seed,
           })
         : null,
     // Worked out again when anything it is planned from changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [step, trailers, vehicles, bring, cantDrive, added, children, together, seed, countUnsure]
+    [
+      step,
+      trailers,
+      vehicles,
+      bring,
+      cantDrive,
+      added,
+      children,
+      together,
+      seed,
+      countUnsure,
+      personRules,
+    ]
   )
 
   const addChild = (vehicleId: string) => {
@@ -450,6 +469,17 @@ export function VehiclePlanner({
                     </YStack>
                   )
                 })}
+
+                {plan.notes.length ? (
+                  <YStack gap="$1">
+                    {label('NOTES')}
+                    {plan.notes.map((n) => (
+                      <Text key={n.uid} color={colors.text} fontSize="$3">
+                        <Text fontWeight="700">{nameOf(n.uid)}:</Text> {n.note}
+                      </Text>
+                    ))}
+                  </YStack>
+                ) : null}
 
                 {cantDrive.length ? (
                   <XStack gap="$2" flexWrap="wrap" alignItems="center">

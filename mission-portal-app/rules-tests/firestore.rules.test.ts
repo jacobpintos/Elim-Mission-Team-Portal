@@ -724,6 +724,30 @@ describe('vehicles (custom: The Well) — kept and read by admins', () => {
   })
 })
 
+describe('carpool rules for people (custom: The Well) — admins’ alone', () => {
+  const rules = {
+    noDrive: true,
+    noTrailer: false,
+    eitherSex: false,
+    keepWith: [],
+    keepApart: [],
+    note: '',
+  }
+
+  it('lets an admin keep and read them', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'carpoolPeople', MEMBER), rules))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'carpoolPeople', MEMBER)))
+  })
+
+  it('refuses anyone else — their own included', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'carpoolPeople', MEMBER), rules)
+    })
+    await assertFails(getDoc(doc(as(MEMBER), 'carpoolPeople', MEMBER)))
+    await assertFails(setDoc(doc(as(MEMBER), 'carpoolPeople', MEMBER), rules))
+  })
+})
+
 describe('carpool memory — the team’s cars, drivers and who rode together, for admins', () => {
   const memory = { cars: {}, rides: { ev1_2026_10_16: { at: 1, cars: [] } } }
 

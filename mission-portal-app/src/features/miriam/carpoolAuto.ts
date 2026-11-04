@@ -4,7 +4,13 @@ import { sameId } from '@/lib/ids'
 import type { EventDraft } from '@/lib/miriam'
 import { readCarpoolMemory } from '@/lib/carpoolMemoryDb'
 import { seatsRemembered, togetherCounts, type CarpoolMemory } from '@/lib/carpoolMemory'
-import { autoAssign, driverToPick, type AssignCar } from '@/features/events/carpoolAssign'
+import {
+  autoAssign,
+  driverToPick,
+  familyName,
+  type AssignCar,
+} from '@/features/events/carpoolAssign'
+import { customSeatingRules } from '@/custom/carpool'
 import type { CarpoolCarData } from '@/types/events'
 
 /**
@@ -18,7 +24,10 @@ import type { CarpoolCarData } from '@/types/events'
 /** Who each is, for keeping men with men and women with women. */
 function peopleOf(uids: string[]) {
   const users = useUsersStore.getState().users
-  return uids.map((uid) => ({ uid, sex: users.find((u) => sameId(u.uid, uid))?.sex }))
+  return uids.map((uid) => {
+    const u = users.find((x) => sameId(x.uid, uid))
+    return { uid, sex: u?.sex, family: familyName(u?.displayName) }
+  })
 }
 
 /** Everyone on an event: those assigned one by one, and the members of its groups. */
@@ -53,12 +62,13 @@ export async function fillCars(
   /** The event and date, as its cars are remembered: its own last arrangement isn't another time. */
   rideKey?: string
 ): Promise<{ cars: CarpoolCarData[]; noRoom: string[] }> {
-  const memory = await readCarpoolMemory()
+  const [memory, rules] = await Promise.all([readCarpoolMemory(), customSeatingRules()])
   return autoAssign({
     cars: toAssign(cars, memory),
     people: peopleOf(people),
     leftOut: notRiding,
     together: togetherCounts(memory, rideKey),
+    rules,
     seed: Date.now() % 2147483647,
   })
 }

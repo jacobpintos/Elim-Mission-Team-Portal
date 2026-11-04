@@ -3,6 +3,7 @@ import {
   arrangementCost,
   autoAssign,
   driverToPick,
+  familyName,
   pairKey,
   roomFor,
   type AssignCar,
@@ -127,6 +128,53 @@ describe('auto-assigning the cars', () => {
     // Everyone rides in the van: the Civic goes with its driver alone.
     expect(ridersOf(cars, 'van')).toEqual(['m1', 'm2', 'm3', 'm4', 'w1', 'w2', 'w3'])
     expect(ridersOf(cars, 'civic')).toEqual([])
+  })
+
+  it('lets family — a shared last name — ride together whatever their sex', () => {
+    expect(familyName('Sam Hart')).toBe('hart')
+    expect(familyName('Cher')).toBe('')
+    // The Harts in the man's car: no one is mixed, though he and she are both in it.
+    const harts = autoAssign({
+      cars: [car('a', 4, 'dad')],
+      people: [
+        { uid: 'dad', sex: 'male', family: 'hart' },
+        { uid: 'mom', sex: 'female', family: 'hart' },
+        { uid: 'son', sex: 'male', family: 'hart' },
+      ],
+    })
+    const cost = arrangementCost(harts, [
+      { uid: 'dad', sex: 'male', family: 'hart' },
+      { uid: 'mom', sex: 'female', family: 'hart' },
+      { uid: 'son', sex: 'male', family: 'hart' },
+    ])
+    const strangers = arrangementCost(harts, [
+      { uid: 'dad', sex: 'male', family: 'hart' },
+      { uid: 'mom', sex: 'female', family: 'ruiz' },
+      { uid: 'son', sex: 'male', family: 'hart' },
+    ])
+    expect(strangers - cost).toBeGreaterThanOrEqual(6)
+  })
+
+  it('follows rules for people: either sex, kept together, kept apart', () => {
+    // Ben may ride with women: he goes in the women's car rather than overfill the men's.
+    const either = autoAssign({
+      cars: [car('his', 3, 'm0'), car('hers', 5, 'w0')],
+      people: [...men('m0', 'm1', 'm2', 'ben'), ...women('w0', 'w1')],
+      rules: { eitherSex: new Set(['ben']) },
+      seed: 2,
+    })
+    expect(either.noRoom).toEqual([])
+    expect(ridersOf(either.cars, 'hers')).toContain('ben')
+
+    const kept = autoAssign({
+      cars: [car('x', 5, 'd1'), car('y', 5, 'd2')],
+      people: men('d1', 'd2', 'a', 'b', 'c', 'd'),
+      rules: { together: [['a', 'b']], apart: [['c', 'd']] },
+    })
+    for (const c of kept.cars) {
+      expect(c.riders.includes('a')).toBe(c.riders.includes('b'))
+      expect(c.riders.includes('c') && c.riders.includes('d')).toBe(false)
+    }
   })
 
   it('gives the same arrangement for the same seed, and one no worse for another', () => {

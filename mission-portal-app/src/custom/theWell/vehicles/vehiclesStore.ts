@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 import { collection, deleteDoc, doc, setDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { auth, db } from '@/lib/firebase'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { audit } from '@/lib/audit'
-import { useAuthStore } from '@/stores/authStore'
+import { useUsersStore } from '@/stores/usersStore'
 import { ELIM_VAN_ID, withElimVan } from './elimVan'
 import { vehicleData, vehicleFrom, type Vehicle } from './types'
 
@@ -25,7 +25,10 @@ interface VehiclesStore {
 }
 
 /** Who made a change, as the audit trail names them. */
-const whoDid = () => useAuthStore.getState().profile?.displayName ?? ''
+const whoDid = () => {
+  const uid = auth.currentUser?.uid
+  return useUsersStore.getState().users.find((u) => String(u.uid) === uid)?.displayName ?? ''
+}
 
 /** A new vehicle's id: from its name, made unique among those kept. */
 export function newVehicleId(name: string, taken: string[]): string {

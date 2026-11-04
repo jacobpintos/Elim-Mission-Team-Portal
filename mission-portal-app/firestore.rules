@@ -574,6 +574,12 @@ service cloud.firestore {
     match /vehicles/{vehicleId} {
       allow read, write: if isAdmin();
     }
+    // Custom: The Well. Special rules for people, for driving and seating
+    // (doesn't drive, can't pull a trailer, may ride with either sex, keep
+    // with, keep apart), by uid — admins', as the vehicles are.
+    match /carpoolPeople/{uid} {
+      allow read, write: if isAdmin();
+    }
 
     // What the carpools have been (src/lib/carpoolMemory): the team's cars by
     // name and size, who drives, and who has ridden with whom — for arranging

@@ -177,6 +177,52 @@ describe('planning a carpool from the vehicles', () => {
     }
   })
 
+  it('never asks someone who doesn’t drive, nor puts a trailer behind someone who can’t pull one', () => {
+    const shared = vehicle('truck', 5, ['tom', 'andy'], 'both')
+    const people = men('tom', 'andy', 'a')
+    const noDrive = planVehicles({
+      vehicles: [shared],
+      people,
+      trailers: NO_TRAILERS,
+      rules: [{ uid: 'tom', noDrive: true }],
+    })
+    expect(noDrive.vehicles[0].driver).toBe('andy')
+    const noTrailer = planVehicles({
+      vehicles: [shared],
+      people,
+      trailers: { small: false, big: true },
+      rules: [{ uid: 'andy', noTrailer: true }],
+    })
+    expect(noTrailer.vehicles[0]).toMatchObject({ driver: 'tom', trailer: 'big' })
+    // Neither may pull it: said, and the seats planned anyway.
+    const neither = planVehicles({
+      vehicles: [shared],
+      people,
+      trailers: { small: false, big: true },
+      rules: [
+        { uid: 'andy', noTrailer: true },
+        { uid: 'tom', noTrailer: true },
+      ],
+    })
+    expect(neither.problems).toEqual([
+      'No one going who may pull a trailer can drive a vehicle that can pull it.',
+    ])
+    expect(neither.noRoom).toEqual([])
+  })
+
+  it('shows the notes kept for people in the vehicles', () => {
+    const plan = planVehicles({
+      vehicles: [vehicle('car', 5, ['a'])],
+      people: men('a', 'b'),
+      trailers: NO_TRAILERS,
+      rules: [
+        { uid: 'b', note: 'Gets carsick — front seat' },
+        { uid: 'nobody', note: 'Not going' },
+      ],
+    })
+    expect(plan.notes).toEqual([{ uid: 'b', note: 'Gets carsick — front seat' }])
+  })
+
   it('brings a vehicle added by hand, or with children in it', () => {
     const plan = planVehicles({
       vehicles: fleet,

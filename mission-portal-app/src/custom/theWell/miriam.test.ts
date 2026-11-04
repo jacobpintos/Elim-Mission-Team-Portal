@@ -3,6 +3,7 @@ import { useUsersStore } from '@/stores/usersStore'
 import type { UserProfile } from '@/types/user'
 import { ELIM_VAN } from './vehicles/elimVan'
 import { useVehiclesStore } from './vehicles/vehiclesStore'
+import { usePersonRulesStore } from './people/personRulesStore'
 import { addVehicle, removeVehicle, updateVehicle, vehiclesForMiriam } from './miriam'
 
 // Hoisted above the imports by vitest: no Firebase, and saves kept here.
@@ -29,6 +30,7 @@ describe('Miriam and the vehicles', () => {
         { uid: 'tom', displayName: 'Tom Reyes' },
       ] as never,
     })
+    usePersonRulesStore.setState({ loaded: true, rules: [{ uid: 'tom', noTrailer: true }] })
     useVehiclesStore.setState({
       vehicles: [ELIM_VAN, odyssey],
       loaded: true,
@@ -50,6 +52,8 @@ describe('Miriam and the vehicles', () => {
       drivers: ['Andy Cole'],
       trailer: 'small',
     })
+    const { special_rules_for_people: rules } = await vehiclesForMiriam()
+    expect(rules).toEqual([{ name: 'Tom Reyes', rules: ['can’t pull a trailer'] }])
   })
 
   it('adds one for an admin, to confirm, and no one else', async () => {

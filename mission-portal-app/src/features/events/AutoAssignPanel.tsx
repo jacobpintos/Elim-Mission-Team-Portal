@@ -15,7 +15,15 @@ import {
 import type { CarpoolCarData, CarpoolChild } from '@/types/events'
 import type { CarpoolPerson } from './CarpoolBuilder'
 import { NameTyper } from './CarpoolNameTyper'
-import { autoAssign, DEFAULT_SEATS, roomFor, type AssignCar } from './carpoolAssign'
+import {
+  autoAssign,
+  DEFAULT_SEATS,
+  familyName,
+  roomFor,
+  type AssignCar,
+  type SeatingRules,
+} from './carpoolAssign'
+import { customSeatingRules } from '@/custom/carpool'
 import { CARD_COLORS, cardColorsFor, carName, newCar, newChild } from './carpoolCards'
 
 /** A car as it is set up: its size as typed. */
@@ -48,7 +56,9 @@ const asAssignCar = (car: SetupCar): AssignCar => ({
  * its driver and any children riding in it — then who isn't riding. Then
  * everyone else is put in a car (./carpoolAssign): not a car full while
  * another has room, men with men and women with women, and not the same
- * people together as last time. The cars come back to the builder, to be
+ * people together as last time — family (a shared last name) together
+ * whatever their sex, and any special rules for people followed. The cars
+ * come back to the builder, to be
  * looked over and changed by hand before they are saved.
  *
  * The team's cars are remembered by name and size, and who usually drives
@@ -73,6 +83,8 @@ export function AutoAssignPanel({
 }) {
   const colors = useThemeColors()
   const [memory, setMemory] = useState<CarpoolMemory | null>(null)
+  // Rules for particular people, where this build keeps them (src/custom).
+  const [rules, setRules] = useState<SeatingRules>({})
   const [cars, setCars] = useState<SetupCar[]>(() =>
     startingCars.map((c) => ({
       id: c.id,
@@ -87,6 +99,9 @@ export function AutoAssignPanel({
 
   useEffect(() => {
     let live = true
+    customSeatingRules()
+      .then((r) => live && setRules(r))
+      .catch(() => {})
     readCarpoolMemory().then((m) => {
       if (!live) return
       setMemory(m)
@@ -146,9 +161,10 @@ export function AutoAssignPanel({
   const assign = () => {
     const result = autoAssign({
       cars: cars.map(asAssignCar),
-      people: people.map((p) => ({ uid: p.uid, sex: p.sex })),
+      people: people.map((p) => ({ uid: p.uid, sex: p.sex, family: familyName(p.name) })),
       leftOut,
       together: togetherCounts(known, rideKey),
+      rules,
       // Each time asked, another of the arrangements as good as each other.
       seed: Date.now() % 2147483647,
     })

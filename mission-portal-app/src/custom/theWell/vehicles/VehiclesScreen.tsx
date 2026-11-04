@@ -10,6 +10,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { ELIM_VAN_ID } from './elimVan'
 import { TRAILER_LABELS, type TrailerAbility, type Vehicle } from './types'
 import { newVehicleId, useVehiclesStore } from './vehiclesStore'
+import { PersonRulesSection } from '../people/PersonRulesSection'
 
 const TRAILERS: TrailerAbility[] = ['none', 'small', 'both']
 
@@ -357,6 +358,8 @@ export function VehiclesScreen() {
           </Text>
         </Pressable>
       </XStack>
+
+      <PersonRulesSection />
     </ScrollView>
   )
 }
