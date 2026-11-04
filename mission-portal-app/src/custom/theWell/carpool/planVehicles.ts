@@ -1,6 +1,6 @@
 import type { CarpoolCarData, CarpoolChild } from '@/types/events'
 import type { Sex } from '@/types/user'
-import { autoAssign } from '@/features/events/carpoolAssign'
+import { autoAssign, mixedFamilies } from '@/features/events/carpoolAssign'
 import { canPull, type TrailersNeeded, type Vehicle } from '../vehicles/types'
 import { seatingRulesFrom, type PersonRules } from '../people/types'
 
@@ -156,6 +156,8 @@ export function planVehicles(input: PlanInput): Plan {
   }
   const tried = [...optional].sort((a, b) => b.seats - a.seats).slice(0, MOST_TRIED)
 
+  // Families going with a man and a woman in them: each opens a vehicle to anyone.
+  const families = mixedFamilies(people)
   const men = people.filter((p) => p.sex === 'male' && !either.has(p.uid)).length
   const women = people.filter((p) => p.sex === 'female' && !either.has(p.uid)).length
 
@@ -186,7 +188,7 @@ export function planVehicles(input: PlanInput): Plan {
         if (i === set.length) {
           const drivers = matchDrivers(set, pick, options)
           if (!drivers) return
-          const mixed = mixedFor(set, pick, kids, men, women)
+          const mixed = mixedFor(set, pick, kids, men, women, families)
           if (!best || mixed < best.mixed) best = { set, drivers, trailers, mixed }
           return
         }
@@ -387,24 +389,32 @@ function matchDrivers(
  * How many must ride with the other sex, at least, with drivers of these
  * sexes: the men beyond the men's vehicles' seats, and the women beyond the
  * women's — less what vehicles men and women may share, or whose driver's
- * sex isn't known, can take.
+ * sex isn't known, can take. A family with a man and a woman in it makes a
+ * vehicle open to anyone by riding in it: as many of the biggest as there
+ * are such families.
  */
 function mixedFor(
   set: Vehicle[],
   sexes: string[],
   kids: (v: Vehicle) => number,
   men: number,
-  women: number
+  women: number,
+  families = 0
 ): number {
   let mens = 0
   let womens = 0
   let open = 0
+  const bySex: { seats: number; sex: string }[] = []
   set.forEach((v, i) => {
     const seats = Math.max(0, v.seats - kids(v))
-    if (v.mixedSex) open += seats
-    else if (sexes[i] === 'male') mens += seats
-    else if (sexes[i] === 'female') womens += seats
-    else open += seats
+    if (v.mixedSex || (sexes[i] !== 'male' && sexes[i] !== 'female')) open += seats
+    else bySex.push({ seats, sex: sexes[i] })
+  })
+  bySex.sort((a, b) => b.seats - a.seats)
+  bySex.forEach(({ seats, sex }, i) => {
+    if (i < families) open += seats
+    else if (sex === 'male') mens += seats
+    else womens += seats
   })
   const over = Math.max(0, men - mens) + Math.max(0, women - womens)
   return Math.max(0, over - open)

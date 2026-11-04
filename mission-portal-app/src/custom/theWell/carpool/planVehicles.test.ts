@@ -106,6 +106,32 @@ describe('planning a carpool from the vehicles', () => {
     expect(plan.offer).toBeNull()
   })
 
+  it('counts a family with a man and a woman as opening a vehicle to anyone — fewer to bring', () => {
+    const vehicles = [
+      vehicle('hartvan', 6, ['dad']),
+      vehicle('carA', 5, ['m1']),
+      vehicle('carB', 5, ['w1']),
+    ]
+    const people = [
+      { uid: 'dad', sex: 'male' as const, family: 'hart' },
+      { uid: 'mom', sex: 'female' as const, family: 'hart' },
+      ...men('m1', 'm2'),
+      ...women('w1'),
+    ]
+    const plan = planVehicles({ vehicles, people, trailers: NO_TRAILERS })
+    // All five in the Harts’ van, with no one mixed: one vehicle, not two.
+    expect(ids(plan)).toEqual(['hartvan'])
+    expect(plan.mixed).toBe(0)
+    expect(plan.noRoom).toEqual([])
+    // Without the family, keeping them apart takes two.
+    const strangers = planVehicles({
+      vehicles,
+      people: [{ uid: 'dad', sex: 'male' }, { uid: 'mom', sex: 'female' }, ...people.slice(2)],
+      trailers: NO_TRAILERS,
+    })
+    expect(strangers.vehicles.length).toBe(2)
+  })
+
   it('takes the vehicle of a driver who is going, when its owner isn’t', () => {
     const borrowed = vehicle('suburban', 8, ['owner', 'kim'])
     const plan = planVehicles({

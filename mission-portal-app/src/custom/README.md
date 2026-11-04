@@ -30,8 +30,9 @@ kept in `carpoolPeople/{uid}` (admins only): doesn't drive, can't pull a
 trailer, can ride with the other sex, keep with, keep apart, and a note shown
 on the plan. The planner follows all of them; the app's own Auto-assign and
 Miriam's carpools follow the seating ones, through `carpool.ts`. People who
-share a last name may ride together whatever their sex — that one is the
-app's own (features/events/carpoolAssign), for everyone.
+share a last name may ride together whatever their sex, and a car with a man
+and a woman of one family in it is open to anyone — that one is the app's own
+(features/events/carpoolAssign), for everyone.
 
 The Elim Van (`vehicles/elimVan.ts`) is the church's own: 15 seats, driven by
 anyone who may drive another of the vehicles, carrying men and women together,

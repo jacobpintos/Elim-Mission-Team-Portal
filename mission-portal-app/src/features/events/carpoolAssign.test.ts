@@ -4,6 +4,7 @@ import {
   autoAssign,
   driverToPick,
   familyName,
+  mixedFamilies,
   pairKey,
   roomFor,
   type AssignCar,
@@ -153,6 +154,35 @@ describe('auto-assigning the cars', () => {
       { uid: 'son', sex: 'male', family: 'hart' },
     ])
     expect(strangers - cost).toBeGreaterThanOrEqual(6)
+  })
+
+  it('opens a car to anyone once a man and a woman of one family are in it', () => {
+    const people = [
+      { uid: 'dad', sex: 'male' as const, family: 'hart' },
+      { uid: 'mom', sex: 'female' as const, family: 'hart' },
+      { uid: 'bob', sex: 'male' as const, family: 'ruiz' },
+      { uid: 'amy', sex: 'female' as const, family: 'cole' },
+    ]
+    expect(mixedFamilies(people)).toBe(1)
+    const together = {
+      cars: [{ id: 'a', label: 'a', seats: 5, driver: 'dad', riders: ['mom', 'bob', 'amy'] }],
+      noRoom: [],
+    }
+    // The Harts in it: Bob and Amy may ride with them, and nobody is mixed.
+    const open = arrangementCost(together, people)
+    const closed = arrangementCost(together, [
+      ...people.slice(0, 1),
+      { uid: 'mom', sex: 'female' as const, family: 'lin' },
+      ...people.slice(2),
+    ])
+    expect(closed - open).toBeGreaterThanOrEqual(6)
+    // And auto-assign takes that car for the others rather than mix another.
+    const { cars } = autoAssign({
+      cars: [car('family', 6, 'dad'), car('his', 5, 'm1')],
+      people: [...people, { uid: 'm1', sex: 'male' }],
+      seed: 3,
+    })
+    expect(ridersOf(cars, 'family')).toEqual(['amy', 'mom'])
   })
 
   it('follows rules for people: either sex, kept together, kept apart', () => {

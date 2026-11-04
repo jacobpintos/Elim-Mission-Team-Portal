@@ -11,7 +11,9 @@ import type { Sex } from '@/types/user'
  *  2. Men with men and women with women, the driver counted: a car is as
  *     mixed as the fewest who would have to leave it for none to be. Two who
  *     share a last name — a family — may ride together whatever their sex,
- *     and so may anyone allowed to ride with either (`rules.eitherSex`).
+ *     and a car with a man and a woman of one family in it is mixed already:
+ *     anyone else may ride in it too. So may anyone allowed to ride with
+ *     either sex (`rules.eitherSex`).
  *     Those to be kept together are, and those to be kept apart are.
  *  3. No car full while another has room: cars filled about as evenly as
  *     their sizes allow.
@@ -352,8 +354,12 @@ function carCost(car: AssignCar, inIt: string[], c: CostContext, riding: Readonl
  * How mixed a car is: the fewest who would have to leave it for no man to
  * ride with a woman he isn't family to. Anyone who may ride with either sex
  * isn't counted. With no families, that is the fewer of the men and women.
+ *
+ * A car with a man and a woman of one family in it is mixed already, and so
+ * open to anyone: none.
  */
 function mixedIn(adults: string[], c: CostContext): number {
+  if (familyMixes(adults, c)) return 0
   const men = adults.filter((u) => c.sexOf.get(u) === 'male' && !c.either.has(u))
   const women = adults.filter((u) => c.sexOf.get(u) === 'female' && !c.either.has(u))
   if (!men.length || !women.length) return 0
@@ -379,6 +385,35 @@ function mixedIn(adults: string[], c: CostContext): number {
   let n = 0
   for (const m of men) if (reach(m, new Set())) n++
   return n
+}
+
+/** Whether a man and a woman who share a last name are among these. */
+function familyMixes(adults: string[], c: CostContext): boolean {
+  const menOf = new Set<string>()
+  const womenOf = new Set<string>()
+  for (const u of adults) {
+    const f = c.familyOf.get(u)
+    if (!f) continue
+    const sex = c.sexOf.get(u)
+    if (sex === 'male') menOf.add(f)
+    else if (sex === 'female') womenOf.add(f)
+  }
+  for (const f of menOf) if (womenOf.has(f)) return true
+  return false
+}
+
+/**
+ * How many families going have both a man and a woman in them: each can make
+ * one vehicle open to anyone, by riding in it (for planning how many vehicles
+ * are needed — src/custom).
+ */
+export function mixedFamilies(people: readonly AssignPerson[]): number {
+  const sexes = new Map<string, Set<string>>()
+  for (const p of people) {
+    if (!p.family || (p.sex !== 'male' && p.sex !== 'female')) continue
+    sexes.set(p.family, (sexes.get(p.family) ?? new Set()).add(p.sex))
+  }
+  return [...sexes.values()].filter((s) => s.size === 2).length
 }
 
 /** A small, fast generator from a seed (mulberry32): the same seed, the same numbers. */
