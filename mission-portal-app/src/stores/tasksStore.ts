@@ -14,6 +14,7 @@ import { db } from '@/lib/firebase'
 import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { nextId } from '@/lib/counters'
+import { storedDay } from '@/lib/eventDates'
 import { isAdmin } from '@/lib/roles'
 import { useAuthStore } from '@/stores/authStore'
 import type { Task } from '@/types/events'
@@ -125,7 +126,11 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
       const unsub = onSnapshot(
         mine,
         (snap) => {
-          const tasks = snap.docs.map((d) => ({ ...(d.data() as Task), id: d.id }))
+          const tasks = snap.docs.map((d) => {
+            const t = d.data() as Task
+            // A Kaizen task's due date, once kept as typed: read as its day.
+            return { ...t, id: d.id, dueDate: storedDay(t.dueDate) }
+          })
           set({ tasks, loading: false })
         },
         (err) => {

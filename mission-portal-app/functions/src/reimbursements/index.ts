@@ -449,6 +449,8 @@ export const answerPayDateChange = onCall(CALL_OPTS, async (req) => {
     tx.update(ref, {
       dateChange: null,
       ...(accepted ? { payBy: change.proposed } : {}),
+      // For the Accountant's briefing: what was answered, and when.
+      dateAnswer: { accepted, proposed: change.proposed, at: Date.now() },
       history: FieldValue.arrayUnion(
         historyEntry(
           uid,

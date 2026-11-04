@@ -108,6 +108,29 @@ describe('the daily briefing', () => {
     const b = buildBriefing(input({ viewer: { uid: 'me', roles: ['admin', 'public'] } }))
     expect(b.spoken).toMatch(/68/)
   })
+  it('tells what happened to a reimbursement since yesterday, and opens its task', () => {
+    const b = buildBriefing(
+      input({
+        money: [
+          {
+            title: 'Reimbursement approved: $42.50',
+            sub: 'Fall Retreat · to be paid by Nov 30',
+            href: '/assignments?taskId=7',
+            spoken: 'your $42.50 reimbursement for Fall Retreat was approved, to be paid by Nov 30',
+          },
+        ],
+      })
+    )
+    expect(b.news.find((n) => n.kind === 'reimbursement')).toEqual({
+      kind: 'reimbursement',
+      title: 'Reimbursement approved: $42.50',
+      sub: 'Fall Retreat · to be paid by Nov 30',
+      href: '/assignments?taskId=7',
+    })
+    expect(b.spoken).toContain(
+      'You have 4 unread messages. Your $42.50 reimbursement for Fall Retreat was approved, to be paid by Nov 30.'
+    )
+  })
   it('says it in order', () => {
     const { spoken } = buildBriefing(input())
     expect(spoken).toContain('Good morning, Jacob. Today is Sunday, October 18.')

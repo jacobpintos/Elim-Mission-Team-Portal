@@ -103,6 +103,17 @@ export function typedDateToIso(typed: string, today: string = localDay()): strin
     : null
 }
 
+/**
+ * A day as it is kept, YYYY-MM-DD — and one kept as it was typed (11/20/26),
+ * as Kaizen action plans once kept their tasks' due dates, read as that day:
+ * compared as kept, "11/20/26" came before every day of this century, so
+ * the task showed overdue. Anything else as it is.
+ */
+export function storedDay<T>(v: T): T | string {
+  if (typeof v !== 'string' || !/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(v.trim())) return v
+  return displayToIso(v) || v
+}
+
 /** Today on this device, YYYY-MM-DD. */
 function localDay(): string {
   const d = new Date()

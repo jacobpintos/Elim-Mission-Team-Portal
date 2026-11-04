@@ -1,22 +1,15 @@
 import { TextInput, StyleSheet } from 'react-native'
 import { YStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { DateField } from '@/components/ui/DateField'
 
 /**
  * Small pieces the reimbursement form and panel share.
  *
- * Dates are typed as MM/DD/YY, the way every other date in the app is, and
- * turned into ISO with eventDates.displayToIso at the point they are sent.
+ * Dates are typed however they come — 11/4/26, 11/04/2026, 11/4 — or picked
+ * from the calendar (components/ui/DateField), and turned into ISO with
+ * eventDates.typedDateToIso at the point they are sent.
  */
-
-/** 103026 → 10/30/26, as it is typed. */
-export function maskDate(v: string): string {
-  const digits = v.replace(/\D/g, '').slice(0, 6)
-  let out = digits.slice(0, 2)
-  if (digits.length > 2) out += '/' + digits.slice(2, 4)
-  if (digits.length > 4) out += '/' + digits.slice(4, 6)
-  return out
-}
 
 export function Label({ children }: { children: string }) {
   const colors = useThemeColors()
@@ -60,6 +53,37 @@ export function Field({
         multiline={multiline}
         keyboardType={keyboardType}
         maxLength={maxLength}
+      />
+    </YStack>
+  )
+}
+
+/** A date, labelled: typed as it comes or picked from a calendar. */
+export function DateInput({
+  label,
+  value,
+  onChange,
+  min,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  /** The earliest day the calendar offers, YYYY-MM-DD. */
+  min?: string
+}) {
+  const colors = useThemeColors()
+  return (
+    <YStack gap="$1">
+      <Label>{label}</Label>
+      <DateField
+        value={value}
+        onChange={onChange}
+        min={min}
+        accessibilityLabel={label}
+        inputStyle={[
+          styles.input,
+          { color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
+        ]}
       />
     </YStack>
   )

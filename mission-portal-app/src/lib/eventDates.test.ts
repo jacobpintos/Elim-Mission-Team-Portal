@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { isoToDisplay, displayToIso, toExtraDayRows, fromExtraDayRows } from './eventDates'
+import {
+  isoToDisplay,
+  displayToIso,
+  toExtraDayRows,
+  fromExtraDayRows,
+  storedDay,
+} from './eventDates'
 
 describe('isoToDisplay', () => {
   it('shows a stored date the way the form asks for it', () => {
@@ -124,5 +130,16 @@ describe('a date with no year', () => {
     const { displayToIso } = await import('./eventDates')
     expect(displayToIso('11/20')).toBe('')
     expect(displayToIso('11/20/26')).toBe('2026-11-20')
+  })
+})
+
+describe('storedDay', () => {
+  it('reads a day kept as typed as that day, and leaves the rest', () => {
+    expect(storedDay('11/20/26')).toBe('2026-11-20')
+    expect(storedDay('1/5/26')).toBe('2026-01-05')
+    expect(storedDay('2026-11-20')).toBe('2026-11-20')
+    expect(storedDay(null)).toBe(null)
+    expect(storedDay(undefined)).toBe(undefined)
+    expect(storedDay('soon')).toBe('soon')
   })
 })

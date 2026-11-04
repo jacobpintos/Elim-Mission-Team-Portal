@@ -5,6 +5,7 @@ import {
   accountantAttention,
   kindOf,
   filterForFinance,
+  moneyBriefing,
 } from './reimbursementTally'
 import type { Reimbursement } from '@/types/reimbursement'
 
@@ -130,5 +131,137 @@ describe('filterForFinance', () => {
       'Supplies',
     ])
     expect(titles({ query: 'youth', from: '2026-06-01', to: '' })).toEqual(['Youth Lock-in'])
+  })
+})
+
+describe('moneyBriefing', () => {
+  const SINCE = 1_000
+  const titles = (b: ReturnType<typeof moneyBriefing>) => ({
+    attention: b.attention.map((l) => l.title),
+    news: b.news.map((l) => l.title),
+  })
+
+  it('tells the one who asked of a decision since yesterday, and opens its task', () => {
+    const b = moneyBriefing(
+      [
+        req({
+          status: 'approved',
+          approvedAmount: 4250,
+          total: 4250,
+          payBy: '2026-11-30',
+          decidedAt: 2_000,
+          taskId: 7,
+        }),
+        req({
+          status: 'partial',
+          approvedAmount: 3000,
+          total: 5000,
+          reason: 'No receipt for the gas',
+          payBy: '2026-12-01',
+          decidedAt: 2_000,
+        }),
+        req({ status: 'denied', total: 1200, reason: 'Not for an event', decidedAt: 2_000 }),
+        // Decided before yesterday: old news.
+        req({ status: 'approved', approvedAmount: 900, payBy: '2026-11-30', decidedAt: 10 }),
+      ],
+      'u1',
+      SINCE
+    )
+    expect(titles(b)).toEqual({
+      attention: [],
+      news: [
+        'Reimbursement approved: $42.50',
+        'Reimbursement partly approved: $30.00 of $50.00',
+        'Reimbursement denied: $12.00',
+      ],
+    })
+    expect(b.news[0]).toMatchObject({
+      sub: 'Retreat · to be paid by Nov 30',
+      spoken: 'your $42.50 reimbursement for Retreat was approved, to be paid by Nov 30',
+      taskId: 7,
+    })
+    expect(b.news[1].sub).toBe('Retreat · No receipt for the gas')
+  })
+
+  it('tells them it was paid — once paid, not that it was approved', () => {
+    const b = moneyBriefing(
+      [
+        req({
+          status: 'paid',
+          approvedAmount: 4250,
+          payBy: '2026-11-30',
+          decidedAt: 2_000,
+          paidAt: 3_000,
+        }),
+      ],
+      'u1',
+      SINCE
+    )
+    expect(titles(b).news).toEqual(['Reimbursement paid: $42.50'])
+    expect(b.news[0].sub).toBe('Retreat · from Sunny')
+  })
+
+  it('asks them to answer a change of pay date, until they do', () => {
+    const asked = req({
+      status: 'approved',
+      approvedAmount: 1000,
+      payBy: '2026-11-30',
+      decidedAt: 10,
+      dateChange: { proposed: '2026-12-05', reason: 'Deposit', requestedAt: 10 },
+    })
+    const b = moneyBriefing([asked], 'u1', SINCE)
+    expect(b.attention).toEqual([
+      {
+        title: 'New pay date to answer: Retreat',
+        sub: 'Sunny asked to move it from Nov 30 to Dec 5',
+        spoken: 'Sunny asked to move your Retreat reimbursement to Dec 5',
+        taskId: 1,
+      },
+    ])
+    // The Accountant who asked is waiting, not asked anything.
+    expect(moneyBriefing([asked], 'acc', SINCE)).toEqual({ attention: [], news: [] })
+  })
+
+  it('tells the Accountant how a date change they asked for was answered', () => {
+    const b = moneyBriefing(
+      [
+        req({
+          status: 'approved',
+          payBy: '2026-12-05',
+          dateAnswer: { accepted: true, proposed: '2026-12-05', at: 2_000 },
+        }),
+        req({
+          status: 'approved',
+          payBy: '2026-11-30',
+          dateAnswer: { accepted: false, proposed: '2026-12-05', at: 2_000 },
+        }),
+        req({
+          status: 'approved',
+          payBy: '2026-11-30',
+          dateAnswer: { accepted: false, proposed: '2026-12-05', at: 10 },
+        }),
+      ],
+      'acc',
+      SINCE
+    )
+    expect(b.news.map((l) => [l.title, l.sub])).toEqual([
+      ['New pay date accepted: Jane', 'Retreat · now due Dec 5'],
+      ['Pay date kept: Jane', 'Retreat · asked Dec 5, still due Nov 30'],
+    ])
+    // Nor is the one who answered told of their own answer.
+    expect(
+      moneyBriefing(
+        [req({ dateAnswer: { accepted: true, proposed: '2026-12-05', at: 2_000 } })],
+        'u1',
+        SINCE
+      ).news
+    ).toEqual([])
+  })
+
+  it('tells no one of anyone else’s, and nothing of an outside bill', () => {
+    const r = req({ status: 'approved', payBy: '2026-11-30', decidedAt: 2_000 })
+    expect(moneyBriefing([r], 'someone', SINCE)).toEqual({ attention: [], news: [] })
+    const bill = req({ kind: 'external', submitterUid: '', status: 'paid', paidAt: 2_000 })
+    expect(moneyBriefing([bill], '', SINCE)).toEqual({ attention: [], news: [] })
   })
 })

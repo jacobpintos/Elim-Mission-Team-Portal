@@ -4,6 +4,7 @@ import { ASKED, ASKED_KEEP_DAYS } from './miriam/own/asked'
 import { EVENTS, EVENTS_KEEP_DAYS } from './miriam/stats'
 import { USAGE_LIMITS } from './utils/usageLimit'
 import { removeStrays } from './strayMembersSync'
+import { trimNotifLists } from './push/notifyCore'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -182,5 +183,12 @@ export const dailyCleanup = onSchedule('0 2 * * *', async () => {
     await removeStrays(db)
   } catch (err) {
     console.error('[dailyCleanup] stray members not removed', err)
+  }
+
+  // ── In-app notification lists: each kept to its newest (push/notifList) ────
+  try {
+    await trimNotifLists()
+  } catch (err) {
+    console.error('[dailyCleanup] notification lists not trimmed', err)
   }
 })

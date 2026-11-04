@@ -57,8 +57,12 @@ export interface Reimbursement {
   dateChange: PayDateChange | null
   taskId: number
   createdAt: number
+  /** When it was approved, partly approved or denied. */
+  decidedAt?: number
   /** When it was marked paid. */
   paidAt?: number
+  /** The last answer to a date change: whether the new date was taken, and when. */
+  dateAnswer?: { accepted: boolean; proposed: string; at: number } | null
   /** When its receipts or invoices were removed, two years after it was made. */
   receiptsRemovedAt?: number
   history?: ReimbursementHistoryEntry[]

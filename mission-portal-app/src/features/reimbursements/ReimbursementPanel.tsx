@@ -7,11 +7,12 @@ import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { formatCents, parseDollars } from '@/lib/money'
 import { KIND_COLORS, kindOf } from '@/lib/reimbursementTally'
-import { displayToIso } from '@/lib/eventDates'
+import { typedDateToIso } from '@/lib/eventDates'
+import { localToday } from '@/lib/events'
 import { FD } from '@/lib/format'
 import type { Task } from '@/types/events'
 import type { Reimbursement, ReimbursementStatus } from '@/types/reimbursement'
-import { Field, maskDate } from './fields'
+import { DateInput, Field } from './fields'
 import { ReceiptThumbs } from './ReceiptThumbs'
 
 const STATUS: Record<ReimbursementStatus, { label: string; color: string }> = {
@@ -108,7 +109,7 @@ function Details({
     }
   }
 
-  const iso = displayToIso(date)
+  const iso = typedDateToIso(date) ?? ''
 
   const submitForm = () => {
     if (form === 'approve') {
@@ -363,19 +364,11 @@ function Details({
             />
           ) : null}
           {form === 'approve' || form === 'partial' || form === 'move' ? (
-            <Field
-              label={
-                form === 'move'
-                  ? external
-                    ? 'NEW DUE DATE (MM/DD/YY)'
-                    : 'NEW PAY-BY DATE (MM/DD/YY)'
-                  : 'PAY BY (MM/DD/YY)'
-              }
+            <DateInput
+              label={form === 'move' ? (external ? 'NEW DUE DATE' : 'NEW PAY-BY DATE') : 'PAY BY'}
               value={date}
-              onChangeText={(v) => setDate(maskDate(v))}
-              placeholder="MM/DD/YY"
-              keyboardType="number-pad"
-              maxLength={8}
+              onChange={setDate}
+              min={localToday()}
             />
           ) : null}
           {form === 'paid' ? (

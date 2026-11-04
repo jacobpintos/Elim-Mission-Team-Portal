@@ -1,4 +1,4 @@
-import { displayToIso } from '@/lib/eventDates'
+import { typedDateToIso } from '@/lib/eventDates'
 import type { NotificationPrefs } from '@/types/user'
 
 /**
@@ -100,7 +100,7 @@ export function lastDayOf(
 /**
  * Check a sale as an admin typed it, returning its end date or what is wrong.
  *
- * The date is typed MM/DD/YY, as the event form takes dates, and has to be
+ * The date is typed as it comes — 11/4/26, 11/04/2026, 11/4 — and has to be
  * today or later: a sale ending yesterday would be posted, notify everyone
  * who asked, and never be seen.
  */
@@ -110,10 +110,12 @@ export function readSale(
   now: Date = new Date()
 ): { endsOn: string; endsAt: number } | { error: string } {
   if (!message.trim()) return { error: 'Write the sale message.' }
-  const endsOn = displayToIso(endDate.trim())
-  // displayToIso lets 02/31 through; a day that rolls into the next month is
-  // not the day that was meant.
-  if (!endsOn || localDate(endsOn).getDate() !== Number(endsOn.slice(8))) {
+  // As typed — 11/4/26, 11/04/2026, or 11/4 for the next one to come; a day
+  // that doesn't exist (02/31) is not one.
+  const p2 = (n: number) => String(n).padStart(2, '0')
+  const today = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`
+  const endsOn = typedDateToIso(endDate.trim(), today)
+  if (!endsOn) {
     return { error: 'Enter the last day of the sale as MM/DD/YY.' }
   }
   const endsAt = endOfDay(endsOn)

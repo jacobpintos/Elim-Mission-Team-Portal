@@ -27,6 +27,8 @@ import { notifyAssignees, notifyAdminsTaskBehind } from '@/lib/taskNotifications
 import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
+import { typedDateToIso } from '@/lib/eventDates'
+import { DateField } from '@/components/ui/DateField'
 import { httpsCallable } from 'firebase/functions'
 import { TASK_SECTIONS, type TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import type { Task } from '@/types/events'
@@ -350,8 +352,8 @@ function CreateTaskModal({
                 <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                   DUE DATE
                 </Text>
-                <TextInput
-                  style={[
+                <DateField
+                  inputStyle={[
                     ctStyles.input,
                     {
                       color: colors.text,
@@ -360,17 +362,8 @@ function CreateTaskModal({
                     },
                   ]}
                   value={dueDate}
-                  onChangeText={(v) => {
-                    const digits = v.replace(/\D/g, '').slice(0, 6)
-                    let formatted = digits.slice(0, 2)
-                    if (digits.length > 2) formatted += '/' + digits.slice(2, 4)
-                    if (digits.length > 4) formatted += '/' + digits.slice(4, 6)
-                    setDueDate(formatted)
-                  }}
-                  placeholder="mm/dd/yy"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="numeric"
-                  maxLength={8}
+                  onChange={setDueDate}
+                  accessibilityLabel="Due date"
                 />
               </YStack>
 
@@ -631,10 +624,9 @@ function isoToDisplay(iso: string | null | undefined): string {
   return `${mm}/${dd}/${yy.slice(2)}`
 }
 
+/** A date as typed — 11/4/26, 11/04/2026, 11/4 — as stored; null for none, or one not a day. */
 function displayToIso(display: string): string | null {
-  if (display.length < 8) return null
-  const [mm, dd, yy] = display.split('/')
-  return `20${yy}-${mm}-${dd}`
+  return typedDateToIso(display) || null
 }
 
 function AdminTaskEditModal({
@@ -666,14 +658,6 @@ function AdminTaskEditModal({
     { value: 'behind', label: 'Behind', color: '#e67e22' },
     { value: 'done', label: 'Completed', color: '#27ae60' },
   ]
-
-  const formatDateInput = (v: string): string => {
-    const digits = v.replace(/\D/g, '').slice(0, 6)
-    let out = digits.slice(0, 2)
-    if (digits.length > 2) out += '/' + digits.slice(2, 4)
-    if (digits.length > 4) out += '/' + digits.slice(4, 6)
-    return out
-  }
 
   const nonPublicUsers = users.filter((u) => !u.roles?.includes('public'))
 
@@ -783,8 +767,8 @@ function AdminTaskEditModal({
               <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                 DUE DATE
               </Text>
-              <TextInput
-                style={[
+              <DateField
+                inputStyle={[
                   ctStyles.input,
                   {
                     color: colors.text,
@@ -793,11 +777,8 @@ function AdminTaskEditModal({
                   },
                 ]}
                 value={dueDate}
-                onChangeText={(v) => setDueDate(formatDateInput(v))}
-                placeholder="mm/dd/yy"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="numeric"
-                maxLength={8}
+                onChange={setDueDate}
+                accessibilityLabel="Due date"
               />
             </YStack>
 
@@ -807,8 +788,8 @@ function AdminTaskEditModal({
                 <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                   PROJECTED DATE
                 </Text>
-                <TextInput
-                  style={[
+                <DateField
+                  inputStyle={[
                     ctStyles.input,
                     {
                       color: colors.text,
@@ -817,11 +798,8 @@ function AdminTaskEditModal({
                     },
                   ]}
                   value={projectedDate}
-                  onChangeText={(v) => setProjectedDate(formatDateInput(v))}
-                  placeholder="mm/dd/yy"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="numeric"
-                  maxLength={8}
+                  onChange={setProjectedDate}
+                  accessibilityLabel="Projected date"
                 />
               </YStack>
             ) : null}
@@ -1091,8 +1069,8 @@ function TaskUpdateModalInner({
             <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
               PROJECTED DATE
             </Text>
-            <TextInput
-              style={[
+            <DateField
+              inputStyle={[
                 tuStyles.input,
                 {
                   color: colors.text,
@@ -1101,17 +1079,8 @@ function TaskUpdateModalInner({
                 },
               ]}
               value={projectedDate}
-              onChangeText={(v) => {
-                const digits = v.replace(/\D/g, '').slice(0, 6)
-                let formatted = digits.slice(0, 2)
-                if (digits.length > 2) formatted += '/' + digits.slice(2, 4)
-                if (digits.length > 4) formatted += '/' + digits.slice(4, 6)
-                setProjectedDate(formatted)
-              }}
-              placeholder="mm/dd/yy"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="numeric"
-              maxLength={8}
+              onChange={setProjectedDate}
+              accessibilityLabel="Projected date"
             />
           </YStack>
         ) : null}
@@ -1405,11 +1374,7 @@ export default function Assignments() {
     projectedDate: string
   ) => {
     if (!updateTaskItem) return
-    let storedDate: string | undefined
-    if (projectedDate && projectedDate.length === 8) {
-      const [mm, dd, yy] = projectedDate.split('/')
-      storedDate = `20${yy}-${mm}-${dd}`
-    }
+    const storedDate = displayToIso(projectedDate) ?? undefined
     try {
       await tasksStore.updateTask(updateTaskItem.id, {
         status,
@@ -1891,12 +1856,8 @@ export default function Assignments() {
           visible={showCreateTask}
           onClose={() => setShowCreateTask(false)}
           onSubmit={async (title, assignees, lead, dueDate) => {
-            // Convert mm/dd/yy to YYYY-MM-DD for storage
-            let storedDate: string | null = null
-            if (dueDate && dueDate.length === 8) {
-              const [mm, dd, yy] = dueDate.split('/')
-              storedDate = `20${yy}-${mm}-${dd}`
-            }
+            // As typed — 11/4/26, 11/04/2026, 11/4 — to YYYY-MM-DD for storage.
+            const storedDate = displayToIso(dueDate)
             const taskId = await tasksStore.createTask({
               title,
               assignees,

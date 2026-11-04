@@ -25,10 +25,10 @@ import {
   isPdf,
   type PickedReceipt,
 } from '@/lib/receiptUpload'
-import { displayToIso } from '@/lib/eventDates'
+import { typedDateToIso } from '@/lib/eventDates'
 import { KIND_COLORS } from '@/lib/reimbursementTally'
 import { FD } from '@/lib/format'
-import { Field, Label, maskDate } from './fields'
+import { DateInput, Field, Label } from './fields'
 
 /** Matches MAX_RECEIPTS in functions/src/reimbursements/logic.ts. */
 const MAX_RECEIPTS = 10
@@ -112,7 +112,7 @@ export function ReimbursementFormModal({
   const total = filled.reduce((sum, r) => sum + (r.amount ?? 0), 0)
 
   /** What still stands between the form and sending it, or null. */
-  const dueIso = displayToIso(due)
+  const dueIso = typedDateToIso(due) ?? ''
   const missing = (() => {
     if (external && !payee.trim()) return 'Say who this is owed to.'
     if (!chosen) return 'Choose the event this was for.'
@@ -362,16 +362,7 @@ export function ReimbursementFormModal({
                   </XStack>
                 </YStack>
 
-                {external ? (
-                  <Field
-                    label="DUE BY * (MM/DD/YY)"
-                    value={due}
-                    onChangeText={(v) => setDue(maskDate(v))}
-                    placeholder="MM/DD/YY"
-                    keyboardType="number-pad"
-                    maxLength={8}
-                  />
-                ) : null}
+                {external ? <DateInput label="DUE BY *" value={due} onChange={setDue} /> : null}
 
                 <Field
                   label="NOTE (optional)"

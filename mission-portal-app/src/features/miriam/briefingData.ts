@@ -11,10 +11,16 @@ import { saleEndSaid } from '@/lib/miriamStore'
 import { screensFor } from '@/lib/miriamScreens'
 import { nextSundayService } from '@/lib/invite'
 import { announcementsShown, roomName } from '@/lib/miriamAppData'
-import { buildBriefing, type AttentionItem, type Briefing, type FoodNudge } from '@/lib/briefing'
+import {
+  buildBriefing,
+  type AttentionItem,
+  type BriefMoney,
+  type Briefing,
+  type FoodNudge,
+} from '@/lib/briefing'
 import { fetchWeather } from '@/lib/weather'
 import { miriamHref } from '@/lib/miriam'
-import { accountantAttention } from '@/lib/reimbursementTally'
+import { accountantAttention, moneyBriefing } from '@/lib/reimbursementTally'
 import type { Reimbursement } from '@/types/reimbursement'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -154,7 +160,10 @@ export async function gatherBriefing(): Promise<
     team
       ? quietly(() => availabilityAsks(events, evOverrides, groups, viewer, day, now.getTime()), [])
       : [],
-    quietly(() => moneyFor(uid, day), [] as AttentionItem[]),
+    quietly(() => moneyFor(uid, day, now), {
+      attention: [] as AttentionItem[],
+      news: [] as BriefMoney[],
+    }),
   ])
 
   // Birthdays and anniversaries, for those who see them (lib/occasions).
@@ -224,7 +233,8 @@ export async function gatherBriefing(): Promise<
     announcements,
     unread,
     // Money first: a payment due is a date someone outside is counting on.
-    attention: [...money, ...attention],
+    attention: [...money.attention, ...attention],
+    money: money.news,
     weather,
     food,
     notes: keepsNotes ? useDateNotesStore.getState().notes : [],
@@ -359,22 +369,51 @@ async function forecasts(
 
 /** What needs an admin, or the worship team, this week. */
 /**
- * For the Accountant: requests to decide, payments overdue and payments due
- * this week. Asks only for requests sent to them, which nobody else may read,
- * so for anyone else this is simply empty.
+ * Reimbursements. For the Accountant: requests to decide, payments overdue
+ * and due this week, and answers to a date change they asked for. For the
+ * one who asked: a decision or payment since yesterday, and a change of
+ * date to answer. Asks only for requests they asked for or were sent, which
+ * nobody else may read.
  */
-async function moneyFor(uid: string, day: string): Promise<AttentionItem[]> {
-  const snap = await getDocs(
-    query(collection(db, 'reimbursements'), where('accountantUid', '==', uid))
-  )
-  const requests = snap.docs.map((d) => ({ ...(d.data() as Reimbursement), id: d.id }))
-  return accountantAttention(requests, day, shiftDate(day, 7)).map((a) => ({
-    kind: 'reimbursement' as const,
-    title: a.title,
-    sub: a.sub,
-    href: '/assignments',
-    spoken: a.spoken,
-  }))
+async function moneyFor(
+  uid: string,
+  day: string,
+  now: Date
+): Promise<{ attention: AttentionItem[]; news: BriefMoney[] }> {
+  const side = (field: string) =>
+    getDocs(query(collection(db, 'reimbursements'), where(field, '==', uid)))
+      .then((snap) => snap.docs.map((d) => ({ ...(d.data() as Reimbursement), id: d.id })))
+      .catch(() => [] as Reimbursement[])
+  const [sent, asked] = await Promise.all([side('accountantUid'), side('submitterUid')])
+  const all = [...new Map([...sent, ...asked].map((r) => [r.id, r])).values()]
+  // Since the start of yesterday: what a day's briefing calls new.
+  const since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime()
+  const lines = moneyBriefing(all, uid, since)
+  const task = (taskId: number) => `/assignments?taskId=${taskId}`
+  return {
+    attention: [
+      ...accountantAttention(sent, day, shiftDate(day, 7)).map((a) => ({
+        kind: 'reimbursement' as const,
+        title: a.title,
+        sub: a.sub,
+        href: '/assignments',
+        spoken: a.spoken,
+      })),
+      ...lines.attention.map((a) => ({
+        kind: 'reimbursement' as const,
+        title: a.title,
+        sub: a.sub,
+        href: task(a.taskId),
+        spoken: a.spoken,
+      })),
+    ],
+    news: lines.news.map((n) => ({
+      title: n.title,
+      sub: n.sub,
+      href: task(n.taskId),
+      spoken: n.spoken,
+    })),
+  }
 }
 
 async function attentionFor(

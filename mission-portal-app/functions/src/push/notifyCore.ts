@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin'
 import { resend, MAIL_FROM } from '../email/client'
 import { sendExpoPush, type InterruptionLevel } from './expoPush'
 import { notifLink } from './notifLinks'
+import { NOTIFS_KEPT, newestNotifs, withNotif } from './notifList'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -296,20 +297,26 @@ export async function deliverNotification(
   // What it's about, opened by a tap on it in the app's list or on the push (./notifLinks).
   const link = notifLink(type, data)
 
-  await db.doc(`notifs/${uid}`).set(
-    {
-      items: admin.firestore.FieldValue.arrayUnion({
-        id: nanoid(),
-        msg: notifMsg,
-        ts: Date.now(),
-        type,
-        read: false,
-        link,
-      }),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  )
+  // Added to their list, kept to the newest (./notifList) — and the push sent
+  // even if this fails: a list that can't be written is no reason to tell
+  // them nothing.
+  const entry = { id: nanoid(), msg: notifMsg, ts: Date.now(), type, read: false, link }
+  const ref = db.doc(`notifs/${uid}`)
+  try {
+    await db.runTransaction(async (tx) => {
+      const items = (await tx.get(ref)).data()?.items
+      tx.set(
+        ref,
+        {
+          items: withNotif(items, entry),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+    })
+  } catch (err) {
+    logger.error('[notify] not added to their list', { uid, type, err })
+  }
 
   if (options.suppressPush) return
 
@@ -416,6 +423,24 @@ export async function notifyUser(
   const after = (await batchRef.get()).data() as { windowEndAt?: number } | undefined
   const justOpenedWindow = after?.windowEndAt === now + BATCH_WINDOW_MS
   await deliverNotification(uid, type, data, { suppressPush: !justOpenedWindow })
+}
+
+/**
+ * Every list longer than it keeps, cut to its newest (./notifList): run
+ * nightly, so one that filled before lists were kept short is let take
+ * notifications again — and so are those the app adds to itself.
+ * How many were cut.
+ */
+export async function trimNotifLists(): Promise<number> {
+  const db = admin.firestore()
+  let trimmed = 0
+  for (const d of (await db.collection('notifs').get()).docs) {
+    const items = d.data().items
+    if (!Array.isArray(items) || items.length <= NOTIFS_KEPT) continue
+    await d.ref.update({ items: newestNotifs(items) })
+    trimmed++
+  }
+  return trimmed
 }
 
 /** Runs on a schedule: sends one summary push per user whose batch window

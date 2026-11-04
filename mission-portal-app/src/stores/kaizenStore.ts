@@ -13,6 +13,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
 import { sameId } from '@/lib/ids'
+import { typedDateToIso } from '@/lib/eventDates'
 import { useTasksStore } from '@/stores/tasksStore'
 import { sendMessageAs, useMessagesStore } from '@/stores/messagesStore'
 import type {
@@ -120,7 +121,8 @@ export const useKaizenStore = create<KaizenStore>((set, get) => ({
         lead: null,
         by: plan.createdBy,
         status: 'pending',
-        dueDate: t.dueDate,
+        // A task's due date is kept as YYYY-MM-DD, as every other task's is.
+        dueDate: typedDateToIso(t.dueDate) || null,
         taskType: 'kaizen_action',
         kaizenId: id,
       })
@@ -133,7 +135,7 @@ export const useKaizenStore = create<KaizenStore>((set, get) => ({
       lead: null,
       by: plan.createdBy,
       status: 'pending',
-      dueDate: plan.reviewDate,
+      dueDate: typedDateToIso(plan.reviewDate) || null,
       taskType: 'kaizen_verification',
       kaizenId: id,
     })

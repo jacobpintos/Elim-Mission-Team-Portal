@@ -70,6 +70,15 @@ describe('readSale', () => {
     expect(got).toEqual({ endsOn: '2026-11-01', endsAt: endOfDay('2026-11-01') })
   })
 
+  it('reads a date typed as it comes: 11/1/26, 11/01/2026, or 11/1 for the next one', () => {
+    for (const typed of ['11/1/26', '11/01/2026', '11/1']) {
+      expect([typed, readSale('Half off hats', typed, NOW)]).toEqual([
+        typed,
+        { endsOn: '2026-11-01', endsAt: endOfDay('2026-11-01') },
+      ])
+    }
+  })
+
   it('takes a sale ending today', () => {
     expect('endsOn' in readSale('Today only', '10/23/26', NOW)).toBe(true)
   })

@@ -188,8 +188,19 @@ export interface BriefingInput {
   newContent?: { id: string; title: string }[]
   /** The Elim Store's sale, if one is on and they have the store (features/miriam/briefingData). */
   sale?: BriefSale | null
+  /** What happened to reimbursements since yesterday, theirs or sent to them (lib/reimbursementTally moneyBriefing). */
+  money?: BriefMoney[]
   /** An admin's: how many have invited someone to the next Sunday service (lib/inviteLog). */
   invited?: { count: number; date: string; href: string } | null
+}
+
+/** A reimbursement decided, paid or a date answered: shown, opened, and said. */
+export interface BriefMoney {
+  title: string
+  sub: string
+  href: string
+  /** Said aloud: a sentence, without its full stop. */
+  spoken: string
 }
 
 /** A sale at the Elim Store: its words, its last day as said ("tomorrow"), and where the store is. */
@@ -238,7 +249,7 @@ export interface Briefing {
   /** Their notes on today, as written. */
   notes: { id: string; text: string }[]
   news: {
-    kind: 'announcement' | 'messages' | 'content' | 'invites'
+    kind: 'announcement' | 'messages' | 'content' | 'invites' | 'reimbursement'
     title: string
     sub: string
     href: string
@@ -453,6 +464,11 @@ export function buildBriefing(input: BriefingInput): Briefing {
     })
   }
 
+  const money = (input.money ?? []).slice(0, 4)
+  for (const m of money) {
+    news.push({ kind: 'reimbursement', title: m.title, sub: m.sub, href: m.href })
+  }
+
   const attention = input.attention.slice(0, 5)
   // A food sheet is its team's: never nudged to anyone holding the public role.
   const food = seesTeamSide(input.viewer) ? (input.food ?? []).slice(0, 2) : []
@@ -560,6 +576,11 @@ export function buildBriefing(input: BriefingInput): Briefing {
     say(
       news.flatMap((n, i) => (n.kind === 'messages' ? [R.news(i)] : [])),
       `You have ${plural(unreadTotal, 'unread message')}.`
+    )
+  if (money.length)
+    say(
+      news.flatMap((n, i) => (n.kind === 'reimbursement' ? [R.news(i)] : [])),
+      money.map((m) => `${m.spoken.charAt(0).toUpperCase()}${m.spoken.slice(1)}.`).join(' ')
     )
   const sale = input.sale ?? null
   if (sale) say([R.sale()], storeSaleSaid(sale))

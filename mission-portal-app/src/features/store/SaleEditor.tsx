@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text, XStack, YStack } from 'tamagui'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { isoToDisplay } from '@/lib/eventDates'
+import { localToday } from '@/lib/events'
+import { DateField } from '@/components/ui/DateField'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -142,18 +144,16 @@ export function SaleEditor({ sale, onClose }: { sale: StoreSale | null; onClose:
 
           <YStack gap="$1">
             <Text color={colors.text} fontWeight="600">
-              Last day of the sale (MM/DD/YY)
+              Last day of the sale
             </Text>
-            <TextInput
+            <DateField
               value={endDate}
-              onChangeText={(v) => {
+              onChange={(v) => {
                 setEndDate(v)
                 setError(null)
               }}
-              placeholder="MM/DD/YY"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="numbers-and-punctuation"
-              style={field}
+              min={localToday()}
+              inputStyle={field}
               accessibilityLabel="Last day of the sale"
             />
             {preview ? (

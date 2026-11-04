@@ -21,7 +21,6 @@ import {
   costDate,
   type Tally,
 } from '@/lib/reimbursementTally'
-import { maskDate } from '@/features/reimbursements/fields'
 import { ReceiptThumbs } from '@/features/reimbursements/ReceiptThumbs'
 import type { Reimbursement, ReimbursementStatus } from '@/types/reimbursement'
 
@@ -299,11 +298,16 @@ function DateBox({
       </Text>
       <TextInput
         value={value}
-        onChangeText={(v) => onChange(maskDate(v))}
+        onChangeText={onChange}
+        // Typed as it comes — 1/5/26, 01/05/2026 — and read as it will be on leaving.
+        onBlur={() => {
+          const iso = displayToIso(value)
+          if (iso && isoToDisplay(iso) !== value) onChange(isoToDisplay(iso))
+        }}
         placeholder="MM/DD/YY"
         placeholderTextColor={colors.textMuted}
-        keyboardType="number-pad"
-        maxLength={8}
+        keyboardType="numbers-and-punctuation"
+        maxLength={10}
         style={[
           styles.input,
           styles.date,

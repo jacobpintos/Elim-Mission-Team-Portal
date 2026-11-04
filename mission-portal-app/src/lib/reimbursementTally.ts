@@ -8,6 +8,7 @@
  */
 import type { Reimbursement } from '@/types/reimbursement'
 import { formatCents } from '@/lib/money'
+import { FD } from '@/lib/format'
 
 export const KIND_COLORS = {
   /** Someone on the team, paid back. */
@@ -173,6 +174,106 @@ export function accountantAttention(
     })
   }
   return items
+}
+
+/** A line of a briefing about one request, opening its task. */
+export interface MoneyLine {
+  title: string
+  sub: string
+  spoken: string
+  taskId: number
+}
+
+/**
+ * What a daily briefing tells of reimbursements besides the Accountant's
+ * to-dos (accountantAttention).
+ *
+ * To the one who asked: a decision on their request or its payment, made
+ * since `since` — and a change of pay date asked of them, until they answer.
+ * To the Accountant: an answer to a change of date they asked for, given
+ * since `since`.
+ */
+export function moneyBriefing(
+  requests: Reimbursement[],
+  uid: string,
+  since: number
+): { attention: MoneyLine[]; news: MoneyLine[] } {
+  const attention: MoneyLine[] = []
+  const news: MoneyLine[] = []
+  const at = (n: unknown) => (typeof n === 'number' ? n : 0)
+  for (const r of requests) {
+    const line = (title: string, sub: string, spoken: string): MoneyLine => ({
+      title,
+      sub,
+      spoken,
+      taskId: r.taskId,
+    })
+    const approved = formatCents(r.approvedAmount ?? r.total)
+    const unpaid = r.status === 'approved' || r.status === 'partial'
+    if (r.submitterUid === uid && kindOf(r) === 'internal') {
+      if (unpaid && r.dateChange) {
+        attention.push(
+          line(
+            `New pay date to answer: ${r.eventTitle}`,
+            `${r.accountantName} asked to move it from ${FD(r.payBy)} to ${FD(r.dateChange.proposed)}`,
+            `${r.accountantName} asked to move your ${r.eventTitle} reimbursement to ${FD(r.dateChange.proposed)}`
+          )
+        )
+      }
+      if (r.status === 'paid' && at(r.paidAt) >= since) {
+        news.push(
+          line(
+            `Reimbursement paid: ${approved}`,
+            `${r.eventTitle} · from ${r.accountantName}`,
+            `your ${approved} reimbursement for ${r.eventTitle} was paid`
+          )
+        )
+      } else if (at(r.decidedAt) >= since) {
+        if (r.status === 'approved') {
+          news.push(
+            line(
+              `Reimbursement approved: ${approved}`,
+              `${r.eventTitle} · to be paid by ${FD(r.payBy)}`,
+              `your ${approved} reimbursement for ${r.eventTitle} was approved, to be paid by ${FD(r.payBy)}`
+            )
+          )
+        } else if (r.status === 'partial') {
+          news.push(
+            line(
+              `Reimbursement partly approved: ${approved} of ${formatCents(r.total)}`,
+              `${r.eventTitle} · ${r.reason}`,
+              `${approved} of your ${formatCents(r.total)} reimbursement for ${r.eventTitle} was approved, to be paid by ${FD(r.payBy)}`
+            )
+          )
+        } else if (r.status === 'denied') {
+          news.push(
+            line(
+              `Reimbursement denied: ${formatCents(r.total)}`,
+              `${r.eventTitle} · ${r.reason}`,
+              `your ${formatCents(r.total)} reimbursement for ${r.eventTitle} was denied`
+            )
+          )
+        }
+      }
+    }
+    const answer = r.dateAnswer
+    if (r.accountantUid === uid && answer && at(answer.at) >= since) {
+      news.push(
+        answer.accepted
+          ? line(
+              `New pay date accepted: ${r.submitterName}`,
+              `${r.eventTitle} · now due ${FD(answer.proposed)}`,
+              `${r.submitterName} accepted paying their ${r.eventTitle} reimbursement on ${FD(answer.proposed)}`
+            )
+          : line(
+              `Pay date kept: ${r.submitterName}`,
+              `${r.eventTitle} · asked ${FD(answer.proposed)}, still due ${FD(r.payBy)}`,
+              `${r.submitterName} kept the pay date for their ${r.eventTitle} reimbursement, ${FD(r.payBy)}`
+            )
+      )
+    }
+  }
+  return { attention, news }
 }
 
 /** The day a cost counts on: its event's date, or the day it was asked for. */

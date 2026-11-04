@@ -12,6 +12,8 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { useUIStore } from '@/stores/uiStore'
 import { isAdmin } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
+import { isoToDisplay, typedDateToIso } from '@/lib/eventDates'
+import { DateField } from '@/components/ui/DateField'
 import type { KaizenCard, KaizenStatus, KaizenActionTask } from '@/types/operations'
 import type { UserProfile } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -167,23 +169,14 @@ function ActionTaskRow({
         </XStack>
       </Pressable>
 
-      <TextInput
-        style={[
+      <DateField
+        inputStyle={[
           styles.input,
           { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
         ]}
         value={task.dueDate}
-        onChangeText={(v) => {
-          const digits = v.replace(/\D/g, '').slice(0, 6)
-          let formatted = digits.slice(0, 2)
-          if (digits.length > 2) formatted += '/' + digits.slice(2, 4)
-          if (digits.length > 4) formatted += '/' + digits.slice(4, 6)
-          onChange({ ...task, dueDate: formatted })
-        }}
-        placeholder="mm/dd/yy"
-        placeholderTextColor={colors.textMuted}
-        keyboardType="numeric"
-        maxLength={8}
+        onChange={(v) => onChange({ ...task, dueDate: v })}
+        accessibilityLabel="Due date"
       />
 
       <UserPickerModal
@@ -443,9 +436,20 @@ export default function Kaizen() {
   const handleSavePlan = async () => {
     if (!planCard || !planDesc.trim() || !planVerifMethod.trim() || !planVerifId || !planReviewDate)
       return
-    const validTasks = planTasks.filter((t) => t.description.trim() && t.assignee && t.dueDate)
-    if (validTasks.length === 0) {
+    // Each date as typed — 11/4/26, 11/04/2026, 11/4 — kept as it reads: 11/04/26.
+    const tidy = (v: string) => {
+      const iso = typedDateToIso(v)
+      return iso ? isoToDisplay(iso) : null
+    }
+    const filled = planTasks.filter((t) => t.description.trim() && t.assignee && t.dueDate)
+    if (filled.length === 0) {
       toast('Add at least one task', 'error')
+      return
+    }
+    const reviewDate = tidy(planReviewDate)
+    const validTasks = filled.map((t) => ({ ...t, dueDate: tidy(t.dueDate) ?? '' }))
+    if (!reviewDate || validTasks.some((t) => !t.dueDate)) {
+      toast('Enter each date as a day, like 11/4/26', 'error')
       return
     }
     setSavingPlan(true)
@@ -455,7 +459,7 @@ export default function Kaizen() {
         tasks: validTasks,
         verificationMethod: planVerifMethod.trim(),
         verifierId: planVerifId,
-        reviewDate: planReviewDate,
+        reviewDate,
         createdBy: uid,
       })
       toast('Action plan saved and tasks assigned', 'success')
@@ -845,8 +849,8 @@ export default function Kaizen() {
                   <Text color={colors.textMuted} fontSize="$2" fontWeight="600">
                     REVIEW DATE
                   </Text>
-                  <TextInput
-                    style={[
+                  <DateField
+                    inputStyle={[
                       styles.input,
                       {
                         color: colors.text,
@@ -855,17 +859,8 @@ export default function Kaizen() {
                       },
                     ]}
                     value={planReviewDate}
-                    onChangeText={(v) => {
-                      const digits = v.replace(/\D/g, '').slice(0, 6)
-                      let formatted = digits.slice(0, 2)
-                      if (digits.length > 2) formatted += '/' + digits.slice(2, 4)
-                      if (digits.length > 4) formatted += '/' + digits.slice(4, 6)
-                      setPlanReviewDate(formatted)
-                    }}
-                    placeholder="mm/dd/yy"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="numeric"
-                    maxLength={8}
+                    onChange={setPlanReviewDate}
+                    accessibilityLabel="Review date"
                   />
                 </YStack>
 
