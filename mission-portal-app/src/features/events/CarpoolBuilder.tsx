@@ -548,20 +548,12 @@ export function CarpoolBuilder({
                     setCars(next)
                     setAuto(false)
                     setSelectedId(null)
-                    // A car with no driver yet is filled too: its driver is
-                    // one of those in it, picked here (tap them, then Driver).
-                    const pick = driverToPick(next)
                     setAssigned(
-                      [
-                        noRoom.length
-                          ? `${noRoom.length === 1 ? '1 person didn’t' : `${noRoom.length} people didn’t`} fit: ${noRoom
-                              .map((u) => personFor(u).name)
-                              .join(', ')} — add a car or seats, or put them in by hand.`
-                          : 'Everyone is in a car. Look it over, change anything by hand, then Save.',
-                        pick ? `${pick} Open it, tap them, then Driver.` : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')
+                      noRoom.length
+                        ? `${noRoom.length === 1 ? '1 person didn’t' : `${noRoom.length} people didn’t`} fit: ${noRoom
+                            .map((u) => personFor(u).name)
+                            .join(', ')} — add a car or seats, or put them in by hand.`
+                        : 'Everyone is in a car. Look it over, change anything by hand, then Save.'
                     )
                   }}
                 />
@@ -851,40 +843,75 @@ export function CarpoolBuilder({
                       {assigned}
                     </Text>
                   ) : null}
+                  {/* A car with no driver yet, and people in it: its driver
+                      is one of them, tapped below — said while any is left. */}
+                  {driverToPick(cars) ? (
+                    <Text color={colors.text} fontSize="$3" fontWeight="600">
+                      {driverToPick(cars).replace(/\.$/, '')} — tap their name.
+                    </Text>
+                  ) : null}
                   <Text color={colors.textMuted} fontSize="$3">
                     {cars.length
                       ? 'Choose a car to fill it.'
                       : 'Add a car, name it, then drag people into it — or Auto-assign.'}
                   </Text>
                   {cars.map((car, i) => (
-                    <Pressable
+                    <View
                       key={car.id}
-                      onPress={() => setSelectedId(car.id)}
-                      accessibilityRole="button"
                       style={[
                         styles.summary,
                         { borderColor: colors.border, backgroundColor: colors.background },
                       ]}
                     >
-                      <Text color={colors.text} fontSize="$4" fontWeight="700">
-                        🚗 {carName(car, i)}
-                      </Text>
-                      <Text color={colors.textMuted} fontSize="$3">
-                        {car.driver ? `${personFor(car.driver).name} driving` : 'No driver yet'}
-                        {car.riders.length
-                          ? ` · ${car.riders.length} passenger${car.riders.length === 1 ? '' : 's'}`
-                          : ''}
-                        {car.children?.length
-                          ? ` · ${car.children.length} ${car.children.length === 1 ? 'child' : 'children'}`
-                          : ''}
-                        {car.seats ? ` · ${headCount(car)} of ${car.seats} seats` : ''}
-                      </Text>
-                      {car.riders.length ? (
-                        <Text color={colors.textMuted} fontSize="$2" numberOfLines={2}>
-                          {car.riders.map((u) => personFor(u).name).join(', ')}
+                      <Pressable
+                        onPress={() => setSelectedId(car.id)}
+                        accessibilityRole="button"
+                        accessibilityHint="Opens this car"
+                        style={{ gap: 2 }}
+                      >
+                        <Text color={colors.text} fontSize="$4" fontWeight="700">
+                          🚗 {carName(car, i)}
                         </Text>
+                        <Text color={colors.textMuted} fontSize="$3">
+                          {car.driver ? `${personFor(car.driver).name} driving` : 'No driver yet'}
+                          {car.riders.length
+                            ? ` · ${car.riders.length} passenger${car.riders.length === 1 ? '' : 's'}`
+                            : ''}
+                          {car.children?.length
+                            ? ` · ${car.children.length} ${car.children.length === 1 ? 'child' : 'children'}`
+                            : ''}
+                          {car.seats ? ` · ${headCount(car)} of ${car.seats} seats` : ''}
+                        </Text>
+                        {car.riders.length && car.driver ? (
+                          <Text color={colors.textMuted} fontSize="$2" numberOfLines={2}>
+                            {car.riders.map((u) => personFor(u).name).join(', ')}
+                          </Text>
+                        ) : null}
+                      </Pressable>
+                      {/* No driver yet: those in it, a tap away from driving it. */}
+                      {car.riders.length && !car.driver ? (
+                        <YStack gap="$1.5" paddingTop="$1">
+                          <Text color={colors.textMuted} fontSize="$2" fontWeight="700">
+                            TAP WHO DRIVES
+                          </Text>
+                          <View style={styles.wrap}>
+                            {car.riders.map((uid) => {
+                              const person = personFor(uid)
+                              return (
+                                <Pressable
+                                  key={uid}
+                                  onPress={() => put(uid, { kind: 'driver', carId: car.id })}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Make ${person.name} the driver of ${carName(car, i)}`}
+                                >
+                                  <PersonCard person={person} />
+                                </Pressable>
+                              )
+                            })}
+                          </View>
+                        </YStack>
                       ) : null}
-                    </Pressable>
+                    </View>
                   ))}
                   {pool.length > 0 && cars.length > 0 ? (
                     <Text color={colors.textMuted} fontSize="$3">
