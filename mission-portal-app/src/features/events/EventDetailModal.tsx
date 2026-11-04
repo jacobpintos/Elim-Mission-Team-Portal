@@ -38,6 +38,7 @@ import { carName, childNames, unplaced } from './carpoolCards'
 import { ScheduleDisplay } from './ScheduleDisplay'
 
 import { openExternalUrl } from '@/lib/externalUrl'
+import { rememberRide } from '@/lib/carpoolMemoryDb'
 import { dressCodesOn, teamsOf } from '../../../functions/src/miriam/data'
 
 export function TeamsDisplay({ event, uid }: { event: EventInstance; uid: string }) {
@@ -795,6 +796,8 @@ export function CarpoolPanel({
     setDoc(doc(db, 'carpool', carpoolKey), { cars: updated }).catch(() =>
       toast('Failed to save carpool', 'error')
     )
+    // Remembered, for arranging the next (lib/carpoolMemory).
+    void rememberRide(carpoolKey, event.date, updated)
   }
 
   const personOf = (u: string) => {
@@ -841,6 +844,7 @@ export function CarpoolPanel({
           cars={cars}
           people={eventUids.map(personOf)}
           lookup={personOf}
+          rideKey={carpoolKey}
           onSave={save}
           onClose={() => setArranging(false)}
         />

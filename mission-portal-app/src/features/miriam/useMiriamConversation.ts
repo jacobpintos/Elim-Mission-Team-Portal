@@ -78,6 +78,7 @@ import {
   type Suggestion,
 } from '@/lib/miriamSuggestions'
 import { askMiriam, miriamError } from './askMiriam'
+import { withCarsFilled } from './carpoolAuto'
 import { eventByKey, prepareAction } from './actions'
 import { appData, eventsLoaded, hereNow, quickFromApp } from './hereNow'
 import { offerDirections, remindBeforeEach, talkHere, type Talk } from './localTalk'
@@ -937,13 +938,26 @@ export function useMiriamConversation(
         // The event form open on the screen: what she filled in goes into it,
         // over what is there — and her bar goes, to leave it in view.
         const here = useMiriamStore.getState().formOnScreen
+        // Cars said with who rides left to the app: filled for those on the
+        // event — as the form says, the one on screen, or the event as it is.
+        const editing = result.editKey
+          ? useEventsStore.getState().getInstanceByKey(result.editKey)
+          : null
+        const filled = await withCarsFilled(
+          result.draft,
+          result.onScreen && here
+            ? here.describe()
+            : editing
+              ? { users: (editing.users ?? []).map(String), groups: editing.groups ?? [] }
+              : null
+        )
+        const { draft } = filled
+        const notes = [...result.notes, ...filled.notes]
         if (result.onScreen && here) {
-          here.fill({ draft: result.draft, notes: result.notes, heard: said })
+          here.fill({ draft, notes, heard: said })
           noteDone('Put that into the event form on their screen, to check and save.')
           speakAside(
-            result.notes.length
-              ? 'It’s in the form — check what I noted at the top.'
-              : 'It’s in the form.'
+            notes.length ? 'It’s in the form — check what I noted at the top.' : 'It’s in the form.'
           )
           setOpen(false)
           return
@@ -952,12 +966,7 @@ export function useMiriamConversation(
           `Opened the ${result.editKey ? 'event’s' : 'new event'} form, filled in, to check and save.`
         )
         afterTheForm('event', () => {
-          offerEventForm({
-            draft: result.draft,
-            heard: said,
-            notes: result.notes,
-            editKey: result.editKey,
-          })
+          offerEventForm({ draft, heard: said, notes, editKey: result.editKey })
           router.navigate('/events' as never)
         })
         return

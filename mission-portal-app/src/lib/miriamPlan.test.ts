@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  APP_TOOLS,
   COMMANDS,
   commandsFor,
   draftFromInput,
@@ -387,6 +388,47 @@ describe('an event described out loud, as it comes', () => {
   it('a time for everyone else is the form’s remainder', () => {
     const { draft } = draftFromInput({ report_times: [{ for: 'everyone', time: '6 pm' }] }, church)
     expect(draft.reportTimes).toEqual([{ group: '_remainder_', time: '6:00 PM' }])
+  })
+})
+
+describe('carpools told by the cars that are going', () => {
+  it('leaves who rides where to the app: the cars as said, and nobody in them yet', () => {
+    const { draft } = draftFromInput(
+      {
+        cars: [
+          { label: 'Andy’s van', seats: 7, driver_id: 'u1', rider_ids: ['u2'] },
+          { label: 'Truck', driver_id: 'u3', child_names: ['Joey'] },
+        ],
+        cars_auto_assign: true,
+        not_riding: ['u4', 'nobody'],
+      },
+      roster
+    )
+    expect(draft.carsAuto).toBe(true)
+    expect(draft.notRiding).toEqual(['u4'])
+    expect(draft.cars).toEqual([
+      { label: 'Andy’s van', seats: 7, driver: 'u1', riders: [] },
+      { label: 'Truck', driver: 'u3', riders: [], children: ['Joey'] },
+    ])
+  })
+
+  it('keeps riders said, when it is not left to the app', () => {
+    const { draft } = draftFromInput(
+      { cars: [{ label: 'Van', driver_id: 'u1', rider_ids: ['u2'] }] },
+      roster
+    )
+    expect(draft).not.toHaveProperty('carsAuto')
+    expect(draft.cars?.[0].riders).toEqual(['u2'])
+  })
+
+  it('asks set_carpool for each car’s size and whether to fill them, strictly', () => {
+    const tool = APP_TOOLS.set_carpool
+    const props = tool.input_schema.properties as Record<
+      string,
+      { items?: { required?: string[] } }
+    >
+    expect(Object.keys(props).sort()).toEqual(['auto_assign', 'cars', 'event_key', 'not_riding'])
+    expect(props.cars.items?.required).toContain('seats')
   })
 })
 

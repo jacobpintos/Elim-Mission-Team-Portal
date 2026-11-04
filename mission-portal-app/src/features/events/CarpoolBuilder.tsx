@@ -19,6 +19,8 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import type { CarpoolCarData } from '@/types/events'
 import type { Sex } from '@/types/user'
 import { DragCard, measureRect, type Rect } from './DragCard'
+import { NameTyper } from './CarpoolNameTyper'
+import { AutoAssignPanel } from './AutoAssignPanel'
 import {
   CARD_COLORS,
   cardColorsFor,
@@ -52,6 +54,11 @@ interface CarpoolBuilderProps {
   people: CarpoolPerson[]
   /** Anyone else a car names — someone since taken off the event, say. */
   lookup?: (uid: string) => CarpoolPerson | undefined
+  /**
+   * The event (and date) being arranged, as its cars are remembered
+   * (lib/carpoolMemory): its own last arrangement isn't another time together.
+   */
+  rideKey?: string
   onSave: (cars: CarpoolCarData[]) => void
   onClose: () => void
 }
@@ -78,6 +85,10 @@ const inside = (r: Rect, x: number, y: number) =>
  * picked from the bar that opens, for anyone who would rather not drag.
  * Children have no accounts, so each is a card added to a car and named on it.
  *
+ * Or Auto-assign: the cars set up — each one's size, driver and children —
+ * and who isn't riding, and everyone else put in one (./carpoolAssign), to
+ * be looked over and changed here before it is saved.
+ *
  * Works on a copy: nothing is kept until Save, which hands the cars back.
  */
 export function CarpoolBuilder({
@@ -85,6 +96,7 @@ export function CarpoolBuilder({
   cars: initialCars,
   people,
   lookup,
+  rideKey,
   onSave,
   onClose,
 }: CarpoolBuilderProps) {
@@ -108,6 +120,9 @@ export function CarpoolBuilder({
   const [focus, setFocus] = useState<string | null>(null)
   // The car's name being typed: its box outlined in the theme's colour.
   const [naming, setNaming] = useState(false)
+  // Auto-assign being set up (./AutoAssignPanel), and what it said when done.
+  const [auto, setAuto] = useState(false)
+  const [assigned, setAssigned] = useState<string | null>(null)
 
   const rootRef = useRef<View>(null)
   const tabsRef = useRef<View>(null)
@@ -498,9 +513,50 @@ export function CarpoolBuilder({
                     + Add car
                   </Text>
                 </Pressable>
+                {!auto ? (
+                  <Pressable
+                    onPress={() => {
+                      setAuto(true)
+                      setSelectedId(null)
+                      setPicked(null)
+                      setAssigned(null)
+                    }}
+                    accessibilityRole="button"
+                    accessibilityHint="Set up the cars and drivers, and everyone else is put in one"
+                    style={[
+                      styles.tab,
+                      compact && styles.tabCompact,
+                      { borderColor: colors.primary, backgroundColor: colors.primary + '14' },
+                    ]}
+                  >
+                    <Text color={colors.primary} fontSize={compact ? '$2' : '$3'} fontWeight="700">
+                      ✨ Auto-assign
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
 
-              {selected ? (
+              {auto ? (
+                <AutoAssignPanel
+                  cars={cars}
+                  people={people}
+                  personFor={personFor}
+                  rideKey={rideKey}
+                  onCancel={() => setAuto(false)}
+                  onAssign={(next, noRoom) => {
+                    setCars(next)
+                    setAuto(false)
+                    setSelectedId(null)
+                    setAssigned(
+                      noRoom.length
+                        ? `${noRoom.length === 1 ? '1 person didn’t' : `${noRoom.length} people didn’t`} fit: ${noRoom
+                            .map((u) => personFor(u).name)
+                            .join(', ')} — add a car or seats, or put them in by hand.`
+                        : 'Everyone is in a car. Look it over, change anything by hand, then Save.'
+                    )
+                  }}
+                />
+              ) : selected ? (
                 <>
                   {/* Where a tapped card goes */}
                   {pickedPerson ? (
@@ -781,10 +837,15 @@ export function CarpoolBuilder({
               ) : (
                 /* No car chosen: what each holds, to pick one from. */
                 <ScrollView contentContainerStyle={{ gap: 8 }}>
+                  {assigned ? (
+                    <Text color={colors.text} fontSize="$3" fontWeight="600">
+                      {assigned}
+                    </Text>
+                  ) : null}
                   <Text color={colors.textMuted} fontSize="$3">
                     {cars.length
                       ? 'Choose a car to fill it.'
-                      : 'Add a car, name it, then drag people into it.'}
+                      : 'Add a car, name it, then drag people into it — or Auto-assign.'}
                   </Text>
                   {cars.map((car, i) => (
                     <Pressable
@@ -807,7 +868,13 @@ export function CarpoolBuilder({
                         {car.children?.length
                           ? ` · ${car.children.length} ${car.children.length === 1 ? 'child' : 'children'}`
                           : ''}
+                        {car.seats ? ` · ${headCount(car)} of ${car.seats} seats` : ''}
                       </Text>
+                      {car.riders.length ? (
+                        <Text color={colors.textMuted} fontSize="$2" numberOfLines={2}>
+                          {car.riders.map((u) => personFor(u).name).join(', ')}
+                        </Text>
+                      ) : null}
                     </Pressable>
                   ))}
                   {pool.length > 0 && cars.length > 0 ? (
@@ -901,113 +968,6 @@ function DraggablePerson({
     >
       <PersonCard person={person} picked={picked} dimmed={dimmed} />
     </DragCard>
-  )
-}
-
-/**
- * A name typed into a seat, for anyone who would rather type than drag: the
- * people it could be, as it is typed, to put there with a tap — or Enter,
- * when it is plainly one of them. In the passengers', a name that is no one
- * on the event can be added as a child.
- */
-function NameTyper({
-  placeholder,
-  candidates,
-  where,
-  onPick,
-  onChild,
-}: {
-  placeholder: string
-  candidates: CarpoolPerson[]
-  /** Where someone is now ("in Car 2", "driving Andy’s van"), or '' if not in a car. */
-  where: (uid: string) => string
-  onPick: (uid: string) => void
-  onChild?: (name: string) => void
-}) {
-  const colors = useThemeColors()
-  const [text, setText] = useState('')
-  const typed = text.trim()
-  const found = typed ? candidates.filter((p) => matchesSearch(p.name, typed)).slice(0, 5) : []
-  const pick = (uid: string) => {
-    onPick(uid)
-    setText('')
-  }
-  const addChild = () => {
-    onChild?.(typed)
-    setText('')
-  }
-  // Enter: the one it fits, or the one it names in full — never a guess among several.
-  const enter = () => {
-    const exact = found.filter((p) => p.name.trim().toLowerCase() === typed.toLowerCase())
-    if (found.length === 1) pick(found[0].uid)
-    else if (exact.length === 1) pick(exact[0].uid)
-    else if (found.length === 0 && typed && onChild) addChild()
-  }
-  return (
-    <View style={styles.typer}>
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        onSubmitEditing={enter}
-        // Kept open for the next name.
-        blurOnSubmit={false}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        autoCorrect={false}
-        autoCapitalize="words"
-        returnKeyType="done"
-        style={[
-          styles.typerInput,
-          { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface },
-        ]}
-        accessibilityLabel={placeholder}
-      />
-      {typed ? (
-        <YStack gap="$1">
-          {found.map((p) => (
-            <Pressable
-              key={p.uid}
-              onPress={() => pick(p.uid)}
-              accessibilityRole="button"
-              accessibilityLabel={`Put ${p.name} here`}
-              style={[styles.suggestion, { borderColor: colors.border }]}
-            >
-              <Text
-                color={colors.text}
-                fontSize="$3"
-                fontWeight="600"
-                numberOfLines={1}
-                flexShrink={1}
-              >
-                {p.name}
-              </Text>
-              {where(p.uid) ? (
-                <Text color={colors.textMuted} fontSize="$2" numberOfLines={1}>
-                  {where(p.uid)}
-                </Text>
-              ) : null}
-            </Pressable>
-          ))}
-          {found.length === 0 ? (
-            onChild ? (
-              <Pressable
-                onPress={addChild}
-                accessibilityRole="button"
-                style={[styles.suggestion, { borderColor: CARD_COLORS.child.border }]}
-              >
-                <Text color={colors.primary} fontSize="$3" fontWeight="600" numberOfLines={1}>
-                  + Add “{typed}” as a child
-                </Text>
-              </Pressable>
-            ) : (
-              <Text color={colors.textMuted} fontSize="$2">
-                No one on this event matches “{typed}”.
-              </Text>
-            )
-          ) : null}
-        </YStack>
-      ) : null}
-    </View>
   )
 }
 
@@ -1133,30 +1093,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   // A whole line of its seat, under whoever is in it.
-  typer: {
-    width: '100%',
-    marginTop: 4,
-    gap: 6,
-  },
-  typerInput: {
-    minHeight: 36,
-    minWidth: 0,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    fontSize: 15,
-  },
-  suggestion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    minHeight: 36,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
   count: {
     minWidth: 22,
     height: 22,

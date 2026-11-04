@@ -698,6 +698,24 @@ describe('foodSignups — one item at a time, never over someone', () => {
   })
 })
 
+describe('carpool memory — the team’s cars, drivers and who rode together, for admins', () => {
+  const memory = { cars: {}, rides: { ev1_2026_10_16: { at: 1, cars: [] } } }
+
+  it('lets an admin read and keep it', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'carpoolMemory', 'main'), memory))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'carpoolMemory', 'main')))
+  })
+
+  it('refuses anyone else: who rides with whom is no member’s to read', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'carpoolMemory', 'main'), memory)
+    })
+    await assertFails(getDoc(doc(as(MEMBER), 'carpoolMemory', 'main')))
+    await assertFails(setDoc(doc(as(MEMBER), 'carpoolMemory', 'main'), memory))
+    await assertFails(getDoc(doc(as(GUEST), 'carpoolMemory', 'main')))
+  })
+})
+
 describe('carpool — arranged by admins, read by everyone on it', () => {
   const KEY = 'ev1_2026-10-16'
   const cars = { cars: [{ id: 'c1', driver: MEMBER, riders: [OUTSIDER] }] }

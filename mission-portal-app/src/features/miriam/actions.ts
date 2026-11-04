@@ -96,7 +96,9 @@ import { lastDayOf, saleEndsLabel } from '@/features/store/storeSale'
 import { endSale, postSale, updateSale } from '@/features/store/storeWrites'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useTasksStore } from '@/stores/tasksStore'
-import { notifyAssignedAdmins, useEventsStore } from '@/stores/eventsStore'
+import { notifyAssignedAdmins, resolveAssignedUids, useEventsStore } from '@/stores/eventsStore'
+import { rememberRide } from '@/lib/carpoolMemoryDb'
+import { fillCars, noRoomSaid } from './carpoolAuto'
 import { readBlocks, useBlockedDatesStore } from '@/stores/blockedDatesStore'
 import { blockProblem, blockSpan } from '../../../functions/src/blockedDates'
 import { useDateNotesStore } from '@/stores/dateNotesStore'
@@ -1209,9 +1211,10 @@ async function setCarpool(profile: UserProfile, input: Record<string, unknown>) 
   if (ev.carpoolCars?.length) {
     return cannot(`${ev.title}’s cars are set in its form — ask me to change the event instead.`)
   }
-  const cars = (Array.isArray(input.cars) ? input.cars : []).slice(0, 30).map((c, i) => {
+  const said = (Array.isArray(input.cars) ? input.cars : []).slice(0, 30).map((c, i) => {
     const car = (c ?? {}) as Record<string, unknown>
     const driver = String(car.driver_id ?? '')
+    const seats = Math.round(Number(car.seats))
     // Children have no accounts: they are names, as the carpool builder keeps them.
     const children = (Array.isArray(car.child_names) ? car.child_names : [])
       .map((n) =>
@@ -1225,17 +1228,31 @@ async function setCarpool(profile: UserProfile, input: Record<string, unknown>) 
     return {
       id: `${Date.now()}${i}`,
       label: String(car.label ?? '').trim(),
+      ...(seats > 0 && seats < 60 ? { seats } : {}),
       driver,
       riders: idList(car.rider_ids).filter((r) => r !== driver),
       ...(children.length ? { children } : {}),
     }
   })
-  const ref = doc(db, 'carpool', `${ev.templateId}_${ev.date}`)
+  const key = `${ev.templateId}_${ev.date}`
+  // Told only which cars are going: everyone else on the event put in one
+  // (./carpoolAuto), as the carpool builder's Auto-assign does it.
+  const auto = input.auto_assign === true
+  const filled = auto
+    ? await fillCars(
+        said.map((c) => ({ ...c, riders: [] })),
+        [...resolveAssignedUids(ev)],
+        idList(input.not_riding),
+        key
+      )
+    : null
+  const cars = filled ? filled.cars.map((c, i) => ({ ...c, id: `${Date.now()}${i}` })) : said
+  const ref = doc(db, 'carpool', key)
   const carsBefore = ((await getDoc(ref)).data()?.cars ?? []) as unknown[]
   const had = carsBefore.length
   return {
     kind: 'ready',
-    title: `Set the cars for ${ev.title}?`,
+    title: auto ? `Fill the cars for ${ev.title} like this?` : `Set the cars for ${ev.title}?`,
     details: [
       `${day(ev.date)}${ev.isRec ? ' — this date only' : ''}${had ? ` — instead of the ${had} there now` : ''}`,
       ...(cars.length
@@ -1244,10 +1261,13 @@ async function setCarpool(profile: UserProfile, input: Record<string, unknown>) 
               `${c.label || `Car ${i + 1}`}: ${c.driver ? `${listNames([c.driver])} driving` : 'no driver yet'}${c.riders.length ? `; ${listNames(c.riders)}` : ''}${c.children?.length ? `; ${c.children.map((k) => `${k.name} (child)`).join(', ')}` : ''}`
           )
         : ['No cars.']),
+      ...(filled?.noRoom.length ? [noRoomSaid(filled.noRoom)] : []),
     ],
     confirm: 'Save',
     run: async () => {
       await setDoc(ref, { cars })
+      // Remembered, for arranging the next (lib/carpoolMemory).
+      void rememberRide(key, ev.date, cars)
       return 'Saved.'
     },
     undo: async () => {

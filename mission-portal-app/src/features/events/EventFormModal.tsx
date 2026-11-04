@@ -50,6 +50,7 @@ import { newLogisticsAssignments } from '@/lib/guestItinerary'
 import { ADMINS } from '../../../functions/src/eventPrivate'
 import { useMiriamStore, type PendingEventForm } from '@/stores/miriamStore'
 import { byName, formLines, scheduleOf } from '@/lib/miriamFormFill'
+import { rememberRide } from '@/lib/carpoolMemoryDb'
 import type { EventDraft, FlightLegDraft } from '@/lib/miriam'
 import type {
   EventTemplate,
@@ -656,6 +657,9 @@ export function EventFormModal({
     // Captured before the write, because the payload sets unpublished and the
     // difference between "updated" and "published" is what it used to be.
     const wasDraft = event?.unpublished === true
+    // The event (or the one date of it) saved, by its id: what its cars are remembered by.
+    let savedAs =
+      instanceKey && editScope === 'instance' ? instanceKey : event ? String(event.id) : ''
     setSaving(true)
     try {
       const coords = form.isVirtual || saveAsDraft ? null : await geocodeCity(form.city, form.state)
@@ -780,6 +784,12 @@ export function EventFormModal({
         }
         await auditEventSave(saveAsDraft ? 'draftCreated' : 'created', form.title, newEventId)
         toast(saveAsDraft ? 'Draft saved' : 'Event created', 'success')
+        savedAs = newEventId ? String(newEventId) : ''
+      }
+      // Its cars remembered, for arranging the next (lib/carpoolMemory): by the
+      // event, or the date of it changed, so saving it again replaces them.
+      if (form.carpool && form.carpoolCars.length && savedAs) {
+        void rememberRide(savedAs, formIso(form.date) || event?.date || '', form.carpoolCars)
       }
       if (!form.isVirtual && !coords && !saveAsDraft) {
         toast(
@@ -1894,6 +1904,13 @@ export function EventFormModal({
             cars={form.carpoolCars}
             people={carpoolUids.map(carpoolPeopleOf)}
             lookup={carpoolPeopleOf}
+            rideKey={
+              instanceKey && editScope === 'instance'
+                ? instanceKey
+                : event
+                  ? String(event.id)
+                  : undefined
+            }
             onSave={(cars) => {
               setForm((f) => ({ ...f, carpoolCars: cars }))
               setArrangingCars(false)

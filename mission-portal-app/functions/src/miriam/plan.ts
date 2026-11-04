@@ -170,12 +170,20 @@ function EVENT_FIELDS(edit = false) {
       cars: listOf(
         {
           label: str('Its name, e.g. "Jacob’s van"'),
-          seats: { type: 'integer' },
+          seats: { type: 'integer', description: 'The most it holds, the driver counted.' },
           driver_id: str(),
           rider_ids: idsOf('Who rides in it.'),
           child_names: idsOf('Children riding in it, by name — they have no accounts.'),
         },
         'Carpool cars.'
+      ),
+      cars_auto_assign: {
+        type: 'boolean',
+        description:
+          'True when they said which cars are going (and their drivers) but not who rides in each: the app puts everyone else in one. Leave rider_ids empty then.',
+      },
+      not_riding: idsOf(
+        'With cars_auto_assign: people on the event not to put in a car — "Ben is driving himself".'
       ),
       lodging: listOf(
         {
@@ -998,7 +1006,8 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
       name: 'set_carpool',
       description:
         'Set the cars for one date of an event whose cars are set on its page (get_event: carpool carsSet "for this date"): every car, whole — read it first with get_event. ' +
-        'For an event whose cars are set in its form, use edit_event.' +
+        'For an event whose cars are set in its form, use edit_event. ' +
+        'Told only which cars are going (and who drives), not who rides in each: auto_assign true, and the app puts everyone else on the event in one.' +
         ADMINS,
       strict: true,
       input_schema: objectOf({
@@ -1007,11 +1016,21 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
           type: 'array',
           items: objectOf({
             label: { type: 'string', description: 'Its name: "Andy’s truck".' },
+            seats: {
+              type: 'integer',
+              description: 'The most it holds, the driver counted; 0 if not said.',
+            },
             driver_id: { type: 'string', description: '"" if no one yet.' },
-            rider_ids: ids('Who rides in it.'),
+            rider_ids: ids('Who rides in it; [] with auto_assign.'),
             child_names: ids('Children riding in it, by name — they have no accounts. [] if none.'),
           }),
         },
+        auto_assign: {
+          type: 'boolean',
+          description:
+            'True when who rides in each car is left to the app: it fills them, cars not full where it can help it, men with men and women with women, and not the same people together as before.',
+        },
+        not_riding: ids('With auto_assign: people on the event not to put in a car; [] if none.'),
       }),
     },
     report_issue: {
@@ -1518,6 +1537,13 @@ export interface EventDraft {
     assignees: string[]
   }[]
   flights?: { uid: string; out: FlightLeg; ret: FlightLeg }[]
+  /**
+   * The cars' riders to be worked out by the app (src/features/events/
+   * carpoolAssign): the cars, their drivers and children are said, and nobody
+   * rides in them yet — but for `notRiding`, everyone else on the event will.
+   */
+  carsAuto?: boolean
+  notRiding?: string[]
   teams?: { name: string; leaders: string[]; members: string[] }[]
   /** When each team is to be there: a team's name, or '_remainder_' for everyone else. */
   reportTimes?: { group: string; time: string }[]
@@ -1712,6 +1738,13 @@ export function draftFromInput(
         ...childrenOf(car.child_names),
       }
     })
+    // Who rides where left to the app: the cars as said, and no one in them yet.
+    if (input.cars_auto_assign === true && draft.cars.length) {
+      draft.carsAuto = true
+      draft.cars = draft.cars.map((c) => ({ ...c, riders: [] }))
+      const notRiding = people(input.not_riding)
+      if (notRiding.length) draft.notRiding = notRiding
+    }
   }
   if (said(input, 'lodging')) {
     draft.lodging = list(input.lodging).map((l) => {

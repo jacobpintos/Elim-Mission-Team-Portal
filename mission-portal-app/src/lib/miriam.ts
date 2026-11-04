@@ -79,6 +79,12 @@ export interface EventDraft {
     assignees: string[]
   }[]
   flights?: { uid: string; out: FlightLegDraft; ret: FlightLegDraft }[]
+  /**
+   * The cars' riders left to the app (features/miriam/carpoolAuto): nobody in
+   * them yet, and everyone else on the event — but `notRiding` — to be put in one.
+   */
+  carsAuto?: boolean
+  notRiding?: string[]
   teams?: { name: string; leaders: string[]; members: string[] }[]
   /** When each team is to be there: a team's name, or '_remainder_' for everyone else. */
   reportTimes?: { group: string; time: string }[]

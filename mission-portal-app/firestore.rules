@@ -568,6 +568,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // What the carpools have been (src/lib/carpoolMemory): the team's cars by
+    // name and size, who drives, and who has ridden with whom — for arranging
+    // the next. One document, kept and read by admins, who arrange them.
+    match /carpoolMemory/{docId} {
+      allow read, write: if isAdmin();
+    }
+
     // Guests read set lists and chord sheets but never write them. Without the
     // read they would have been given a worship tab that renders nothing.
     // Reminders people set for themselves (Miriam): theirs alone to read and

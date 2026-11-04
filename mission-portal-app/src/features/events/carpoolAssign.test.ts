@@ -1,0 +1,120 @@
+import { describe, expect, it } from 'vitest'
+import {
+  arrangementCost,
+  autoAssign,
+  pairKey,
+  roomFor,
+  type AssignCar,
+  type AssignPerson,
+} from './carpoolAssign'
+
+const car = (id: string, seats: number, driver = '', children: string[] = []): AssignCar => ({
+  id,
+  label: id,
+  seats,
+  driver,
+  children: children.map((name, i) => ({ id: `${id}k${i}`, name })),
+})
+const men = (...uids: string[]): AssignPerson[] => uids.map((uid) => ({ uid, sex: 'male' }))
+const women = (...uids: string[]): AssignPerson[] => uids.map((uid) => ({ uid, sex: 'female' }))
+const ridersOf = (cars: { id: string; riders: string[] }[], id: string) =>
+  [...(cars.find((c) => c.id === id)?.riders ?? [])].sort()
+
+describe('auto-assigning the cars', () => {
+  it('seats everyone it can, never past what a car holds — its driver and children counted', () => {
+    const cars = [car('van', 7, 'd1', ['Joey']), car('truck', 3, 'd2')]
+    expect(cars.map(roomFor)).toEqual([5, 2])
+    const people = [...men('d1', 'd2'), ...men('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h')]
+    const { cars: out, noRoom } = autoAssign({ cars, people, seed: 3 })
+    expect(out[0].riders.length).toBeLessThanOrEqual(5)
+    expect(out[1].riders.length).toBeLessThanOrEqual(2)
+    expect(out[0].children).toEqual([{ id: 'vank0', name: 'Joey' }])
+    // Eight to seat, seven seats: one left over, and said.
+    expect(noRoom).toHaveLength(1)
+    const seated = new Set([...out.flatMap((c) => c.riders), ...noRoom])
+    expect(seated).toEqual(new Set(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']))
+  })
+
+  it('never seats a driver as a rider, nor anyone left out', () => {
+    const { cars, noRoom } = autoAssign({
+      cars: [car('a', 5, 'd1'), car('b', 5, 'd2')],
+      people: men('d1', 'd2', 'x', 'y', 'z'),
+      leftOut: ['z'],
+    })
+    const riders = cars.flatMap((c) => c.riders).sort()
+    expect(riders).toEqual(['x', 'y'])
+    expect(noRoom).toEqual([])
+  })
+
+  it('keeps men with men and women with women, the driver counted', () => {
+    const { cars } = autoAssign({
+      cars: [car('his', 5, 'mDriver'), car('hers', 5, 'wDriver')],
+      people: [...men('mDriver', 'm1', 'm2', 'm3'), ...women('wDriver', 'w1', 'w2', 'w3')],
+      seed: 9,
+    })
+    expect(ridersOf(cars, 'his')).toEqual(['m1', 'm2', 'm3'])
+    expect(ridersOf(cars, 'hers')).toEqual(['w1', 'w2', 'w3'])
+  })
+
+  it('fills no car while another has room: as evenly as their sizes allow', () => {
+    const { cars } = autoAssign({
+      cars: [car('a', 5, 'd1'), car('b', 5, 'd2')],
+      people: men('d1', 'd2', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6'),
+    })
+    expect(cars.map((c) => c.riders.length)).toEqual([3, 3])
+  })
+
+  it('mixes as little as it must when one car can’t take them all', () => {
+    // Six men and a woman, two cars of five: the men can't all ride with the
+    // man driving. The cars are no more mixed than they have to be, and
+    // neither is full.
+    const { cars, noRoom } = autoAssign({
+      cars: [car('his', 5, 'mDriver'), car('hers', 5, 'wDriver')],
+      people: [...men('mDriver', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6'), ...women('wDriver', 'w1')],
+      seed: 4,
+    })
+    expect(noRoom).toEqual([])
+    expect(ridersOf(cars, 'hers')).toContain('w1')
+    expect(cars.map((c) => c.riders.length).sort()).toEqual([3, 4])
+  })
+
+  it('keeps apart those who have ridden together before, where nothing else is lost', () => {
+    const together = new Map([
+      [pairKey('a', 'b'), 3],
+      [pairKey('c', 'd'), 3],
+    ])
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const { cars } = autoAssign({
+        cars: [car('x', 5, 'd1'), car('y', 5, 'd2')],
+        people: men('d1', 'd2', 'a', 'b', 'c', 'd'),
+        together,
+        seed,
+      })
+      for (const c of cars) {
+        expect(c.riders.includes('a') && c.riders.includes('b')).toBe(false)
+        expect(c.riders.includes('c') && c.riders.includes('d')).toBe(false)
+      }
+    }
+  })
+
+  it('keeps a seat for a driver not yet chosen', () => {
+    const { cars, noRoom } = autoAssign({
+      cars: [car('bus', 4)],
+      people: men('a', 'b', 'c', 'd'),
+    })
+    expect(cars[0].riders).toHaveLength(3)
+    expect(noRoom).toHaveLength(1)
+  })
+
+  it('gives the same arrangement for the same seed, and one no worse for another', () => {
+    const input = {
+      cars: [car('a', 5, 'd1'), car('b', 6, 'd2'), car('c', 4, 'd3')],
+      people: [...men('d1', 'd2', 'p1', 'p2', 'p3', 'p4'), ...women('d3', 'q1', 'q2', 'q3')],
+    }
+    const first = autoAssign({ ...input, seed: 11 })
+    expect(autoAssign({ ...input, seed: 11 })).toEqual(first)
+    const best = arrangementCost(first, input.people)
+    const other = autoAssign({ ...input, seed: 12 })
+    expect(Math.abs(arrangementCost(other, input.people) - best)).toBeLessThan(1)
+  })
+})
