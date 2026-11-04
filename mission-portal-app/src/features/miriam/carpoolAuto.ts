@@ -4,7 +4,7 @@ import { sameId } from '@/lib/ids'
 import type { EventDraft } from '@/lib/miriam'
 import { readCarpoolMemory } from '@/lib/carpoolMemoryDb'
 import { seatsRemembered, togetherCounts, type CarpoolMemory } from '@/lib/carpoolMemory'
-import { autoAssign, type AssignCar } from '@/features/events/carpoolAssign'
+import { autoAssign, driverToPick, type AssignCar } from '@/features/events/carpoolAssign'
 import type { CarpoolCarData } from '@/types/events'
 
 /**
@@ -94,6 +94,9 @@ export async function withCarsFilled(
         ...(c.children?.length ? { children: c.children.map((k) => k.name) } : {}),
       })),
     },
-    notes: filled.noRoom.length ? [noRoomSaid(filled.noRoom)] : [],
+    notes: [
+      ...(filled.noRoom.length ? [noRoomSaid(filled.noRoom)] : []),
+      ...(driverToPick(filled.cars) ? [driverToPick(filled.cars)] : []),
+    ],
   }
 }

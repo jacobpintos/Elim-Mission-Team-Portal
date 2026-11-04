@@ -375,7 +375,9 @@ export function AutoAssignPanel({
       <Text color={short > 0 ? '$red10' : colors.textMuted} fontSize="$3">
         {riders.length} to seat · {seats} {seats === 1 ? 'seat' : 'seats'}
         {short > 0 ? ` — ${short} more than there are seats: add a car, or seats.` : ''}
-        {cars.some((c) => !c.driver) ? ' · A car without a driver keeps a seat for one.' : ''}
+        {cars.some((c) => !c.driver)
+          ? ' · A car without a driver is filled too: pick its driver from those in it.'
+          : ''}
       </Text>
       <XStack gap="$2" justifyContent="flex-end">
         <Pressable

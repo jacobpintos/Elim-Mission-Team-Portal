@@ -21,6 +21,7 @@ import type { Sex } from '@/types/user'
 import { DragCard, measureRect, type Rect } from './DragCard'
 import { NameTyper } from './CarpoolNameTyper'
 import { AutoAssignPanel } from './AutoAssignPanel'
+import { driverToPick } from './carpoolAssign'
 import {
   CARD_COLORS,
   cardColorsFor,
@@ -547,12 +548,20 @@ export function CarpoolBuilder({
                     setCars(next)
                     setAuto(false)
                     setSelectedId(null)
+                    // A car with no driver yet is filled too: its driver is
+                    // one of those in it, picked here (tap them, then Driver).
+                    const pick = driverToPick(next)
                     setAssigned(
-                      noRoom.length
-                        ? `${noRoom.length === 1 ? '1 person didn’t' : `${noRoom.length} people didn’t`} fit: ${noRoom
-                            .map((u) => personFor(u).name)
-                            .join(', ')} — add a car or seats, or put them in by hand.`
-                        : 'Everyone is in a car. Look it over, change anything by hand, then Save.'
+                      [
+                        noRoom.length
+                          ? `${noRoom.length === 1 ? '1 person didn’t' : `${noRoom.length} people didn’t`} fit: ${noRoom
+                              .map((u) => personFor(u).name)
+                              .join(', ')} — add a car or seats, or put them in by hand.`
+                          : 'Everyone is in a car. Look it over, change anything by hand, then Save.',
+                        pick ? `${pick} Open it, tap them, then Driver.` : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
                     )
                   }}
                 />

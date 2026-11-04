@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   arrangementCost,
   autoAssign,
+  driverToPick,
   pairKey,
   roomFor,
   type AssignCar,
@@ -97,13 +98,22 @@ describe('auto-assigning the cars', () => {
     }
   })
 
-  it('keeps a seat for a driver not yet chosen', () => {
+  it('fills a car with no driver yet to every seat: its driver is one of those in it', () => {
+    expect(roomFor(car('bus', 4))).toBe(4)
     const { cars, noRoom } = autoAssign({
       cars: [car('bus', 4)],
       people: men('a', 'b', 'c', 'd'),
     })
-    expect(cars[0].riders).toHaveLength(3)
-    expect(noRoom).toHaveLength(1)
+    expect(cars[0].riders).toHaveLength(4)
+    expect(noRoom).toEqual([])
+    expect(driverToPick(cars)).toBe('Pick a driver for bus from those in it.')
+    expect(
+      driverToPick([
+        ...cars,
+        { ...cars[0], id: 'van', label: 'Van' },
+        { ...cars[0], id: 'x', label: '', riders: [] },
+      ])
+    ).toBe('Pick a driver for bus and Van from those in them.')
   })
 
   it('gives the same arrangement for the same seed, and one no worse for another', () => {

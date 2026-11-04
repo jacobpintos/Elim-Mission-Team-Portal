@@ -15,9 +15,11 @@ import type { Sex } from '@/types/user'
  *  4. Not the same people together every time: two who have ridden together
  *     before (`together`) are kept apart where it costs nothing else.
  *
- * A car's driver seat is kept for its driver, set or not, and children ride
- * where they were put. A seeded shuffle decides between arrangements as good
- * as each other, so asking again can give another.
+ * A car with no driver yet is filled to its every seat: everyone on the
+ * event is put in a car, so its driver is one of those in it, picked from
+ * them afterwards — no seat is kept empty for someone who isn't coming.
+ * Children ride where they were put. A seeded shuffle decides between
+ * arrangements as good as each other, so asking again can give another.
  *
  * Pure: the cars and people in, the cars out — nothing read or written.
  */
@@ -27,7 +29,7 @@ export interface AssignCar {
   label: string
   /** The most it holds, driver and children counted. */
   seats: number
-  /** '' for none yet: a seat is kept for one. */
+  /** '' for none yet: one of its riders, to be picked. */
   driver: string
   children?: CarpoolChild[]
 }
@@ -70,9 +72,9 @@ const AGAIN = 1
 /** Past this many times together, it counts no more: a pair who always ride together isn't made to never. */
 const MOST_AGAIN = 3
 
-/** Riders' seats in a car: what it holds, less its driver's seat and its children's. */
+/** Riders' seats in a car: what it holds, less its driver's (when it has one) and its children's. */
 export const roomFor = (car: AssignCar) =>
-  Math.max(0, seatsOf(car) - 1 - (car.children?.length ?? 0))
+  Math.max(0, seatsOf(car) - (car.driver ? 1 : 0) - (car.children?.length ?? 0))
 
 const seatsOf = (car: AssignCar) =>
   Number.isFinite(car.seats) && car.seats > 0 ? Math.floor(car.seats) : DEFAULT_SEATS
@@ -93,7 +95,7 @@ export function autoAssign(input: AssignInput): AssignResult {
   /** What one car's riders cost (see above). */
   const costOf = (car: AssignCar, inIt: string[]) => {
     const seats = seatsOf(car)
-    const load = 1 + (car.children?.length ?? 0) + inIt.length
+    const load = (car.driver ? 1 : 0) + (car.children?.length ?? 0) + inIt.length
     const adults = car.driver ? [car.driver, ...inIt] : inIt
     let men = 0
     let women = 0
@@ -215,6 +217,22 @@ export function autoAssign(input: AssignInput): AssignResult {
   }
 }
 
+/**
+ * The cars with no driver yet, by name — filled with riders, one of whom is to
+ * drive: "Pick a driver for the bus from those in it."
+ */
+export function driverToPick(cars: CarpoolCarData[]): string {
+  const names = cars
+    .map((c, i) => (c.driver || !c.riders.length ? '' : c.label.trim() || `Car ${i + 1}`))
+    .filter(Boolean)
+  if (!names.length) return ''
+  const list =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+  return `Pick a driver for ${list} from those in ${names.length === 1 ? 'it' : 'them'}.`
+}
+
 /** What an arrangement costs, all told — for tests, and to compare two. */
 export function arrangementCost(
   result: AssignResult,
@@ -225,7 +243,7 @@ export function arrangementCost(
   let total = NO_ROOM * result.noRoom.length
   for (const car of result.cars) {
     const seats = car.seats ?? DEFAULT_SEATS
-    const load = 1 + (car.children?.length ?? 0) + car.riders.length
+    const load = (car.driver ? 1 : 0) + (car.children?.length ?? 0) + car.riders.length
     const adults = car.driver ? [car.driver, ...car.riders] : car.riders
     const men = adults.filter((u) => sexOf.get(u) === 'male').length
     const women = adults.filter((u) => sexOf.get(u) === 'female').length

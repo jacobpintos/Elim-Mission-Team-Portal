@@ -99,6 +99,7 @@ import { useTasksStore } from '@/stores/tasksStore'
 import { notifyAssignedAdmins, resolveAssignedUids, useEventsStore } from '@/stores/eventsStore'
 import { rememberRide } from '@/lib/carpoolMemoryDb'
 import { fillCars, noRoomSaid } from './carpoolAuto'
+import { driverToPick } from '@/features/events/carpoolAssign'
 import { readBlocks, useBlockedDatesStore } from '@/stores/blockedDatesStore'
 import { blockProblem, blockSpan } from '../../../functions/src/blockedDates'
 import { useDateNotesStore } from '@/stores/dateNotesStore'
@@ -1262,6 +1263,7 @@ async function setCarpool(profile: UserProfile, input: Record<string, unknown>) 
           )
         : ['No cars.']),
       ...(filled?.noRoom.length ? [noRoomSaid(filled.noRoom)] : []),
+      ...(filled && driverToPick(filled.cars) ? [driverToPick(filled.cars)] : []),
     ],
     confirm: 'Save',
     run: async () => {
