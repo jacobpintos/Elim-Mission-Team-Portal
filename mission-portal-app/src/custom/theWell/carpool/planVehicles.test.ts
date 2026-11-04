@@ -400,6 +400,35 @@ describe('planning a carpool from the vehicles', () => {
       }
     })
 
+    it('brings a vehicle on top of those going when they are kept, not in place of one', () => {
+      // Fifteen men, three five-seaters full: the fourth offered.
+      const cars5 = ['a', 'b', 'c', 'd', 'e'].map((x) => vehicle(`car-${x}`, 5, [x]))
+      const fifteen = men('a', 'b', 'c', 'd', 'e', ...Array.from({ length: 10 }, (_, i) => `m${i}`))
+      const plan = planVehicles({ vehicles: cars5, people: fifteen, trailers: NO_TRAILERS })
+      expect(plan.vehicles).toHaveLength(3)
+      expect(plan.full).toHaveLength(3)
+      const offer = plan.offer!.id
+      expect(ids(plan)).not.toContain(offer)
+      // Only the one brought: another is taken out for it, as few vehicles as can be.
+      const swapped = planVehicles({
+        vehicles: cars5,
+        people: fifteen,
+        trailers: NO_TRAILERS,
+        add: [offer],
+      })
+      expect(swapped.vehicles).toHaveLength(3)
+      // Those going kept with it, as Auto-fill brings one: one more.
+      const more = planVehicles({
+        vehicles: cars5,
+        people: fifteen,
+        trailers: NO_TRAILERS,
+        add: [...ids(plan), offer],
+      })
+      expect(more.vehicles).toHaveLength(4)
+      expect(ids(more)).toEqual([...ids(plan), offer].sort())
+      expect(more.full).toEqual([])
+    })
+
     it('lists who it is kept for, as drivers to change to', () => {
       const plan = planVehicles({ vehicles: few, people: going, trailers: NO_TRAILERS })
       for (const pv of plan.vehicles) {

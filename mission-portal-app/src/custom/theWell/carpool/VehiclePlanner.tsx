@@ -91,6 +91,9 @@ export function VehiclePlanner({
   const [countUnsure, setCountUnsure] = useState(true)
   const [cantDrive, setCantDrive] = useState<string[]>([])
   const [added, setAdded] = useState<string[]>([])
+  // The vehicles going when another was brought by hand: kept, so it's one
+  // more, not one swapped in. Let go when the questions are answered again.
+  const [kept, setKept] = useState<string[]>([])
   const [children, setChildren] = useState<Record<string, CarpoolChild[]>>({})
   const [childName, setChildName] = useState<Record<string, string>>({})
   const [seed, setSeed] = useState(() => Date.now() % 2147483647)
@@ -133,7 +136,7 @@ export function VehiclePlanner({
             leaveOut,
             driverOf,
             trailerOf,
-            add: added,
+            add: [...added, ...kept],
             children,
             together,
             rules: personRules,
@@ -152,6 +155,7 @@ export function VehiclePlanner({
       bring,
       cantDrive,
       added,
+      kept,
       children,
       together,
       seed,
@@ -176,6 +180,23 @@ export function VehiclePlanner({
     setChildren((c) => ({ ...c, [vehicleId]: (c[vehicleId] ?? []).filter((k) => k.id !== id) }))
 
   // Changed by hand, it stays as it was changed: no rule says otherwise.
+  /**
+   * A vehicle brought by hand: it goes, on top of those going now — none
+   * taken out for it.
+   */
+  const bringIn = (vehicleId: string) => {
+    if (plan && !plan.vehicles.some((pv) => pv.vehicle.id === vehicleId)) {
+      const going = plan.vehicles.map((pv) => pv.vehicle.id)
+      setKept((k) => [...new Set([...k, ...going])])
+    }
+    setLeaveOut((l) => l.filter((x) => x !== vehicleId))
+    setAdded((a) => (a.includes(vehicleId) ? a : [...a, vehicleId]))
+  }
+  /** The questions answered again: planned afresh, with fewest vehicles. */
+  const answer = (change: () => void) => {
+    change()
+    setKept([])
+  }
   /** They drive it: it goes, and they drive nothing else. */
   const chooseDriver = (vehicleId: string, uid: string) => {
     setDriverOf((d) => ({
@@ -183,8 +204,7 @@ export function VehiclePlanner({
       [vehicleId]: uid,
     }))
     setCantDrive((c) => c.filter((u) => u !== uid))
-    setLeaveOut((l) => l.filter((x) => x !== vehicleId))
-    setAdded((a) => (a.includes(vehicleId) ? a : [...a, vehicleId]))
+    bringIn(vehicleId)
     setPicking(null)
   }
   /** It pulls that trailer: it goes, and pulls nothing else. */
@@ -195,7 +215,7 @@ export function VehiclePlanner({
       if (next[other] === vehicleId) delete next[other]
       return next
     })
-    setLeaveOut((l) => l.filter((x) => x !== vehicleId))
+    bringIn(vehicleId)
     setPickingTrailer(null)
   }
   /** Which vehicle can be picked to pull it: any of them — those listed as able first. */
@@ -446,7 +466,7 @@ export function VehiclePlanner({
               {label('TRAILERS NEEDED')}
               <XStack gap="$2" flexWrap="wrap">
                 {TRAILER_CHOICES.map((t) =>
-                  choice(t.key, t.label, trailers === t.key, () => setTrailers(t.key))
+                  choice(t.key, t.label, trailers === t.key, () => answer(() => setTrailers(t.key)))
                 )}
               </XStack>
               {(['big', 'small'] as const)
@@ -481,10 +501,10 @@ export function VehiclePlanner({
                   {label(`BRING THE ${v.name.toUpperCase()}? · ${v.seats} SEATS`)}
                   <XStack gap="$2">
                     {choice(`${v.id}:yes`, 'Yes', bring[v.id] === true, () =>
-                      setBring((b) => ({ ...b, [v.id]: true }))
+                      answer(() => setBring((b) => ({ ...b, [v.id]: true })))
                     )}
                     {choice(`${v.id}:no`, 'No', bring[v.id] !== true, () =>
-                      setBring((b) => ({ ...b, [v.id]: false }))
+                      answer(() => setBring((b) => ({ ...b, [v.id]: false })))
                     )}
                   </XStack>
                 </YStack>
@@ -530,11 +550,7 @@ export function VehiclePlanner({
                         : `${plan.full.length === 1 ? 'A vehicle is' : `${plan.full.length} vehicles are`} full.`}{' '}
                       Bring {plan.offer.name} too ({plan.offer.seats} seats)?
                     </Text>
-                    {button(
-                      `Bring ${plan.offer.name}`,
-                      () => setAdded((a) => [...a, plan.offer!.id]),
-                      true
-                    )}
+                    {button(`Bring ${plan.offer.name}`, () => bringIn(plan.offer!.id), true)}
                   </XStack>
                 ) : null}
 
@@ -568,6 +584,7 @@ export function VehiclePlanner({
                             onPress={() => {
                               setLeaveOut((l) => [...l, pv.vehicle.id])
                               setAdded((a) => a.filter((x) => x !== pv.vehicle.id))
+                              setKept((k) => k.filter((x) => x !== pv.vehicle.id))
                               setDriverOf((d) => {
                                 const rest = { ...d }
                                 delete rest[pv.vehicle.id]
@@ -734,7 +751,7 @@ export function VehiclePlanner({
                           </Text>
                           {why === 'not needed' ? (
                             <Pressable
-                              onPress={() => setAdded((a) => [...a, vehicle.id])}
+                              onPress={() => bringIn(vehicle.id)}
                               accessibilityRole="button"
                             >
                               <Text color={colors.primary} fontSize="$3" fontWeight="700">
@@ -743,7 +760,7 @@ export function VehiclePlanner({
                             </Pressable>
                           ) : why === 'left out' ? (
                             <Pressable
-                              onPress={() => setLeaveOut((l) => l.filter((x) => x !== vehicle.id))}
+                              onPress={() => bringIn(vehicle.id)}
                               accessibilityRole="button"
                             >
                               <Text color={colors.primary} fontSize="$3" fontWeight="700">
@@ -752,7 +769,9 @@ export function VehiclePlanner({
                             </Pressable>
                           ) : why === 'not brought' ? (
                             <Pressable
-                              onPress={() => setBring((b) => ({ ...b, [vehicle.id]: true }))}
+                              onPress={() =>
+                                answer(() => setBring((b) => ({ ...b, [vehicle.id]: true })))
+                              }
                               accessibilityRole="button"
                             >
                               <Text color={colors.primary} fontSize="$3" fontWeight="700">
