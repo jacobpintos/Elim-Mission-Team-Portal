@@ -1394,7 +1394,7 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
     read_vehicles: {
       name: 'read_vehicles',
       description:
-        'The team’s vehicles (Admin → Vehicles), which carpools are planned from: each one’s name, its seats (the driver counted), who may drive it, what it can pull (no trailer, the small trailer only, or the small and the big), whether men and women ride in it together, whether it is filled first, and notes — and special rules for people (who doesn’t drive, who can’t pull a trailer, who may ride with either sex, who to keep with or apart from). People who share a last name may ride together whatever their sex, and a car with a man and a woman of one family in it may take anyone. ' +
+        'The team’s vehicles (Admin → Vehicles), which carpools are planned from: each one’s name, its seats (the driver counted), who may drive it, what it can pull (no trailer, the small trailer only, or the small and the big), whether men and women ride in it together, whether it is filled first, whether it is preferred for trailers, and notes — and special rules for people (who doesn’t drive, who can’t pull a trailer, who may ride with either sex, who to keep with or apart from). People who share a last name may ride together whatever their sex, and a car with a man and a woman of one family in it may take anyone. ' +
         'The Elim Van may be driven by anyone who may drive another vehicle, carries men and women together, and is filled first when it goes. Read it before changing one.',
       strict: true,
       input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
@@ -1427,6 +1427,11 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
           enum: ['yes', 'no', ''],
           description: 'yes when it is filled before the others, so fewer cars go; "" if not said.',
         },
+        preferred_for_trailers: {
+          type: 'string',
+          enum: ['yes', 'no', ''],
+          description: 'yes when it is chosen first to pull a trailer it can pull; "" if not said.',
+        },
         notes: { type: 'string', description: 'Anything else said about it; "" if nothing.' },
       }),
     },
@@ -1456,6 +1461,11 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
           type: 'string',
           enum: ['yes', 'no', ''],
           description: 'Whether it is filled before the others when it goes; "" to keep it.',
+        },
+        preferred_for_trailers: {
+          type: 'string',
+          enum: ['yes', 'no', ''],
+          description: 'Whether it is chosen first to pull a trailer it can pull; "" to keep it.',
         },
         notes: { type: 'string', description: '"" to keep them.' },
       }),

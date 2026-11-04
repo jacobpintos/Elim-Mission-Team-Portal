@@ -26,7 +26,9 @@ import { seatingRulesFrom, type PersonRules } from '../people/types'
  *     men and women may share (the Elim Van) takes whoever the others can't
  *     keep apart, and nobody in it counts.
  *  2. As few vehicles as possible.
- *  3. No vehicle full: the most seats to spare. When a vehicle is full all the
+ *  3. Trailers behind the vehicles preferred for them (Admin → Vehicles),
+ *     where one can pull it.
+ *  4. No vehicle full: the most seats to spare. When a vehicle is full all the
  *     same, the next one to bring is offered (`offer`). A vehicle filled
  *     first (the Elim Van) is filled before the rest instead, so fewer go.
  *
@@ -111,6 +113,8 @@ interface Choice {
   drivers: string[]
   trailers: ('small' | 'big' | null)[]
   mixed: number
+  /** How many of the trailers are behind a vehicle preferred for them. */
+  preferred: number
   spare: number
 }
 
@@ -189,7 +193,10 @@ export function planVehicles(input: PlanInput): Plan {
           const drivers = matchDrivers(set, pick, options)
           if (!drivers) return
           const mixed = mixedFor(set, pick, kids, men, women, families)
-          if (!best || mixed < best.mixed) best = { set, drivers, trailers, mixed }
+          const preferred = set.filter((v, j) => trailers[j] && v.preferTrailer).length
+          if (!best || mixed < best.mixed || (mixed === best.mixed && preferred > best.preferred)) {
+            best = { set, drivers, trailers, mixed, preferred }
+          }
           return
         }
         for (const [sx] of options[i]) {
@@ -198,7 +205,9 @@ export function planVehicles(input: PlanInput): Plan {
         }
       }
       walk(0)
-      if (best && (best as Omit<Choice, 'spare'>).mixed === 0) break
+      // Nothing better to find: no one mixed, and every trailer behind a preferred vehicle.
+      const found = best as Omit<Choice, 'spare'> | null
+      if (found && found.mixed === 0 && found.preferred === trailerCount(needed)) break
     }
     return best
   }
@@ -208,7 +217,11 @@ export function planVehicles(input: PlanInput): Plan {
     !b ||
     a.mixed < b.mixed ||
     (a.mixed === b.mixed && a.set.length < b.set.length) ||
-    (a.mixed === b.mixed && a.set.length === b.set.length && a.spare > b.spare)
+    (a.mixed === b.mixed && a.set.length === b.set.length && a.preferred > b.preferred) ||
+    (a.mixed === b.mixed &&
+      a.set.length === b.set.length &&
+      a.preferred === b.preferred &&
+      a.spare > b.spare)
 
   let best: Choice | null = null
   for (let k = 0; k <= tried.length; k++) {
@@ -326,6 +339,9 @@ export function planVehicles(input: PlanInput): Plan {
   }
 }
 
+/** How many trailers are asked for. */
+const trailerCount = (needed: TrailersNeeded) => Number(needed.small) + Number(needed.big)
+
 /** The most ways of pulling the trailers tried for one set of vehicles. */
 const MOST_TRAILER_WAYS = 12
 
@@ -338,11 +354,17 @@ const MOST_TRAILER_WAYS = 12
 function trailerOptions(set: Vehicle[], needed: TrailersNeeded): ('small' | 'big' | null)[][] {
   const none = set.map((): 'small' | 'big' | null => null)
   if (!needed.big && !needed.small) return [none]
+  // Those preferred for trailers first; then, for the small, a small-only
+  // one, keeping one that can pull either for the big.
   const at = (size: 'small' | 'big', not = -1) =>
     set
       .map((v, i) => (i !== not && canPull(v, size) ? i : -1))
       .filter((i) => i >= 0)
-      .sort((a, b) => Number(set[a].trailer === 'both') - Number(set[b].trailer === 'both'))
+      .sort(
+        (a, b) =>
+          Number(!set[a].preferTrailer) - Number(!set[b].preferTrailer) ||
+          Number(set[a].trailer === 'both') - Number(set[b].trailer === 'both')
+      )
   const out: ('small' | 'big' | null)[][] = []
   for (const big of needed.big ? at('big') : [-1]) {
     for (const small of needed.small ? at('small', big) : [-1]) {

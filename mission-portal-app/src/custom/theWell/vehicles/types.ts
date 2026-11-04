@@ -35,6 +35,11 @@ export interface Vehicle {
    * needed — full is what it should be, and no reason to bring another.
    */
   fillFirst?: boolean
+  /**
+   * Chosen first to pull a trailer it can pull, when one is needed — after
+   * keeping men and women apart and bringing as few vehicles as possible.
+   */
+  preferTrailer?: boolean
   /** Anything else to know: "Needs gas card", "Tow hitch is 2 inch". */
   notes?: string
 }
@@ -75,6 +80,7 @@ export function vehicleFrom(id: string, data: Record<string, unknown> | undefine
     ...(d.fillFirst === true || (d.fillFirst === undefined && id === ELIM_VAN_ID)
       ? { fillFirst: true }
       : {}),
+    ...(d.preferTrailer === true && trailer !== 'none' ? { preferTrailer: true } : {}),
     ...(typeof d.notes === 'string' && d.notes.trim() ? { notes: d.notes.trim() } : {}),
   }
 }
@@ -90,6 +96,7 @@ export function vehicleData(v: Vehicle): Record<string, unknown> {
     ask: !!v.ask,
     mixedSex: !!v.mixedSex,
     fillFirst: !!v.fillFirst,
+    preferTrailer: !!v.preferTrailer && v.trailer !== 'none',
     notes: v.notes?.trim() ?? '',
   }
 }

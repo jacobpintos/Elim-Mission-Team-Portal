@@ -38,7 +38,11 @@ export function vehicleLine(v: Vehicle): string {
     : v.drivers.length
       ? v.drivers.map(nameOf).join(', ')
       : 'no drivers yet'
-  const how = [v.mixedSex ? 'men and women together' : '', v.fillFirst ? 'filled first' : '']
+  const how = [
+    v.mixedSex ? 'men and women together' : '',
+    v.fillFirst ? 'filled first' : '',
+    v.preferTrailer ? 'preferred for trailers' : '',
+  ]
     .filter(Boolean)
     .join(', ')
   return `${v.name} · ${v.seats} seats · ${TRAILER_LABELS[v.trailer]}${how ? ` · ${how}` : ''} · Drivers: ${drivers}`
@@ -83,6 +87,7 @@ export async function vehiclesForMiriam() {
       asked_each_time: !!v.ask,
       men_and_women_together: !!v.mixedSex,
       filled_first: !!v.fillFirst,
+      preferred_for_trailers: !!v.preferTrailer,
       ...(v.notes ? { notes: v.notes } : {}),
     })),
   }
@@ -109,6 +114,11 @@ export async function addVehicle(profile: UserProfile, input: Record<string, unk
     trailer: trailerOf(input.trailer) ?? 'none',
     ...(yesNo(input.men_and_women_together) ? { mixedSex: true } : {}),
     ...(yesNo(input.fill_first) ? { fillFirst: true } : {}),
+    ...(yesNo(input.preferred_for_trailers) &&
+    trailerOf(input.trailer) !== 'none' &&
+    trailerOf(input.trailer)
+      ? { preferTrailer: true }
+      : {}),
     ...(String(input.notes ?? '').trim() ? { notes: String(input.notes).trim() } : {}),
   }
   const { save, remove } = useVehiclesStore.getState()
@@ -154,10 +164,12 @@ export async function updateVehicle(profile: UserProfile, input: Record<string, 
   const notes = String(input.notes ?? '').trim()
   const together = yesNo(input.men_and_women_together)
   const first = yesNo(input.fill_first)
+  const preferred = yesNo(input.preferred_for_trailers)
   const after: Vehicle = {
     ...before,
     ...(together !== null ? { mixedSex: together } : {}),
     ...(first !== null ? { fillFirst: first } : {}),
+    ...(preferred !== null ? { preferTrailer: preferred } : {}),
     ...(newName ? { name: newName } : {}),
     ...(seats ? { seats } : {}),
     ...(trailer ? { trailer } : {}),
@@ -192,8 +204,14 @@ export async function updateVehicle(profile: UserProfile, input: Record<string, 
         ? 'Filled first when it goes'
         : 'No longer filled first'
       : '',
+    preferred !== null && preferred !== !!before.preferTrailer
+      ? preferred
+        ? 'Preferred for trailers'
+        : 'No longer preferred for trailers'
+      : '',
     notes && notes !== before.notes ? `Notes: ${notes}` : '',
   ].filter(Boolean)
+  if (after.trailer === 'none') delete after.preferTrailer
   if (!changes.length) return cannot(`${before.name} is like that already.`)
   const { save } = useVehiclesStore.getState()
   return {

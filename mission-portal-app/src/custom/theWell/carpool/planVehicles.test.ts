@@ -160,6 +160,33 @@ describe('planning a carpool from the vehicles', () => {
     expect(both.problems).toEqual([])
   })
 
+  it('puts a trailer behind a vehicle preferred for it — but never brings one more for that', () => {
+    const truck = vehicle('truck', 5, ['t'], 'both')
+    const suburban = { ...vehicle('suburban', 8, ['s'], 'both'), preferTrailer: true }
+    // Both going anyway (ten men): the Suburban, preferred, pulls the big trailer.
+    const both = planVehicles({
+      vehicles: [truck, suburban],
+      people: men('t', 's', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'),
+      trailers: { small: false, big: true },
+    })
+    expect(both.vehicles.find((v) => v.trailer === 'big')?.vehicle.id).toBe('suburban')
+    // Only one vehicle needed, the truck's driver alone going: the truck pulls
+    // it, and the Suburban isn't brought for it.
+    const one = planVehicles({
+      vehicles: [truck, { ...suburban, drivers: ['nobody'] }],
+      people: men('t', 'a'),
+      trailers: { small: false, big: true },
+    })
+    expect(ids(one)).toEqual(['truck'])
+    // With a choice of the same number of vehicles, the preferred is taken.
+    const choose = planVehicles({
+      vehicles: [truck, suburban],
+      people: men('t', 's', 'a'),
+      trailers: { small: false, big: true },
+    })
+    expect(ids(choose)).toEqual(['suburban'])
+  })
+
   it('says when no vehicle going can pull a trailer, and plans the seats anyway', () => {
     const plan = planVehicles({
       vehicles: fleet,

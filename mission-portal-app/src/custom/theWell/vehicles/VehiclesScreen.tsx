@@ -189,6 +189,7 @@ export function VehiclesScreen() {
                     {TRAILER_LABELS[v.trailer]}
                     {v.mixedSex ? ' · Men and women together' : ''}
                     {v.fillFirst ? ' · Filled first' : ''}
+                    {v.preferTrailer ? ' · Preferred for trailers' : ''}
                     {v.ask ? ' · Asked about each time' : ''}
                   </Text>
                   <Text fontSize="$3" color={colors.text}>
@@ -269,6 +270,14 @@ export function VehiclesScreen() {
                   !!shown!.mixedSex,
                   (on) => setDraft((d) => (d ? { ...d, mixedSex: on } : d))
                 )}
+                {shown!.trailer !== 'none'
+                  ? toggle(
+                      'Preferred for trailers',
+                      'Chosen first to pull a trailer it can pull, when one is needed.',
+                      !!shown!.preferTrailer,
+                      (on) => setDraft((d) => (d ? { ...d, preferTrailer: on } : d))
+                    )
+                  : null}
                 {toggle(
                   'Fill it first',
                   'When it goes, it is filled before the others, so fewer cars are needed.',

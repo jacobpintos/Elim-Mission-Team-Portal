@@ -33,6 +33,15 @@ describe('a vehicle as kept', () => {
     })
   })
 
+  it('is preferred for trailers only when it can pull one', () => {
+    expect(vehicleFrom('t', { name: 'T', trailer: 'small', preferTrailer: true })).toMatchObject({
+      preferTrailer: true,
+    })
+    expect(
+      vehicleFrom('c', { name: 'C', trailer: 'none', preferTrailer: true })
+    ).not.toHaveProperty('preferTrailer')
+  })
+
   it('pulls the big trailer only when it can pull both', () => {
     expect(canPull({ trailer: 'both' }, 'big')).toBe(true)
     expect(canPull({ trailer: 'small' }, 'big')).toBe(false)

@@ -97,6 +97,23 @@ describe('Miriam and the vehicles', () => {
     expect(saved[1]).toEqual(odyssey)
   })
 
+  it('marks one preferred for trailers', async () => {
+    const prepared = await updateVehicle(admin, {
+      vehicle: 'odyssey',
+      new_name: '',
+      seats: 0,
+      trailer: '',
+      add_driver_ids: [],
+      remove_driver_ids: [],
+      notes: '',
+      preferred_for_trailers: 'yes',
+    })
+    if (prepared.kind !== 'ready') throw new Error(prepared.kind)
+    expect(prepared.details).toEqual(['Preferred for trailers'])
+    await prepared.run()
+    expect(saved[0]).toMatchObject({ preferTrailer: true })
+  })
+
   it('removes one, but never the Elim Van', async () => {
     expect(await removeVehicle(admin, { vehicle: 'Elim Van' })).toEqual({
       kind: 'cannot',
