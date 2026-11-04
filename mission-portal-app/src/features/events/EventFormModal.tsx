@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Pressable } from 'react-native'
 import { YStack, XStack, Text, Input, TextArea } from 'tamagui'
 import { CoverPhoto } from './CoverPhoto'
@@ -48,7 +48,8 @@ import {
 } from '@/lib/taskNotifications'
 import { newLogisticsAssignments } from '@/lib/guestItinerary'
 import { ADMINS } from '../../../functions/src/eventPrivate'
-import type { PendingEventForm } from '@/stores/miriamStore'
+import { useMiriamStore, type PendingEventForm } from '@/stores/miriamStore'
+import { byName, formLines, scheduleOf } from '@/lib/miriamFormFill'
 import type { EventDraft, FlightLegDraft } from '@/lib/miriam'
 import type {
   EventTemplate,
@@ -259,7 +260,7 @@ function listsFor(event: EventTemplate | null | undefined, draft?: EventDraft) {
   return {
     teams: draft?.teams ?? event?.teams ?? [],
     dressCode: draft?.dressCode ?? event?.dressCode ?? [],
-    reportTimes: event?.reportTimes ?? [],
+    reportTimes: draft?.reportTimes ?? event?.reportTimes ?? [],
     lodgingEntries: draft?.lodging
       ? draft.lodging.map((l, i) => ({
           id: `${Date.now()}_${i}`,
@@ -279,7 +280,7 @@ function listsFor(event: EventTemplate | null | undefined, draft?: EventDraft) {
         }))
       : (event?.flightEntries ?? []),
     extraDays: toExtraDayRows(draft?.extraDays ?? event?.extraDays),
-    schedule: event?.schedule ?? [],
+    schedule: draft?.schedule ? scheduleOf(draft.schedule) : (event?.schedule ?? []),
   }
 }
 
@@ -385,6 +386,9 @@ export function EventFormModal({
   // bringing what.
   const [foodAssignees, setFoodAssignees] = useState<Record<number, string>>({})
   const [foodPickerIndex, setFoodPickerIndex] = useState<number | null>(null)
+  // Filled in by Miriam while it was open — "Hey Miriam, it starts at 5":
+  // what was said, and what she couldn't do, shown as her own form's are.
+  const [liveFill, setLiveFill] = useState<{ heard: string; notes: string[] } | null>(null)
 
   // What the form was loaded for, while open; null once it closes. Each
   // opening loads it afresh — a new event after another new one too, which
@@ -411,8 +415,86 @@ export function EventFormModal({
     setArrangingCars(false)
     setBuildingSchedule(false)
     setUserSearch('')
+    setLiveFill(null)
   }
   if (!open && loadedFor !== null) setLoadedFor(null)
+
+  /**
+   * While open, the form Miriam fills in (stores/miriamStore: formOnScreen):
+   * what it holds, described for her, and what she hears about the event put
+   * into it — over what is there, and the rest left as it was typed — rather
+   * than a new form opened in its place.
+   */
+  const now = useRef({
+    form,
+    teams,
+    reportTimes,
+    schedule,
+    dressCode,
+    lodgingEntries,
+    flightEntries,
+  })
+  useEffect(() => {
+    now.current = { form, teams, reportTimes, schedule, dressCode, lodgingEntries, flightEntries }
+  })
+  const namesRef = useRef({ event, allGroups, taskTemplates, nameOf })
+  useEffect(() => {
+    namesRef.current = { event, allGroups, taskTemplates, nameOf }
+  })
+  useEffect(() => {
+    if (!open) return
+    return useMiriamStore.getState().showForm({
+      describe: () => {
+        const n = now.current
+        const {
+          event: ev,
+          allGroups: groups,
+          taskTemplates: templates,
+          nameOf: named,
+        } = namesRef.current
+        return {
+          kind: 'event',
+          of: ev ? `${ev.title}${ev.date ? ` on ${ev.date}` : ''}` : 'a new event',
+          templateId: ev ? String(ev.id) : '',
+          lines: formLines(
+            {
+              ...n.form,
+              cars: n.form.carpoolCars.length,
+              lodging: n.form.lodging ? n.lodgingEntries.length : 0,
+              flights: n.form.flights ? n.flightEntries.length : 0,
+              teams: n.teams,
+              reportTimes: n.reportTimes,
+              schedule: n.schedule,
+              dressCode: n.dressCode,
+              taskTemplate:
+                templates.find((t) => String(t.id) === String(n.form.taskTemplateId))?.name ?? '',
+            },
+            named,
+            (id) => groups.find((g) => g.id === id)?.name ?? 'A group'
+          ),
+          users: n.form.users.map(String),
+          groups: n.form.groups.map(String),
+        }
+      },
+      fill: ({ draft, notes, heard }) => {
+        setForm((f) => {
+          const next = withDraft(f, draft)
+          if (draft.date) next.date = isoToDisplay(draft.date)
+          return next
+        })
+        const given = listsFor(null, draft)
+        if (draft.teams) setTeams((t) => byName(t, draft.teams, (x) => x.name))
+        if (draft.reportTimes) setReportTimes((r) => byName(r, draft.reportTimes, (x) => x.group))
+        if (draft.dressCode) setDressCode((d) => byName(d, draft.dressCode, (x) => x.group))
+        if (draft.schedule) setSchedule(given.schedule)
+        if (draft.lodging) setLodgingEntries(given.lodgingEntries)
+        if (draft.flights) setFlightEntries(given.flightEntries)
+        if (draft.extraDays) setExtraDays(given.extraDays)
+        setLiveFill({ heard, notes })
+      },
+    })
+    // Once each time it opens: the latest of everything is read through the refs.
+  }, [open])
 
   /** A date field's box, drawn as the form's other inputs are. */
   const dateInput = (backgroundColor: string) => ({
@@ -978,7 +1060,7 @@ export function EventFormModal({
         )}
 
         {/* Filled in by Miriam: what was asked, and what she couldn't do. */}
-        {!event && prefill ? (
+        {liveFill || (!event && prefill) ? (
           <YStack
             backgroundColor={colors.primary + '14'}
             borderWidth={1}
@@ -991,9 +1073,9 @@ export function EventFormModal({
               Filled in by Miriam — check it before saving.
             </Text>
             <Text color={colors.textMuted} fontSize="$2" fontStyle="italic">
-              “{prefill.heard}”
+              “{(liveFill ?? prefill)?.heard}”
             </Text>
-            {prefill.notes.map((note) => (
+            {((liveFill ?? prefill)?.notes ?? []).map((note) => (
               <Text key={note} color={colors.text} fontSize="$2">
                 {note}
               </Text>

@@ -22,6 +22,26 @@ export interface PendingEventForm {
   editKey?: string
 }
 
+/**
+ * The event form open on the screen, while it is: what it holds, described
+ * for Miriam to read what is said in the light of — and where what she fills
+ * in goes: into it, over what is there, rather than a new form opened in its
+ * place and what was typed lost (features/events/EventFormModal).
+ */
+export interface FormOnScreen {
+  /** What is filled in so far, as askMiriam sends it (functions/src/miriam/plan: FormOnScreen). */
+  describe: () => {
+    kind: 'event'
+    of: string
+    templateId: string
+    lines: string[]
+    users: string[]
+    groups: string[]
+  }
+  /** What she filled in, put into the form; `heard`: what was said, shown above it. */
+  fill: (filled: { draft: EventDraft; notes: string[]; heard: string }) => void
+}
+
 /** A new account's form, filled in by Miriam, for an admin to give a password and save. */
 export interface PendingUserForm {
   id: number
@@ -46,6 +66,10 @@ interface MiriamStore {
   eventForm: PendingEventForm | null
   offerEventForm: (form: Omit<PendingEventForm, 'id'>) => void
   clearEventForm: () => void
+  /** The event form open on the screen, if one is. */
+  formOnScreen: FormOnScreen | null
+  /** Shown: this form is the one on screen. Returns its going, which clears it if it still is. */
+  showForm: (form: FormOnScreen) => () => void
   userForm: PendingUserForm | null
   taskForm: { id: number; draft: TaskDraft; notes: string[] } | null
   offerTaskForm: (form: { draft: TaskDraft; notes: string[] }) => void
@@ -105,6 +129,11 @@ export const useMiriamStore = create<MiriamStore>((set) => ({
   eventForm: null,
   offerEventForm: (form) => set({ eventForm: { ...form, id: Date.now() } }),
   clearEventForm: () => set({ eventForm: null }),
+  formOnScreen: null,
+  showForm: (form) => {
+    set({ formOnScreen: form })
+    return () => set((s) => (s.formOnScreen === form ? { formOnScreen: null } : s))
+  },
   userForm: null,
   taskForm: null,
   offerTaskForm: (form) => set({ taskForm: { ...form, id: Date.now() } }),

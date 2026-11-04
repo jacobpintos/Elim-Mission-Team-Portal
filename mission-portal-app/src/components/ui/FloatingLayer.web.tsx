@@ -2,9 +2,19 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 /**
- * A layer above everything — a chord sheet open in its own overlay included —
- * that covers nothing it does not draw: no backdrop, nothing dimmed, and
- * every touch outside what it draws goes through to the page beneath.
+ * Where the layer sits: above everything. Above a Tamagui sheet — every form
+ * on a phone, portalled into the body at a z-index of a hundred thousand —
+ * and above a window opened from inside one (FullScreenOverlay.web's
+ * ABOVE_SHEETS_Z, two hundred thousand). Below them, Miriam's bar opened
+ * behind the form on the screen: "Hey Miriam" was heard, and nothing seen.
+ */
+const FLOATING_Z = 300000
+
+/**
+ * A layer above everything — a chord sheet open in its own overlay, and a
+ * form, included — that covers nothing it does not draw: no backdrop,
+ * nothing dimmed, and every touch outside what it draws goes through to the
+ * page beneath.
  *
  * Absolutely positioned, like FullScreenOverlay.web.tsx and for the same
  * reason (a fixed layer's touches drift from what is drawn on an iPhone held
@@ -23,8 +33,7 @@ export function FloatingLayer({
   const [host] = useState(() => {
     if (typeof document === 'undefined') return null
     const el = document.createElement('div')
-    el.style.cssText =
-      'position:absolute;top:0;left:0;right:0;bottom:0;z-index:10000;display:flex;flex-direction:column;pointer-events:none'
+    el.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;z-index:${FLOATING_Z};display:flex;flex-direction:column;pointer-events:none`
     // The app's typeface comes from Tamagui's font_body class on a wrapper
     // inside #root, and this layer is appended to the body, outside it — so
     // Miriam's bar was drawn in the browser's default serif. Brought along,

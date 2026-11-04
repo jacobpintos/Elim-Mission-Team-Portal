@@ -56,11 +56,18 @@ export async function askMiriam(
   heard?: Heard,
   continued = false,
   /** Said not to be what they meant: her answer, sent back (lib/miriamNotMeant). */
-  correct?: string
+  correct?: string,
+  /**
+   * `describing`: an event, described once she asked to hear about it ("Ok,
+   * tell me more about it") — its new form, filled in from all of it.
+   */
+  { describing }: { describing?: 'event' } = {}
 ): Promise<MiriamResult> {
   const call = httpsCallable<Record<string, unknown>, MiriamResult | Run>(functions, 'askMiriam')
   const profile = useAuthStore.getState().profile
   const today = localToday()
+  // The event form open on their screen, as it is now: what is said fills it in.
+  const form = useMiriamStore.getState().formOnScreen?.describe()
   let { data } = await call({
     ...(continued ? { continued: true } : {}),
     ...(correct ? { correct } : {}),
@@ -76,6 +83,8 @@ export async function askMiriam(
     history: recentExchanges(useMiriamStore.getState().conversation, Date.now()),
     appTools: appToolsFor(profile),
     screens: screensFor(profile).map(({ id, label }) => ({ id, label })),
+    ...(form ? { form } : {}),
+    ...(describing ? { describing } : {}),
   })
   for (let runs = 0; data.kind === 'run' && runs < MAX_RUNS; runs++) {
     const { calls, state } = data

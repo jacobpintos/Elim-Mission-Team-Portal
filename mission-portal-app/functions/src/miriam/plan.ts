@@ -127,6 +127,17 @@ const leg = (which: string) => ({
   additionalProperties: false,
 })
 
+/**
+ * People and groups added to or taken off: an existing event's, or — for a
+ * new one — the form already open on their screen, filled in so far.
+ */
+const CHANGED_PEOPLE = {
+  add_groups: idsOf('Groups to assign.'),
+  remove_groups: idsOf('Groups to take off.'),
+  add_people: idsOf('People to assign.'),
+  remove_people: idsOf('People to take off.'),
+}
+
 /** Every field of the event form (src/features/events/EventFormModal.tsx); an edit's, as changes. */
 function EVENT_FIELDS(edit = false) {
   return {
@@ -184,7 +195,30 @@ function EVENT_FIELDS(edit = false) {
         { name: str(), leader_ids: idsOf('Team leads.'), member_ids: idsOf('Members.') },
         'The event’s teams.'
       ),
-      common_teams: idsOf('Names of common teams (from people_and_groups) to add as they are.'),
+      common_teams: idsOf(
+        'Names of common teams, or of groups, from people_and_groups, to make the event’s teams of: ' +
+          '"setup" is the setup team, "rehearsal" or "the band" the worship team. ' +
+          'Each holds only those of its members who are on the event.'
+      ),
+      report_times: listOf(
+        {
+          for: str('A team’s name, or "everyone" — those not on a team with a time of its own.'),
+          time: str('Like "3:00 PM".'),
+        },
+        'When people are to be there, by team: "report time at 3 for setup", "rehearsal at 4" (the worship team’s).'
+      ),
+      schedule: listOf(
+        {
+          time: str('Like "4:00 PM"; "" for none.'),
+          end_time: str('"" if not said.'),
+          title: str('What happens: "Rehearsal", "Setup", "Doors open".'),
+          notes: str('Where, or who; "" if not said.'),
+        },
+        'What happens when on the day, in order.'
+      ),
+      left_out: idsOf(
+        'What they said they aren’t sure of yet, so it is left out, a few words each: "Andy — not sure he’s going", "The flagging team — to check".'
+      ),
       dress_code: listOf(
         {
           for: str(
@@ -200,18 +234,15 @@ function EVENT_FIELDS(edit = false) {
       ),
       task_template_id: str('A task template to start the event’s tasks from.'),
       ...(edit
-        ? {
-            add_groups: idsOf('Groups to assign.'),
-            remove_groups: idsOf('Groups to take off.'),
-            add_people: idsOf('People to assign.'),
-            remove_people: idsOf('People to take off.'),
-          }
+        ? CHANGED_PEOPLE
         : {
             groups: idsOf('Groups to assign.'),
             people: idsOf('People to assign one by one.'),
             except_people: idsOf(
               'People to leave out of the groups: "everyone in All except Jacob".'
             ),
+            // The form already open on their screen: what they say changes it.
+            ...CHANGED_PEOPLE,
           }),
       unmatched_names: idsOf(
         'Names of people, groups, teams or templates that were said but match nothing, or more than one, as said.'
@@ -230,8 +261,11 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
       name: 'open_event_form',
       description:
         'Open the form for a new event, filled in with what was asked for, for the person to check and save. ' +
-        'Use it for any request to create, add, set up or schedule an event. ' +
-        'Fill in only what the request says — never guess a venue, address, time, link or person — and leave out the rest. ' +
+        'Use it for any request to create, add, set up or schedule an event, and for an event described out loud as it comes to them. ' +
+        'Fill in only what the request says — never guess a venue, address, time, link or person — and leave out the rest; ' +
+        'it opens with whatever was said, a date or place missing too. ' +
+        'With the event form already open on their screen, it fills in that one: give only what they said now, ' +
+        'and people and groups as add_/remove_. ' +
         'Ids of people, groups and task templates come from people_and_groups.',
       strict: false,
       input_schema: EVENT_FIELDS(),
@@ -1485,16 +1519,34 @@ export interface EventDraft {
   }[]
   flights?: { uid: string; out: FlightLeg; ret: FlightLeg }[]
   teams?: { name: string; leaders: string[]; members: string[] }[]
+  /** When each team is to be there: a team's name, or '_remainder_' for everyone else. */
+  reportTimes?: { group: string; time: string }[]
+  /** What happens when on the day. */
+  schedule?: ScheduleDraft[]
   dressCode?: { group: string; text: string }[]
   extraDays?: { date: string; startTime: string; location: string }[]
   taskTemplateId?: string
 }
 
-/** What an edit starts from: who the event is assigned to now. */
+/** One thing on an event's schedule, as Miriam fills it in: "4:00 PM — Rehearsal". */
+export interface ScheduleDraft {
+  time: string
+  endTime?: string
+  title: string
+  notes?: string
+}
+
+/**
+ * What an edit starts from: who the event is assigned to now — an existing
+ * event's, or the form open on their screen, as filled in so far.
+ */
 export interface EventBase {
   users: string[]
   groups: string[]
 }
+
+/** "Everyone", said of who a report time or a dress code is for: those no other entry covers. */
+const EVERYONE = /^(?:everyone|all|everybody|remaining|everyone else|the rest)$/i
 
 const clean = (s: unknown, max = 120) => (typeof s === 'string' ? s.trim().slice(0, max) : '')
 
@@ -1544,8 +1596,14 @@ const said = (input: Record<string, unknown>, key: string) => key in input && in
  * anything else said goes into `notes`, to be told. "Everyone in All except
  * Jacob" is worked out here, not by the model: the groups' members, less
  * those left out, as people assigned one by one (a group assigned as a group
- * would bring them back in). With `base`, it is an edit: only what was said
- * is in the draft, and people and groups are added to and taken from it.
+ * would bring them back in). With `base`, it is an edit — of an existing
+ * event, or of the form open on their screen: only what was said is in the
+ * draft, and people and groups are added to and taken from it.
+ *
+ * So is who goes on a team made from a common team or a group ("setup",
+ * "rehearsal"): those of its members who are on the event, assigned one by
+ * one or through a group — not everyone it has. With nobody on the event
+ * yet, all of them, as the form's own "From Common Teams" adds them.
  */
 export function draftFromInput(
   input: EventFormInput,
@@ -1570,11 +1628,15 @@ export function draftFromInput(
     state: clean(input.state, 2).toUpperCase(),
   }
 
-  // Who it is assigned to.
+  // Who it is assigned to. A new event's add_ and remove_ (the form on
+  // screen's, said with nothing filled in yet) are its groups, people and
+  // those left out; an edit's groups and people, what it adds.
+  const both = (a: string, b: string) => [...list(input[a]), ...list(input[b])]
+  const isGroup = (id: string) => groupsById.has(id)
   if (!base) {
-    const groups = ids(input.groups, (id) => groupsById.has(id))
-    const one = people(input.people)
-    const except = new Set(people(input.except_people))
+    const groups = ids(both('groups', 'add_groups'), isGroup)
+    const one = people(both('people', 'add_people'))
+    const except = new Set(people(both('except_people', 'remove_people')))
     if (except.size > 0) {
       const everyone = new Set(one)
       for (const g of groups) for (const m of groupsById.get(g)?.members ?? []) everyone.add(m)
@@ -1585,16 +1647,18 @@ export function draftFromInput(
       draft.groups = groups
     }
   } else if (
-    ['add_people', 'remove_people', 'add_groups', 'remove_groups'].some((k) => said(input, k))
+    ['add_people', 'remove_people', 'add_groups', 'remove_groups', 'people', 'groups'].some((k) =>
+      said(input, k)
+    )
   ) {
-    const remove = new Set(people(input.remove_people))
+    const remove = new Set(people(both('remove_people', 'except_people')))
     const takeGroups = new Set(
       ids(input.remove_groups, (id) => groupsById.has(id) || base.groups.includes(id))
     )
     let groups = [
-      ...new Set([...base.groups, ...ids(input.add_groups, (id) => groupsById.has(id))]),
+      ...new Set([...base.groups, ...ids(both('add_groups', 'groups'), isGroup)]),
     ].filter((g) => !takeGroups.has(g))
-    const users = new Set([...base.users.map(String), ...people(input.add_people)])
+    const users = new Set([...base.users.map(String), ...people(both('add_people', 'people'))])
     // Someone taken off who is in an assigned group: that group's members
     // are assigned one by one instead, without them.
     for (const g of [...groups]) {
@@ -1688,6 +1752,12 @@ export function draftFromInput(
         return !!f.uid
       })
   }
+  // Who is on the event once that is done — one by one, or through a group:
+  // a team made from a common team or a group holds only those of its members.
+  const onEvent = new Set<string>(draft.users ?? base?.users ?? [])
+  for (const g of draft.groups ?? base?.groups ?? []) {
+    for (const m of groupsById.get(g)?.members ?? []) onEvent.add(String(m))
+  }
   if (said(input, 'teams') || said(input, 'common_teams')) {
     const teams = list(input.teams).map((t) => {
       const team = obj(t)
@@ -1697,15 +1767,67 @@ export function draftFromInput(
         members: people(team.member_ids),
       }
     })
-    for (const name of list(input.common_teams).map((n) => clean(n, 60))) {
-      const common = (roster.commonTeams ?? []).find(
-        (t) => t.name.toLowerCase() === name.toLowerCase()
-      )
-      if (common)
-        teams.push({ name: common.name, leaders: [], members: common.members.filter(isPerson) })
-      else if (name) notes.push(`There’s no common team called “${name}”.`)
+    for (const name of list(input.common_teams)
+      .map((n) => clean(n, 60))
+      .filter(Boolean)) {
+      const lower = name.toLowerCase()
+      // A common team by its name; else a group, by its name or its id.
+      const from =
+        (roster.commonTeams ?? []).find((t) => t.name.toLowerCase() === lower) ??
+        roster.groups.find((g) => g.id === name || g.name.toLowerCase() === lower)
+      if (!from) {
+        notes.push(`There’s no common team called “${name}”.`)
+        continue
+      }
+      // Given as a team of its own already, with its people.
+      if (teams.some((t) => t.name.toLowerCase() === from.name.toLowerCase())) continue
+      const everyone = from.members.map(String).filter(isPerson)
+      const members = onEvent.size ? everyone.filter((m) => onEvent.has(m)) : everyone
+      if (onEvent.size && everyone.length && !members.length) {
+        notes.push(`No one on ${from.name} is on this event yet — add them to its team by hand.`)
+      }
+      teams.push({ name: from.name, leaders: [], members })
     }
     draft.teams = teams.filter((t) => t.name)
+  }
+  if (said(input, 'report_times')) {
+    // As the event's teams are named: "setup" for the Setup Team.
+    const teamNames = (draft.teams ?? []).map((t) => t.name)
+    const teamCalled = (who: string) => {
+      const w = who.toLowerCase()
+      return (
+        teamNames.find((t) => t.toLowerCase() === w) ??
+        teamNames.find((t) => t.toLowerCase().includes(w) || w.includes(t.toLowerCase())) ??
+        who
+      )
+    }
+    draft.reportTimes = list(input.report_times)
+      .map((r) => {
+        const entry = obj(r)
+        const who = clean(entry.for, 60)
+        return {
+          group: !who || EVERYONE.test(who) ? '_remainder_' : teamCalled(who),
+          time: validTime(clean(entry.time, 12)),
+        }
+      })
+      .filter((r) => r.time)
+  }
+  if (said(input, 'schedule')) {
+    draft.schedule = list(input.schedule)
+      .map((s): ScheduleDraft => {
+        const item = obj(s)
+        const time = clean(item.time, 12)
+        const end = clean(item.end_time, 12)
+        const note = clean(item.notes, 200)
+        return {
+          time: validTime(time) || time,
+          ...(end ? { endTime: validTime(end) || end } : {}),
+          title: clean(item.title, 120),
+          ...(note ? { notes: note } : {}),
+        }
+      })
+      .filter((s) => s.title)
+      .slice(0, 40)
   }
   if (said(input, 'dress_code')) {
     draft.dressCode = list(input.dress_code)
@@ -1713,7 +1835,7 @@ export function draftFromInput(
         const entry = obj(d)
         const who = clean(entry.for, 60)
         return {
-          group: /^(everyone|all|everybody|remaining)$/i.test(who) || !who ? '_remainder_' : who,
+          group: EVERYONE.test(who) || !who ? '_remainder_' : who,
           text: clean(entry.text, 300),
         }
       })
@@ -1737,6 +1859,14 @@ export function draftFromInput(
     else notes.push('That task template wasn’t found — pick it by hand.')
   }
 
+  // What they weren't sure of yet: left out, and said so — "Andy — not sure he's going".
+  const leftOut = list(input.left_out)
+    .map((n) => clean(n, 100))
+    .filter(Boolean)
+    .slice(0, 10)
+  if (leftOut.length) {
+    notes.push(`Left out for now, as you weren’t sure: ${leftOut.join('; ')}.`)
+  }
   const unmatched = list(input.unmatched_names)
     .map((n) => clean(n, 60))
     .filter(Boolean)
@@ -1744,6 +1874,57 @@ export function draftFromInput(
     notes.push(`Couldn’t find ${unmatched.map((n) => `“${n}”`).join(', ')} — add them by hand.`)
   }
   return { draft, notes }
+}
+
+/**
+ * The event form open on their screen, as the app describes it: what it has
+ * so far, for Claude to read what is said in the light of, and who it is
+ * assigned to, for what is said to change.
+ *
+ * Its people are the form's own, sent back to the same form: kept as they are
+ * (someone with no name yet is on no roster, and would drop off the event),
+ * as nothing is saved from here — the form is, through the database's rules.
+ */
+export interface FormOnScreen {
+  /** "a new event", or the event being changed: "Revive Me on 2026-11-20". */
+  of: string
+  /** The event being changed, by its id; '' for a new one. */
+  templateId: string
+  /** What is filled in, a line each: "Title: Revive Me". */
+  lines: string[]
+  users: string[]
+  groups: string[]
+}
+
+/** The form on screen from what the app sent: null for anything that isn't one. */
+export function formOnScreenFrom(v: unknown): FormOnScreen | null {
+  const f = obj(v)
+  if (f.kind !== 'event') return null
+  const idsIn = (ids: unknown) =>
+    [...new Set(list(ids).map((id) => clean(String(id), 128)))].filter(Boolean).slice(0, 500)
+  return {
+    of: clean(f.of, 160) || 'a new event',
+    templateId: clean(f.templateId, 128),
+    lines: list(f.lines)
+      .map((l) => clean(l, 400))
+      .filter(Boolean)
+      .slice(0, 30),
+    users: idsIn(f.users),
+    groups: idsIn(f.groups),
+  }
+}
+
+/** What Claude is told of the form on their screen. */
+export function formOnScreenSaid(form: FormOnScreen): string {
+  return (
+    `On their screen now: the event form, for ${form.of}, filled in so far:\n` +
+    (form.lines.length ? form.lines.map((l) => `- ${l}`).join('\n') : '- (nothing yet)') +
+    '\nWhat they say about an event is about this one, unless they plainly mean another: fill it in with open_event_form, ' +
+    'giving only what they said now — it goes into the form on their screen, over what is there. ' +
+    'People and groups: add_people, remove_people, add_groups, remove_groups. ' +
+    'Teams, report times and dress code go by name: give those they add or change, and the form keeps the rest. ' +
+    'Any other list they change (schedule, food, cars, lodging, flights) is given whole, as it should be after; one they said nothing of is left out.'
+  )
 }
 
 /** A new task's form, filled in. Mirrored in the app (src/lib/miriam.ts). */

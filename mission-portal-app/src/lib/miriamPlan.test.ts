@@ -3,6 +3,8 @@ import {
   COMMANDS,
   commandsFor,
   draftFromInput,
+  formOnScreenFrom,
+  formOnScreenSaid,
   isPublicFollower,
   PUBLIC_APP_TOOLS,
   publicReply,
@@ -290,6 +292,150 @@ describe('filling in every part of the event form', () => {
     expect(draftFromInput({ event_key: 'x', city: 'Ames' }, full, base).draft).not.toHaveProperty(
       'users'
     )
+  })
+})
+
+describe('an event described out loud, as it comes', () => {
+  // "The event is called Revive Me. It starts at 4 PM. Actually, it starts at
+  // 5. I'm still trying to figure out if Andy is going. The guys are going
+  // though. You can add Emily too. I'll have to check if the flagging team is
+  // needed. We'll have report time at 3 for setup and rehearsal at 4."
+  const church: Roster = {
+    people: [
+      { id: 'andy', name: 'Andy Cole' },
+      { id: 'ben', name: 'Ben Ortiz' },
+      { id: 'carl', name: 'Carl Diaz' },
+      { id: 'dan', name: 'Dan Moss' },
+      { id: 'emily', name: 'Emily Ruiz' },
+      { id: 'fay', name: 'Fay Lin' },
+      { id: 'gus', name: 'Gus Hart' },
+    ],
+    groups: [
+      { id: 'gMen', name: 'Men', members: ['andy', 'ben', 'carl', 'dan'] },
+      { id: 'gFlag', name: 'Flagging', members: ['fay', 'gus'] },
+    ],
+    commonTeams: [
+      // Worship has Fay too, and Setup has Gus: neither is on the event.
+      { name: 'Worship', members: ['ben', 'emily', 'fay'] },
+      { name: 'Setup', members: ['carl', 'dan', 'gus'] },
+    ],
+  }
+  const asReadByClaude: EventFormInput = {
+    title: 'Revive Me',
+    start_time: '5 pm',
+    groups: ['gMen'],
+    people: ['emily'],
+    common_teams: ['Setup', 'Worship'],
+    report_times: [
+      { for: 'setup', time: '3 pm' },
+      { for: 'Worship', time: '4:00 PM' },
+    ],
+    schedule: [
+      { time: '3 pm', title: 'Setup' },
+      { time: '4 pm', title: 'Rehearsal', notes: '' },
+    ],
+    left_out: ['Andy — not sure he’s going', 'The flagging team — to check'],
+  }
+
+  it('makes the teams of only those on the event, with their report times and the schedule', () => {
+    const { draft, notes } = draftFromInput(asReadByClaude, church)
+    expect(draft.title).toBe('Revive Me')
+    expect(draft.startTime).toBe('5:00 PM')
+    // The guys as their group, and Emily by name — no date said, and none guessed.
+    expect(draft.groups).toEqual(['gMen'])
+    expect(draft.users).toEqual(['emily'])
+    expect(draft.date).toBe('')
+    // Only those on the event: not Fay on Worship, nor Gus on Setup.
+    expect(draft.teams).toEqual([
+      { name: 'Setup', leaders: [], members: ['carl', 'dan'] },
+      { name: 'Worship', leaders: [], members: ['ben', 'emily'] },
+    ])
+    expect(draft.reportTimes).toEqual([
+      { group: 'Setup', time: '3:00 PM' },
+      { group: 'Worship', time: '4:00 PM' },
+    ])
+    expect(draft.schedule).toEqual([
+      { time: '3:00 PM', title: 'Setup' },
+      { time: '4:00 PM', title: 'Rehearsal' },
+    ])
+    expect(notes).toEqual([
+      'Left out for now, as you weren’t sure: Andy — not sure he’s going; The flagging team — to check.',
+    ])
+  })
+
+  it('takes a group for a team where there is no common team of its name', () => {
+    const { draft } = draftFromInput({ people: ['fay', 'ben'], common_teams: ['Flagging'] }, church)
+    expect(draft.teams).toEqual([{ name: 'Flagging', leaders: [], members: ['fay'] }])
+  })
+
+  it('says so when no one on a team is on the event, and keeps the team for its time', () => {
+    const { draft, notes } = draftFromInput(
+      {
+        people: ['andy'],
+        common_teams: ['Worship'],
+        report_times: [{ for: 'worship', time: '4pm' }],
+      },
+      church
+    )
+    expect(draft.teams).toEqual([{ name: 'Worship', leaders: [], members: [] }])
+    expect(draft.reportTimes).toEqual([{ group: 'Worship', time: '4:00 PM' }])
+    expect(notes).toEqual([
+      'No one on Worship is on this event yet — add them to its team by hand.',
+    ])
+  })
+
+  it('a time for everyone else is the form’s remainder', () => {
+    const { draft } = draftFromInput({ report_times: [{ for: 'everyone', time: '6 pm' }] }, church)
+    expect(draft.reportTimes).toEqual([{ group: '_remainder_', time: '6:00 PM' }])
+  })
+})
+
+describe('the event form open on their screen', () => {
+  it('is read from what the app sends, and nothing else', () => {
+    expect(formOnScreenFrom(null)).toBeNull()
+    expect(formOnScreenFrom({ kind: 'task' })).toBeNull()
+    const form = formOnScreenFrom({
+      kind: 'event',
+      of: 'a new event',
+      lines: ['Title: Revive Me', '', 42],
+      users: ['emily', 'emily', 7],
+      groups: ['gMen'],
+    })
+    expect(form).toEqual({
+      of: 'a new event',
+      templateId: '',
+      // Only lines of text: anything else sent is left out.
+      lines: ['Title: Revive Me'],
+      users: ['emily', '7'],
+      groups: ['gMen'],
+    })
+    expect(formOnScreenSaid(form!)).toContain('- Title: Revive Me')
+  })
+
+  it('takes what is said now as changes to it: people added and taken off, the rest kept', () => {
+    const onScreen = { users: ['u4', 'nameless'], groups: ['gWorship'] }
+    const { draft } = draftFromInput(
+      { start_time: '6 pm', add_people: ['u1'], remove_people: ['u4'] },
+      roster,
+      onScreen
+    )
+    expect(draft.startTime).toBe('6:00 PM')
+    // Someone on the form with no name yet, on no roster, stays on it.
+    expect(draft.users?.sort()).toEqual(['nameless', 'u1'])
+    expect(draft.groups).toEqual(['gWorship'])
+    // "The guys are going too", given as groups rather than add_groups: added, not in place.
+    const more = draftFromInput({ groups: ['gAll'] }, roster, onScreen).draft
+    expect(more.groups).toEqual(['gWorship', 'gAll'])
+    expect(more.users).toEqual(['u4', 'nameless'])
+  })
+
+  it('puts a team made from a common team as the form has its people', () => {
+    const teams: Roster = { ...roster, commonTeams: [{ name: 'Setup', members: ['u2', 'u4'] }] }
+    const { draft } = draftFromInput({ common_teams: ['setup'] }, teams, {
+      users: ['u4'],
+      groups: [],
+    })
+    expect(draft.teams).toEqual([{ name: 'Setup', leaders: [], members: ['u4'] }])
   })
 })
 

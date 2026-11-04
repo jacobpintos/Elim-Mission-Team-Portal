@@ -70,6 +70,13 @@ import { stopSpeaking, unlockSpeech, whenSpoken } from './speak'
 import type { LastOwn } from '@/stores/miriamStore'
 import { FORGET_MS } from '@/lib/miriamConversation'
 import { NOT_MEANT_TAP, notMeantSaid } from '@/lib/miriamNotMeant'
+import {
+  finishedBy,
+  NEW_EVENT,
+  newEventAsked,
+  type Starter,
+  type Suggestion,
+} from '@/lib/miriamSuggestions'
 import { askMiriam, miriamError } from './askMiriam'
 import { eventByKey, prepareAction } from './actions'
 import { appData, eventsLoaded, hereNow, quickFromApp } from './hereNow'
@@ -165,7 +172,17 @@ export function useMiriamConversation(
     noteDone,
     endVoiceConfirm,
   } = panel
-  const { requestRef, heardAsRef, saidHerNameRef, setWake, stopListening, listen } = listening
+  const {
+    requestRef,
+    heardAsRef,
+    saidHerNameRef,
+    setWake,
+    stopListening,
+    listen,
+    listenPatiently,
+  } = listening
+  // A conversation she began ("Ok, tell me more about it"): what the reply is taken as.
+  const startedRef = useRef<Starter | null>(null)
   const { giveBriefing, briefedFoodRef } = briefing
 
   // Songs and videos (./useMiriamMedia), lyric slides (./useMiriamSlides), and
@@ -313,6 +330,34 @@ export function useMiriamConversation(
       setStage('answered')
       return
     }
+    // Answering what she asked to begin something: the reply is the request.
+    // An event described ("Ok, tell me more about it") goes as that, all of
+    // it, to be read the way it was meant; anything else is finished as the
+    // request it is — "Remind me" and "to call Sam at 5".
+    const started = startedRef.current
+    startedRef.current = null
+    if (!again && started && useMiriamStore.getState().awaiting) {
+      useMiriamStore.getState().setAwaiting(false)
+      const reply = withoutHerName(said)
+      if (ONLY_NEVER_MIND.test(reply)) {
+        setAnswer('Okay.')
+        speak('Okay.')
+        setStage('answered')
+        return
+      }
+      if (started.describing) {
+        await askClaude(reply, typing, false, undefined, { describing: started.describing })
+        return
+      }
+      sentRef.current = false
+      await sendNow(finishedBy(started, reply))
+      return
+    }
+    // "Create an event", and nothing more: she asks to hear about it.
+    if (!again && isAdmin(useAuthStore.getState().profile) && newEventAsked(withoutHerName(said))) {
+      begin(NEW_EVENT, typing)
+      return
+    }
     // Answering her "which song?" for slides: the lyrics as typed — their
     // lines kept, and never "put right" as something misheard — or its name.
     // Lyrics are pasted, a line to a line: one line, or anything said, is a
@@ -385,8 +430,12 @@ export function useMiriamConversation(
       if (slidesAsk.kind === 'lyrics') askedRef.current = slidesAsking(slidesAsk)
       if (await makeSlides(slidesAsk)) return
     }
-    // Worked out here, from what the app has, when it plainly can be.
-    const local = !again && !replying
+    // Worked out here, from what the app has, when it plainly can be — but
+    // not with the event form open on the screen: what is said then is about
+    // the event in it ("it starts at 5", "add Emily"), for Claude to fill in
+    // (stores/miriamStore: formOnScreen), and never a question of its own.
+    const onForm = !!useMiriamStore.getState().formOnScreen
+    const local = !again && !replying && !onForm
     // "Stop offering my briefing" / "offer my briefing every morning".
     if (local && (BRIEFING_OFF.test(said) || BRIEFING_ON.test(said))) {
       const off = BRIEFING_OFF.test(said)
@@ -835,7 +884,14 @@ export function useMiriamConversation(
    * asks back is answered by typing, rather than listened for. `check`: one
    * of her own answers, said not to be what they meant.
    */
-  const askClaude = async (said: string, typing: boolean, continued = false, check?: string) => {
+  const askClaude = async (
+    said: string,
+    typing: boolean,
+    continued = false,
+    check?: string,
+    /** `describing`: an event, described once she asked to hear about it. */
+    asked: { describing?: 'event' } = {}
+  ) => {
     toServer.current++
     setStage('thinking')
     useMiriamStore.getState().setLastOwn(null)
@@ -845,7 +901,7 @@ export function useMiriamConversation(
       const justSaid =
         said === requestRef.current || said === heardRight(requestRef.current ?? '').text
       const heard = !typing && justSaid ? (heardAsRef.current ?? undefined) : undefined
-      const result = await askMiriam(said, heard, continued, check)
+      const result = await askMiriam(said, heard, continued, check, asked)
       // Her own answer: kept a little while, for "that's not what I meant" — and let go after.
       const ownCheck =
         (result.kind === 'answer' || result.kind === 'confirm') && result.check
@@ -878,24 +934,40 @@ export function useMiriamConversation(
       useMiriamStore.getState().setAwaiting(followUp)
       setStay(result.kind === 'answer' && !!result.stay)
       if (result.kind === 'eventForm') {
+        // The event form open on the screen: what she filled in goes into it,
+        // over what is there — and her bar goes, to leave it in view.
+        const here = useMiriamStore.getState().formOnScreen
+        if (result.onScreen && here) {
+          here.fill({ draft: result.draft, notes: result.notes, heard: said })
+          noteDone('Put that into the event form on their screen, to check and save.')
+          speakAside(
+            result.notes.length
+              ? 'It’s in the form — check what I noted at the top.'
+              : 'It’s in the form.'
+          )
+          setOpen(false)
+          return
+        }
         noteDone(
           `Opened the ${result.editKey ? 'event’s' : 'new event'} form, filled in, to check and save.`
         )
-        offerEventForm({
-          draft: result.draft,
-          heard: said,
-          notes: result.notes,
-          editKey: result.editKey,
+        afterTheForm('event', () => {
+          offerEventForm({
+            draft: result.draft,
+            heard: said,
+            notes: result.notes,
+            editKey: result.editKey,
+          })
+          router.navigate('/events' as never)
         })
-        setOpen(false)
-        router.navigate('/events' as never)
         return
       }
       if (result.kind === 'taskForm') {
         noteDone('Opened the new task form, filled in, to check and save.')
-        useMiriamStore.getState().offerTaskForm({ draft: result.draft, notes: result.notes })
-        setOpen(false)
-        router.navigate('/assignments' as never)
+        afterTheForm('task', () => {
+          useMiriamStore.getState().offerTaskForm({ draft: result.draft, notes: result.notes })
+          router.navigate('/assignments' as never)
+        })
         return
       }
       // A change: worked out into exactly what will be done, and shown to
@@ -1167,6 +1239,66 @@ export function useMiriamConversation(
     },
   })
 
+  /**
+   * A form she filled in, opened where it belongs — once the event form on
+   * the screen, if one is, has been closed: opened over it, it would take the
+   * place of what is being typed there.
+   */
+  const afterTheForm = (what: 'event' | 'task', open: () => void) => {
+    if (!useMiriamStore.getState().formOnScreen) {
+      setOpen(false)
+      open()
+      return
+    }
+    const unsubscribe = useMiriamStore.subscribe((s) => {
+      if (s.formOnScreen) return
+      unsubscribe()
+      open()
+    })
+    const text = `I’ve filled in the ${what} form — it opens once you close the one on your screen.`
+    setAnswer(text)
+    speak(text)
+    setStage('answered')
+  }
+
+  /**
+   * A conversation she begins — "Ok, tell me more about it" — tapped, or
+   * asked for in so many words: her question, and the reply listened for
+   * (patiently, for an event described) and taken as the request.
+   */
+  const begin = (starter: Starter, typing: boolean) => {
+    stopListening()
+    stopSpeaking()
+    startedRef.current = starter
+    askedHereRef.current = null
+    useMiriamStore.getState().setAwaiting(true)
+    if (starter.describing) listenPatiently()
+    setAnswer(starter.ask)
+    speak(starter.ask)
+    // Remembered here: listening for the reply may come before the panel is seen answered.
+    noteDone(starter.ask)
+    setStage('answered')
+    void askBack(typing)
+  }
+
+  /** One of the things her bar offers, tapped (lib/miriamSuggestions). */
+  const suggest = (s: Suggestion) => {
+    unlockSpeech()
+    const typing = stage === 'typing'
+    if (s.starter) {
+      sentRef.current = true
+      askedRef.current = s.label
+      setHeard(s.label)
+      setTyped('')
+      begin(s.starter, typing)
+      return
+    }
+    if (!s.say) return
+    stopListening()
+    sentRef.current = false
+    void send(s.say)
+  }
+
   /** Her question back, answered: listened for once she has said it, or typed. */
   const askBack = async (typing: boolean) => {
     setAskingBack(true)
@@ -1270,6 +1402,7 @@ export function useMiriamConversation(
     setBriefing(null)
     setSaid(null)
     setLyricsWanted(false)
+    startedRef.current = null
     useMiriamStore.getState().setAwaiting(false)
     setOpen(false)
   }
@@ -1331,6 +1464,7 @@ export function useMiriamConversation(
 
   return {
     send,
+    suggest,
     talkFor,
     offerAction,
     confirmAction,

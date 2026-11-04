@@ -37,6 +37,12 @@ const SPEECH_ID = 'miriam'
 const WAKE_ID = 'miriam-wake'
 /** A pause this long ends the request: long enough to think mid-sentence. */
 const PAUSE_MS = 1800
+/**
+ * Telling her about an event she asked to hear about: thought out loud as it
+ * comes — "I'm still trying to figure out if Andy is going…" — so a pause to
+ * think is waited out rather than taken for the end.
+ */
+const PATIENT_PAUSE_MS = 4500
 /** The longest a request is listened to: a minute, room for a long one. */
 const LISTEN_MS = 60_000
 /** How often listening for "Hey Miriam" is started again when it has stopped. */
@@ -164,6 +170,10 @@ export function useListening(
   const settled = useRef('')
   const requestRef = useRef('')
   const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Listening patiently (PATIENT_PAUSE_MS): asked for the next listening, and
+  // holding for the one under way.
+  const patientNext = useRef(false)
+  const patient = useRef(false)
 
   useEffect(() => {
     prepareCues()
@@ -199,6 +209,7 @@ export function useListening(
   const songAliases = useRef<ReadonlyMap<string, string>>(new Map())
   /** How long to wait after the last words before acting on them. */
   const pauseFor = (text: string) => {
+    if (patient.current) return PATIENT_PAUSE_MS
     // A tour of a part named in full: nothing more to wait for.
     if (tourAsked(text)?.part) return TOUR_PAUSE_MS
     if (!songHost()) return PAUSE_MS
@@ -223,6 +234,8 @@ export function useListening(
     unlockSpeech()
     stopWake()
     stopSpeaking()
+    patient.current = patientNext.current
+    patientNext.current = false
     loadAliases().then((m) => (songAliases.current = m))
     setChoices([])
     setSongGuesses([])
@@ -510,6 +523,10 @@ export function useListening(
     stopWake,
     stopListening,
     listen,
+    /** The next listening waits out longer pauses: an event being described. */
+    listenPatiently: () => {
+      patientNext.current = true
+    },
     toggleWake,
   }
 }

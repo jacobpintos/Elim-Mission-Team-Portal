@@ -46,8 +46,8 @@ const DURATION = 300
  * sheet: that portals into the body at a z-index of a hundred thousand, and
  * on a phone every form built on components/ui/Modal is one. So a window
  * opened from inside a form — the carpool builder from the event form — would
- * open behind the form that opened it. Those ask to be above sheets. The rest
- * stay where they were, under the floating layer (FloatingLayer.web.tsx).
+ * open behind the form that opened it. Those ask to be above sheets. Both
+ * are under the floating layer (FloatingLayer.web.tsx), where Miriam's bar is.
  */
 const BASE_Z = 9999
 const ABOVE_SHEETS_Z = 200000

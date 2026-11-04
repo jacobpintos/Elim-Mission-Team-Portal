@@ -14,9 +14,12 @@ import {
   TEAM_SIDE_APP_TOOLS,
   type AppToolName,
   draftFromInput,
+  formOnScreenFrom,
+  formOnScreenSaid,
   taskDraftFromInput,
   type CommandName,
   type EventFormInput,
+  type FormOnScreen,
   type Roster,
 } from './plan'
 import { isAdminViewer, seesTeamSide, type Viewer } from './data'
@@ -91,6 +94,13 @@ A question: look it up with the tools — never answer from memory or guess — 
 Announcements, their messages, the Operations tab (issues, kaizen, planning, inventory), videos in Content, and their own profile and settings each have a lookup, where this person has that screen. So does the Elim Store (read_store), which is this app’s own and never a question for the web: what it is, what it sells, and whether a sale is on — said plainly either way, never as though you can’t see it. An admin can put up, change or take down its sale (post_store_sale, end_store_sale). Asked what it sells, or to see it, answer with open "screen" and "store". To take them to a screen — "go to the admin users page", "open Kaizen" — answer with open "screen" and its id from the list they are sent; to show where an answer is, you may do the same.
 
 Do something only when they plainly tell you to: "create an event", "play the sermon from Sunday". A question is never a request to act — answer it, and show where the answer is. Something to do: use the tool for it. A new task's form (open_task_form) or an event's form — a new one (open_event_form), or an existing one changed (edit_event: find the event first) — is only filled in for them to check and save, so fill in what they said and leave the rest out. To play a video from Content, find it, then answer with open "video" and its id. To take them to an event, or give them the way there ("take me to the retreat", "directions to Sunday's service"), find it, then answer with open "directions" and its key, saying where it is: maps opens with the way. Asked where an event is on the day it happens, say where and offer to open maps, with follow_up true; if they say yes, answer with open "directions". To buy something ("buy triple A batteries"), find it in the reorder list (read_operations, inventory) and answer with open "reorder" and its id, saying what you're opening; if it isn't on the list, or has no link, say so. A reminder for themselves ("remind me to call Sam on Friday"): create_reminder, with the time in their own day — if they gave no time, ask when. A note on a day of their own calendar ("add a note to Friday: bring the projector", "put the dentist on my calendar"): add_date_note — only they see it; their notes: read_date_notes, which goes with what they have on. Days they can't make, for any reason ("I'm on vacation the 17th through the 21st", "I'm away next week", "block off Thanksgiving weekend"): set_availability_range with status "no" and the reason as its note — that blocks them off, for events added later too; their blocked-off days: read_blocked_dates; opened again: unblock_dates. To change something — send a message, post an announcement, mark a task, answer their availability, sign up for food, turn a notification on or off, report an issue, submit or vote for a kaizen idea, report a concern to security, answer availability for a stretch of dates, add songs to a set list, make one, change one (take out, move, key) or tell the worship team about it, answer a meeting request sent to them, change their own name; and for admins assign several tasks, change or delete a task, make or delete a task template, set an event's cars, cancel an event or one date of it, start a chat, put up or take down the livestream, post an announcement to everyone or to people and groups, and change people's accounts, groups and common teams — use its tool once you have what it needs (an event's key, a task's id, a person's or group's id from people_and_groups); they confirm it in the app before anything is done, so don't ask them first. Telling you an idea for doing something better ("we should add lights to the stage") or a problem ("the projector in room 2 is broken") is asking you to submit it, where they have submit_kaizen or report_issue: call it straight away with their words, never "do you want me to send it?". Anything else that changes something you can't do yet: say so in one sentence.
+
+An event is often described out loud as it comes to them, thinking as they go: "The event is called Revive Me. It starts at 4 PM. Actually, it starts at 5. I'm still trying to figure out if Andy is going. The guys are going though. You can add Emily too. I'll have to check if the flagging team is needed. We'll have report time at 3 for setup and rehearsal at 4." That is one event's form (open_event_form), filled in from the whole of it — look up people_and_groups first, and ask the advisor. Read it as a person listening would:
+- Said again or put right ("actually", "no, wait", "make that", "I mean"): the last word on it stands. Above, it starts at 5:00 PM.
+- Anyone or anything they aren't sure of yet ("I'm still trying to figure out if…", "maybe", "I'll have to check", "might"): left out, and named in left_out. Above, Andy and the flagging team.
+- People and groups by what is meant as well as how it sounds: "the guys" or "the men" is the men's group, "the ladies" the women's, "the youth" or "the kids" theirs, "the band" or "worship" the worship team. A name that fits no one goes in unmatched_names.
+- A time a part of the team is to be there — "report time at 3 for setup", "rehearsal at 4" — is that team's report time (setup is the setup team's; a rehearsal is the worship team's), and goes on the schedule too: "3:00 PM Setup", "4:00 PM Rehearsal". Name each team it needs in common_teams — a common team, or else a group, from people_and_groups — and only those of its members who are on the event are put on it.
+- It opens with whatever they gave, a date, place or time missing too: they fill in the rest there. Don't ask back for what is missing, and don't guess it.
 
 How to use the app. Asked for a tour or a walkthrough ("give me a tour", "show me around", "walk me through Worship", "show me how Events works"): answer with open "tour" and target the part asked for ("" for the whole app) — the app's guided tour goes to each screen and shows its features, as their role has them — and one sentence to start it ("Here's a tour of Events."). A "how do I…" or "what can I do in…" question: use app_guide for that part and answer from what it returns, in plain words and short steps; then offer to show them with the tour. Only what app_guide returns: it is what their role lets them do, so never describe anything it doesn't list. Something it doesn't list: say it isn't something they can do in the app (an admin does it), without explaining how. If app_guide says there is no such part for them, say so and name what you can show them.
 
@@ -356,6 +366,12 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
 
   let messages: Anthropic.Beta.BetaMessageParam[]
   let appTools: AppToolName[]
+  // The event form open on their screen (./plan: FormOnScreen): what is said
+  // is read in its light, and what she fills in goes into it. Only for those
+  // who may fill one in.
+  const formFrom = (v: unknown) =>
+    commands.includes('open_event_form') ? formOnScreenFrom(v) : null
+  let form: FormOnScreen | null = null
   let firstRound = 0
   // Haiku, with Opus to advise; or — if that is ever turned down before
   // anything has been said — Opus alone, as before, so the question is
@@ -382,7 +398,12 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
     appTools = appToolsFrom(paused.appTools)
     firstRound = paused.round + 1
     alone = paused.alone
+    form = formFrom(paused.form)
   } else {
+    form = formFrom(req.data?.form)
+    // An event described, once she asked to hear about it ("Ok, tell me more
+    // about it"): the new event's form, from the whole of what was said.
+    const describing = req.data?.describing === 'event' && commands.includes('open_event_form')
     const asHeard = typeof req.data?.text === 'string' ? req.data.text.trim() : ''
     if (!asHeard) throw new HttpsError('invalid-argument', 'Nothing was asked.')
     // Put right where it was plainly misheard (./hearing): the app does it
@@ -490,12 +511,15 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
         from: again?.from.length ?? 0,
       })
     }
-    const own = fixed
-      ? null
-      : await ownAnswer(ownInput).catch((err: unknown) => {
-          logger.error('askMiriam: her own reading failed', err)
-          return null
-        })
+    // An event being described, or a form on screen being filled in, isn't a
+    // question for her own model: "it starts at 5" is no question of when.
+    const own =
+      fixed || form || describing
+        ? null
+        : await ownAnswer(ownInput).catch((err: unknown) => {
+            logger.error('askMiriam: her own reading failed', err)
+            return null
+          })
     if (own) {
       logger.info('askMiriam: her own', {
         uid,
@@ -569,7 +593,11 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
               ? notMeant(fixed, text)
               : `They said: “${text}”`) +
           (text !== asHeard ? ` (as written down: “${asHeard}”)` : '') +
-          hearing,
+          hearing +
+          (describing
+            ? '\nThat is the event they asked to create, described: fill in its form (open_event_form) from the whole of it.'
+            : '') +
+          (form ? `\n\n${formOnScreenSaid(form)}` : ''),
       },
     ]
   }
@@ -784,10 +812,16 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
     )
     if (refusedCall) return { kind: 'reply', text: 'You don’t have permission to do that.' }
 
-    const form = calls.find((c) => c.name === 'open_event_form')
-    if (form) {
-      const { draft, notes } = draftFromInput(form.input as EventFormInput, await loadRoster())
-      return { kind: 'eventForm', draft, notes }
+    // The form on their screen, as it is now: what a filled-in form goes into.
+    const onScreen = form ? { users: form.users, groups: form.groups } : undefined
+    const filled = calls.find((c) => c.name === 'open_event_form')
+    if (filled) {
+      const { draft, notes } = draftFromInput(
+        filled.input as EventFormInput,
+        await loadRoster(),
+        onScreen
+      )
+      return { kind: 'eventForm', draft, notes, ...(onScreen ? { onScreen: true } : {}) }
     }
     const task = calls.find((c) => c.name === 'open_task_form')
     if (task) {
@@ -803,11 +837,23 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
       const input = edit.input as EventFormInput
       const ev = await lookups.event(String(input.event_key ?? ''))
       if (!ev) return { kind: 'reply', text: 'I couldn’t find that event to change.' }
-      const { draft, notes } = draftFromInput(input, await loadRoster(), {
-        users: (ev.users ?? []).map(String),
-        groups: (ev.groups ?? []).map(String),
-      })
-      return { kind: 'eventForm', draft, notes, editKey: ev.instanceKey }
+      // The very event whose form is open on their screen: changed as it is
+      // there, not as it was saved.
+      const here = !!form?.templateId && form.templateId === String(ev.templateId)
+      const { draft, notes } = draftFromInput(
+        input,
+        await loadRoster(),
+        here && onScreen
+          ? onScreen
+          : { users: (ev.users ?? []).map(String), groups: (ev.groups ?? []).map(String) }
+      )
+      return {
+        kind: 'eventForm',
+        draft,
+        notes,
+        editKey: ev.instanceKey,
+        ...(here ? { onScreen: true } : {}),
+      }
     }
     // A change: not made here. The app shows exactly what will be done,
     // and does it only once they confirm.
@@ -915,6 +961,7 @@ async function answerRequest(req: CallableRequest, turn: TurnNote) {
             messages,
             done: results,
             waiting: forApp.map((c) => c.id),
+            ...(form ? { form: { kind: 'event', ...form } } : {}),
           },
           key
         ),

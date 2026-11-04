@@ -16,6 +16,8 @@ export interface Paused {
   messages: any[]
   done: any[]
   waiting: string[]
+  /** The event form on their screen, as the app sent it (./plan: FormOnScreen): what a filled-in form goes into. */
+  form?: unknown
 }
 export const PAUSE_MS = 5 * 60 * 1000
 /** The most an app lookup may hand back. */

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Animated,
   Easing,
@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { usePathname } from 'expo-router'
 import { Text, XStack, YStack } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { wakeEngine } from '@/lib/wakeEngine'
@@ -22,6 +23,8 @@ import type { Conversation } from './useMiriamConversation'
 import type { Listening } from './useListening'
 import type { PanelState } from './usePanelState'
 import { useMiriamStore } from '@/stores/miriamStore'
+import { useAuthStore } from '@/stores/authStore'
+import { suggestionsFor } from '@/lib/miriamSuggestions'
 
 /** Miriam's button, in the header: a green dot while she listens for her name. */
 export function MiriamHeaderButton({
@@ -96,6 +99,7 @@ export function MiriamPanel({
   const { available, listening, wakeOn, requestRef, listen, toggleWake } = ears
   const {
     send,
+    suggest,
     offerAction,
     confirmAction,
     cancelAction,
@@ -110,6 +114,19 @@ export function MiriamPanel({
   } = conversation
   // Her own last answer, while it can still be said not to be what was meant.
   const correctable = useMiriamStore((s) => !!s.lastOwn)
+  // Things to say, for this screen and this person (lib/miriamSuggestions):
+  // offered while she waits for a request, and gone once one comes.
+  const pathname = usePathname()
+  const profile = useAuthStore((s) => s.profile)
+  const suggestions = useMemo(() => suggestionsFor(pathname, profile), [pathname, profile])
+  const offering =
+    suggestions.length > 0 &&
+    !heard &&
+    !answer &&
+    !briefing &&
+    !lyricsWanted &&
+    !songHost() &&
+    (stage === 'listening' || (stage === 'typing' && !typed.trim()))
 
   // Woken by her name and listening: the bar in her colour, so it is seen.
   const called = woken && listening && stage === 'listening'
@@ -200,6 +217,24 @@ export function MiriamPanel({
             </Text>
           </Pressable>
         </XStack>
+
+        {offering ? (
+          <XStack flexWrap="wrap" gap="$1.5" accessibilityLabel="Things you can ask">
+            {suggestions.map((s) => (
+              <Pressable
+                key={s.label}
+                onPress={() => suggest(s)}
+                accessibilityRole="button"
+                accessibilityHint={s.starter ? s.starter.ask : `Asks Miriam: ${s.say}`}
+                style={[styles.suggestion, { borderColor: called ? 'white' : colors.primary }]}
+              >
+                <Text color={called ? 'white' : colors.primary} fontWeight="700" fontSize="$2">
+                  {s.label}
+                </Text>
+              </Pressable>
+            ))}
+          </XStack>
+        ) : null}
 
         {/* Her answer and what comes with it, the bar's full width — beside the
             badge and the buttons it was a narrow column, a long answer on
@@ -739,6 +774,15 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderWidth: 1,
     borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: 'center',
+  },
+  // One of the things to say, offered while she waits: a pill, a tap away.
+  suggestion: {
+    minHeight: 36,
+    borderWidth: 1,
+    borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 6,
     justifyContent: 'center',

@@ -80,6 +80,10 @@ export interface EventDraft {
   }[]
   flights?: { uid: string; out: FlightLegDraft; ret: FlightLegDraft }[]
   teams?: { name: string; leaders: string[]; members: string[] }[]
+  /** When each team is to be there: a team's name, or '_remainder_' for everyone else. */
+  reportTimes?: { group: string; time: string }[]
+  /** What happens when on the day: "4:00 PM — Rehearsal". */
+  schedule?: { time: string; endTime?: string; title: string; notes?: string }[]
   dressCode?: { group: string; text: string }[]
   extraDays?: { date: string; startTime: string; location: string }[]
   taskTemplateId?: string
@@ -122,8 +126,12 @@ export type MiriamOpen =
   | { kind: 'link'; url: string; label: string }
 
 export type MiriamResult =
-  /** With `editKey`, an existing event's form (its instance key) with the changes made. */
-  | { kind: 'eventForm'; draft: EventDraft; notes: string[]; editKey?: string }
+  /**
+   * With `editKey`, an existing event's form (its instance key) with the
+   * changes made. `onScreen`: for the event form open on their screen, to go
+   * into it (stores/miriamStore: formOnScreen).
+   */
+  | { kind: 'eventForm'; draft: EventDraft; notes: string[]; editKey?: string; onScreen?: boolean }
   | {
       kind: 'answer'
       text: string
