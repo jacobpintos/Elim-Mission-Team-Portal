@@ -20,7 +20,16 @@ import { useMiriamStore } from '@/stores/miriamStore'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
 import { allInstances, localToday } from '@/lib/events'
 import { AVAIL_LABELS, effectiveAvail } from '@/lib/availability'
-import { isAdmin, isGuest, isPublic, isSecurity, isWorship, visibleTabs } from '@/lib/roles'
+import {
+  canBeMessaged,
+  isAdmin,
+  isGuest,
+  isPublic,
+  isSecurity,
+  isWorship,
+  visibleTabs,
+} from '@/lib/roles'
+import { directWith } from '@/lib/rooms'
 import {
   notificationKeysFor,
   notificationLabel,
@@ -36,7 +45,7 @@ import {
 } from '../../../functions/src/miriam/data'
 import { mergeEvent } from '../../../functions/src/eventPrivate'
 import { seesTask } from '../../../functions/src/recordAccess'
-import { roomName, roomsFor } from '@/lib/miriamAppData'
+import { messageTargets, roomName, type MessageTarget } from '@/lib/miriamAppData'
 import { claimFoodItem, type FoodSignups } from '@/lib/foodSignups'
 import {
   foodItemFor,
@@ -226,30 +235,57 @@ async function sendMessage(profile: UserProfile, input: Record<string, unknown>)
   const rooms = (
     await getDocs(query(collection(db, 'rooms'), where('members', 'array-contains', uid)))
   ).docs.map((d) => ({ ...(d.data() as Room), id: d.id }))
-  const found = input.room_id
-    ? rooms.filter((r) => String(r.id) === String(input.room_id))
-    : roomsFor(rooms, uid, who, String(input.conversation ?? ''))
+  // Anyone who has Messages, by name: a person said is their direct message.
+  const people = useUsersStore
+    .getState()
+    .users.filter((u) => canBeMessaged(u) && !!u.displayName)
+    .map((u) => ({ uid: String(u.uid), name: u.displayName }))
+  const said = String(input.conversation ?? '')
+  // Picked from those offered: that one, as it was offered.
+  const picked: MessageTarget[] = input.room_id
+    ? rooms
+        .filter((r) => String(r.id) === String(input.room_id))
+        .map((room) => ({ kind: 'group', room, name: roomName(room, uid, who) }))
+    : input.person_id
+      ? people
+          .filter((p) => p.uid === String(input.person_id))
+          .map((p) => ({
+            kind: 'person',
+            uid: p.uid,
+            name: p.name,
+            room: directWith(rooms, uid, p.uid) ?? null,
+          }))
+      : []
+  const found = picked.length ? picked : messageTargets(rooms, people, uid, said)
   if (found.length === 0) {
-    return cannot(`I couldn’t find a conversation with “${String(input.conversation ?? '')}”.`)
+    return cannot(`I couldn’t find anyone or any group chat called “${said}”.`)
   }
   if (found.length > 1) {
     return {
       kind: 'choose',
-      title: 'Which conversation?',
-      options: found.slice(0, 4).map((r) => ({
-        label: roomName(r, uid, who),
-        input: { ...input, room_id: String(r.id) },
-      })),
+      title: 'Who should it go to?',
+      options: found
+        .slice(0, 4)
+        .map((t) =>
+          t.kind === 'group'
+            ? { label: `${t.name} (group chat)`, input: { ...input, room_id: String(t.room.id) } }
+            : { label: t.name, input: { ...input, person_id: t.uid } }
+        ),
     } satisfies Prepared
   }
-  const room = found[0]
+  const to = found[0]
   return {
     kind: 'ready',
-    title: `Send this to ${roomName(room, uid, who)}?`,
-    details: [text],
+    title: `Send this to ${to.name}?`,
+    details: [text, ...(to.kind === 'person' && !to.room ? ['A new conversation with them'] : [])],
     confirm: 'Send',
     run: async () => {
-      await sendMessageAs(room.id, uid, text)
+      // A person with no conversation yet: theirs started, as Messages starts one.
+      const roomId =
+        to.kind === 'group'
+          ? to.room.id
+          : (to.room?.id ?? (await useMessagesStore.getState().startChat(uid, [to.uid])))
+      await sendMessageAs(roomId, uid, text)
       return 'Sent.'
     },
   } satisfies Prepared

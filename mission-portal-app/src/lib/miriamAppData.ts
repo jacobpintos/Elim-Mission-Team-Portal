@@ -120,6 +120,85 @@ export function roomsFor(
   )
 }
 
+/** Someone a message can be sent to, by name: anyone who has Messages (lib/roles canBeMessaged). */
+export interface Messageable {
+  uid: string
+  name: string
+}
+
+/**
+ * Who a message is for, by the name said: a group chat, by its own name — or
+ * a person, which is their direct message, whether or not there is one yet.
+ * Never a group chat because the person is in it: "message Kolton" is no
+ * message to All Chat.
+ *
+ * Best fits first: the whole name said ("Kolton Ruiz", "All Chat") before
+ * every word of it said, before a word begun ("Kol"). When nothing fits
+ * another way, a group chat with no name whose people are all named.
+ */
+export type MessageTarget =
+  | { kind: 'group'; room: Room; name: string }
+  | { kind: 'person'; uid: string; name: string; room: Room | null }
+
+export function messageTargets(
+  rooms: Room[],
+  people: Messageable[],
+  uid: string,
+  said: string
+): MessageTarget[] {
+  const asked = words(said)
+  if (!asked.length) return []
+  const plain = asked.join(' ')
+  /** 3: the whole name; 2: every word asked is a word of it; 1: each begins one; 0: no. */
+  const score = (name: string) => {
+    const have = words(name)
+    if (!have.length) return 0
+    if (have.join(' ') === plain) return 3
+    if (asked.every((q) => have.includes(q))) return 2
+    if (asked.every((q) => have.some((w) => w.startsWith(q) || q.startsWith(w)))) return 1
+    return 0
+  }
+  const scored: { target: MessageTarget; score: number }[] = []
+  for (const room of rooms) {
+    if (roomKind(room) !== 'group' || !room.name?.trim()) continue
+    const s = score(room.name)
+    if (s) scored.push({ target: { kind: 'group', room, name: room.name.trim() }, score: s })
+  }
+  for (const p of people) {
+    if (p.uid === uid || !p.name.trim()) continue
+    const s = score(p.name)
+    if (!s) continue
+    const room =
+      rooms.find(
+        (r) =>
+          roomKind(r) === 'dm' &&
+          r.members.length === 2 &&
+          r.members.some((m) => String(m) === p.uid) &&
+          r.members.some((m) => String(m) === uid)
+      ) ?? null
+    scored.push({ target: { kind: 'person', uid: p.uid, name: p.name, room }, score: s })
+  }
+  if (scored.length) {
+    const best = Math.max(...scored.map((x) => x.score))
+    return scored.filter((x) => x.score === best).map((x) => x.target)
+  }
+  // "Message Sam and Beth": a group chat with no name, of just those named.
+  const named = people.filter((p) => p.uid !== uid && words(p.name).some((w) => asked.includes(w)))
+  return rooms
+    .filter((r) => roomKind(r) === 'group' && !r.name?.trim())
+    .map((room) => ({ room, others: room.members.map(String).filter((m) => m !== uid) }))
+    .filter(
+      ({ others }) => others.length > 1 && others.every((m) => named.some((p) => p.uid === m))
+    )
+    .map(({ room, others }) => ({
+      kind: 'group' as const,
+      room,
+      name: `your group with ${others
+        .map((m) => named.find((p) => p.uid === m)!.name.split(' ')[0])
+        .join(', ')}`,
+    }))
+}
+
 export function messageLines(messages: Message[], uid: string, names: ReadonlyMap<string, string>) {
   return [...messages]
     .sort((a, b) => a.ts - b.ts)

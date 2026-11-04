@@ -733,18 +733,22 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
     },
     send_message: {
       name: 'send_message',
-      description: 'Send a message in one of their conversations.' + ACTS,
+      description:
+        'Send a message to a person or a group chat. To a person, it goes to the two of them alone — never to a group chat they are in — and a conversation is started if there isn’t one yet.' +
+        ACTS,
       strict: true,
       input_schema: {
         type: 'object',
         properties: {
           conversation: {
             type: 'string',
-            description: 'The person’s name or the group chat’s name, as said.',
+            description:
+              'Who it is for: the person’s name, or the group chat’s own name, as said ("Kolton", "All Chat").',
           },
           text: {
             type: 'string',
-            description: 'The message, in their words, as they would type it.',
+            description:
+              'The message as it should reach them, in their words: told to pass something on, as said to them — "tell Kolton he is snug" is "You’re snug", "let Sam know I’m running late" is "I’m running late".',
           },
         },
         required: ['conversation', 'text'],
