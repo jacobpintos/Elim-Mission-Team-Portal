@@ -398,6 +398,12 @@ export interface ConfigMain {
      * coordinator: it routes a job and appears nowhere on a profile.
      */
     accountant?: string
+    /**
+     * The number the texting list's texts come from, E.164: who to text STOP
+     * to, to stop them. The texts are sent by another service; this is only
+     * said. Empty when nobody has set it.
+     */
+    textingNumber?: string
   }
   publicPages: Record<string, unknown>
   postsConfig: PostsConfig

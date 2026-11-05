@@ -443,14 +443,14 @@ describe('textingListSignups — a request, not a subscription', () => {
     )
   })
 
-  it('does not let the subject read it back', async () => {
-    // Nothing in the app shows it to them, and a phone number does not need a
-    // second way out. The digest reads it with the Admin SDK, which these
-    // rules do not apply to.
+  it('lets the subject read their own back, and admins', async () => {
+    // The Connect tab and Miriam show them the number they asked with, and
+    // whether it has gone to the coordinator. No one else's: the digest reads
+    // them with the Admin SDK, which these rules do not apply to.
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'textingListSignups', MEMBER), REQ)
     })
-    await assertFails(getDoc(doc(as(MEMBER), 'textingListSignups', MEMBER)))
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'textingListSignups', MEMBER)))
     await assertSucceeds(getDoc(doc(as(ADMIN), 'textingListSignups', MEMBER)))
   })
 

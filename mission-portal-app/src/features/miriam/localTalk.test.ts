@@ -87,6 +87,10 @@ const ALL_TOOLS = [
 
 interface Setup {
   tools?: string[]
+  /** Their texting list request: null for none. */
+  signup?: { phone: string; status: 'pending' | 'sent'; at: number } | null
+  /** The number the texts come from. */
+  textingNumber?: string
   /** Everyone they can message; by default, everyone named, sex unsaid. */
   people?: { uid: string; name: string; sex?: 'male' | 'female' | null }[]
   /** What today's briefing showed open, and suggested. */
@@ -194,6 +198,8 @@ function conversation(setup: Setup = {}) {
       ] as Announcement[],
     names: () => names,
     rooms: async () => rooms,
+    textingSignup: async () => setup.signup,
+    textingNumber: async () => setup.textingNumber ?? '',
     messageable: () => setup.people ?? [...names].map(([uid, name]) => ({ uid, name, sex: null })),
     latest: async (r) => setup.messages?.[String(r.id)] ?? [],
     now: () => NOW,
@@ -1266,5 +1272,68 @@ describe('a message sent, worked out here', () => {
     expect(await chat()('tell everyone we start at 6')).toEqual(['(to Claude)'])
     // Without Messages: never.
     expect(await conversation({ people, rooms })('tell Kolton he’s snug')).toEqual(['(to Claude)'])
+  })
+})
+
+describe('the texting list', () => {
+  const join = (phone: string) => `offer join_texting_list ${JSON.stringify({ phone })}`
+
+  it('joining, with the number said: shown to confirm', async () => {
+    expect(
+      await conversation({ signup: null })('add me to the texting list, 515-555-1234')
+    ).toEqual([join('+15155551234')])
+  })
+
+  it('joining, no number said: asked for, then shown to confirm', async () => {
+    const say = conversation({ signup: null })
+    expect(await say('add me to the texting list')).toEqual([
+      'ask: What number should the texts go to?',
+    ])
+    expect(await say('it’s 515 555 1234')).toEqual([join('+15155551234')])
+  })
+
+  it('a number that isn’t one: asked once more, then where to add it', async () => {
+    const say = conversation({ signup: null })
+    await say('sign me up for the texts')
+    expect(await say('five five five')).toEqual([
+      'ask: That doesn’t sound like a US phone number. Say it with the area code — like 515 555 1234.',
+    ])
+    expect(await say('um I forget')).toEqual([
+      'say: I couldn’t make that out as a phone number. You can add it on the Connect tab.',
+    ])
+  })
+
+  it('how to join: the Connect tab, or now', async () => {
+    const say = conversation({ signup: null })
+    expect(await say('how do I get added to the texting list')).toEqual([
+      'ask: You can sign up on the Connect tab — or I can add you now. What number should the texts go to?',
+    ])
+    expect(await say('no')).toEqual(['say: Okay — nothing was changed.'])
+  })
+
+  it('asked before: said so, with the number, and another offered', async () => {
+    const signup = { phone: '+15155551234', status: 'pending' as const, at: 0 }
+    const say = conversation({ signup })
+    expect(await say('add me to the texting list')).toEqual([
+      'ask: You’ve asked to join with (515) 555-1234 — the Connections Coordinator adds you with the day’s requests. To use a different number, say it — or “no”.',
+    ])
+    expect(await say('515-555-9999')).toEqual([join('+15155559999')])
+    expect(
+      await conversation({ signup: { ...signup, status: 'sent' } })('am I on the texting list')
+    ).toEqual([
+      'say: Your request, with (515) 555-1234, went to the Connections Coordinator to add you.',
+    ])
+    expect(await conversation({ signup: null })('am I on the texting list')).toEqual([
+      'say: You haven’t asked to join the texting list. You can on the Connect tab — or ask me to add you.',
+    ])
+  })
+
+  it('stopping them: text STOP to the number they come from', async () => {
+    expect(
+      await conversation({ textingNumber: '+15155550100' })('unsubscribe me from the texting list')
+    ).toEqual(['say: To stop the texts, text STOP to (515) 555-0100 — the number they come from.'])
+    expect(await conversation()('stop sending me texts')).toEqual([
+      'say: To stop the texts, reply STOP to any of them.',
+    ])
   })
 })

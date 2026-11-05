@@ -15,6 +15,8 @@ export const theWell: OrgModule = {
       icon: '🚐',
     },
   ],
+  // The texting list's texts come from this number.
+  textingNumber: '+13192490049',
   features: {
     // Admin → Vehicles, the carpool planner, and Miriam's vehicle commands.
     vehicles: true,

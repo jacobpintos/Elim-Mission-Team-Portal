@@ -683,6 +683,12 @@ export const connectFlow: TourFlow = {
       title: 'Connect',
       body: 'Get in touch and get involved — and ask to meet with someone from our leadership, right from the page.',
     },
+    {
+      id: 'connect-texting',
+      route: '/connect',
+      title: 'Texting list',
+      body: 'Event and meeting reminders by text: put in your cell number near the top of Connect, and the Connections Coordinator adds you. To stop the texts, text STOP to the number they come from.',
+    },
   ],
 }
 

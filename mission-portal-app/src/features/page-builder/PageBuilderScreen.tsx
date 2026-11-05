@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { ScrollView } from 'react-native'
 import { YStack, XStack, Text, Button, Input, Checkbox, Label, Spinner } from 'tamagui'
 import { doc, updateDoc } from 'firebase/firestore'
@@ -31,9 +31,11 @@ const DESIGNS = {
 interface PageBuilderScreenProps {
   pageKey: PageKey
   pageTitle: string
+  /** Shown with the page, below its header, whatever its blocks: Connect's texting list sign-up. */
+  extra?: ReactNode
 }
 
-export function PageBuilderScreen({ pageKey, pageTitle }: PageBuilderScreenProps) {
+export function PageBuilderScreen({ pageKey, pageTitle, extra }: PageBuilderScreenProps) {
   const { profile } = useAuthStore()
   const { buildModeKey, setBuildMode } = usePageBuilderStore()
   const { toast } = useUIStore()
@@ -239,6 +241,9 @@ export function PageBuilderScreen({ pageKey, pageTitle }: PageBuilderScreenProps
   ) : null
 
   if (pageData.blocks.length > 0) {
+    if (pageKey === 'connect') {
+      return <ConnectDesign blocks={pageData.blocks} top={editButton} afterHero={extra} />
+    }
     const Design = DESIGNS[pageKey]
     return <Design blocks={pageData.blocks} top={editButton} />
   }
@@ -247,6 +252,7 @@ export function PageBuilderScreen({ pageKey, pageTitle }: PageBuilderScreenProps
     <ScrollView>
       <YStack flex={1}>
         {editButton}
+        {extra}
         <YStack padding="$8" alignItems="center" justifyContent="center">
           <Text fontSize="$5" fontWeight="700" marginBottom="$2">
             {pageTitle}

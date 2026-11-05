@@ -46,6 +46,8 @@ import {
 import { mergeEvent } from '../../../functions/src/eventPrivate'
 import { seesTask } from '../../../functions/src/recordAccess'
 import { messageTargets, roomName, type MessageTarget } from '@/lib/miriamAppData'
+import { formatPhone, normalizePhone } from '@/lib/textingList'
+import { askToJoin } from '@/lib/textingListDb'
 import { claimFoodItem, type FoodSignups } from '@/lib/foodSignups'
 import {
   foodItemFor,
@@ -287,6 +289,29 @@ async function sendMessage(profile: UserProfile, input: Record<string, unknown>)
           : (to.room?.id ?? (await useMessagesStore.getState().startChat(uid, [to.uid])))
       await sendMessageAs(roomId, uid, text)
       return 'Sent.'
+    },
+  } satisfies Prepared
+}
+
+/**
+ * Asked to join the texting list, with this number: a request the
+ * Connections Coordinator picks up with the day's (lib/textingListDb). A
+ * number asked with before is replaced.
+ */
+async function joinTextingList(profile: UserProfile, input: Record<string, unknown>) {
+  const phone = normalizePhone(String(input.phone ?? ''))
+  if (!phone) return cannot('That isn’t a US phone number — say it with the area code.')
+  return {
+    kind: 'ready',
+    title: 'Ask to join the texting list?',
+    details: [
+      `Texts to ${formatPhone(phone)}`,
+      'The Connections Coordinator gets the day’s requests at 5 PM and adds you.',
+    ],
+    confirm: 'Ask to join',
+    run: async () => {
+      await askToJoin(String(profile.uid), profile.displayName ?? '', phone)
+      return 'Done — you’ve asked to join the texting list.'
     },
   } satisfies Prepared
 }
@@ -2264,6 +2289,7 @@ const ACTIONS: Record<
   (profile: UserProfile, input: Record<string, unknown>) => Promise<Prepared>
 > = {
   send_message: sendMessage,
+  join_texting_list: joinTextingList,
   post_announcement: postAnnouncement,
   set_task_status: setTaskStatus,
   set_availability: setAvailability,

@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { ActivityIndicator } from 'react-native'
-import { Stack } from 'expo-router'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { TextingListCard } from '@/features/connect/TextingListCard'
 
 const PageBuilderScreen = lazy(() =>
   import('@/features/page-builder/PageBuilderScreen').then((m) => ({
@@ -14,7 +14,7 @@ export default function ConnectPage() {
     <>
       <ScreenTitle options={{ title: 'Connect' }} />
       <Suspense fallback={<ActivityIndicator style={{ flex: 1 }} />}>
-        <PageBuilderScreen pageKey="connect" pageTitle="Connect" />
+        <PageBuilderScreen pageKey="connect" pageTitle="Connect" extra={<TextingListCard />} />
       </Suspense>
     </>
   )

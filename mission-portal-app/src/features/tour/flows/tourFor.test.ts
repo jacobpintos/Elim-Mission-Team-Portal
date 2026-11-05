@@ -122,6 +122,7 @@ describe('the tour for someone who follows the church in the app', () => {
         'events-intro',
         'ann-intro-public',
         'connect-intro',
+        'connect-texting',
       ])
     )
     for (const id of [

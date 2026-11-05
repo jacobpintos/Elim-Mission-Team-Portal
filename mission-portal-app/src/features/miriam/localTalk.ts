@@ -6,6 +6,9 @@ import { postsAsked, postsFor, postsSaid } from '@/lib/miriamPosts'
 import type { Sex, UserProfile } from '@/types/user'
 import { messageTargets, type MessageTarget } from '@/lib/miriamAppData'
 import { sendAsked, sendSplit, sendText } from '@/lib/miriamSend'
+import { textingAsked } from '@/lib/miriamTexting'
+import { formatPhone, phoneIn, stopSaid } from '@/lib/textingList'
+import type { MySignup } from '@/lib/textingListDb'
 import { seesTeamSide, type EventInstance } from '../../../functions/src/miriam/data'
 import { FD } from '@/lib/format'
 import { foodStillOpenSaid, foodTakenSaid, stillOpen } from '@/lib/miriamActions'
@@ -174,6 +177,10 @@ export interface Here {
   names: () => ReadonlyMap<string, string>
   /** Their conversations, most recently active first. */
   rooms: () => Promise<Room[]>
+  /** Their own request to join the texting list: null for none, undefined when it can't be read. */
+  textingSignup: () => Promise<MySignup | null | undefined>
+  /** The number the texting list's texts come from, or '' (Admin → Leadership Team). */
+  textingNumber: () => Promise<string>
   /** Everyone they can message, by name — and their sex, for "he" and "she" said of them. */
   messageable: () => { uid: string; name: string; sex?: Sex | null }[]
   latest: (room: Room, n: number) => Promise<Message[]>
@@ -198,7 +205,10 @@ export async function talkHere(said: string, here: Here, talk: Talk): Promise<bo
   // Directions before food: "take me to the potluck" brings nothing. A
   // reminder asked for, before what it names: "remind me before all my events"
   // is no list of them.
+  // The texting list before notifications: "take me off the texting list" is
+  // the list, not the coordinator's notification of who asked to join.
   return (
+    (await textingHere(said, here, talk)) ||
     (await notificationsHere(said, here, talk)) ||
     (await sendHere(said, here, talk)) ||
     (await notesHere(said, here, talk)) ||
@@ -1823,6 +1833,83 @@ async function remindFrom(
     ...(start ? { minutesBefore: Math.round((start.getTime() - at.getTime()) / 60_000) } : {}),
   })
   return true
+}
+
+// --- The texting list ------------------------------------------------------------------
+
+/**
+ * "Add me to the texting list", "how do I get the texts?", "am I on the
+ * texting list?", "unsubscribe me from the texts". Joining is a request
+ * (lib/textingList): asked for with a number — said, or asked for — and
+ * shown to confirm. Stopping them is the texting service's: text STOP to the
+ * number they come from.
+ */
+async function textingHere(said: string, here: Here, talk: Talk): Promise<boolean> {
+  const ask = textingAsked(said)
+  if (!ask || !here.profile) return false
+  if (ask === 'stop') {
+    talk.say(stopSaid(await here.textingNumber()))
+    return true
+  }
+  talk.thinking()
+  const mine = await here.textingSignup()
+  const asked = mine
+    ? mine.status === 'sent'
+      ? `Your request, with ${formatPhone(mine.phone)}, went to the Connections Coordinator to add you.`
+      : `You’ve asked to join with ${formatPhone(mine.phone)} — the Connections Coordinator adds you with the day’s requests.`
+    : null
+  if (ask === 'status') {
+    talk.say(
+      asked ??
+        (mine === null
+          ? 'You haven’t asked to join the texting list. You can on the Connect tab — or ask me to add you.'
+          : 'I couldn’t check just now. The Connect tab shows it.')
+    )
+    return true
+  }
+  // Joining: with the number said, shown to confirm; else asked for.
+  const given = phoneIn(said)
+  if (given) {
+    await talk.offer('join_texting_list', { phone: given })
+    return true
+  }
+  if (asked) {
+    talk.ask(`${asked} To use a different number, say it — or “no”.`, textingNumberReply())
+    return true
+  }
+  talk.ask(
+    ask === 'how'
+      ? 'You can sign up on the Connect tab — or I can add you now. What number should the texts go to?'
+      : 'What number should the texts go to?',
+    textingNumberReply()
+  )
+  return true
+}
+
+/** A number for the texting list, asked for: once more if it isn't one. */
+function textingNumberReply(again = false): Reply {
+  return async (reply, t) => {
+    if (neverMind(reply, t)) return true
+    const phone = phoneIn(reply)
+    if (phone) {
+      await t.offer('join_texting_list', { phone })
+      return true
+    }
+    if (saidNo(reply)?.rest === '') {
+      t.say('Okay — nothing was changed.')
+      return true
+    }
+    if (looksLikeNewRequest(reply)) return false
+    if (!again) {
+      t.ask(
+        'That doesn’t sound like a US phone number. Say it with the area code — like 515 555 1234.',
+        textingNumberReply(true)
+      )
+      return true
+    }
+    t.say('I couldn’t make that out as a phone number. You can add it on the Connect tab.')
+    return true
+  }
 }
 
 // --- A message sent --------------------------------------------------------------------

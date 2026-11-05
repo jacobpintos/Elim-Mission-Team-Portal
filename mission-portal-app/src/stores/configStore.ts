@@ -15,6 +15,8 @@ interface ConfigStore {
   connectionsCoordinator: string
   /** Uid of the Accountant, who answers reimbursement requests, or ''. */
   accountant: string
+  /** The number the texting list's texts come from, E.164, or '' (Admin → Leadership Team). */
+  textingNumber: string
   loading: boolean
   _unsub: (() => void) | null
   _refCount: number
@@ -35,6 +37,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   ccliLicense: '',
   connectionsCoordinator: '',
   accountant: '',
+  textingNumber: '',
   loading: false,
   _unsub: null,
   _refCount: 0,
@@ -68,6 +71,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           ccliLicense: data.ccliLicense ?? '',
           connectionsCoordinator: data.connectConfig?.connectionsCoordinator ?? '',
           accountant: data.connectConfig?.accountant ?? '',
+          textingNumber: data.connectConfig?.textingNumber ?? '',
           loading: false,
         })
       },

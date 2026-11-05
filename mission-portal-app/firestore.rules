@@ -113,16 +113,20 @@ service cloud.firestore {
     // A request to be added to the event and meeting texting list.
     //
     // One document per person, keyed by their uid, holding a phone number they
-    // typed during sign-up. It is read by textingListDigest through the Admin
-    // SDK, which these rules do not apply to, and by admins for support — so
-    // no client read is granted to the person who wrote it either. A phone
-    // number is worth less exposure than an email address, not more.
+    // typed (at sign-up, on the Connect tab, or told Miriam). It is read by
+    // textingListDigest through the Admin SDK, which these rules do not apply
+    // to, by admins for support, and by the person themselves — never by
+    // anyone else. A phone number is worth less exposure than an email
+    // address, not more.
     //
     // Writable only by its subject and only as a pending request: `status` is
     // what the digest clears once the Connections Coordinator has it, and a
     // client that could set it would silently drop itself from the list.
     match /textingListSignups/{uid} {
-      allow read: if isAdmin();
+      // Its subject reads it back too, and no one else: the Connect tab and
+      // Miriam show them the number they asked with, and whether it has gone
+      // to the Connections Coordinator yet.
+      allow read: if isSelf(uid) || isAdmin();
       allow create: if isSelf(uid) && request.resource.data.status == 'pending';
       allow update: if isSelf(uid)
         && request.resource.data.status == 'pending'

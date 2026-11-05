@@ -16,6 +16,8 @@ import { useUsersStore } from '@/stores/usersStore'
 import type { CarpoolCarData } from '@/types/events'
 import { appToolsFor } from './appTools'
 import { canBeMessaged } from '@/lib/roles'
+import { mySignup, textingNumber } from '@/lib/textingListDb'
+import { useConfigStore } from '@/stores/configStore'
 import {
   allAnnouncements,
   foodSheet,
@@ -99,6 +101,9 @@ export function hereNow(briefedFoodRef: {
       profile ? announcementsShown(await allAnnouncements(), profile, todayStr()) : [],
     names: () => new Map(useUsersStore.getState().users.map((u) => [String(u.uid), u.displayName])),
     rooms: () => myRooms(uid),
+    textingSignup: () => mySignup(uid),
+    // As loaded, where it is; else read.
+    textingNumber: async () => useConfigStore.getState().textingNumber || (await textingNumber()),
     // As the message card finds them (actions: send_message): anyone who has Messages.
     messageable: () =>
       useUsersStore

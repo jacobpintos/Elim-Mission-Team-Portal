@@ -9,6 +9,11 @@ export interface OrgModule {
   name: string
   /** Sections of its own in the admin area, after the app's. */
   adminSections: AdminSection[]
+  /**
+   * The number its texting list's texts come from, E.164: who to text STOP
+   * to. Said until an admin sets another (Admin → Leadership Team).
+   */
+  textingNumber?: string
   /** Its features, each on or off. */
   features: {
     /**

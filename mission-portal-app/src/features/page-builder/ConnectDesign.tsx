@@ -36,10 +36,13 @@ const lines = (text: string | undefined) =>
 export function ConnectDesign({
   blocks,
   top,
+  afterHero,
 }: {
   blocks: PageBlock[]
   /** Above the header: the admins' Edit Page button. */
   top?: ReactNode
+  /** Just below the header: the texting list sign-up (features/connect). */
+  afterHero?: ReactNode
 }) {
   const colors = useThemeColors()
   const primary = colors.primary
@@ -118,6 +121,8 @@ export function ConnectDesign({
           </XStack>
         ) : null}
       </BrandHero>
+
+      {afterHero}
 
       {/* Who the church is, in its own words. */}
       {layout.tagline?.text ? (

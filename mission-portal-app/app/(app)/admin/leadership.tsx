@@ -12,7 +12,10 @@ import { audit } from '@/lib/audit'
 import { useUIStore } from '@/stores/uiStore'
 import { Avatar } from '@/components/ui/Avatar'
 import { isMember } from '@/lib/roles'
+import { formatPhone, normalizePhone } from '@/lib/textingList'
+import { DEFAULT_TEXTING_NUMBER } from '@/lib/textingListDb'
 import { useThemeStore } from '@/stores/themeStore'
+import { useThemeColors } from '@/theme/useThemeColors'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
 export default function AdminLeadership() {
@@ -20,10 +23,14 @@ export default function AdminLeadership() {
   const { profile } = useAuthStore()
   const { toast } = useUIStore()
   const { theme } = useThemeStore()
+  const colors = useThemeColors()
 
   const [leadershipTeam, setLeadershipTeam] = useState<string[]>([])
   const [coordinator, setCoordinator] = useState('')
   const [accountant, setAccountantState] = useState('')
+  // The number the texting list's texts come from, as saved, and as typed.
+  const [textingNumber, setTextingNumber] = useState('')
+  const [numberDraft, setNumberDraft] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const titleDraft = useRef<Record<string, string>>({})
@@ -40,6 +47,7 @@ export default function AdminLeadership() {
       setLeadershipTeam(team.map((v: unknown) => String(v)))
       setCoordinator(String(data?.connectConfig?.connectionsCoordinator ?? ''))
       setAccountantState(String(data?.connectConfig?.accountant ?? ''))
+      setTextingNumber(String(data?.connectConfig?.textingNumber ?? ''))
       setLoading(false)
     })
     return () => unsub()
@@ -148,6 +156,35 @@ export default function AdminLeadership() {
     }
   }
 
+  /**
+   * The number the texts come from: what people are told to text STOP to, on
+   * the Connect tab and by Miriam. The texts are sent by another service —
+   * this is only said, never texted from. '' clears it.
+   */
+  const saveTextingNumber = async () => {
+    const typed = (numberDraft ?? '').trim()
+    const next = typed ? normalizePhone(typed) : ''
+    if (next === null) {
+      toast('That isn’t a US phone number — include the area code.', 'error')
+      return
+    }
+    setSaving(true)
+    try {
+      await updateDoc(doc(db, 'config', 'main'), { 'connectConfig.textingNumber': next })
+      await audit(
+        'leadership.textingNumber',
+        next ? `Texting list number set to ${formatPhone(next)}` : 'Texting list number cleared',
+        profile?.displayName ?? ''
+      )
+      setNumberDraft(null)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save'
+      toast(message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const toggleMember = async (uid: string) => {
     let updated: string[]
     if (leadershipTeam.includes(uid)) {
@@ -218,6 +255,60 @@ export default function AdminLeadership() {
             ? `${users.find((u) => u.uid === coordinator)?.displayName ?? coordinator} receives the daily list of people asking to join the texting list.`
             : 'Nobody holds this yet. Requests to join the texting list are held until someone does. Use “Make Coordinator” on a leadership member below.'}
         </Text>
+      </YStack>
+
+      <YStack
+        backgroundColor="$surface"
+        borderRadius="$3"
+        padding="$3"
+        gap="$1.5"
+        borderWidth={1}
+        borderColor="$borderColor"
+      >
+        <Text fontSize="$3" fontWeight="700">
+          Texting list number
+        </Text>
+        <Text fontSize="$2" color="$gray10">
+          The number the texts come from. People are told to text STOP to it to stop them — on the
+          Connect tab, and by Miriam.
+          {textingNumber
+            ? ''
+            : DEFAULT_TEXTING_NUMBER
+              ? ` Until another is set here, it’s ${formatPhone(DEFAULT_TEXTING_NUMBER)}.`
+              : ' Until it’s set, they’re told to reply STOP to any of the texts.'}
+        </Text>
+        <XStack gap="$2" alignItems="center">
+          <RNTextInput
+            value={numberDraft ?? (textingNumber ? formatPhone(textingNumber) : '')}
+            onChangeText={setNumberDraft}
+            placeholder={
+              DEFAULT_TEXTING_NUMBER ? formatPhone(DEFAULT_TEXTING_NUMBER) : '(515) 555-0100'
+            }
+            placeholderTextColor={colors.textMuted}
+            keyboardType="phone-pad"
+            accessibilityLabel="The number the texting list's texts come from"
+            style={{
+              flex: 1,
+              fontSize: 15,
+              color: colors.text,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+              paddingVertical: 4,
+            }}
+          />
+          {numberDraft !== null ? (
+            <Button
+              size="$2"
+              onPress={saveTextingNumber}
+              backgroundColor={theme.primary}
+              disabled={saving}
+            >
+              <Text color="white" fontSize="$2" fontWeight="600">
+                Save
+              </Text>
+            </Button>
+          ) : null}
+        </XStack>
       </YStack>
 
       <YStack

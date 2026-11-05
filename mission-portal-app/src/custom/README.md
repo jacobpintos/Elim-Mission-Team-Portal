@@ -55,6 +55,10 @@ and filled first when it goes so fewer cars are needed. It is asked about each
 time a carpool is planned ("Bring the Elim Van?"), and never brought in another
 vehicle's place when a driver can't drive.
 
+The texting list's texts come from (319) 249-0049 (`textingNumber` in
+`theWell/index.ts`): what the Connect tab and Miriam tell people to text STOP
+to. An admin can set another in Admin → Leadership Team.
+
 ## Adding an organization
 
 1. Add a folder beside `theWell/` with an `index.ts` exporting its `OrgModule`.

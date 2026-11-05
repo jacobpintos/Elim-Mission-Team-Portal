@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
+  phoneIn,
+  stopSaid,
   normalizePhone,
   isValidPhone,
   formatPhone,
@@ -93,5 +95,22 @@ describe('the coordinator’s message', () => {
     expect(msg).toContain('2 people want')
     expect(msg).toContain('Mitch Moylan — (319) 555-1234')
     expect(msg).toContain('Sunny Singh — (319) 555-9876')
+  })
+})
+
+describe('a number said among other words', () => {
+  it('takes every digit said, in whatever pieces', () => {
+    expect(phoneIn('it’s 515-555-1234')).toBe('+15155551234')
+    expect(phoneIn('my number is (515) 555 1234 thanks')).toBe('+15155551234')
+    expect(phoneIn('1 515 555 1234')).toBe('+15155551234')
+    expect(phoneIn('add me to the texting list')).toBeNull()
+    expect(phoneIn('555 1234')).toBeNull()
+  })
+
+  it('says to text STOP to the number they come from, or to reply STOP', () => {
+    expect(stopSaid('+15155550100')).toBe(
+      'To stop the texts, text STOP to (515) 555-0100 — the number they come from.'
+    )
+    expect(stopSaid('')).toBe('To stop the texts, reply STOP to any of them.')
   })
 })

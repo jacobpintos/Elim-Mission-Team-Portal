@@ -66,3 +66,20 @@ export function signupDigestMessage(signups: { displayName: string; phone: strin
   const lines = signups.map((s) => signupLine(s.displayName, s.phone)).join('\n')
   return `${who} to join the texting list:\n${lines}`
 }
+
+/**
+ * A phone number said or typed in among other words — "it's 515-555-1234",
+ * "my number is (515) 555 1234" — or null when there isn't plainly one.
+ * Every digit said is taken together, so a number said in pieces is whole.
+ */
+export function phoneIn(said: string): string | null {
+  return normalizePhone(said.replace(/[^\d]/g, ''))
+}
+
+/** What's said of how to stop the texts: STOP to the number they come from. */
+export function stopSaid(textingNumber: string): string {
+  const from = textingNumber ? normalizePhone(textingNumber) : null
+  return from
+    ? `To stop the texts, text STOP to ${formatPhone(from)} — the number they come from.`
+    : 'To stop the texts, reply STOP to any of them.'
+}
