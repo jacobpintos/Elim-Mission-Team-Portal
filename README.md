@@ -64,7 +64,7 @@ For the functions, run `cd functions && npm ci && npm run build`.
 |---|---|---|
 | **CI** | Every push to `main` or `claude/**`, and on pull requests | Typecheck, lint, unit tests, rules tests, web build |
 | **Deploy Web App** | A push to `main` that changes the app | Builds the web app and deploys it to Firebase Hosting, along with the Storage rules |
-| **Deploy Firebase** | A push to `main` that changes `functions/` or the rules files (or by hand) | Deploys Cloud Functions, Firestore rules and Storage rules |
+| **Deploy Firebase** | A push to `main` that changes `functions/` or the rules files (or by hand) | Uploads Miriam's model to Cloud Storage, then deploys Cloud Functions, Firestore rules and Storage rules |
 | **EAS Build** | By hand | Builds the iPhone and Android apps, and can submit them to the stores |
 
 ---

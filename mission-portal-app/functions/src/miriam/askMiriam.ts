@@ -57,8 +57,16 @@ import { meantInstead } from './notMeant'
 import { aboutScripture } from './own/faith'
 import { withinLimit, type UsageLimit } from '../utils/usageLimit'
 import { ALLOW_CLAUDE, askBeforeClaude } from './consent'
+import { loadModel } from './model'
 
 if (!admin.apps.length) admin.initializeApp()
+
+// Her model's files, fetched from Cloud Storage at cold start (./model), so the
+// first request doesn't wait for them. Only in askMiriam's own instances:
+// every function's instance loads this file, and the others don't need them.
+if (process.env.FUNCTION_TARGET === 'askMiriam') {
+  loadModel().catch((err: unknown) => logger.error('askMiriam: model not fetched at start', err))
+}
 
 /** Set with `firebase functions:secrets:set ANTHROPIC_API_KEY`. */
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY')
@@ -320,6 +328,11 @@ async function noteEvent(db: admin.firestore.Firestore, event: MiriamEvent): Pro
 async function answerRequest(req: CallableRequest, turn: TurnNote) {
   const uid = req.auth?.uid
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in to use Miriam.')
+  // Fetched at cold start (above). If that failed, this tries again.
+  await loadModel().catch((err: unknown) => {
+    logger.error('askMiriam: model not fetched', err)
+    throw new HttpsError('unavailable', 'Miriam couldn’t be reached. Try again.')
+  })
 
   // The person's own day, for "Friday" and "9/25": the server's is UTC.
   const today =

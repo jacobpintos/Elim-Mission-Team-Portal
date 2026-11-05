@@ -109,6 +109,23 @@ jobs:
           echo "MAIL_FROM=${{ secrets.MAIL_FROM || 'Mission Portal <noreply@yourdomain.com>' }}" >> mission-portal-app/functions/.env
           echo "MAIL_ADMIN_TO=${{ secrets.MAIL_ADMIN_TO || 'admin@yourdomain.com' }}" >> mission-portal-app/functions/.env
 
+      # Miriam's model (functions/models/minilm, about 25 MB) is left out of the
+      # functions' source (firebase.json: functions.ignore). Before, a copy went
+      # into every function, about 1.2 GB for each deploy. Now it is kept in Cloud
+      # Storage, in the default bucket, and askMiriam, miriamOwnAdmin and
+      # readChurchSite fetch it from there (functions/src/miriam/model). It is
+      # uploaded before the deploy so the new functions find it. Files already
+      # there unchanged aren't uploaded again. If this step fails, the functions
+      # aren't deployed: without the model, Miriam can't read requests.
+      - name: Upload Miriam's model
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.deploy_functions == true) ||
+          (github.event_name == 'push' && steps.changed.outputs.functions != '0')
+        run: |
+          npm run build
+          node lib/scripts/uploadModel.js "$(node -p "require('../../firebase.json').storage[0].bucket")"
+        working-directory: mission-portal-app/functions
+
       # Deploy Cloud Functions only when functions source changed (or manually requested).
       - name: Deploy Cloud Functions
         if: |

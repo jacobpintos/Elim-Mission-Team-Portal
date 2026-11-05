@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
 import type { OwnDb } from './own/learn'
 import { readSite, storeSite } from './own/site'
+import { loadModel } from './model'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -20,6 +21,8 @@ export const readChurchSite = onSchedule(
     timeoutSeconds: 540,
   },
   async () => {
+    // Each passage's meaning is worked out with her model (./model).
+    await loadModel()
     const read = await readSite()
     const kept = await storeSite(admin.firestore() as unknown as OwnDb, read)
     logger.info('readChurchSite', {

@@ -1,6 +1,5 @@
-import { readFileSync } from 'fs'
-import { join } from 'path'
 import { embed, similarity } from './encoder'
+import { modelFile } from './modelFiles'
 import { SEEDS, asRead, asShown, type Skill } from './skills'
 import { unpackVector } from './vectors'
 
@@ -38,9 +37,7 @@ const NEAREST = 3
 let stored: Record<string, string> | null = null
 /** A meaning worked out ahead of time (scripts/miriam-model/seeds.js), by its text, or null. */
 export function storedMeaning(text: string): Float32Array | null {
-  stored ??= JSON.parse(
-    readFileSync(join(__dirname, '..', '..', '..', 'models', 'minilm', 'seedVectors.json'), 'utf8')
-  ) as Record<string, string>
+  stored ??= JSON.parse(modelFile('seedVectors.json').toString('utf8')) as Record<string, string>
   return stored[text] ? unpackVector(stored[text]) : null
 }
 

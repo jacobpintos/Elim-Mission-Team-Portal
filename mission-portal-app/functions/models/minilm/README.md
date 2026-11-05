@@ -25,3 +25,15 @@ never computes them at startup. After you change the examples, run:
     npm --prefix functions run build && node scripts/miriam-model/seeds.js
 
 A test fails until every example has its meaning here.
+
+**Not deployed with the functions.** This folder is left out of the functions'
+source (`firebase.json`: `functions.ignore`). Before, a copy went into every
+function. The Deploy Firebase workflow uploads `model.bin`, `vocab.txt` and
+`seedVectors.json` to the default Storage bucket, under `miriam/models/minilm/`
+(`src/scripts/uploadModel.ts`), before it deploys the functions. askMiriam
+fetches them at cold start. miriamOwnAdmin and readChurchSite fetch them the
+first time they need them (`src/miriam/model.ts`). The tests, the scripts and
+the emulator still read them from here. If you deploy the functions by hand
+after changing a file here, upload it first:
+
+    npm --prefix functions run build && node functions/lib/scripts/uploadModel.js mission-team-portal.firebasestorage.app

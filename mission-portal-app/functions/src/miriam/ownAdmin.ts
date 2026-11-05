@@ -20,10 +20,13 @@ import { CHURCH_SITE, readSite, SITE_DOC, storeSite } from './own/site'
 import { ASKED, groupAsked } from './own/asked'
 import { EVENTS, MAX_EVENTS, MAX_FOOD_EVENTS, summarize } from './stats'
 import { packVector, unpackVector } from './own/vectors'
+import { loadModel } from './model'
 
 /** The questions read for one look at Analytics, at most: the latest. */
 const MAX_ASKED = 5000
 const DAY_MS = 24 * 60 * 60 * 1000
+/** The actions that work out meanings (./own/encoder: embed). */
+const USES_MODEL = new Set(['asked', 'readSite', 'teach', 'retaught'])
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -51,6 +54,8 @@ export const miriamOwnAdmin = onCall(
     }
     const ownDb = db as unknown as OwnDb
     const action = String(req.data?.action ?? '')
+    // These work out meanings with her model, fetched the first time one is asked for (./model).
+    if (USES_MODEL.has(action)) await loadModel()
     const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
     if (action === 'list') {

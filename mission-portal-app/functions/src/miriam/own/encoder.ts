@@ -15,11 +15,7 @@
  * (scripts/miriam-model/convert.py); src/lib/miriamEncoder.test.ts checks it
  * against the original's own output.
  */
-import { readFileSync } from 'fs'
-import { join } from 'path'
-
-/** Where the model's files are, from here (src/ or lib/, the same depth). */
-const MODEL_DIR = join(__dirname, '..', '..', '..', 'models', 'minilm')
+import { modelFile } from './modelFiles'
 
 /** Tokens read at most, [CLS] and [SEP] included, as the model was trained. */
 export const MAX_TOKENS = 128
@@ -77,8 +73,8 @@ interface TensorEntry {
   scales?: number
 }
 
-function read(dir: string): Model {
-  const buf = readFileSync(join(dir, 'model.bin'))
+function read(): Model {
+  const buf = modelFile('model.bin')
   if (buf.toString('latin1', 0, 4) !== 'MML1') throw new Error('Not a Miriam model file')
   const headerLen = buf.readUInt32LE(4)
   const header = JSON.parse(buf.toString('utf8', 8, 8 + headerLen)) as {
@@ -115,7 +111,8 @@ function read(dir: string): Model {
     }
   }
   const vocab = new Map<string, number>()
-  readFileSync(join(dir, 'vocab.txt'), 'utf8')
+  modelFile('vocab.txt')
+    .toString('utf8')
     .split('\n')
     .forEach((w, i) => {
       const word = w.replace(/\r$/, '')
@@ -159,9 +156,12 @@ function read(dir: string): Model {
 }
 
 let loaded: Model | null = null
-/** Read once for each server instance, when first needed (about 24 MB). */
+/**
+ * Read once for each server instance, when first needed (about 24 MB). A
+ * deployed function fetches the files first (../model: loadModel).
+ */
 function model(): Model {
-  loaded ??= read(MODEL_DIR)
+  loaded ??= read()
   return loaded
 }
 

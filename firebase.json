@@ -16,6 +16,14 @@
   },
   "functions": {
     "source": "mission-portal-app/functions",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "*.local",
+      "models"
+    ],
     "predeploy": ["npm --prefix mission-portal-app/functions run build"]
   },
   "firestore": {
