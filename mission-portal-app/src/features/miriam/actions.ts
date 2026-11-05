@@ -304,10 +304,7 @@ async function joinTextingList(profile: UserProfile, input: Record<string, unkno
   return {
     kind: 'ready',
     title: 'Ask to join the texting list?',
-    details: [
-      `Texts to ${formatPhone(phone)}`,
-      'The Connections Coordinator gets the day’s requests at 5 PM and adds you.',
-    ],
+    details: [`Texts to ${formatPhone(phone)}`, 'The Connections Coordinator adds you.'],
     confirm: 'Ask to join',
     run: async () => {
       await askToJoin(String(profile.uid), profile.displayName ?? '', phone)

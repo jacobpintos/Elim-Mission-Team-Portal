@@ -4,7 +4,7 @@ import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { RecipientPicker } from '@/components/ui/RecipientPicker'
 import { YStack, XStack, Text, Input } from 'tamagui'
-import { Stack, router, useLocalSearchParams } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { collection } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { db, functions } from '@/lib/firebase'
@@ -39,6 +39,7 @@ import { WithDictation } from '@/components/ui/Dictation'
 import { RemindersSection } from '@/features/reminders/RemindersSection'
 import { ReimbursementFormModal } from '@/features/reimbursements/ReimbursementFormModal'
 import { ReimbursementsSection } from '@/features/reimbursements/ReimbursementsSection'
+import { TextingRequestsSection } from '@/features/connect/TextingRequestsSection'
 
 interface GroupDoc {
   id: string
@@ -1705,6 +1706,8 @@ export default function Assignments() {
             {adminView === 'mine' && uid && (filter === 'all' || filter === 'pending') ? (
               <RemindersSection uid={String(uid)} />
             ) : null}
+            {/* For the Connections Coordinator: who asked to join the texting list, still to add. */}
+            {adminView === 'mine' && uid ? <TextingRequestsSection /> : null}
             {/* Their reimbursements — and, for the Accountant, the tally and outside bills. */}
             {adminView === 'mine' && uid ? (
               <ReimbursementsSection

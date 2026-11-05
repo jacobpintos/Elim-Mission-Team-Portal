@@ -1854,9 +1854,9 @@ async function textingHere(said: string, here: Here, talk: Talk): Promise<boolea
   talk.thinking()
   const mine = await here.textingSignup()
   const asked = mine
-    ? mine.status === 'sent'
-      ? `Your request, with ${formatPhone(mine.phone)}, went to the Connections Coordinator to add you.`
-      : `You’ve asked to join with ${formatPhone(mine.phone)} — the Connections Coordinator adds you with the day’s requests.`
+    ? mine.status === 'added'
+      ? `You’re on the texting list, with ${formatPhone(mine.phone)}.`
+      : `You’ve asked to join with ${formatPhone(mine.phone)} — the Connections Coordinator adds you.`
     : null
   if (ask === 'status') {
     talk.say(

@@ -95,6 +95,7 @@ describe('the coordinator’s message', () => {
     expect(msg).toContain('2 people want')
     expect(msg).toContain('Mitch Moylan — (319) 555-1234')
     expect(msg).toContain('Sunny Singh — (319) 555-9876')
+    expect(msg).toContain('on your Tasks too')
   })
 })
 

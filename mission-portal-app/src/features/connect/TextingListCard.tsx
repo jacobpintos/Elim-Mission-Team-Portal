@@ -166,9 +166,9 @@ export function TextingListCard() {
       ) : (
         <YStack gap={6}>
           <Text color={colors.text} fontSize="$3">
-            {signup.status === 'sent'
-              ? `Your request, with ${formatPhone(signup.phone)}, went to the Connections Coordinator${signup.at ? ` on ${FD(new Date(signup.at).toISOString().slice(0, 10))}` : ''} to add you.`
-              : `You’ve asked to join with ${formatPhone(signup.phone)}. The Connections Coordinator gets the day’s requests at 5 PM and adds you.`}
+            {signup.status === 'added'
+              ? `You’re on the texting list, with ${formatPhone(signup.phone)}.`
+              : `You’ve asked to join with ${formatPhone(signup.phone)}${signup.at ? ` on ${FD(new Date(signup.at).toISOString().slice(0, 10))}` : ''}. The Connections Coordinator adds you.`}
           </Text>
           <Pressable
             onPress={() => {

@@ -64,7 +64,7 @@ export function signupLine(displayName: string, phone: string): string {
 export function signupDigestMessage(signups: { displayName: string; phone: string }[]): string {
   const who = signups.length === 1 ? '1 person wants' : `${signups.length} people want`
   const lines = signups.map((s) => signupLine(s.displayName, s.phone)).join('\n')
-  return `${who} to join the texting list:\n${lines}`
+  return `${who} to join the texting list:\n${lines}\nThey’re on your Tasks too — mark each added once they are.`
 }
 
 /**

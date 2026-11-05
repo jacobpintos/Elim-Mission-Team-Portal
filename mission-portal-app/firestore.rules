@@ -9,6 +9,15 @@ service cloud.firestore {
     }
     function isSelf(uid) { return isSignedIn() && request.auth.uid == uid; }
 
+    // Who holds the Connections Coordinator identifier (Admin → Leadership
+    // Team): the one the texting list's requests are for.
+    function isCoordinator() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/config/main) &&
+        get(/databases/$(database)/documents/config/main).data
+          .get('connectConfig', {}).get('connectionsCoordinator', '') == request.auth.uid;
+    }
+
     // The one account that sits above admin.
     //
     // A literal uid rather than a role: roles live in this very collection and
@@ -119,18 +128,25 @@ service cloud.firestore {
     // anyone else. A phone number is worth less exposure than an email
     // address, not more.
     //
-    // Writable only by its subject and only as a pending request: `status` is
-    // what the digest clears once the Connections Coordinator has it, and a
-    // client that could set it would silently drop itself from the list.
+    // Writable by its subject only as a pending request: `status` is what the
+    // digest clears once the Connections Coordinator has it, and a client that
+    // could set it would silently drop itself from the list.
+    //
+    // The Connections Coordinator (and an admin) reads them all — the people
+    // still to be added are on their Tasks — and marks one added once it is,
+    // or takes that back: the status and when and by whom, nothing else.
     match /textingListSignups/{uid} {
-      // Its subject reads it back too, and no one else: the Connect tab and
-      // Miriam show them the number they asked with, and whether it has gone
-      // to the Connections Coordinator yet.
-      allow read: if isSelf(uid) || isAdmin();
+      // Its subject reads it back too: the Connect tab and Miriam show them
+      // the number they asked with, and how far it has got.
+      allow read: if isSelf(uid) || isAdmin() || isCoordinator();
       allow create: if isSelf(uid) && request.resource.data.status == 'pending';
-      allow update: if isSelf(uid)
+      allow update: if (isSelf(uid)
         && request.resource.data.status == 'pending'
-        && request.resource.data.uid == uid;
+        && request.resource.data.uid == uid)
+        || ((isCoordinator() || isAdmin())
+          && request.resource.data.status in ['added', 'sent', 'pending']
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'addedAt', 'addedBy']));
       allow delete: if isAdmin();
     }
 

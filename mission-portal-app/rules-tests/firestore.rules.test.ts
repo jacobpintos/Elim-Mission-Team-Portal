@@ -467,6 +467,42 @@ describe('textingListSignups — a request, not a subscription', () => {
       setDoc(doc(env.unauthenticatedContext().firestore(), 'textingListSignups', MEMBER), REQ)
     )
   })
+
+  describe('the Connections Coordinator', () => {
+    // Worship holds it here: anyone can, member or not an admin.
+    const COORDINATOR = WORSHIP
+    beforeEach(async () => {
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'config', 'main'), {
+          connectConfig: { connectionsCoordinator: COORDINATOR },
+        })
+        await setDoc(doc(ctx.firestore(), 'textingListSignups', MEMBER), REQ)
+      })
+    })
+
+    it('reads every request — the people still to add, on their Tasks', async () => {
+      await assertSucceeds(getDoc(doc(as(COORDINATOR), 'textingListSignups', MEMBER)))
+      await assertSucceeds(getDocs(collection(as(COORDINATOR), 'textingListSignups')))
+      // Someone who isn't the coordinator: still no one else's.
+      await assertFails(getDocs(collection(as(OUTSIDER), 'textingListSignups')))
+    })
+
+    it('marks one added, and takes it back — nothing else', async () => {
+      const ref = doc(as(COORDINATOR), 'textingListSignups', MEMBER)
+      await assertSucceeds(updateDoc(ref, { status: 'added', addedAt: 1, addedBy: COORDINATOR }))
+      // Taken back to where it was.
+      await assertSucceeds(updateDoc(ref, { status: 'pending' }))
+      await assertFails(updateDoc(ref, { status: 'added', phone: '+13195550000' }))
+      await assertFails(updateDoc(ref, { status: 'gone' }))
+      // Nor anyone else.
+      await assertFails(
+        updateDoc(doc(as(OUTSIDER), 'textingListSignups', MEMBER), { status: 'added' })
+      )
+      await assertFails(
+        updateDoc(doc(as(MEMBER), 'textingListSignups', MEMBER), { status: 'added' })
+      )
+    })
+  })
 })
 
 describe('contentReports — the moderation queue', () => {

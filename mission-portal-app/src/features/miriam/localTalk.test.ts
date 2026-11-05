@@ -88,7 +88,7 @@ const ALL_TOOLS = [
 interface Setup {
   tools?: string[]
   /** Their texting list request: null for none. */
-  signup?: { phone: string; status: 'pending' | 'sent'; at: number } | null
+  signup?: { phone: string; status: 'pending' | 'sent' | 'added'; at: number } | null
   /** The number the texts come from. */
   textingNumber?: string
   /** Everyone they can message; by default, everyone named, sex unsaid. */
@@ -1315,14 +1315,12 @@ describe('the texting list', () => {
     const signup = { phone: '+15155551234', status: 'pending' as const, at: 0 }
     const say = conversation({ signup })
     expect(await say('add me to the texting list')).toEqual([
-      'ask: You’ve asked to join with (515) 555-1234 — the Connections Coordinator adds you with the day’s requests. To use a different number, say it — or “no”.',
+      'ask: You’ve asked to join with (515) 555-1234 — the Connections Coordinator adds you. To use a different number, say it — or “no”.',
     ])
     expect(await say('515-555-9999')).toEqual([join('+15155559999')])
     expect(
-      await conversation({ signup: { ...signup, status: 'sent' } })('am I on the texting list')
-    ).toEqual([
-      'say: Your request, with (515) 555-1234, went to the Connections Coordinator to add you.',
-    ])
+      await conversation({ signup: { ...signup, status: 'added' } })('am I on the texting list')
+    ).toEqual(['say: You’re on the texting list, with (515) 555-1234.'])
     expect(await conversation({ signup: null })('am I on the texting list')).toEqual([
       'say: You haven’t asked to join the texting list. You can on the Connect tab — or ask me to add you.',
     ])

@@ -40,7 +40,7 @@ export function signupDigestMessage(signups: Signup[]): string {
   const lines = signups
     .map((s) => `${s.displayName.trim() || 'Someone'} — ${formatPhone(s.phone)}`)
     .join('\n')
-  return `${who} to join the texting list:\n${lines}`
+  return `${who} to join the texting list:\n${lines}\nThey’re on your Tasks too — mark each added once they are.`
 }
 
 /** Who holds the Connections Coordinator identifier, or null if nobody does. */
