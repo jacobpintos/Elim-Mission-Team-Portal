@@ -15,6 +15,7 @@ import { useTasksStore } from '@/stores/tasksStore'
 import { useUsersStore } from '@/stores/usersStore'
 import type { CarpoolCarData } from '@/types/events'
 import { appToolsFor } from './appTools'
+import { canBeMessaged } from '@/lib/roles'
 import {
   allAnnouncements,
   foodSheet,
@@ -98,6 +99,12 @@ export function hereNow(briefedFoodRef: {
       profile ? announcementsShown(await allAnnouncements(), profile, todayStr()) : [],
     names: () => new Map(useUsersStore.getState().users.map((u) => [String(u.uid), u.displayName])),
     rooms: () => myRooms(uid),
+    // As the message card finds them (actions: send_message): anyone who has Messages.
+    messageable: () =>
+      useUsersStore
+        .getState()
+        .users.filter((u) => canBeMessaged(u) && !!u.displayName)
+        .map((u) => ({ uid: String(u.uid), name: u.displayName, sex: u.sex ?? null })),
     latest: (room, n) => latestMessages(room, n, profile),
     now: () => Date.now(),
     briefedFood: () =>

@@ -3,7 +3,9 @@ import type { Announcement, CarpoolCarData, Message, PostPage, Room, Task } from
 import { visibleTabs } from '@/lib/roles'
 import { isTabVisible } from '@/lib/featureFlags'
 import { postsAsked, postsFor, postsSaid } from '@/lib/miriamPosts'
-import type { UserProfile } from '@/types/user'
+import type { Sex, UserProfile } from '@/types/user'
+import { messageTargets, type MessageTarget } from '@/lib/miriamAppData'
+import { sendAsked, sendSplit, sendText } from '@/lib/miriamSend'
 import { seesTeamSide, type EventInstance } from '../../../functions/src/miriam/data'
 import { FD } from '@/lib/format'
 import { foodStillOpenSaid, foodTakenSaid, stillOpen } from '@/lib/miriamActions'
@@ -172,6 +174,8 @@ export interface Here {
   names: () => ReadonlyMap<string, string>
   /** Their conversations, most recently active first. */
   rooms: () => Promise<Room[]>
+  /** Everyone they can message, by name — and their sex, for "he" and "she" said of them. */
+  messageable: () => { uid: string; name: string; sex?: Sex | null }[]
   latest: (room: Room, n: number) => Promise<Message[]>
   now: () => number
   /** The food today's briefing showed open, by event, and the item it suggested. */
@@ -196,6 +200,7 @@ export async function talkHere(said: string, here: Here, talk: Talk): Promise<bo
   // is no list of them.
   return (
     (await notificationsHere(said, here, talk)) ||
+    (await sendHere(said, here, talk)) ||
     (await notesHere(said, here, talk)) ||
     (await directionsHere(said, here, talk)) ||
     (await remindersHere(said, here, talk)) ||
@@ -1819,6 +1824,83 @@ async function remindFrom(
   })
   return true
 }
+
+// --- A message sent --------------------------------------------------------------------
+
+/**
+ * "Tell Kolton he's snug", "let Sam know I'm running late", "message the
+ * worship team": who it's for, found among their conversations and everyone
+ * they can message, and the message as it should reach them ("You're snug")
+ * — shown to confirm, as every message is. No message said: asked for.
+ *
+ * A name that fits no one, or a message that can't be put plainly ("they"
+ * said of one person) is left to Claude, which can tell what was meant.
+ */
+async function sendHere(said: string, here: Here, talk: Talk): Promise<boolean> {
+  if (!here.tools.includes('send_message') || !here.profile) return false
+  const ask = sendAsked(said)
+  if (!ask) return false
+  const uid = String(here.profile.uid)
+  const rooms = await here.rooms().catch(() => null)
+  if (!rooms) return false
+  const people = here.messageable()
+  /** Those a name fits, by every word of it: "Sam Holub", "Sam" — never "Sa". */
+  const fitting = (name: string): MessageTarget[] => {
+    const asked = nameWords(name)
+    if (!asked.length) return []
+    return messageTargets(rooms, people, uid, name).filter((t) => {
+      const have = nameWords(t.name)
+      return asked.every((w) => have.includes(w))
+    })
+  }
+  const split = sendSplit(ask, (name) => fitting(name).length > 0)
+  if (!split) return false
+  const targets = fitting(split.to)
+  // One of them, sure: theirs by id. Several: the card asks which (actions: send_message).
+  const one = targets.length === 1 ? targets[0] : null
+  const sexOf = (t: MessageTarget) =>
+    t.kind === 'person' ? (people.find((p) => p.uid === t.uid)?.sex ?? null) : null
+  const sexes = new Set(targets.map(sexOf))
+  const to = {
+    group: targets.every((t) => t.kind === 'group'),
+    sex: sexes.size === 1 ? [...sexes][0] : null,
+  }
+  if (targets.some((t) => t.kind === 'group') && !to.group) return false
+  const name = one?.name ?? split.to
+  const input = (text: string) => ({
+    conversation: name,
+    text,
+    ...(one?.kind === 'person' ? { person_id: one.uid } : {}),
+    ...(one?.kind === 'group' ? { room_id: String(one.room.id) } : {}),
+  })
+  const text = sendText(split.message, ask.form, to)
+  if (text === null) return false
+  if (text) {
+    await talk.offer('send_message', input(text))
+    return true
+  }
+  // Who, but not what: asked, and the answer is the message.
+  talk.ask(`What should I tell ${name}?`, async (reply, t) => {
+    if (neverMind(reply, t)) return true
+    const said = sendText(
+      reply.replace(/^(?:tell\s+(?:him|her|them)|say)\b[\s,:]*(?:that\b\s*)?/i, ''),
+      'said',
+      to
+    )
+    if (!said) return false
+    await t.offer('send_message', input(said))
+    return true
+  })
+  return true
+}
+
+/** A name's words, as they're matched: "Kolton Ruiz" — kolton, ruiz. */
+const nameWords = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
 
 // --- Announcements and messages, read out ----------------------------------------------
 

@@ -87,6 +87,8 @@ const ALL_TOOLS = [
 
 interface Setup {
   tools?: string[]
+  /** Everyone they can message; by default, everyone named, sex unsaid. */
+  people?: { uid: string; name: string; sex?: 'male' | 'female' | null }[]
   /** What today's briefing showed open, and suggested. */
   briefed?: { eventKey: string; suggestion: string; open: string[] }[]
   tasksReady?: boolean
@@ -192,6 +194,7 @@ function conversation(setup: Setup = {}) {
       ] as Announcement[],
     names: () => names,
     rooms: async () => rooms,
+    messageable: () => setup.people ?? [...names].map(([uid, name]) => ({ uid, name, sex: null })),
     latest: async (r) => setup.messages?.[String(r.id)] ?? [],
     now: () => NOW,
     briefedFood: () => setup.briefed ?? [],
@@ -1157,5 +1160,111 @@ describe('a reminder before every event', () => {
     const say = conversation({ tools })
     const said = await say('Remind me an hour before youth night')
     expect(said[0]).toMatch(/^remind /)
+  })
+})
+
+describe('a message sent, worked out here', () => {
+  const people = [
+    { uid: 'me', name: 'Jacob Pintos', sex: 'male' as const },
+    { uid: 'k', name: 'Kolton Ruiz', sex: 'male' as const },
+    { uid: 'sh', name: 'Sam Holub', sex: 'male' as const },
+    { uid: 'sj', name: 'Sam Jones', sex: 'male' as const },
+    { uid: 'e', name: 'Emily Reed', sex: 'female' as const },
+  ]
+  const rooms = [
+    room('dmk', ['me', 'k']),
+    room('wt', ['me', 'k', 'e'], 'Worship Team'),
+    room('all', ['me', 'k', 'e', 'sh'], 'All Chat'),
+  ]
+  const chat = () => conversation({ tools: [...ALL_TOOLS, 'send_message'], people, rooms })
+  const send = (input: Record<string, string>) => `offer send_message ${JSON.stringify(input)}`
+  const toKolton = (text: string) => send({ conversation: 'Kolton Ruiz', text, person_id: 'k' })
+
+  it('“tell Kolton he’s snug”: to him alone, as said to him', async () => {
+    expect(await chat()('Tell Kolton he’s snug')).toEqual([toKolton("You're snug")])
+    expect(await chat()('Hey Miriam, can you tell Kolton that he is snug')).toEqual([
+      toKolton('You are snug'),
+    ])
+  })
+
+  it('what they said themselves, as they said it', async () => {
+    expect(await chat()('let Kolton know I’m running late')).toEqual([toKolton("I'm running late")])
+    expect(await chat()('text Kolton thanks for driving tonight')).toEqual([
+      toKolton('Thanks for driving tonight'),
+    ])
+    expect(await chat()('send Kolton a message saying good job tonight')).toEqual([
+      toKolton('Good job tonight'),
+    ])
+    expect(await chat()('send a message to Kolton that we leave at 6')).toEqual([
+      toKolton('We leave at 6'),
+    ])
+  })
+
+  it('he, him and his said of him: you and your', async () => {
+    expect(await chat()('tell Kolton he always forgets his keys')).toEqual([
+      toKolton('You always forget your keys'),
+    ])
+    expect(await chat()('tell Kolton he needs to bring his guitar, I’ll pick him up at 5')).toEqual(
+      [toKolton("You need to bring your guitar, I'll pick you up at 5")]
+    )
+    expect(await chat()('tell Kolton he’s been great')).toEqual([toKolton("You've been great")])
+  })
+
+  it('her: you, or your before a thing', async () => {
+    const toEmily = (text: string) => send({ conversation: 'Emily Reed', text, person_id: 'e' })
+    expect(await chat()('tell Emily her car is ready and I’ll pick her up later')).toEqual([
+      toEmily("Your car is ready and I'll pick you up later"),
+    ])
+    // “He” said to Emily is someone else.
+    expect(await chat()('tell Emily he’s coming too')).toEqual([toEmily("He's coming too")])
+  })
+
+  it('something for them to do, a reminder, a request', async () => {
+    expect(await chat()('tell Kolton to bring his chairs')).toEqual([
+      toKolton('Please bring your chairs'),
+    ])
+    expect(await chat()('remind Kolton to bring his guitar')).toEqual([
+      toKolton('Don’t forget to bring your guitar'),
+    ])
+    expect(await chat()('ask Kolton to call me')).toEqual([toKolton('Could you call me?')])
+  })
+
+  it('a group chat by its name: they is them', async () => {
+    expect(await chat()('message the worship team saying they’re on at 7')).toEqual([
+      send({ conversation: 'Worship Team', text: "You're on at 7", room_id: 'wt' }),
+    ])
+  })
+
+  it('the whole name said, before the first word of it', async () => {
+    expect(await chat()('tell Sam Holub the van leaves at 6')).toEqual([
+      send({ conversation: 'Sam Holub', text: 'The van leaves at 6', person_id: 'sh' }),
+    ])
+    // Two Sams: the card asks which.
+    expect(await chat()('tell Sam the van leaves at 6')).toEqual([
+      send({ conversation: 'Sam', text: 'The van leaves at 6' }),
+    ])
+  })
+
+  it('no message said: asked for, and the answer sent', async () => {
+    const say = chat()
+    expect(await say('message Kolton')).toEqual(['ask: What should I tell Kolton Ruiz?'])
+    expect(await say('tell him he’s snug')).toEqual([toKolton("You're snug")])
+    const again = chat()
+    await again('message Kolton')
+    expect(await again('never mind')).toEqual(['say: Okay — nothing was changed.'])
+  })
+
+  it('left to Claude when it isn’t plain', async () => {
+    // A name that fits no one: misheard, perhaps.
+    expect(await chat()('tell Colton he’s snug')).toEqual(['(to Claude)'])
+    // “They” said of one person: them, or someone else?
+    expect(await chat()('tell Kolton they moved the meeting')).toEqual(['(to Claude)'])
+    // Not a message to anyone.
+    expect(
+      (await chat()('tell me my messages')).some((l) => l.startsWith('offer send_message'))
+    ).toBe(false)
+    expect(await chat()('tell everyone we start at 6')).toEqual(['(to Claude)'])
+    // Without Messages: never.
+    expect(await conversation({ people, rooms })('tell Kolton he’s snug')).toEqual(['(to Claude)'])
   })
 })
