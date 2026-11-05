@@ -10,6 +10,7 @@ import {
   liftAnswer,
   type Answer,
   type Block,
+  blockedAmong,
 } from '../../functions/src/blockedDates'
 import type { EventTemplate, Group } from '../../functions/src/miriam/data'
 
@@ -157,5 +158,28 @@ describe('the answer a block gives', () => {
     expect(liftAnswer('b1', blockAnswer(block, null, true, 5))).toBe('clear')
     expect(liftAnswer('b1', said())).toBeNull()
     expect(liftAnswer('b1', null)).toBeNull()
+  })
+})
+
+describe('who of those on an event has blocked off its days', () => {
+  const blocks = [
+    { id: 'b1', uid: 'jacob', from: '2026-12-30', to: '2027-01-02', reason: 'Vacation' },
+    { id: 'b2', uid: 'emily', from: '2026-12-31', to: '2026-12-31', reason: '' },
+    { id: 'b3', uid: 'sam', from: '2026-12-01', to: '2026-12-05', reason: 'Work' },
+    { id: 'b4', uid: 'nobody', from: '2026-12-31', to: '2026-12-31', reason: 'Away' },
+  ]
+
+  it('those on it, off on its day — with why', () => {
+    expect(blockedAmong(blocks, ['jacob', 'emily', 'sam'], ['2026-12-31'])).toEqual([
+      { uid: 'jacob', reasons: ['Vacation'], days: ['2026-12-31'] },
+      { uid: 'emily', reasons: [], days: ['2026-12-31'] },
+    ])
+  })
+
+  it('which of its days, for one that runs or repeats', () => {
+    expect(
+      blockedAmong(blocks, ['jacob'], ['2026-12-24', '2026-12-31', '2027-01-07', '2027-01-02'])
+    ).toEqual([{ uid: 'jacob', reasons: ['Vacation'], days: ['2026-12-31', '2027-01-02'] }])
+    expect(blockedAmong(blocks, ['jacob'], [])).toEqual([])
   })
 })

@@ -186,3 +186,31 @@ export function blockSpan(b: Pick<Block, 'from' | 'to'>): string {
   if (month(f) === month(t)) return `${month(f)} ${f.getUTCDate()} – ${t.getUTCDate()}`
   return `${month(f)} ${f.getUTCDate()} – ${month(t)} ${t.getUTCDate()}`
 }
+
+/**
+ * Who of these people has blocked off any of these days, and which — for an
+ * event being made, before any answer has been given for it: one entry a
+ * person, their blocks' reasons, and the days each covers, in order.
+ */
+export function blockedAmong(
+  blocks: readonly Block[],
+  uids: readonly string[],
+  days: readonly string[]
+): { uid: string; reasons: string[]; days: string[] }[] {
+  const wanted = new Set(uids.map(String))
+  const out = new Map<string, { uid: string; reasons: Set<string>; days: Set<string> }>()
+  for (const b of blocks) {
+    if (!wanted.has(String(b.uid))) continue
+    const covered = days.filter((d) => isDay(d) && blockCovers(b, d))
+    if (!covered.length) continue
+    const entry = out.get(b.uid) ?? { uid: b.uid, reasons: new Set(), days: new Set() }
+    if (b.reason.trim()) entry.reasons.add(b.reason.trim())
+    covered.forEach((d) => entry.days.add(d))
+    out.set(b.uid, entry)
+  }
+  return [...out.values()].map((e) => ({
+    uid: e.uid,
+    reasons: [...e.reasons],
+    days: [...e.days].sort(),
+  }))
+}

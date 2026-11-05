@@ -92,6 +92,15 @@ export const useBlockedDatesStore = create<BlockedDatesStore>((set, get) => ({
 }))
 
 /** Someone's blocks, read once: for Miriam, wherever she is asked. */
+/**
+ * Everyone's blocks that reach from this day on — an admin's to read
+ * (firestore.rules), for the event being made: who is off on its days.
+ */
+export async function readBlocksFrom(day: string): Promise<Block[]> {
+  const snap = await getDocs(query(collection(db, 'blockedDates'), where('to', '>=', day)))
+  return byDate(snap.docs.flatMap((d) => blockOf(d.id, d.data()) ?? []))
+}
+
 export async function readBlocks(uid: string): Promise<Block[]> {
   const snap = await getDocs(query(collection(db, 'blockedDates'), where('uid', '==', uid)))
   return byDate(snap.docs.flatMap((d) => blockOf(d.id, d.data()) ?? []))

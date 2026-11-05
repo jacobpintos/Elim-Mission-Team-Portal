@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Pressable } from 'react-native'
 import { YStack, XStack, Text, Input, TextArea } from 'tamagui'
 import { CoverPhoto } from './CoverPhoto'
@@ -20,7 +20,7 @@ import { audit } from '@/lib/audit'
 import { confirmAsync } from '@/lib/confirm'
 import { useConfigStore } from '@/stores/configStore'
 import { geocodeCity } from '@/lib/geocode'
-import { isPublic, groupDisplayName } from '@/lib/roles'
+import { isAdmin, isPublic, groupDisplayName } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { TeamsEditor } from './TeamsEditor'
 import { DressCodeEditor } from './DressCodeEditor'
@@ -33,7 +33,11 @@ import { unplaced } from './carpoolCards'
 import { ScheduleBuilder } from './ScheduleBuilder'
 import { dayNames, scheduleByDay, tidySchedule, tidyTime, whenShown } from '@/lib/eventSchedule'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
-import { taskDueDate } from '@/lib/events'
+import { getInstances, localToday, taskDueDate } from '@/lib/events'
+import { blockedAmong, type Block } from '../../../functions/src/blockedDates'
+import { shiftDate } from '../../../functions/src/miriam/data'
+import { readBlocksFrom } from '@/stores/blockedDatesStore'
+import { FD } from '@/lib/format'
 import {
   isoToDisplay,
   typedDateToIso,
@@ -69,6 +73,9 @@ import type {
  * the next one to come (lib/eventDates typedDateToIso); '' for one that isn't.
  */
 const formIso = (typed: string) => typedDateToIso(typed) || ''
+
+/** Someone blocked off on its day: their chip, and the note saying so. */
+const BLOCKED_TINT = '#DC2626'
 
 interface GroupDoc {
   id: string
@@ -590,6 +597,51 @@ export function EventFormModal({
     form.groups.flatMap((gid) => allGroups.find((g) => g.id === gid)?.members ?? [])
   )
   const assignedUids = new Set([...form.users.map(String), ...groupMemberUids])
+
+  // The days it's on: this date, being changed alone; else its date and any
+  // extra days; one that repeats, its next dates — for who has blocked them off.
+  const eventDays = useMemo(() => {
+    if (instanceKey && editScope === 'instance') {
+      return [instanceKey.slice(instanceKey.indexOf('_') + 1, instanceKey.indexOf('_') + 11)]
+    }
+    if (!form.isRec) {
+      return [formIso(form.date), ...extraDays.map((d) => formIso(d.date))].filter(Boolean)
+    }
+    const today = localToday()
+    const start = formIso(form.date) || today
+    const from = start > today ? start : today
+    return getInstances(
+      {
+        id: 'new',
+        title: '',
+        isRec: true,
+        recDay: form.recDay,
+        recur: form.recur,
+        date: start,
+      } as EventTemplate,
+      from,
+      shiftDate(from, 120)
+    )
+      .map((i) => i.date)
+      .slice(0, 12)
+  }, [instanceKey, editScope, form.isRec, form.date, form.recDay, form.recur, extraDays])
+  // Everyone's blocked-off days from its first on (an admin's to read): who
+  // on it is off, shown as they are added — before any answer is given.
+  const [blocks, setBlocks] = useState<Block[]>([])
+  const firstDay = [...eventDays].sort()[0] ?? ''
+  useEffect(() => {
+    if (!open || !firstDay || !isAdmin(profile)) return
+    let live = true
+    readBlocksFrom(firstDay)
+      .then((b) => live && setBlocks(b))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, firstDay])
+  const blocked = blockedAmong(blocks, [...assignedUids], eventDays)
+  const blockedOf = new Map(blocked.map((b) => [b.uid, b]))
   // Who a uid is, as a card in the carpool builder: the full record an admin
   // reads, so it carries what colours the card.
   const carpoolPeopleOf = (uid: string) => {
@@ -1456,28 +1508,70 @@ export function EventFormModal({
           </Text>
           {assignedUsers.length > 0 ? (
             <XStack flexWrap="wrap" gap="$1">
-              {assignedUsers.map((u) => (
-                <Pressable key={u.uid} onPress={() => toggleUser(u.uid)}>
-                  <XStack
-                    borderWidth={1}
-                    borderColor={colors.primary}
-                    backgroundColor={colors.primary + '22'}
-                    borderRadius={99}
-                    paddingHorizontal="$2"
-                    paddingVertical="$1"
-                    gap="$1"
-                    alignItems="center"
+              {assignedUsers.map((u) => {
+                // Blocked off on its day: marked, as they're added.
+                const off = blockedOf.has(String(u.uid))
+                const tint = off ? BLOCKED_TINT : colors.primary
+                return (
+                  <Pressable
+                    key={u.uid}
+                    onPress={() => toggleUser(u.uid)}
+                    accessibilityLabel={`${u.displayName || 'Someone'}${off ? ', blocked off that day' : ''}. Tap to take off`}
                   >
-                    <Text color={colors.primary} fontSize="$2" fontWeight="600">
-                      {u.displayName || u.email || String(u.uid)}
-                    </Text>
-                    <Text color={colors.primary} fontSize="$1">
-                      ✕
-                    </Text>
-                  </XStack>
-                </Pressable>
-              ))}
+                    <XStack
+                      borderWidth={1}
+                      borderColor={tint}
+                      backgroundColor={tint + '22'}
+                      borderRadius={99}
+                      paddingHorizontal="$2"
+                      paddingVertical="$1"
+                      gap="$1"
+                      alignItems="center"
+                    >
+                      <Text color={tint} fontSize="$2" fontWeight="600">
+                        {u.displayName || u.email || String(u.uid)}
+                        {off ? ' · blocked off' : ''}
+                      </Text>
+                      <Text color={tint} fontSize="$1">
+                        ✕
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                )
+              })}
             </XStack>
+          ) : null}
+          {/* Who on it — by name or in its groups — has blocked off its day:
+              not available, before they're asked. */}
+          {blocked.length ? (
+            <YStack
+              gap="$1"
+              padding="$2"
+              borderRadius={8}
+              borderWidth={1}
+              borderColor={BLOCKED_TINT}
+              backgroundColor={BLOCKED_TINT + '18'}
+            >
+              <Text color={BLOCKED_TINT} fontSize="$2" fontWeight="700">
+                Not available — blocked off {eventDays.length > 1 ? 'some of its days' : 'that day'}
+              </Text>
+              {blocked.map((b) => {
+                const name = nameOf(b.uid)
+                const via = form.users.some((x) => sameId(x, b.uid))
+                  ? null
+                  : allGroups.find(
+                      (g) => form.groups.includes(g.id) && g.members.map(String).includes(b.uid)
+                    )
+                return (
+                  <Text key={b.uid} color={colors.text} fontSize="$2">
+                    {name}
+                    {via ? ` (in ${via.name})` : ''}
+                    {b.reasons.length ? ` — ${b.reasons.join(', ')}` : ''}
+                    {eventDays.length > 1 ? ` · ${b.days.map((d) => FD(d)).join(', ')}` : ''}
+                  </Text>
+                )
+              })}
+            </YStack>
           ) : null}
           <Input
             value={userSearch}
