@@ -76,119 +76,117 @@ export function TextingListCard() {
   )
 
   return (
-    <YStack width="100%" maxWidth={720} alignSelf="center" paddingHorizontal={16} paddingTop={24}>
-      <YStack
-        padding={16}
-        gap={10}
-        borderRadius={14}
-        borderWidth={1}
-        borderColor={colors.border}
-        backgroundColor={colors.surface}
-      >
-        <Text color={colors.text} fontSize="$6" fontWeight="700">
-          Texting list
-        </Text>
-        {muted('Event and meeting reminders, by text.')}
+    <YStack
+      padding={16}
+      gap={10}
+      borderRadius={14}
+      borderWidth={1}
+      borderColor={colors.border}
+      backgroundColor={colors.surface}
+    >
+      <Text color={colors.text} fontSize="$6" fontWeight="700">
+        Texting list
+      </Text>
+      {muted('Event and meeting reminders, by text.')}
 
-        {!read ? (
-          <Spinner size="small" alignSelf="flex-start" />
-        ) : asking ? (
-          <YStack gap={8}>
-            <XStack gap={8} alignItems="center" flexWrap="wrap">
-              <TextInput
-                value={phone}
-                onChangeText={(t) => {
-                  setPhone(t)
-                  setFailed(false)
-                }}
-                onSubmitEditing={join}
-                placeholder="Your cell number, e.g. (515) 555-1234"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="phone-pad"
-                autoComplete="tel"
-                textContentType="telephoneNumber"
-                accessibilityLabel="Your cell number, for the texting list"
-                style={{
-                  flex: 1,
-                  minWidth: 200,
-                  minHeight: 42,
-                  borderWidth: 1,
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                  fontSize: 16,
-                  color: colors.text,
-                  backgroundColor: colors.background,
-                  borderColor: tried && !valid ? '#DC2626' : colors.border,
-                }}
-              />
-              <Pressable
-                onPress={join}
-                disabled={saving}
-                accessibilityRole="button"
-                style={{
-                  minHeight: 42,
-                  paddingHorizontal: 18,
-                  borderRadius: 21,
-                  justifyContent: 'center',
-                  backgroundColor: colors.primary,
-                  opacity: saving ? 0.6 : 1,
-                }}
-              >
-                <Text color={colors.onPrimary} fontSize="$3" fontWeight="700">
-                  {signup ? 'Save number' : 'Add me'}
-                </Text>
-              </Pressable>
-              {editing ? (
-                <Pressable
-                  onPress={() => {
-                    setEditing(false)
-                    setTried(false)
-                  }}
-                  accessibilityRole="button"
-                  hitSlop={8}
-                >
-                  <Text color={colors.primary} fontSize="$3" fontWeight="600">
-                    Cancel
-                  </Text>
-                </Pressable>
-              ) : null}
-            </XStack>
-            {tried && !valid ? (
-              <Text color="$red10" fontSize="$2" fontWeight="600">
-                That doesn’t look like a US number — include the area code.
-              </Text>
-            ) : null}
-            {failed ? (
-              <Text color="$red10" fontSize="$2" fontWeight="600">
-                That didn’t save — try again in a moment.
-              </Text>
-            ) : null}
-          </YStack>
-        ) : (
-          <YStack gap={6}>
-            <Text color={colors.text} fontSize="$3">
-              {signup.status === 'sent'
-                ? `Your request, with ${formatPhone(signup.phone)}, went to the Connections Coordinator${signup.at ? ` on ${FD(new Date(signup.at).toISOString().slice(0, 10))}` : ''} to add you.`
-                : `You’ve asked to join with ${formatPhone(signup.phone)}. The Connections Coordinator gets the day’s requests at 5 PM and adds you.`}
-            </Text>
-            <Pressable
-              onPress={() => {
-                setPhone(formatPhone(signup.phone))
-                setEditing(true)
+      {!read ? (
+        <Spinner size="small" alignSelf="flex-start" />
+      ) : asking ? (
+        <YStack gap={8}>
+          <XStack gap={8} alignItems="center" flexWrap="wrap">
+            <TextInput
+              value={phone}
+              onChangeText={(t) => {
+                setPhone(t)
+                setFailed(false)
               }}
+              onSubmitEditing={join}
+              placeholder="Your cell number"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+              textContentType="telephoneNumber"
+              accessibilityLabel="Your cell number, for the texting list"
+              style={{
+                flex: 1,
+                minWidth: 200,
+                minHeight: 42,
+                borderWidth: 1,
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                fontSize: 16,
+                color: colors.text,
+                backgroundColor: colors.background,
+                borderColor: tried && !valid ? '#DC2626' : colors.border,
+              }}
+            />
+            <Pressable
+              onPress={join}
+              disabled={saving}
               accessibilityRole="button"
-              hitSlop={8}
+              style={{
+                minHeight: 42,
+                paddingHorizontal: 18,
+                borderRadius: 21,
+                justifyContent: 'center',
+                backgroundColor: colors.primary,
+                opacity: saving ? 0.6 : 1,
+              }}
             >
-              <Text color={colors.primary} fontSize="$3" fontWeight="600">
-                Change number
+              <Text color={colors.onPrimary} fontSize="$3" fontWeight="700">
+                {signup ? 'Save number' : 'Add me'}
               </Text>
             </Pressable>
-          </YStack>
-        )}
+            {editing ? (
+              <Pressable
+                onPress={() => {
+                  setEditing(false)
+                  setTried(false)
+                }}
+                accessibilityRole="button"
+                hitSlop={8}
+              >
+                <Text color={colors.primary} fontSize="$3" fontWeight="600">
+                  Cancel
+                </Text>
+              </Pressable>
+            ) : null}
+          </XStack>
+          {tried && !valid ? (
+            <Text color="$red10" fontSize="$2" fontWeight="600">
+              That doesn’t look like a US number — include the area code.
+            </Text>
+          ) : null}
+          {failed ? (
+            <Text color="$red10" fontSize="$2" fontWeight="600">
+              That didn’t save — try again in a moment.
+            </Text>
+          ) : null}
+        </YStack>
+      ) : (
+        <YStack gap={6}>
+          <Text color={colors.text} fontSize="$3">
+            {signup.status === 'sent'
+              ? `Your request, with ${formatPhone(signup.phone)}, went to the Connections Coordinator${signup.at ? ` on ${FD(new Date(signup.at).toISOString().slice(0, 10))}` : ''} to add you.`
+              : `You’ve asked to join with ${formatPhone(signup.phone)}. The Connections Coordinator gets the day’s requests at 5 PM and adds you.`}
+          </Text>
+          <Pressable
+            onPress={() => {
+              setPhone(formatPhone(signup.phone))
+              setEditing(true)
+            }}
+            accessibilityRole="button"
+            hitSlop={8}
+          >
+            <Text color={colors.primary} fontSize="$3" fontWeight="600">
+              Change number
+            </Text>
+          </Pressable>
+        </YStack>
+      )}
 
-        <View style={{ height: 1, backgroundColor: colors.border }} />
-        {muted(stopSaid(textingNumberOf(textingNumber)))}
-      </YStack>
+      <View style={{ height: 1, backgroundColor: colors.border }} />
+      {muted(stopSaid(textingNumberOf(textingNumber)))}
     </YStack>
   )
 }

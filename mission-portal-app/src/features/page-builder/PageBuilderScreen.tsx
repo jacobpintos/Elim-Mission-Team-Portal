@@ -31,7 +31,7 @@ const DESIGNS = {
 interface PageBuilderScreenProps {
   pageKey: PageKey
   pageTitle: string
-  /** Shown with the page, below its header, whatever its blocks: Connect's texting list sign-up. */
+  /** Shown with the page whatever its blocks: Connect's texting list sign-up. */
   extra?: ReactNode
 }
 
@@ -242,7 +242,7 @@ export function PageBuilderScreen({ pageKey, pageTitle, extra }: PageBuilderScre
 
   if (pageData.blocks.length > 0) {
     if (pageKey === 'connect') {
-      return <ConnectDesign blocks={pageData.blocks} top={editButton} afterHero={extra} />
+      return <ConnectDesign blocks={pageData.blocks} top={editButton} textingList={extra} />
     }
     const Design = DESIGNS[pageKey]
     return <Design blocks={pageData.blocks} top={editButton} />
@@ -252,7 +252,11 @@ export function PageBuilderScreen({ pageKey, pageTitle, extra }: PageBuilderScre
     <ScrollView>
       <YStack flex={1}>
         {editButton}
-        {extra}
+        {extra ? (
+          <YStack width="100%" maxWidth={720} alignSelf="center" padding="$4">
+            {extra}
+          </YStack>
+        ) : null}
         <YStack padding="$8" alignItems="center" justifyContent="center">
           <Text fontSize="$5" fontWeight="700" marginBottom="$2">
             {pageTitle}
