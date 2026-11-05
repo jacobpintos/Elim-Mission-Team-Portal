@@ -165,6 +165,7 @@ export function useMiriamConversation(
     setLyricsWanted,
     stay,
     setStay,
+    setUnheard,
     woken,
     sentRef,
     saidAloudRef,
@@ -259,6 +260,8 @@ export function useMiriamConversation(
     // Sent by a tap (the button, or a choice): lets a browser say the answer.
     unlockSpeech()
     sentRef.current = true
+    // Asked: whatever comes now is an answer, not a word about listening.
+    setUnheard(false)
     // "That's not what I meant", after an answer of her own: asked again, of
     // Claude — before a yes or no to her card, as "no, that's not what I
     // meant" isn't a no to it. Anything else said lets her answer go.

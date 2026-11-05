@@ -95,6 +95,7 @@ export function MiriamPanel({
     lyricsWanted,
     stay,
     woken,
+    unheard,
   } = panel
   const { available, listening, wakeOn, requestRef, listen, toggleWake } = ears
   const {
@@ -115,18 +116,22 @@ export function MiriamPanel({
   // Her own last answer, while it can still be said not to be what was meant.
   const correctable = useMiriamStore((s) => !!s.lastOwn)
   // Things to say, for this screen and this person (lib/miriamSuggestions):
-  // offered while she waits for a request, and gone once one comes.
+  // offered while she waits for a request, and gone once one comes — and
+  // when listening came to nothing (no microphone allowed, nothing said),
+  // under what she says of it, so there is still something to tap.
   const pathname = usePathname()
   const profile = useAuthStore((s) => s.profile)
   const suggestions = useMemo(() => suggestionsFor(pathname, profile), [pathname, profile])
   const offering =
     suggestions.length > 0 &&
     !heard &&
-    !answer &&
+    (!answer || unheard) &&
     !briefing &&
     !lyricsWanted &&
     !songHost() &&
-    (stage === 'listening' || (stage === 'typing' && !typed.trim()))
+    (stage === 'listening' ||
+      (stage === 'typing' && !typed.trim()) ||
+      (stage === 'answered' && unheard))
 
   // Woken by her name and listening: the bar in her colour, so it is seen.
   const called = woken && listening && stage === 'listening'

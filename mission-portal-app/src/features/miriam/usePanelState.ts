@@ -78,6 +78,10 @@ export function usePanelState() {
   const [lyricsWanted, setLyricsWanted] = useState(false)
   // An answer on faith: left open, to be read, until it is closed.
   const [stay, setStay] = useState(false)
+  // Listening ended with nothing heard — no microphone, nothing said, a
+  // listening error: what she says of it is no answer, and the things to ask
+  // stay offered (MiriamPanel) until something is.
+  const [unheard, setUnheard] = useState(false)
   // Opened by her name rather than a tap: shown unmistakably, as it may be
   // across the room from whoever said it.
   const [woken, setWoken] = useState(false)
@@ -170,6 +174,8 @@ export function usePanelState() {
     setLyricsWanted,
     stay,
     setStay,
+    unheard,
+    setUnheard,
     woken,
     setWoken,
     sentRef,

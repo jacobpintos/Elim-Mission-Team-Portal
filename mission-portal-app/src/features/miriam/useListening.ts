@@ -130,6 +130,7 @@ export function useListening(
     setTyped,
     setRanOut,
     setAnswer,
+    setUnheard,
     setChoices,
     setUnderstood,
     askedRef,
@@ -250,6 +251,7 @@ export function useListening(
     setUndo(null)
     setWoken(byName)
     setRanOut(false)
+    setUnheard(false)
     if (byName) AccessibilityInfo.announceForAccessibility('Miriam: Hineni, I am here')
     sentRef.current = false
     settled.current = ''
@@ -276,6 +278,7 @@ export function useListening(
         setAnswer(
           'Mission Portal needs the microphone and speech recognition for Miriam. You can turn them on in Settings, or type instead.'
         )
+        setUnheard(true)
         setStage('answered')
         return
       }
@@ -381,6 +384,8 @@ export function useListening(
       setStage('answered')
       return
     }
+    // Nothing heard: no answer, and the things to ask stay offered.
+    setUnheard(true)
     if (e.error === 'no-speech' || e.error === 'speech-timeout') {
       setAnswer('Didn’t hear anything. Try again, or type it.')
     } else if (e.error === 'not-allowed') {
@@ -475,6 +480,7 @@ export function useListening(
         setStage('typing')
       } else {
         setAnswer('Didn’t hear anything. Try again, or type it.')
+        setUnheard(true)
         setStage('answered')
       }
     }, LISTEN_MS)
