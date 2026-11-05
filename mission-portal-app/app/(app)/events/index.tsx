@@ -3,7 +3,9 @@ import { Dimensions, ScrollView, Pressable, Linking, Platform, View } from 'reac
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
-import { useEventsStore } from '@/stores/eventsStore'
+import { resolveAssignedUids, useEventsStore } from '@/stores/eventsStore'
+import { canViewEvent, localToday } from '@/lib/events'
+import { eventNamed } from '@/lib/eventNamed'
 import { useConfigStore } from '@/stores/configStore'
 import { sameId } from '@/lib/ids'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -238,6 +240,24 @@ export default function EventsScreen() {
     setSelectedDay(askedDay)
     setView('calendar')
   }, [askedDay])
+
+  // From a notification that named no event of its own — "You've been added
+  // to Revive Me", from before events' links were kept (lib/notifTarget):
+  // the event it names, opened once the events are in, if it's theirs to see.
+  const { about } = useLocalSearchParams<{ about?: string }>()
+  const aboutOpened = useRef<string | null>(null)
+  useEffect(() => {
+    if (!about || aboutOpened.current === about || !loadedTemplates.length) return
+    aboutOpened.current = about
+    router.setParams({ about: undefined } as never)
+    const ev = eventNamed(about, loadedTemplates, loadedOverrides, localToday())
+    if (!ev) return
+    const me = String(profile?.uid ?? '')
+    const assigned = !!me && !isPublicFollower(profile) && resolveAssignedUids(ev).has(me)
+    if (canViewEvent(ev, { admin, assigned, uid: me })) openDetail(ev)
+    // Once, as the events come in: not again as they change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [about, loadedTemplates, loadedOverrides])
 
   useEffect(() => {
     if (!seesOcc) return

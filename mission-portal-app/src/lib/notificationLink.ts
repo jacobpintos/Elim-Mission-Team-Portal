@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications'
+import { pushTarget } from './notifTarget'
 
 /**
  * The link from a notification tap that has not been acted on yet, if there is
@@ -22,13 +23,15 @@ export function takePendingNotificationLink(): string | null {
     // A tap, not a dismissal or a button on the notification itself.
     if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return null
 
-    const link = (response.notification.request.content.data as { link?: string } | undefined)?.link
+    const content = response.notification.request.content
+    const data = (content.data ?? {}) as { link?: string; eventTitle?: string }
+    const link = data.link
     if (!link) return null
 
     // Taken, not just read: clearing it stops the live listener acting on the
     // same tap a moment later and sending somebody to the same screen twice.
     Notifications.clearLastNotificationResponse()
-    return link
+    return pushTarget(link, data, content.body ?? undefined)
   } catch {
     // Nothing here is worth failing sign-in over. Losing the link costs a tap;
     // throwing costs the launch.

@@ -11,6 +11,7 @@ import * as Notifications from 'expo-notifications'
 import { DynamicThemeProvider } from '@/theme/DynamicThemeProvider'
 import { useAuthStore } from '@/stores/authStore'
 import { takePendingNotificationLink } from '@/lib/notificationLink'
+import { pushTarget } from '@/lib/notifTarget'
 import { useSignedInTabsMounted } from '@/lib/useSignedInTabsMounted'
 import {
   registerReminderButtons,
@@ -148,8 +149,11 @@ function NotificationRouter() {
     // A tap, not a dismissal or a button on the notification itself.
     if (action !== Notifications.DEFAULT_ACTION_IDENTIFIER) return
 
-    const data = lastResponse.notification.request.content.data as { link?: string }
+    const content = lastResponse.notification.request.content
+    const data = content.data as { link?: string; eventTitle?: string }
     if (!data?.link) return
+    // An event's notice that names no event: the Events tab finds it (lib/notifTarget).
+    const link = pushTarget(data.link, data, content.body ?? undefined)
 
     const id = lastResponse.notification.request.identifier
     if (handled.current === id) return
@@ -163,11 +167,11 @@ function NotificationRouter() {
       console.warn('Could not clear the last notification response', err)
     }
     try {
-      router.push(data.link as Parameters<typeof router.push>[0])
+      router.push(link as Parameters<typeof router.push>[0])
     } catch (err) {
       // A link from an older notification may name a route that no longer
       // exists. Staying where we are beats taking the app down over it.
-      console.warn('Could not open the notification link', data.link, err)
+      console.warn('Could not open the notification link', link, err)
     }
   }, [lastResponse, fbUser, profile, tabsUp, router])
 

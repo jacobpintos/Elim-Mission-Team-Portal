@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isAppLink, notifLink, screenFor } from '../../functions/src/push/notifLinks'
-import { notifTarget } from './notifTarget'
+import { notifTarget, pushTarget } from './notifTarget'
 
 describe('where a notification opens', () => {
   it('the link it was sent with', () => {
@@ -45,5 +45,25 @@ describe('where a notification opens', () => {
     expect(notifTarget({ type: 'kaizenSubmission' })).toBe('/(app)/issues/kaizen')
     expect(notifTarget({ type: 'newMessage', link: '' })).toBe('/(app)/messages')
     expect(screenFor('storeSale')).toBe('/(app)/store')
+  })
+
+  it('an event’s notice that names no event: the Events tab, told what it said', () => {
+    expect(notifTarget({ type: 'eventJoin', msg: "You've been added to Revive Me" })).toBe(
+      `/(app)/events?about=${encodeURIComponent("You've been added to Revive Me")}`
+    )
+    expect(notifTarget({ type: 'eventJoin', link: '/(app)/events', msg: 'Added to Revive' })).toBe(
+      '/(app)/events?about=Added%20to%20Revive'
+    )
+    expect(notifTarget({ type: 'eventJoin' })).toBe('/(app)/events')
+    // A push: the title it carries, else what it said.
+    expect(pushTarget('/(app)/events', { eventTitle: 'Revive Me' })).toBe(
+      '/(app)/events?about=Revive%20Me'
+    )
+    expect(pushTarget('/(app)/events', {}, 'Added to Revive Me')).toBe(
+      '/(app)/events?about=Added%20to%20Revive%20Me'
+    )
+    expect(pushTarget('/(app)/events/e1_2026-11-16', { eventTitle: 'Revive Me' })).toBe(
+      '/(app)/events/e1_2026-11-16'
+    )
   })
 })
