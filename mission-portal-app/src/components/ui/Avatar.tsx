@@ -31,9 +31,17 @@ export function Avatar({ uri, displayName, size = 48 }: AvatarProps) {
         ? words[0].slice(0, 2).toUpperCase()
         : (words[0][0] + words[words.length - 1][0]).toUpperCase()
 
+  // A photo only where there is one to load: a stored "null" or a blank is none.
+  const photo = uri?.trim() && !/^(?:null|undefined)$/i.test(uri.trim()) ? uri.trim() : ''
+
   return (
-    <TamaguiAvatar circular size={size}>
-      {uri ? <TamaguiAvatar.Image src={uri} accessibilityLabel={displayName} /> : null}
+    // Keyed by the photo, so a row a list reuses for someone else starts
+    // afresh. Tamagui's Avatar remembers that a photo loaded, and hides the
+    // initials while it thinks so: a recycled row (FlashList) that showed one
+    // person's photo kept that, and showed nothing at all for the next person,
+    // with no photo of their own.
+    <TamaguiAvatar key={photo || 'initials'} circular size={size}>
+      {photo ? <TamaguiAvatar.Image src={photo} aria-label={displayName} /> : null}
       <TamaguiAvatar.Fallback
         backgroundColor={colors.primary}
         alignItems="center"

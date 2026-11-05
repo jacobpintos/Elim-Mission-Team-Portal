@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { TextInput as RNTextInput } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
 import { YStack, XStack, Text, Button, Spinner } from 'tamagui'
-import { Stack } from 'expo-router'
 import { doc, updateDoc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { onSnapshot } from '@/lib/liveFirestore'
@@ -12,7 +11,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { audit } from '@/lib/audit'
 import { useUIStore } from '@/stores/uiStore'
 import { Avatar } from '@/components/ui/Avatar'
-import type { UserProfile } from '@/types/user'
+import { isMember } from '@/lib/roles'
 import { useThemeStore } from '@/stores/themeStore'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
 
@@ -167,6 +166,14 @@ export default function AdminLeadership() {
     // on requests only they know about. An admin hands it on deliberately.
   }
 
+  // Members only: not guests, nor public followers. Someone who holds a place
+  // here and isn't a member any more is still listed, marked, so they can be
+  // taken off — the team shows on the church's pages, and the Coordinator's
+  // and Accountant's requests go wherever these point.
+  const holdsAPlace = (uid: string) =>
+    leadershipTeam.includes(uid) || coordinator === uid || accountant === uid
+  const listed = users.filter((u) => isMember(u) || holdsAPlace(u.uid))
+
   if (loading) {
     return (
       <YStack flex={1} alignItems="center" justifyContent="center">
@@ -232,7 +239,7 @@ export default function AdminLeadership() {
       </YStack>
 
       <FlashList
-        data={users}
+        data={listed}
         keyExtractor={(u) => u.uid}
         renderItem={({ item }) => {
           const isLeader = leadershipTeam.includes(item.uid)
@@ -250,6 +257,11 @@ export default function AdminLeadership() {
                 <Text fontWeight="600" fontSize="$3">
                   {item.displayName}
                 </Text>
+                {!isMember(item) ? (
+                  <Text fontSize="$2" color="$red10" fontWeight="600">
+                    No longer a member — remove them from the team.
+                  </Text>
+                ) : null}
                 <RNTextInput
                   // Keyed by the person, which is what stops a title landing on
                   // the wrong one. FlashList recycles a row's views for whoever

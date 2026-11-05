@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  isMember,
   hasRole,
   isAdmin,
   isSecurity,
@@ -312,5 +313,21 @@ describe('countsTowardAllGroup', () => {
 
   it('does not count an account carrying no roles at all', () => {
     expect(countsTowardAllGroup(user())).toBe(false)
+  })
+})
+
+describe('isMember', () => {
+  const u = (roles: Role[]) => ({ uid: 'x', roles }) as unknown as UserProfile
+  it('a member by any member role; never a guest alone, nor a public follower', () => {
+    expect(isMember(u(['regular']))).toBe(true)
+    expect(isMember(u(['worship']))).toBe(true)
+    expect(isMember(u(['intern']))).toBe(true)
+    expect(isMember(u(['admin']))).toBe(true)
+    expect(isMember(u(['guest']))).toBe(false)
+    expect(isMember(u(['public']))).toBe(false)
+    // Moved from a member to public: no longer one.
+    expect(isMember(u(['public', 'guest']))).toBe(false)
+    expect(isMember(u(['public', 'regular']))).toBe(true)
+    expect(isMember(null)).toBe(false)
   })
 })
