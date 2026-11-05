@@ -17,6 +17,9 @@ const ASKING = new Set(
   ).split(' ')
 )
 
+/** Their next event, and nothing else: "to my next event", "the next one". */
+const NEXT = /^(?:to\s+)?(?:(?:my|our|the)\s+)?next(?:\s+(?:event|one|thing|gathering))?$/
+
 /** How it is asked; what follows names the event. */
 const ASKED = [
   // "Directions to X", "give me directions to X", "I need directions to X"
@@ -35,13 +38,14 @@ const ASKED = [
 
 /**
  * The event they asked the way to, as far as it was said: a day, and the words
- * naming it — both empty for "take me there" or "directions please". Null
- * when it isn't asking the way at all.
+ * naming it — both empty for "take me there" or "directions please"; `next`
+ * for "directions to my next event", their soonest, said in so many words.
+ * Null when it isn't asking the way at all.
  */
 export function directionsAsked(
   text: string,
   today: string
-): { date: string | null; name: string } | null {
+): { date: string | null; name: string; next?: true } | null {
   if (!text.trim()) return null
   const s = withoutEnding(plain(withoutAsking(plain(text))))
   for (const re of ASKED) {
@@ -49,6 +53,8 @@ export function directionsAsked(
     if (!m) continue
     const rest = (m[1] ?? '').trim()
     if (!rest) return { date: null, name: '' }
+    // "My next event", "the next one": theirs, the soonest — no other named.
+    if (NEXT.test(rest)) return { date: null, name: '', next: true }
     const ref = eventRef(rest, today, ASKING)
     return { date: ref?.date ?? null, name: ref?.name ?? '' }
   }

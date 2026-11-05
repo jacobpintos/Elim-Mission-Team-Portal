@@ -36,6 +36,17 @@ describe('the way to an event, asked', () => {
     })
   })
 
+  it('their next, in so many words', () => {
+    expect(directionsAsked('Directions to my next event', today)).toEqual({
+      date: null,
+      name: '',
+      next: true,
+    })
+    expect(directionsAsked('Take me to the next one', today)?.next).toBe(true)
+    // The next of one named: that one, by its name.
+    expect(directionsAsked('Directions to the next Revival', today)?.next).toBeUndefined()
+  })
+
   it('none named: "there", "please"', () => {
     expect(directionsAsked('Take me there', today)).toEqual({ date: null, name: '' })
     expect(directionsAsked('Directions, please', today)).toEqual({ date: null, name: '' })

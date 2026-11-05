@@ -243,6 +243,11 @@ async function directionsHere(said: string, here: Here, talk: Talk): Promise<boo
   if (!ask) return false
   if (!ask.date && !ask.name) {
     const soon = theirEvents(data, data.today, shiftDate(data.today, DIRECTIONS_DAYS))
+    // "Directions to my next event": that one, plainly — no need to ask. The
+    // next there's somewhere to go to: not a call, nor one with no place yet.
+    if (ask.next && soon[0]) {
+      return goTo(soon.find((ev) => !ev.isVirtual && placeOf(ev)) ?? soon[0], talk)
+    }
     const todays = soon.filter((ev) => ev.date === data.today)
     if (todays.length === 1) return goTo(todays[0], talk)
     if (todays.length > 1) return whichTo(todays, data.today, talk)

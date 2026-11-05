@@ -1107,6 +1107,15 @@ describe('directions', () => {
     expect(await say('no, sunday service')).toEqual(['directions svc_2026-10-18'])
   })
 
+  it('"directions to my next event": maps at once — the next with a place to go', async () => {
+    expect(await conversation({ events: placed })('Directions to my next event')).toEqual([
+      'directions yn_2026-10-13',
+    ])
+    // Not today: still at once. The Prayer Call is a call, Planning Night has no place.
+    const say = conversation({ events: placed.filter((e) => e.id !== 'yn') })
+    expect(await say('Directions to my next event')).toEqual(['directions svc_2026-10-18'])
+  })
+
   it('says why, when there is nowhere to open maps to', async () => {
     const say = conversation({ events: placed })
     expect(await say('Navigate to the prayer call')).toEqual([
