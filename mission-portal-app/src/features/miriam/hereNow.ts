@@ -27,6 +27,11 @@ import {
   openFood,
 } from './localData'
 import type { Here } from './localTalk'
+import type { DeskAccess } from './mixerTalk'
+import { isSoundEngineer, soundEngineersOf } from '@/lib/soundEngineer'
+import { canReachDesk, deskLinkTo } from '@/lib/mixer/link'
+import { loadDeskAddress } from '@/lib/mixer/deskAddress'
+import { loadSwaps, saveSwaps } from '@/lib/mixer/swapStore'
 
 /**
  * What Miriam answers from on the phone, without asking Claude: what the app
@@ -81,6 +86,31 @@ export async function eventsLoaded(): Promise<QuickData | null> {
 }
 
 /** What the conversations worked out here can see, as this person. */
+/**
+ * Whether this person, on this phone, can reach the sound desk (./mixerTalk):
+ * a Sound Engineer (as loaded, else from the phone's copy of the config), in
+ * the phone app, with the desk's address set in Settings.
+ */
+async function deskAccess(uid: string): Promise<DeskAccess> {
+  const config = useConfigStore.getState()
+  let holders = config.soundEngineers
+  if (!config._refCount) {
+    const snap = await Promise.race([
+      getDoc(doc(db, 'config', 'main')).catch(() => undefined),
+      new Promise<undefined>((done) => setTimeout(() => done(undefined), 3000)),
+    ])
+    const stored = (snap?.data() as { connectConfig?: { soundEngineers?: unknown } } | undefined)
+      ?.connectConfig?.soundEngineers
+    holders = soundEngineersOf(stored)
+  }
+  if (!isSoundEngineer(uid, holders)) return { kind: 'not engineer' }
+  if (!canReachDesk()) return { kind: 'no app' }
+  const address = await loadDeskAddress()
+  if (!address) return { kind: 'no address' }
+  const link = deskLinkTo(address)
+  return link ? { kind: 'ready', link } : { kind: 'no app' }
+}
+
 export function hereNow(briefedFoodRef: {
   current: { day: string; food: FoodNudge[] } | null
 }): Here {
@@ -112,6 +142,8 @@ export function hereNow(briefedFoodRef: {
         .map((u) => ({ uid: String(u.uid), name: u.displayName, sex: u.sex ?? null })),
     latest: (room, n) => latestMessages(room, n, profile),
     now: () => Date.now(),
+    desk: () => deskAccess(uid),
+    swaps: { load: () => loadSwaps(), save: saveSwaps },
     briefedFood: () =>
       briefedFoodRef.current?.day === localToday() ? briefedFoodRef.current.food : [],
     answerOf: (ev) => {

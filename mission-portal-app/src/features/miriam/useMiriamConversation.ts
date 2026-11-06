@@ -1255,6 +1255,15 @@ export function useMiriamConversation(
       useMiriamStore.getState().setAwaiting(false)
       return addNote(date, text)
     },
+    // Made at once (the sound desk: ./mixerTalk), with a tap to put it back.
+    done: (text, undo) => {
+      useMiriamStore.getState().setAwaiting(false)
+      useMiriamStore.getState().remember(askedRef.current, text)
+      setAnswer(text)
+      speak(text)
+      setStage('answered')
+      setUndo({ label: 'Undo', run: undo })
+    },
   })
 
   /**

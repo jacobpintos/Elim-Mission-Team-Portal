@@ -1,0 +1,7 @@
+{
+  "name": "desk-link",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Send OSC messages to the church's sound desk over its own Wi-Fi (UDP)",
+  "license": "MIT"
+}

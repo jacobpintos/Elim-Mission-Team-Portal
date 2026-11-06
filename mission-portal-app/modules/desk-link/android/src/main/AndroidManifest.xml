@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <!-- To find the Wi-Fi network the desk is on (DeskLinkModule: wifi). -->
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+</manifest>

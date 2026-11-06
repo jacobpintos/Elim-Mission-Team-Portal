@@ -26,6 +26,10 @@ import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
 import { confirmAsync } from '@/lib/confirm'
 import { DEFAULT_FLIGHT_REMINDER_HOURS, defaultNotificationPrefs } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { isSoundEngineer } from '@/lib/soundEngineer'
+import { deskAddressOf, loadDeskAddress, saveDeskAddress } from '@/lib/mixer/deskAddress'
+import { canReachDesk, deskLinkTo } from '@/lib/mixer/link'
+import { deskInfo } from '@/lib/mixer/x32'
 import { recentStartups } from '@/lib/startupTimeline'
 import { describeRun, type StartupRun } from '@/lib/startupSteps'
 import * as Sentry from '@sentry/react-native'
@@ -78,6 +82,7 @@ export default function SettingsScreen() {
   // Who holds the Connections Coordinator identifier — it decides whether the
   // texting-list row belongs in this user's list at all.
   const connectionsCoordinator = useConfigStore((s) => s.connectionsCoordinator)
+  const soundEngineers = useConfigStore((s) => s.soundEngineers)
   const subConfig = useConfigStore((s) => s.subscribe)
   const unsubConfig = useConfigStore((s) => s.unsubscribe)
   useEffect(() => {
@@ -100,6 +105,37 @@ export default function SettingsScreen() {
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [savingPw, setSavingPw] = useState(false)
+
+  // The sound desk's address on its Wi-Fi, kept on this phone (Sound Engineers).
+  const [deskAddress, setDeskAddress] = useState('')
+  const [deskChecking, setDeskChecking] = useState(false)
+  const [deskStatus, setDeskStatus] = useState('')
+  useEffect(() => {
+    loadDeskAddress().then(setDeskAddress)
+  }, [])
+  /** Saves the address and asks the desk its name: whether this phone can reach it. */
+  const saveAndCheckDesk = async () => {
+    const address = deskAddressOf(deskAddress)
+    if (deskAddress.trim() && !address) {
+      setDeskStatus('That isn’t an address like 192.168.0.64.')
+      return
+    }
+    await saveDeskAddress(address ?? '')
+    if (!address) {
+      setDeskStatus('Cleared.')
+      return
+    }
+    setDeskAddress(address)
+    setDeskChecking(true)
+    const link = deskLinkTo(address)
+    const info = link ? await deskInfo(link) : null
+    setDeskChecking(false)
+    setDeskStatus(
+      info
+        ? `Saved. Connected to ${info.model}${info.name ? ` “${info.name}”` : ''}.`
+        : 'Saved, but the desk didn’t answer. Is this phone on its Wi-Fi?'
+    )
+  }
 
   // Location
   const [city, setCity] = useState(profile?.locationPref?.city ?? '')
@@ -684,6 +720,69 @@ export default function SettingsScreen() {
             </View>
           </Pressable>
         </Section>
+
+        {/* The sound desk (lib/mixer): where it is, for Miriam to change it. */}
+        {isSoundEngineer(String(profile?.uid ?? ''), soundEngineers) ? (
+          <Section title="Sound desk">
+            {Platform.OS === 'web' || !canReachDesk() ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                {Platform.OS === 'web'
+                  ? 'Miriam can change the sound desk only from the phone app, on the desk’s Wi-Fi.'
+                  : 'Update the app to let Miriam change the sound desk.'}
+              </Text>
+            ) : (
+              <>
+                <Text color={colors.textMuted} fontSize="$2">
+                  As a Sound Engineer, you can ask Miriam to mute channels and change levels in the
+                  house and in people’s in-ears. Join the desk’s Wi-Fi, and enter the X32’s address
+                  (on the desk: Setup → Network).
+                </Text>
+                <XStack gap="$2" alignItems="flex-end">
+                  <Field label="Desk address">
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surface,
+                          minWidth: 160,
+                        },
+                      ]}
+                      value={deskAddress}
+                      onChangeText={(v) => {
+                        setDeskAddress(v)
+                        setDeskStatus('')
+                      }}
+                      placeholder="192.168.0.64"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="numbers-and-punctuation"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </Field>
+                  <Pressable onPress={saveAndCheckDesk} disabled={deskChecking}>
+                    <View
+                      style={[
+                        styles.btn,
+                        { backgroundColor: colors.primary, opacity: deskChecking ? 0.5 : 1 },
+                      ]}
+                    >
+                      <Text color="white" fontWeight="700">
+                        {deskChecking ? 'Checking…' : 'Save and check'}
+                      </Text>
+                    </View>
+                  </Pressable>
+                </XStack>
+                {deskStatus ? (
+                  <Text color={colors.textMuted} fontSize="$2">
+                    {deskStatus}
+                  </Text>
+                ) : null}
+              </>
+            )}
+          </Section>
+        ) : null}
 
         {/* Appearance */}
         <Section title="Appearance">

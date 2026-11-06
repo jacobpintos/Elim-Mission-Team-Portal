@@ -1,4 +1,5 @@
 import { roomKind } from '@/lib/rooms'
+import { mixerHere, type DeskAccess, type SwapStore } from './mixerTalk'
 import type { Announcement, CarpoolCarData, Message, PostPage, Room, Task } from '@/types/events'
 import { visibleTabs } from '@/lib/roles'
 import { isTabVisible } from '@/lib/featureFlags'
@@ -154,6 +155,8 @@ export interface Talk {
   ) => Promise<void>
   /** Adds a note on a day of their calendar, and says so — with a tap to take it back (MiriamButton). */
   note: (date: string, text: string) => Promise<void>
+  /** Says a change made at once, with a tap to put it back: `undo` says what it did. */
+  done?: (text: string, undo: () => Promise<string>) => void
 }
 
 /** What she can see, as this person: loaded, or read on asking. */
@@ -197,6 +200,10 @@ export interface Here {
   notes: () => Promise<{ ready: boolean; all: DateNote[] }>
   /** The church's post pages, as the Posts screen has them; null when they can't be read. */
   posts: () => Promise<PostPage[] | null>
+  /** The sound desk, for a Sound Engineer on the phone app (./mixerTalk). */
+  desk?: () => Promise<DeskAccess>
+  /** Who is using whose in-ear pack or mic today, kept on this phone (./mixerTalk). */
+  swaps?: SwapStore
 }
 
 /** Worked out here, when it plainly can be: false to leave it to Claude. */
@@ -207,7 +214,10 @@ export async function talkHere(said: string, here: Here, talk: Talk): Promise<bo
   // is no list of them.
   // The texting list before notifications: "take me off the texting list" is
   // the list, not the coordinator's notification of who asked to join.
+  // The sound desk first: "mute Mitch EG" is a channel on it, not a chat. It
+  // claims a plain "mute X" only when X is on the desk (./mixerTalk).
   return (
+    (await mixerHere(said, here, talk)) ||
     (await textingHere(said, here, talk)) ||
     (await notificationsHere(said, here, talk)) ||
     (await sendHere(said, here, talk)) ||
