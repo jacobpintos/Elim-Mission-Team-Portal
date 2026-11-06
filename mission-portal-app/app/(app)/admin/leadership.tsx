@@ -14,6 +14,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { isMember } from '@/lib/roles'
 import { formatPhone, normalizePhone } from '@/lib/textingList'
 import { DEFAULT_TEXTING_NUMBER } from '@/lib/textingListDb'
+import { soundEngineersOf, toggledSoundEngineer } from '@/lib/soundEngineer'
 import { useThemeStore } from '@/stores/themeStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -28,6 +29,7 @@ export default function AdminLeadership() {
   const [leadershipTeam, setLeadershipTeam] = useState<string[]>([])
   const [coordinator, setCoordinator] = useState('')
   const [accountant, setAccountantState] = useState('')
+  const [soundEngineers, setSoundEngineers] = useState<string[]>([])
   // The number the texting list's texts come from, as saved, and as typed.
   const [textingNumber, setTextingNumber] = useState('')
   const [numberDraft, setNumberDraft] = useState<string | null>(null)
@@ -47,6 +49,7 @@ export default function AdminLeadership() {
       setLeadershipTeam(team.map((v: unknown) => String(v)))
       setCoordinator(String(data?.connectConfig?.connectionsCoordinator ?? ''))
       setAccountantState(String(data?.connectConfig?.accountant ?? ''))
+      setSoundEngineers(soundEngineersOf(data?.connectConfig?.soundEngineers))
       setTextingNumber(String(data?.connectConfig?.textingNumber ?? ''))
       setLoading(false)
     })
@@ -185,6 +188,34 @@ export default function AdminLeadership() {
     }
   }
 
+  /**
+   * Give someone the Sound Engineer job, or take it back. Several people can
+   * hold it, and it isn't a place on the team: anyone listed can be given it.
+   */
+  const toggleSoundEngineer = async (uid: string) => {
+    const previous = soundEngineers
+    const next = toggledSoundEngineer(previous, uid)
+    const name = users.find((u) => u.uid === uid)?.displayName ?? uid
+    setSoundEngineers(next)
+    setSaving(true)
+    try {
+      await updateDoc(doc(db, 'config', 'main'), { 'connectConfig.soundEngineers': next })
+      await audit(
+        'leadership.soundEngineer',
+        next.includes(uid)
+          ? `${name} made a Sound Engineer`
+          : `${name} is no longer a Sound Engineer`,
+        profile?.displayName ?? ''
+      )
+    } catch (err: unknown) {
+      setSoundEngineers(previous)
+      const message = err instanceof Error ? err.message : 'Failed to save'
+      toast(message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const toggleMember = async (uid: string) => {
     let updated: string[]
     if (leadershipTeam.includes(uid)) {
@@ -205,10 +236,14 @@ export default function AdminLeadership() {
 
   // Members only: not guests, nor public followers. Someone who holds a place
   // here and isn't a member any more is still listed, marked, so they can be
-  // taken off — the team shows on the church's pages, and the Coordinator's
-  // and Accountant's requests go wherever these point.
+  // taken off — the team shows on the church's pages, the Coordinator's and
+  // Accountant's requests go wherever these point, and a Sound Engineer can
+  // change the sound desk.
   const holdsAPlace = (uid: string) =>
-    leadershipTeam.includes(uid) || coordinator === uid || accountant === uid
+    leadershipTeam.includes(uid) ||
+    coordinator === uid ||
+    accountant === uid ||
+    soundEngineers.includes(uid)
   const listed = users.filter((u) => isMember(u) || holdsAPlace(u.uid))
 
   if (loading) {
@@ -329,11 +364,32 @@ export default function AdminLeadership() {
         </Text>
       </YStack>
 
+      <YStack
+        backgroundColor="$surface"
+        borderRadius="$3"
+        padding="$3"
+        gap="$1"
+        borderWidth={1}
+        borderColor="$borderColor"
+      >
+        <Text fontSize="$3" fontWeight="700">
+          Sound Engineers
+        </Text>
+        <Text fontSize="$2" color="$gray10">
+          {soundEngineers.length
+            ? `${soundEngineers.map((uid) => users.find((u) => u.uid === uid)?.displayName ?? uid).join(', ')} can ask Miriam to change the sound desk.`
+            : 'Nobody holds this yet. Sound Engineers can ask Miriam to change the sound desk. Use “Make Sound Engineer” on anyone below.'}{' '}
+          Several people can hold it, and it doesn’t put them on the leadership team or the meeting
+          form.
+        </Text>
+      </YStack>
+
       <FlashList
         data={listed}
         keyExtractor={(u) => u.uid}
         renderItem={({ item }) => {
           const isLeader = leadershipTeam.includes(item.uid)
+          const isSoundEngineer = soundEngineers.includes(item.uid)
           return (
             <XStack
               alignItems="center"
@@ -429,6 +485,17 @@ export default function AdminLeadership() {
                     </Text>
                   </Button>
                 ) : null}
+                {/* Not a place on the team, so offered to anyone listed. */}
+                <Button
+                  size="$2"
+                  onPress={() => toggleSoundEngineer(item.uid)}
+                  backgroundColor={isSoundEngineer ? theme.primary : undefined}
+                  theme={isSoundEngineer ? undefined : 'gray'}
+                >
+                  <Text color={isSoundEngineer ? 'white' : '$color'} fontSize="$1" fontWeight="600">
+                    {isSoundEngineer ? 'Sound Engineer ✓' : 'Make Sound Engineer'}
+                  </Text>
+                </Button>
               </YStack>
             </XStack>
           )

@@ -404,6 +404,13 @@ export interface ConfigMain {
      * said. Empty when nobody has set it.
      */
     textingNumber?: string
+    /**
+     * Who may tell Miriam to change the sound desk (src/lib/mixer). A job,
+     * like the two above, but several people can hold it, and holding it
+     * doesn't put them on the leadership team: they aren't shown on the
+     * church's pages or on the meeting form.
+     */
+    soundEngineers?: string[]
   }
   publicPages: Record<string, unknown>
   postsConfig: PostsConfig

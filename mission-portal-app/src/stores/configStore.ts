@@ -3,6 +3,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import type { ConfigMain, PostsConfig, CommonTeam } from '@/types/events'
+import { soundEngineersOf } from '@/lib/soundEngineer'
 
 interface ConfigStore {
   calY: number
@@ -17,6 +18,8 @@ interface ConfigStore {
   accountant: string
   /** The number the texting list's texts come from, E.164, or '' (Admin → Leadership Team). */
   textingNumber: string
+  /** Uids of the Sound Engineers, who may change the sound desk through Miriam. */
+  soundEngineers: string[]
   loading: boolean
   _unsub: (() => void) | null
   _refCount: number
@@ -38,6 +41,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   connectionsCoordinator: '',
   accountant: '',
   textingNumber: '',
+  soundEngineers: [],
   loading: false,
   _unsub: null,
   _refCount: 0,
@@ -72,6 +76,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           connectionsCoordinator: data.connectConfig?.connectionsCoordinator ?? '',
           accountant: data.connectConfig?.accountant ?? '',
           textingNumber: data.connectConfig?.textingNumber ?? '',
+          soundEngineers: soundEngineersOf(data.connectConfig?.soundEngineers),
           loading: false,
         })
       },
