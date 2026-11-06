@@ -43,6 +43,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       // Sound Engineers' and Video Operators' requests to Miriam go to the
       // sound desk and the video switcher on the local network
       // (modules/desk-link): iOS asks for this the first time.
+      // The video encoder's preview of the ATEM's multiview is plain http on
+      // the local network (src/features/video): allowed there, and only there.
+      NSAppTransportSecurity: {
+        NSAllowsArbitraryLoads: false,
+        NSAllowsLocalNetworking: true,
+      },
       NSLocalNetworkUsageDescription:
         'Mission Portal needs local network access so Miriam can change the sound desk or switch cameras when a Sound Engineer or Video Operator asks her to.',
     },
@@ -134,6 +140,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     'expo-router',
+    // Plain http from the local network on Android: the multiview's preview (Video).
+    './plugins/withLocalNetworkHttp',
     'expo-font',
     [
       'expo-splash-screen',

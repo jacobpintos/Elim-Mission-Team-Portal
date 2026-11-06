@@ -36,6 +36,7 @@ const TAB_NAMES: Record<Tab, string> = {
   story: 'Our Story',
   connect: 'Connect',
   rolehub: 'Role hub',
+  video: 'Video — the cameras on the switcher',
   settings: 'Profile & Settings',
 }
 

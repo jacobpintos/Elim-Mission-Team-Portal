@@ -28,6 +28,8 @@ import { useTourStore } from '@/features/tour/tourStore'
 import { buildTabTour } from '@/features/tour/flows'
 import type { Tab } from '@/lib/roles'
 import { isTabVisible } from '@/lib/featureFlags'
+import { useConfigStore } from '@/stores/configStore'
+import { holdsJob } from '@/lib/teamJobs'
 import { INBOX_TITLE } from '@/features/inbox/InboxTabs'
 import { markStartup } from '@/lib/startupTimeline'
 import { EVERYONE } from '../../functions/src/eventPrivate'
@@ -54,7 +56,20 @@ const TAB_LABELS: Record<Tab, string> = {
   story: 'Our Story',
   connect: 'Connect',
   rolehub: 'Admin',
+  video: 'Video',
   settings: 'Profile & Settings',
+}
+
+/**
+ * Video, for Video Operators in the phone app (src/features/video): before
+ * Profile & Settings. Not on the web, which can't reach the switcher. Not a
+ * role but a job (Admin → Leadership Team), so it's added here, from the
+ * config, rather than by visibleTabs.
+ */
+function withVideo(tabs: Tab[], operator: boolean): Tab[] {
+  if (!operator || Platform.OS === 'web' || tabs.length === 0) return tabs
+  const at = tabs.indexOf('settings')
+  return at < 0 ? [...tabs, 'video'] : [...tabs.slice(0, at), 'video', ...tabs.slice(at)]
 }
 
 /** `color` at an alpha (two hex digits), or a neutral grey when it isn't a plain #rrggbb. */
@@ -192,6 +207,13 @@ export default function AppLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Who holds the Video Operator job (lib/teamJobs): it decides whether Video is in the menu.
+  const videoOperators = useConfigStore((s) => s.videoOperators)
+  useEffect(() => {
+    useConfigStore.getState().subscribe()
+    return () => useConfigStore.getState().unsubscribe()
+  }, [])
+
   // How long opening took (Profile & Settings): the first time a tab is shown.
   useEffect(() => {
     if (!loading && profile && visibleTabs(profile).length > 0) markStartup('firstScreen')
@@ -203,7 +225,7 @@ export default function AppLayout() {
   // The public-facing section is a tab now, not a mode. A member reaches it
   // by opening Public Facing and leaves it by opening anything else, so there
   // is no separate view to be in and nothing to restore on the way out.
-  const tabs = visibleTabs(profile)
+  const tabs = withVideo(visibleTabs(profile), holdsJob(String(profile.uid), videoOperators))
 
   // Unverified users who completed onboarding are awaiting role assignment — show holding screen
   if (tabs.length === 0) {

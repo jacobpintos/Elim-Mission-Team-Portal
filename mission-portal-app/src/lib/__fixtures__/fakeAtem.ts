@@ -93,8 +93,13 @@ export function fakeAtem(
     return packets
   }
 
+  /** The open session's way to send state, and whether it has gone quiet. */
+  let pushState: ((payloads: number[][]) => void) | null = null
+  let quiet = false
+
   const open = async (): Promise<UdpSession | null> => {
     opened++
+    quiet = false
     const inbox: Uint8Array[] = []
     let sent: Uint8Array[] = []
     let nextId = 1
@@ -109,9 +114,10 @@ export function fakeAtem(
         else inbox.push(packet)
       }
     }
+    pushState = sendState
     const session: UdpSession = {
       send: async (bytes) => {
-        if (setup.silent) return true
+        if (setup.silent || quiet) return true
         const p = readPacket(bytes)
         if (!p) return true
         if (p.flags & FLAG.newSession) {
@@ -153,7 +159,7 @@ export function fakeAtem(
         return true
       },
       receive: async (timeoutMs) => {
-        const next = inbox.shift()
+        const next = quiet ? undefined : inbox.shift()
         if (next) return next
         now += timeoutMs
         return null
@@ -168,6 +174,15 @@ export function fakeAtem(
   return {
     open,
     clock: () => now,
+    /** Someone switches on the panel: the switcher says so to whoever is connected. */
+    fromPanel: (program: number) => {
+      live.program = program
+      pushState?.([Array.from(makeCommand('PrgI', [0, 0, ...two(program)]))])
+    },
+    /** It stops answering (unplugged, or the phone left its network). */
+    goQuiet: () => {
+      quiet = true
+    },
     live,
     /** The commands it took, by name, in order. */
     commands,

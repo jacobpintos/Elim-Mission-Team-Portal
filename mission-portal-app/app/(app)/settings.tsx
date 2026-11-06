@@ -31,7 +31,14 @@ import { deskAddressOf, loadDeskAddress, saveDeskAddress } from '@/lib/mixer/des
 import { canReachDesk, deskLinkTo } from '@/lib/mixer/link'
 import { deskInfo } from '@/lib/mixer/x32'
 import { canReachSwitcher, switcherAt } from '@/lib/switcher/link'
-import { loadSwitcherAddress, saveSwitcherAddress } from '@/lib/switcher/switcherAddress'
+import {
+  loadMultiviewFeed,
+  loadSwitcherAddress,
+  saveMultiviewFeed,
+  saveSwitcherAddress,
+  type MultiviewFeed,
+} from '@/lib/switcher/switcherAddress'
+import { feedUrlOf } from '@/lib/switcher/multiview'
 import { visitAtem } from '@/lib/switcher/atem'
 import { liveSaid } from '@/lib/switcher/plan'
 import { canLookAround, phoneNetwork, udpExchange } from '@/lib/localNetwork'
@@ -184,9 +191,28 @@ export default function SettingsScreen() {
   const [switcherAddress, setSwitcherAddress] = useState('')
   const [switcherChecking, setSwitcherChecking] = useState(false)
   const [switcherStatus, setSwitcherStatus] = useState('')
+  // The multiview's picture, from a video encoder on the same network (Video).
+  const [feedUrl, setFeedUrl] = useState('')
+  const [feedKind, setFeedKind] = useState<MultiviewFeed['kind']>('still')
+  const [feedStatus, setFeedStatus] = useState('')
   useEffect(() => {
     loadSwitcherAddress().then(setSwitcherAddress)
+    loadMultiviewFeed().then((f) => {
+      if (!f) return
+      setFeedUrl(f.url)
+      setFeedKind(f.kind)
+    })
   }, [])
+  const saveFeed = async () => {
+    const url = feedUrlOf(feedUrl)
+    if (feedUrl.trim() && !url) {
+      setFeedStatus('That isn’t a web address like http://192.168.1.50/snapshot.jpg.')
+      return
+    }
+    await saveMultiviewFeed(url ? { url, kind: feedKind } : null)
+    if (url) setFeedUrl(url)
+    setFeedStatus(url ? 'Saved. Open Video to see it.' : 'Cleared.')
+  }
   /** Saves the address, and connects to read what the switcher is and what's live. */
   const saveAndCheckSwitcher = async (typed = switcherAddress, foundNote = '') => {
     const address = deskAddressOf(typed)
@@ -971,6 +997,76 @@ export default function SettingsScreen() {
                 {switcherStatus ? (
                   <Text color={colors.textMuted} fontSize="$2">
                     {switcherStatus}
+                  </Text>
+                ) : null}
+                <Text color={colors.textMuted} fontSize="$2">
+                  To see the cameras in Video, plug the ATEM’s multiview output into a video encoder
+                  on this network, and enter the address of the encoder’s preview picture (its
+                  manual or settings page gives it).
+                </Text>
+                <Field label="Multiview preview address">
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.surface,
+                      },
+                    ]}
+                    value={feedUrl}
+                    onChangeText={(v) => {
+                      setFeedUrl(v)
+                      setFeedStatus('')
+                    }}
+                    placeholder="http://192.168.1.50/snapshot.jpg"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="url"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </Field>
+                <XStack gap="$2" alignItems="center" flexWrap="wrap">
+                  {(
+                    [
+                      ['still', 'Still picture'],
+                      ['mjpeg', 'Motion JPEG'],
+                    ] as const
+                  ).map(([kind, label]) => (
+                    <Pressable
+                      key={kind}
+                      onPress={() => {
+                        setFeedKind(kind)
+                        setFeedStatus('')
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.btn,
+                          {
+                            borderWidth: 1,
+                            borderColor: colors.primary,
+                            backgroundColor: feedKind === kind ? colors.primary : 'transparent',
+                          },
+                        ]}
+                      >
+                        <Text color={feedKind === kind ? 'white' : colors.primary} fontWeight="700">
+                          {label}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                  <Pressable onPress={saveFeed}>
+                    <View style={[styles.btn, { backgroundColor: colors.primary }]}>
+                      <Text color="white" fontWeight="700">
+                        Save
+                      </Text>
+                    </View>
+                  </Pressable>
+                </XStack>
+                {feedStatus ? (
+                  <Text color={colors.textMuted} fontSize="$2">
+                    {feedStatus}
                   </Text>
                 ) : null}
               </>

@@ -61,6 +61,8 @@ export type Tab =
   | 'story'
   | 'connect'
   | 'rolehub'
+  /** For Video Operators, in the phone app (app/(app)/_layout: withVideo). */
+  | 'video'
   | 'settings'
 
 /** Roles that make an account a team member rather than a public follower. */

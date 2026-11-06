@@ -22,3 +22,31 @@ export async function saveSwitcherAddress(address: string): Promise<void> {
     () => {}
   )
 }
+
+/** The multiview's picture, from a video encoder on the same network (./multiview). */
+export interface MultiviewFeed {
+  url: string
+  /** A still picture the encoder updates (asked for again and again), or a motion-JPEG stream. */
+  kind: 'still' | 'mjpeg'
+}
+
+const FEED_KEY = 'switcher.multiview'
+
+export async function loadMultiviewFeed(): Promise<MultiviewFeed | null> {
+  const raw = await AsyncStorage.getItem(FEED_KEY).catch(() => null)
+  if (!raw) return null
+  try {
+    const f = JSON.parse(raw) as Partial<MultiviewFeed>
+    return typeof f.url === 'string' && (f.kind === 'still' || f.kind === 'mjpeg')
+      ? { url: f.url, kind: f.kind }
+      : null
+  } catch {
+    return null
+  }
+}
+
+export async function saveMultiviewFeed(feed: MultiviewFeed | null): Promise<void> {
+  await (
+    feed ? AsyncStorage.setItem(FEED_KEY, JSON.stringify(feed)) : AsyncStorage.removeItem(FEED_KEY)
+  ).catch(() => {})
+}
