@@ -1,5 +1,6 @@
 import type { MixAmount, MixerAsk } from './asked'
 import { mixerPlain } from './asked'
+import { isMicWord, sameMeaning, withPhrases } from './lingo'
 import { liveSwaps, sameName, whoseFor, type Swap } from './swaps'
 import {
   dbToFader,
@@ -27,25 +28,33 @@ export const MAX_UP_DB = 6
 /** "Turn it down" with no amount: this much. */
 const STEP_DB: Record<'little' | 'some' | 'lot', number> = { little: 2, some: 3, lot: 6 }
 
+/** Words, as said or as on the desk, read the same way (./lingo: "electric guitar" is "eg"). */
 const words = (s: string) =>
-  mixerPlain(s)
-    .replace(/'s\b|s'(?=\s|$)/g, '')
+  withPhrases(mixerPlain(s).replace(/'s\b|s'(?=\s|$)/g, ''))
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
     .split(' ')
     .filter(Boolean)
 
-/** A word said and a word on the desk alike: the same, or one the start of the other (3+ letters). */
+/**
+ * A word said and a word on the desk alike: the same, one the start of the
+ * other (3+ letters), or two ways of saying the same thing ("mic" and "Vox").
+ */
 const alike = (said: string, on: string) =>
   said === on ||
   (said.length >= 3 && on.startsWith(said)) ||
-  (on.length >= 3 && said.startsWith(on))
+  (on.length >= 3 && said.startsWith(on)) ||
+  sameMeaning(said, on)
 
 /** How well what was said names this: 3 all of it, 2 all said found in it (or it in what was said), 0 not. */
 function fit(said: string[], name: string[]): number {
   if (!said.length || !name.length) return 0
   if (said.join('') === name.join('')) return 3
-  const sameSet = said.length === name.length && said.every((w) => name.includes(w))
+  const same = (a: string, b: string) => a === b || sameMeaning(a, b)
+  const sameSet =
+    said.length === name.length &&
+    said.every((w) => name.some((n) => same(w, n))) &&
+    name.every((n) => said.some((w) => same(w, n)))
   if (sameSet) return 3
   if (said.every((w) => name.some((n) => alike(w, n)))) return 2
   if (name.every((n) => said.some((w) => alike(w, n)))) return 2
@@ -90,9 +99,8 @@ function best(
 export const namesFound = (said: string, names: readonly string[]): Found =>
   best(words(said), names)
 
-/** Words that make a channel someone's mic: "Jacob Vox", "Mia Mic". A channel named only for them is too. */
-const MIC_WORDS =
-  /^(?:vox|voc|vocals?|vocs|mics?|microphones?|voice|bvs?|bgvs?|lead|ld|singer|sing|speech|handheld|hh|headset)$/
+/** A word that makes a channel someone's mic ("Jacob Vox", "Mia Mic"): ./lingo. A channel named only for them is too. */
+const MIC_WORDS = { test: isMicWord }
 
 /** The words of a channel's name besides this person's, and whether the name is theirs at all. */
 function besides(person: string[], name: string[]) {

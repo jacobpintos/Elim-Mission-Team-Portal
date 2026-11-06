@@ -202,13 +202,194 @@ export type AtemVisit =
 
 const isNext = (last: number, id: number) => id === (last + 1) % MAX_PACKET_ID
 
-/** How long a visit may take: hello, the state, the command and its ack. */
+/** How long things may take: hello, the state, a command's ack. */
 const HELLO_MS = 1500
 const STATE_MS = 5000
 const ACK_MS = 1500
 const RESEND_MS = 100
-/** After the ack, how long to listen for the switcher's new state. */
+/** After a command's ack, how long a visit listens for the switcher's new state. */
 const SETTLE_MS = 400
+/** Nothing heard from the switcher for this long: the connection is lost (as atem-connection judges it). */
+const LOST_MS = 5000
+
+/** Whether an ack of `ackId` covers our packet `id` (ids wrap at 15 bits). */
+const covers = (ackId: number, id: number) =>
+  (ackId - id + MAX_PACKET_ID) % MAX_PACKET_ID < MAX_PACKET_ID / 2
+
+export const cloneAtemState = (s: AtemState): AtemState => ({ ...s, inputs: new Map(s.inputs) })
+
+/**
+ * A connection to the switcher: connected, it keeps acknowledging what the
+ * switcher sends (so it stays connected and its state stays current) for as
+ * long as `listen` runs, and sends commands until they're acknowledged.
+ *
+ * Miriam's requests use it for one command and leave (`visitAtem`); the
+ * Video screen keeps it while it's open, so live and preview stay right when
+ * someone switches on the panel.
+ */
+export class AtemConnection {
+  readonly state: AtemState = emptyAtemState()
+  /** Told when the switcher says something changed, once it has said everything. */
+  onChange: ((state: AtemState) => void) | null = null
+  private session: UdpSession | null = null
+  private sessionId = 0
+  private last = -1
+  private established = false
+  private nextId = 1
+  private pending: {
+    id: number
+    packet: Uint8Array
+    sentAt: number
+    until: number
+    done: (ok: boolean) => void
+  }[] = []
+  private waits: { at: number; done: () => void }[] = []
+  private heardAt = 0
+  private closed = false
+
+  constructor(
+    private readonly open: () => Promise<UdpSession | null>,
+    private readonly clock: () => number = Date.now
+  ) {}
+
+  /** Says hello and reads everything about the switcher: true once it has. */
+  async connect(): Promise<boolean> {
+    this.session = await this.open()
+    if (!this.session) return false
+    let until = this.clock() + HELLO_MS
+    let helloAt = -Infinity
+    while (!this.established) {
+      if (this.closed || this.clock() >= until) return this.fail()
+      if (this.clock() - helloAt >= 500) {
+        await this.session.send(HELLO)
+        helloAt = this.clock()
+      }
+      await this.hear(100)
+    }
+    until = this.clock() + STATE_MS
+    while (!this.state.ready) {
+      if (this.closed || this.clock() >= until) return this.fail()
+      await this.hear(200)
+    }
+    return true
+  }
+
+  /**
+   * Keeps the connection: acknowledges, takes in changes, sends and resends
+   * commands. Resolves once closed, or when the switcher has gone quiet.
+   */
+  async listen(): Promise<'closed' | 'lost'> {
+    while (!this.closed) {
+      await this.tick()
+      const heard = await this.hear(50)
+      if (!heard && this.clock() - this.heardAt > LOST_MS) {
+        this.close()
+        return 'lost'
+      }
+    }
+    return 'closed'
+  }
+
+  /** Sends commands in one packet: true once the switcher acknowledges them. Needs `listen` running. */
+  command(commands: readonly Uint8Array[]): Promise<boolean> {
+    if (this.closed || !this.session || !commands.length) return Promise.resolve(false)
+    const id = this.nextId
+    this.nextId = (this.nextId + 1) % MAX_PACKET_ID
+    const payload = new Uint8Array(commands.reduce((n, c) => n + c.length, 0))
+    let at = 0
+    for (const c of commands) {
+      payload.set(c, at)
+      at += c.length
+    }
+    const packet = makePacket(ACK_REQUEST, this.sessionId, { packetId: id }, payload)
+    return new Promise((done) =>
+      this.pending.push({ id, packet, sentAt: -Infinity, until: this.clock() + ACK_MS, done })
+    )
+  }
+
+  /** Resolves after this long, by the connection's own clock. Needs `listen` running. */
+  wait(ms: number): Promise<void> {
+    return new Promise((done) => this.waits.push({ at: this.clock() + ms, done }))
+  }
+
+  /** Leaves: nothing more is sent or heard. (The library sends no goodbye either.) */
+  close(): void {
+    if (this.closed) return
+    this.closed = true
+    for (const p of this.pending) p.done(false)
+    this.pending = []
+    for (const w of this.waits) w.done()
+    this.waits = []
+    this.session?.close()
+  }
+
+  private fail(): false {
+    this.close()
+    return false
+  }
+
+  /** One datagram, if one comes in time, taken in: true if one came. */
+  private async hear(ms: number): Promise<boolean> {
+    const bytes = this.session ? await this.session.receive(ms) : null
+    const p = bytes ? readPacket(bytes) : null
+    if (p) {
+      this.heardAt = this.clock()
+      await this.take(p)
+    }
+    return !!bytes
+  }
+
+  /** Waits that are due, commands not acknowledged in time, and resends. */
+  private async tick(): Promise<void> {
+    const now = this.clock()
+    const due = this.waits.filter((w) => now >= w.at)
+    this.waits = this.waits.filter((w) => now < w.at)
+    for (const w of due) w.done()
+    for (const p of [...this.pending]) {
+      if (now >= p.until) {
+        this.settle(p.id, false)
+      } else if (now - p.sentAt >= RESEND_MS && this.session) {
+        // With the session as the switcher has it now.
+        put16(p.packet, 2, this.sessionId)
+        await this.session.send(p.packet)
+        p.sentAt = this.clock()
+      }
+    }
+  }
+
+  private settle(id: number, ok: boolean) {
+    const i = this.pending.findIndex((p) => p.id === id)
+    if (i < 0) return
+    const [p] = this.pending.splice(i, 1)
+    p.done(ok)
+  }
+
+  /** One packet: acknowledged, and read when it's the next in order. */
+  private async take(p: AtemPacket): Promise<void> {
+    if (!this.session) return
+    this.sessionId = p.session
+    if (p.flags & NEW_SESSION) {
+      this.established = true
+      this.last = p.packetId
+      await this.session.send(ackPacket(this.sessionId, this.last))
+      return
+    }
+    if (p.flags & ACK_REPLY) {
+      for (const q of [...this.pending]) if (covers(p.ackId, q.id)) this.settle(q.id, true)
+    }
+    if (p.flags & RETRANSMIT_REQUEST) for (const q of this.pending) q.sentAt = -Infinity
+    if (!(p.flags & ACK_REQUEST) || this.last < 0) return
+    if (isNext(this.last, p.packetId)) {
+      this.last = p.packetId
+      const commands = readCommands(p.payload)
+      const wasReady = this.state.ready
+      for (const c of commands) applyAtemCommand(this.state, c.name, c.data)
+      if (wasReady && commands.length) this.onChange?.(this.state)
+    }
+    // Out of order: not read, and the switcher resends it. Either way, acked up to the last in order.
+    await this.session.send(ackPacket(this.sessionId, this.last))
+  }
+}
 
 /**
  * Connects, reads the switcher, gives the commands `act` returns for what it
@@ -219,105 +400,21 @@ export async function visitAtem(
   act: (state: AtemState) => Uint8Array[],
   clock: () => number = Date.now
 ): Promise<AtemVisit> {
-  const session = await open()
-  if (!session) return { kind: 'unreachable' }
-  try {
-    return await visit(session, act, clock)
-  } finally {
-    session.close()
-  }
-}
-
-async function visit(
-  s: UdpSession,
-  act: (state: AtemState) => Uint8Array[],
-  clock: () => number
-): Promise<AtemVisit> {
-  const state = emptyAtemState()
-  let sessionId = 0
-  let last = -1
-  let established = false
-
-  /** Takes in one packet: acks it, and reads what it says when it's the next in order. */
-  const take = async (p: AtemPacket) => {
-    sessionId = p.session
-    if (p.flags & NEW_SESSION) {
-      established = true
-      last = p.packetId
-      await s.send(ackPacket(sessionId, last))
-      return
-    }
-    if (!(p.flags & ACK_REQUEST) || last < 0) return
-    if (isNext(last, p.packetId)) {
-      last = p.packetId
-      for (const c of readCommands(p.payload)) applyAtemCommand(state, c.name, c.data)
-    }
-    // Out of order: not read, and the switcher resends it. Either way, acked up to the last in order.
-    await s.send(ackPacket(sessionId, last))
-  }
-
-  // Hello, said again until the switcher answers.
-  let until = clock() + HELLO_MS
-  let helloAt = -Infinity
-  while (!established) {
-    if (clock() >= until) return { kind: 'unreachable' }
-    if (clock() - helloAt >= 500) {
-      await s.send(HELLO)
-      helloAt = clock()
-    }
-    const bytes = await s.receive(100)
-    const p = bytes ? readPacket(bytes) : null
-    if (p) await take(p)
-  }
-
-  // Everything about the switcher, until it says it's done.
-  until = clock() + STATE_MS
-  while (!state.ready) {
-    if (clock() >= until) return { kind: 'unreachable' }
-    const bytes = await s.receive(200)
-    const p = bytes ? readPacket(bytes) : null
-    if (p) await take(p)
-  }
-  const before = cloneState(state)
-
+  const conn = new AtemConnection(open, clock)
+  if (!(await conn.connect())) return { kind: 'unreachable' }
+  const before = cloneAtemState(conn.state)
   const commands = act(before)
-  if (!commands.length) return { kind: 'done', before, after: before }
-
-  // The command, as our packet 1, resent until the switcher acks it.
-  const payload = new Uint8Array(commands.reduce((n, c) => n + c.length, 0))
-  let at = 0
-  for (const c of commands) {
-    payload.set(c, at)
-    at += c.length
+  if (!commands.length) {
+    conn.close()
+    return { kind: 'done', before, after: before }
   }
-  const ours = makePacket(ACK_REQUEST, sessionId, { packetId: 1 }, payload)
-  let acked = false
-  let sentAt = -Infinity
-  until = clock() + ACK_MS
-  while (!acked) {
-    if (clock() >= until) return { kind: 'not taken', before }
-    if (clock() - sentAt >= RESEND_MS) {
-      // With the session as the switcher has it now.
-      put16(ours, 2, sessionId)
-      await s.send(ours)
-      sentAt = clock()
-    }
-    const bytes = await s.receive(RESEND_MS)
-    const p = bytes ? readPacket(bytes) : null
-    if (!p) continue
-    if (p.flags & ACK_REPLY && p.ackId >= 1) acked = true
-    if (p.flags & RETRANSMIT_REQUEST) sentAt = -Infinity
-    await take(p)
-  }
-
+  const listening = conn.listen()
+  const ok = await conn.command(commands)
   // A moment to hear what changed.
-  const settleUntil = clock() + SETTLE_MS
-  while (clock() < settleUntil) {
-    const bytes = await s.receive(Math.max(1, settleUntil - clock()))
-    const p = bytes ? readPacket(bytes) : null
-    if (p) await take(p)
-  }
-  return { kind: 'done', before, after: cloneState(state) }
+  if (ok) await conn.wait(SETTLE_MS)
+  conn.close()
+  await listening
+  return ok
+    ? { kind: 'done', before, after: cloneAtemState(conn.state) }
+    : { kind: 'not taken', before }
 }
-
-const cloneState = (s: AtemState): AtemState => ({ ...s, inputs: new Map(s.inputs) })

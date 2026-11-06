@@ -340,3 +340,69 @@ describe('a change, made on the desk', () => {
     })
   })
 })
+
+describe('channels, as people say them', () => {
+  const STRIPS = {
+    1: 'Pastor HH',
+    2: 'Sunny Vox',
+    3: 'Sunny EG',
+    4: 'Sunny AG',
+    5: 'Sunny TB',
+    6: 'Mia Vox',
+    7: 'HH',
+    8: 'Kick',
+    9: 'Keys',
+  }
+  async function strips() {
+    const desk = fakeX32({ channels: STRIPS, buses: BUSES })
+    return (await readDeskNames(desk.link)) as DeskNames
+  }
+  const chOf = (names: DeskNames, said: string) => {
+    const a = aim(ask(said), names, [], 'Jo', NOW)
+    return a.kind === 'target'
+      ? a.target.chName
+      : a.kind === 'which channel'
+        ? a.options.map((o) => o.name)
+        : a.kind
+  }
+
+  it('knows a vocal by any of its names', async () => {
+    const names = await strips()
+    expect(chOf(names, 'mute sunny vocal')).toBe('Sunny Vox')
+    expect(chOf(names, 'mute sunny’s mic')).toBe('Sunny Vox')
+    expect(chOf(names, 'turn down sunny’s voice')).toBe('Sunny Vox')
+    expect(chOf(names, 'mute the pastor’s mic')).toBe('Pastor HH')
+  })
+
+  it('goes straight to someone’s only channel, and asks which of several', async () => {
+    const names = await strips()
+    expect(chOf(names, 'mute mia')).toBe('Mia Vox')
+    expect(chOf(names, 'mute sunny')).toEqual(['Sunny Vox', 'Sunny EG', 'Sunny AG', 'Sunny TB'])
+  })
+
+  it('knows the strips’ short names', async () => {
+    const names = await strips()
+    expect(chOf(names, 'mute sunny’s electric guitar')).toBe('Sunny EG')
+    expect(chOf(names, 'mute sunny’s acoustic')).toBe('Sunny AG')
+    expect(chOf(names, 'mute sunny’s talkback')).toBe('Sunny TB')
+    expect(chOf(names, 'turn down the hi hat')).toBe('HH')
+    expect(chOf(names, 'turn down the kick drum')).toBe('Kick')
+    expect(chOf(names, 'turn up the piano')).toBe('Keys')
+  })
+
+  it('asks which, when “guitar” could be either', async () => {
+    const names = await strips()
+    expect(chOf(names, 'mute sunny’s guitar')).toEqual(['Sunny EG', 'Sunny AG'])
+  })
+
+  it('knows a vocal by any of its names when someone is on another’s mic', async () => {
+    const desk = fakeX32({
+      channels: { 3: 'Jacob Vox', 4: 'Mia Vox', 5: 'Mia Keys' },
+      buses: BUSES,
+    })
+    const names = (await readDeskNames(desk.link)) as DeskNames
+    const swaps = swapsOf('Mia is using Jacob’s mic')
+    expect(targetOf(aim(ask('mute mia’s mic'), names, swaps, 'Jo', NOW)).chName).toBe('Jacob Vox')
+    expect(targetOf(aim(ask('mute mia vocal'), names, swaps, 'Jo', NOW)).chName).toBe('Jacob Vox')
+  })
+})
