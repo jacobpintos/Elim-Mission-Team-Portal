@@ -34,6 +34,10 @@ import { canReachSwitcher, switcherAt } from '@/lib/switcher/link'
 import { loadSwitcherAddress, saveSwitcherAddress } from '@/lib/switcher/switcherAddress'
 import { visitAtem } from '@/lib/switcher/atem'
 import { liveSaid } from '@/lib/switcher/plan'
+import { canLookAround, phoneNetwork, udpExchange } from '@/lib/localNetwork'
+import { networkSaid } from '@/lib/netScan'
+import { findDesks } from '@/lib/mixer/find'
+import { findSwitchers } from '@/lib/switcher/find'
 import { recentStartups } from '@/lib/startupTimeline'
 import { describeRun, type StartupRun } from '@/lib/startupSteps'
 import * as Sentry from '@sentry/react-native'
@@ -45,6 +49,17 @@ import {
   type NotifKey,
   type PublicNotifKey,
 } from '@/lib/notificationKeys'
+
+/** Nothing answered a search of the network (Settings → Sound desk, Video switcher). */
+function notFound(what: string, phone: string): string {
+  const ios =
+    Platform.OS === 'ios' ? ' If it asked about local network access, allow it and try again.' : ''
+  return `No ${what} answered on ${networkSaid(phone)}. Is this phone on its network?${ios}`
+}
+
+/** Others that answered too: said, so the right one can be typed in. */
+const alsoFound = (more: { host: string }[]) =>
+  more.length ? ` (Also answered: ${more.map((m) => m.host).join(', ')}.)` : ''
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const colors = useThemeColors()
@@ -119,9 +134,9 @@ export default function SettingsScreen() {
     loadDeskAddress().then(setDeskAddress)
   }, [])
   /** Saves the address and asks the desk its name: whether this phone can reach it. */
-  const saveAndCheckDesk = async () => {
-    const address = deskAddressOf(deskAddress)
-    if (deskAddress.trim() && !address) {
+  const saveAndCheckDesk = async (typed = deskAddress) => {
+    const address = deskAddressOf(typed)
+    if (typed.trim() && !address) {
       setDeskStatus('That isn’t an address like 192.168.0.64.')
       return
     }
@@ -141,6 +156,29 @@ export default function SettingsScreen() {
         : 'Saved, but the desk didn’t answer. Is this phone on its Wi-Fi?'
     )
   }
+  /** Looks for the desk on the phone's Wi-Fi (lib/mixer/find), and saves the one that answers. */
+  const findDesk = async () => {
+    const net = phoneNetwork()
+    if (!net) {
+      setDeskStatus('This phone isn’t on Wi-Fi. Join the desk’s Wi-Fi first.')
+      return
+    }
+    setDeskChecking(true)
+    setDeskStatus(`Looking on ${networkSaid(net.address)}…`)
+    const found = await findDesks(udpExchange, net)
+    setDeskChecking(false)
+    if (!found.length) {
+      setDeskStatus(notFound('sound desk', net.address))
+      return
+    }
+    const [first, ...more] = found
+    setDeskAddress(first.host)
+    await saveDeskAddress(first.host)
+    const { model, name } = first.found
+    setDeskStatus(
+      `Found ${model || 'the desk'}${name ? ` “${name}”` : ''} at ${first.host}. Saved.${alsoFound(more)}`
+    )
+  }
 
   // The video switcher's address on its network, kept on this phone (Video Operators).
   const [switcherAddress, setSwitcherAddress] = useState('')
@@ -150,9 +188,9 @@ export default function SettingsScreen() {
     loadSwitcherAddress().then(setSwitcherAddress)
   }, [])
   /** Saves the address, and connects to read what the switcher is and what's live. */
-  const saveAndCheckSwitcher = async () => {
-    const address = deskAddressOf(switcherAddress)
-    if (switcherAddress.trim() && !address) {
+  const saveAndCheckSwitcher = async (typed = switcherAddress, foundNote = '') => {
+    const address = deskAddressOf(typed)
+    if (typed.trim() && !address) {
       setSwitcherStatus('That isn’t an address like 192.168.10.240.')
       return
     }
@@ -167,10 +205,29 @@ export default function SettingsScreen() {
     const visit = open ? await visitAtem(open, () => []) : null
     setSwitcherChecking(false)
     setSwitcherStatus(
-      visit?.kind === 'done'
-        ? `Saved. Connected to ${visit.before.product || 'the ATEM'}. ${liveSaid(visit.before)}`
-        : 'Saved, but the switcher didn’t answer. Is this phone on its network?'
+      foundNote +
+        (visit?.kind === 'done'
+          ? `Saved. Connected to ${visit.before.product || 'the ATEM'}. ${liveSaid(visit.before)}`
+          : 'Saved, but the switcher didn’t answer. Is this phone on its network?')
     )
+  }
+  /** Looks for the switcher on the phone's network (lib/switcher/find), and saves the one that answers. */
+  const findSwitcher = async () => {
+    const net = phoneNetwork()
+    if (!net) {
+      setSwitcherStatus('This phone isn’t on Wi-Fi. Join the switcher’s network first.')
+      return
+    }
+    setSwitcherChecking(true)
+    setSwitcherStatus(`Looking on ${networkSaid(net.address)}…`)
+    const found = await findSwitchers(udpExchange, net)
+    setSwitcherChecking(false)
+    if (!found.length) {
+      setSwitcherStatus(notFound('video switcher', net.address))
+      return
+    }
+    const [first, ...more] = found
+    await saveAndCheckSwitcher(first.host, `Found it at ${first.host}.${alsoFound(more)} `)
   }
 
   // Location
@@ -797,7 +854,7 @@ export default function SettingsScreen() {
                       autoCorrect={false}
                     />
                   </Field>
-                  <Pressable onPress={saveAndCheckDesk} disabled={deskChecking}>
+                  <Pressable onPress={() => saveAndCheckDesk()} disabled={deskChecking}>
                     <View
                       style={[
                         styles.btn,
@@ -810,6 +867,25 @@ export default function SettingsScreen() {
                     </View>
                   </Pressable>
                 </XStack>
+                {canLookAround() ? (
+                  <Pressable onPress={findDesk} disabled={deskChecking}>
+                    <View
+                      style={[
+                        styles.btn,
+                        {
+                          borderWidth: 1,
+                          borderColor: colors.primary,
+                          alignSelf: 'flex-start',
+                          opacity: deskChecking ? 0.5 : 1,
+                        },
+                      ]}
+                    >
+                      <Text color={colors.primary} fontWeight="700">
+                        Find it on this Wi-Fi
+                      </Text>
+                    </View>
+                  </Pressable>
+                ) : null}
                 {deskStatus ? (
                   <Text color={colors.textMuted} fontSize="$2">
                     {deskStatus}
@@ -860,7 +936,7 @@ export default function SettingsScreen() {
                       autoCorrect={false}
                     />
                   </Field>
-                  <Pressable onPress={saveAndCheckSwitcher} disabled={switcherChecking}>
+                  <Pressable onPress={() => saveAndCheckSwitcher()} disabled={switcherChecking}>
                     <View
                       style={[
                         styles.btn,
@@ -873,6 +949,25 @@ export default function SettingsScreen() {
                     </View>
                   </Pressable>
                 </XStack>
+                {canLookAround() ? (
+                  <Pressable onPress={findSwitcher} disabled={switcherChecking}>
+                    <View
+                      style={[
+                        styles.btn,
+                        {
+                          borderWidth: 1,
+                          borderColor: colors.primary,
+                          alignSelf: 'flex-start',
+                          opacity: switcherChecking ? 0.5 : 1,
+                        },
+                      ]}
+                    >
+                      <Text color={colors.primary} fontWeight="700">
+                        Find it on this network
+                      </Text>
+                    </View>
+                  </Pressable>
+                ) : null}
                 {switcherStatus ? (
                   <Text color={colors.textMuted} fontSize="$2">
                     {switcherStatus}

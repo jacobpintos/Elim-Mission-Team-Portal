@@ -1,4 +1,5 @@
 import ExpoModulesCore
+import Foundation
 import Network
 
 /// The church's equipment on the local network, over UDP:
@@ -33,6 +34,13 @@ public class DeskLinkModule: Module {
 
     Function("isAvailable") { () -> Bool in
       return true
+    }
+
+    /// The phone's own address on Wi-Fi and its network mask, for looking
+    /// for the equipment on that network (src/lib/localNetwork.ts); null when
+    /// it isn't on Wi-Fi.
+    Function("localNetwork") { () -> [String: String]? in
+      return DeskLinkModule.wifiAddress()
     }
 
     /// Sends `message` to the desk and resolves with its first answer, or
@@ -94,6 +102,26 @@ public class DeskLinkModule: Module {
     Function("close") { (id: Int) in
       self.queue.async { self.closeSession(id) }
     }
+  }
+
+  /// The IPv4 address and mask of en0, the Wi-Fi interface.
+  private static func wifiAddress() -> [String: String]? {
+    var list: UnsafeMutablePointer<ifaddrs>?
+    guard getifaddrs(&list) == 0, let first = list else { return nil }
+    defer { freeifaddrs(list) }
+    let numeric = { (sa: UnsafeMutablePointer<sockaddr>) -> String in
+      var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+      getnameinfo(sa, socklen_t(sa.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST)
+      return String(cString: host)
+    }
+    for entry in sequence(first: first, next: { $0.pointee.ifa_next }) {
+      let iface = entry.pointee
+      guard let addr = iface.ifa_addr, addr.pointee.sa_family == UInt8(AF_INET),
+        String(cString: iface.ifa_name) == "en0", let mask = iface.ifa_netmask
+      else { continue }
+      return ["address": numeric(addr), "netmask": numeric(mask)]
+    }
+    return nil
   }
 
   private func openSession(host: String, port: Int, promise: Promise) {

@@ -9,6 +9,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.SocketTimeoutException
 import java.util.concurrent.ConcurrentHashMap
@@ -38,6 +39,20 @@ class DeskLinkModule : Module() {
     Name("DeskLink")
 
     Function("isAvailable") { true }
+
+    /**
+     * The phone's own address on Wi-Fi and the network's prefix length, for
+     * looking for the equipment on that network (src/lib/localNetwork.ts);
+     * null when it isn't on Wi-Fi.
+     */
+    Function("localNetwork") {
+      val context = appContext.reactContext
+      val cm = context?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+      val link = wifi()?.let { cm?.getLinkProperties(it) }
+      val v4 = link?.linkAddresses?.firstOrNull { it.address is Inet4Address }
+      if (v4 == null) null
+      else mapOf("address" to (v4.address.hostAddress ?: ""), "prefix" to v4.prefixLength.toString())
+    }
 
     /** Sends `message` to the desk and gives back its first answer, or null if none came in time. */
     AsyncFunction("exchange") Coroutine { host: String, port: Int, message: List<Int>, timeoutMs: Int ->
