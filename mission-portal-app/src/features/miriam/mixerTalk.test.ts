@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { UserProfile } from '@/types/user'
 import { X32 } from '@/lib/mixer/x32'
+import { forgetHouseMutes } from '@/lib/mixer/desk'
 import type { Swap } from '@/lib/mixer/swaps'
 import { fakeX32 } from '@/lib/__fixtures__/fakeX32'
 import type { Here, Reply, Talk } from './localTalk'
@@ -73,7 +74,10 @@ function atTheDesk(access?: DeskAccess['kind']) {
   })
 }
 
-beforeEach(() => forgetDeskNames())
+beforeEach(() => {
+  forgetDeskNames()
+  forgetHouseMutes()
+})
 
 describe('Miriam at the sound desk', () => {
   it('mutes a channel at once, with Undo', async () => {

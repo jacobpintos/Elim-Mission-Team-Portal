@@ -17,6 +17,7 @@ export function fakeX32(
     state.set(X32.fader(ch), { t: 'f', v: snapFader(0.75) })
     state.set(X32.mainLR(ch), { t: 'i', v: 1 })
     state.set(X32.mainMono(ch), { t: 'i', v: 0 })
+    state.set(X32.monoLevel(ch), { t: 'f', v: 0 })
     for (let bus = 1; bus <= BUSES; bus++) {
       state.set(X32.sendOn(ch, bus), { t: 'i', v: 1 })
       state.set(X32.sendLevel(ch, bus), { t: 'f', v: snapFader(0.75) })

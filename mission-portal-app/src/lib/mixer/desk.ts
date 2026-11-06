@@ -181,7 +181,17 @@ export interface Target {
   chNote?: string
   /** The in-ear mix, whose ears were said, and whose pack it is if not theirs. */
   ears?: { bus: number; busName: string; person: string; note?: string }
+  /** Mix buses that feed house speakers ("Subs", "Front Fill"): part of "the house". */
+  houseBuses?: number[]
 }
+
+/** A mix bus named for house speakers, not someone's in-ears. */
+const HOUSE_BUS =
+  /\b(?:subs?|sub\s*woofers?|subwoofers?|fills?|front\s*fills?|frontfill|delays?|pa|mains?|house|foh|sides?|centre|center|cluster|lcr)\b/i
+
+/** The desk's mix buses that feed house speakers, by their names. */
+export const houseBusesOf = (names: DeskNames) =>
+  names.buses.flatMap((name, i) => (HOUSE_BUS.test(name) ? [i + 1] : []))
 
 export type Aimed =
   | { kind: 'target'; target: Target }
@@ -216,6 +226,7 @@ export function aim(
     ch: found.n,
     chName: found.name || `Channel ${found.n}`,
     chNote: noteFor(found.n),
+    houseBuses: houseBusesOf(names),
   }
   if (ask.place?.kind !== 'ears') return { kind: 'target', target }
   const person = titledName(ask.place.who === 'me' ? me : ask.place.who)
@@ -302,6 +313,91 @@ const changeSize = (from: number, to: number) => {
   return Math.round(Math.abs(b - a) * 10) / 10
 }
 
+const NOT_TAKEN = 'The desk didn’t take that. Check it in MX-Q.'
+
+/**
+ * What a channel's house feeds were turned off by "mute it in the house", by
+ * channel, on this phone: "unmute it in the house" turns the same ones back on.
+ */
+const outOfTheHouse = new Map<number, string[]>()
+
+/** Forgets what was taken out of the house (tests). */
+export function forgetHouseMutes(): void {
+  outOfTheHouse.clear()
+}
+
+/**
+ * "In the house" is every speaker in the room, subs too: the channel's feed
+ * to the main left/right, to the mono/centre bus (which often feeds the
+ * subs), and to any mix bus named for house speakers ("Subs", "Front Fill").
+ * Muted there, each feed that is on is turned off, and remembered. Unmuted,
+ * those are turned back on. With nothing remembered (another phone muted
+ * it, or the app was closed), the main left/right is, and any other feed
+ * whose level is up: one set to be heard.
+ */
+async function houseMute(link: DeskLink, mute: boolean, t: Target, name: string): Promise<Worked> {
+  const feeds = [
+    { address: X32.mainLR(t.ch), level: null as string | null },
+    { address: X32.mainMono(t.ch), level: X32.monoLevel(t.ch) },
+    ...(t.houseBuses ?? []).map((b) => ({
+      address: X32.sendOn(t.ch, b),
+      level: X32.sendLevel(t.ch, b),
+    })),
+  ]
+  const states: number[] = []
+  for (const f of feeds) {
+    const v = asInt(await deskValue(link, f.address))
+    if (v === null) return { kind: 'unreachable' }
+    states.push(v)
+  }
+  const on = feeds.filter((_, i) => states[i] === 1).map((f) => f.address)
+  const lrOn = states[0] === 1
+  let change: string[]
+  if (mute) {
+    if (!on.length) return { kind: 'said', text: `${name} is already muted in the house.` }
+    change = on
+  } else {
+    const remembered = outOfTheHouse.get(t.ch)
+    if (remembered) {
+      change = remembered.filter((a) => !on.includes(a))
+    } else if (lrOn) {
+      change = []
+    } else {
+      change = [X32.mainLR(t.ch)]
+      for (const f of feeds.slice(1)) {
+        if (on.includes(f.address) || !f.level) continue
+        const level = asFloat(await deskValue(link, f.level))
+        if (level !== null && level > 0) change.push(f.address)
+      }
+    }
+    if (!change.length) return { kind: 'said', text: `${name} isn’t muted in the house.` }
+  }
+  const setAll = async (v: number) => {
+    let ok = true
+    for (const a of change) ok = (await setDeskValue(link, a, { t: 'i', v })) && ok
+    return ok
+  }
+  return {
+    kind: 'change',
+    change: {
+      askFirst: !mute,
+      question: `Put ${name} back in the house?`,
+      make: async () => {
+        if (!(await setAll(mute ? 0 : 1))) return null
+        if (mute) outOfTheHouse.set(t.ch, change)
+        else outOfTheHouse.delete(t.ch)
+        return mute ? `Muted ${name} in the house.` : `${name} is back in the house.`
+      },
+      undo: async () => {
+        if (!(await setAll(mute ? 1 : 0))) return NOT_TAKEN
+        if (mute) outOfTheHouse.delete(t.ch)
+        else outOfTheHouse.set(t.ch, change)
+        return mute ? `${name} is back in the house.` : `${name} is muted in the house again.`
+      },
+    },
+  }
+}
+
 /** The change a request makes, worked out from the desk as it is now. */
 export async function workOut(link: DeskLink, ask: MixerAsk, t: Target): Promise<Worked> {
   const name = channelSaid(t)
@@ -311,25 +407,19 @@ export async function workOut(link: DeskLink, ask: MixerAsk, t: Target): Promise
       ? ' in the house'
       : ''
 
+  if (ask.kind === 'mute' && ask.place?.kind === 'house' && !t.ears) {
+    return houseMute(link, ask.mute, t, name)
+  }
+
   if (ask.kind === 'mute') {
     // Someone's in-ears: the channel's send to their mix.
-    // The house: the channel taken off the main speakers (left/right).
     // Neither: the channel's own mute button, as on the desk.
-    const address = t.ears
-      ? X32.sendOn(t.ch, t.ears.bus)
-      : ask.place?.kind === 'house'
-        ? X32.mainLR(t.ch)
-        : X32.on(t.ch)
+    const address = t.ears ? X32.sendOn(t.ch, t.ears.bus) : X32.on(t.ch)
     const now = asInt(await deskValue(link, address))
     if (now === null) return { kind: 'unreachable' }
     const heard = now === 1
     if (ask.mute && !heard) return { kind: 'said', text: `${name} is already muted${where}.` }
     if (!ask.mute && heard) return { kind: 'said', text: `${name} isn’t muted${where}.` }
-    // Out of the main speakers, but still to the mono/centre bus: said, as it may still be heard.
-    const mono =
-      ask.mute && ask.place?.kind === 'house' && !t.ears
-        ? asInt(await deskValue(link, X32.mainMono(t.ch))) === 1
-        : false
     const set = (v: number) => setDeskValue(link, address, { t: 'i', v })
     return {
       kind: 'change',
@@ -338,15 +428,14 @@ export async function workOut(link: DeskLink, ask: MixerAsk, t: Target): Promise
         question: `Unmute ${name}${where}?`,
         make: async () => {
           if (!(await set(ask.mute ? 0 : 1))) return null
-          if (!ask.mute) return `${name} is unmuted${where}.`
-          return `Muted ${name}${where}.${mono ? ' It still goes to the mono bus.' : ''}`
+          return ask.mute ? `Muted ${name}${where}.` : `${name} is unmuted${where}.`
         },
         undo: async () =>
           (await set(heard ? 1 : 0))
             ? heard
               ? `${name} is back on${where}.`
               : `${name} is muted again${where}.`
-            : 'The desk didn’t take that. Check it in MX-Q.',
+            : NOT_TAKEN,
       },
     }
   }

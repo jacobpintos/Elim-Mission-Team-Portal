@@ -57,8 +57,10 @@ export const X32 = {
   fader: (ch: number) => `/ch/${two(ch)}/mix/fader`,
   /** Whether the channel goes to the main left/right: the house speakers. */
   mainLR: (ch: number) => `/ch/${two(ch)}/mix/st`,
-  /** Whether the channel goes to the mono/centre bus, which may feed house speakers too. */
+  /** Whether the channel goes to the mono/centre bus, which often feeds the subs. */
   mainMono: (ch: number) => `/ch/${two(ch)}/mix/mono`,
+  /** The channel's level to the mono/centre bus. */
+  monoLevel: (ch: number) => `/ch/${two(ch)}/mix/mlevel`,
   /** The channel's send to a mix bus (an in-ear mix): on, and its level. */
   sendOn: (ch: number, bus: number) => `/ch/${two(ch)}/mix/${two(bus)}/on`,
   sendLevel: (ch: number, bus: number) => `/ch/${two(ch)}/mix/${two(bus)}/level`,

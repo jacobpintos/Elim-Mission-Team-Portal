@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mixerAsked, type MixerAsk } from './mixer/asked'
-import { aim, dbSaid, workOut, type Target } from './mixer/desk'
+import { aim, dbSaid, forgetHouseMutes, workOut, type Target } from './mixer/desk'
 import { swapsSaid, withSwaps, type Swap } from './mixer/swaps'
 import { dbToFader, faderToDb, readDeskNames, snapFader, X32, type DeskNames } from './mixer/x32'
 import { fakeX32 } from './__fixtures__/fakeX32'
@@ -183,16 +183,89 @@ describe('a change, made on the desk', () => {
     expect(desk.value(X32.on(7))).toBe(1)
   })
 
-  it('takes a channel out of the house speakers only, saying if the mono bus still has it', async () => {
-    const { desk } = await setup()
-    desk.set(X32.mainMono(7), { t: 'i', v: 1 })
-    const w = await workOut(desk.link, ask('mute Mitch EG in the house'), target())
-    if (w.kind !== 'change') throw new Error(w.kind)
-    expect(await w.change.make()).toBe(
-      'Muted Mitch EG in the house. It still goes to the mono bus.'
-    )
-    expect(desk.value(X32.mainLR(7))).toBe(0)
-    expect(desk.value(X32.on(7))).toBe(1)
+  describe('in the house: every speaker, subs too', () => {
+    const SPEAKERS = { ...BUSES, 5: 'Subs', 6: 'Front Fill' }
+    async function house() {
+      forgetHouseMutes()
+      const desk = fakeX32({ channels: CHANNELS, buses: SPEAKERS })
+      const names = (await readDeskNames(desk.link)) as DeskNames
+      // The bass: to the main left/right, the mono bus (for the subs) and the Subs bus;
+      // not to the front fill (its send off, its level all the way down).
+      desk.set(X32.mainMono(8), { t: 'i', v: 1 })
+      desk.set(X32.monoLevel(8), { t: 'f', v: snapFader(0.75) })
+      desk.set(X32.sendOn(8, 6), { t: 'i', v: 0 })
+      desk.set(X32.sendLevel(8, 6), { t: 'f', v: 0 })
+      return { desk, names }
+    }
+    const housed = (desk: ReturnType<typeof fakeX32>) => [
+      desk.value(X32.mainLR(8)),
+      desk.value(X32.mainMono(8)),
+      desk.value(X32.sendOn(8, 5)),
+      desk.value(X32.sendOn(8, 6)),
+    ]
+
+    it('knows the speaker buses by their names', async () => {
+      const { names } = await house()
+      expect(
+        targetOf(aim(ask('mute the bass in the house'), names, [], 'Jo', NOW)).houseBuses
+      ).toEqual([5, 6])
+    })
+
+    it('mutes every feed to the house that is on, and only those, with Undo', async () => {
+      const { desk, names } = await house()
+      const t = targetOf(aim(ask('mute the bass in the house'), names, [], 'Jo', NOW))
+      const w = await workOut(desk.link, ask('mute the bass in the house'), t)
+      if (w.kind !== 'change') throw new Error(w.kind)
+      expect(w.change.askFirst).toBe(false)
+      expect(await w.change.make()).toBe('Muted Bass in the house.')
+      expect(housed(desk)).toEqual([0, 0, 0, 0])
+      // The in-ears and the channel itself, untouched.
+      expect(desk.value(X32.sendOn(8, 1))).toBe(1)
+      expect(desk.value(X32.on(8))).toBe(1)
+      expect(await w.change.undo()).toBe('Bass is back in the house.')
+      expect(housed(desk)).toEqual([1, 1, 1, 0])
+    })
+
+    it('puts back what it took out, asked first', async () => {
+      const { desk, names } = await house()
+      const t = targetOf(aim(ask('mute the bass in the house'), names, [], 'Jo', NOW))
+      const muted = await workOut(desk.link, ask('mute the bass in the house'), t)
+      if (muted.kind !== 'change') throw new Error(muted.kind)
+      await muted.change.make()
+      const w = await workOut(desk.link, ask('unmute the bass in the house'), t)
+      if (w.kind !== 'change') throw new Error(w.kind)
+      expect(w.change).toMatchObject({ askFirst: true, question: 'Put Bass back in the house?' })
+      expect(await w.change.make()).toBe('Bass is back in the house.')
+      expect(housed(desk)).toEqual([1, 1, 1, 0])
+    })
+
+    it('with nothing remembered, puts back the feeds whose levels are up', async () => {
+      const { desk, names } = await house()
+      // Taken out of the house on another phone: every feed off.
+      for (const a of [X32.mainLR(8), X32.mainMono(8), X32.sendOn(8, 5)])
+        desk.set(a, { t: 'i', v: 0 })
+      const t = targetOf(aim(ask('unmute the bass in the house'), names, [], 'Jo', NOW))
+      const w = await workOut(desk.link, ask('unmute the bass in the house'), t)
+      if (w.kind !== 'change') throw new Error(w.kind)
+      await w.change.make()
+      // The front fill's level is all the way down: left off.
+      expect(housed(desk)).toEqual([1, 1, 1, 0])
+    })
+
+    it('says so when there is nothing to change', async () => {
+      const { desk, names } = await house()
+      const t = targetOf(aim(ask('unmute the bass in the house'), names, [], 'Jo', NOW))
+      expect(await workOut(desk.link, ask('unmute the bass in the house'), t)).toEqual({
+        kind: 'said',
+        text: 'Bass isn’t muted in the house.',
+      })
+      for (const a of [X32.mainLR(8), X32.mainMono(8), X32.sendOn(8, 5)])
+        desk.set(a, { t: 'i', v: 0 })
+      expect(await workOut(desk.link, ask('mute the bass in the house'), t)).toEqual({
+        kind: 'said',
+        text: 'Bass is already muted in the house.',
+      })
+    })
   })
 
   it('mutes in someone’s ears with the send to their mix, as said with their pack', async () => {
