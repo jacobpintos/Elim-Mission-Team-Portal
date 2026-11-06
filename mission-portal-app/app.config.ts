@@ -40,10 +40,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         'Mission Portal needs photo library access to let you upload a profile photo, share images in team chats, and attach a photo to a security report.',
       NSCameraUsageDescription:
         'Mission Portal needs camera access to let you take a profile photo.',
-      // Sound Engineers' requests to Miriam go to the sound desk on its own
-      // Wi-Fi (modules/desk-link): iOS asks for this the first time.
+      // Sound Engineers' and Video Operators' requests to Miriam go to the
+      // sound desk and the video switcher on the local network
+      // (modules/desk-link): iOS asks for this the first time.
       NSLocalNetworkUsageDescription:
-        'Mission Portal needs local network access so Miriam can change the sound desk when a Sound Engineer asks her to.',
+        'Mission Portal needs local network access so Miriam can change the sound desk or switch cameras when a Sound Engineer or Video Operator asks her to.',
     },
     privacyManifests: {
       NSPrivacyAccessedAPITypes: [

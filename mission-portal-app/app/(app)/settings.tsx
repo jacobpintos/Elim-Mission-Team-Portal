@@ -26,10 +26,14 @@ import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
 import { confirmAsync } from '@/lib/confirm'
 import { DEFAULT_FLIGHT_REMINDER_HOURS, defaultNotificationPrefs } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
-import { isSoundEngineer } from '@/lib/soundEngineer'
+import { holdsJob } from '@/lib/teamJobs'
 import { deskAddressOf, loadDeskAddress, saveDeskAddress } from '@/lib/mixer/deskAddress'
 import { canReachDesk, deskLinkTo } from '@/lib/mixer/link'
 import { deskInfo } from '@/lib/mixer/x32'
+import { canReachSwitcher, switcherAt } from '@/lib/switcher/link'
+import { loadSwitcherAddress, saveSwitcherAddress } from '@/lib/switcher/switcherAddress'
+import { visitAtem } from '@/lib/switcher/atem'
+import { liveSaid } from '@/lib/switcher/plan'
 import { recentStartups } from '@/lib/startupTimeline'
 import { describeRun, type StartupRun } from '@/lib/startupSteps'
 import * as Sentry from '@sentry/react-native'
@@ -83,6 +87,7 @@ export default function SettingsScreen() {
   // texting-list row belongs in this user's list at all.
   const connectionsCoordinator = useConfigStore((s) => s.connectionsCoordinator)
   const soundEngineers = useConfigStore((s) => s.soundEngineers)
+  const videoOperators = useConfigStore((s) => s.videoOperators)
   const subConfig = useConfigStore((s) => s.subscribe)
   const unsubConfig = useConfigStore((s) => s.unsubscribe)
   useEffect(() => {
@@ -134,6 +139,37 @@ export default function SettingsScreen() {
       info
         ? `Saved. Connected to ${info.model}${info.name ? ` “${info.name}”` : ''}.`
         : 'Saved, but the desk didn’t answer. Is this phone on its Wi-Fi?'
+    )
+  }
+
+  // The video switcher's address on its network, kept on this phone (Video Operators).
+  const [switcherAddress, setSwitcherAddress] = useState('')
+  const [switcherChecking, setSwitcherChecking] = useState(false)
+  const [switcherStatus, setSwitcherStatus] = useState('')
+  useEffect(() => {
+    loadSwitcherAddress().then(setSwitcherAddress)
+  }, [])
+  /** Saves the address, and connects to read what the switcher is and what's live. */
+  const saveAndCheckSwitcher = async () => {
+    const address = deskAddressOf(switcherAddress)
+    if (switcherAddress.trim() && !address) {
+      setSwitcherStatus('That isn’t an address like 192.168.10.240.')
+      return
+    }
+    await saveSwitcherAddress(address ?? '')
+    if (!address) {
+      setSwitcherStatus('Cleared.')
+      return
+    }
+    setSwitcherAddress(address)
+    setSwitcherChecking(true)
+    const open = switcherAt(address)
+    const visit = open ? await visitAtem(open, () => []) : null
+    setSwitcherChecking(false)
+    setSwitcherStatus(
+      visit?.kind === 'done'
+        ? `Saved. Connected to ${visit.before.product || 'the ATEM'}. ${liveSaid(visit.before)}`
+        : 'Saved, but the switcher didn’t answer. Is this phone on its network?'
     )
   }
 
@@ -722,7 +758,7 @@ export default function SettingsScreen() {
         </Section>
 
         {/* The sound desk (lib/mixer): where it is, for Miriam to change it. */}
-        {isSoundEngineer(String(profile?.uid ?? ''), soundEngineers) ? (
+        {holdsJob(String(profile?.uid ?? ''), soundEngineers) ? (
           <Section title="Sound desk">
             {Platform.OS === 'web' || !canReachDesk() ? (
               <Text color={colors.textMuted} fontSize="$2">
@@ -777,6 +813,69 @@ export default function SettingsScreen() {
                 {deskStatus ? (
                   <Text color={colors.textMuted} fontSize="$2">
                     {deskStatus}
+                  </Text>
+                ) : null}
+              </>
+            )}
+          </Section>
+        ) : null}
+
+        {/* The video switcher (lib/switcher): where it is, for Miriam to switch cameras. */}
+        {holdsJob(String(profile?.uid ?? ''), videoOperators) ? (
+          <Section title="Video switcher">
+            {Platform.OS === 'web' || !canReachSwitcher() ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                {Platform.OS === 'web'
+                  ? 'Miriam can switch cameras only from the phone app, on the switcher’s network.'
+                  : 'Update the app to let Miriam switch cameras.'}
+              </Text>
+            ) : (
+              <>
+                <Text color={colors.textMuted} fontSize="$2">
+                  As a Video Operator, you can ask Miriam to switch cameras on the ATEM. Join the
+                  network the switcher is on, and enter its address (in ATEM Setup, or the
+                  switcher’s own menu).
+                </Text>
+                <XStack gap="$2" alignItems="flex-end">
+                  <Field label="Switcher address">
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          color: colors.text,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surface,
+                          minWidth: 160,
+                        },
+                      ]}
+                      value={switcherAddress}
+                      onChangeText={(v) => {
+                        setSwitcherAddress(v)
+                        setSwitcherStatus('')
+                      }}
+                      placeholder="192.168.10.240"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="numbers-and-punctuation"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </Field>
+                  <Pressable onPress={saveAndCheckSwitcher} disabled={switcherChecking}>
+                    <View
+                      style={[
+                        styles.btn,
+                        { backgroundColor: colors.primary, opacity: switcherChecking ? 0.5 : 1 },
+                      ]}
+                    >
+                      <Text color="white" fontWeight="700">
+                        {switcherChecking ? 'Checking…' : 'Save and check'}
+                      </Text>
+                    </View>
+                  </Pressable>
+                </XStack>
+                {switcherStatus ? (
+                  <Text color={colors.textMuted} fontSize="$2">
+                    {switcherStatus}
                   </Text>
                 ) : null}
               </>

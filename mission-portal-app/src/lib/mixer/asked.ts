@@ -88,7 +88,7 @@ const FILLER =
 
 /** Never the desk: what the notification switch and messages answer to. */
 const NOT_THE_DESK =
-  /\b(?:notifications?|alerts?|chats?|messages?|conversations?|texts?|texting|emails?|reminders?|group\s+chat|thread|calls?|phone)\b/
+  /\b(?:notifications?|alerts?|chats?|messages?|conversations?|texts?|texting|emails?|reminders?|group\s+chat|thread|calls?|phone|cameras?|cams?|preview|program|black)\b|^(?:cut\s+to|fade)\b/
 
 /** "Mitch EG channel", "channel Mitch EG", "the bass": the channel as named. */
 function channelSaid(s: string): string {

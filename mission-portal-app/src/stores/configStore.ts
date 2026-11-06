@@ -3,7 +3,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { db } from '@/lib/firebase'
 import type { ConfigMain, PostsConfig, CommonTeam } from '@/types/events'
-import { soundEngineersOf } from '@/lib/soundEngineer'
+import { jobHoldersOf } from '@/lib/teamJobs'
 
 interface ConfigStore {
   calY: number
@@ -20,6 +20,8 @@ interface ConfigStore {
   textingNumber: string
   /** Uids of the Sound Engineers, who may change the sound desk through Miriam. */
   soundEngineers: string[]
+  /** Uids of the Video Operators, who may switch cameras through Miriam. */
+  videoOperators: string[]
   loading: boolean
   _unsub: (() => void) | null
   _refCount: number
@@ -42,6 +44,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   accountant: '',
   textingNumber: '',
   soundEngineers: [],
+  videoOperators: [],
   loading: false,
   _unsub: null,
   _refCount: 0,
@@ -76,7 +79,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           connectionsCoordinator: data.connectConfig?.connectionsCoordinator ?? '',
           accountant: data.connectConfig?.accountant ?? '',
           textingNumber: data.connectConfig?.textingNumber ?? '',
-          soundEngineers: soundEngineersOf(data.connectConfig?.soundEngineers),
+          soundEngineers: jobHoldersOf(data.connectConfig?.soundEngineers),
+          videoOperators: jobHoldersOf(data.connectConfig?.videoOperators),
           loading: false,
         })
       },

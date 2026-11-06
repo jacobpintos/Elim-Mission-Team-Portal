@@ -14,7 +14,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { isMember } from '@/lib/roles'
 import { formatPhone, normalizePhone } from '@/lib/textingList'
 import { DEFAULT_TEXTING_NUMBER } from '@/lib/textingListDb'
-import { soundEngineersOf, toggledSoundEngineer } from '@/lib/soundEngineer'
+import { jobHoldersOf, TEAM_JOBS, toggledJob, type TeamJob } from '@/lib/teamJobs'
 import { useThemeStore } from '@/stores/themeStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -29,7 +29,11 @@ export default function AdminLeadership() {
   const [leadershipTeam, setLeadershipTeam] = useState<string[]>([])
   const [coordinator, setCoordinator] = useState('')
   const [accountant, setAccountantState] = useState('')
-  const [soundEngineers, setSoundEngineers] = useState<string[]>([])
+  // Jobs several people hold, by job (lib/teamJobs).
+  const [jobs, setJobs] = useState<Record<TeamJob, string[]>>({
+    soundEngineers: [],
+    videoOperators: [],
+  })
   // The number the texting list's texts come from, as saved, and as typed.
   const [textingNumber, setTextingNumber] = useState('')
   const [numberDraft, setNumberDraft] = useState<string | null>(null)
@@ -49,7 +53,10 @@ export default function AdminLeadership() {
       setLeadershipTeam(team.map((v: unknown) => String(v)))
       setCoordinator(String(data?.connectConfig?.connectionsCoordinator ?? ''))
       setAccountantState(String(data?.connectConfig?.accountant ?? ''))
-      setSoundEngineers(soundEngineersOf(data?.connectConfig?.soundEngineers))
+      setJobs({
+        soundEngineers: jobHoldersOf(data?.connectConfig?.soundEngineers),
+        videoOperators: jobHoldersOf(data?.connectConfig?.videoOperators),
+      })
       setTextingNumber(String(data?.connectConfig?.textingNumber ?? ''))
       setLoading(false)
     })
@@ -189,26 +196,26 @@ export default function AdminLeadership() {
   }
 
   /**
-   * Give someone the Sound Engineer job, or take it back. Several people can
-   * hold it, and it isn't a place on the team: anyone listed can be given it.
+   * Give someone a Sound Engineer or Video Operator job, or take it back.
+   * Several people can hold each, and neither is a place on the team: anyone
+   * listed can be given one.
    */
-  const toggleSoundEngineer = async (uid: string) => {
-    const previous = soundEngineers
-    const next = toggledSoundEngineer(previous, uid)
+  const toggleJob = async (job: TeamJob, uid: string) => {
+    const previous = jobs[job]
+    const next = toggledJob(previous, uid)
     const name = users.find((u) => u.uid === uid)?.displayName ?? uid
-    setSoundEngineers(next)
+    const { one } = TEAM_JOBS[job]
+    setJobs((j) => ({ ...j, [job]: next }))
     setSaving(true)
     try {
-      await updateDoc(doc(db, 'config', 'main'), { 'connectConfig.soundEngineers': next })
+      await updateDoc(doc(db, 'config', 'main'), { [`connectConfig.${job}`]: next })
       await audit(
-        'leadership.soundEngineer',
-        next.includes(uid)
-          ? `${name} made a Sound Engineer`
-          : `${name} is no longer a Sound Engineer`,
+        `leadership.${job}`,
+        next.includes(uid) ? `${name} made a ${one}` : `${name} is no longer a ${one}`,
         profile?.displayName ?? ''
       )
     } catch (err: unknown) {
-      setSoundEngineers(previous)
+      setJobs((j) => ({ ...j, [job]: previous }))
       const message = err instanceof Error ? err.message : 'Failed to save'
       toast(message, 'error')
     } finally {
@@ -243,7 +250,8 @@ export default function AdminLeadership() {
     leadershipTeam.includes(uid) ||
     coordinator === uid ||
     accountant === uid ||
-    soundEngineers.includes(uid)
+    jobs.soundEngineers.includes(uid) ||
+    jobs.videoOperators.includes(uid)
   const listed = users.filter((u) => isMember(u) || holdsAPlace(u.uid))
 
   if (loading) {
@@ -364,32 +372,38 @@ export default function AdminLeadership() {
         </Text>
       </YStack>
 
-      <YStack
-        backgroundColor="$surface"
-        borderRadius="$3"
-        padding="$3"
-        gap="$1"
-        borderWidth={1}
-        borderColor="$borderColor"
-      >
-        <Text fontSize="$3" fontWeight="700">
-          Sound Engineers
-        </Text>
-        <Text fontSize="$2" color="$gray10">
-          {soundEngineers.length
-            ? `${soundEngineers.map((uid) => users.find((u) => u.uid === uid)?.displayName ?? uid).join(', ')} can ask Miriam to change the sound desk.`
-            : 'Nobody holds this yet. Sound Engineers can ask Miriam to change the sound desk. Use “Make Sound Engineer” on anyone below.'}{' '}
-          Several people can hold it, and it doesn’t put them on the leadership team or the meeting
-          form.
-        </Text>
-      </YStack>
+      {(Object.keys(TEAM_JOBS) as TeamJob[]).map((job) => {
+        const { one, does } = TEAM_JOBS[job]
+        const holders = jobs[job]
+        return (
+          <YStack
+            key={job}
+            backgroundColor="$surface"
+            borderRadius="$3"
+            padding="$3"
+            gap="$1"
+            borderWidth={1}
+            borderColor="$borderColor"
+          >
+            <Text fontSize="$3" fontWeight="700">
+              {one}s
+            </Text>
+            <Text fontSize="$2" color="$gray10">
+              {holders.length
+                ? `${holders.map((uid) => users.find((u) => u.uid === uid)?.displayName ?? uid).join(', ')} can ask Miriam to ${does}.`
+                : `Nobody holds this yet. ${one}s can ask Miriam to ${does}. Use “Make ${one}” on anyone below.`}{' '}
+              Several people can hold it, and it doesn’t put them on the leadership team or the
+              meeting form.
+            </Text>
+          </YStack>
+        )
+      })}
 
       <FlashList
         data={listed}
         keyExtractor={(u) => u.uid}
         renderItem={({ item }) => {
           const isLeader = leadershipTeam.includes(item.uid)
-          const isSoundEngineer = soundEngineers.includes(item.uid)
           return (
             <XStack
               alignItems="center"
@@ -485,17 +499,24 @@ export default function AdminLeadership() {
                     </Text>
                   </Button>
                 ) : null}
-                {/* Not a place on the team, so offered to anyone listed. */}
-                <Button
-                  size="$2"
-                  onPress={() => toggleSoundEngineer(item.uid)}
-                  backgroundColor={isSoundEngineer ? theme.primary : undefined}
-                  theme={isSoundEngineer ? undefined : 'gray'}
-                >
-                  <Text color={isSoundEngineer ? 'white' : '$color'} fontSize="$1" fontWeight="600">
-                    {isSoundEngineer ? 'Sound Engineer ✓' : 'Make Sound Engineer'}
-                  </Text>
-                </Button>
+                {/* Not places on the team, so offered to anyone listed. */}
+                {(Object.keys(TEAM_JOBS) as TeamJob[]).map((job) => {
+                  const holds = jobs[job].includes(item.uid)
+                  const { one } = TEAM_JOBS[job]
+                  return (
+                    <Button
+                      key={job}
+                      size="$2"
+                      onPress={() => toggleJob(job, item.uid)}
+                      backgroundColor={holds ? theme.primary : undefined}
+                      theme={holds ? undefined : 'gray'}
+                    >
+                      <Text color={holds ? 'white' : '$color'} fontSize="$1" fontWeight="600">
+                        {holds ? `${one} ✓` : `Make ${one}`}
+                      </Text>
+                    </Button>
+                  )
+                })}
               </YStack>
             </XStack>
           )

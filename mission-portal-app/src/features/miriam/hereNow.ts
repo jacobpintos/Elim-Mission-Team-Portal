@@ -28,7 +28,10 @@ import {
 } from './localData'
 import type { Here } from './localTalk'
 import type { DeskAccess } from './mixerTalk'
-import { isSoundEngineer, soundEngineersOf } from '@/lib/soundEngineer'
+import { holdsJob, jobHoldersOf, type TeamJob } from '@/lib/teamJobs'
+import type { SwitcherAccess } from './switcherTalk'
+import { canReachSwitcher, switcherAt } from '@/lib/switcher/link'
+import { loadSwitcherAddress } from '@/lib/switcher/switcherAddress'
 import { canReachDesk, deskLinkTo } from '@/lib/mixer/link'
 import { loadDeskAddress } from '@/lib/mixer/deskAddress'
 import { loadSwaps, saveSwaps } from '@/lib/mixer/swapStore'
@@ -87,28 +90,46 @@ export async function eventsLoaded(): Promise<QuickData | null> {
 
 /** What the conversations worked out here can see, as this person. */
 /**
+ * Who holds a job (lib/teamJobs): as loaded, else from the phone's copy of
+ * the config, which answers with no signal.
+ */
+async function jobHolders(job: TeamJob): Promise<string[]> {
+  const config = useConfigStore.getState()
+  if (config._refCount) return config[job]
+  const snap = await Promise.race([
+    getDoc(doc(db, 'config', 'main')).catch(() => undefined),
+    new Promise<undefined>((done) => setTimeout(() => done(undefined), 3000)),
+  ])
+  const stored = (snap?.data() as { connectConfig?: Record<string, unknown> } | undefined)
+    ?.connectConfig?.[job]
+  return jobHoldersOf(stored)
+}
+
+/**
  * Whether this person, on this phone, can reach the sound desk (./mixerTalk):
- * a Sound Engineer (as loaded, else from the phone's copy of the config), in
- * the phone app, with the desk's address set in Settings.
+ * a Sound Engineer, in the phone app, with the desk's address set in Settings.
  */
 async function deskAccess(uid: string): Promise<DeskAccess> {
-  const config = useConfigStore.getState()
-  let holders = config.soundEngineers
-  if (!config._refCount) {
-    const snap = await Promise.race([
-      getDoc(doc(db, 'config', 'main')).catch(() => undefined),
-      new Promise<undefined>((done) => setTimeout(() => done(undefined), 3000)),
-    ])
-    const stored = (snap?.data() as { connectConfig?: { soundEngineers?: unknown } } | undefined)
-      ?.connectConfig?.soundEngineers
-    holders = soundEngineersOf(stored)
-  }
-  if (!isSoundEngineer(uid, holders)) return { kind: 'not engineer' }
+  if (!holdsJob(uid, await jobHolders('soundEngineers'))) return { kind: 'not engineer' }
   if (!canReachDesk()) return { kind: 'no app' }
   const address = await loadDeskAddress()
   if (!address) return { kind: 'no address' }
   const link = deskLinkTo(address)
   return link ? { kind: 'ready', link } : { kind: 'no app' }
+}
+
+/**
+ * Whether this person, on this phone, can reach the video switcher
+ * (./switcherTalk): a Video Operator, in the phone app, with the switcher's
+ * address set in Settings.
+ */
+async function switcherAccess(uid: string): Promise<SwitcherAccess> {
+  if (!holdsJob(uid, await jobHolders('videoOperators'))) return { kind: 'not operator' }
+  if (!canReachSwitcher()) return { kind: 'no app' }
+  const address = await loadSwitcherAddress()
+  if (!address) return { kind: 'no address' }
+  const open = switcherAt(address)
+  return open ? { kind: 'ready', open } : { kind: 'no app' }
 }
 
 export function hereNow(briefedFoodRef: {
@@ -143,6 +164,7 @@ export function hereNow(briefedFoodRef: {
     latest: (room, n) => latestMessages(room, n, profile),
     now: () => Date.now(),
     desk: () => deskAccess(uid),
+    switcher: () => switcherAccess(uid),
     swaps: { load: () => loadSwaps(), save: saveSwaps },
     briefedFood: () =>
       briefedFoodRef.current?.day === localToday() ? briefedFoodRef.current.food : [],

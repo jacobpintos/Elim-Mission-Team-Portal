@@ -11,18 +11,29 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.SocketTimeoutException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * The church's sound desk (a Behringer X32), over its own Wi-Fi: one UDP
- * message out, and the desk's answer back (src/lib/mixer/link.ts).
+ * The church's equipment on the local network, over UDP:
  *
- * The desk's Wi-Fi has no internet, so Android keeps using mobile data for
- * everything else. These messages are sent on the Wi-Fi network itself: the
- * desk is only there.
+ * - the sound desk (a Behringer X32): one message out, and its answer back
+ *   (`exchange`, `send`; src/lib/mixer/link.ts);
+ * - the video switcher (a Blackmagic ATEM): a short conversation, many
+ *   datagrams each way (`open`, `sendTo`, `receive`, `close`;
+ *   src/lib/switcher/link.ts).
+ *
+ * These networks may have no internet, so Android keeps using mobile data
+ * for everything else. These messages are sent on the Wi-Fi network itself:
+ * the equipment is only there.
  */
 class DeskLinkModule : Module() {
+  /** Conversations (`open`), by id. */
+  private val sessions = ConcurrentHashMap<Int, DatagramSocket>()
+  private val nextSession = AtomicInteger(1)
+
   override fun definition() = ModuleDefinition {
     Name("DeskLink")
 
@@ -39,6 +50,63 @@ class DeskLinkModule : Module() {
         exchange(host, port, message, 0, false)
         Unit
       }
+    }
+
+    /** Starts a conversation: its id, or null if it can't be. */
+    AsyncFunction("open") Coroutine { host: String, port: Int ->
+      withContext(Dispatchers.IO) {
+        try {
+          val socket = DatagramSocket()
+          wifi()?.bindSocket(socket)
+          socket.connect(InetAddress.getByName(host), port)
+          val id = nextSession.getAndIncrement()
+          sessions[id] = socket
+          id
+        } catch (e: Exception) {
+          null
+        }
+      }
+    }
+
+    /** Sends one datagram in a conversation: true once it's sent. */
+    AsyncFunction("sendTo") Coroutine { id: Int, message: List<Int> ->
+      withContext(Dispatchers.IO) {
+        val socket = sessions[id] ?: return@withContext false
+        try {
+          val bytes = ByteArray(message.size) { message[it].toByte() }
+          socket.send(DatagramPacket(bytes, bytes.size))
+          true
+        } catch (e: Exception) {
+          false
+        }
+      }
+    }
+
+    /** The next datagram in a conversation, or null if none comes within `timeoutMs`. */
+    AsyncFunction("receive") Coroutine { id: Int, timeoutMs: Int ->
+      withContext(Dispatchers.IO) {
+        val socket = sessions[id] ?: return@withContext null
+        try {
+          socket.soTimeout = maxOf(1, timeoutMs)
+          val buffer = ByteArray(2048)
+          val packet = DatagramPacket(buffer, buffer.size)
+          socket.receive(packet)
+          buffer.copyOf(packet.length).map { it.toInt() and 0xff }
+        } catch (e: Exception) {
+          null
+        }
+      }
+    }
+
+    /** Ends a conversation. */
+    Function("close") { id: Int ->
+      sessions.remove(id)?.close()
+      Unit
+    }
+
+    OnDestroy {
+      sessions.values.forEach { it.close() }
+      sessions.clear()
     }
   }
 

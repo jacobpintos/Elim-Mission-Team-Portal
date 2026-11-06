@@ -1,5 +1,6 @@
 import { roomKind } from '@/lib/rooms'
 import { mixerHere, type DeskAccess, type SwapStore } from './mixerTalk'
+import { switcherHere, type SwitcherAccess } from './switcherTalk'
 import type { Announcement, CarpoolCarData, Message, PostPage, Room, Task } from '@/types/events'
 import { visibleTabs } from '@/lib/roles'
 import { isTabVisible } from '@/lib/featureFlags'
@@ -204,6 +205,8 @@ export interface Here {
   desk?: () => Promise<DeskAccess>
   /** Who is using whose in-ear pack or mic today, kept on this phone (./mixerTalk). */
   swaps?: SwapStore
+  /** The video switcher, for a Video Operator on the phone app (./switcherTalk). */
+  switcher?: () => Promise<SwitcherAccess>
 }
 
 /** Worked out here, when it plainly can be: false to leave it to Claude. */
@@ -218,6 +221,7 @@ export async function talkHere(said: string, here: Here, talk: Talk): Promise<bo
   // claims a plain "mute X" only when X is on the desk (./mixerTalk).
   return (
     (await mixerHere(said, here, talk)) ||
+    (await switcherHere(said, here, talk)) ||
     (await textingHere(said, here, talk)) ||
     (await notificationsHere(said, here, talk)) ||
     (await sendHere(said, here, talk)) ||

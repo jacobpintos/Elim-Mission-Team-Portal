@@ -10,6 +10,7 @@ import { reminderAsked } from '@/lib/reminders'
 import { mixerAsked } from '@/lib/mixer/asked'
 import { swapsSaid } from '@/lib/mixer/swaps'
 import { selfAsked } from '../../../functions/src/miriam/own/self'
+import { switcherAsked } from '@/lib/switcher/asked'
 
 /**
  * What a Sound Engineer says to the desk reaches it: none of what Miriam
@@ -36,6 +37,40 @@ const SAID = [
 describe('desk requests, as Miriam first hears them', () => {
   it.each(SAID)('“%s” is the desk’s', (said) => {
     expect(mixerAsked(said) ?? swapsSaid(said)).not.toBeNull()
+    expect(reminderAsked(said, new Date(2026, 10, 8, 10))).toBeNull()
+    expect(tourAsked(said)).toBeNull()
+    expect(playAsked(said)).toBeFalsy()
+    expect(meetingAsked(said)).toBeNull()
+    expect(selfAsked(said)).toBe(false)
+    expect(storeAsked(said)).toBeNull()
+    expect(themeAsked(said)).toBeNull()
+    expect(nameChangeAsked(said)).toBeNull()
+    expect(locationAsked(said)).toBeNull()
+    expect(comingAsked(said)).toBeNull()
+    expect(occasionAsked(said, '2026-11-08')).toBeNull()
+  })
+})
+
+/** Likewise for the video switcher, which comes after the desk: the desk leaves these alone. */
+const CAMERAS = [
+  'camera 2',
+  'cut to the wide shot',
+  'switch to camera 3',
+  'go to the pulpit cam',
+  'preview the pulpit cam',
+  'put camera 3 on preview',
+  'take it',
+  'dissolve to camera 3',
+  'fade to black',
+  'fade back up',
+  'what’s live?',
+]
+
+describe('switcher requests, as Miriam first hears them', () => {
+  it.each(CAMERAS)('“%s” is the switcher’s', (said) => {
+    expect(switcherAsked(said)).not.toBeNull()
+    expect(mixerAsked(said)).toBeNull()
+    expect(swapsSaid(said)).toBeNull()
     expect(reminderAsked(said, new Date(2026, 10, 8, 10))).toBeNull()
     expect(tourAsked(said)).toBeNull()
     expect(playAsked(said)).toBeFalsy()

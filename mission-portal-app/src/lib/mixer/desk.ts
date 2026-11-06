@@ -86,6 +86,10 @@ function best(
   return foundOf(options)
 }
 
+/** Which of these names is meant, as said: shared with the video switcher (lib/switcher). */
+export const namesFound = (said: string, names: readonly string[]): Found =>
+  best(words(said), names)
+
 /** Words that make a channel someone's mic: "Jacob Vox", "Mia Mic". A channel named only for them is too. */
 const MIC_WORDS =
   /^(?:vox|voc|vocals?|vocs|mics?|microphones?|voice|bvs?|bgvs?|lead|ld|singer|sing|speech|handheld|hh|headset)$/

@@ -411,6 +411,8 @@ export interface ConfigMain {
      * church's pages or on the meeting form.
      */
     soundEngineers?: string[]
+    /** Who may tell Miriam to switch cameras (src/lib/switcher): a job like the one above. */
+    videoOperators?: string[]
   }
   publicPages: Record<string, unknown>
   postsConfig: PostsConfig
