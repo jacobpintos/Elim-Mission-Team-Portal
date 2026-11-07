@@ -3,16 +3,16 @@
 Where the app is going, in five stages, and what each one means for the code.
 
 **Where we are:** Stage 0, working towards Stage 1. Nothing past Stage 1 is
-built. What *is* built is the groundwork that keeps the later stages from
+built. What _is_ built is the groundwork that keeps the later stages from
 needing a rewrite (see [Groundwork already in the code](#groundwork-already-in-the-code)).
 
-| Stage | What it is | Who uses it |
-|---|---|---|
-| **1** | One operational platform: planning, procedures and equipment connected, Miriam running all of it in plain language | The Well and its network |
-| 2 | Multi-tenant: partner churches on their own accounts, free or reduced cost, feeding back | The Well + partner churches |
-| 3 | Subscriptions: a pay gate, about $100/month for small and medium churches | Paying churches |
-| 4 | Traveling pastors, worship bands, touring artists; fan outreach; ticket links; an approval process | Churches, ministries, bands |
-| 5 | Discovery: the public find events near them that match what they like, across every organization | The public |
+| Stage | What it is                                                                                                                 | Who uses it                 |
+| ----- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| **1** | One operational platform: planning, procedures and equipment connected, Miriam running all of it in plain language         | The Well                    |
+| 2     | Multi-tenant: our network, the outside churches we partner with, on their own accounts, free or reduced cost, feeding back | The Well + partner churches |
+| 3     | Subscriptions: a pay gate, about $100/month for small and medium churches                                                  | Paying churches             |
+| 4     | Traveling pastors, worship bands, touring artists; fan outreach; ticket links; an approval process                         | Churches, ministries, bands |
+| 5     | Discovery: the public find events near them that match what they like, across every organization                           | The public                  |
 
 ---
 
@@ -35,8 +35,14 @@ being asked.
   - reimbursements and outside bills, from request to paid;
   - security reports;
   - the Production Checklist, a member's own site shown under Operations.
+    It is The Well's alone (`src/custom/theWell/production`); other
+    churches get the Pre-service Checklist in its place (see Stage 2).
 - **Equipment:**
   - the sound desk (Behringer X32): levels and mutes in the house and in people's ears, plus pack and mic swaps;
+  - the input lists and the sound desk: rows line up with the board, so a
+    Sound Engineer can compare a list with the desk's names and send either
+    side's names to the other (Worship → Input List), or ask Miriam to
+    "send the Sunday input list to the desk";
   - the video switcher (ATEM): preview, cut, auto and fade to black, with the Video screen and its multiview;
   - vehicles and the carpool planner;
   - inventory and reordering.
@@ -47,23 +53,18 @@ being asked.
 - [ ] **The equipment, tried at church.** The sound desk, switcher and
       encoder code has only run against test stand-ins. It needs a Sunday on
       the real X32, the real ATEM and a real encoder.
-- [ ] **Procedures that can run equipment.** Run sheets kept in the app,
-      such as *Service start* or *Teardown*, each a list of steps. Some steps
-      are things to check; others are equipment actions written as Miriam
-      would be asked ("fade up from black", "camera 1", "unmute the
-      pastor's mic in the house"). Each is attached to an event, worked through by tapping,
-      or started by asking Miriam to run it. The Production Checklist is a
-      member's own site, so whether it moves in is their decision.
-- [ ] **Input lists ↔ the sound desk.** Compare the input list with the
-      desk's channel names, and send the names to the desk. This needs
-      deciding which row is which desk channel.
+- [ ] **The input lists on the real desk.** Rows line up with the board
+      in its own order: inputs 1–32 are channels, 33–40 the aux inputs and
+      41–48 the effects returns; outputs 1–16 are the mix buses and 17–22
+      the matrices. That needs checking against the real X32.
 - [ ] **Events ↔ rooms and equipment.** An event says which input list and
       setup it uses, so Miriam and the procedures know which one applies.
 - [ ] **Issues ↔ inventory.** An equipment issue linked to the inventory
       item it's about.
-- [ ] **"Our network" defined.** If it means other ministries or campuses,
-      they are groups inside The Well at Stage 1, not separate organizations.
-      Separate organizations are Stage 2.
+
+**Decided:** The Well's procedures stay in its Production Checklist, a
+member's own site. "Our network" means the outside churches we partner
+with, which is Stage 2.
 
 ---
 
@@ -73,13 +74,15 @@ These parts of the code are where the later stages plug in. Use them for new
 work, so the later stages don't need to find and change every place that
 assumes The Well.
 
-| Groundwork | Where | What it's for |
-|---|---|---|
-| **One organization profile:** names, kind, time zone, home, mailing address, the app's address | `src/custom` (`ORG.profile`), and `functions/src/org.ts` on the server; `src/lib/orgProfile.test.ts` keeps them the same | Nothing else in the code hard-codes "The Well of Iowa", Central time or North Liberty. At Stage 2 this becomes each organization's record |
-| **Plan and equipment:** `ORG.plan`, `ORG.equipment`, and `orgCan(feature)` | `src/lib/entitlements.ts` | The one question "may this organization use this?" The Sound Engineer and Video Operator jobs, their Settings sections, the Video tab, and Miriam's desk and camera requests all ask it. At Stage 2 partner churches get only what they have; at Stage 3 a plan decides it |
-| **Organization-specific features** | `src/custom` (The Well's vehicles, Elim Van, carpool rules) | Anything only one organization has stays there, switched on per organization |
+| Groundwork                                                                                     | Where                                                                                                                    | What it's for                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **One organization profile:** names, kind, time zone, home, mailing address, the app's address | `src/custom` (`ORG.profile`), and `functions/src/org.ts` on the server; `src/lib/orgProfile.test.ts` keeps them the same | Nothing else in the code hard-codes "The Well of Iowa", Central time or North Liberty. At Stage 2 this becomes each organization's record                                                                                                                                                                                                                                      |
+| **Plan and equipment:** `ORG.plan`, `ORG.equipment`, and `orgCan(feature)`                     | `src/lib/entitlements.ts`                                                                                                | The one question "may this organization use this?" The Sound Engineer and Video Operator jobs, their Settings sections, the Video tab, and Miriam's desk and camera requests all ask it. At Stage 2 partner churches get only what they have; at Stage 3 a plan decides it                                                                                                     |
+| **Organization-specific features**                                                             | `src/custom` (The Well's vehicles, Elim Van, carpool rules, Production Checklist)                                        | Anything only one organization has stays there, switched on per organization                                                                                                                                                                                                                                                                                                   |
+| **Pre-service Checklist**                                                                      | `src/features/preservice`                                                                                                | What a church without its own checklist gets on Operations' first tab, built now so partner churches have it at Stage 2. Admins build the list and give each item to people; each person checks off their own and sees how far along everyone is; admins see and can check the whole list. It starts fresh for each service day. The Well doesn't see it, since it has its own |
 
 **Rules for new work until Stage 2:**
+
 - Name the organization through `ORG.profile` (`ORG_NAME` and `APP_URL` in `src/lib/orgInfo.ts`; `ORG` and `todayInOrg()` on the server), never as text.
 - A new feature that needs equipment or could be a paid extra gets an `AppFeature` and is checked with `orgCan`.
 - Something only The Well has goes in `src/custom/theWell`.
@@ -89,8 +92,14 @@ assumes The Well.
 
 ## Stage 2: partner churches (multi-tenant)
 
+Our network: the outside churches we partner with, trying the app free or
+for a reduced price and telling us what to improve. What they get that The
+Well doesn't have is already built: the Pre-service Checklist, in place of
+The Well's Production Checklist.
+
 **The decision: one app and one backend, with each organization's data kept
 apart by an organization id.** Not a separate build for each church, because:
+
 - Apple turns down apps made from a template unless the content's owner
   submits them (App Review Guideline 4.2.6), so each church would need its
   own developer account;
@@ -98,6 +107,7 @@ apart by an organization id.** Not a separate build for each church, because:
 - one app is one thing to keep running.
 
 What it takes:
+
 - **Data:** each organization's records under `orgs/{orgId}/…`. That's about
   50 collections, read and written in about 320 places in the app and 120 in
   the functions, with 57 rule blocks. A one-off migration copies The Well's
