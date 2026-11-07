@@ -263,10 +263,12 @@ export default function AdminLeadership() {
     )
   }
 
-  return (
-    <YStack flex={1} padding="$4" gap="$3">
-      <ScreenTitle options={{ title: 'Leadership Team', headerShown: false }} />
-
+  // Everything above the people scrolls with them, as the list's header: with
+  // every job's card here, a fixed block above the list filled the phone's
+  // screen and left the list no room to scroll. An element, not a component,
+  // so the texting number's field keeps its place as it's typed in.
+  const header = (
+    <YStack gap="$3" paddingBottom="$3">
       <XStack alignItems="center" justifyContent="space-between">
         <Text fontSize="$6" fontWeight="700">
           Leadership Team
@@ -279,9 +281,9 @@ export default function AdminLeadership() {
       </Text>
 
       {/* The identifier is a routing address, not a title — it decides who
-          receives the daily texting-list requests and appears nowhere on the
-          person's profile. Named here so an admin can see who holds it
-          without opening every row. */}
+            receives the daily texting-list requests and appears nowhere on the
+            person's profile. Named here so an admin can see who holds it
+            without opening every row. */}
       <YStack
         backgroundColor="$surface"
         borderRadius="$3"
@@ -398,10 +400,17 @@ export default function AdminLeadership() {
           </YStack>
         )
       })}
+    </YStack>
+  )
+
+  return (
+    <YStack flex={1} padding="$4">
+      <ScreenTitle options={{ title: 'Leadership Team', headerShown: false }} />
 
       <FlashList
         data={listed}
         keyExtractor={(u) => u.uid}
+        ListHeaderComponent={header}
         renderItem={({ item }) => {
           const isLeader = leadershipTeam.includes(item.uid)
           return (
