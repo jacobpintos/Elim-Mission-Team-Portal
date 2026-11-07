@@ -28,6 +28,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # What this run was asked for, as GitHub passed it on from the Run
+      # workflow form (or the API). A build that should have gone to
+      # TestFlight and didn't shows here whether Submit arrived ticked.
+      - name: Options received
+        run: |
+          echo "platform: ${{ inputs.platform }}"
+          echo "profile:  ${{ inputs.profile }}"
+          echo "submit:   ${{ inputs.submit }}"
+
       - name: Checkout
         uses: actions/checkout@v5
 
