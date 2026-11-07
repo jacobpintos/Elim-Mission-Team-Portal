@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin'
+import { ORG_TIME_ZONE } from './org'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { logger } from 'firebase-functions'
 import {
@@ -113,7 +114,7 @@ export async function cleanUpEventHistory(db: admin.firestore.Firestore, now: Da
 
 /** Nightly, after midnight in Iowa: "the day after" is the church's day after. */
 export const eventHistoryCleanup = onSchedule(
-  { schedule: '15 3 * * *', timeZone: 'America/Chicago', timeoutSeconds: 540 },
+  { schedule: '15 3 * * *', timeZone: ORG_TIME_ZONE, timeoutSeconds: 540 },
   async () => {
     const done = await cleanUpEventHistory(admin.firestore())
     logger.info('[eventHistoryCleanup]', done)

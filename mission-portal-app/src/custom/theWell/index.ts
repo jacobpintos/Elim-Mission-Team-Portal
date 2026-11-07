@@ -7,6 +7,20 @@ import type { OrgModule } from '../types'
 export const theWell: OrgModule = {
   id: 'thewell',
   name: 'The Well',
+  profile: {
+    fullName: 'The Well of Iowa',
+    kind: 'church',
+    timeZone: 'America/Chicago',
+    mailingAddress: 'P.O. Box 552, North Liberty, IA 52317',
+    home: { city: 'North Liberty', state: 'IA', lat: 41.7491, lng: -91.5779 },
+    appUrl: 'https://mission-team-portal.web.app',
+  },
+  plan: 'founding',
+  equipment: {
+    // The X32 on its own Wi-Fi, and the ATEM Television Studio Pro.
+    soundDesk: 'x32',
+    videoSwitcher: 'atem',
+  },
   adminSections: [
     {
       key: 'vehicles',

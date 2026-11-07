@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { ORG_TIME_ZONE } from '../org'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 import { CONNECTIONS } from './config'
@@ -15,7 +16,7 @@ if (!admin.apps.length) admin.initializeApp()
  * so it runs regardless of how healthy the webhook looks.
  */
 export const fbPostsBackfill = onSchedule(
-  { schedule: '17 * * * *', timeZone: 'America/Chicago', timeoutSeconds: 540 },
+  { schedule: '17 * * * *', timeZone: ORG_TIME_ZONE, timeoutSeconds: 540 },
   async () => {
     const snap = await admin.firestore().collection(CONNECTIONS).get()
     if (snap.empty) return

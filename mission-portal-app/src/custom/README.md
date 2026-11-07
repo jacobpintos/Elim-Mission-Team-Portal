@@ -8,7 +8,11 @@ people. Everything here is specific to one of them, so it can be switched on
 for that organization and left out of everyone else's build.
 
 - `index.ts` names the organization this build is for (`ORG`) and what its
-  module adds. Core code asks `ORG` whether a custom feature is on and never
+  module adds: who it is (`profile`: names, time zone, home, addresses),
+  its plan, the equipment it has, and its own features. Core code names the
+  organization through `profile` and asks `orgCan` (`src/lib/entitlements`)
+  whether it may use something, so the next organization changes only its
+  manifest (docs/ROADMAP.md). Core code asks `ORG` whether a custom feature is on and never
   imports from an organization's folder directly, only through these:
   - `index.ts`: the manifest — data only, so the app's logic and its tests can
     read it without loading a screen.

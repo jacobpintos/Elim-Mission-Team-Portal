@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { ORG_TIME_ZONE } from '../org'
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions'
@@ -14,7 +15,7 @@ if (!admin.apps.length) admin.initializeApp()
  * Nothing in the app deletes them before then.
  */
 export const purgeOldReceipts = onSchedule(
-  { schedule: '15 3 * * *', timeZone: 'America/Chicago', timeoutSeconds: 540 },
+  { schedule: '15 3 * * *', timeZone: ORG_TIME_ZONE, timeoutSeconds: 540 },
   async () => {
     const db = admin.firestore()
     const bucket = admin.storage().bucket()

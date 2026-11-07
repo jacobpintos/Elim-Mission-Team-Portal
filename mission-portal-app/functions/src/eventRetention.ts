@@ -13,14 +13,17 @@
  *
  * Kept free of Firebase: the app's tests import it.
  */
+
+import { todayInOrg } from './org'
+
 export const KEEP_EVENT_MONTHS = 12
 export const KEEP_INVITE_DAYS = 90
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
-/** Today in Iowa, where the church's days are, as YYYY-MM-DD. */
+/** Today where the church is (./org), where its days are, as YYYY-MM-DD. */
 export function iowaToday(now: Date = new Date()): string {
-  return now.toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
+  return todayInOrg(now)
 }
 
 /** The day this many months before `today` (the 31st going back to a shorter month: its last day). */

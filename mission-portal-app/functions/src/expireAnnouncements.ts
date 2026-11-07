@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { ORG_TIME_ZONE } from './org'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 
@@ -16,7 +17,7 @@ const BATCH_LIMIT = 450
  */
 export function todayCentral(now: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Chicago',
+    timeZone: ORG_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -68,7 +69,7 @@ export function storagePathFromUrl(url: unknown): string | null {
  * broken card to everyone until the next run.
  */
 export const expireAnnouncements = onSchedule(
-  { schedule: '5 0 * * *', timeZone: 'America/Chicago' },
+  { schedule: '5 0 * * *', timeZone: ORG_TIME_ZONE },
   async () => {
     const db = admin.firestore()
     const today = todayCentral()

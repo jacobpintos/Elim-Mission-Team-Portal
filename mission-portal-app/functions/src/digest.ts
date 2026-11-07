@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { ORG } from './org'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { requireAdmin } from './owner'
 import { defineSecret } from 'firebase-functions/params'
@@ -141,11 +142,11 @@ function buildWeeklyEmailHtml(
 <body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333">
   <div style="background:#f56c5a;padding:24px;border-radius:8px 8px 0 0;text-align:center">
     <h1 style="color:white;margin:0;font-size:24px">Weekly Digest</h1>
-    <p style="color:rgba(255,255,255,0.85);margin:8px 0 0">The Well of Iowa</p>
+    <p style="color:rgba(255,255,255,0.85);margin:8px 0 0">${ORG.fullName}</p>
   </div>
   <div style="background:#f5f5f5;padding:20px;border-radius:0 0 8px 8px">
     <p>Hi ${name},</p>
-    <p>Here's your weekly update from The Well of Iowa.</p>
+    <p>Here's your weekly update from ${ORG.fullName}.</p>
 
     <h2 style="color:#f56c5a;font-size:18px">Upcoming Events</h2>
     <table style="width:100%;border-collapse:collapse">
@@ -157,8 +158,8 @@ function buildWeeklyEmailHtml(
 
     <hr style="border:none;border-top:1px solid #ddd;margin:24px 0">
     <p style="font-size:12px;color:#aaa;text-align:center">
-      You're receiving this weekly digest from The Well of Iowa.<br>
-      P.O. Box 552, North Liberty, IA 52317<br>
+      You're receiving this weekly digest from ${ORG.fullName}.<br>
+      ${ORG.mailingAddress}<br>
       <a href="${unsubUrl}" style="color:#aaa">Unsubscribe</a>
     </p>
   </div>
@@ -203,11 +204,11 @@ function buildMonthlyEmailHtml(
 <body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333">
   <div style="background:#f56c5a;padding:24px;border-radius:8px 8px 0 0;text-align:center">
     <h1 style="color:white;margin:0;font-size:24px">Monthly Newsletter</h1>
-    <p style="color:rgba(255,255,255,0.85);margin:8px 0 0">The Well of Iowa</p>
+    <p style="color:rgba(255,255,255,0.85);margin:8px 0 0">${ORG.fullName}</p>
   </div>
   <div style="background:#f5f5f5;padding:20px;border-radius:0 0 8px 8px">
     <p>Hi ${name},</p>
-    <p>Here's your monthly update from The Well of Iowa.</p>
+    <p>Here's your monthly update from ${ORG.fullName}.</p>
 
     <h2 style="color:#f56c5a;font-size:18px">Upcoming Events</h2>
     <ul>
@@ -219,8 +220,8 @@ function buildMonthlyEmailHtml(
 
     <hr style="border:none;border-top:1px solid #ddd;margin:24px 0">
     <p style="font-size:12px;color:#aaa;text-align:center">
-      You're receiving this monthly newsletter from The Well of Iowa.<br>
-      P.O. Box 552, North Liberty, IA 52317<br>
+      You're receiving this monthly newsletter from ${ORG.fullName}.<br>
+      ${ORG.mailingAddress}<br>
       <a href="${unsubUrl}" style="color:#aaa">Unsubscribe</a>
     </p>
   </div>
@@ -257,8 +258,8 @@ async function sendDigestBatch(
         to: user.email,
         subject:
           type === 'weekly'
-            ? 'Your Weekly Digest — The Well of Iowa'
-            : 'Monthly Newsletter — The Well of Iowa',
+            ? `Your Weekly Digest — ${ORG.fullName}`
+            : `Monthly Newsletter — ${ORG.fullName}`,
         html,
         tags: [{ name: 'batchId', value: batchId }],
       }

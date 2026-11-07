@@ -21,6 +21,7 @@ import { migrateRetiredRoles } from '@/lib/roles'
 import { forgetOfflineData } from '@/lib/offlineCache'
 import { defaultNotificationPrefs } from '@/types/user'
 import { SIGN_UP_ENABLED } from '@/lib/featureFlags'
+import { APP_URL } from '@/lib/orgInfo'
 import { markStartup } from '@/lib/startupTimeline'
 import type { UserProfile } from '@/types/user'
 
@@ -148,7 +149,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     })
     // Fire-and-forget — resend button on verify-email screen handles retries
     sendEmailVerification(cred.user, {
-      url: process.env.EXPO_PUBLIC_APP_URL ?? 'https://mission-team-portal.web.app',
+      url: APP_URL,
       handleCodeInApp: false,
     }).catch(() => {})
   },
@@ -171,7 +172,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   resendVerification: async () => {
     if (auth.currentUser)
       await sendEmailVerification(auth.currentUser, {
-        url: process.env.EXPO_PUBLIC_APP_URL ?? 'https://mission-team-portal.web.app',
+        url: APP_URL,
         handleCodeInApp: false,
       })
   },

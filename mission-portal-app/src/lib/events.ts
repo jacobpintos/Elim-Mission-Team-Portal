@@ -1,5 +1,6 @@
 import type { EventTemplate, EventInstance } from '@/types/events'
 import { clockMinutes } from '@/lib/eventSchedule'
+import { ORG_NAME } from '@/lib/orgInfo'
 import { seesDraft } from '../../functions/src/eventPrivate'
 import type { ReportTime } from '../../functions/src/miriam/data'
 
@@ -205,7 +206,7 @@ export function buildICS(
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//The Well of Iowa//Mission Portal//EN',
+    `PRODID:-//${ORG_NAME}//Mission Portal//EN`,
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
@@ -217,7 +218,7 @@ export function buildICS(
     ...(start && end ? [`DTSTART${stamp(start)}`, `DTEND${stamp(end)}`] : []),
     `SUMMARY:${esc(ev.title + (ev.isRec ? ' (Recurring)' : ''))}`,
     `LOCATION:${esc(where)}`,
-    `DESCRIPTION:${esc(desc.join('\n') || 'The Well of Iowa Mission Event')}`,
+    `DESCRIPTION:${esc(desc.join('\n') || `${ORG_NAME} Mission Event`)}`,
     'END:VEVENT',
     'END:VCALENDAR',
   ].join('\r\n')

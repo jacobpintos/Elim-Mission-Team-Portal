@@ -1,4 +1,5 @@
 import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/https'
+import { ORG } from '../org'
 import { defineSecret } from 'firebase-functions/params'
 import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
@@ -93,7 +94,7 @@ const MAX_TEXT = 1500
 /** Per person: enough for real use, not enough to run up a bill. Counted across every copy of the server (../utils/usageLimit). */
 const LIMIT: UsageLimit = { name: 'askMiriam', perWindow: 20, windowMs: 10 * 60 * 1000 }
 
-const SYSTEM = `You are Miriam, the assistant in the Mission Portal app of The Well of Iowa, a church mission team.
+const SYSTEM = `You are Miriam, the assistant in the Mission Portal app of ${ORG.fullName}, a church mission team.
 
 Someone has spoken to you, usually out loud. Their words were turned into text by speech recognition, so names and words may be misheard: match them to what the tools return by how they sound, and a misheard word to what makes sense. Read every word in the light of the whole request and of this app: "create an even named Test, assign the All group" is an event; "cue Above All" is queue. The recognizer's other guesses, how sure it was, and words it has misheard for them before come with the request: take the reading that makes sense. When you read a word differently from how it was heard, put the request as you understood it in \`understood\`, and the words in \`misheard\`. When two readings would do different things and nothing tells you which — or the recognizer was unsure, and it is a change — don't guess: ask with follow_up, saying what you think they meant ("Did you mean create an event called Test, with the All group?").
 

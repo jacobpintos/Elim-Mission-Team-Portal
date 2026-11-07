@@ -2,12 +2,13 @@ import { useMemo } from 'react'
 import { Platform } from 'react-native'
 import { InviteButton } from '@/features/invite/InviteButton'
 import { eventInviteMessage, eventPageUrl } from '@/lib/invite'
+import { APP_URL } from '@/lib/orgInfo'
 import type { EventInstance } from '@/types/events'
 
 /** The app's address, for a link to an event's page. */
 function appOrigin(): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined') return window.location.origin
-  return process.env.EXPO_PUBLIC_APP_URL ?? 'https://mission-team-portal.web.app'
+  return APP_URL
 }
 
 /**

@@ -28,6 +28,7 @@ import {
 } from './localData'
 import type { Here } from './localTalk'
 import { deskAccess, switcherAccess } from './equipmentAccess'
+import { orgCan } from '@/lib/entitlements'
 import { loadSwaps, saveSwaps } from '@/lib/mixer/swapStore'
 
 /**
@@ -114,8 +115,10 @@ export function hereNow(briefedFoodRef: {
         .map((u) => ({ uid: String(u.uid), name: u.displayName, sex: u.sex ?? null })),
     latest: (room, n) => latestMessages(room, n, profile),
     now: () => Date.now(),
-    desk: () => deskAccess(uid),
-    switcher: () => switcherAccess(uid),
+    // Only where the organization has them (lib/entitlements): elsewhere
+    // "mute the bass" or "camera 2" isn't hers to take.
+    desk: orgCan('soundDesk') ? () => deskAccess(uid) : undefined,
+    switcher: orgCan('videoSwitcher') ? () => switcherAccess(uid) : undefined,
     swaps: { load: () => loadSwaps(), save: saveSwaps },
     briefedFood: () =>
       briefedFoodRef.current?.day === localToday() ? briefedFoodRef.current.food : [],

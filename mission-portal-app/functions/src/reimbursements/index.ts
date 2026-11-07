@@ -1,4 +1,5 @@
 import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/https'
+import { todayInOrg } from '../org'
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions'
@@ -63,9 +64,9 @@ const MAX_NOTE = 1000
 
 const CALL_OPTS = { secrets: [RESEND_API_KEY] }
 
-/** Today in Iowa, which is when "already passed" is decided. */
+/** Today where the church is (../org), which is when "already passed" is decided. */
 function today(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
+  return todayInOrg()
 }
 
 function requireUid(req: CallableRequest): string {

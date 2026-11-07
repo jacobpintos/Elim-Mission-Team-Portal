@@ -14,7 +14,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { isMember } from '@/lib/roles'
 import { formatPhone, normalizePhone } from '@/lib/textingList'
 import { DEFAULT_TEXTING_NUMBER } from '@/lib/textingListDb'
-import { jobHoldersOf, TEAM_JOBS, toggledJob, type TeamJob } from '@/lib/teamJobs'
+import { jobHoldersOf, orgJobs, TEAM_JOBS, toggledJob, type TeamJob } from '@/lib/teamJobs'
 import { useThemeStore } from '@/stores/themeStore'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -374,7 +374,7 @@ export default function AdminLeadership() {
         </Text>
       </YStack>
 
-      {(Object.keys(TEAM_JOBS) as TeamJob[]).map((job) => {
+      {orgJobs().map((job) => {
         const { one, does } = TEAM_JOBS[job]
         const holders = jobs[job]
         return (
@@ -509,7 +509,7 @@ export default function AdminLeadership() {
                   </Button>
                 ) : null}
                 {/* Not places on the team, so offered to anyone listed. */}
-                {(Object.keys(TEAM_JOBS) as TeamJob[]).map((job) => {
+                {orgJobs().map((job) => {
                   const holds = jobs[job].includes(item.uid)
                   const { one } = TEAM_JOBS[job]
                   return (

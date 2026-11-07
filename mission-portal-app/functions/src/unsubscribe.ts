@@ -1,4 +1,5 @@
 import { onRequest } from 'firebase-functions/v2/https'
+import { ORG } from './org'
 import { defineSecret } from 'firebase-functions/params'
 import * as admin from 'firebase-admin'
 import * as crypto from 'crypto'
@@ -20,6 +21,6 @@ export const unsubscribe = onRequest({ secrets: [UNSUBSCRIBE_HMAC_SECRET] }, asy
     type === 'weekly' ? 'notificationPrefs.weeklyDigest' : 'notificationPrefs.monthlyDigest'
   await db.collection('users').doc(uid).update({ [field]: false })
   res.status(200).send(
-    `<!DOCTYPE html><html lang="en"><head><title>Unsubscribed</title></head><body style="font-family:sans-serif;max-width:400px;margin:60px auto;text-align:center;color:#333"><h2>You've been unsubscribed.</h2><p>You will no longer receive ${type} email digests from The Well of Iowa.</p><p style="margin-top:24px;font-size:13px;color:#888">Changed your mind? Update your notification preferences in the portal.</p></body></html>`
+    `<!DOCTYPE html><html lang="en"><head><title>Unsubscribed</title></head><body style="font-family:sans-serif;max-width:400px;margin:60px auto;text-align:center;color:#333"><h2>You've been unsubscribed.</h2><p>You will no longer receive ${type} email digests from ${ORG.fullName}.</p><p style="margin-top:24px;font-size:13px;color:#888">Changed your mind? Update your notification preferences in the portal.</p></body></html>`
   )
 })

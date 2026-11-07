@@ -10,9 +10,11 @@ import { isAdmin } from '@/lib/roles'
 import { allInstances } from '@/lib/events'
 import { haversineMiles } from '@/lib/geocode'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
+import { ORG } from '@/custom'
 
-const HOME_LAT = 41.7491
-const HOME_LNG = -91.5779
+/** Where trips leave from: the organization's home (src/custom). */
+const { lat: HOME_LAT, lng: HOME_LNG } = ORG.profile.home
+const HOME_SAID = `${ORG.profile.home.city}, ${ORG.profile.home.state}`
 
 type LocationGroup = {
   key: string
@@ -154,7 +156,7 @@ export default function EventsMapScreen() {
       .setLngLat([HOME_LNG, HOME_LAT])
       .setPopup(
         new mapboxgl.Popup({ offset: 12, closeButton: false }).setHTML(
-          '<div style="font-family:system-ui;font-size:12px;"><strong>North Liberty, IA</strong><br/>Mission departure point</div>'
+          `<div style="font-family:system-ui;font-size:12px;"><strong>${HOME_SAID}</strong><br/>Mission departure point</div>`
         )
       )
       .addTo(map.current)
@@ -508,7 +510,7 @@ export default function EventsMapScreen() {
                   flexShrink: 0,
                 }}
               />
-              <span style={{ color: colors.text }}>North Liberty, IA</span>
+              <span style={{ color: colors.text }}>{HOME_SAID}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 20, height: 2, background: '#5a7db5', flexShrink: 0 }} />

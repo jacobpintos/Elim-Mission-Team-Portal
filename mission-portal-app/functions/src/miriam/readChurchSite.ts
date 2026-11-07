@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { ORG_TIME_ZONE } from '../org'
 import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
 import type { OwnDb } from './own/learn'
@@ -15,7 +16,7 @@ if (!admin.apps.length) admin.initializeApp()
 export const readChurchSite = onSchedule(
   {
     schedule: 'every day 03:50',
-    timeZone: 'America/Chicago',
+    timeZone: ORG_TIME_ZONE,
     memory: '1GiB',
     cpu: 1,
     timeoutSeconds: 540,

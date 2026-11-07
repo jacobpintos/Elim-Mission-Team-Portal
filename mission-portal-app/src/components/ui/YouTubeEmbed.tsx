@@ -3,6 +3,7 @@ import { WebView } from 'react-native-webview'
 import { XStack, Text } from 'tamagui'
 import { extractYouTubeId } from '@/stores/musicStore'
 import { startsWithSound, youTubeEmbedUrl } from '@/lib/autoplay'
+import { APP_URL } from '@/lib/orgInfo'
 
 /**
  * A YouTube video playing inside the app, on native and on the web.
@@ -31,7 +32,7 @@ export function YouTubeEmbed({ url }: { url: string }) {
   // whose iframe plays these videos without complaint — satisfies both, and
   // `origin=` must match `baseUrl` or the player rejects the mismatch.
   if (Platform.OS !== 'web') {
-    const origin = process.env.EXPO_PUBLIC_APP_URL ?? 'https://mission-team-portal.web.app'
+    const origin = APP_URL
     const html = `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}iframe{border:0;display:block;width:100%;height:100%}</style>

@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { ORG_TIME_ZONE } from '../org'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 import { notifyUser } from './notifyCore'
@@ -65,7 +66,7 @@ export async function coordinatorUid(db: admin.firestore.Firestore): Promise<str
  * dropped, so designating a coordinator later still delivers the backlog.
  */
 export const textingListDigest = onSchedule(
-  { schedule: '0 17 * * *', timeZone: 'America/Chicago' },
+  { schedule: '0 17 * * *', timeZone: ORG_TIME_ZONE },
   async () => {
     const db = admin.firestore()
 

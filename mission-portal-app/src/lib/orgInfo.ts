@@ -1,3 +1,5 @@
+import { ORG } from '@/custom'
+
 /**
  * Organisation contact details shown in the Privacy Policy and Terms of Use.
  *
@@ -9,9 +11,12 @@
  */
 export const SUPPORT_EMAIL = process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? ''
 
-export const ORG_NAME = process.env.EXPO_PUBLIC_ORG_NAME ?? 'The Well of Iowa'
+export const ORG_NAME = process.env.EXPO_PUBLIC_ORG_NAME ?? ORG.profile.fullName
 
-export const ORG_MAILING_ADDRESS = process.env.EXPO_PUBLIC_ORG_ADDRESS ?? ''
+export const ORG_MAILING_ADDRESS = process.env.EXPO_PUBLIC_ORG_ADDRESS ?? ORG.profile.mailingAddress
+
+/** The web app's address, for links into it from outside (src/custom: the organization's profile). */
+export const APP_URL = process.env.EXPO_PUBLIC_APP_URL ?? ORG.profile.appUrl
 
 /** How quickly reports about objectionable content are acted on. */
 export const MODERATION_SLA_HOURS = 24

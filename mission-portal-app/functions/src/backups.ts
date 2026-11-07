@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { ORG_TIME_ZONE, todayInOrg } from './org'
 import * as admin from 'firebase-admin'
 import { v1 } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions'
@@ -29,16 +30,12 @@ if (!admin.apps.length) admin.initializeApp()
  * Google Cloud → IAM.
  */
 
-function todayInIowa(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
-}
-
 export const nightlyBackup = onSchedule(
-  { schedule: '30 2 * * *', timeZone: 'America/Chicago', timeoutSeconds: 540 },
+  { schedule: '30 2 * * *', timeZone: ORG_TIME_ZONE, timeoutSeconds: 540 },
   async () => {
     const projectId = process.env.GCLOUD_PROJECT ?? admin.app().options.projectId ?? ''
     const bucket = admin.storage().bucket()
-    const day = todayInIowa()
+    const day = todayInOrg()
     const status = admin.firestore().doc('backupStatus/latest')
 
     try {

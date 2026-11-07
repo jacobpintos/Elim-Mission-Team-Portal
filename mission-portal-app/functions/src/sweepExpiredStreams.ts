@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { ORG_TIME_ZONE } from './org'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 
@@ -30,7 +31,7 @@ export function isExpiredStream(expiresAt: unknown, now: number): boolean {
  * holds roughly one document per week. The read costs less than the index.
  */
 export const sweepExpiredStreams = onSchedule(
-  { schedule: '7 * * * *', timeZone: 'America/Chicago' },
+  { schedule: '7 * * * *', timeZone: ORG_TIME_ZONE },
   async () => {
     const db = admin.firestore()
     const now = Date.now()

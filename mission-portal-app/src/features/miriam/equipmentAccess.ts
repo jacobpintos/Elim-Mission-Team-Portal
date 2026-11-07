@@ -2,7 +2,7 @@ import { doc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { getDoc } from '@/lib/liveFirestore'
 import { useConfigStore } from '@/stores/configStore'
-import { holdsJob, jobHoldersOf, type TeamJob } from '@/lib/teamJobs'
+import { doesJob, jobHoldersOf, type TeamJob } from '@/lib/teamJobs'
 import { canReachDesk, deskLinkTo } from '@/lib/mixer/link'
 import { loadDeskAddress } from '@/lib/mixer/deskAddress'
 import { canReachSwitcher, switcherAt } from '@/lib/switcher/link'
@@ -37,7 +37,8 @@ export async function jobHolders(job: TeamJob): Promise<string[]> {
  * a Sound Engineer, in the phone app, with the desk's address set in Settings.
  */
 export async function deskAccess(uid: string): Promise<DeskAccess> {
-  if (!holdsJob(uid, await jobHolders('soundEngineers'))) return { kind: 'not engineer' }
+  if (!doesJob('soundEngineers', uid, await jobHolders('soundEngineers')))
+    return { kind: 'not engineer' }
   if (!canReachDesk()) return { kind: 'no app' }
   const address = await loadDeskAddress()
   if (!address) return { kind: 'no address' }
@@ -51,7 +52,8 @@ export async function deskAccess(uid: string): Promise<DeskAccess> {
  * address set in Settings.
  */
 export async function switcherAccess(uid: string): Promise<SwitcherAccess> {
-  if (!holdsJob(uid, await jobHolders('videoOperators'))) return { kind: 'not operator' }
+  if (!doesJob('videoOperators', uid, await jobHolders('videoOperators')))
+    return { kind: 'not operator' }
   if (!canReachSwitcher()) return { kind: 'no app' }
   const address = await loadSwitcherAddress()
   if (!address) return { kind: 'no address' }

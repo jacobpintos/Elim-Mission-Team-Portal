@@ -2,6 +2,8 @@
 
 The app the mission team uses to plan and run events and trips. It covers availability, teams, carpools, lodging and flights, food sign-ups, tasks, reimbursements, worship set lists and chord sheets, messaging, announcements and a public website. It also includes **Miriam**, a voice assistant that can do most of that by being asked.
 
+Where it's headed, from The Well's own operational platform to a subscription app for other churches, ministries and bands, is in [docs/ROADMAP.md](docs/ROADMAP.md).
+
 It is one [Expo](https://docs.expo.dev/versions/v56.0.0/) (React Native) codebase that runs on iPhone, Android and the web, backed by Firebase: Auth, Firestore, Storage, Cloud Functions and Hosting.
 
 ---
@@ -22,8 +24,10 @@ It is one [Expo](https://docs.expo.dev/versions/v56.0.0/) (React Native) codebas
 │   ├── firestore.rules          Who may read and write what in Firestore
 │   ├── storage.rules            The same for uploaded files
 │   ├── rules-tests/             Tests for both rule files, run against the emulators
-│   └── modules/miriam-wake/     Native module for Miriam's on-device wake word
+│   ├── modules/miriam-wake/     Native module for Miriam's on-device wake word
+│   └── modules/desk-link/       Native module for the sound desk, the video switcher and the local network
 ├── docs/
+│   ├── ROADMAP.md               The five stages, where the app is, and the groundwork for what's next
 │   ├── migration/               History: how the original single-page app became this one
 │   └── facebook-page-*          Setting up Facebook Page sync
 ├── firebase.json                Hosting, Functions, Firestore and Storage configuration

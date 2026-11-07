@@ -26,7 +26,7 @@ import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
 import { confirmAsync } from '@/lib/confirm'
 import { DEFAULT_FLIGHT_REMINDER_HOURS, defaultNotificationPrefs } from '@/types/user'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
-import { holdsJob } from '@/lib/teamJobs'
+import { doesJob } from '@/lib/teamJobs'
 import { deskAddressOf, loadDeskAddress, saveDeskAddress } from '@/lib/mixer/deskAddress'
 import { canReachDesk, deskLinkTo } from '@/lib/mixer/link'
 import { deskInfo } from '@/lib/mixer/x32'
@@ -822,7 +822,7 @@ export default function SettingsScreen() {
         </Section>
 
         {/* The sound desk (lib/mixer): where it is, for Miriam to change it. */}
-        {holdsJob(String(profile?.uid ?? ''), soundEngineers) ? (
+        {doesJob('soundEngineers', String(profile?.uid ?? ''), soundEngineers) ? (
           <Section title="Sound desk">
             {Platform.OS === 'web' || !canReachDesk() ? (
               <Text color={colors.textMuted} fontSize="$2">
@@ -904,7 +904,7 @@ export default function SettingsScreen() {
         ) : null}
 
         {/* The video switcher (lib/switcher): where it is, for Miriam to switch cameras. */}
-        {holdsJob(String(profile?.uid ?? ''), videoOperators) ? (
+        {doesJob('videoOperators', String(profile?.uid ?? ''), videoOperators) ? (
           <Section title="Video switcher">
             {Platform.OS === 'web' || !canReachSwitcher() ? (
               <Text color={colors.textMuted} fontSize="$2">

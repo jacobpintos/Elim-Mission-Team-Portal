@@ -29,7 +29,7 @@ import { buildTabTour } from '@/features/tour/flows'
 import type { Tab } from '@/lib/roles'
 import { isTabVisible } from '@/lib/featureFlags'
 import { useConfigStore } from '@/stores/configStore'
-import { holdsJob } from '@/lib/teamJobs'
+import { doesJob } from '@/lib/teamJobs'
 import { INBOX_TITLE } from '@/features/inbox/InboxTabs'
 import { markStartup } from '@/lib/startupTimeline'
 import { EVERYONE } from '../../functions/src/eventPrivate'
@@ -225,7 +225,10 @@ export default function AppLayout() {
   // The public-facing section is a tab now, not a mode. A member reaches it
   // by opening Public Facing and leaves it by opening anything else, so there
   // is no separate view to be in and nothing to restore on the way out.
-  const tabs = withVideo(visibleTabs(profile), holdsJob(String(profile.uid), videoOperators))
+  const tabs = withVideo(
+    visibleTabs(profile),
+    doesJob('videoOperators', String(profile.uid), videoOperators)
+  )
 
   // Unverified users who completed onboarding are awaiting role assignment — show holding screen
   if (tabs.length === 0) {

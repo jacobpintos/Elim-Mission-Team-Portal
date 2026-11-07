@@ -1,3 +1,6 @@
+import { ORG, type OrgModule } from '@/custom'
+import { orgCan, type AppFeature } from '@/lib/entitlements'
+
 /**
  * Jobs several people can hold, given on Admin → Leadership Team:
  *
@@ -7,14 +10,29 @@
  * Kept in config (connectConfig) beside the Connections Coordinator and the
  * Accountant, not on the leadership team, so holding one doesn't put anyone
  * on the church's pages or the meeting form.
+ *
+ * A job is there only where the organization can use what it works
+ * (lib/entitlements): no Sound Engineers where there's no sound desk.
  */
 
 export type TeamJob = 'soundEngineers' | 'videoOperators'
 
-export const TEAM_JOBS: Record<TeamJob, { one: string; does: string }> = {
-  soundEngineers: { one: 'Sound Engineer', does: 'change the sound desk' },
-  videoOperators: { one: 'Video Operator', does: 'switch cameras' },
+export const TEAM_JOBS: Record<TeamJob, { one: string; does: string; needs: AppFeature }> = {
+  soundEngineers: { one: 'Sound Engineer', does: 'change the sound desk', needs: 'soundDesk' },
+  videoOperators: { one: 'Video Operator', does: 'switch cameras', needs: 'videoSwitcher' },
 }
+
+/** The jobs the organization has: those whose equipment and plan it has. */
+export const orgJobs = (org: OrgModule = ORG): TeamJob[] =>
+  (Object.keys(TEAM_JOBS) as TeamJob[]).filter((job) => orgCan(TEAM_JOBS[job].needs, org))
+
+/** Whether this person does a job here: the organization has it, and they hold it. */
+export const doesJob = (
+  job: TeamJob,
+  uid: string | undefined,
+  holders: readonly string[],
+  org: OrgModule = ORG
+) => orgCan(TEAM_JOBS[job].needs, org) && holdsJob(uid, holders)
 
 /** A job's holders as stored: uids only, each once. */
 export function jobHoldersOf(stored: unknown): string[] {
