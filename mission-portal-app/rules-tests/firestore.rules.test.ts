@@ -2153,3 +2153,53 @@ describe('blockedDates — days someone can’t make', () => {
     await assertSucceeds(deleteDoc(doc(as(ADMIN), 'blockedDates/b2')))
   })
 })
+
+describe('the Pre-service Checklist', () => {
+  const DAY = '2026-11-08'
+  const check = (by: string) => ({ by, at: serverTimestamp() })
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'preService/checklist'), {
+        items: {
+          mics: { text: 'Batteries in the mics', section: 'Sound', order: 0, assignees: [MEMBER] },
+          lights: { text: 'Lights on', section: '', order: 1, assignees: [] },
+        },
+        serviceDays: [0],
+      })
+    })
+  })
+
+  it('is built by admins and read by the team, not guests or anyone signed out', async () => {
+    await assertSucceeds(getDoc(doc(as(MEMBER), 'preService/checklist')))
+    await assertSucceeds(getDoc(doc(as(WORSHIP), 'preService/checklist')))
+    await assertFails(getDoc(doc(as(GUEST), 'preService/checklist')))
+    await assertFails(getDoc(doc(anon(), 'preService/checklist')))
+    await assertFails(updateDoc(doc(as(MEMBER), 'preService/checklist'), { serviceDays: [0, 3] }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'preService/checklist'), { serviceDays: [0, 3] }))
+  })
+
+  it('has each item checked off by those it’s given to, and by admins', async () => {
+    const mics = `preServiceDays/${DAY}/checks/mics`
+    await assertFails(setDoc(doc(as(OUTSIDER), mics), check(OUTSIDER)))
+    // In their own name only, and only when it was done.
+    await assertFails(setDoc(doc(as(MEMBER), mics), check(ADMIN)))
+    await assertFails(setDoc(doc(as(MEMBER), mics), { by: MEMBER, at: 1 }))
+    await assertFails(setDoc(doc(as(MEMBER), mics), { ...check(MEMBER), note: 'x' }))
+    await assertSucceeds(setDoc(doc(as(MEMBER), mics), check(MEMBER)))
+    await assertSucceeds(getDocs(collection(as(OUTSIDER), `preServiceDays/${DAY}/checks`)))
+    await assertFails(getDocs(collection(as(GUEST), `preServiceDays/${DAY}/checks`)))
+    await assertFails(deleteDoc(doc(as(OUTSIDER), mics)))
+    await assertSucceeds(deleteDoc(doc(as(MEMBER), mics)))
+    // An item given to nobody: an admin's.
+    const lights = `preServiceDays/${DAY}/checks/lights`
+    await assertFails(setDoc(doc(as(MEMBER), lights), check(MEMBER)))
+    await assertSucceeds(setDoc(doc(as(ADMIN), lights), check(ADMIN)))
+    await assertSucceeds(setDoc(doc(as(ADMIN), mics), check(ADMIN)))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), mics)))
+  })
+
+  it('checks only items on the list, for a day', async () => {
+    await assertFails(setDoc(doc(as(MEMBER), `preServiceDays/${DAY}/checks/gone`), check(MEMBER)))
+    await assertFails(setDoc(doc(as(ADMIN), 'preServiceDays/someday/checks/mics'), check(ADMIN)))
+  })
+})

@@ -492,6 +492,34 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // The Pre-service Checklist (src/features/preservice): admins build it
+    // and give each item to people; each of them checks their own off, for
+    // the service it's for; admins may check any. Everyone on the team can
+    // see how far along it is.
+    function onTheTeam() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+          .hasAny(['admin', 'security', 'regular', 'intern', 'worship']);
+    }
+    function givenPreServiceItem(itemId) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/preService/checklist).data.items[itemId]
+          .assignees.hasAny([request.auth.uid]);
+    }
+    match /preService/checklist {
+      allow read: if onTheTeam();
+      allow write: if isAdmin();
+    }
+    match /preServiceDays/{day}/checks/{itemId} {
+      allow read: if onTheTeam();
+      allow create, update: if day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        request.resource.data.keys().hasOnly(['by', 'at']) &&
+        request.resource.data.by == request.auth.uid &&
+        request.resource.data.at == request.time &&
+        (isAdmin() || givenPreServiceItem(itemId));
+      allow delete: if isAdmin() || givenPreServiceItem(itemId);
+    }
+
     match /kaizen/{id} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();

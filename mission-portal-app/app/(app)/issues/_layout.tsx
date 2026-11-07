@@ -4,11 +4,16 @@ import { XStack, YStack, Text } from 'tamagui'
 import { useAuthStore } from '@/stores/authStore'
 import { isAdmin } from '@/lib/roles'
 import { useThemeColors } from '@/theme/useThemeColors'
+import { hasCustom } from '@/custom'
 
 const ALL_TABS = [
-  // What Operations opens on: a church member's own site, shown as it is
-  // (features/production).
-  { key: 'index', label: 'Production Checklist', path: '/(app)/issues' },
+  // What Operations opens on (./index): The Well's Production Checklist, a
+  // member's own site (src/custom), or else the Pre-service Checklist.
+  {
+    key: 'index',
+    label: hasCustom('productionChecklist') ? 'Production Checklist' : 'Pre-service Checklist',
+    path: '/(app)/issues',
+  },
   { key: 'list', label: 'Issues', path: '/(app)/issues/list' },
   { key: 'kaizen', label: 'Kaizen', path: '/(app)/issues/kaizen' },
   { key: 'planning', label: 'Planning', path: '/(app)/issues/planning', adminOnly: true },

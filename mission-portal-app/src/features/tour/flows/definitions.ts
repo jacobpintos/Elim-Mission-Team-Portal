@@ -1,6 +1,7 @@
 import type { TourFlow } from '../types'
 import { ADMIN_SECTIONS } from '@/lib/adminSections'
 import { PUBLIC_SURFACE_ENABLED, EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
+import { hasCustom } from '@/custom'
 
 /** The opening card — asks whether to take the tour. */
 export const welcomeFlow: TourFlow = {
@@ -129,12 +130,19 @@ export const operationsFlow: TourFlow = {
   tab: 'issues',
   title: 'Operations',
   steps: [
-    {
-      id: 'ops-production',
-      route: '/issues',
-      title: 'Production Checklist',
-      body: 'Operations opens on the production checklist, built by a member of the church and shown here as it is.',
-    },
+    hasCustom('productionChecklist')
+      ? {
+          id: 'ops-production',
+          route: '/issues',
+          title: 'Production Checklist',
+          body: 'Operations opens on the production checklist, built by a member of the church and shown here as it is.',
+        }
+      : {
+          id: 'ops-preservice',
+          route: '/issues',
+          title: 'Pre-service Checklist',
+          body: 'Operations opens on the pre-service checklist: what you’ve been given to do before the service, and how far along everyone is.',
+        },
     {
       id: 'ops-intro',
       route: '/issues/list',

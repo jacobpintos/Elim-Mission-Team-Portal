@@ -69,5 +69,10 @@ export interface OrgModule {
      * and Miriam keeping them.
      */
     vehicles: boolean
+    /**
+     * Operations opens on its own Production Checklist, a member's site
+     * (theWell/production), rather than the app's Pre-service Checklist.
+     */
+    productionChecklist: boolean
   }
 }

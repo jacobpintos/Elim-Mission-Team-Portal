@@ -34,5 +34,7 @@ export const theWell: OrgModule = {
   features: {
     // Admin → Vehicles, the carpool planner, and Miriam's vehicle commands.
     vehicles: true,
+    // Operations → Production Checklist: a member's own site, shown as it is.
+    productionChecklist: true,
   },
 }

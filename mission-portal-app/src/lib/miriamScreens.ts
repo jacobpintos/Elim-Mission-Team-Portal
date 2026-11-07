@@ -51,7 +51,7 @@ export function screensFor(profile: UserProfile | null): MiriamScreen[] {
     screens.push({ id: 'messages', label: 'Messages', path: '/messages' })
   }
   if (tabs.includes('issues')) {
-    // Operations opens on the Production Checklist (app/(app)/issues/index);
+    // Operations opens on its checklist (app/(app)/issues/index);
     // its Issues list is a tab of its own.
     screens.push(
       { id: 'issues_list', label: 'Operations — Issues', path: '/issues/list' },

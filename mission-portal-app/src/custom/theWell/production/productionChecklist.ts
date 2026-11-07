@@ -1,6 +1,6 @@
 /**
- * The Production Checklist: a church member's own site, shown under
- * Operations as it is (app/(app)/issues/production). It is theirs — built,
+ * Custom: The Well. The Production Checklist: a church member's own site,
+ * shown under Operations as it is (./ProductionChecklistScreen). It is theirs — built,
  * hosted and updated by them — so nothing of it is copied here: the tab
  * shows the live site, and whatever they publish shows with it.
  */

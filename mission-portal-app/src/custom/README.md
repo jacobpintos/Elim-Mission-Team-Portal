@@ -35,11 +35,12 @@ their own, and Re-plan arranges everyone again in the same vehicles. A vehicle
 may sit with no driver, or too many in it, while people are moved — it says
 so, and the plan can't be used (nor the builder's cars saved) until it's fixed.
 
-| Feature             | Where                                                                                                                | What it keeps                                                  |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Vehicles            | Admin → Vehicles (`vehicles/`)                                                                                       | `vehicles/{id}` in Firestore, admins only (`firestore.rules`)  |
-| Carpool planner     | An event's carpool: Plan from vehicles (`carpool/`)                                                                  | Nothing of its own: the cars it plans are saved as the event's |
-| Miriam and vehicles | `add_vehicle`, `update_vehicle`, `remove_vehicle`, `read_vehicles` (`miriam.ts`, and `functions/src/miriam/plan.ts`) | The same `vehicles` documents                                  |
+| Feature              | Where                                                                                                                                               | What it keeps                                                  |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Vehicles             | Admin → Vehicles (`vehicles/`)                                                                                                                      | `vehicles/{id}` in Firestore, admins only (`firestore.rules`)  |
+| Carpool planner      | An event's carpool: Plan from vehicles (`carpool/`)                                                                                                 | Nothing of its own: the cars it plans are saved as the event's |
+| Miriam and vehicles  | `add_vehicle`, `update_vehicle`, `remove_vehicle`, `read_vehicles` (`miriam.ts`, and `functions/src/miriam/plan.ts`)                                | The same `vehicles` documents                                  |
+| Production Checklist | Operations' first tab (`production/`): a member's own site, shown as it is, in place of the app's Pre-service Checklist (`src/features/preservice`) | Nothing: the site is theirs                                    |
 
 Special rules for people (`people/`) sit under the vehicles, in Admin → Vehicles,
 kept in `carpoolPeople/{uid}` (admins only): doesn't drive, can't pull a

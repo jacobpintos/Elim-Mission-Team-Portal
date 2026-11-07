@@ -1,6 +1,7 @@
 import { ORG } from '.'
 import { VehiclePlanner } from './theWell/carpool/VehiclePlanner'
 import { VehiclesScreen } from './theWell/vehicles/VehiclesScreen'
+import { ProductionChecklistScreen } from './theWell/production/ProductionChecklistScreen'
 
 /**
  * The screens an organization's custom module adds (src/custom/README.md),
@@ -14,5 +15,10 @@ export const CustomCarpoolPlanner = ORG.features.vehicles ? VehiclePlanner : nul
 
 /** The Well: Admin → Vehicles. */
 export const CustomVehiclesScreen = ORG.features.vehicles ? VehiclesScreen : null
+
+/** The Well: Operations' first tab, its Production Checklist, in place of the Pre-service Checklist. */
+export const CustomOperationsChecklist = ORG.features.productionChecklist
+  ? ProductionChecklistScreen
+  : null
 
 export type { VehiclePlannerProps as CarpoolPlannerProps } from './theWell/carpool/VehiclePlanner'
