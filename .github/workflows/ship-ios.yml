@@ -1,0 +1,143 @@
+name: Ship to iPhones
+
+# What reaches main goes to the team's iPhones by itself, without anyone
+# starting a build or an update:
+#
+# - App code only (the usual change): once the unit tests pass, an
+#   over-the-air update to the production builds. Phones download it the next
+#   time the app opens (src/lib/appUpdates.ts).
+# - A native change (a new native module, a permission, an Expo upgrade):
+#   no build has its runtime version (app.config.ts: a fingerprint of
+#   everything native), so an update couldn't reach anyone. A new build is made
+#   instead and sent to TestFlight (./eas-build.yml), with the new code in it.
+# - Every Monday: a new build when the newest is 75 days old, before
+#   TestFlight's 90 days run out on the one the team has.
+#
+# EAS Update and EAS Build stay, for sending something by hand (or to staging).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mission-portal-app/**'
+      - '!mission-portal-app/**/*.md'
+      - '!mission-portal-app/firestore.rules'
+      - '!mission-portal-app/storage.rules'
+      - '!mission-portal-app/firestore.indexes.json'
+      - '!mission-portal-app/rules-tests/**'
+      - '!mission-portal-app/functions/models/**'
+  schedule:
+    # Mondays, mid-morning in Iowa.
+    - cron: '23 15 * * 1'
+  workflow_dispatch:
+
+# One at a time; a newer push waiting replaces an older one waiting.
+concurrency:
+  group: ship-ios
+  cancel-in-progress: false
+
+jobs:
+  decide:
+    name: Update or build
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.decide.outputs.action }}
+    defaults:
+      run:
+        working-directory: mission-portal-app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # As for EAS Build: eas-cli needs Node >= 22.
+      - name: Setup Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mission-portal-app/package-lock.json
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # Nothing goes to phones that fails these. (CI runs the rest: lint, the
+      # rules tests, the web build.)
+      - name: Typecheck and unit tests
+        if: github.event_name != 'schedule'
+        run: |
+          npm run typecheck
+          npm test
+
+      # The production build profile's settings (Firebase and the rest), as a
+      # build has them: an update is made with them too (as in eas-update.yml).
+      - name: Build profile settings
+        run: |
+          node -e '
+            const env = require("./eas.json").build.production.env || {}
+            for (const [k, v] of Object.entries(env)) console.log(`${k}=${v}`)
+          ' >> "$GITHUB_ENV"
+
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          rv=$(npx expo-updates runtimeversion:resolve --platform ios 2>/dev/null \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).runtimeVersion))')
+          echo "Runtime version: $rv"
+
+          if [ "$EVENT" = schedule ]; then
+            newest=$(eas build:list --platform ios --channel production --status finished --limit 1 --json --non-interactive \
+              | jq -r '.[0].createdAt // empty')
+            if [ -z "$newest" ]; then
+              action=build; why="No finished production build was found."
+            else
+              age=$(( ( $(date +%s) - $(date -d "$newest" +%s) ) / 86400 ))
+              if [ "$age" -ge 75 ]; then
+                action=build; why="The newest build is $age days old; TestFlight stops it at 90."
+              else
+                action=none; why="The newest build is $age days old: nothing to do."
+              fi
+            fi
+          else
+            # Any production build with this runtime version, finished or on
+            # its way, takes an update: it's the same native app.
+            usable=$(eas build:list --platform ios --channel production --runtime-version "$rv" --limit 10 --json --non-interactive \
+              | jq '[.[] | select((.status | ascii_downcase) as $s | ["errored", "canceled", "pending_cancel"] | index($s) | not)] | length')
+            if [ "$usable" -gt 0 ]; then
+              action=update; why="A production build has runtime version $rv: sent as an update."
+            else
+              action=build; why="No production build has runtime version $rv (something native changed): a new build."
+            fi
+          fi
+          echo "$why"
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+          echo "$why" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update
+        if: steps.decide.outputs.action == 'update'
+        run: |
+          eas update \
+            --channel production \
+            --platform ios \
+            --environment production \
+            --message "$(git log -1 --format=%s)" \
+            --non-interactive
+
+  build:
+    name: New build
+    needs: decide
+    if: needs.decide.outputs.action == 'build'
+    uses: ./.github/workflows/eas-build.yml
+    with:
+      platform: ios
+      profile: production
+      submit: true
+    secrets: inherit

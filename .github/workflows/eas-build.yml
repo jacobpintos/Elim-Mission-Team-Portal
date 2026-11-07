@@ -21,6 +21,19 @@ on:
         description: 'Submit to the store when the build finishes'
         type: boolean
         default: false
+  # The same build, started by Ship to iPhones (./ship-ios.yml) when something
+  # native changed or TestFlight's 90 days are nearly up.
+  workflow_call:
+    inputs:
+      platform:
+        type: string
+        default: ios
+      profile:
+        type: string
+        default: production
+      submit:
+        type: boolean
+        default: false
 
 jobs:
   build:

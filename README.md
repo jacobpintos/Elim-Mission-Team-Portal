@@ -69,8 +69,9 @@ For the functions, run `cd functions && npm ci && npm run build`.
 | **CI** | Every push to `main` or `claude/**`, and on pull requests | Typecheck, lint, unit tests, rules tests, web build |
 | **Deploy Web App** | A push to `main` that changes the app | Builds the web app and deploys it to Firebase Hosting, along with the Storage rules |
 | **Deploy Firebase** | A push to `main` that changes `functions/` or the rules files (or by hand) | Uploads Miriam's model to Cloud Storage, then deploys Cloud Functions, Firestore rules and Storage rules |
-| **EAS Build** | By hand | Builds the iPhone and Android apps, and can submit them to the stores |
-| **EAS Update** | By hand | Sends the app's JavaScript to installed apps, with no store build. Builds whose native side matches take it; a change that needs native code still needs EAS Build |
+| **Ship to iPhones** | A push to `main` that changes the app; Mondays; or by hand | Gets what's on `main` onto the team's iPhones by itself. App code goes out as an over-the-air update once the unit tests pass. A native change, which no build can take as an update, gets a new build sent to TestFlight instead. On Mondays it makes a new build when the newest is 75 days old, before TestFlight's 90 days run out |
+| **EAS Build** | By hand, or from Ship to iPhones | Builds the iPhone and Android apps, and can submit them to the stores |
+| **EAS Update** | By hand | Sends the app's JavaScript to installed apps, with no store build: for staging, or Android, or sending something without waiting. Builds whose native side matches take it; a change that needs native code still needs EAS Build |
 
 ---
 
