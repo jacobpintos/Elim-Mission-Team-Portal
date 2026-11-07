@@ -1,0 +1,11 @@
+# What the fingerprint (app.config.ts: runtimeVersion) leaves out. One glob
+# per line; a line starting with # matches nothing.
+#
+# Downloaded at build time by Miriam's wake-word module (its .gitignore): by
+# its podspec when CocoaPods installs, and by its build.gradle. GitHub's
+# machine works the runtime version out before either has run, EAS's after,
+# so counting them made the two disagree and EAS stopped the build
+# ("Runtime version calculated on local machine not equal to runtime
+# version calculated during build").
+modules/miriam-wake/ios/Frameworks/**/*
+modules/miriam-wake/android/sherpa-onnx/**/*

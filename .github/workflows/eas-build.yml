@@ -72,9 +72,39 @@ jobs:
       # to watch a progress bar; the run URL is printed either way.
       - name: Build
         run: |
+          set -o pipefail
           eas build \
             --profile ${{ inputs.profile }} \
             --platform ${{ inputs.platform }} \
             --non-interactive \
-            ${{ inputs.submit && '--auto-submit' || '--no-wait' }}
+            ${{ inputs.submit && '--auto-submit' || '--no-wait' }} \
+            2>&1 | tee "$RUNNER_TEMP/eas-build.log"
+        working-directory: mission-portal-app
+
+      # A failed build says little here ("Unknown error. See logs of the …
+      # build phase"): the detail is in EAS's own log, on expo.dev. This
+      # fetches that log and prints the expo-updates steps (with the
+      # fingerprint diff when runtime versions disagree) and every error, so
+      # it can be read from here.
+      - name: On failure, what EAS said
+        if: failure()
+        run: |
+          id=$(grep -o 'builds/[0-9a-f-]\{36\}' "$RUNNER_TEMP/eas-build.log" | tail -1 | cut -d/ -f2)
+          if [ -z "$id" ]; then echo "No EAS build was started."; exit 0; fi
+          eas build:view "$id" --json > "$RUNNER_TEMP/build.json" || exit 0
+          node -e '
+            const b = require(process.argv[1])
+            for (const u of b.logFiles || []) console.log(u)
+          ' "$RUNNER_TEMP/build.json" | while read -r url; do curl -fsSL "$url"; echo; done > "$RUNNER_TEMP/eas.log"
+          node -e '
+            const lines = require("fs").readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean)
+            const out = []
+            for (const line of lines) {
+              let j
+              try { j = JSON.parse(line) } catch { out.push(line); continue }
+              const phase = j.phase || ""
+              if (/EXPO_UPDATES|FINGERPRINT/.test(phase) || (j.level ?? 0) >= 50) out.push(`[${phase}] ${j.msg ?? ""}`)
+            }
+            console.log(out.slice(-300).join("\n") || "(nothing from the expo-updates steps, and no errors)")
+          ' "$RUNNER_TEMP/eas.log"
         working-directory: mission-portal-app
