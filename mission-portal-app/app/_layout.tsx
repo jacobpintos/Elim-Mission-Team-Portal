@@ -20,6 +20,7 @@ import {
   REMINDER_SNOOZE,
 } from '@/lib/reminderActions'
 import { registerServiceWorker } from '@/lib/serviceWorker'
+import { useAppUpdates } from '@/lib/appUpdates'
 // On the web, outside links followed as links (lib/webLinking.web).
 import '@/lib/webLinking'
 import { useThemeStore } from '@/stores/themeStore'
@@ -179,6 +180,8 @@ function NotificationRouter() {
 }
 
 export default function RootLayout() {
+  // Over-the-air updates, started on when the app comes back to them (lib/appUpdates).
+  useAppUpdates()
   const init = useAuthStore((s) => s.init)
   const teardown = useAuthStore((s) => s.teardown)
   const theme = useThemeStore((s) => s.theme)

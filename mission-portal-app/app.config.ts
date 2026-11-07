@@ -4,6 +4,13 @@ import type { ExpoConfig, ConfigContext } from 'expo/config'
 const MICROPHONE_REASON =
   'Mission Portal uses the microphone when you tap 🎤: to type what you say into a text box, to open a chord sheet by its name, for voice commands on an open chord sheet, and to ask Miriam, the in-app assistant — and, if you switch it on, to listen for “Hey Miriam” while the app is open. Nothing is recorded or kept.'
 
+/**
+ * The EAS project. eas.json exports EAS_PROJECT_ID during `eas build`, but
+ * nothing sets it for `eas submit` or `eas update`, so the literal ID is the
+ * fallback.
+ */
+const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID ?? '79c8ec55-2787-4ed3-8813-2ed6758f9065'
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Mission Portal',
@@ -190,12 +197,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
   ],
   scheme: 'mission',
+  // Over-the-air updates (EAS Update, .github/workflows/eas-update.yml): the
+  // app's JavaScript sent to installed apps without a new store build. An
+  // update goes only to builds with the same native side: the runtime
+  // version is a fingerprint of everything native (modules, config,
+  // plugins), so one that needs a native change waits for a build that has
+  // it instead of crashing an older one. Checked when the app opens; a new
+  // one is downloaded then and used from the next time it opens.
+  runtimeVersion: { policy: 'fingerprint' },
+  updates: {
+    url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
+  },
   extra: {
     eas: {
-      // eas.json exports EAS_PROJECT_ID during `eas build`, but nothing sets
-      // it for `eas submit` — fall back to the literal ID so submit can
-      // resolve which EAS project this is without that env var.
-      projectId: process.env.EAS_PROJECT_ID ?? '79c8ec55-2787-4ed3-8813-2ed6758f9065',
+      projectId: EAS_PROJECT_ID,
     },
   },
 })

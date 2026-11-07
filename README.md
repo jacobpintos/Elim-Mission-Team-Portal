@@ -66,6 +66,7 @@ For the functions, run `cd functions && npm ci && npm run build`.
 | **Deploy Web App** | A push to `main` that changes the app | Builds the web app and deploys it to Firebase Hosting, along with the Storage rules |
 | **Deploy Firebase** | A push to `main` that changes `functions/` or the rules files (or by hand) | Uploads Miriam's model to Cloud Storage, then deploys Cloud Functions, Firestore rules and Storage rules |
 | **EAS Build** | By hand | Builds the iPhone and Android apps, and can submit them to the stores |
+| **EAS Update** | By hand | Sends the app's JavaScript to installed apps, with no store build. Builds whose native side matches take it; a change that needs native code still needs EAS Build |
 
 ---
 
