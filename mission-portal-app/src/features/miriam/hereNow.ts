@@ -120,6 +120,13 @@ export function hereNow(briefedFoodRef: {
     desk: orgCan('soundDesk') ? () => deskAccess(uid) : undefined,
     switcher: orgCan('videoSwitcher') ? () => switcherAccess(uid) : undefined,
     swaps: { load: () => loadSwaps(), save: saveSwaps },
+    inputList: async (loc) => {
+      const snap = await getDoc(doc(db, 'inputList', loc)).catch(() => null)
+      if (!snap) return null
+      const rows = (snap.data()?.rows ?? []) as { input?: unknown; output?: unknown }[]
+      const text = (v: unknown) => (typeof v === 'string' ? v : '')
+      return rows.map((r) => ({ input: text(r?.input), output: text(r?.output) }))
+    },
     briefedFood: () =>
       briefedFoodRef.current?.day === localToday() ? briefedFoodRef.current.food : [],
     answerOf: (ev) => {

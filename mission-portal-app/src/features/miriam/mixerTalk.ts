@@ -11,6 +11,15 @@ import {
   type Swap,
 } from '@/lib/mixer/swaps'
 import { readDeskNames, type DeskLink, type DeskNames } from '@/lib/mixer/x32'
+import {
+  inputListAsked,
+  namesDiffering,
+  putBackDeskNames,
+  readStripNames,
+  sendNamesToDesk,
+  stripsOf,
+} from '@/lib/mixer/inputListDesk'
+import type { InputListLocation } from '@/stores/inputListStore'
 import type { Here, Talk } from './localTalk'
 
 /**
@@ -74,6 +83,12 @@ const firstName = (here: Here) => (here.profile?.displayName ?? '').trim().split
 /** Worked out here: a request to the desk, or about who is using whose pack or mic. False to leave it. */
 export async function mixerHere(said: string, here: Here, talk: Talk): Promise<boolean> {
   if (!here.desk) return false
+  // An input list's names, onto the desk.
+  const listAsk = inputListAsked(said)
+  if (listAsk) {
+    await inputListHere(listAsk.loc, await here.desk(), here, talk)
+    return true
+  }
   // Read first, so the desk is only looked for when it's asked for.
   const swapped = swapsSaid(said)
   const ask = swapped ? null : mixerAsked(said)
@@ -207,6 +222,90 @@ async function changeHere(ask: MixerAsk, target: Target, link: DeskLink, talk: T
     }
     return false
   })
+}
+
+// --- An input list's names, onto the desk ------------------------------------------
+
+const LISTS: Record<InputListLocation, string> = { sunday: 'Sunday', event: 'Event', wh2: 'WH2' }
+const LIST_KEYS = Object.keys(LISTS) as InputListLocation[]
+
+/**
+ * "Send the Sunday input list to the desk" (lib/mixer/inputListDesk): which
+ * list, if it wasn't said; then, asked first, its names onto the strips its
+ * rows line up with, where they differ. Rows it leaves empty stay as they
+ * are; Undo puts back the names the desk had.
+ */
+async function inputListHere(
+  loc: InputListLocation | null,
+  access: DeskAccess,
+  here: Here,
+  talk: Talk
+): Promise<void> {
+  if (access.kind !== 'ready') {
+    return talk.say(
+      access.kind === 'not engineer' ? NOT_ENGINEER : access.kind === 'no app' ? NO_APP : NO_ADDRESS
+    )
+  }
+  if (!loc) {
+    const names = LIST_KEYS.map((k) => LISTS[k])
+    return talk.ask(`Which input list: ${listed(names, 'or')}?`, async (r, t) => {
+      const i = choicePicked(r, names)
+      if (i >= 0) {
+        await inputListHere(LIST_KEYS[i], access, here, t)
+        return true
+      }
+      if (saidNeverMind(r) || saidNo(r)) {
+        t.say('Okay — left as it is.')
+        return true
+      }
+      return false
+    })
+  }
+  if (!here.inputList) return talk.say(NO_APP)
+  talk.thinking()
+  const rows = await here.inputList(loc)
+  if (!rows) return talk.say(`I couldn’t read the ${LISTS[loc]} input list.`)
+  const deskNames = await readStripNames(
+    access.link,
+    stripsOf(rows).map((s) => s.strip.address)
+  )
+  if (!deskNames) return talk.say(UNREACHABLE)
+  const sending = namesDiffering(rows, deskNames).filter((d) => d.list)
+  if (!sending.length) {
+    return talk.say(`The desk already has the ${LISTS[loc]} input list’s names.`)
+  }
+  const n = sending.length
+  const names = (k: number) => `${k} ${k === 1 ? 'name' : 'names'}`
+  talk.ask(
+    `Send ${names(n)} from the ${LISTS[loc]} input list to the desk? Its other names stay as they are.`,
+    async (r, t) => {
+      if (saidYes(r)) {
+        t.thinking()
+        const { sent, failed } = await sendNamesToDesk(access.link, sending)
+        if (!sent.length) {
+          t.say(NOT_TAKEN)
+          return true
+        }
+        const text =
+          `Done — ${names(sent.length)} from the ${LISTS[loc]} list ${sent.length === 1 ? 'is' : 'are'} on the desk.` +
+          (failed.length ? ` It didn’t take ${failed.map((f) => f.strip.label).join(', ')}.` : '')
+        const undo = async () => {
+          const back = await putBackDeskNames(access.link, sent)
+          return back.failed.length
+            ? `I put back ${names(back.sent.length)}; the desk didn’t take ${back.failed.map((f) => f.strip.label).join(', ')}.`
+            : `Put back: the desk has its own names again.`
+        }
+        if (t.done) t.done(text, undo)
+        else t.say(text)
+        return true
+      }
+      if (saidNeverMind(r) || saidNo(r)) {
+        t.say('Okay — left as it is.')
+        return true
+      }
+      return false
+    }
+  )
 }
 
 // --- Who is using whose pack or mic ------------------------------------------------

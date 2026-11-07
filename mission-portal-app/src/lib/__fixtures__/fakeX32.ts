@@ -26,6 +26,13 @@ export function fakeX32(
   for (let bus = 1; bus <= BUSES; bus++) {
     state.set(X32.busName(bus), { t: 's', v: setup.buses?.[bus] ?? '' })
   }
+  // The other named strips: aux inputs, effects returns, matrices.
+  const two = (n: number) => String(n).padStart(2, '0')
+  for (let n = 1; n <= 8; n++) {
+    state.set(`/auxin/${two(n)}/config/name`, { t: 's', v: '' })
+    state.set(`/fxrtn/${two(n)}/config/name`, { t: 's', v: '' })
+  }
+  for (let n = 1; n <= 6; n++) state.set(`/mtx/${two(n)}/config/name`, { t: 's', v: '' })
   const changed: string[] = []
   let down = false
   const link: DeskLink = {

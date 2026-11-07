@@ -20,6 +20,23 @@ const CHANNELS = {
 }
 const BUSES = { 1: 'Mia IEM', 2: 'Sunny IEM', 3: 'Jacob IEM', 4: 'Mitch Ears' }
 
+/** The input lists, as Worship → Input List has them: rows line up with the desk's strips. */
+const row = (input = '', output = '') => ({ input, output })
+const INPUT_LISTS: Record<string, { input: string; output: string }[]> = {
+  // Matches the desk but for channel 2, channel 8's name, and the fifth in-ear mix.
+  sunday: [
+    row('Pastor', 'Mia IEM'),
+    row('Kick'),
+    row('Jacob Vox', 'Jacob IEM'),
+    row('Mia Vox', 'Mitch Ears'),
+    row('Mia Keys', 'Joel IEM'),
+    row(),
+    row('Mitch EG'),
+    row('Bass DI'),
+  ],
+  event: [row('Pastor'), row(), row('Jacob Vox'), row('Mia Vox'), row('Mia Keys')],
+}
+
 /** A Sound Engineer talking to her, by the desk: each line said, and what came of it. */
 function atTheDesk(access?: DeskAccess['kind']) {
   const desk = fakeX32({ channels: CHANNELS, buses: BUSES })
@@ -47,6 +64,7 @@ function atTheDesk(access?: DeskAccess['kind']) {
       !access || access === 'ready'
         ? { kind: 'ready', link: desk.link }
         : ({ kind: access } as DeskAccess),
+    inputList: async (loc: string) => INPUT_LISTS[loc] ?? null,
     swaps: {
       load: async () => kept,
       save: async (s: Swap[]) => {
@@ -215,6 +233,53 @@ describe('Miriam at the sound desk', () => {
     ])
     expect(await atTheDesk('no address')('Mitch EG down 10%')).toEqual([
       'say: I don’t know where the sound desk is yet. Put its address in Settings, under Sound desk.',
+    ])
+  })
+})
+
+describe('Miriam and the input list', () => {
+  it('asks first, then puts the list’s names on the desk, with Undo', async () => {
+    const say = atTheDesk()
+    expect(await say('send the Sunday input list to the desk')).toEqual([
+      'ask: Send 3 names from the Sunday input list to the desk? Its other names stay as they are.',
+    ])
+    expect(await say('yes')).toEqual([
+      'done: Done — 3 names from the Sunday list are on the desk. [Undo]',
+    ])
+    expect(say.desk.value(X32.channelName(2))).toBe('Kick')
+    expect(say.desk.value(X32.channelName(8))).toBe('Bass DI')
+    expect(say.desk.value(X32.busName(5))).toBe('Joel IEM')
+    // The list leaves the second in-ear mix empty: left as the desk had it.
+    expect(say.desk.value(X32.busName(2))).toBe('Sunny IEM')
+    expect(await say.undo()).toBe('Put back: the desk has its own names again.')
+    expect(say.desk.value(X32.channelName(8))).toBe('Bass')
+    expect(say.desk.value(X32.channelName(2))).toBe('')
+  })
+
+  it('asks which list when none is said, and leaves it on a no', async () => {
+    const say = atTheDesk()
+    expect(await say('load the input list onto the board')).toEqual([
+      'ask: Which input list: Sunday, Event or WH2?',
+    ])
+    expect(await say('the event one')).toEqual([
+      'say: The desk already has the Event input list’s names.',
+    ])
+    await say('put the Sunday input list on the desk')
+    expect(await say('no')).toEqual(['say: Okay — left as it is.'])
+    expect(say.desk.value(X32.channelName(2))).toBe('')
+  })
+
+  it('says what’s in the way', async () => {
+    expect(await atTheDesk('not engineer')('send the sunday input list to the desk')).toEqual([
+      expect.stringMatching(/^say: Only Sound Engineers/),
+    ])
+    expect(await atTheDesk()('send the WH2 input list to the desk')).toEqual([
+      'say: I couldn’t read the WH2 input list.',
+    ])
+    const unplugged = atTheDesk()
+    unplugged.desk.unplug()
+    expect(await unplugged('send the sunday input list to the desk')).toEqual([
+      'say: I can’t reach the sound desk. Is this phone on its Wi-Fi?',
     ])
   })
 })

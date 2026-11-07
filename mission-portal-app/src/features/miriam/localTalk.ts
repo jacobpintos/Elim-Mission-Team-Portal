@@ -105,6 +105,8 @@ import {
   unreadSaid,
   type RoomFit,
 } from '@/lib/miriamReads'
+import type { InputListLocation } from '@/stores/inputListStore'
+import type { ListRow } from '@/lib/mixer/inputListDesk'
 
 /**
  * Miriam's conversations that run on the device — food sign-ups, a task's
@@ -207,6 +209,8 @@ export interface Here {
   swaps?: SwapStore
   /** The video switcher, for a Video Operator on the phone app (./switcherTalk). */
   switcher?: () => Promise<SwitcherAccess>
+  /** An input list's rows (Worship → Input List), for putting its names on the desk; null if unread. */
+  inputList?: (loc: InputListLocation) => Promise<ListRow[] | null>
 }
 
 /** Worked out here, when it plainly can be: false to leave it to Claude. */

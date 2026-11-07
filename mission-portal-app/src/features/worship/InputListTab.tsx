@@ -4,6 +4,7 @@ import { YStack, XStack, Text } from 'tamagui'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { useInputListStore } from '@/stores/inputListStore'
 import type { InputListLocation } from '@/stores/inputListStore'
+import { InputListDesk } from './InputListDesk'
 
 const LOCATIONS: { key: InputListLocation; label: string }[] = [
   { key: 'sunday', label: 'Sunday' },
@@ -63,6 +64,10 @@ export function InputListTab() {
           </Pressable>
         ))}
       </XStack>
+
+      {currentRows.length && !isLoading ? (
+        <InputListDesk loc={activeLoc} rows={currentRows} />
+      ) : null}
 
       {isLoading ? (
         <YStack flex={1} alignItems="center" justifyContent="center">
