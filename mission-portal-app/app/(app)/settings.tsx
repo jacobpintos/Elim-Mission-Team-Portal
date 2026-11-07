@@ -44,7 +44,9 @@ import { liveSaid } from '@/lib/switcher/plan'
 import { canLookAround, phoneNetwork, udpExchange } from '@/lib/localNetwork'
 import { networkSaid } from '@/lib/netScan'
 import { findDesks } from '@/lib/mixer/find'
-import { findSwitchers } from '@/lib/switcher/find'
+import { alsoFoundSaid, notFoundSaid } from '@/lib/foundSaid'
+import { lookForSwitcher } from '@/features/video/lookAround'
+import { FindEncoder } from '@/features/video/FindEncoder'
 import { recentStartups } from '@/lib/startupTimeline'
 import { describeRun, type StartupRun } from '@/lib/startupSteps'
 import * as Sentry from '@sentry/react-native'
@@ -56,17 +58,6 @@ import {
   type NotifKey,
   type PublicNotifKey,
 } from '@/lib/notificationKeys'
-
-/** Nothing answered a search of the network (Settings → Sound desk, Video switcher). */
-function notFound(what: string, phone: string): string {
-  const ios =
-    Platform.OS === 'ios' ? ' If it asked about local network access, allow it and try again.' : ''
-  return `No ${what} answered on ${networkSaid(phone)}. Is this phone on its network?${ios}`
-}
-
-/** Others that answered too: said, so the right one can be typed in. */
-const alsoFound = (more: { host: string }[]) =>
-  more.length ? ` (Also answered: ${more.map((m) => m.host).join(', ')}.)` : ''
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const colors = useThemeColors()
@@ -175,7 +166,7 @@ export default function SettingsScreen() {
     const found = await findDesks(udpExchange, net)
     setDeskChecking(false)
     if (!found.length) {
-      setDeskStatus(notFound('sound desk', net.address))
+      setDeskStatus(notFoundSaid('sound desk', net.address, Platform.OS === 'ios'))
       return
     }
     const [first, ...more] = found
@@ -183,7 +174,7 @@ export default function SettingsScreen() {
     await saveDeskAddress(first.host)
     const { model, name } = first.found
     setDeskStatus(
-      `Found ${model || 'the desk'}${name ? ` “${name}”` : ''} at ${first.host}. Saved.${alsoFound(more)}`
+      `Found ${model || 'the desk'}${name ? ` “${name}”` : ''} at ${first.host}. Saved.${alsoFoundSaid(more)}`
     )
   }
 
@@ -239,21 +230,11 @@ export default function SettingsScreen() {
   }
   /** Looks for the switcher on the phone's network (lib/switcher/find), and saves the one that answers. */
   const findSwitcher = async () => {
-    const net = phoneNetwork()
-    if (!net) {
-      setSwitcherStatus('This phone isn’t on Wi-Fi. Join the switcher’s network first.')
-      return
-    }
     setSwitcherChecking(true)
-    setSwitcherStatus(`Looking on ${networkSaid(net.address)}…`)
-    const found = await findSwitchers(udpExchange, net)
+    const found = await lookForSwitcher(setSwitcherStatus)
     setSwitcherChecking(false)
-    if (!found.length) {
-      setSwitcherStatus(notFound('video switcher', net.address))
-      return
-    }
-    const [first, ...more] = found
-    await saveAndCheckSwitcher(first.host, `Found it at ${first.host}.${alsoFound(more)} `)
+    if (found.host) await saveAndCheckSwitcher(found.host, `${found.said} `)
+    else setSwitcherStatus(found.said)
   }
 
   // Location
@@ -1001,8 +982,8 @@ export default function SettingsScreen() {
                 ) : null}
                 <Text color={colors.textMuted} fontSize="$2">
                   To see the cameras in Video, plug the ATEM’s multiview output into a video encoder
-                  on this network, and enter the address of the encoder’s preview picture (its
-                  manual or settings page gives it).
+                  on this network. Find it, or enter the address of the encoder’s preview picture
+                  (its manual or settings page gives it).
                 </Text>
                 <Field label="Multiview preview address">
                   <TextInput
@@ -1069,6 +1050,13 @@ export default function SettingsScreen() {
                     {feedStatus}
                   </Text>
                 ) : null}
+                <FindEncoder
+                  onSaved={(feed) => {
+                    setFeedUrl(feed.url)
+                    setFeedKind(feed.kind)
+                    setFeedStatus('')
+                  }}
+                />
               </>
             )}
           </Section>

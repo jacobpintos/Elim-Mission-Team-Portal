@@ -1,9 +1,10 @@
 /**
  * Looking for the church's equipment (the X32 sound desk, the ATEM video
- * switcher) on the network the phone is on: every other address there is
- * asked, a batch at a time, and those that answer as the equipment would are
- * kept (lib/mixer/find, lib/switcher/find). At most the 254 addresses of the
- * phone's own x.x.x.0–255 range.
+ * switcher, the encoder serving the multiview) on the network the phone is
+ * on: every other address there is asked, a batch at a time, and those that
+ * answer as the equipment would are kept (lib/mixer/find, lib/switcher/find,
+ * lib/switcher/findEncoder). At most the 254 addresses of the phone's own
+ * x.x.x.0–255 range.
  */
 
 /** Sends one datagram to an address and port, and gives back the first answer, or null. */
@@ -13,6 +14,24 @@ export type Exchange = (
   message: Uint8Array,
   timeoutMs: number
 ) => Promise<Uint8Array | null>
+
+/** What an http address answered: its status, its kind of content, and whether that ended in the time given. */
+export interface Peeked {
+  status: number
+  /** The Content-Type, lower case ('' if none). */
+  type: string
+  ended: boolean
+}
+
+/**
+ * Asks an http address, giving up if nothing answers within timeoutMs. Once
+ * it answers, waits up to bodyMs more for what it sends to end (0: not at
+ * all), then lets go: a picture ends, a motion-JPEG stream never does.
+ */
+export type Peek = (
+  url: string,
+  timing: { timeoutMs: number; bodyMs: number }
+) => Promise<Peeked | null>
 
 const parts = (ip: string): number[] | null => {
   const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip.trim())

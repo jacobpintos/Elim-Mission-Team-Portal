@@ -10,7 +10,10 @@ import { confirmAsync } from '@/lib/confirm'
 import { ATEM, type AtemInput } from '@/lib/switcher/atem'
 import { inputName, liveSaid } from '@/lib/switcher/plan'
 import { loadMultiviewFeed, type MultiviewFeed } from '@/lib/switcher/switcherAddress'
+import { canLookAround } from '@/lib/localNetwork'
 import { Multiview } from './Multiview'
+import { FindButton, FindEncoder } from './FindEncoder'
+import { lookForSwitcher } from './lookAround'
 import { useSwitcher, type SwitcherStatus } from './useSwitcher'
 
 /** The colours of the ATEM's own buttons and multiview borders. */
@@ -25,12 +28,17 @@ const STATUS: Record<Exclude<SwitcherStatus, 'connected'>, string> = {
   'no address': 'Set the switcher’s address in Settings → Video switcher first.',
 }
 
+/** With nothing set up yet, in a build that can look around the network. */
+const NOT_FOUND_YET =
+  'The app doesn’t know where the video switcher is yet. Join its network, then find it.'
+
 /**
  * Video (for Video Operators, in the phone app): the ATEM's multiview, when
  * an encoder serves it on the network, and a tile for each camera, red when
  * live and green on preview. Tap a camera to put it on preview; Cut or Auto
  * takes it live. Connected to the switcher while this is open
- * (./useSwitcher), so it follows the panel too.
+ * (./useSwitcher), so it follows the panel too. Until the switcher and the
+ * encoder are set up, they can be found from here (./lookAround).
  */
 export function VideoScreen() {
   const colors = useThemeColors()
@@ -40,6 +48,8 @@ export function VideoScreen() {
   const { status, state, command, retry } = useSwitcher(uid)
   const [feed, setFeed] = useState<MultiviewFeed | null>(null)
   const [busy, setBusy] = useState(false)
+  const [finding, setFinding] = useState(false)
+  const [foundSaid, setFoundSaid] = useState('')
 
   useFocusEffect(
     useCallback(() => {
@@ -52,6 +62,15 @@ export function VideoScreen() {
     const ok = await command(commands)
     setBusy(false)
     if (!ok) toast('The switcher didn’t take that. Try again, or use the panel.', 'error')
+  }
+
+  /** Finds the switcher on this network, saves it, and connects to it. */
+  const findSwitcher = async () => {
+    setFinding(true)
+    const found = await lookForSwitcher(setFoundSaid)
+    setFinding(false)
+    setFoundSaid(found.said)
+    if (found.host) void retry()
   }
 
   const fade = async () => {
@@ -107,21 +126,38 @@ export function VideoScreen() {
         ) : (
           <YStack gap="$2">
             <Text color={colors.textMuted}>
-              {STATUS[status === 'connected' ? 'connecting' : status]}
+              {status === 'no address' && canLookAround()
+                ? NOT_FOUND_YET
+                : STATUS[status === 'connected' ? 'connecting' : status]}
             </Text>
-            {status === 'unreachable' ? (
-              <Pressable onPress={() => void retry()}>
-                <Text color={colors.primary} fontWeight="700">
-                  Try again
-                </Text>
-              </Pressable>
-            ) : status === 'no address' ? (
-              <Pressable onPress={() => router.push('/settings' as never)}>
-                <Text color={colors.primary} fontWeight="700">
-                  Open Settings
-                </Text>
-              </Pressable>
+            {(status === 'no address' || status === 'unreachable') && canLookAround() ? (
+              <FindButton
+                label={finding ? 'Looking…' : 'Find the switcher on this network'}
+                onPress={() => void findSwitcher()}
+                disabled={finding}
+              />
             ) : null}
+            {foundSaid ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                {foundSaid}
+              </Text>
+            ) : null}
+            <XStack gap="$4" flexWrap="wrap">
+              {status === 'unreachable' ? (
+                <Pressable onPress={() => void retry()} disabled={finding}>
+                  <Text color={colors.primary} fontWeight="700">
+                    Try again
+                  </Text>
+                </Pressable>
+              ) : null}
+              {status === 'no address' || status === 'unreachable' ? (
+                <Pressable onPress={() => router.push('/settings' as never)}>
+                  <Text color={colors.primary} fontWeight="700">
+                    {canLookAround() ? 'Enter its address in Settings' : 'Open Settings'}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </XStack>
           </YStack>
         )}
 
@@ -134,15 +170,17 @@ export function VideoScreen() {
             borderWidth={1}
             borderColor={colors.border}
             backgroundColor={colors.surface}
-            gap="$1"
+            gap="$2"
           >
             <Text fontWeight="700" color={colors.text}>
               The cameras’ pictures
             </Text>
             <Text color={colors.textMuted} fontSize="$2">
               To see the ATEM’s multiview here, plug its multiview output into a video encoder on
-              this network, then add the encoder’s preview address in Settings → Video switcher.
+              this network, then find the encoder, or enter its preview address in Settings → Video
+              switcher.
             </Text>
+            <FindEncoder onSaved={setFeed} />
           </YStack>
         )}
 
