@@ -24,7 +24,10 @@ const INPUT_LISTS: Record<string, { input: string; output: string }[]> = {
     ...Array.from({ length: 40 }, (_, i) => row(i === 8 ? 'Choir Mics' : '')),
     // Aux 1, and main 1's row on the output side (row 17).
     row('Laptop'),
-  ].map((r, i) => (i === 16 ? { ...r, output: 'PA Main' } : r)),
+  ].map((r, i) =>
+    // Bus 2's row, and a row past the 16 outputs, which no strip has.
+    i === 1 ? { ...r, output: 'Sunny Ears' } : i === 16 ? { ...r, output: 'PA Main' } : r
+  ),
 }
 
 /** A Sound Engineer talking to her, by a WING: each line said, and what came of it. */
@@ -145,7 +148,7 @@ describe('Miriam at a WING', () => {
     expect(say.desk.value('/ch/9/mute')).toBe(1)
   })
 
-  it('puts the input list’s names on the WING, on the strip or its input, aux and mains too', async () => {
+  it('puts the input list’s names on the WING: on the strip or its input, aux, and the 16 buses', async () => {
     const say = atTheWing()
     say.desk.set('/ch/9/clink', 1)
     expect(await say('send the Sunday input list to the desk')).toEqual([
@@ -158,7 +161,9 @@ describe('Miriam at a WING', () => {
     expect(say.desk.value('/io/in/LCL/9/name')).toBe('Choir Mics')
     expect(say.desk.value('/ch/9/name')).toBe('')
     expect(say.desk.value('/aux/1/name')).toBe('Laptop')
-    expect(say.desk.value('/main/1/name')).toBe('PA Main')
+    expect(say.desk.value('/bus/2/name')).toBe('Sunny Ears')
+    // Past the 16 outputs: nothing on the desk to name.
+    expect(say.desk.value('/main/1/name')).toBe('PA')
   })
 })
 

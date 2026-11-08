@@ -8,8 +8,7 @@ import { DESKS, type DeskKind } from './deskModel'
  * board, in the order its strips run. On a WING:
  *
  * - inputs: rows 1–40 are channels 1–40, and rows 41–48 the aux inputs 1–8;
- * - outputs: rows 1–16 are buses 1–16 (the in-ear mixes), rows 17–20 the
- *   mains 1–4, and rows 21–28 the matrices 1–8.
+ * - outputs: rows 1–16 are its 16 buses (the in-ear mixes), and no more.
  *
  * On an X32:
  *
@@ -49,10 +48,7 @@ export function stripFor(side: ListSide, row: number, kind: DeskKind = 'x32'): S
       if (row <= 48) return strip('auxin', row - 40, 'Aux')
       return null
     }
-    if (row <= 16) return strip('bus', row, 'Bus')
-    if (row <= 20) return strip('main', row - 16, 'Main')
-    if (row <= 28) return strip('mtx', row - 20, 'Matrix')
-    return null
+    return row <= 16 ? strip('bus', row, 'Bus') : null
   }
   if (side === 'input') {
     if (row <= 32) return strip('ch', row, 'Ch')

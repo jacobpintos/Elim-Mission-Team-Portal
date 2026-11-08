@@ -58,8 +58,8 @@ being asked.
       Remote must have OSC on and its Remote Lock off.
 - [ ] **The input lists on the real desk.** Rows line up with the board
       in its own order: inputs 1–40 are channels and 41–48 the aux inputs;
-      outputs 1–16 are the buses, 17–20 the mains and 21–28 the matrices.
-      That needs checking against the real WING.
+      outputs 1–16 are the 16 buses. That needs checking against the real
+      WING.
 - [ ] **Events ↔ rooms and equipment.** An event says which input list and
       setup it uses, so Miriam and the procedures know which one applies.
 - [ ] **Issues ↔ inventory.** An equipment issue linked to the inventory
