@@ -38,7 +38,9 @@ being asked.
     It is The Well's alone (`src/custom/theWell/production`); other
     churches get the Pre-service Checklist in its place (see Stage 2).
 - **Equipment:**
-  - the sound desk (Behringer X32): levels and mutes in the house and in people's ears, plus pack and mic swaps;
+  - the sound desk (Behringer WING): levels and mutes in the house and in
+    people's ears, pack and mic swaps, and moving channels with every setting
+    (direct outs and side-chains follow);
   - the input lists and the sound desk: rows line up with the board, so a
     Sound Engineer can compare a list with the desk's names and send either
     side's names to the other (Worship → Input List), or ask Miriam to
@@ -52,11 +54,12 @@ being asked.
 
 - [ ] **The equipment, tried at church.** The sound desk, switcher and
       encoder code has only run against test stand-ins. It needs a Sunday on
-      the real X32, the real ATEM and a real encoder.
+      the real WING, the real ATEM and a real encoder. On the WING, Setup →
+      Remote must have OSC on and its Remote Lock off.
 - [ ] **The input lists on the real desk.** Rows line up with the board
-      in its own order: inputs 1–32 are channels, 33–40 the aux inputs and
-      41–48 the effects returns; outputs 1–16 are the mix buses and 17–22
-      the matrices. That needs checking against the real X32.
+      in its own order: inputs 1–40 are channels and 41–48 the aux inputs;
+      outputs 1–16 are the buses, 17–20 the mains and 21–28 the matrices.
+      That needs checking against the real WING.
 - [ ] **Events ↔ rooms and equipment.** An event says which input list and
       setup it uses, so Miriam and the procedures know which one applies.
 - [ ] **Issues ↔ inventory.** An equipment issue linked to the inventory
@@ -121,9 +124,10 @@ What it takes:
 - **The profile and features:** they move from the build (`src/custom`) to
   each organization's record, read when someone signs in. The Well's custom
   features become switches other organizations can have too.
-- **Equipment:** other desks and switchers. A Midas M32 already works like
-  the X32; Allen & Heath, Yamaha and others go behind the same
-  sound-desk interface (`src/lib/mixer`).
+- **Equipment:** other desks and switchers. The WING and the X32 both
+  work already (a Midas M32 works like the X32), each behind the same
+  sound-desk interface (`src/lib/mixer`: `deskModel`, `wing`, `x32`);
+  Allen & Heath, Yamaha and others would go behind it too.
 - **Costs per organization:** Miriam's AI, storage and messages are counted
   per organization from the start, so Stage 3's price is based on real
   numbers.

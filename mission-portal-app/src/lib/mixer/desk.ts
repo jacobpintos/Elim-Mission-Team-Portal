@@ -195,6 +195,8 @@ export interface Target {
   ears?: { bus: number; busName: string; person: string; note?: string }
   /** Mix buses that feed house speakers ("Subs", "Front Fill"): part of "the house". */
   houseBuses?: number[]
+  /** A WING's mains that feed the house (not the stream's): the house there, in place of the X32's left/right and mono. */
+  houseMains?: number[]
 }
 
 /** A mix bus named for house speakers, not someone's in-ears. */
@@ -204,6 +206,20 @@ const HOUSE_BUS =
 /** The desk's mix buses that feed house speakers, by their names. */
 export const houseBusesOf = (names: DeskNames) =>
   names.buses.flatMap((name, i) => (HOUSE_BUS.test(name) ? [i + 1] : []))
+
+/** A main named for somewhere other than the room's speakers: the stream, a recording, the lobby. */
+const NOT_THE_ROOM =
+  /\b(?:stream|streaming|livestream|broadcast|bcast|web|online|record|recording|rec|pro\s*tools|daw|iem|ears?|monitors?|mons?|wedges?|lobby|foyer|nursery|overflow|cry\s*room)\b/i
+
+/**
+ * A WING's mains that feed the house: main 1 unless it's named for elsewhere,
+ * and any other named for house speakers (./desk HOUSE_BUS: "Subs", "PA").
+ * One named for the stream ("Stream", "Pro Tools") never is.
+ */
+export const houseMainsOf = (names: DeskNames) =>
+  (names.mains ?? []).flatMap((name, i) =>
+    !NOT_THE_ROOM.test(name) && (i === 0 || HOUSE_BUS.test(name)) ? [i + 1] : []
+  )
 
 export type Aimed =
   | { kind: 'target'; target: Target }
@@ -239,6 +255,7 @@ export function aim(
     chName: found.name || `Channel ${found.n}`,
     chNote: noteFor(found.n),
     houseBuses: houseBusesOf(names),
+    ...(names.mains ? { houseMains: houseMainsOf(names) } : {}),
   }
   if (ask.place?.kind !== 'ears') return { kind: 'target', target }
   const person = titledName(ask.place.who === 'me' ? me : ask.place.who)
@@ -325,7 +342,7 @@ const changeSize = (from: number, to: number) => {
   return Math.round(Math.abs(b - a) * 10) / 10
 }
 
-const NOT_TAKEN = 'The desk didn’t take that. Check it in MX-Q.'
+const NOT_TAKEN = 'The desk didn’t take that. Check it on the desk.'
 
 /**
  * What a channel's house feeds were turned off by "mute it in the house", by
@@ -339,18 +356,25 @@ export function forgetHouseMutes(): void {
 }
 
 /**
- * "In the house" is every speaker in the room, subs too: the channel's feed
- * to the main left/right, to the mono/centre bus (which often feeds the
- * subs), and to any mix bus named for house speakers ("Subs", "Front Fill").
- * Muted there, each feed that is on is turned off, and remembered. Unmuted,
- * those are turned back on. With nothing remembered (another phone muted
- * it, or the app was closed), the main left/right is, and any other feed
- * whose level is up: one set to be heard.
+ * "In the house" is every speaker in the room, subs too: on an X32, the
+ * channel's feed to the main left/right and to the mono/centre bus (which
+ * often feeds the subs); on a WING, to its mains that feed the house (not the
+ * stream's); and on either, to any mix bus named for house speakers ("Subs",
+ * "Front Fill"). Muted there, each feed that is on is turned off, and
+ * remembered. Unmuted, those are turned back on. With nothing remembered
+ * (another phone muted it, or the app was closed), the first (the main
+ * left/right, or main 1) is, and any other feed whose level is up: one set
+ * to be heard.
  */
 async function houseMute(link: DeskLink, mute: boolean, t: Target, name: string): Promise<Worked> {
+  const mains: { address: string; level: string | null }[] = t.houseMains
+    ? t.houseMains.map((m) => ({ address: X32.mainOn(t.ch, m), level: X32.mainLevel(t.ch, m) }))
+    : [
+        { address: X32.mainLR(t.ch), level: null },
+        { address: X32.mainMono(t.ch), level: X32.monoLevel(t.ch) },
+      ]
   const feeds = [
-    { address: X32.mainLR(t.ch), level: null as string | null },
-    { address: X32.mainMono(t.ch), level: X32.monoLevel(t.ch) },
+    ...mains,
     ...(t.houseBuses ?? []).map((b) => ({
       address: X32.sendOn(t.ch, b),
       level: X32.sendLevel(t.ch, b),
@@ -375,7 +399,7 @@ async function houseMute(link: DeskLink, mute: boolean, t: Target, name: string)
     } else if (lrOn) {
       change = []
     } else {
-      change = [X32.mainLR(t.ch)]
+      change = feeds.length ? [feeds[0].address] : []
       for (const f of feeds.slice(1)) {
         if (on.includes(f.address) || !f.level) continue
         const level = asFloat(await deskValue(link, f.level))
@@ -484,9 +508,7 @@ export async function workOut(link: DeskLink, ask: MixerAsk, t: Target): Promise
         }`
       },
       undo: async () =>
-        (await set(from))
-          ? `${name} is back to ${dbSaid(faderToDb(from))}${place}.`
-          : 'The desk didn’t take that. Check it in MX-Q.',
+        (await set(from)) ? `${name} is back to ${dbSaid(faderToDb(from))}${place}.` : NOT_TAKEN,
     },
   }
 }

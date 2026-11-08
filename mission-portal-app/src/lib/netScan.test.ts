@@ -68,7 +68,7 @@ describe('finding the sound desk', () => {
     const desk = fakeX32()
     const exchange: Exchange = async (host, port, message, timeoutMs) =>
       host === '192.168.1.20' && port === 10023 ? desk.link.exchange(message, timeoutMs) : null
-    expect(await findDesks(exchange, { address: '192.168.1.37', prefix: 24 })).toEqual([
+    expect(await findDesks(exchange, { address: '192.168.1.37', prefix: 24 }, 'x32')).toEqual([
       { host: '192.168.1.20', found: { name: 'Sanctuary', model: 'X32' } },
     ])
   })

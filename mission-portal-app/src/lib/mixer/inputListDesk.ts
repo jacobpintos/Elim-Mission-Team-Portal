@@ -1,18 +1,25 @@
 import type { InputListLocation } from '@/stores/inputListStore'
 import { deskValue, setDeskValue, type DeskLink } from './x32'
+import { DESKS, type DeskKind } from './deskModel'
 
 /**
  * The input list (Worship → Input List: src/stores/inputListStore) and the
  * sound desk's own names, row for row. The list's rows line up with the
- * board, in the order its strips run:
+ * board, in the order its strips run. On a WING:
+ *
+ * - inputs: rows 1–40 are channels 1–40, and rows 41–48 the aux inputs 1–8;
+ * - outputs: rows 1–16 are buses 1–16 (the in-ear mixes), rows 17–20 the
+ *   mains 1–4, and rows 21–28 the matrices 1–8.
+ *
+ * On an X32:
  *
  * - inputs: rows 1–32 are channels 1–32, rows 33–40 the aux inputs 1–8, and
  *   rows 41–48 the effects returns 1–8;
- * - outputs: rows 1–16 are mix buses 1–16 (the in-ear mixes), and rows
- *   17–22 matrices 1–6.
+ * - outputs: rows 1–16 are mix buses 1–16, and rows 17–22 matrices 1–6.
  *
- * A row past those has no strip of its own to name. Names on the desk are
- * at most 12 characters (the X32's scribble strips).
+ * A row past those has no strip of its own to name. Names are as long as the
+ * desk shows: 16 characters on a WING, 12 on an X32. Each desk's names are
+ * asked for the X32's way; a WING's link puts that in its words (./wing).
  */
 
 export type ListSide = 'input' | 'output'
@@ -24,7 +31,7 @@ export interface Strip {
   label: string
 }
 
-/** The longest name the desk shows. */
+/** The longest name an X32 shows. */
 export const DESK_NAME_MAX = 12
 
 const two = (n: number) => String(n).padStart(2, '0')
@@ -34,8 +41,19 @@ const strip = (path: string, n: number, label: string): Strip => ({
 })
 
 /** The desk's strip for a row of the list (from 1), or null for a row past them. */
-export function stripFor(side: ListSide, row: number): Strip | null {
+export function stripFor(side: ListSide, row: number, kind: DeskKind = 'x32'): Strip | null {
   if (!Number.isInteger(row) || row < 1) return null
+  if (kind === 'wing') {
+    if (side === 'input') {
+      if (row <= 40) return strip('ch', row, 'Ch')
+      if (row <= 48) return strip('auxin', row - 40, 'Aux')
+      return null
+    }
+    if (row <= 16) return strip('bus', row, 'Bus')
+    if (row <= 20) return strip('main', row - 16, 'Main')
+    if (row <= 28) return strip('mtx', row - 20, 'Matrix')
+    return null
+  }
   if (side === 'input') {
     if (row <= 32) return strip('ch', row, 'Ch')
     if (row <= 40) return strip('auxin', row - 32, 'Aux')
@@ -48,7 +66,8 @@ export function stripFor(side: ListSide, row: number): Strip | null {
 }
 
 /** A name from the list as the desk would hold it: trimmed, and cut to what it shows. */
-export const deskNameOf = (name: string) => name.trim().slice(0, DESK_NAME_MAX).trim()
+export const deskNameOf = (name: string, kind: DeskKind = 'x32') =>
+  name.trim().slice(0, DESKS[kind].nameMax).trim()
 
 export interface ListRow {
   input: string
@@ -69,12 +88,13 @@ export interface NameDifference {
 
 /** The strips the list's rows line up with, input side and output side. */
 export function stripsOf(
-  rows: readonly ListRow[]
+  rows: readonly ListRow[],
+  kind: DeskKind = 'x32'
 ): { side: ListSide; row: number; strip: Strip }[] {
   const out: { side: ListSide; row: number; strip: Strip }[] = []
   for (const side of ['input', 'output'] as const) {
     rows.forEach((_, i) => {
-      const s = stripFor(side, i + 1)
+      const s = stripFor(side, i + 1, kind)
       if (s) out.push({ side, row: i + 1, strip: s })
     })
   }
@@ -107,11 +127,12 @@ export async function readStripNames(
 /** Where the list and the desk differ, row by row: inputs, then outputs. */
 export function namesDiffering(
   rows: readonly ListRow[],
-  deskNames: ReadonlyMap<string, string>
+  deskNames: ReadonlyMap<string, string>,
+  kind: DeskKind = 'x32'
 ): NameDifference[] {
   const out: NameDifference[] = []
-  for (const { side, row, strip: s } of stripsOf(rows)) {
-    const list = deskNameOf(rows[row - 1][side])
+  for (const { side, row, strip: s } of stripsOf(rows, kind)) {
+    const list = deskNameOf(rows[row - 1][side], kind)
     const desk = deskNames.get(s.address) ?? ''
     if (list !== desk) out.push({ side, row, strip: s, list, desk })
   }
@@ -119,11 +140,14 @@ export function namesDiffering(
 }
 
 /** Rows with a name but no strip on the desk to give it to. */
-export function rowsPastTheDesk(rows: readonly ListRow[]): { side: ListSide; row: number }[] {
+export function rowsPastTheDesk(
+  rows: readonly ListRow[],
+  kind: DeskKind = 'x32'
+): { side: ListSide; row: number }[] {
   const out: { side: ListSide; row: number }[] = []
   for (const side of ['input', 'output'] as const) {
     rows.forEach((r, i) => {
-      if (r[side].trim() && !stripFor(side, i + 1)) out.push({ side, row: i + 1 })
+      if (r[side].trim() && !stripFor(side, i + 1, kind)) out.push({ side, row: i + 1 })
     })
   }
   return out

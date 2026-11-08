@@ -25,10 +25,15 @@ function oscString(s: string): Uint8Array {
 }
 
 /** An address and its values (none: a question), as bytes to send. */
-export function encodeOsc(address: string, args: readonly OscArg[] = []): Uint8Array {
+export function encodeOsc(
+  address: string,
+  args: readonly OscArg[] = [],
+  /** The type list even with no values: the WING asks for it (./wing). */
+  typesAlways = false
+): Uint8Array {
   const parts: Uint8Array[] = [oscString(address)]
   // Asked with no values, the X32 wants the address alone, without a type list.
-  if (args.length) parts.push(oscString(`,${args.map((a) => a.t).join('')}`))
+  if (args.length || typesAlways) parts.push(oscString(`,${args.map((a) => a.t).join('')}`))
   for (const a of args) {
     if (a.t === 's') {
       parts.push(oscString(a.v))

@@ -29,6 +29,7 @@ import { ScreenTitle } from '@/components/ui/ScreenTitle'
 import { doesJob } from '@/lib/teamJobs'
 import { deskAddressOf, loadDeskAddress, saveDeskAddress } from '@/lib/mixer/deskAddress'
 import { canReachDesk, deskLinkTo } from '@/lib/mixer/link'
+import { orgDesk } from '@/lib/mixer/deskModel'
 import { deskInfo } from '@/lib/mixer/x32'
 import { canReachSwitcher, switcherAt } from '@/lib/switcher/link'
 import {
@@ -151,7 +152,9 @@ export default function SettingsScreen() {
     setDeskStatus(
       info
         ? `Saved. Connected to ${info.model}${info.name ? ` “${info.name}”` : ''}.`
-        : 'Saved, but the desk didn’t answer. Is this phone on its Wi-Fi?'
+        : orgDesk() === 'wing'
+          ? 'Saved, but the desk didn’t answer. Is this phone on its Wi-Fi, and is OSC on (Setup → Remote)?'
+          : 'Saved, but the desk didn’t answer. Is this phone on its Wi-Fi?'
     )
   }
   /** Looks for the desk on the phone's Wi-Fi (lib/mixer/find), and saves the one that answers. */
@@ -833,9 +836,9 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Text color={colors.textMuted} fontSize="$2">
-                  As a Sound Engineer, you can ask Miriam to mute channels and change levels in the
-                  house and in people’s in-ears. Join the desk’s Wi-Fi, and enter the X32’s address
-                  (on the desk: Setup → Network).
+                  {orgDesk() === 'wing'
+                    ? 'As a Sound Engineer, you can ask Miriam to mute channels and change levels in the house and in people’s in-ears. Join the desk’s Wi-Fi, and enter the WING’s address (on the desk: Setup → Network). On the WING, under Setup → Remote, OSC must be on and its Remote Lock off.'
+                    : 'As a Sound Engineer, you can ask Miriam to mute channels and change levels in the house and in people’s in-ears. Join the desk’s Wi-Fi, and enter the X32’s address (on the desk: Setup → Network).'}
                 </Text>
                 <XStack gap="$2" alignItems="flex-end">
                   <Field label="Desk address">

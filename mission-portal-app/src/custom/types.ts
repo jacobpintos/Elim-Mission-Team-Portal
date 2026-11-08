@@ -38,8 +38,11 @@ export interface OrgProfile {
  * has none, and the jobs, settings and screens for it aren't shown.
  */
 export interface OrgEquipment {
-  /** Its sound desk: a Behringer X32, or a Midas M32, which works the same (src/lib/mixer). */
-  soundDesk?: 'x32'
+  /**
+   * Its sound desk (src/lib/mixer): a Behringer WING, or a Behringer X32 (or
+   * Midas M32, which works the same).
+   */
+  soundDesk?: 'wing' | 'x32'
   /** Its video switcher: a Blackmagic ATEM (src/lib/switcher). */
   videoSwitcher?: 'atem'
 }

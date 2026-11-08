@@ -23,19 +23,22 @@ import type { InputListLocation } from '@/stores/inputListStore'
 import {
   channelMoveAsked,
   channelsSaid,
+  followingMove,
   moveChannels,
   movePlan,
   nameBefore,
+  outOfRange,
   prepareMove,
   putChannelsBack,
   type ChannelsBefore,
   type MoveAsk,
 } from '@/lib/mixer/channelMove'
+import { DESKS, modelOf } from '@/lib/mixer/deskModel'
 import type { Here, Talk } from './localTalk'
 
 /**
  * Miriam and the sound desk, worked out on the phone with no internet: the
- * church's X32 is on its own Wi-Fi, and the phone talks to it directly
+ * church's sound desk (a WING, or an X32) is on its own Wi-Fi, and the phone talks to it directly
  * (lib/mixer). For Sound Engineers (Admin → Leadership Team).
  *
  *   "mute Mitch EG", "Mitch EG down 10% in the house",
@@ -67,7 +70,7 @@ const NO_APP = 'I can change the sound desk only from the phone app, on the desk
 const NO_ADDRESS =
   'I don’t know where the sound desk is yet. Put its address in Settings, under Sound desk.'
 const UNREACHABLE = 'I can’t reach the sound desk. Is this phone on its Wi-Fi?'
-const NOT_TAKEN = 'The desk didn’t take that. Try again, or change it in MX-Q.'
+const NOT_TAKEN = 'The desk didn’t take that. Try again, or change it on the desk.'
 const STREAM = 'The livestream is mixed in Pro Tools, so I can’t change it from here.'
 
 /** The desk's names, read again after this long, or when a name isn't found. */
@@ -95,7 +98,8 @@ const firstName = (here: Here) => (here.profile?.displayName ?? '').trim().split
 export async function mixerHere(said: string, here: Here, talk: Talk): Promise<boolean> {
   if (!here.desk) return false
   // Channels moved, with everything they have.
-  const moveSaid = channelMoveAsked(said)
+  // Heard against the largest desk; checked against this one once it's reached.
+  const moveSaid = channelMoveAsked(said, DESKS.wing.channels)
   if (moveSaid) {
     await moveHere(moveSaid, await here.desk(), talk)
     return true
@@ -295,6 +299,9 @@ async function moveHere(
   }
   if (said.kind === 'unclear') return talk.say(said.why)
   const { ask } = said
+  const desk = modelOf(access.link)
+  const outside = outOfRange(ask, desk.channels)
+  if (outside) return talk.say(outside)
   const plan = movePlan(ask)
   talk.thinking()
   const first = await prepareMove(access.link, plan)
@@ -315,15 +322,21 @@ async function moveHere(
         t.say(now.kind === 'unreachable' ? UNREACHABLE : NOT_TAKEN)
         return true
       }
+      const following = followingMove(access.link, plan, now.before)
       const missed = await moveChannels(access.link, plan, now.before)
       // Names and channels have changed places: nothing remembered by channel holds.
       forgetDeskNames()
       forgetHouseMutes()
       const text =
         words.done +
+        (following
+          ? ` ${following} ${following === 1 ? 'direct out or side-chain' : 'direct outs and side-chains'} pointing at them followed.`
+          : '') +
         (missed.length
           ? ` The desk didn’t take ${missed.length} ${missed.length === 1 ? 'setting' : 'settings'} — look them over, or Undo.`
-          : '')
+          : '') +
+        // A WING's snapshot can't be saved from outside it.
+        (desk.kind === 'wing' ? ' Save the snapshot on the WING to keep it.' : '')
       const undo = async () => {
         const back = await putChannelsBack(access.link, now.before)
         forgetDeskNames()
@@ -387,10 +400,10 @@ async function inputListHere(
   if (!rows) return talk.say(`I couldn’t read the ${LISTS[loc]} input list.`)
   const deskNames = await readStripNames(
     access.link,
-    stripsOf(rows).map((s) => s.strip.address)
+    stripsOf(rows, access.link.model).map((s) => s.strip.address)
   )
   if (!deskNames) return talk.say(UNREACHABLE)
-  const sending = namesDiffering(rows, deskNames).filter((d) => d.list)
+  const sending = namesDiffering(rows, deskNames, access.link.model).filter((d) => d.list)
   if (!sending.length) {
     return talk.say(`The desk already has the ${LISTS[loc]} input list’s names.`)
   }

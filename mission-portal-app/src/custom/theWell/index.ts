@@ -17,8 +17,8 @@ export const theWell: OrgModule = {
   },
   plan: 'founding',
   equipment: {
-    // The X32 on its own Wi-Fi, and the ATEM Television Studio Pro.
-    soundDesk: 'x32',
+    // The Behringer WING on its own Wi-Fi, and the ATEM Television Studio Pro.
+    soundDesk: 'wing',
     videoSwitcher: 'atem',
   },
   adminSections: [

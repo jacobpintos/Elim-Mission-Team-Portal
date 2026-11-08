@@ -73,7 +73,7 @@ export function InputListDesk({ loc, rows }: { loc: InputListLocation; rows: Lis
     const names = info
       ? await readStripNames(
           access.link,
-          stripsOf(rows).map((s) => s.strip.address)
+          stripsOf(rows, access.link.model).map((s) => s.strip.address)
         )
       : null
     setBusy(false)
@@ -81,10 +81,10 @@ export function InputListDesk({ loc, rows }: { loc: InputListLocation; rows: Lis
       setSaid('The sound desk didn’t answer. Is this phone on its Wi-Fi?')
       return
     }
-    const differences = namesDiffering(rows, names)
+    const differences = namesDiffering(rows, names, access.link.model)
     const desk = `${info.model || 'the desk'}${info.name ? ` “${info.name}”` : ''}`
     setCompared({ loc, link: access.link, desk, differences })
-    const past = rowsPastTheDesk(rows)
+    const past = rowsPastTheDesk(rows, access.link.model)
     setSaid(
       (differences.length
         ? `${differences.length} ${differences.length === 1 ? 'name differs' : 'names differ'} from ${desk}.`

@@ -1,5 +1,7 @@
 import { requireOptionalNativeModule } from 'expo'
 import { X32_PORT, type DeskLink } from './x32'
+import { orgDesk, type DeskKind } from './deskModel'
+import { WING_PORT, wingLink } from './wing'
 
 /**
  * The phone's way to the sound desk: the app's own native module
@@ -24,17 +26,21 @@ const native = requireOptionalNativeModule<DeskLinkModule>('DeskLink')
 /** Whether this build of the app can reach a desk at all. */
 export const canReachDesk = (): boolean => !!native?.isAvailable()
 
-/** The way to the desk at this address, or null where the app can't reach one. */
-export function deskLinkTo(host: string): DeskLink | null {
+/**
+ * The way to the desk at this address, or null where the app can't reach one:
+ * the organization's desk (src/custom: its equipment), an X32 or a WING,
+ * each on its own port, and a WING's put into its own words (./wing).
+ */
+export function deskLinkTo(host: string, kind: DeskKind = orgDesk()): DeskLink | null {
   const n = native
   if (!n) return null
-  return {
+  const port = kind === 'wing' ? WING_PORT : X32_PORT
+  const raw: DeskLink = {
     exchange: async (message, timeoutMs) => {
-      const answer = await n
-        .exchange(host, X32_PORT, Array.from(message), timeoutMs)
-        .catch(() => null)
+      const answer = await n.exchange(host, port, Array.from(message), timeoutMs).catch(() => null)
       return answer ? Uint8Array.from(answer) : null
     },
-    send: (message) => n.send(host, X32_PORT, Array.from(message)).catch(() => {}),
+    send: (message) => n.send(host, port, Array.from(message)).catch(() => {}),
   }
+  return kind === 'wing' ? wingLink(raw) : { ...raw, model: 'x32' }
 }

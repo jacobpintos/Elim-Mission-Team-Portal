@@ -1,6 +1,8 @@
 import { addressesToScan, scanAddresses, type Exchange } from '@/lib/netScan'
 import { decodeOsc, encodeOsc } from './osc'
 import { X32_PORT } from './x32'
+import { orgDesk, type DeskKind } from './deskModel'
+import { WING_ASK, WING_FIND_PORT, wingFromAnswer } from './wing'
 
 /** What answered /xinfo as a sound desk: its name and model, or null. */
 export function deskFromAnswer(answer: Uint8Array | null): { name: string; model: string } | null {
@@ -10,13 +12,23 @@ export function deskFromAnswer(answer: Uint8Array | null): { name: string; model
   return { name: name ?? '', model: model ?? '' }
 }
 
-/** Every X32 on the phone's network: each address asked "/xinfo" on the desk's port. */
+/**
+ * Every desk of this kind on the phone's network: an X32 is asked "/xinfo" on
+ * its port; a WING "WING?" on the port it answers that on (./wing).
+ */
 export function findDesks(
   exchange: Exchange,
-  network: { address: string; prefix: number }
+  network: { address: string; prefix: number },
+  kind: DeskKind = orgDesk()
 ): Promise<{ host: string; found: { name: string; model: string } }[]> {
+  const hosts = addressesToScan(network.address, network.prefix)
+  if (kind === 'wing') {
+    return scanAddresses(hosts, async (host) =>
+      wingFromAnswer(await exchange(host, WING_FIND_PORT, WING_ASK, 500))
+    )
+  }
   const ask = encodeOsc('/xinfo')
-  return scanAddresses(addressesToScan(network.address, network.prefix), async (host) =>
+  return scanAddresses(hosts, async (host) =>
     deskFromAnswer(await exchange(host, X32_PORT, ask, 500))
   )
 }

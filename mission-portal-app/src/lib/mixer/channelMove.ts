@@ -1,5 +1,6 @@
 import { encodeOsc, type OscArg } from './osc'
 import { CHANNELS, deskValue, type DeskLink } from './x32'
+import { wingFollowing, wingMove, wingPrepare, wingPutBack } from './wingChannelMove'
 
 /**
  * Moving channels on the desk: "move channels 15 through 20 to 25 through
@@ -151,9 +152,9 @@ const NOT_A_MOVE =
  * "Move channels 15 through 20 to 25 through 30", "move channels 15 to 20 to
  * 25", "switch channel 3 with channel 7", "swap channels 3 and 7": which, and
  * where to. Null when it isn't moving channels; unclear, with why, when the
- * numbers don't fit the desk.
+ * numbers don't fit a desk of this many channels.
  */
-export function channelMoveAsked(said: string): MoveSaid | null {
+export function channelMoveAsked(said: string, channels = CHANNELS): MoveSaid | null {
   const s = withDigits(said.toLowerCase().replace(/[–—]/g, '-'))
   if (!MOVING.test(s) || !CHANNEL_WORD.test(s) || NOT_A_MOVE.test(s)) return null
   const nums = (s.match(/\d+/g) ?? []).map(Number)
@@ -170,12 +171,18 @@ export function channelMoveAsked(said: string): MoveSaid | null {
     }
     ask = { from: a, to: c, count: b - a + 1 }
   } else return null
-  const last = Math.max(ask.from, ask.to) + ask.count - 1
-  if (Math.min(ask.from, ask.to) < 1 || last > CHANNELS) {
-    return { kind: 'unclear', why: `The desk’s channels are 1 to ${CHANNELS}.` }
-  }
+  const why = outOfRange(ask, channels)
+  if (why) return { kind: 'unclear', why }
   if (ask.from === ask.to) return { kind: 'unclear', why: 'Those are the same channels.' }
   return { kind: 'move', ask }
+}
+
+/** Why a move doesn't fit a desk of this many channels, or null when it does. */
+export function outOfRange(ask: MoveAsk, channels: number): string | null {
+  const last = Math.max(ask.from, ask.to) + ask.count - 1
+  return Math.min(ask.from, ask.to) < 1 || last > channels
+    ? `The desk’s channels are 1 to ${channels}.`
+    : null
 }
 
 // ─── Where each goes ────────────────────────────────────────────────────────
@@ -208,8 +215,10 @@ function pairLanding(plan: ReadonlyMap<number, number>, pair: number): number | 
 /** Everything the channels had, and their pairs' links: what a move starts from, and Undo puts back. */
 export interface ChannelsBefore {
   values: Map<string, OscArg>
-  /** Each pair touched: 1 linked, 0 not. */
+  /** Each pair touched: 1 linked, 0 not (an X32's; a WING has no pairs). */
   links: Map<number, number>
+  /** A WING's: each moved channel's name as it shows. */
+  shown?: Map<number, string>
 }
 
 export type Prepared =
@@ -238,6 +247,12 @@ export async function prepareMove(
   link: DeskLink,
   plan: ReadonlyMap<number, number>
 ): Promise<Prepared> {
+  if (link.model === 'wing' && link.raw) {
+    const before = await wingPrepare(link.raw, plan)
+    return before
+      ? { kind: 'ready', before: { values: before.values, links: new Map(), shown: before.shown } }
+      : { kind: 'unreachable' }
+  }
   // Whether the desk is there at all, before asking it hundreds of things.
   const first = [...plan.keys()][0]
   if (!first || !(await deskValue(link, settingsOf(first)[0]))) return { kind: 'unreachable' }
@@ -333,8 +348,23 @@ export function moveChannels(
   before: ChannelsBefore,
   pauseMs = 10
 ): Promise<string[]> {
+  if (link.model === 'wing' && link.raw) {
+    return wingMove(link.raw, plan, wingBefore(before), pauseMs)
+  }
   return apply(link, landed(before, plan), pauseMs)
 }
+
+const wingBefore = (before: ChannelsBefore) => ({
+  values: before.values,
+  shown: before.shown ?? new Map<number, string>(),
+})
+
+/** How many direct outs and side-chains pointing at the channels follow them (a WING's). */
+export const followingMove = (
+  link: DeskLink,
+  plan: ReadonlyMap<number, number>,
+  before: ChannelsBefore
+): number => (link.model === 'wing' ? wingFollowing(wingBefore(before), plan) : 0)
 
 /** Puts the channels back as they were (Undo). The settings the desk didn't take are given back. */
 export function putChannelsBack(
@@ -342,11 +372,13 @@ export function putChannelsBack(
   before: ChannelsBefore,
   pauseMs = 10
 ): Promise<string[]> {
+  if (link.model === 'wing' && link.raw) return wingPutBack(link.raw, wingBefore(before), pauseMs)
   return apply(link, before, pauseMs)
 }
 
 /** A channel's name before the move, or null for one not named. */
 export const nameBefore = (before: ChannelsBefore, ch: number): string | null => {
+  if (before.shown) return before.shown.get(ch) || null
   const v = before.values.get(settingsOf(ch)[0])
   return v?.t === 's' && v.v.trim() ? v.v.trim() : null
 }
