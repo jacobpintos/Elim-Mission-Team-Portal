@@ -283,3 +283,51 @@ describe('Miriam and the input list', () => {
     ])
   })
 })
+
+describe('Miriam moving channels', () => {
+  it('asks first, switches the channels with everything they have, and has Undo', async () => {
+    const say = atTheDesk()
+    say.desk.set('/ch/01/mix/02/on', { t: 'i', v: 0 })
+    expect(await say('swap channels 1 and 7')).toEqual([
+      'ask: Switch channel 1 (Pastor) with 7 (Mitch EG)? Each takes its input, name and every setting with it. The sound on them drops out for a moment while they move.',
+    ])
+    expect(await say('yes')).toEqual(['done: Done — channel 1 is on 7 now, and 7 on 1. [Undo]'])
+    expect(say.desk.value(X32.channelName(7))).toBe('Pastor')
+    expect(say.desk.value('/ch/07/config/source')).toBe(1)
+    expect(say.desk.value('/ch/07/mix/02/on')).toBe(0)
+    expect(say.desk.value(X32.channelName(1))).toBe('Mitch EG')
+    // Asked for by name, it's found where it went.
+    expect(await say('mute Mitch EG')).toEqual(['done: Muted Mitch EG. [Undo]'])
+    expect(say.desk.value(X32.on(1))).toBe(0)
+  })
+
+  it('puts them all back on Undo, and leaves them on a no', async () => {
+    const say = atTheDesk()
+    await say('move channels 3 through 4 to 7 through 8')
+    expect(await say('yes')).toEqual([
+      'done: Done — channels 3–4 are on 7–8 now, and 7–8 on 3–4. [Undo]',
+    ])
+    expect(say.desk.value(X32.channelName(8))).toBe('Mia Vox')
+    expect(await say.undo()).toBe('Put back: those channels are as they were.')
+    expect(say.desk.value(X32.channelName(3))).toBe('Jacob Vox')
+    expect(say.desk.value(X32.channelName(8))).toBe('Bass')
+
+    await say('switch channel 1 with channel 2')
+    expect(await say('no')).toEqual(['say: Okay — left as it is.'])
+    expect(say.desk.value(X32.channelName(1))).toBe('Pastor')
+  })
+
+  it('says what’s in the way', async () => {
+    expect(await atTheDesk()('move channels 15 through 20 to 25 through 29')).toEqual([
+      'say: 15 through 20 is 6 channels, but 25 through 29 is 5. They need to be the same number.',
+    ])
+    const linked = atTheDesk()
+    linked.desk.set('/config/chlink/3-4', { t: 'i', v: 1 })
+    expect(await linked('move channels 3 through 4 to 6 through 7')).toEqual([
+      'say: Channels 3 and 4 are linked as a stereo pair, and this would split them. Move them onto an odd channel and the one after it, or unlink them first.',
+    ])
+    expect(await atTheDesk('not engineer')('swap channels 1 and 7')).toEqual([
+      expect.stringMatching(/^say: Only Sound Engineers/),
+    ])
+  })
+})

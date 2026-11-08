@@ -1,6 +1,6 @@
 import { choicePicked, listed, saidNeverMind, saidNo, saidYes } from '@/lib/miriamReplies'
 import { mixerAsked, plainlyTheDesk, type MixerAsk } from '@/lib/mixer/asked'
-import { aim, earsFound, micsOf, workOut, type Target } from '@/lib/mixer/desk'
+import { aim, earsFound, forgetHouseMutes, micsOf, workOut, type Target } from '@/lib/mixer/desk'
 import {
   resetSwaps,
   sameName,
@@ -20,6 +20,17 @@ import {
   stripsOf,
 } from '@/lib/mixer/inputListDesk'
 import type { InputListLocation } from '@/stores/inputListStore'
+import {
+  channelMoveAsked,
+  channelsSaid,
+  moveChannels,
+  movePlan,
+  nameBefore,
+  prepareMove,
+  putChannelsBack,
+  type ChannelsBefore,
+  type MoveAsk,
+} from '@/lib/mixer/channelMove'
 import type { Here, Talk } from './localTalk'
 
 /**
@@ -83,6 +94,12 @@ const firstName = (here: Here) => (here.profile?.displayName ?? '').trim().split
 /** Worked out here: a request to the desk, or about who is using whose pack or mic. False to leave it. */
 export async function mixerHere(said: string, here: Here, talk: Talk): Promise<boolean> {
   if (!here.desk) return false
+  // Channels moved, with everything they have.
+  const moveSaid = channelMoveAsked(said)
+  if (moveSaid) {
+    await moveHere(moveSaid, await here.desk(), talk)
+    return true
+  }
   // An input list's names, onto the desk.
   const listAsk = inputListAsked(said)
   if (listAsk) {
@@ -214,6 +231,109 @@ async function changeHere(ask: MixerAsk, target: Target, link: DeskLink, talk: T
   talk.ask(change.question, async (r, t) => {
     if (saidYes(r)) {
       await make(t)
+      return true
+    }
+    if (saidNeverMind(r) || saidNo(r)) {
+      t.say('Okay — left as it is.')
+      return true
+    }
+    return false
+  })
+}
+
+// --- Channels moved, with everything they have -------------------------------------
+
+/** What's on these channels, by name, for asking: "Kick, Snare, unnamed". */
+function namesOn(before: ChannelsBefore, from: number, count: number): string {
+  const names = Array.from({ length: count }, (_, i) => nameBefore(before, from + i))
+  return names.some(Boolean) ? ` (${names.map((n) => n ?? 'unnamed').join(', ')})` : ''
+}
+
+/** "Switch channels 15–20 with 25–30", or, overlapping, "move 15–20 to 18–23, and 21–23 to 15–17". */
+function moveWords(
+  ask: MoveAsk,
+  before: ChannelsBefore | null
+): { question: string; done: string } {
+  const { from, to, count } = ask
+  const names = (start: number, n: number) => (before ? namesOn(before, start, n) : '')
+  const apart = Math.abs(to - from) >= count
+  if (apart) {
+    return {
+      question: `Switch ${channelsSaid(from, count)}${names(from, count)} with ${channelsSaid(to, count).replace(/^channels? /, '')}${names(to, count)}?`,
+      done: `Done — ${channelsSaid(from, count)} ${count === 1 ? 'is' : 'are'} on ${to}${count === 1 ? '' : `–${to + count - 1}`} now, and ${to}${count === 1 ? '' : `–${to + count - 1}`} on ${from}${count === 1 ? '' : `–${from + count - 1}`}.`,
+    }
+  }
+  // Overlapping: those displaced fill the places left.
+  const shift = Math.abs(to - from)
+  const displacedFrom = to > from ? from + count : to
+  const freedFrom = to > from ? from : to + count
+  const range = (start: number, n: number) => (n === 1 ? `${start}` : `${start}–${start + n - 1}`)
+  return {
+    question: `Move ${channelsSaid(from, count)}${names(from, count)} to ${range(to, count)}, and ${range(displacedFrom, shift)}${names(displacedFrom, shift)} to ${range(freedFrom, shift)}?`,
+    done: `Done — ${channelsSaid(from, count)} ${count === 1 ? 'is' : 'are'} on ${range(to, count)} now, and ${range(displacedFrom, shift)} on ${range(freedFrom, shift)}.`,
+  }
+}
+
+const MOVING_NOTE =
+  ' Each takes its input, name and every setting with it. The sound on them drops out for a moment while they move.'
+
+/**
+ * "Move channels 15 through 20 to 25 through 30" (lib/mixer/channelMove):
+ * what's on them read first, then asked, then each strip moved with
+ * everything it has, the channels there switched into the places left.
+ * Undo puts every one back as it was.
+ */
+async function moveHere(
+  said: NonNullable<ReturnType<typeof channelMoveAsked>>,
+  access: DeskAccess,
+  talk: Talk
+): Promise<void> {
+  if (access.kind !== 'ready') {
+    return talk.say(
+      access.kind === 'not engineer' ? NOT_ENGINEER : access.kind === 'no app' ? NO_APP : NO_ADDRESS
+    )
+  }
+  if (said.kind === 'unclear') return talk.say(said.why)
+  const { ask } = said
+  const plan = movePlan(ask)
+  talk.thinking()
+  const first = await prepareMove(access.link, plan)
+  if (first.kind === 'unreachable') return talk.say(UNREACHABLE)
+  if (first.kind === 'splits') {
+    const [a, b] = first.channels
+    return talk.say(
+      `Channels ${a} and ${b} are linked as a stereo pair, and this would split them. Move them onto an odd channel and the one after it, or unlink them first.`
+    )
+  }
+  const words = moveWords(ask, first.before)
+  talk.ask(words.question + MOVING_NOTE, async (r, t) => {
+    if (saidYes(r)) {
+      t.thinking()
+      // Read again: what they have now is what moves.
+      const now = await prepareMove(access.link, plan)
+      if (now.kind !== 'ready') {
+        t.say(now.kind === 'unreachable' ? UNREACHABLE : NOT_TAKEN)
+        return true
+      }
+      const missed = await moveChannels(access.link, plan, now.before)
+      // Names and channels have changed places: nothing remembered by channel holds.
+      forgetDeskNames()
+      forgetHouseMutes()
+      const text =
+        words.done +
+        (missed.length
+          ? ` The desk didn’t take ${missed.length} ${missed.length === 1 ? 'setting' : 'settings'} — look them over, or Undo.`
+          : '')
+      const undo = async () => {
+        const back = await putChannelsBack(access.link, now.before)
+        forgetDeskNames()
+        forgetHouseMutes()
+        return back.length
+          ? `I put them back, but the desk didn’t take ${back.length} ${back.length === 1 ? 'setting' : 'settings'}.`
+          : 'Put back: those channels are as they were.'
+      }
+      if (t.done) t.done(text, undo)
+      else t.say(text)
       return true
     }
     if (saidNeverMind(r) || saidNo(r)) {

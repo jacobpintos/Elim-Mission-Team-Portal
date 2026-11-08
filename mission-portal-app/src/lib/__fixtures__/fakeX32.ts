@@ -1,5 +1,6 @@
 import { decodeOsc, encodeOsc, type OscArg } from '../mixer/osc'
 import { BUSES, CHANNELS, snapFader, X32, type DeskLink } from '../mixer/x32'
+import { CHANNEL_SETTINGS, linkAddress } from '../mixer/channelMove'
 
 /**
  * An X32 for the tests, as the real desk behaves over OSC: a message with no
@@ -11,7 +12,14 @@ export function fakeX32(
   setup: { channels?: Record<number, string>; buses?: Record<number, string> } = {}
 ) {
   const state = new Map<string, OscArg>()
+  const two = (n: number) => String(n).padStart(2, '0')
   for (let ch = 1; ch <= CHANNELS; ch++) {
+    // Every setting a channel strip has, at rest; those used below set as they start.
+    for (const s of CHANNEL_SETTINGS) {
+      state.set(`/ch/${two(ch)}/${s.path}`, s.t === 's' ? { t: 's', v: '' } : { t: s.t, v: 0 })
+    }
+    // Its own input.
+    state.set(`/ch/${two(ch)}/config/source`, { t: 'i', v: ch })
     state.set(X32.channelName(ch), { t: 's', v: setup.channels?.[ch] ?? '' })
     state.set(X32.on(ch), { t: 'i', v: 1 })
     state.set(X32.fader(ch), { t: 'f', v: snapFader(0.75) })
@@ -26,8 +34,9 @@ export function fakeX32(
   for (let bus = 1; bus <= BUSES; bus++) {
     state.set(X32.busName(bus), { t: 's', v: setup.buses?.[bus] ?? '' })
   }
+  // Stereo links, one to a pair of channels.
+  for (let p = 1; p <= CHANNELS / 2; p++) state.set(linkAddress(p), { t: 'i', v: 0 })
   // The other named strips: aux inputs, effects returns, matrices.
-  const two = (n: number) => String(n).padStart(2, '0')
   for (let n = 1; n <= 8; n++) {
     state.set(`/auxin/${two(n)}/config/name`, { t: 's', v: '' })
     state.set(`/fxrtn/${two(n)}/config/name`, { t: 's', v: '' })
