@@ -39,8 +39,9 @@ being asked.
     churches get the Pre-service Checklist in its place (see Stage 2).
 - **Equipment:**
   - the sound desk (Behringer WING): levels and mutes in the house and in
-    people's ears, pack and mic swaps, and moving channels with every setting
-    (direct outs and side-chains follow);
+    people's ears, pack and mic swaps, moving or swapping channels with every
+    setting (direct outs and side-chains follow), and loading scenes from the
+    open show (next, previous, by number; saving stays on the desk);
   - the input lists and the sound desk: rows line up with the board, so a
     Sound Engineer can compare a list with the desk's names and send either
     side's names to the other (Worship → Input List), or ask Miriam to

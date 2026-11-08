@@ -20,6 +20,10 @@ export function fakeWing(
     channels?: Record<number, string>
     buses?: Record<number, string>
     mains?: Record<number, string>
+    /** The open show's scenes, numbered from 1 on its list; none: no show open. */
+    scenes?: string[]
+    /** Channel names a scene brings with it, by scene. */
+    sceneNames?: Record<string, Record<number, string>>
   } = {}
 ) {
   const state = new Map<string, { kind: Kind; v: number | string }>()
@@ -61,6 +65,21 @@ export function fakeWing(
   }
   put('/$syscfg/consolename', 's', 'Sanctuary')
   put('/$syscfg/$cnsmdl', 's', 'ngc-full')
+  // The library: the open show and the scene that's on.
+  const scenes = setup.scenes ?? []
+  put('/$ctl/lib/$actshow', 's', scenes.length ? 'Services' : '')
+  put('/$ctl/lib/$active', 's', scenes.length ? `Services/${scenes[0]}.snap` : '')
+  put('/$ctl/lib/$actidx', 'i', scenes.length ? 1 : 0)
+  put('/$ctl/lib/$actionidx', 'i', 0)
+  put('/$ctl/lib/$action', 's', 'IDLE')
+  const recall = (n: number) => {
+    if (n < 1 || n > scenes.length) return
+    put('/$ctl/lib/$actidx', 'i', n)
+    put('/$ctl/lib/$active', 's', `Services/${scenes[n - 1]}.snap`)
+    for (const [ch, name] of Object.entries(setup.sceneNames?.[scenes[n - 1]] ?? {})) {
+      put(`/ch/${ch}/name`, 's', name)
+    }
+  }
 
   /** What a strip shows: its input's name when it takes its look from it, else its own. */
   const shown = (strip: string): string => {
@@ -108,6 +127,12 @@ export function fakeWing(
         s.kind === 's' ? String(a.v) : s.kind === 'i' ? Math.round(Number(a.v)) : Number(a.v)
       changed.push(m.address)
       state.set(m.address, { kind: s.kind, v })
+      if (m.address === '/$ctl/lib/$action') {
+        const on = Number(state.get('/$ctl/lib/$actidx')?.v)
+        if (v === 'GO') recall(Number(state.get('/$ctl/lib/$actionidx')?.v))
+        if (v === 'GONEXT') recall(on + 1)
+        if (v === 'GOPREV') recall(on - 1)
+      }
     },
   }
   return {

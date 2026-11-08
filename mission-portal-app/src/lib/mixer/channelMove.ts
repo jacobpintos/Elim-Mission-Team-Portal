@@ -133,7 +133,7 @@ const TEENS = [
 ]
 
 /** Numbers said as words, as digits: "twenty five" is 25. Up to the desk's 32. */
-function withDigits(s: string): string {
+export function withDigits(s: string): string {
   const one = (w: string) => ONES.indexOf(w) + 1
   return s
     .replace(

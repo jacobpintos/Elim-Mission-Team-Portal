@@ -43,6 +43,15 @@ import {
   type MoveAsk,
 } from '@/lib/mixer/channelMove'
 import { DESKS, modelOf } from '@/lib/mixer/deskModel'
+import {
+  goToScene,
+  sceneAsked,
+  sceneNow,
+  sceneSaid,
+  type SceneAsk,
+  type SceneNow,
+} from '@/lib/mixer/scenes'
+import { withDigits } from '@/lib/mixer/channelMove'
 import type { Here, Talk } from './localTalk'
 
 /**
@@ -106,6 +115,12 @@ const firstName = (here: Here) => (here.profile?.displayName ?? '').trim().split
 /** Worked out here: a request to the desk, or about who is using whose pack or mic. False to leave it. */
 export async function mixerHere(said: string, here: Here, talk: Talk): Promise<boolean> {
   if (!here.desk) return false
+  // Scenes: loaded, stepped through, asked about.
+  const scene = sceneAsked(said)
+  if (scene) {
+    await scenesHere(scene, await here.desk(), talk)
+    return true
+  }
   // Channels moved, with everything they have.
   // Heard against the largest desk; checked against this one once it's reached.
   const moveSaid = channelMoveAsked(said, DESKS.wing.channels)
@@ -432,6 +447,134 @@ async function namedSwapHere(
 }
 
 const titled = (s: string) => s.replace(/(^|\s)(\p{L})/gu, (_, a, b) => a + b.toUpperCase())
+
+// --- Scenes ------------------------------------------------------------------------
+
+const SAVE_ON_DESK = 'The WING doesn’t let apps save a scene. Save it in its library, on the desk.'
+const NO_SHOW = 'No show is open on the WING. Open one there, then ask again.'
+const SCENES_ON_A_WING = 'I can load scenes only on a WING for now.'
+
+/** How long the WING is given to recall a scene before what's on is read (tests: none). */
+let sceneSettleMs = 600
+export function settleScenesFor(ms: number): void {
+  sceneSettleMs = ms
+}
+
+/**
+ * "Next scene", "load scene 3", "load the Sunday scene", "what scene are we
+ * on?" (lib/mixer/scenes): a WING's open show, its scenes recalled from its
+ * list. A recall changes the whole desk, so it's asked first, saying that
+ * what's changed since the scene on now was saved goes; what's on after is
+ * read back and said; Undo recalls the one before. A scene can't be saved from
+ * outside the desk: she says so.
+ */
+async function scenesHere(ask: SceneAsk, access: DeskAccess, talk: Talk): Promise<void> {
+  if (access.kind !== 'ready') {
+    return talk.say(
+      access.kind === 'not engineer' ? NOT_ENGINEER : access.kind === 'no app' ? NO_APP : NO_ADDRESS
+    )
+  }
+  const raw = access.link.model === 'wing' ? access.link.raw : undefined
+  if (!raw) return talk.say(SCENES_ON_A_WING)
+  if (ask.kind === 'save') return talk.say(SAVE_ON_DESK)
+  talk.thinking()
+  const now = await sceneNow(raw)
+  if (!now) return talk.say(UNREACHABLE)
+  if (!now.show) return talk.say(NO_SHOW)
+  if (ask.kind === 'which') {
+    return talk.say(
+      now.name
+        ? `We’re on “${now.name}”${now.n !== null ? ` (scene ${now.n})` : ''}, in the show “${now.show}”.`
+        : `The show “${now.show}” is open, but I can’t tell which scene is on.`
+    )
+  }
+  if (ask.kind === 'name') {
+    if (now.name && sameName(now.name, ask.name)) {
+      return talk.say(`We’re already on “${now.name}”.`)
+    }
+    return talk.ask(
+      `Which number is “${titled(ask.name)}” on the WING’s show list?`,
+      async (r, t) => {
+        const n = /\d+/.exec(withDigits(r.toLowerCase()))
+        if (n) {
+          loadScene({ kind: 'number', n: Number(n[0]) }, raw, now, t)
+          return true
+        }
+        if (saidNeverMind(r) || saidNo(r)) {
+          t.say('Okay — left as it is.')
+          return true
+        }
+        return false
+      }
+    )
+  }
+  loadScene(ask, raw, now, talk)
+}
+
+function loadScene(
+  to: { kind: 'next' } | { kind: 'previous' } | { kind: 'number'; n: number },
+  raw: DeskLink,
+  before: SceneNow,
+  talk: Talk
+): void {
+  const what =
+    to.kind === 'next'
+      ? 'the next scene'
+      : to.kind === 'previous'
+        ? 'the scene before'
+        : `scene ${to.n}`
+  const on = before.name ? `“${before.name}”` : 'the scene that’s on'
+  talk.ask(
+    `Load ${what}? Everything on the desk changes to it, and anything changed since ${on} was last saved is lost.`,
+    async (r, t) => {
+      if (saidYes(r)) {
+        t.thinking()
+        const after = await goToScene(raw, to, sceneSettleMs)
+        // Its names and what's where are the scene's now.
+        forgetDeskNames()
+        forgetHouseMutes()
+        if (!after) {
+          t.say(UNREACHABLE)
+          return true
+        }
+        if (after.name === before.name && after.n === before.n) {
+          t.say(
+            to.kind === 'number'
+              ? `The WING didn’t change scenes. Is there a scene ${to.n} on its show list?`
+              : `The WING didn’t change scenes: there may be no ${to.kind === 'next' ? 'next' : 'earlier'} one.`
+          )
+          return true
+        }
+        const text = `Loaded “${after.name || `scene ${after.n}`}”.`
+        const undo = async () => {
+          const back =
+            before.n !== null
+              ? await goToScene(raw, { kind: 'number', n: before.n }, sceneSettleMs)
+              : to.kind !== 'number'
+                ? await goToScene(
+                    raw,
+                    { kind: to.kind === 'next' ? 'previous' : 'next' },
+                    sceneSettleMs
+                  )
+                : null
+          forgetDeskNames()
+          forgetHouseMutes()
+          return back && back.name === before.name
+            ? `Back on “${sceneSaid(before.name)}”, as it was last saved.`
+            : 'I couldn’t get back to the scene before. Load it on the desk.'
+        }
+        if (t.done) t.done(text, undo)
+        else t.say(text)
+        return true
+      }
+      if (saidNeverMind(r) || saidNo(r)) {
+        t.say('Okay — left as it is.')
+        return true
+      }
+      return false
+    }
+  )
+}
 
 // --- An input list's names, onto the desk ------------------------------------------
 

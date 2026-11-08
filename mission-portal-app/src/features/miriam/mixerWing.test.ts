@@ -6,7 +6,8 @@ import { wingFromAnswer } from '@/lib/mixer/wing'
 import { WING_CHANNEL_SETTINGS } from '@/lib/mixer/wingChannelMove'
 import { fakeWing } from '@/lib/__fixtures__/fakeWing'
 import type { Here, Reply, Talk } from './localTalk'
-import { forgetDeskNames, mixerHere, type DeskAccess } from './mixerTalk'
+import { forgetDeskNames, mixerHere, settleScenesFor, type DeskAccess } from './mixerTalk'
+import { sceneAsked } from '@/lib/mixer/scenes'
 
 const CHANNELS = {
   1: 'Pastor',
@@ -31,8 +32,11 @@ const INPUT_LISTS: Record<string, { input: string; output: string }[]> = {
 }
 
 /** A Sound Engineer talking to her, by a WING: each line said, and what came of it. */
-function atTheWing(access?: DeskAccess['kind']) {
-  const desk = fakeWing({ channels: CHANNELS, buses: BUSES, mains: MAINS })
+function atTheWing(
+  access?: DeskAccess['kind'],
+  scenes: Pick<Parameters<typeof fakeWing>[0] & object, 'scenes' | 'sceneNames'> = {}
+) {
+  const desk = fakeWing({ channels: CHANNELS, buses: BUSES, mains: MAINS, ...scenes })
   const log: string[] = []
   let waiting: Reply | null = null
   let undo: (() => Promise<string>) | null = null
@@ -78,6 +82,7 @@ function atTheWing(access?: DeskAccess['kind']) {
 beforeEach(() => {
   forgetDeskNames()
   forgetHouseMutes()
+  settleScenesFor(0)
 })
 
 describe('a WING, asked the way the app asks a desk', () => {
@@ -232,5 +237,82 @@ describe('Miriam swapping channels by name on a WING', () => {
     expect(say.desk.value('/ch/7/fdr')).toBe(-7)
     expect(say.desk.value('/ch/7/in/conn/in')).toBe(8)
     expect(say.desk.value('/ch/8/name')).toBe('Mitch EG')
+  })
+})
+
+describe('asked about scenes', () => {
+  it('hears what’s asked', () => {
+    expect(sceneAsked('next scene')).toEqual({ kind: 'next' })
+    expect(sceneAsked('load the next snapshot please')).toEqual({ kind: 'next' })
+    expect(sceneAsked('go back a scene')).toEqual({ kind: 'previous' })
+    expect(sceneAsked('load the previous scene')).toEqual({ kind: 'previous' })
+    expect(sceneAsked('load scene 3')).toEqual({ kind: 'number', n: 3 })
+    expect(sceneAsked('recall snapshot number twelve')).toEqual({ kind: 'number', n: 12 })
+    expect(sceneAsked('load the Sunday scene')).toEqual({ kind: 'name', name: 'sunday' })
+    expect(sceneAsked('switch to the scene called Wednesday Night')).toEqual({
+      kind: 'name',
+      name: 'wednesday night',
+    })
+    expect(sceneAsked('what scene are we on?')).toEqual({ kind: 'which' })
+    expect(sceneAsked('save the scene')).toEqual({ kind: 'save' })
+    expect(sceneAsked('mute the bass')).toBeNull()
+    expect(sceneAsked('switch to camera 2')).toBeNull()
+  })
+})
+
+describe('Miriam loading scenes on a WING', () => {
+  const SHOW = {
+    scenes: ['Sunday', 'Wednesday', 'Youth'],
+    sceneNames: { Wednesday: { 7: 'Acoustic' } },
+  }
+
+  it('asks first, loads the next one, says what’s on, and Undo goes back', async () => {
+    const say = atTheWing(undefined, SHOW)
+    expect(await say('next scene')).toEqual([
+      'ask: Load the next scene? Everything on the desk changes to it, and anything changed since “Sunday” was last saved is lost.',
+    ])
+    expect(await say('yes')).toEqual(['done: Loaded “Wednesday”. [Undo]'])
+    expect(say.desk.value('/$ctl/lib/$actidx')).toBe(2)
+    // The scene's names are read fresh: channel 7 is Acoustic now.
+    expect(await say('mute acoustic')).toEqual(['done: Muted Acoustic. [Undo]'])
+    expect(await say.undo()).toBe('Acoustic is back on.')
+  })
+
+  it('loads one by its number on the show’s list, with Undo back to the one before', async () => {
+    const say = atTheWing(undefined, SHOW)
+    await say('load scene 3')
+    expect(await say('yes')).toEqual(['done: Loaded “Youth”. [Undo]'])
+    expect(await say.undo()).toBe('Back on “Sunday”, as it was last saved.')
+    expect(say.desk.value('/$ctl/lib/$actidx')).toBe(1)
+  })
+
+  it('asks the number of one named, and knows when it’s on already', async () => {
+    const say = atTheWing(undefined, SHOW)
+    expect(await say('load the Sunday scene')).toEqual(['say: We’re already on “Sunday”.'])
+    expect(await say('load the youth scene')).toEqual([
+      'ask: Which number is “Youth” on the WING’s show list?',
+    ])
+    expect(await say('three')).toEqual([
+      'ask: Load scene 3? Everything on the desk changes to it, and anything changed since “Sunday” was last saved is lost.',
+    ])
+    expect(await say('yes')).toEqual(['done: Loaded “Youth”. [Undo]'])
+  })
+
+  it('says what’s on, and what it can’t do', async () => {
+    const say = atTheWing(undefined, SHOW)
+    expect(await say('what scene are we on?')).toEqual([
+      'say: We’re on “Sunday” (scene 1), in the show “Services”.',
+    ])
+    expect(await say('save the scene')).toEqual([
+      'say: The WING doesn’t let apps save a scene. Save it in its library, on the desk.',
+    ])
+    await say('load scene 9')
+    expect(await say('yes')).toEqual([
+      'say: The WING didn’t change scenes. Is there a scene 9 on its show list?',
+    ])
+    expect(await atTheWing()('next scene')).toEqual([
+      'say: No show is open on the WING. Open one there, then ask again.',
+    ])
+    await say('no')
   })
 })
