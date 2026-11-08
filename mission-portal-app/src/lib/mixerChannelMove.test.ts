@@ -182,3 +182,32 @@ describe('moving channels on the desk', () => {
     })
   })
 })
+
+describe('asked to swap channels by name', () => {
+  it('hears the two names', () => {
+    expect(channelMoveAsked('swap the kick and the snare')).toEqual({
+      kind: 'names',
+      a: 'kick',
+      b: 'snare',
+    })
+    expect(channelMoveAsked('Switch Mia Vox with Jacob Vox.')).toEqual({
+      kind: 'names',
+      a: 'mia vox',
+      b: 'jacob vox',
+    })
+    expect(channelMoveAsked('can you swap channels pastor and choir please')).toEqual({
+      kind: 'names',
+      a: 'pastor',
+      b: 'choir',
+    })
+  })
+
+  it('leaves packs, cameras and other swaps alone', () => {
+    expect(channelMoveAsked('Mia and Sunny swapped packs')).toBeNull()
+    expect(channelMoveAsked('swap packs with Sunny')).toBeNull()
+    expect(channelMoveAsked('switch to camera 2')).toBeNull()
+    expect(channelMoveAsked('switch the wide camera with the pulpit camera')).toBeNull()
+    expect(channelMoveAsked('swap the bass up in the house')).toBeNull()
+    expect(channelMoveAsked('switch to dark mode')).toBeNull()
+  })
+})

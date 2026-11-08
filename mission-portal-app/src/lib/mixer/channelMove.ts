@@ -112,7 +112,11 @@ export interface MoveAsk {
   count: number
 }
 
-export type MoveSaid = { kind: 'move'; ask: MoveAsk } | { kind: 'unclear'; why: string }
+export type MoveSaid =
+  | { kind: 'move'; ask: MoveAsk }
+  | { kind: 'unclear'; why: string }
+  /** Two channels by their names, to be found on the desk: "swap the kick and the snare". */
+  | { kind: 'names'; a: string; b: string }
 
 const ONES = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 const TEENS = [
@@ -156,6 +160,8 @@ const NOT_A_MOVE =
  */
 export function channelMoveAsked(said: string, channels = CHANNELS): MoveSaid | null {
   const s = withDigits(said.toLowerCase().replace(/[–—]/g, '-'))
+  // No numbers: two channels by name, or not a move at all.
+  if (!/\d/.test(s)) return namedSwap(s)
   if (!MOVING.test(s) || !CHANNEL_WORD.test(s) || NOT_A_MOVE.test(s)) return null
   const nums = (s.match(/\d+/g) ?? []).map(Number)
   let ask: MoveAsk
@@ -175,6 +181,28 @@ export function channelMoveAsked(said: string, channels = CHANNELS): MoveSaid | 
   if (why) return { kind: 'unclear', why }
   if (ask.from === ask.to) return { kind: 'unclear', why: 'Those are the same channels.' }
   return { kind: 'move', ask }
+}
+
+/** "Swap the kick and the snare", "switch Mia Vox with Jacob Vox". */
+const NAMED_SWAP =
+  /^(?:(?:hey\s+)?(?:please|miriam|can\s+you|could\s+you)[,\s]+)*(?:swap|switch|exchange|trade)\s+(?:channels?\s+)?(.+?)\s+(?:and|with)\s+(.+?)(?:\s+please)?[.!?]*$/
+/** Things swapped that aren't channels: in-ear packs (./swaps), cameras, songs. */
+const NOT_CHANNELS =
+  /\b(?:packs?|ears?|in-?ears?|iems?|cameras?|cams?|preview|program|songs?|places?|seats?|shifts?|days?|dates?)\b/
+const nameSaid = (s: string) =>
+  s
+    .replace(/^(?:the|channel|ch)\s+/, '')
+    .replace(/\s+channel$/, '')
+    .trim()
+
+/** Two channels said by name, to swap; null when it isn't that. */
+function namedSwap(s: string): MoveSaid | null {
+  if (NOT_A_MOVE.test(s) || NOT_CHANNELS.test(s)) return null
+  const m = NAMED_SWAP.exec(s.trim())
+  if (!m) return null
+  const a = nameSaid(m[1])
+  const b = nameSaid(m[2])
+  return a && b ? { kind: 'names', a, b } : null
 }
 
 /** Why a move doesn't fit a desk of this many channels, or null when it does. */

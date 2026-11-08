@@ -1,6 +1,15 @@
 import { choicePicked, listed, saidNeverMind, saidNo, saidYes } from '@/lib/miriamReplies'
 import { mixerAsked, plainlyTheDesk, type MixerAsk } from '@/lib/mixer/asked'
-import { aim, earsFound, forgetHouseMutes, micsOf, workOut, type Target } from '@/lib/mixer/desk'
+import {
+  aim,
+  channelFound,
+  earsFound,
+  forgetHouseMutes,
+  micsOf,
+  workOut,
+  type Found,
+  type Target,
+} from '@/lib/mixer/desk'
 import {
   resetSwaps,
   sameName,
@@ -100,7 +109,9 @@ export async function mixerHere(said: string, here: Here, talk: Talk): Promise<b
   // Channels moved, with everything they have.
   // Heard against the largest desk; checked against this one once it's reached.
   const moveSaid = channelMoveAsked(said, DESKS.wing.channels)
-  if (moveSaid) {
+  if (moveSaid?.kind === 'names') {
+    if (await namedSwapHere(moveSaid, here, talk)) return true
+  } else if (moveSaid) {
     await moveHere(moveSaid, await here.desk(), talk)
     return true
   }
@@ -288,7 +299,7 @@ const MOVING_NOTE =
  * Undo puts every one back as it was.
  */
 async function moveHere(
-  said: NonNullable<ReturnType<typeof channelMoveAsked>>,
+  said: Exclude<NonNullable<ReturnType<typeof channelMoveAsked>>, { kind: 'names' }>,
   access: DeskAccess,
   talk: Talk
 ): Promise<void> {
@@ -356,6 +367,71 @@ async function moveHere(
     return false
   })
 }
+
+/**
+ * "Swap the kick and the snare": each found by its name on the desk, as "mute
+ * the kick" finds it, asking which when a name fits several; then switched
+ * as two channels by number are (moveHere). Not the desk's when neither name
+ * is a channel there, nor when this person can't use it: "switch Sunday and
+ * Wednesday" may be about something else.
+ */
+async function namedSwapHere(
+  said: { a: string; b: string },
+  here: Here,
+  talk: Talk
+): Promise<boolean> {
+  const access = await here.desk!()
+  if (access.kind !== 'ready') return false
+  const names = await deskNames(access.link, here.now())
+  if (!names) {
+    const known = lastDeskNames()
+    const either =
+      known &&
+      (channelFound(said.a, known).kind !== 'none' || channelFound(said.b, known).kind !== 'none')
+    if (!either) return false
+    talk.say(UNREACHABLE)
+    return true
+  }
+  const a = channelFound(said.a, names)
+  const b = channelFound(said.b, names)
+  if (a.kind === 'none' && b.kind === 'none') return false
+  if (a.kind === 'none' || b.kind === 'none') {
+    talk.say(`I can’t find ${titled(a.kind === 'none' ? said.a : said.b)} on the desk.`)
+    return true
+  }
+  const pick = (
+    found: Found,
+    label: string,
+    t: Talk,
+    then: (n: number, t: Talk) => Promise<void>
+  ) => {
+    if (found.kind === 'one') return then(found.n, t)
+    if (found.kind !== 'several') return Promise.resolve()
+    const options = found.options.map((o) => o.name || `Channel ${o.n}`)
+    t.ask(`Which ${titled(label)}: ${listed(options, 'or')}?`, async (r, t2) => {
+      const i = choicePicked(r, options)
+      if (i >= 0) {
+        await then(found.options[i].n, t2)
+        return true
+      }
+      if (saidNeverMind(r) || saidNo(r)) {
+        t2.say('Okay — left as it is.')
+        return true
+      }
+      return false
+    })
+    return Promise.resolve()
+  }
+  await pick(a, said.a, talk, (na, t1) =>
+    pick(b, said.b, t1, async (nb, t2) => {
+      if (na === nb) return t2.say('That’s the same channel.')
+      await moveHere({ kind: 'move', ask: { from: na, to: nb, count: 1 } }, access, t2)
+    })
+  )
+  return true
+}
+
+const titled = (s: string) => s.replace(/(^|\s)(\p{L})/gu, (_, a, b) => a + b.toUpperCase())
 
 // --- An input list's names, onto the desk ------------------------------------------
 

@@ -331,3 +331,37 @@ describe('Miriam moving channels', () => {
     ])
   })
 })
+
+describe('Miriam swapping channels by name', () => {
+  it('finds each by its name on the desk, and switches them', async () => {
+    const say = atTheDesk()
+    expect(await say('swap the pastor and the bass')).toEqual([
+      'ask: Switch channel 1 (Pastor) with 8 (Bass)? Each takes its input, name and every setting with it. The sound on them drops out for a moment while they move.',
+    ])
+    expect(await say('yes')).toEqual(['done: Done — channel 1 is on 8 now, and 8 on 1. [Undo]'])
+    expect(say.desk.value(X32.channelName(8))).toBe('Pastor')
+    expect(say.desk.value(X32.channelName(1))).toBe('Bass')
+  })
+
+  it('asks which, when a name fits several', async () => {
+    const say = atTheDesk()
+    expect(await say('switch Mia with Mitch EG')).toEqual(['ask: Which Mia: Mia Vox or Mia Keys?'])
+    expect(await say('keys')).toEqual([
+      'ask: Switch channel 5 (Mia Keys) with 7 (Mitch EG)? Each takes its input, name and every setting with it. The sound on them drops out for a moment while they move.',
+    ])
+    await say('yes')
+    expect(say.desk.value(X32.channelName(7))).toBe('Mia Keys')
+  })
+
+  it('says which it can’t find, and leaves what isn’t the desk’s to others', async () => {
+    expect(await atTheDesk()('swap the drums and the bass')).toEqual([
+      'say: I can’t find Drums on the desk.',
+    ])
+    expect(await atTheDesk()('switch the Sunday service with the Wednesday service')).toEqual([
+      '(not the desk)',
+    ])
+    expect(await atTheDesk('not engineer')('swap the pastor and the bass')).toEqual([
+      '(not the desk)',
+    ])
+  })
+})

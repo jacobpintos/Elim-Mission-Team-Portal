@@ -212,3 +212,20 @@ describe('Miriam moving channels on a WING', () => {
     ])
   })
 })
+
+describe('Miriam swapping channels by name on a WING', () => {
+  it('switches the two, every setting with them', async () => {
+    const say = atTheWing()
+    say.desk.set('/ch/8/fdr', -7)
+    expect(await say('swap the bass and Mitch EG')).toEqual([
+      'ask: Switch channel 8 (Bass) with 7 (Mitch EG)? Each takes its input, name and every setting with it. The sound on them drops out for a moment while they move.',
+    ])
+    expect(await say('yes')).toEqual([
+      'done: Done — channel 8 is on 7 now, and 7 on 8. Save the snapshot on the WING to keep it. [Undo]',
+    ])
+    expect(say.desk.value('/ch/7/name')).toBe('Bass')
+    expect(say.desk.value('/ch/7/fdr')).toBe(-7)
+    expect(say.desk.value('/ch/7/in/conn/in')).toBe(8)
+    expect(say.desk.value('/ch/8/name')).toBe('Mitch EG')
+  })
+})
