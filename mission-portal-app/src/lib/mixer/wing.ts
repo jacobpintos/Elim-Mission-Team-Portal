@@ -145,6 +145,9 @@ function said(address: string): Said | null {
       write: levelWrite,
     }
   }
+  if ((m = address.match(/^\/bus\/(\d\d)\/mix\/fader$/))) {
+    return { path: `/bus/${n(m[1])}/fdr`, kind: 'f', read: levelRead, write: levelWrite }
+  }
   if ((m = address.match(/^\/ch\/(\d\d)\/main\/(\d)\/on$/))) {
     return { path: `/ch/${n(m[1])}/main/${m[2]}/on`, kind: 'i', read: same, write: same }
   }

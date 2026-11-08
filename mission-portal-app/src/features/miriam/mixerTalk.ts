@@ -85,6 +85,8 @@ export interface SwapStore {
 const NOT_ENGINEER =
   'Only Sound Engineers can change the sound desk. An admin can make you one on the Leadership Team screen.'
 const NO_APP = 'I can change the sound desk only from the phone app, on the desk’s Wi-Fi.'
+const TO_IN_EARS =
+  'You can change your own in-ears: I’ve opened Worship → In-ear Adjustment. Choose your pack, then say what you need there.'
 const NO_ADDRESS =
   'I don’t know where the sound desk is yet. Put its address in Settings, under Sound desk.'
 const UNREACHABLE = 'I can’t reach the sound desk. Is this phone on its Wi-Fi?'
@@ -152,6 +154,15 @@ export async function mixerHere(said: string, here: Here, talk: Talk): Promise<b
   if (!ask) return false
   const plainly = plainlyTheDesk(ask)
   if (access.kind !== 'ready') {
+    // The worship team and guests change their own in-ears themselves: taken
+    // there (Worship → In-ear Adjustment), for anything about their ears, or
+    // a level with no place said ("more vocals"), not the house.
+    const theirEars = ask.place?.kind === 'ears' || (ask.kind === 'level' && ask.place === null)
+    if (access.kind === 'not engineer' && theirEars && here.inEars?.()) {
+      talk.say(TO_IN_EARS)
+      talk.open?.(`/worship?tab=inears&at=${here.now()}`)
+      return true
+    }
     // A plain "mute X" from someone who can't use the desk may be about a chat.
     if (!plainly) return false
     talk.say(

@@ -285,9 +285,10 @@ export function aim(
 /** The channel said back: "Jacob Vox (Mia’s mic)". */
 export const channelSaid = (t: Target) => (t.chNote ? `${t.chName} (${t.chNote})` : t.chName)
 
-/** Whose ears, said back: "Mia’s ears (Sunny’s pack)". */
+/** Whose ears, said back: "Mia’s ears (Sunny’s pack)"; the person's own: "your ears". */
 export function earsSaid(e: NonNullable<Target['ears']>): string {
-  return `${e.person}’s ears${e.note ? ` (${e.note})` : ''}`
+  const whose = e.person === 'you' ? 'your ears' : `${e.person}’s ears`
+  return `${whose}${e.note ? ` (${e.note})` : ''}`
 }
 
 /** A level as said: "-6 dB", "+2.5 dB", "all the way down". */
@@ -430,6 +431,45 @@ async function houseMute(link: DeskLink, mute: boolean, t: Target, name: string)
         else outOfTheHouse.set(t.ch, change)
         return mute ? `${name} is back in the house.` : `${name} is muted in the house again.`
       },
+    },
+  }
+}
+
+/**
+ * A whole in-ear mix louder or quieter: its bus's own fader, which every
+ * channel in it goes through. Turning up is asked first and goes 6 dB at
+ * most, as a channel's does.
+ */
+export async function mixLevel(
+  link: DeskLink,
+  bus: number,
+  up: boolean,
+  by: MixAmount
+): Promise<Worked> {
+  const address = X32.busFader(bus)
+  const from = asFloat(await deskValue(link, address))
+  if (from === null) return { kind: 'unreachable' }
+  const { to, capped } = deltaOf(by, from, up)
+  if (to === snapFader(from)) {
+    return {
+      kind: 'said',
+      text: `Your mix is already all the way ${up ? 'up' : 'down'} (${dbSaid(faderToDb(from))}).`,
+    }
+  }
+  const size = changeSize(from, to)
+  const how = `${up ? 'up' : 'down'}${size === null ? '' : ` ${size} dB`}`
+  const set = (v: number) => setDeskValue(link, address, { t: 'f', v })
+  return {
+    kind: 'change',
+    change: {
+      askFirst: up,
+      question: `Turn your whole mix ${how}, to ${dbSaid(faderToDb(to))}?${
+        capped ? ' That’s as far as I’ll turn it up at once.' : ''
+      }`,
+      make: async () =>
+        (await set(to)) ? `Your whole mix ${how}, to ${dbSaid(faderToDb(to))}.` : null,
+      undo: async () =>
+        (await set(from)) ? `Your mix is back to ${dbSaid(faderToDb(from))}.` : NOT_TAKEN,
     },
   }
 }

@@ -1255,6 +1255,10 @@ export function useMiriamConversation(
       useMiriamStore.getState().setAwaiting(false)
       return addNote(date, text)
     },
+    // A screen she takes them to (Worship → In-ear Adjustment: ./mixerTalk).
+    open: (path) => {
+      if (!anyOverlayOpen()) router.push(path as never)
+    },
     // Made at once (the sound desk: ./mixerTalk), with a tap to put it back.
     done: (text, undo) => {
       useMiriamStore.getState().setAwaiting(false)

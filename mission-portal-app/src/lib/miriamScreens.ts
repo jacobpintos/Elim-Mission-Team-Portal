@@ -2,6 +2,7 @@ import type { UserProfile } from '@/types/user'
 import { canUseMessages, isAdmin, visibleTabs, type Tab } from './roles'
 import { isTabVisible } from './featureFlags'
 import { ADMIN_SECTIONS } from './adminSections'
+import { canAdjustInEars } from './teamJobs'
 
 /**
  * The screens Miriam can take someone to: the ones their menu has, and the
@@ -44,6 +45,13 @@ export function screensFor(profile: UserProfile | null): MiriamScreen[] {
   const tabs = visibleTabs(profile)
   const screens: MiriamScreen[] = tabs.map((t) => ({ id: t, label: TAB_NAMES[t], path: `/${t}` }))
   const admin = isAdmin(profile)
+  if (tabs.includes('worship') && canAdjustInEars(profile, [])) {
+    screens.push({
+      id: 'inears',
+      label: 'Worship — In-ear Adjustment (your own in-ears)',
+      path: '/worship?tab=inears',
+    })
+  }
   if (tabs.includes('events')) {
     screens.push({ id: 'events_map', label: 'Events — map', path: '/events/map' })
   }

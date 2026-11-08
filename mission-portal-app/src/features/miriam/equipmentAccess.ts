@@ -39,6 +39,15 @@ export async function jobHolders(job: TeamJob): Promise<string[]> {
 export async function deskAccess(uid: string): Promise<DeskAccess> {
   if (!doesJob('soundEngineers', uid, await jobHolders('soundEngineers')))
     return { kind: 'not engineer' }
+  return deskHere()
+}
+
+/**
+ * The desk from this phone, whoever is asking: in the phone app, with its
+ * address saved here (Settings → Sound desk, or found from Worship → In-ear
+ * Adjustment). Who may change what is for the asker to check.
+ */
+export async function deskHere(): Promise<Exclude<DeskAccess, { kind: 'not engineer' }>> {
   if (!canReachDesk()) return { kind: 'no app' }
   const address = await loadDeskAddress()
   if (!address) return { kind: 'no address' }

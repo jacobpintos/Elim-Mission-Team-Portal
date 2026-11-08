@@ -33,6 +33,7 @@ export function fakeX32(
   }
   for (let bus = 1; bus <= BUSES; bus++) {
     state.set(X32.busName(bus), { t: 's', v: setup.buses?.[bus] ?? '' })
+    state.set(X32.busFader(bus), { t: 'f', v: snapFader(0.75) })
   }
   // Stereo links, one to a pair of channels.
   for (let p = 1; p <= CHANNELS / 2; p++) state.set(linkAddress(p), { t: 'i', v: 0 })

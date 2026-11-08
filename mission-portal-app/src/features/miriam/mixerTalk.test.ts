@@ -38,7 +38,7 @@ const INPUT_LISTS: Record<string, { input: string; output: string }[]> = {
 }
 
 /** A Sound Engineer talking to her, by the desk: each line said, and what came of it. */
-function atTheDesk(access?: DeskAccess['kind']) {
+function atTheDesk(access?: DeskAccess['kind'], inEars = false) {
   const desk = fakeX32({ channels: CHANNELS, buses: BUSES })
   const log: string[] = []
   let waiting: Reply | null = null
@@ -56,6 +56,7 @@ function atTheDesk(access?: DeskAccess['kind']) {
       log.push(`done: ${text} [Undo]`)
       undo = u
     },
+    open: (path: string) => log.push(`open: ${path.replace(/&at=\d+/, '')}`),
   } as unknown as Talk
   const here = {
     profile: { uid: 'mitch', displayName: 'Mitch Allen' } as UserProfile,
@@ -65,6 +66,7 @@ function atTheDesk(access?: DeskAccess['kind']) {
         ? { kind: 'ready', link: desk.link }
         : ({ kind: access } as DeskAccess),
     inputList: async (loc: string) => INPUT_LISTS[loc] ?? null,
+    inEars: () => inEars,
     swaps: {
       load: async () => kept,
       save: async (s: Swap[]) => {
@@ -363,5 +365,24 @@ describe('Miriam swapping channels by name', () => {
     expect(await atTheDesk('not engineer')('swap the pastor and the bass')).toEqual([
       '(not the desk)',
     ])
+  })
+})
+
+describe('Miriam and someone who changes their own in-ears', () => {
+  const TO_THE_TAB = [
+    'say: You can change your own in-ears: I’ve opened Worship → In-ear Adjustment. Choose your pack, then say what you need there.',
+    'open: /worship?tab=inears',
+  ]
+
+  it('takes the worship team to In-ear Adjustment for their ears', async () => {
+    expect(await atTheDesk('not engineer', true)('more vocals in my ears')).toEqual(TO_THE_TAB)
+    expect(await atTheDesk('not engineer', true)('less bass')).toEqual(TO_THE_TAB)
+  })
+
+  it('leaves the house to a Sound Engineer, and a plain mute to the rest of Miriam', async () => {
+    expect(await atTheDesk('not engineer', true)('mute Mitch EG in the house')).toEqual([
+      expect.stringMatching(/^say: Only Sound Engineers/),
+    ])
+    expect(await atTheDesk('not engineer', true)('mute Mitch EG')).toEqual(['(not the desk)'])
   })
 })

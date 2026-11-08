@@ -52,6 +52,8 @@ const two = (n: number) => String(n).padStart(2, '0')
 export const X32 = {
   channelName: (ch: number) => `/ch/${two(ch)}/config/name`,
   busName: (bus: number) => `/bus/${two(bus)}/config/name`,
+  /** A mix bus's own fader: the whole of someone's in-ear mix. */
+  busFader: (bus: number) => `/bus/${two(bus)}/mix/fader`,
   /** The channel's mute button: 1 is on (heard), 0 is muted. */
   on: (ch: number) => `/ch/${two(ch)}/mix/on`,
   /** The channel's fader: its level in the house (the main speakers). */

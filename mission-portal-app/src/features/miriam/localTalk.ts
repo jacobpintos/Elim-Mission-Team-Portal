@@ -160,6 +160,8 @@ export interface Talk {
   note: (date: string, text: string) => Promise<void>
   /** Says a change made at once, with a tap to put it back: `undo` says what it did. */
   done?: (text: string, undo: () => Promise<string>) => void
+  /** Opens a screen of the app, by its address ("/worship?tab=inears"). */
+  open?: (path: string) => void
 }
 
 /** What she can see, as this person: loaded, or read on asking. */
@@ -209,6 +211,8 @@ export interface Here {
   swaps?: SwapStore
   /** The video switcher, for a Video Operator on the phone app (./switcherTalk). */
   switcher?: () => Promise<SwitcherAccess>
+  /** Whether this person changes their own in-ears (Worship → In-ear Adjustment: lib/teamJobs canAdjustInEars). */
+  inEars?: () => boolean
   /** An input list's rows (Worship → Input List), for putting its names on the desk; null if unread. */
   inputList?: (loc: InputListLocation) => Promise<ListRow[] | null>
 }

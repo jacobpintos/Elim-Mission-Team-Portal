@@ -53,7 +53,10 @@ export function fakeWing(
     put(`/aux/${a}/in/conn/grp`, 's', 'AUX')
     put(`/aux/${a}/in/conn/in`, 'i', a)
   }
-  for (let b = 1; b <= 16; b++) put(`/bus/${b}/name`, 's', setup.buses?.[b] ?? '')
+  for (let b = 1; b <= 16; b++) {
+    put(`/bus/${b}/name`, 's', setup.buses?.[b] ?? '')
+    put(`/bus/${b}/fdr`, 'f', 0)
+  }
   for (let m = 1; m <= 4; m++) put(`/main/${m}/name`, 's', setup.mains?.[m] ?? '')
   for (let x = 1; x <= 8; x++) put(`/mtx/${x}/name`, 's', '')
   for (let u = 1; u <= 24; u++) {

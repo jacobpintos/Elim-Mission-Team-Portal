@@ -29,6 +29,8 @@ import {
 import type { Here } from './localTalk'
 import { deskAccess, switcherAccess } from './equipmentAccess'
 import { orgCan } from '@/lib/entitlements'
+import { canAdjustInEars } from '@/lib/teamJobs'
+import { Platform } from 'react-native'
 import { loadSwaps, saveSwaps } from '@/lib/mixer/swapStore'
 
 /**
@@ -118,6 +120,9 @@ export function hereNow(briefedFoodRef: {
     // Only where the organization has them (lib/entitlements): elsewhere
     // "mute the bass" or "camera 2" isn't hers to take.
     desk: orgCan('soundDesk') ? () => deskAccess(uid) : undefined,
+    inEars: () =>
+      Platform.OS !== 'web' &&
+      canAdjustInEars(profile ?? null, useConfigStore.getState().soundEngineers),
     switcher: orgCan('videoSwitcher') ? () => switcherAccess(uid) : undefined,
     swaps: { load: () => loadSwaps(), save: saveSwaps },
     inputList: async (loc) => {

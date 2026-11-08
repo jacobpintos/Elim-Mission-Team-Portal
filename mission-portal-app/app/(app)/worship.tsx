@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ScrollView, Pressable, StyleSheet } from 'react-native'
+import { ScrollView, Pressable, StyleSheet, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack, useLocalSearchParams } from 'expo-router'
@@ -19,6 +19,8 @@ import { announceSetList } from '@/features/worship/announceSetList'
 import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
 import { ChordSheetsTab } from '@/features/worship/ChordSheetsTab'
 import { InputListTab } from '@/features/worship/InputListTab'
+import { InEarTab } from '@/features/worship/InEarTab'
+import { canAdjustInEars } from '@/lib/teamJobs'
 import type { SetList } from '@/types/worship'
 import type { EventInstance } from '@/types/events'
 import { ScreenTitle } from '@/components/ui/ScreenTitle'
@@ -49,8 +51,15 @@ export default function WorshipScreen() {
   // A tab asked for by link — Miriam opening a song on Chord Sheets (?tab=chords),
   // each time she does (&at=…), whichever tab was up.
   const { tab, at } = useLocalSearchParams<{ tab?: string; at?: string }>()
-  const askedTab = tab === 'chords' || tab === 'setlists' || tab === 'inputs' ? tab : null
-  const [activeTab, setActiveTab] = useState<'setlists' | 'chords' | 'inputs'>(
+  // Worship → In-ear Adjustment: the worship team and guests, in the phone app,
+  // where there's a sound desk (lib/teamJobs canAdjustInEars).
+  const engineers = useConfigStore((s) => s.soundEngineers)
+  const inEars = Platform.OS !== 'web' && canAdjustInEars(profile, engineers)
+  const askedTab =
+    tab === 'chords' || tab === 'setlists' || tab === 'inputs' || (tab === 'inears' && inEars)
+      ? tab
+      : null
+  const [activeTab, setActiveTab] = useState<'setlists' | 'chords' | 'inputs' | 'inears'>(
     askedTab ?? 'setlists'
   )
   const [tabAsked, setTabAsked] = useState(`${tab}:${at}`)
@@ -156,7 +165,7 @@ export default function WorshipScreen() {
       <ScreenTitle options={{ title: 'Worship' }} />
 
       {/* Tab switcher */}
-      <XStack paddingHorizontal="$3" paddingTop="$3" paddingBottom="$2" gap="$2">
+      <XStack paddingHorizontal="$3" paddingTop="$3" paddingBottom="$2" gap="$2" flexWrap="wrap">
         <Pressable onPress={() => setActiveTab('setlists')}>
           <XStack
             backgroundColor={activeTab === 'setlists' ? colors.primary : colors.surface}
@@ -215,6 +224,26 @@ export default function WorshipScreen() {
             </XStack>
           </Pressable>
         )}
+        {inEars ? (
+          <Pressable onPress={() => setActiveTab('inears')}>
+            <XStack
+              backgroundColor={activeTab === 'inears' ? colors.primary : colors.surface}
+              borderRadius={99}
+              borderWidth={1}
+              borderColor={activeTab === 'inears' ? colors.primary : colors.border}
+              paddingHorizontal="$3"
+              paddingVertical="$1"
+            >
+              <Text
+                color={activeTab === 'inears' ? 'white' : colors.textMuted}
+                fontWeight={activeTab === 'inears' ? '700' : '400'}
+                fontSize="$3"
+              >
+                In-ear Adjustment
+              </Text>
+            </XStack>
+          </Pressable>
+        ) : null}
       </XStack>
 
       {activeTab === 'setlists' ? (
@@ -394,6 +423,8 @@ export default function WorshipScreen() {
         </>
       ) : activeTab === 'chords' ? (
         <ChordSheetsTab createdBy={uid} readOnly={readOnly} />
+      ) : activeTab === 'inears' ? (
+        <InEarTab />
       ) : (
         <InputListTab />
       )}

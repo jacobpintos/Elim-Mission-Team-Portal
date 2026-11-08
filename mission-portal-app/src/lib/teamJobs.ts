@@ -1,5 +1,7 @@
 import { ORG, type OrgModule } from '@/custom'
 import { orgCan, type AppFeature } from '@/lib/entitlements'
+import { isGuest, isWorship } from '@/lib/roles'
+import type { UserProfile } from '@/types/user'
 
 /**
  * Jobs several people can hold, given on Admin → Leadership Team:
@@ -50,4 +52,18 @@ export const holdsJob = (uid: string | undefined, holders: readonly string[]) =>
 /** The holders with this person given the job, or with it taken back if they held it. */
 export function toggledJob(holders: readonly string[], uid: string): string[] {
   return holders.includes(uid) ? holders.filter((h) => h !== uid) : [...holders, uid]
+}
+
+/**
+ * Who may change their own in-ears (Worship → In-ear Adjustment): the worship
+ * team and guests along to sing or play, and the Sound Engineers and admins
+ * who look after them. Only where the organization has a sound desk.
+ */
+export function canAdjustInEars(
+  profile: UserProfile | null,
+  engineers: readonly string[],
+  org: OrgModule = ORG
+): boolean {
+  if (!profile || !orgCan('soundDesk', org)) return false
+  return isWorship(profile) || isGuest(profile) || holdsJob(String(profile.uid ?? ''), engineers)
 }
