@@ -40,10 +40,16 @@ export const usePlanningStore = create<PlanningStore>((set, get) => ({
   subscribe: () => {
     if (get()._unsub) return
     set({ loading: true })
-    const unsub = onSnapshot(collection(db, 'planningBoards'), (snap) => {
-      const boards = snap.docs.map((d) => ({ ...(d.data() as PlanningBoard), id: d.id }))
-      set({ boards, loading: false })
-    })
+    const unsub = onSnapshot(
+      collection(db, 'planningBoards'),
+      (snap) => {
+        const boards = snap.docs.map((d) => ({ ...(d.data() as PlanningBoard), id: d.id }))
+        set({ boards, loading: false })
+      },
+      // Refused — planning boards are the team's (firestore.rules) — or out
+      // of reach: none to show, and not left loading.
+      () => set({ boards: [], loading: false, _unsub: null })
+    )
     set({ _unsub: unsub })
   },
 

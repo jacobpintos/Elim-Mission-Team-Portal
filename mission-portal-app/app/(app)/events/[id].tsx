@@ -36,7 +36,7 @@ import {
   type NWSAlert,
 } from '@/lib/weather'
 import { canViewEvent } from '@/lib/events'
-import { isAdmin, isPublic, isPublicFollower } from '@/lib/roles'
+import { isAdmin, isMember as onTheTeam, isPublic, isPublicFollower } from '@/lib/roles'
 import { sameId } from '@/lib/ids'
 import { useUIStore } from '@/stores/uiStore'
 
@@ -95,17 +95,20 @@ export default function EventDetailScreen() {
   const { subscribe: subPlanning, unsubscribe: unsubPlanning } = usePlanningStore()
   const { boards } = usePlanningStore()
 
+  // Planning boards are the team's (firestore.rules): a guest's or a
+  // follower's event page shows none, and doesn't ask for them.
+  const team = onTheTeam(profile)
   useEffect(() => {
     subscribe()
     subUsers()
-    subPlanning()
+    if (team) subPlanning()
     return () => {
       unsubscribe()
       unsubUsers()
-      unsubPlanning()
+      if (team) unsubPlanning()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [team])
 
   // Resolve event: prefer selectedEvent matching this id, fallback to lookup
   const resolved =

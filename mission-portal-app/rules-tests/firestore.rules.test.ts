@@ -1238,7 +1238,89 @@ describe('availability — read as its event is', () => {
     await assertFails(getDoc(doc(as(PUBLIC), 'avail', 'pub_2026-11-01')))
   })
 
-  it('takes anyone’s answer, but not who may see it', async () => {
+  it('takes an answer as the app writes it: theirs alone, with when', async () => {
+    // eventsStore.setAvail, on a date already answered by others and on a new one.
+    await assertSucceeds(
+      setDoc(
+        doc(as(OUTSIDER), 'avail', 'pub_2026-11-01'),
+        {
+          responses: { [OUTSIDER]: { status: 'partial', note: '', uid: OUTSIDER, ts: 1 } },
+          updatedAt: serverTimestamp(),
+        },
+        { mergeFields: [`responses.${OUTSIDER}`, 'updatedAt'] }
+      )
+    )
+    await assertSucceeds(
+      setDoc(
+        doc(as(OUTSIDER), 'avail', 'pub_2026-11-08'),
+        {
+          responses: { [OUTSIDER]: { status: 'yes', note: '', uid: OUTSIDER, ts: 1 } },
+          updatedAt: serverTimestamp(),
+        },
+        { mergeFields: [`responses.${OUTSIDER}`, 'updatedAt'] }
+      )
+    )
+    // Taken back, either way the app does it.
+    await assertSucceeds(
+      updateDoc(doc(as(OUTSIDER), 'avail', 'pub_2026-11-01'), {
+        [`responses.${OUTSIDER}`]: null,
+        updatedAt: serverTimestamp(),
+      })
+    )
+    await assertSucceeds(
+      updateDoc(doc(as(OUTSIDER), 'avail', 'pub_2026-11-01'), {
+        [`responses.${OUTSIDER}`]: deleteField(),
+        updatedAt: serverTimestamp(),
+      })
+    )
+  })
+
+  it('refuses an answer given for someone else, or theirs changed or wiped', async () => {
+    // Any of these used to be anyone's who was signed in.
+    await assertFails(
+      updateDoc(doc(as(OUTSIDER), 'avail', 'staff_2026-11-20'), {
+        [`responses.${MEMBER}`]: { status: 'no' },
+      })
+    )
+    await assertFails(
+      updateDoc(doc(as(OUTSIDER), 'avail', 'staff_2026-11-20'), {
+        [`responses.${MEMBER}`]: deleteField(),
+      })
+    )
+    await assertFails(updateDoc(doc(as(OUTSIDER), 'avail', 'staff_2026-11-20'), { responses: {} }))
+    await assertFails(
+      setDoc(doc(as(OUTSIDER), 'avail', 'staff_2026-11-27'), {
+        responses: { [MEMBER]: { status: 'no' } },
+      })
+    )
+    // Their own, with someone else's slipped in beside it.
+    await assertFails(
+      updateDoc(doc(as(OUTSIDER), 'avail', 'staff_2026-11-20'), {
+        [`responses.${OUTSIDER}`]: { status: 'yes' },
+        [`responses.${MEMBER}`]: { status: 'no' },
+      })
+    )
+  })
+
+  it('lets an admin answer for anyone, and never takes one from a public account', async () => {
+    await assertSucceeds(
+      updateDoc(doc(as(ADMIN), 'avail', 'staff_2026-11-20'), {
+        [`responses.${MEMBER}`]: { status: 'no' },
+      })
+    )
+    await assertFails(
+      updateDoc(doc(as(PUBLIC), 'avail', 'pub_2026-11-01'), {
+        [`responses.${PUBLIC}`]: { status: 'yes' },
+      })
+    )
+    await assertFails(
+      setDoc(doc(as(PUBLIC), 'avail', 'pub_2026-11-15'), {
+        responses: { [PUBLIC]: { status: 'yes' } },
+      })
+    )
+  })
+
+  it('takes their own answer, but not who may see it', async () => {
     await assertSucceeds(
       setDoc(
         doc(as(MEMBER), 'avail', 'staff_2026-11-20'),
@@ -1256,6 +1338,98 @@ describe('availability — read as its event is', () => {
     )
     await assertFails(updateDoc(doc(as(MEMBER), 'avail', 'staff_2026-11-20'), { seenBy: ['*'] }))
     await assertFails(deleteDoc(doc(as(MEMBER), 'avail', 'staff_2026-11-20')))
+  })
+})
+
+describe('the audit log — what admins have done', () => {
+  const entry = (over: Record<string, unknown> = {}) => ({
+    action: 'user.passwordReset',
+    detail: 'Reset password for someone@example.com',
+    name: 'Admin',
+    ts: serverTimestamp(),
+    ...over,
+  })
+
+  it('is written by admins, as the app writes it, and read back by them', async () => {
+    // src/lib/audit, and an app from before it said who.
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'auditLog', 'a1'), entry({ uid: ADMIN })))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'auditLog', 'a2'), entry()))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'auditLog', 'a1')))
+    await assertFails(getDoc(doc(as(MEMBER), 'auditLog', 'a1')))
+  })
+
+  it('takes nothing from anyone else', async () => {
+    // It used to take an entry, under any name, from anyone signed in.
+    await assertFails(setDoc(doc(as(MEMBER), 'auditLog', 'a3'), entry({ uid: MEMBER })))
+    await assertFails(setDoc(doc(as(GUEST), 'auditLog', 'a4'), entry({ name: 'Admin' })))
+    await assertFails(setDoc(doc(anon(), 'auditLog', 'a5'), entry()))
+  })
+
+  it('says only who really wrote it, and when it really was', async () => {
+    await assertFails(setDoc(doc(as(ADMIN), 'auditLog', 'a6'), entry({ uid: MEMBER })))
+    await assertFails(setDoc(doc(as(ADMIN), 'auditLog', 'a7'), entry({ ts: new Date(0) })))
+    await assertFails(setDoc(doc(as(ADMIN), 'auditLog', 'a8'), entry({ extra: true })))
+    await assertFails(setDoc(doc(as(ADMIN), 'auditLog', 'a9'), entry({ detail: 'x'.repeat(2001) })))
+  })
+
+  it('is never changed or removed, by anyone', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'auditLog', 'a10'), entry({ uid: ADMIN })))
+    await assertFails(updateDoc(doc(as(ADMIN), 'auditLog', 'a10'), { detail: 'Nothing happened' }))
+    await assertFails(deleteDoc(doc(as(ADMIN), 'auditLog', 'a10')))
+  })
+})
+
+describe('operations — the team’s, never a guest’s or a public account’s', () => {
+  const PUBLIC = 'public-uid'
+  const TEAMS_OWN = [
+    'issues',
+    'kaizen',
+    'planningBoards',
+    'taskTemplates',
+    'inventoryCategories',
+    'inventoryItems',
+    'reorderItems',
+  ]
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'users', PUBLIC), { roles: ['public'], displayName: 'Follower' })
+      for (const name of TEAMS_OWN) await setDoc(doc(db, name, 'x1'), { title: 'One', upvotes: [] })
+      await setDoc(doc(db, 'groups', 'g1'), { name: 'All', members: [MEMBER] })
+    })
+  })
+
+  it.each(TEAMS_OWN)('%s: read and listed by the team, and by no one else', async (name) => {
+    await assertSucceeds(getDoc(doc(as(MEMBER), name, 'x1')))
+    await assertSucceeds(getDocs(collection(as(WORSHIP), name)))
+    await assertSucceeds(getDocs(collection(as(ADMIN), name)))
+    // Each used to be open to anyone signed in.
+    await assertFails(getDoc(doc(as(GUEST), name, 'x1')))
+    await assertFails(getDocs(collection(as(GUEST), name)))
+    await assertFails(getDoc(doc(as(PUBLIC), name, 'x1')))
+    await assertFails(getDoc(doc(anon(), name, 'x1')))
+  })
+
+  it('takes an issue or an idea from the team, and from no one else', async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER), 'issues', 'i2'), { title: 'Broken cable' }))
+    await assertSucceeds(setDoc(doc(as(MEMBER), 'kaizen', 'k2'), { title: 'Stage lights' }))
+    await assertFails(setDoc(doc(as(GUEST), 'issues', 'i3'), { title: 'Spam' }))
+    await assertFails(setDoc(doc(as(PUBLIC), 'kaizen', 'k3'), { title: 'Spam' }))
+  })
+
+  it('lets the team vote for an idea, and change nothing else on it', async () => {
+    await assertSucceeds(updateDoc(doc(as(MEMBER), 'kaizen', 'x1'), { upvotes: [MEMBER] }))
+    await assertFails(updateDoc(doc(as(MEMBER), 'kaizen', 'x1'), { title: 'Mine now' }))
+    await assertFails(updateDoc(doc(as(GUEST), 'kaizen', 'x1'), { upvotes: [GUEST] }))
+    await assertFails(updateDoc(doc(as(PUBLIC), 'kaizen', 'x1'), { upvotes: [PUBLIC] }))
+  })
+
+  it('leaves groups to everyone signed in: their event pages work out who is on an event from them', async () => {
+    await assertSucceeds(getDocs(collection(as(GUEST), 'groups')))
+    await assertSucceeds(getDocs(collection(as(PUBLIC), 'groups')))
+    await assertFails(getDocs(collection(anon(), 'groups')))
+    await assertFails(updateDoc(doc(as(MEMBER), 'groups', 'g1'), { members: [] }))
   })
 })
 

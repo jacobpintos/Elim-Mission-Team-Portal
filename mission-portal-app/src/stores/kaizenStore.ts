@@ -62,10 +62,16 @@ export const useKaizenStore = create<KaizenStore>((set, get) => ({
   subscribe: () => {
     if (get()._unsub) return
     set({ loading: true })
-    const unsub = onSnapshot(collection(db, 'kaizen'), (snap) => {
-      const cards = snap.docs.map((d) => ({ ...(d.data() as KaizenCard), id: d.id }))
-      set({ cards, loading: false })
-    })
+    const unsub = onSnapshot(
+      collection(db, 'kaizen'),
+      (snap) => {
+        const cards = snap.docs.map((d) => ({ ...(d.data() as KaizenCard), id: d.id }))
+        set({ cards, loading: false })
+      },
+      // Refused — ideas are the team's (firestore.rules) — or out of reach:
+      // none to show, and not left loading.
+      () => set({ cards: [], loading: false, _unsub: null })
+    )
     set({ _unsub: unsub })
   },
 

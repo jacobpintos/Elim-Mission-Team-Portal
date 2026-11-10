@@ -1,5 +1,7 @@
 rules_version = '2';
-// Last updated: 2026-10-29 — events seen only by those on them (seenBy)
+// Last updated: 2026-11-10 — an availability answer is its own person's to
+// change; the audit log is the admins' to write; issues, ideas, planning
+// boards, inventory and task templates are the team's to read
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
@@ -150,9 +152,26 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // What admins have done — accounts made and removed, events saved,
+    // messages taken down (src/lib/audit) — written as they do it, and read
+    // back by them (Admin → Audit). Never changed or removed.
+    //
+    // Only admins do the things it records, so only admins write it: it used
+    // to take an entry, under any name, from anyone signed in. Each says who
+    // wrote it (`uid`, only ever themselves; an app from before leaves it
+    // out), when — the server's own time — and nothing beyond its few fields.
     match /auditLog/{doc} {
       allow read: if isAdmin();
-      allow create: if isSignedIn();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['action', 'detail', 'name', 'ts', 'uid'])
+        && request.resource.data.action is string
+        && request.resource.data.action.size() <= 100
+        && request.resource.data.get('detail', '') is string
+        && request.resource.data.get('detail', '').size() <= 2000
+        && request.resource.data.get('name', '') is string
+        && request.resource.data.get('name', '').size() <= 200
+        && request.resource.data.ts == request.time
+        && request.resource.data.get('uid', request.auth.uid) == request.auth.uid;
       allow update, delete: if false;
     }
 
@@ -221,14 +240,24 @@ service cloud.firestore {
     // Availability, by event and date (`${eventId}_${date}`, `${eventId}_series`):
     // when it is, and who is coming. Read as its event is (seenBy, copied here
     // by eventPrivateSync) — never by a public account, whose event pages ask
-    // nothing of them. Anyone signed in answers; who may see it is the
+    // nothing of them, and who answer nothing either.
+    //
+    // Each person's answer is under their own uid in `responses`, and theirs
+    // alone to give, change or take back (eventsStore.setAvail writes just
+    // that, and when). It used to be anyone's who was signed in: one member
+    // could answer for another, or wipe every answer on an event. An admin
+    // answers for anyone (Admin → Availability). Who may see it is the
     // server's to write.
+    function ownAnswerOnly(before) {
+      return request.resource.data.diff(before).affectedKeys().hasOnly(['responses', 'updatedAt'])
+        && request.resource.data.get('responses', {}).diff(before.get('responses', {}))
+             .affectedKeys().hasOnly([request.auth.uid]);
+    }
     match /avail/{key} {
       allow read: if seesEvent(resource.data) && (isAdmin() || !holdsPublic());
-      allow create: if isSignedIn() &&
-        (isAdmin() || !request.resource.data.keys().hasAny(['seenBy']));
+      allow create: if isSignedIn() && (isAdmin() || (!holdsPublic() && ownAnswerOnly({})));
       allow update: if isSignedIn() &&
-        (isAdmin() || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['seenBy']));
+        (isAdmin() || (!holdsPublic() && ownAnswerOnly(resource.data)));
       allow delete: if isAdmin();
     }
 
@@ -382,13 +411,17 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Groups: a name, and who is in it by uid. Read by everyone signed in,
+    // because every account's event pages work out who is on an event from
+    // them — a guest's and a public follower's too. Kept by admins.
     match /groups/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
+    // The team's, as issues are (below): never a guest's or a public account's.
     match /taskTemplates/{id} {
-      allow read: if isSignedIn();
+      allow read: if onTheTeam();
       allow write: if isAdmin();
     }
 
@@ -493,9 +526,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Operations — issues, ideas (kaizen), planning boards, inventory and
+    // what to reorder, and the task templates above — are the team's: read,
+    // and reported or suggested, by those on it. They used to be open to
+    // anyone signed in, a guest along for one trip and a public follower
+    // included, though neither is ever shown them.
     match /issues/{id} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if onTheTeam();
+      allow create: if onTheTeam();
       allow update, delete: if isAdmin();
     }
 
@@ -528,17 +566,17 @@ service cloud.firestore {
     }
 
     match /kaizen/{id} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if onTheTeam();
+      allow create: if onTheTeam();
       allow update: if isAdmin() ||
-        (isSignedIn() &&
+        (onTheTeam() &&
          request.resource.data.diff(resource.data).affectedKeys()
            .hasOnly(['upvotes', 'updatedAt']));
       allow delete: if isAdmin();
     }
 
     match /planningBoards/{id} {
-      allow read: if isSignedIn();
+      allow read: if onTheTeam();
       allow write: if isAdmin();
     }
 
@@ -742,18 +780,19 @@ service cloud.firestore {
       allow write: if isWorshipOrAdmin();
     }
 
+    // Inventory and what to reorder: the team's (see issues, above).
     match /inventoryCategories/{id} {
-      allow read: if isSignedIn();
+      allow read: if onTheTeam();
       allow write: if isAdmin();
     }
 
     match /inventoryItems/{id} {
-      allow read: if isSignedIn();
+      allow read: if onTheTeam();
       allow write: if isAdmin();
     }
 
     match /reorderItems/{id} {
-      allow read: if isSignedIn();
+      allow read: if onTheTeam();
       allow write: if isAdmin();
     }
 

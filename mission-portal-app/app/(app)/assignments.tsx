@@ -22,7 +22,7 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { TaskCard } from '@/components/ui/TaskCard'
 import { EventKanban } from '@/features/events/EventKanban'
 import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
-import { isAdmin, isPublic } from '@/lib/roles'
+import { isAdmin, isMember, isPublic } from '@/lib/roles'
 import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
@@ -1212,14 +1212,29 @@ export default function Assignments() {
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([])
   const [spawning, setSpawning] = useState<string | number | null>(null)
 
+  // Ideas and task templates are the team's (firestore.rules): a guest, who
+  // has this screen for the tasks they're given, isn't shown them and doesn't
+  // ask for them.
+  const onTheTeam = isMember(profile)
   useEffect(() => {
     subTasks()
     subEvents()
-    subKaizen()
     subWorship()
-    const unsub = onSnapshot(collection(db, 'taskTemplates'), (snap) => {
-      setTaskTemplates(snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TaskTemplate))
-    })
+    if (!onTheTeam) {
+      return () => {
+        unsubTasks()
+        unsubEvents()
+        unsubWorship()
+      }
+    }
+    subKaizen()
+    const unsub = onSnapshot(
+      collection(db, 'taskTemplates'),
+      (snap) => {
+        setTaskTemplates(snap.docs.map((d) => ({ ...d.data(), id: d.id }) as TaskTemplate))
+      },
+      () => setTaskTemplates([])
+    )
     return () => {
       unsubTasks()
       unsubEvents()
@@ -1228,7 +1243,7 @@ export default function Assignments() {
       unsub()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [onTheTeam])
 
   useEffect(() => {
     if (!admin) return
