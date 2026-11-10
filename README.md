@@ -31,6 +31,8 @@ It is one [Expo](https://docs.expo.dev/versions/v56.0.0/) (React Native) codebas
 │   ├── migration/               History: how the original single-page app became this one
 │   └── facebook-page-*          Setting up Facebook Page sync
 ├── firebase.json                Hosting, Functions, Firestore and Storage configuration
+├── LICENSE                      Who owns this: The Well of Iowa, all rights reserved
+├── THIRD_PARTY_NOTICES.md       The licences of what it includes: Expo's template, Miriam's models
 └── .github/workflows/           CI and deploys (see below)
 ```
 
