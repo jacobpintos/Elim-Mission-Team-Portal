@@ -19,7 +19,6 @@ on:
       - 'mission-portal-app/scripts/**'
       - 'firebase.json'
       - '.firebaserc'
-      - 'mission-portal-app/storage.rules'
       - '.github/workflows/deploy-web.yml'
 
 jobs:
@@ -77,11 +76,16 @@ jobs:
       - name: Create hosting site if not exists
         run: npx firebase-tools hosting:sites:create ${{ secrets.FIREBASE_PROJECT_ID }} --project ${{ secrets.FIREBASE_PROJECT_ID }} 2>&1 || true
 
-      - name: Deploy to Firebase Hosting and Storage Rules
+      # Hosting only. This used to deploy the Storage rules as well, each time
+      # the app changed. They are Deploy Firebase's to deploy, which first
+      # checks that they will be able to read roles from Firestore
+      # (deploy-firebase.yml): deployed from here without that check, they
+      # could refuse every upload in the app.
+      - name: Deploy to Firebase Hosting
         working-directory: mission-portal-app
         run: |
           for attempt in 1 2 3; do
-            npx firebase-tools deploy --only hosting,storage --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
+            npx firebase-tools deploy --only hosting --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
             if [ $attempt -lt 3 ]; then
               echo "Attempt $attempt failed — retrying in 30s..."
               sleep 30

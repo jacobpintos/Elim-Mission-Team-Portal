@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from '@/lib/firebase'
+import { auth, db, storage } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
 import type { SecurityReport } from '@/types/security'
 import type { ReportPhoto } from '@/features/security/ReportFormModal'
@@ -96,8 +96,14 @@ export const useSecurityStore = create<SecurityStore>((set, get) => ({
     if (photo) {
       const storageRef = ref(storage, `securityReports/${id}/photo`)
       // The Storage rule requires an image/* content type, which a Blob read
-      // off a native file:// URI does not reliably carry.
-      await uploadBytes(storageRef, photo.blob, { contentType: photo.contentType })
+      // off a native file:// URI does not reliably carry. It says whose it
+      // is, too: only they, security and the admins may ask for its address
+      // (storage.rules securityReports), which is asked for next.
+      const me = auth.currentUser?.uid
+      await uploadBytes(storageRef, photo.blob, {
+        contentType: photo.contentType,
+        ...(me ? { customMetadata: { uploadedBy: me } } : {}),
+      })
       photoURL = await getDownloadURL(storageRef)
     }
 

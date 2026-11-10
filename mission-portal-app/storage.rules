@@ -1,125 +1,159 @@
 rules_version = '2';
+// Last updated: 2026-11-10 — who may write, delete and read each folder goes
+// by their role, read from Firestore.
 service firebase.storage {
   match /b/{bucket}/o {
+    // Who someone is, is kept in Firestore: their roles in users/{uid}, who is
+    // in a conversation in rooms/{id}, who the Accountant is in config/main.
+    // These rules read them there (firestore.get), as firestore.rules does.
+    //
+    // They used to say they could not, and so asked only that someone be
+    // signed in: any account — a guest's, a public one — could overwrite or
+    // delete an announcement's photo, an event's cover or a set list's
+    // track, replace the app's logo, and read a security report's photo or
+    // anyone's receipt by its path.
+    //
+    // Reading Firestore from here needs the project's Storage service agent
+    // to hold the role "Firebase Rules Firestore Service Agent". Without it
+    // every rule below that reads a role refuses everyone, so the deploy
+    // checks for it first, and stops if it isn't there
+    // (.github/workflows/deploy-firebase.yml; README, Deploying).
+    //
+    // A picture's download address (getDownloadURL) carries its own key: once
+    // someone has been given one — in an event, an announcement, a message —
+    // it opens without these rules being asked. `read` below is who may ask
+    // for that address, or list a folder.
+    function signedIn() { return request.auth != null; }
+    function roles() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles;
+    }
+    function isAdmin() { return signedIn() && roles().hasAny(['admin']); }
+    function isWorshipOrAdmin() { return signedIn() && roles().hasAny(['admin', 'worship']); }
+    function isSecurityOrAdmin() { return signedIn() && roles().hasAny(['admin', 'security']); }
+    // Who reads set lists and chord sheets (firestore.rules chordSheets).
+    function readsWorship() {
+      return signedIn() && roles().hasAny(['admin', 'worship', 'guest']);
+    }
+    // Any account but a public one: who an event's travel details are for.
+    function onTheTeamOrAGuest() {
+      return signedIn() &&
+        roles().hasAny(['admin', 'security', 'regular', 'intern', 'worship', 'guest']);
+    }
+    function room(roomId) {
+      return firestore.get(/databases/(default)/documents/rooms/$(roomId)).data;
+    }
+    function inRoom(roomId) {
+      return signedIn() && room(roomId).members.hasAny([request.auth.uid]);
+    }
+    // A conversation someone in it reported: the admins may read it until
+    // one of them clears the report (firestore.rules rooms).
+    function reportedRoom(roomId) {
+      return isAdmin() && room(roomId).get('reported', false) == true;
+    }
+    // Who answers reimbursement requests (Admin → Leadership Team).
+    function isAccountant() {
+      return signedIn() &&
+        firestore.get(/databases/(default)/documents/config/main).data
+          .connectConfig.accountant == request.auth.uid;
+    }
+    function imageUnder(megabytes) {
+      return request.resource.size < megabytes * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+    // Nothing there yet. `create` means that already; said outright where a
+    // file must never be written over, because the emulator the rules are
+    // tested against asks `create` of a file that is.
+    function isNew() { return resource == null; }
+
     // Users can read and write their own avatar
     match /avatars/{uid} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == uid
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid && imageUnder(5);
     }
 
     // App logo — public read so the login screen loads without auth;
-    // only admins may write.
+    // only admins may write (Admin → Theme), or remove the one it replaced.
     match /logos/{file} {
       allow read: if true;
-      allow write: if request.auth != null
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow create, update: if isAdmin() && imageUnder(5);
+      allow delete: if isAdmin();
     }
 
-    // Chat image attachments, written by messages/[threadId].tsx. Without this
-    // rule Storage denied every upload by default, so image attachments never
-    // worked at all.
-    //
-    // Storage rules cannot read Firestore, so room membership cannot be checked
-    // here; any signed-in user can read, matching how avatars already work.
-    // Delete is allowed so an admin can purge a reported image from the
-    // moderation queue — the Firestore rules are what gate who sees a room.
-    // A group chat's cover photo (features/messages/roomCover): as an
-    // attachment is, the Firestore rules gating who puts it on the chat.
+    // A group chat's cover photo (features/messages/roomCover): put there by
+    // anyone in the chat, and read by them.
     match /rooms/{roomId}/cover/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow read: if inRoom(roomId) || reportedRoom(roomId);
+      allow create, update: if inRoom(roomId) && imageUnder(10);
+      allow delete: if isAdmin();
     }
 
+    // Chat image attachments, written by messages/[threadId].tsx: by someone
+    // in the conversation, each under a name of its own, never over another.
+    // Read by those in it — and by the admins while it is reported, as its
+    // messages are. An admin removes a reported image (Moderation).
     match /rooms/{roomId}/attachments/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      allow read: if inRoom(roomId) || reportedRoom(roomId);
+      allow create: if isNew() && inRoom(roomId) && imageUnder(10);
+      allow delete: if isAdmin();
     }
 
     // Photos and videos on announcements, written by the announce composer:
     // a photo up to 10 MB, a video up to 100 MB (src/lib/announcementUpload).
+    // Admins post announcements (firestore.rules announcements), so admins
+    // put their pictures up and take them down.
     //
-    // Read is open to any signed-in user because an announcement's audience
-    // lives in Firestore and Storage rules cannot see it — the same limit the
-    // chat attachments above run into. Firestore is what gates who sees the
-    // announcement the photo belongs to.
-    //
-    // Delete is allowed so removing a photo, or an expiring announcement,
-    // takes the file with it rather than orphaning it in the bucket.
+    // Read is open to any signed-in user: an announcement's audience can be
+    // everyone, public followers too.
     match /announcements/{announcementId}/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && ((request.resource.size < 10 * 1024 * 1024
-             && request.resource.contentType.matches('image/.*'))
+      allow read: if signedIn();
+      allow create, update: if isAdmin()
+        && (imageUnder(10)
           || (request.resource.size <= 100 * 1024 * 1024
              && request.resource.contentType.matches('video/.*')));
-      allow delete: if request.auth != null;
+      allow delete: if isAdmin();
     }
 
     // Photos in a public album, written by the gallery's Upload button. Each
     // picture stores two files: the photo and a _thumb.jpg for the grid.
-    //
-    // Read is any signed-in user, matching the rules around it — the (app)
-    // group redirects to login, so even the public-facing tabs sit behind it.
-    // Write cannot be narrowed to admins, because Storage rules cannot read
-    // Firestore to check a role; the Firestore rule on photoAlbums is what
-    // decides who can actually put a photo in an album.
+    // Admins keep the albums (firestore.rules photoAlbums); everyone signed
+    // in looks at them.
     match /photoAlbums/{albumId}/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && imageUnder(10);
+      allow delete: if isAdmin();
     }
 
     // Pictures placed on a builder page — hero backgrounds, image blocks,
-    // galleries — written by the block editors.
+    // galleries — an event's cover and the store's, written by the editors,
+    // which are the admins' (firestore.rules config/main, events).
     //
     // Read is any signed-in user, which is everyone who can reach these pages
     // at all: the (app) group redirects to login without a profile, so even
     // the public-facing tabs are behind sign-in.
-    //
-    // Write cannot be narrowed to admins here, because Storage rules cannot
-    // read Firestore to check a role — the same limit the rules above run
-    // into. What actually gates authorship is the Firestore rule on
-    // config/main, without which an uploaded file is a file nobody can put on
-    // a page.
     match /pages/{pageKey}/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      allow read: if signedIn();
+      allow create, update: if isAdmin() && imageUnder(10);
+      allow delete: if isAdmin();
     }
 
     // Pictures attached to a flight leg or a hotel — boarding passes,
     // itineraries, booking confirmations — written by the event form's flight
-    // and lodging editors, and read by readTravelImage to fill the form in.
+    // and lodging editors, which are the admins', and read by readTravelImage
+    // (as the server, which these rules don't apply to) to fill the form in.
     // Keyed by the entry's id, because a new event has no id until it is saved
     // and the picture is chosen before that.
     //
-    // Read is any signed-in user, matching the rules above; the Firestore rule
-    // on events is what decides who sees the entry holding the address.
+    // Never a public account's to ask for: an event's travel details are for
+    // those on it (firestore.rules eventPrivate).
     match /eventFlights/{entryId}/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      allow read: if onTheTeamOrAGuest();
+      allow create, update: if isAdmin() && imageUnder(10);
+      allow delete: if isAdmin();
     }
     match /eventLodging/{entryId}/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      allow read: if onTheTeamOrAGuest();
+      allow create, update: if isAdmin() && imageUnder(10);
+      allow delete: if isAdmin();
     }
 
     // Reference tracks attached to a set list's songs, written by the set
@@ -128,51 +162,66 @@ service firebase.storage {
     // list is the audioPath stored on the song, which is also what
     // onSetListDeleted reads to clean up.
     //
-    // Read is any signed-in user, matching every rule above — Firestore's rule
-    // on setLists is what decides who can see the set list the track belongs
-    // to, and Storage rules cannot read Firestore to check a role.
+    // Kept by the worship team and admins, who keep the set lists, and read
+    // by them and by guests, as chord sheets are.
     //
     // 20 MB rather than the 10 MB the image paths allow: a full-length worship
     // track does not fit in 10 MB.
     match /setListAudio/{songId}/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow read: if readsWorship();
+      allow create, update: if isWorshipOrAdmin()
         && request.resource.size < 20 * 1024 * 1024
         && request.resource.contentType.matches('audio/.*');
-      allow delete: if request.auth != null;
+      allow delete: if isWorshipOrAdmin();
     }
 
     // Photos attached to security incident reports, written by
-    // securityStore.createReport(). Same problem as above — previously denied.
+    // securityStore.createReport(): by anyone signed in, as a report is, once
+    // — never over the photo a report already has.
+    //
+    // Read by security and the admins, who answer reports — and by whoever
+    // put it there, who asks for its address straight after to put on the
+    // report: the app says who that is (`uploadedBy`, only ever themselves).
+    // An app from before doesn't say, so a photo that names no one may be
+    // asked for by anyone signed in for its first two minutes, which is when
+    // that app asks; once every phone has the update, that clause can go.
+    //
     // dailyCleanup removes these with the Admin SDK when a report's retention
     // expires, which bypasses these rules.
     match /securityReports/{reportId}/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+      function namesNoOne() {
+        return resource.metadata == null || !('uploadedBy' in resource.metadata);
+      }
+      allow get: if isSecurityOrAdmin()
+        || (signedIn() && !namesNoOne() && resource.metadata.uploadedBy == request.auth.uid)
+        || (signedIn() && namesNoOne()
+            && request.time < resource.timeCreated + duration.value(2, 'm'));
+      allow list: if isSecurityOrAdmin();
+      allow create: if isNew() && signedIn() && imageUnder(10)
+        && (request.resource.metadata == null
+            || !('uploadedBy' in request.resource.metadata)
+            || request.resource.metadata.uploadedBy == request.auth.uid);
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     // Receipt photos for a reimbursement request, each in the folder of the
     // person who paid. Only they may put one there, which is what lets
     // submitReimbursement trust a path in their folder to be their receipt.
     //
-    // Storage rules here do not read Firestore, so the Accountant cannot be
-    // named. Reading one file is open to signed-in users, as with every path
-    // above; listing a folder is not, so a receipt is reached only through the
-    // request that names it — and that request is readable only by the person
-    // who asked and the Accountant.
+    // Looked at by them and by the Accountant, whom the request goes to
+    // (src/lib/receiptUpload receiptUrl) — no one else, as the request itself
+    // is (firestore.rules reimbursements). Only they may list their folder.
     match /reimbursements/{uid}/{file} {
-      allow get: if request.auth != null;
-      allow list: if request.auth != null && request.auth.uid == uid;
+      allow get: if signedIn() && (request.auth.uid == uid || isAccountant());
+      allow list: if signedIn() && request.auth.uid == uid;
       // Photos of receipts, and invoices, which often arrive as PDFs.
-      allow create: if request.auth != null && request.auth.uid == uid
+      allow create: if isNew() && signedIn() && request.auth.uid == uid
         && request.resource.size < 10 * 1024 * 1024
         && (request.resource.contentType.matches('image/.*')
             || request.resource.contentType == 'application/pdf');
       allow update: if false;
-      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow delete: if signedIn() && request.auth.uid == uid;
     }
   }
 }

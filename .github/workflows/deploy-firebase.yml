@@ -160,12 +160,69 @@ jobs:
           )
         run: npx firebase-tools deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }}
 
-      # Storage rules, on the same terms as the Firestore rules above. Without
-      # this step a new upload folder (eventFlights/, eventLodging/) stayed
-      # denied until someone remembered to deploy the rules by hand.
-      - name: Deploy Storage Rules
+      # The Storage rules read each person's roles from Firestore
+      # (storage.rules). That works only while the project's Storage service
+      # agent holds the role "Firebase Rules Firestore Service Agent". Without
+      # it, every rule that reads a role refuses everyone: no photo, cover or
+      # track could be put up or taken down, anywhere in the app. The Firebase
+      # CLI offers to grant it when someone deploys by hand, and says nothing
+      # here. So it is looked for first, granted if this deploy's account is
+      # allowed to, and the rules are held back, with why, if it isn't there:
+      # the rules already deployed stay, and the app goes on working.
+      #
+      # If this deploy's account can't read the project's access list at all,
+      # the check can't see a grant made by hand either: then set the
+      # repository variable STORAGE_RULES_READ_FIRESTORE to "granted" once it
+      # is (README: Deploying).
+      - name: Let Storage rules read roles from Firestore
+        id: storage_reads_firestore
         if: |
           !cancelled() && (
+            (github.event_name == 'workflow_dispatch' && inputs.deploy_storage_rules == true) ||
+            (github.event_name == 'push' && steps.changed.outputs.storage != '0')
+          )
+        env:
+          PROJECT: ${{ secrets.FIREBASE_PROJECT_ID }}
+          CONFIRMED: ${{ vars.STORAGE_RULES_READ_FIRESTORE }}
+        run: |
+          if [ "$CONFIRMED" = granted ]; then
+            echo "Confirmed by hand (STORAGE_RULES_READ_FIRESTORE)."
+            exit 0
+          fi
+          ROLE=roles/firebaserules.firestoreServiceAgent
+          # The project's number: asked for, or as the app's own settings have it.
+          NUMBER=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)' 2>/dev/null || true)
+          if [ -z "$NUMBER" ]; then
+            NUMBER=$(node -p "require('./mission-portal-app/eas.json').build.production.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID")
+          fi
+          MEMBER="serviceAccount:service-${NUMBER}@gcp-sa-firebasestorage.iam.gserviceaccount.com"
+          granted() {
+            gcloud projects get-iam-policy "$PROJECT" --format=json 2>/dev/null \
+              | jq -e --arg role "$ROLE" --arg member "$MEMBER" \
+                  'any(.bindings[]?; .role == $role and (.members | index($member) != null))' \
+                  >/dev/null 2>&1
+          }
+          if granted; then
+            echo "The Storage service agent may read Firestore for the rules."
+            exit 0
+          fi
+          echo "Not granted yet: trying to grant it."
+          gcloud projects add-iam-policy-binding "$PROJECT" \
+            --member="$MEMBER" --role="$ROLE" --condition=None --quiet >/dev/null 2>&1 || true
+          if granted; then
+            echo "Granted."
+            exit 0
+          fi
+          echo "::error::The Storage rules were NOT deployed. They read roles from Firestore, which needs a one-time grant this deploy could not see or make. The rules from before are still in place. See README: Deploying, 'Storage rules and Firestore'."
+          exit 1
+
+      # Storage rules, on the same terms as the Firestore rules above. Without
+      # this step a new upload folder (eventFlights/, eventLodging/) stayed
+      # denied until someone remembered to deploy the rules by hand. Only once
+      # the step above has found that they will be able to read Firestore.
+      - name: Deploy Storage Rules
+        if: |
+          !cancelled() && steps.storage_reads_firestore.outcome == 'success' && (
             (github.event_name == 'workflow_dispatch' && inputs.deploy_storage_rules == true) ||
             (github.event_name == 'push' && steps.changed.outputs.storage != '0')
           )
