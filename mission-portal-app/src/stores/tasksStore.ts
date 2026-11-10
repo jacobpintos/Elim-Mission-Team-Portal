@@ -194,11 +194,23 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     set((s) => ({
       tasks: s.tasks.map((t) => (sameId(t.id, id) ? { ...t, status } : t)),
     }))
-    const extra = status === 'done' ? { doneAt: serverTimestamp() } : {}
-    await updateDoc(doc(db, 'tasks', String(id)), {
-      status,
-      ...extra,
-      _updatedAt: serverTimestamp(),
-    })
+    // Who finished it, with when: whoever made the task is told it's done,
+    // unless that was them (functions: push/recordTellings taskTellings).
+    const me = useAuthStore.getState().profile?.uid
+    const write = (doneBy: object) =>
+      updateDoc(doc(db, 'tasks', String(id)), {
+        status,
+        ...(status === 'done' ? { doneAt: serverTimestamp(), ...doneBy } : {}),
+        _updatedAt: serverTimestamp(),
+      })
+    try {
+      await write(status === 'done' && me ? { doneBy: String(me) } : {})
+    } catch (err) {
+      // The database's rules from before `doneBy` refuse it from anyone but
+      // an admin: for the minutes between the app updating and the rules,
+      // it is written without.
+      if (status !== 'done' || (err as { code?: string }).code !== 'permission-denied') throw err
+      await write({})
+    }
   },
 }))

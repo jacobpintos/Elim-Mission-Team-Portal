@@ -1014,6 +1014,29 @@ describe('tasks', () => {
     )
   })
 
+  it('lets them say who finished it — themselves — and nobody else', async () => {
+    // tasksStore.setStatus writes doneBy with 'done': the server tells whoever
+    // made the task it's done, unless that was them (functions: taskTellings).
+    await assertFails(
+      updateDoc(doc(as(MEMBER), 'tasks/t1'), {
+        status: 'done',
+        doneAt: serverTimestamp(),
+        doneBy: ADMIN,
+        _updatedAt: serverTimestamp(),
+      })
+    )
+    await assertSucceeds(
+      updateDoc(doc(as(MEMBER), 'tasks/t1'), {
+        status: 'done',
+        doneAt: serverTimestamp(),
+        doneBy: MEMBER,
+        _updatedAt: serverTimestamp(),
+      })
+    )
+    // Moved again later, who finished it is left as it was.
+    await assertSucceeds(updateDoc(doc(as(MEMBER), 'tasks/t1'), { status: 'pending' }))
+  })
+
   it("refuses a member moving a task that isn't theirs", async () => {
     // It used to be allowed for any member, on any task.
     await assertFails(updateDoc(doc(as(OUTSIDER), 'tasks/t1'), { status: 'done' }))

@@ -9,8 +9,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
-import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { db } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
 import { sameId } from '@/lib/ids'
 import { typedDateToIso } from '@/lib/eventDates'
@@ -152,23 +151,8 @@ export const useKaizenStore = create<KaizenStore>((set, get) => ({
       updatedAt: serverTimestamp(),
     })
 
-    // Notify everyone who just picked up work from this action plan.
-    const sendNotif = httpsCallable(functions, 'sendNotification')
-    for (const t of tasksWithIds) {
-      sendNotif({
-        uid: String(t.assignee),
-        type: 'newAssignment',
-        data: { taskTitle: `[Kaizen] ${t.description}`, taskId: String(t.taskId) },
-      }).catch(() => {})
-    }
-    sendNotif({
-      uid: String(plan.verifierId),
-      type: 'newAssignment',
-      data: {
-        taskTitle: `[Kaizen] Verify: ${card.title}`,
-        taskId: String(verificationTaskId),
-      },
-    }).catch(() => {})
+    // Everyone who just picked up work from this plan is told by the server,
+    // as each task is made (functions: push/recordNotifications onTaskWritten).
   },
 
   submitVerification: async (id, result, taskId) => {

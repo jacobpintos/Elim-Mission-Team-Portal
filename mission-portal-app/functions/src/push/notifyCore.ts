@@ -186,7 +186,10 @@ export function inAppMessage(type: NotificationType, data: Record<string, unknow
     case 'issueSubmission':
       return `New issue submitted: ${data.title ?? ''}`
     case 'eventHealthBehind':
-      return `${data.eventTitle ?? 'An event'} has fallen behind schedule`
+      // A task marked behind names the task: it may be on no event at all.
+      return data.eventTitle || !data.taskTitle
+        ? `${data.eventTitle ?? 'An event'} has fallen behind schedule`
+        : `A task has fallen behind schedule: ${data.taskTitle}`
     case 'chatFlagged':
       return data.roomName
         ? `Chat "${data.roomName}" was reported for review`

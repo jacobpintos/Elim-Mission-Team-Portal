@@ -3,6 +3,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 import {
+  SETTLED_QUIETLY,
   eventReaders,
   eventSeenBy,
   mergeEvent,
@@ -62,7 +63,10 @@ const unsettled = (open: Doc, closed: Doc | undefined, groups: Group[]) => {
 export async function settleEvent(
   db: admin.firestore.Firestore,
   id: string,
-  groups?: Group[]
+  groups?: Group[],
+  // Put right because a group's members changed, or by the sweep: nobody is
+  // told they were put on the event or taken off it (push/recordNotifications).
+  { quiet = false }: { quiet?: boolean } = {}
 ): Promise<boolean> {
   const everyGroup = groups ?? (await readGroups(db))
   const openRef = db.doc(`events/${id}`)
@@ -75,7 +79,17 @@ export async function settleEvent(
     const s = settling(open, c.exists ? c.data() : undefined, everyGroup)
     if (s.accessRight && s.seenRight && !s.cleared.length) return null
     if (!s.accessRight || Object.keys(s.moved).length) {
-      tx.set(closedRef, { ...s.moved, access: s.access }, { merge: true })
+      tx.set(
+        closedRef,
+        {
+          ...s.moved,
+          access: s.access,
+          ...(quiet && !s.accessRight
+            ? { [SETTLED_QUIETLY]: admin.firestore.FieldValue.increment(1) }
+            : {}),
+        },
+        { merge: true }
+      )
     }
     const fields: [admin.firestore.FieldPath, unknown][] = [
       ...s.cleared.map(
@@ -189,7 +203,7 @@ export const settleGroupAccess = onDocumentWritten('groups/{groupId}', async (ev
       overrides?: Record<string, { groups?: unknown[] }>
     }
     if (!onIt(ev) && !Object.values(ev.overrides ?? {}).some(onIt)) continue
-    await settleEvent(db, d.id, groups)
+    await settleEvent(db, d.id, groups, { quiet: true })
     // Someone new to the group may have dates blocked off on its events.
     if (blocks.length) await blocksOn(db, d.id, { blocks })
   }
@@ -269,7 +283,7 @@ export async function settleAll(
   for (const d of events.docs) {
     if (!unsettled(d.data(), privateOf.get(d.id), groups)) continue
     try {
-      if (await settleEvent(db, d.id, groups)) settled++
+      if (await settleEvent(db, d.id, groups, { quiet: true })) settled++
     } catch (err) {
       logger.error('settleAll: failed', { id: d.id, err })
     }

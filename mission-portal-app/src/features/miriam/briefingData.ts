@@ -543,27 +543,16 @@ async function noAnswer(ev: EventInstance, groups: Group[]): Promise<string[]> {
   return [...assignedTo(ev, groups)].filter((u) => !effectiveResponse(ev, u, instance, series))
 }
 
-/** Those who haven't answered, asked to: a push each (functions: availabilityNudge). */
+/**
+ * Those who haven't answered, asked to: a push each, sent by the server,
+ * which checks the asker is an admin and each of them is on the event, and
+ * names the event and the day itself (functions: push/availabilityNudge).
+ */
 export async function remindToAnswer(item: NonNullable<AttentionItem['remind']>) {
-  const send = httpsCallable(functions, 'sendNotification')
-  const date = new Date(`${item.eventDate}T12:00:00`).toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
-  })
-  await Promise.all(
-    item.uids.map((uid) =>
-      send({
-        uid,
-        type: 'availabilityNudge',
-        data: {
-          eventTitle: item.eventTitle,
-          eventDate: date,
-          link: miriamHref({ kind: 'event', key: item.eventKey, section: 'availability' }),
-        },
-      }).catch(() => {})
-    )
-  )
+  await httpsCallable(
+    functions,
+    'nudgeAvailability'
+  )({ eventKey: item.eventKey, uids: item.uids }).catch(() => {})
 }
 
 /** Food sign-ups looked at, a week ahead. */

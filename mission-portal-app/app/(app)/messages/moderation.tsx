@@ -25,32 +25,13 @@ function resolution(status: 'actioned' | 'dismissed', adminUid: string) {
   return { status, resolvedBy: adminUid, resolvedAt: Date.now() }
 }
 
-/**
- * Tell the reporter their report was dealt with, without saying how.
- *
- * Deliberately identical for every outcome. What happened to another user —
- * whether they were warned, had a message removed, or nothing was done — is
- * that user's business, and revealing it invites retaliation between people who
- * are on the same team. The reporter only needs to know it was not ignored.
- */
-async function notifyReporterResolved(report: ContentReport) {
-  if (!report.reporterUid) return
-  try {
-    const sendNotif = httpsCallable(functions, 'sendNotification')
-    await sendNotif({
-      uid: String(report.reporterUid),
-      type: 'announcement',
-      data: {
-        title: 'Your report has been reviewed',
-        link: '/(app)/messages',
-        body: 'Thank you for reporting. We reviewed the message and have taken any action we judged necessary. We do not share what was decided about another member.',
-      },
-    })
-  } catch {
-    // A failed courtesy notification must not roll back the moderation action
-    // that already succeeded.
-  }
-}
+// The reporter is told their report was dealt with, without saying how, by
+// the server, as the report is marked (functions: push/recordNotifications
+// onContentReportResolved). Deliberately identical for every outcome: what
+// happened to another user — whether they were warned, had a message removed,
+// or nothing was done — is that user's business, and revealing it invites
+// retaliation between people who are on the same team. The reporter only
+// needs to know it was not ignored.
 
 export default function AdminModeration() {
   const colors = useThemeColors()
@@ -137,16 +118,9 @@ export default function AdminModeration() {
     if (!ok) return
     setBusy(report.id)
     try {
-      const sendNotif = httpsCallable(functions, 'sendNotification')
-      await sendNotif({
-        uid: String(report.authorUid),
-        type: 'announcement',
-        data: {
-          title: 'Warning from the Mission Portal team',
-          link: '/(app)/messages',
-          body: `A message you sent was reported for "${report.reason}" and breaks the Terms of Use. Please review them. Repeated breaches can get your account removed.`,
-        },
-      })
+      // Sent by the server, which checks an admin is asking and reads who
+      // wrote the message from the report (functions: moderation/warnAuthor).
+      await httpsCallable(functions, 'warnReportedAuthor')({ reportId: report.id })
       await audit(
         'moderation.userWarned',
         `Warned ${name} over a reported message (${report.reason})`,
@@ -178,7 +152,6 @@ export default function AdminModeration() {
         doc(db, 'contentReports', report.id),
         resolution('actioned', profile?.uid ?? '')
       )
-      await notifyReporterResolved(report)
       await audit(
         'moderation.userRemoved',
         `Deleted ${name}'s account over a reported message (${report.reason})`,
@@ -196,7 +169,6 @@ export default function AdminModeration() {
     setBusy(report.id)
     try {
       await updateDoc(doc(db, 'contentReports', report.id), resolution(status, profile?.uid ?? ''))
-      await notifyReporterResolved(report)
       await audit(
         `moderation.${status}`,
         `Report on message by ${nameFor(report.authorUid)} marked ${status}`,
@@ -231,7 +203,6 @@ export default function AdminModeration() {
         doc(db, 'contentReports', report.id),
         resolution('actioned', profile?.uid ?? '')
       )
-      await notifyReporterResolved(report)
       await audit(
         'moderation.messageRemoved',
         `Removed reported message by ${nameFor(report.authorUid)}`,

@@ -6,9 +6,8 @@ import { useThemeColors } from '@/theme/useThemeColors'
 import { confirmAsync } from '@/lib/confirm'
 import { localToday } from '@/lib/events'
 import { FD } from '@/lib/format'
-import { effectiveAvail } from '@/lib/availability'
 import { useBlockedDatesStore } from '@/stores/blockedDatesStore'
-import { notifyAssignedAdmins, useEventsStore } from '@/stores/eventsStore'
+import { useEventsStore } from '@/stores/eventsStore'
 import { useUIStore } from '@/stores/uiStore'
 import {
   blockCovers,
@@ -87,7 +86,6 @@ export function BlockDatesSheet({
 
   /** Your events in the days picked, and what you'd said for each. */
   const myInstances = useEventsStore((s) => s.myInstances)
-  const avail = useEventsStore((s) => s.avail)
   const affected = useMemo(
     () => (from && to ? myInstances(uid, from, to).filter((ev) => ev.unpublished !== true) : []),
     [from, to, uid, myInstances]
@@ -109,13 +107,10 @@ export function BlockDatesSheet({
     if (problem) return toast(problem, 'error')
     setSaving(true)
     try {
+      // Admins on those events hear of it, as they would of an answer given
+      // by hand: from the server, as it answers for them (functions:
+      // push/recordNotifications onAvailWritten).
       await add(uid, from, to, reason)
-      // Admins on those events hear of it, as they would of an answer given by hand.
-      for (const ev of affected) {
-        if (effectiveAvail(avail, ev, uid)?.status !== 'no') {
-          notifyAssignedAdmins(ev, uid, 'no').catch(() => {})
-        }
-      }
       toast(
         `Blocked off ${blockSpan({ from, to })} — you’ll show as Not Available then.`,
         'success'

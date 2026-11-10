@@ -1,8 +1,7 @@
 import { create } from 'zustand'
 import { collection, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
-import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { db } from '@/lib/firebase'
 import { nextId } from '@/lib/counters'
 import { useTasksStore } from '@/stores/tasksStore'
 import type {
@@ -121,14 +120,7 @@ export const useIssuesStore = create<IssuesStore>((set, get) => ({
       updatedAt: serverTimestamp(),
     })
 
-    // Tell the assignee they now own a corrective action.
-    httpsCallable(
-      functions,
-      'sendNotification'
-    )({
-      uid: String(action.assignee),
-      type: 'issueAssigned',
-      data: { title: action.description, issueId: String(id), taskId: String(taskId) },
-    }).catch(() => {})
+    // The assignee is told they now own a corrective action by the server,
+    // as its task is made (functions: push/recordNotifications onTaskWritten).
   },
 }))

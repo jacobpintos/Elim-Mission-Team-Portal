@@ -46,12 +46,6 @@ import {
   type ExtraDayRow,
 } from '@/lib/eventDates'
 import { DateField } from '@/components/ui/DateField'
-import {
-  notifyAssignees,
-  notifyLogisticsAssigned,
-  notifyFoodSignupOpen,
-} from '@/lib/taskNotifications'
-import { newLogisticsAssignments } from '@/lib/guestItinerary'
 import { ADMINS } from '../../../functions/src/eventPrivate'
 import { useMiriamStore, type PendingEventForm } from '@/stores/miriamStore'
 import { byName, formLines, scheduleOf } from '@/lib/miriamFormFill'
@@ -701,7 +695,7 @@ export function EventFormModal({
       if (!taskItem.title.trim()) continue
       const isPostEvent = (taskItem.daysAfterEvent ?? 0) > 0
       const dueDate = taskDueDate(eventDate, taskItem)
-      const newTaskId = await createTask({
+      await createTask({
         title: taskItem.title,
         assignees: taskItem.assignees ?? [],
         lead: (taskItem.assignees ?? [])[0] ?? null,
@@ -712,11 +706,8 @@ export function EventFormModal({
         dueDate,
         ...(isPostEvent ? { isPostEvent: true } : {}),
       })
-      // Tasks spawned from a template notify their assignees the same
-      // way a hand-assigned task does. This was the gap that made
-      // assigning yourself a task through an event silently produce
-      // nothing.
-      notifyAssignees(taskItem.assignees ?? [], taskItem.title, newTaskId)
+      // Its assignees are told by the server, as every task's are
+      // (functions: push/recordNotifications onTaskWritten).
     }
   }
 
@@ -826,22 +817,12 @@ export function EventFormModal({
       } else if (event) {
         await updateEvent(event.id, payload)
         await persistFoodAssignments(String(event.id), event.date ?? formIso(form.date))
-        // Only what changed — an event is saved many times and re-announcing
-        // every hotel room each save would train people to ignore these. A
-        // draft tells no one; published, it tells everyone, and gets its
-        // template's tasks (a draft from before held them already).
+        // Those given a flight, a room or a seat since the last save are told
+        // by the server (functions: push/recordNotifications
+        // onEventPrivateWritten): only what changed, since an event is saved
+        // many times. A draft tells no one; published, it tells everyone, and
+        // gets its template's tasks (a draft from before held them already).
         const publishing = wasDraft && !saveAsDraft
-        if (!saveAsDraft) {
-          notifyLogisticsAssigned(
-            newLogisticsAssignments(publishing ? null : event, {
-              lodgingEntries,
-              flightEntries,
-              carpoolCars: form.carpoolCars,
-            }),
-            form.title,
-            instanceKey ?? String(event.id)
-          )
-        }
         if (publishing && !(await hasTasks(event.id))) await spawnTemplateTasks(event.id)
         await auditEventSave(
           saveAsDraft ? 'draftSaved' : wasDraft ? 'published' : 'updated',
@@ -853,18 +834,7 @@ export function EventFormModal({
         const newEventId = await createEvent(payload)
         // A draft is its maker's alone: nobody is told of it, nor given its
         // tasks, until it is published.
-        if (!saveAsDraft) {
-          notifyLogisticsAssigned(
-            newLogisticsAssignments(null, {
-              lodgingEntries,
-              flightEntries,
-              carpoolCars: form.carpoolCars,
-            }),
-            form.title,
-            String(newEventId)
-          )
-          if (newEventId) await spawnTemplateTasks(newEventId)
-        }
+        if (!saveAsDraft && newEventId) await spawnTemplateTasks(newEventId)
         await auditEventSave(saveAsDraft ? 'draftCreated' : 'created', form.title, newEventId)
         toast(saveAsDraft ? 'Draft saved' : 'Event created', 'success')
         savedAs = newEventId ? String(newEventId) : ''

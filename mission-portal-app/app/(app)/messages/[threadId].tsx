@@ -28,8 +28,7 @@ import { confirmAsync } from '@/lib/confirm'
 import { roomKind, roomTitle } from '@/lib/rooms'
 import { updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
-import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { db } from '@/lib/firebase'
 import { RoomAvatar } from '@/features/messages/RoomAvatar'
 import { pickCover, setRoomCover } from '@/features/messages/roomCover'
 import type { Message, MessageAttachment, Room } from '@/types/events'
@@ -181,17 +180,8 @@ export default function ThreadScreen() {
         reviewers: arrayUnion(uid),
         reported: true,
       })
-      // The admins told it needs review.
-      const sendNotif = httpsCallable(functions, 'sendNotification')
-      users
-        .filter((u) => u.roles?.includes('admin') && !sameId(u.uid, uid))
-        .forEach((u) => {
-          sendNotif({
-            uid: String(u.uid),
-            type: 'chatFlagged',
-            data: { roomName: dm ? '' : (room.name ?? ''), roomId: String(room.id) },
-          }).catch(() => {})
-        })
+      // The admins are told it needs review by the server
+      // (functions: push/recordNotifications onRoomReported).
       toast('Reported — the admins will review it', 'info')
     } catch {
       toast('Failed to report the conversation', 'error')

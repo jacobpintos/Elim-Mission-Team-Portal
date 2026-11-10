@@ -68,7 +68,7 @@ export function withoutPrivate<T extends Doc>(open: T): T {
  */
 export function mergeEvent<T extends Doc>(open: T, closed?: Doc | null): T {
   if (!closed) return open
-  const { overrides: _co, access: _access, ...top } = closed
+  const { overrides: _co, access: _access, [SETTLED_QUIETLY]: _quietly, ...top } = closed
   const merged: Doc = { ...open, ...top }
   const oo = overridesOf(open)
   const co = overridesOf(closed)
@@ -164,6 +164,17 @@ export function eventAccess(
 
 export const sameAccess = (a: unknown, b: string[]) =>
   Array.isArray(a) && a.length === b.length && a.every((x, i) => x === b[i])
+
+/**
+ * On a private record: counted up each time its `access` is put right
+ * without anyone having changed the event — a group's members changed, or
+ * the half-hourly sweep found it out of step (./eventPrivateSync). A change
+ * to `access` that comes with a change to this tells no one they were put on
+ * the event or taken off it (./push/recordNotifications): adding someone to
+ * a group would otherwise tell them of every event the group is on, one by
+ * one, and taking them out tell them of every one again.
+ */
+export const SETTLED_QUIETLY = 'settledQuietly'
 
 /** In `seenBy`: an event anyone signed in may see. */
 export const EVERYONE = '*'

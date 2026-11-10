@@ -5,8 +5,7 @@ import { YStack, XStack, Text } from 'tamagui'
 import { useState, useEffect, useMemo } from 'react'
 import { collection, query, where } from 'firebase/firestore'
 import { getDocs } from '@/lib/liveFirestore'
-import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { db } from '@/lib/firebase'
 import { canUseMiriam } from '@/lib/miriam'
 import { MiriamButton } from '@/features/miriam/MiriamButton'
 import { allInstances, todayStr } from '@/lib/events'
@@ -18,7 +17,7 @@ import { useWorshipStore } from '@/stores/worshipStore'
 import { useChordSheetsStore } from '@/stores/chordSheetsStore'
 import { useSecurityStore } from '@/stores/securityStore'
 import { useUIStore } from '@/stores/uiStore'
-import { visibleTabs, isSecurity, isPublic, hasRole, isWorship, isGuest } from '@/lib/roles'
+import { visibleTabs, isPublic, hasRole, isWorship, isGuest } from '@/lib/roles'
 import { useThemeColors } from '@/theme/useThemeColors'
 import { AppLogo } from '@/components/ui/AppLogo'
 import { ReportFormModal } from '@/features/security/ReportFormModal'
@@ -134,7 +133,7 @@ export default function AppLayout() {
   const [reportOpen, setReportOpen] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [hasPublicEventToday, setHasPublicEventToday] = useState(false)
-  const { subscribe: subUsers, unsubscribe: unsubUsers, users } = useUsersStore()
+  const { subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
   const { subscribe: subWorship, unsubscribe: unsubWorship } = useWorshipStore()
   const { subscribe: subChords, unsubscribe: unsubChords } = useChordSheetsStore()
   const { createReport } = useSecurityStore()
@@ -315,16 +314,6 @@ export default function AppLayout() {
 
   const showReportButton = !isPublic(profile) || hasPublicEventToday
 
-  // Security reports go to security users AND admins (deduped — a user with
-  // both roles should only be notified once).
-  const securityReportAudience = Array.from(
-    new Map(
-      users
-        .filter((u) => isSecurity(u) || u.roles?.includes('admin'))
-        .map((u) => [String(u.uid), u])
-    ).values()
-  )
-
   const handleReportSubmit = async (data: {
     description: string
     location: string
@@ -342,16 +331,8 @@ export default function AppLayout() {
         },
         data.photo
       )
-      const sendNotif = httpsCallable(functions, 'sendNotification')
-      securityReportAudience.forEach((u) => {
-        sendNotif({
-          uid: String(u.uid),
-          type: 'securityReport',
-          data: {
-            message: `🚨 New incident at ${data.location}: ${data.description.slice(0, 80)}${data.description.length > 80 ? '…' : ''}`,
-          },
-        }).catch(() => {})
-      })
+      // Security and the admins are told by the server, as it is filed
+      // (functions: push/securityNotifications onSecurityReportCreated).
       toast('Report submitted', 'success')
       setReportOpen(false)
     } catch {

@@ -7,7 +7,7 @@ import { YStack, XStack, Text, Input } from 'tamagui'
 import { router, useLocalSearchParams } from 'expo-router'
 import { collection } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
-import { db, functions } from '@/lib/firebase'
+import { db } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useEventsStore } from '@/stores/eventsStore'
@@ -23,13 +23,11 @@ import { TaskCard } from '@/components/ui/TaskCard'
 import { EventKanban } from '@/features/events/EventKanban'
 import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
 import { isAdmin, isPublic } from '@/lib/roles'
-import { notifyAssignees, notifyAdminsTaskBehind } from '@/lib/taskNotifications'
 import { isOverdue } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
 import { typedDateToIso } from '@/lib/eventDates'
 import { DateField } from '@/components/ui/DateField'
-import { httpsCallable } from 'firebase/functions'
 import { TASK_SECTIONS, type TaskTemplate } from '@/features/admin/TaskTemplateCard'
 import type { Task } from '@/types/events'
 import type { KaizenCard, KaizenVerificationResult } from '@/types/operations'
@@ -1354,17 +1352,10 @@ export default function Assignments() {
       return
     }
     try {
+      // Whoever made the task is told it's done by the server, unless that
+      // was them (functions: push/recordNotifications onTaskWritten).
       await tasksStore.completeTask(task.id)
       toast('Task completed!', 'success')
-      // Notify task creator if different from current user
-      if (task.by && !sameId(task.by, uid)) {
-        const sendNotif = httpsCallable(functions, 'sendNotification')
-        sendNotif({
-          uid: String(task.by),
-          type: 'taskComplete',
-          data: { taskId: String(task.id), taskTitle: task.title },
-        }).catch(() => {})
-      }
     } catch {
       toast('Failed to complete task', 'error')
     }
@@ -1381,9 +1372,7 @@ export default function Assignments() {
         status,
         projectedDate: storedDate,
       })
-      if (status === 'behind') {
-        notifyAdminsTaskBehind(allUsers, updateTaskItem.title, updateTaskItem.id)
-      }
+      // Marked behind, the admins are told by the server (functions: onTaskWritten).
       toast('Task updated', 'success')
       setUpdateTaskItem(null)
     } catch {
@@ -1493,7 +1482,8 @@ export default function Assignments() {
         }
         const groupUids = getMemberUids(taskItem.assigneeGroups ?? [])
         const allAssignees = [...new Set([...(taskItem.assignees ?? []), ...groupUids])]
-        const taskId = await createTask({
+        // Its assignees are told by the server (functions: onTaskWritten).
+        await createTask({
           title: taskItem.title,
           assignees: allAssignees,
           lead: allAssignees[0] ?? null,
@@ -1503,7 +1493,6 @@ export default function Assignments() {
           evDate: ev.date ?? null,
           dueDate,
         })
-        notifyAssignees(allAssignees, taskItem.title, taskId)
       }
       toast('Tasks spawned', 'success')
     } catch {
@@ -1861,7 +1850,8 @@ export default function Assignments() {
           onSubmit={async (title, assignees, lead, dueDate) => {
             // As typed — 11/4/26, 11/04/2026, 11/4 — to YYYY-MM-DD for storage.
             const storedDate = displayToIso(dueDate)
-            const taskId = await tasksStore.createTask({
+            // Its assignees are told by the server (functions: onTaskWritten).
+            await tasksStore.createTask({
               title,
               assignees,
               lead,
@@ -1869,7 +1859,6 @@ export default function Assignments() {
               status: 'pending',
               dueDate: storedDate,
             })
-            notifyAssignees(assignees, title, taskId)
             toast('Task assigned!', 'success')
             setShowCreateTask(false)
           }}

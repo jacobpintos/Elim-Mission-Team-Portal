@@ -19,16 +19,8 @@ import { ALL_ROLES } from '@/features/admin/RoleCheckboxes'
 import { useMiriamStore } from '@/stores/miriamStore'
 import { getDoc, getDocs } from '@/lib/liveFirestore'
 import { allInstances, localToday } from '@/lib/events'
-import { AVAIL_LABELS, effectiveAvail } from '@/lib/availability'
-import {
-  canBeMessaged,
-  isAdmin,
-  isGuest,
-  isPublic,
-  isSecurity,
-  isWorship,
-  visibleTabs,
-} from '@/lib/roles'
+import { AVAIL_LABELS } from '@/lib/availability'
+import { canBeMessaged, isAdmin, isGuest, isPublic, isWorship, visibleTabs } from '@/lib/roles'
 import { directWith } from '@/lib/rooms'
 import {
   notificationKeysFor,
@@ -66,8 +58,6 @@ import {
 import { closestTitles, parseSongRequest } from '@/lib/songRequest'
 import { matchContentByTitle } from '@/lib/contentMatch'
 import { keyLabel } from '@/lib/nashvilleNumbers'
-import { notifyAssignees, notifyLogisticsAssigned } from '@/lib/taskNotifications'
-import { newLogisticsAssignments } from '@/lib/guestItinerary'
 import {
   carName,
   childNames,
@@ -107,7 +97,7 @@ import { lastDayOf, saleEndsLabel } from '@/features/store/storeSale'
 import { endSale, postSale, updateSale } from '@/features/store/storeWrites'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useTasksStore } from '@/stores/tasksStore'
-import { notifyAssignedAdmins, resolveAssignedUids, useEventsStore } from '@/stores/eventsStore'
+import { resolveAssignedUids, useEventsStore } from '@/stores/eventsStore'
 import { rememberRide } from '@/lib/carpoolMemoryDb'
 import { fillCars, noRoomSaid } from './carpoolAuto'
 import { CUSTOM_ACTIONS } from '@/custom/miriam'
@@ -1052,7 +1042,6 @@ async function createTasks(profile: UserProfile, input: Record<string, unknown>)
           dueDate: t.dueDate,
           ...(t.event ? { evTemplateId: t.event.templateId, evDate: t.event.date } : {}),
         })
-        notifyAssignees(t.assignees, t.title, id)
         made.push(id)
       }
       return tasks.length === 1 ? 'Assigned.' : `Done — ${tasks.length} tasks assigned.`
@@ -1124,8 +1113,8 @@ async function updateTask(profile: UserProfile, input: Record<string, unknown>) 
     details,
     confirm: 'Save',
     run: async () => {
+      // Anyone it was newly given to is told by the server (functions: onTaskWritten).
       await useTasksStore.getState().updateTask(task.id, patch)
-      if (added.length) notifyAssignees(added, patch.title ?? task.title, task.id)
       return 'Saved.'
     },
     undo: async () => {
@@ -1243,15 +1232,9 @@ async function moveInCarpool(profile: UserProfile, input: Record<string, unknown
     ],
     confirm: 'Save',
     run: async () => {
+      // Those given a seat are told by the server, as the event form's are
+      // (functions: push/recordNotifications onEventPrivateWritten).
       await write(after)
-      // Told of a seat, as the event form tells them — only those given one.
-      if (inForm) {
-        notifyLogisticsAssigned(
-          newLogisticsAssignments({ carpoolCars: before }, { carpoolCars: after }),
-          ev.title,
-          ev.instanceKey
-        )
-      }
       return 'Done — the cars are updated.'
     },
     undo: async () => {
@@ -1586,21 +1569,8 @@ async function reportSecurity(profile: UserProfile, input: Record<string, unknow
         reportedBy: String(profile.uid),
         reporterName: profile.displayName ?? 'Unknown',
       })
-      // Security and admins, once each (app/(app)/_layout: securityReportAudience).
-      const send = httpsCallable(functions, 'sendNotification')
-      const audience = useUsersStore
-        .getState()
-        .users.filter((u) => isSecurity(u) || u.roles?.includes('admin'))
-      const short = description.length > 80 ? `${description.slice(0, 80)}…` : description
-      await Promise.all(
-        [...new Set(audience.map((u) => String(u.uid)))].map((uid) =>
-          send({
-            uid,
-            type: 'securityReport',
-            data: { message: `🚨 New incident at ${location}: ${short}` },
-          }).catch(() => {})
-        )
-      )
+      // Security and admins are told by the server, as it is filed
+      // (functions: push/securityNotifications onSecurityReportCreated).
       return 'Reported — security has been told.'
     },
   } satisfies Prepared
@@ -1671,7 +1641,6 @@ async function blockOffDays(profile: UserProfile, from: string, to: string, reas
     return cannot(`You already have ${blockSpan({ from, to })} blocked off.`)
   }
   const span = blockSpan({ from, to })
-  const { avail } = useEventsStore.getState()
   const mine = useEventsStore
     .getState()
     .myInstances(uid, from, to)
@@ -1691,12 +1660,9 @@ async function blockOffDays(profile: UserProfile, from: string, to: string, reas
     ],
     confirm: 'Block off',
     run: async () => {
+      // The admins on those events hear of it from the server, as it answers
+      // for them (functions: push/recordNotifications onAvailWritten).
       id = await useBlockedDatesStore.getState().add(uid, from, to, reason)
-      for (const ev of mine) {
-        if (effectiveAvail(avail, ev, uid)?.status !== 'no') {
-          notifyAssignedAdmins(ev, uid, 'no').catch(() => {})
-        }
-      }
       return `Done — ${span} is blocked off.`
     },
     undo: async () => {

@@ -23,15 +23,22 @@ export async function announceSetList(
   const templates = useEventsStore.getState().templates
   const worshipUsers = users.filter((u) => isWorship(u) && !u.roles?.includes('admin'))
 
-  // Notify all worship users
-  const sendNotif = httpsCallable(functions, 'sendNotification')
-  worshipUsers.forEach((u) => {
-    sendNotif({
-      uid: String(u.uid),
-      type: 'announcement',
-      data: { title: 'New Set List', body: data.title, link: '/(app)/worship' },
-    }).catch(() => {})
-  })
+  // Everyone on worship is told there is a new one, and anyone on a team
+  // whose NAME contains "worship" for its event that it was set for them
+  // (team-name-based, not role-based, so e.g. a "Worship Band" team member
+  // gets it even without the worship role). Told by the server: only it
+  // knows who is on worship, and the teams are in the event's private
+  // record, which whoever posts the set list may not be able to read
+  // (functions/src/notify: notifyWorshipTeams).
+  httpsCallable(
+    functions,
+    'notifyWorshipTeams'
+  )({
+    setListId: String(setListId),
+    // For a server not yet updated, which goes by these.
+    ...(data.eventTemplateId ? { eventTemplateId: String(data.eventTemplateId) } : {}),
+    setListTitle: data.title,
+  }).catch(() => {})
 
   // Create acknowledge tasks for worship users assigned to the linked event
   if (data.eventTemplateId) {
@@ -40,16 +47,6 @@ export async function announceSetList(
     const assignedWorshipUsers = evUsers.length
       ? worshipUsers.filter((wu) => evUsers.some((eu) => sameId(eu, wu.uid)))
       : []
-
-    // Anyone on a team whose NAME contains "worship" for this event (per spec
-    // team-name-based, not role-based, so e.g. a "Worship Band" team member
-    // gets it even without the worship role). Told by the server: the teams
-    // are in the event's private record, which whoever posts the set list
-    // may not be able to read (functions/src/notify: notifyWorshipTeams).
-    httpsCallable(
-      functions,
-      'notifyWorshipTeams'
-    )({ eventTemplateId: String(data.eventTemplateId), setListTitle: data.title }).catch(() => {})
 
     for (const wu of assignedWorshipUsers) {
       await useTasksStore.getState().createTask({

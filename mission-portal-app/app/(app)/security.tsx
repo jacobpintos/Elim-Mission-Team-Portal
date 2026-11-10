@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react'
 import { ScrollView, Pressable } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { Stack } from 'expo-router'
-import { httpsCallable } from 'firebase/functions'
-import { functions } from '@/lib/firebase'
 import { useAuthStore } from '@/stores/authStore'
 import { useSecurityStore } from '@/stores/securityStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -51,7 +49,7 @@ export default function SecurityScreen() {
     setOnMyWay,
     resolveReport,
   } = useSecurityStore()
-  const { users, subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
+  const { subscribe: subUsers, unsubscribe: unsubUsers } = useUsersStore()
 
   const [showForm, setShowForm] = useState(false)
   const [detailReport, setDetailReport] = useState<SecurityReport | null>(null)
@@ -76,8 +74,6 @@ export default function SecurityScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showArchive])
 
-  const securityUsers = users.filter((u) => isSecurity(u))
-
   const handleSubmit = async (data: {
     description: string
     location: string
@@ -96,20 +92,8 @@ export default function SecurityScreen() {
         data.photo
       )
 
-      // Notify all security and admin users
-      const sendNotif = httpsCallable(functions, 'sendNotification')
-      securityUsers.forEach((u) => {
-        sendNotif({
-          uid: String(u.uid),
-          type: 'announcement',
-          data: {
-            link: '/(app)/security',
-            title: '🚨 Security Report',
-            body: `New incident at ${data.location}: ${data.description.slice(0, 80)}${data.description.length > 80 ? '…' : ''}`,
-          },
-        }).catch(() => {})
-      })
-
+      // Security and the admins are told by the server, as it is filed
+      // (functions: push/securityNotifications onSecurityReportCreated).
       toast('Report submitted', 'success')
       setShowForm(false)
     } catch {
@@ -121,34 +105,8 @@ export default function SecurityScreen() {
     try {
       await setOnMyWay(report.id, uid, displayName)
 
-      // Notify security/admin team
-      const sendNotif = httpsCallable(functions, 'sendNotification')
-      securityUsers.forEach((u) => {
-        if (String(u.uid) === uid) return
-        sendNotif({
-          uid: String(u.uid),
-          type: 'announcement',
-          data: {
-            link: '/(app)/security',
-            title: '🚨 Responding to Incident',
-            body: `${displayName} is on the way to: ${report.location}`,
-          },
-        }).catch(() => {})
-      })
-
-      // Also notify the reporter (if not security themselves)
-      if (report.reportedBy && report.reportedBy !== uid) {
-        sendNotif({
-          uid: report.reportedBy,
-          type: 'announcement',
-          data: {
-            link: '/(app)/security',
-            title: '🚨 Help is on the way',
-            body: `${displayName} is heading to ${report.location}`,
-          },
-        }).catch(() => {})
-      }
-
+      // Security, the admins and whoever reported it are told by the server
+      // (functions: push/securityNotifications onSecurityReportUpdated).
       toast(`${displayName} is on the way`, 'success')
       setDetailReport(null)
     } catch {
@@ -160,32 +118,7 @@ export default function SecurityScreen() {
     try {
       await resolveReport(report.id, resolution)
 
-      // Notify security/admin and reporter
-      const sendNotif = httpsCallable(functions, 'sendNotification')
-      const body = `Incident at ${report.location} resolved. ${resolution.slice(0, 100)}${resolution.length > 100 ? '…' : ''}`
-      securityUsers.forEach((u) => {
-        sendNotif({
-          uid: String(u.uid),
-          type: 'announcement',
-          data: {
-            link: '/(app)/security',
-            title: '✓ Incident Resolved',
-            body,
-          },
-        }).catch(() => {})
-      })
-      if (report.reportedBy && !securityUsers.some((u) => String(u.uid) === report.reportedBy)) {
-        sendNotif({
-          uid: report.reportedBy,
-          type: 'announcement',
-          data: {
-            link: '/(app)/security',
-            title: '✓ Your report has been resolved',
-            body,
-          },
-        }).catch(() => {})
-      }
-
+      // Security, the admins and whoever reported it are told by the server.
       toast('Report resolved', 'success')
       setDetailReport(null)
       setShowArchive(true)

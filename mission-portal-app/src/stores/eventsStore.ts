@@ -13,16 +13,14 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { onSnapshot } from '@/lib/liveFirestore'
-import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { db } from '@/lib/firebase'
 import { geocodeCity } from '@/lib/geocode'
 import { allInstances, localToday } from '@/lib/events'
-import { availKey, seriesAvailKey, getSeriesAvail, AVAIL_LABELS } from '@/lib/availability'
+import { availKey, seriesAvailKey, getSeriesAvail } from '@/lib/availability'
 import { sameId } from '@/lib/ids'
 import { nextId } from '@/lib/counters'
 import { useAuthStore } from '@/stores/authStore'
 import { useGroupsStore } from '@/stores/groupsStore'
-import { useUsersStore } from '@/stores/usersStore'
 import { isAdmin, isPublic, isPublicFollower } from '@/lib/roles'
 import { readers, seers } from '@/lib/seenBy'
 import type { EventTemplate, EventInstance, AvailResponse, InAppNotif } from '@/types/events'
@@ -162,52 +160,6 @@ async function resolveGeo(city?: string, state?: string) {
   return { lat: coords.lat, lng: coords.lng, _geocodeLat: coords.lat, _geocodeLng: coords.lng }
 }
 
-// Fires whenever someone responds to an RSVP with anything other than
-// "Available" — including their FIRST response, not just a change from a
-// prior one. Routed through sendNotification (batched, rsvpNonAvailable) so
-// it respects prefs and the shared batching window, unlike the old
-// direct-to-notifs write this replaces.
-export async function notifyAssignedAdmins(
-  ev: EventInstance,
-  changerUid: string,
-  newStatus: AvailResponse['status']
-) {
-  if (newStatus === 'yes') return
-
-  const { users } = useUsersStore.getState()
-
-  const assignedUids = resolveAssignedUids(ev)
-
-  const changer = users.find((u) => sameId(u.uid, changerUid))
-  const changerName = changer?.displayName || changer?.email || changerUid
-
-  const adminsToNotify = users.filter(
-    (u) =>
-      u.roles?.includes('admin') &&
-      String(u.uid) !== String(changerUid) &&
-      assignedUids.has(String(u.uid))
-  )
-
-  if (adminsToNotify.length === 0) return
-
-  const sendNotif = httpsCallable(functions, 'sendNotification')
-  await Promise.all(
-    adminsToNotify.map((u) =>
-      sendNotif({
-        uid: String(u.uid),
-        type: 'rsvpNonAvailable',
-        data: {
-          userName: changerName,
-          eventTitle: ev.title,
-          statusLabel: AVAIL_LABELS[newStatus].toLowerCase(),
-          // Its page, at who can and can't come (AvailSummary).
-          link: `/(app)/events/${encodeURIComponent(ev.instanceKey)}?focus=team_availability`,
-        },
-      }).catch(() => {})
-    )
-  )
-}
-
 function getDCForUser(ev: EventTemplate, uid: string): string | null {
   if (!ev.dressCode?.length) return null
   const codes = dressCodesOn(ev.dressCode, teamsOf(ev, uid))
@@ -299,35 +251,6 @@ export function reportTimesShown(ev: EventTemplate, profile: UserProfile | null)
   if (!profile?.uid) return []
   const uid = String(profile.uid)
   return reportTimesFor(ev, { uid, roles: profile.roles ?? [] }, resolveAssignedUids(ev).has(uid))
-}
-
-/**
- * Notifies uids newly added to (eventJoin, batched) or fully dropped from
- * (eventRemoved, immediate) an event's assignment (users/groups/teams),
- * comparing the before/after resolved uid sets. Routed through the
- * sendNotification callable (not a raw Firestore write) so these respect
- * notificationPrefs and participate in the batching engine.
- */
-async function notifyEventJoinRemoval(old: EventTemplate, updated: EventTemplate) {
-  const oldAssigned = resolveAssignedUids(old)
-  const newAssigned = resolveAssignedUids(updated)
-  const sendNotif = httpsCallable(functions, 'sendNotification')
-
-  const joins = [...newAssigned].filter((uid) => !oldAssigned.has(uid))
-  const removals = [...oldAssigned].filter((uid) => !newAssigned.has(uid))
-
-  await Promise.all([
-    ...joins.map((uid) =>
-      sendNotif({
-        uid,
-        type: 'eventJoin',
-        data: { eventTitle: updated.title, link: eventLink(updated) },
-      }).catch(() => {})
-    ),
-    ...removals.map((uid) =>
-      sendNotif({ uid, type: 'eventRemoved', data: { eventTitle: updated.title } }).catch(() => {})
-    ),
-  ])
 }
 
 export const useEventsStore = create<EventsStore>((set, get) => ({
@@ -605,19 +528,12 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     // published — and then everyone on it is, as newly added.
     const draft = (patch.unpublished ?? old?.unpublished) === true
     const published = old?.unpublished === true && patch.unpublished === false
-    if (!old || draft) return
-    if (published) {
-      notifyEventJoinRemoval(
-        { ...old, users: [], groups: [], teams: [] },
-        { ...old, ...patch }
-      ).catch(() => {})
-      return
-    }
+    // Those put on it or taken off — everyone on it, when it is published —
+    // are told by the server, from who its private record says is on it
+    // (functions: push/recordNotifications onEventPrivateWritten).
+    if (!old || draft || published) return
     if (patch.teams !== undefined || patch.dressCode !== undefined) {
       notifyEventChanges(old, { ...old, ...patch }).catch(() => {})
-    }
-    if (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined) {
-      notifyEventJoinRemoval(old, { ...old, ...patch }).catch(() => {})
     }
   },
 
@@ -632,10 +548,6 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   setOverride: async (instanceKey, patch) => {
     const parts = instanceKey.split('_')
     const templateId = parts[0]
-    // Snapshot the effective instance BEFORE writing, so join/removal can be
-    // detected for changes scoped to a single occurrence (these previously
-    // went undetected entirely — setOverride never checked for them).
-    const before = get().getInstanceByKey(instanceKey)
     const openNow = get()._openDocs.find(([k]) => k === templateId)?.[1] ?? {}
     const closedNow = get()._privateDocs[templateId] ?? {}
     const { open, closed } = splitFields(patch as Doc)
@@ -668,18 +580,10 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     batch.set(privateRef, { ...moved, access }, { merge: true })
     batch.update(privateRef, new FieldPath('overrides', instanceKey), closed)
     await batch.commit()
-    if (
-      before &&
-      before.unpublished !== true &&
-      (patch.users !== undefined || patch.groups !== undefined || patch.teams !== undefined)
-    ) {
-      notifyEventJoinRemoval(before, { ...before, ...patch }).catch(() => {})
-    }
   },
 
   setAvail: async (ev, uid, status, note = '') => {
     const key = availKey(ev).replace(/\//g, '_')
-    const prevResponse = get().avail[key]?.[uid] ?? null
 
     if (!status) {
       set((s) => {
@@ -710,18 +614,12 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       { mergeFields: [`responses.${uid}`, 'updatedAt'] }
     )
 
-    // Notify admins on any new or changed response (notifyAssignedAdmins
-    // itself filters to non-"Available" statuses).
-    if (!prevResponse || prevResponse.status !== status) {
-      notifyAssignedAdmins(ev, uid, status).catch(() => {})
-    }
+    // The admins on the event are told of anything but "Available" by the
+    // server, as it is written (functions: push/recordNotifications onAvailWritten).
   },
 
   setSeriesAvail: async (templateId, uid, status, note = '', forceOverrideKeys = []) => {
     const key = seriesAvailKey(templateId)
-    // Capture prev BEFORE optimistic update so notification check is correct
-    const prevSeriesResp = get().avail[key]?.[uid] ?? null
-
     if (!status) {
       set((s) => {
         const avail = { ...s.avail }
@@ -755,13 +653,10 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     )
 
     // Delete confirmed override instance responses so they fall back to series
-    const today = new Date().toISOString().split('T')[0]
-    const { templates, overrides, avail: currentAvail } = get()
+    const { templates, avail: currentAvail } = get()
     const tmpl = templates.find((t) => sameId(t.id, templateId))
 
     if (tmpl) {
-      const instances = allInstances([tmpl], overrides, today, '9999-12-31')
-
       if (forceOverrideKeys.length > 0) {
         const deletes: string[] = []
         for (const instanceKey of forceOverrideKeys) {
@@ -791,11 +686,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
         }
       }
 
-      // Notify assigned admins on any new or changed series response
-      // (notifyAssignedAdmins itself filters to non-"Available" statuses).
-      if ((!prevSeriesResp || prevSeriesResp.status !== status) && instances.length > 0) {
-        notifyAssignedAdmins(instances[0], uid, status).catch(() => {})
-      }
+      // The admins on the event are told by the server, as above.
     }
   },
 }))
