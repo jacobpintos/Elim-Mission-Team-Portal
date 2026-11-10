@@ -72,6 +72,8 @@ type CreateAuthResult = {
   displayName: string
   status: 'created' | 'already_exists' | 'error'
   error?: string
+  /** A login just made: its temporary password, shown here once. */
+  password?: string
 }
 
 interface AuthAuditSheetProps {
@@ -133,7 +135,7 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
   const createAllAuthAccounts = async () => {
     if (!result?.orphanFirestore.length) return
     const ok = await confirmAsync(
-      `Create Auth accounts for all ${result.orphanFirestore.length} orphan users? Default password will be 12345678.`,
+      `Create Auth accounts for all ${result.orphanFirestore.length} orphan users? Each gets a temporary password of its own, shown here once for you to pass on.`,
       { destructive: true }
     )
     if (!ok) return
@@ -143,7 +145,8 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
         timeout: 120000,
       })
       const uids = result.orphanFirestore.map((u) => u.uid)
-      const res = await createAuthForOrphans({ uids })
+      // `shown`: this screen shows the passwords it is sent (functions/src/temporaryPassword).
+      const res = await createAuthForOrphans({ uids, shown: true })
       const results = (res.data as { results: CreateAuthResult[] }).results
       setCreateResults(results)
       const created = results.filter((r) => r.status === 'created').length
@@ -399,6 +402,12 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
                   <Text fontWeight="700" fontSize="$4">
                     Creation Results
                   </Text>
+                  {createResults.some((r) => r.password) && (
+                    <Text fontSize="$2" color="$gray10">
+                      Each new login’s temporary password is below. Pass them on now: they aren’t
+                      kept, and are gone when this closes.
+                    </Text>
+                  )}
                   {createResults.map((r) => (
                     <XStack
                       key={r.uid}
@@ -419,6 +428,11 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
                         {r.error && (
                           <Text fontSize="$2" color="$red10">
                             {r.error}
+                          </Text>
+                        )}
+                        {r.password && (
+                          <Text fontSize="$2" selectable>
+                            Temporary password: {r.password}
                           </Text>
                         )}
                       </YStack>

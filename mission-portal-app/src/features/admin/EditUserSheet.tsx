@@ -10,6 +10,7 @@ import { deleteField, doc, updateDoc } from 'firebase/firestore'
 import { db, functions } from '@/lib/firebase'
 import { httpsCallable } from 'firebase/functions'
 import { confirmAsync } from '@/lib/confirm'
+import { showTemporaryPassword } from '@/lib/temporaryPassword'
 import { isOwner } from '@/lib/owner'
 import type { Sex, UserProfile } from '@/types/user'
 
@@ -50,21 +51,24 @@ export function EditUserSheet({ open, onClose, user }: EditUserSheetProps) {
 
   const handleResetPassword = async () => {
     if (!user) return
+    const name = user.displayName ?? user.email ?? 'This person'
     const ok = await confirmAsync(
-      `Reset password for "${user.displayName ?? user.email}" to 12345678?`,
+      `Reset the password for "${name}"? They get a new temporary one, shown to you once to pass on.`,
       { destructive: true }
     )
     if (!ok) return
     setResetting(true)
     try {
       const resetUserPassword = httpsCallable(functions, 'resetUserPassword')
-      await resetUserPassword({ uid: user.uid })
+      // `shown`: this app shows the password it is sent (functions/src/temporaryPassword).
+      const res = await resetUserPassword({ uid: user.uid, shown: true })
+      const password = String((res.data as { password?: unknown } | null)?.password ?? '')
       await audit(
         'user.passwordReset',
         `Reset password for ${user.email}`,
         profile?.displayName ?? ''
       )
-      toast('Password reset to 12345678', 'success')
+      if (await showTemporaryPassword(name, password)) toast('Password copied', 'success')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to reset password'
       toast(message, 'error')

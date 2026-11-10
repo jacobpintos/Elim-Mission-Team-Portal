@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { requireOwner } from './owner'
+import { showsPassword, temporaryPassword, UPDATE_TO_RESET } from './temporaryPassword'
 import * as admin from 'firebase-admin'
 
 if (!admin.apps.length) admin.initializeApp()
@@ -10,11 +11,15 @@ export type CreateAuthResult = {
   displayName: string
   status: 'created' | 'already_exists' | 'error'
   error?: string
+  /** A login just made: its temporary password, for the owner to pass on. Sent once, kept nowhere. */
+  password?: string
 }
 
 export const createAuthForOrphans = onCall(async (req) => {
-  // Owner-only. Mints logins with a known default password.
+  // Owner-only. Mints logins, each with a temporary password of its own
+  // (./temporaryPassword), sent back to be shown once.
   requireOwner(req.auth?.uid)
+  if (!showsPassword(req.data)) throw new HttpsError('failed-precondition', UPDATE_TO_RESET)
 
   const { uids } = req.data as { uids: string[] }
   if (!Array.isArray(uids) || uids.length === 0) {
@@ -26,7 +31,13 @@ export const createAuthForOrphans = onCall(async (req) => {
   for (const uid of uids) {
     const snap = await admin.firestore().collection('users').doc(uid).get()
     if (!snap.exists) {
-      results.push({ uid, email: '', displayName: '', status: 'error', error: 'Firestore doc not found' })
+      results.push({
+        uid,
+        email: '',
+        displayName: '',
+        status: 'error',
+        error: 'Firestore doc not found',
+      })
       continue
     }
 
@@ -35,27 +46,46 @@ export const createAuthForOrphans = onCall(async (req) => {
     const displayName = (data.displayName ?? data.name ?? '').trim()
 
     if (!email) {
-      results.push({ uid, email: '', displayName, status: 'error', error: 'No email address in profile' })
+      results.push({
+        uid,
+        email: '',
+        displayName,
+        status: 'error',
+        error: 'No email address in profile',
+      })
       continue
     }
 
     try {
+      const password = temporaryPassword()
       await admin.auth().createUser({
         uid,
         email,
         displayName,
-        password: '12345678',
+        password,
         emailVerified: true,
       })
-      results.push({ uid, email, displayName, status: 'created' })
+      results.push({ uid, email, displayName, status: 'created', password })
     } catch (err: unknown) {
       const code = (err as { code?: string }).code
       if (code === 'auth/uid-already-exists') {
         results.push({ uid, email, displayName, status: 'already_exists' })
       } else if (code === 'auth/email-already-exists') {
-        results.push({ uid, email, displayName, status: 'error', error: `Email already used by a different account` })
+        results.push({
+          uid,
+          email,
+          displayName,
+          status: 'error',
+          error: `Email already used by a different account`,
+        })
       } else {
-        results.push({ uid, email, displayName, status: 'error', error: (err as Error).message ?? 'Unknown error' })
+        results.push({
+          uid,
+          email,
+          displayName,
+          status: 'error',
+          error: (err as Error).message ?? 'Unknown error',
+        })
       }
     }
   }

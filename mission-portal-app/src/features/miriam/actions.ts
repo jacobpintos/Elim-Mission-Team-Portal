@@ -98,6 +98,7 @@ import { endSale, postSale, updateSale } from '@/features/store/storeWrites'
 import { useAnnounceStore } from '@/stores/announceStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { resolveAssignedUids, useEventsStore } from '@/stores/eventsStore'
+import { showTemporaryPassword } from '@/lib/temporaryPassword'
 import { rememberRide } from '@/lib/carpoolMemoryDb'
 import { fillCars, noRoomSaid } from './carpoolAuto'
 import { CUSTOM_ACTIONS } from '@/custom/miriam'
@@ -672,13 +673,19 @@ async function resetPassword(profile: UserProfile, input: Record<string, unknown
   return {
     kind: 'ready',
     title: `Reset ${user.displayName}’s password?`,
-    details: ['It will be the temporary one, 12345678, until they change it.'],
+    details: ['They get a new temporary one, shown to you once to pass on.'],
     confirm: 'Reset',
     destructive: true,
     run: async () => {
-      await httpsCallable(functions, 'resetUserPassword')({ uid: user.uid })
+      // `shown`: it is put on the screen here — never said aloud.
+      const res = await httpsCallable(
+        functions,
+        'resetUserPassword'
+      )({ uid: user.uid, shown: true })
+      const password = String((res.data as { password?: unknown } | null)?.password ?? '')
       await audit('user.passwordReset', `Reset password for ${user.email}`, by(profile))
-      return 'Done — their password is reset to the temporary one.'
+      await showTemporaryPassword(user.displayName ?? 'This person', password)
+      return 'Done — their password is reset. The temporary one was on your screen.'
     },
   } satisfies Prepared
 }
