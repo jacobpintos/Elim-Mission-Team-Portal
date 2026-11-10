@@ -11,15 +11,25 @@
  *
  * Kept free of Firebase, for tests (src/lib/recordTellings.test.ts in the app).
  */
-import type { NotificationType } from './notifyCore'
 import { ADMINS, SETTLED_QUIETLY } from '../eventPrivate'
 
 type Doc = Record<string, unknown>
 
+/**
+ * The kinds of notification a task sends: some of ./notifyCore's
+ * NotificationType, named here because that file brings Firebase with it and
+ * this one is read by the app's tests, which don't have it.
+ */
+export type TaskNotification =
+  | 'newAssignment'
+  | 'issueAssigned'
+  | 'taskComplete'
+  | 'eventHealthBehind'
+
 /** One notification: to a person, or to every admin. */
 export interface Telling {
   to: string | typeof ADMINS
-  type: NotificationType
+  type: TaskNotification
   data: Record<string, unknown>
 }
 
