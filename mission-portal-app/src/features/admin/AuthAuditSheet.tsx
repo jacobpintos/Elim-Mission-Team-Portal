@@ -242,7 +242,7 @@ export function AuthAuditSheet({ open, onClose }: AuthAuditSheetProps) {
       onboardingComplete: true,
       // A repaired profile is a new profile: same defaults as a sign-up,
       // minus the weekly digest an orphaned account never asked for.
-      notificationPrefs: { ...defaultNotificationPrefs(), weeklyDigest: false },
+      notificationPrefs: defaultNotificationPrefs(),
       pushTokens: {},
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),

@@ -406,11 +406,6 @@ service cloud.firestore {
            .hasOnly(['nChordSheet']));
     }
 
-    match /digestStats/{docId} {
-      allow read: if isAdmin();
-      allow write: if false;
-    }
-
     // Groups: a name, and who is in it by uid. Read by everyone signed in,
     // because every account's event pages work out who is on an event from
     // them — a guest's and a public follower's too. Kept by admins.

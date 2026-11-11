@@ -481,14 +481,12 @@ async function signUpFood(profile: UserProfile, input: Record<string, unknown>) 
 }
 
 async function changeNotification(profile: UserProfile, input: Record<string, unknown>) {
-  const channel = String(input.channel ?? '')
-  if (!['push', 'email', 'both'].includes(channel)) return cannot('Push, email, or both?')
+  // A server not yet updated may still ask for email: the app sends none.
+  if (input.channel === 'email') {
+    return cannot('The app doesn’t send email — only notifications on your phone.')
+  }
   const on = input.on === true
-  const target = notificationSwitch(
-    String(input.notification ?? ''),
-    channel as 'push' | 'email' | 'both',
-    isAdmin(profile)
-  )
+  const target = notificationSwitch(String(input.notification ?? ''), isAdmin(profile))
   if (!target) return cannot('That isn’t one of your notifications.')
   return {
     kind: 'ready',

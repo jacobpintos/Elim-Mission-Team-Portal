@@ -1,6 +1,5 @@
 import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
-import { resend, MAIL_FROM } from '../email/client'
 import { sendExpoPush, type InterruptionLevel } from './expoPush'
 import { notifLink } from './notifLinks'
 import { NOTIFS_KEPT, newestNotifs, withNotif } from './notifList'
@@ -139,9 +138,6 @@ export function extractTokens(pushTokens: unknown): string[] {
  * same way (pushDefaultFor in app/(app)/settings.tsx). That is exactly how a
  * guest assigned a hotel room got the in-app row and no notification.
  *
- * Email deliberately does NOT default on: nobody should start receiving mail
- * because a new notification type shipped.
- *
  * `livestream` never reaches here — onLivestreamPosted queries for the pref
  * being explicitly true, which is what keeps "not yet asked" from becoming a
  * push nobody agreed to.
@@ -260,29 +256,17 @@ function subjectFor(type: NotificationType, _data: Record<string, unknown>): str
   return subjects[type] ?? 'Mission Portal notification'
 }
 
-function bodyFor(type: NotificationType, data: Record<string, unknown>): string {
-  return `
-    <p>You have a new notification from Mission Portal.</p>
-    <p><strong>${inAppMessage(type, data)}</strong></p>
-    <hr>
-    <p style="color: #888; font-size: 12px;">
-      You're receiving this because you have email notifications enabled for this event type.
-      <br>
-      <a href="#">Manage notification preferences</a>
-    </p>
-  `
-}
-
 interface DeliverOptions {
-  /** Skip the push/email send — used for batched types arriving mid-window,
+  /** Skip the push — used for batched types arriving mid-window,
    * which still need to land in the in-app list right away. */
   suppressPush?: boolean
 }
 
 /**
- * Core delivery: always writes the in-app notifs/{uid} entry; conditionally
- * emails/pushes per the user's notificationPrefs, unless suppressPush is set
+ * Core delivery: always writes the in-app notifs/{uid} entry; pushes if the
+ * user's notificationPrefs has push on for it, unless suppressPush is set
  * (the batched-mid-window case, where push is deferred to the next flush).
+ * Nothing is emailed: the app sends no email of its own.
  */
 export async function deliverNotification(
   uid: string,
@@ -295,7 +279,7 @@ export async function deliverNotification(
   const profile = userSnap.data()
   if (!profile) return
 
-  const prefs = profile.notificationPrefs?.[type] as { push?: boolean; email?: boolean } | undefined
+  const prefs = profile.notificationPrefs?.[type] as { push?: boolean } | undefined
   const notifMsg = inAppMessage(type, data)
   // What it's about, opened by a tap on it in the app's list or on the push (./notifLinks).
   const link = notifLink(type, data)
@@ -322,19 +306,6 @@ export async function deliverNotification(
   }
 
   if (options.suppressPush) return
-
-  if (prefs?.email && profile.email) {
-    try {
-      await resend().emails.send({
-        from: MAIL_FROM.value(),
-        to: profile.email as string,
-        subject: subjectFor(type, data),
-        html: bodyFor(type, data),
-      })
-    } catch (err) {
-      logger.error('Email send failed', err)
-    }
-  }
 
   if (pushEnabled(prefs)) {
     const tokens = extractTokens(profile.pushTokens)

@@ -1,7 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
-import { RESEND_API_KEY } from '../email/client'
 import { notifyUser } from './notifyCore'
 import { mergeEvent } from '../eventPrivate'
 
@@ -68,58 +67,55 @@ async function inviteeUids(db: admin.firestore.Firestore, event: EventRaw): Prom
  * ones. Guests are skipped; they are not asked to bring food — nor is anyone
  * who has answered that they are not available.
  */
-export const foodSignupReminders = onSchedule(
-  { schedule: '0 15 * * *', secrets: [RESEND_API_KEY] },
-  async () => {
-    const db = admin.firestore()
-    const targetDate = dateInDays(new Date(), REMINDER_DAYS)
+export const foodSignupReminders = onSchedule({ schedule: '0 15 * * *' }, async () => {
+  const db = admin.firestore()
+  const targetDate = dateInDays(new Date(), REMINDER_DAYS)
 
-    const eventsSnap = await db.collection('events').where('date', '==', targetDate).get()
+  const eventsSnap = await db.collection('events').where('date', '==', targetDate).get()
 
-    for (const eventDoc of eventsSnap.docs) {
-      const stored = eventDoc.data() as EventRaw & { unpublished?: boolean }
-      // A draft is its maker's alone: nobody is nudged about it.
-      if (!stored.food || stored.unpublished === true) continue
-      // Its teams are in its private record (../eventPrivate).
-      const closed = (await db.collection('eventPrivate').doc(eventDoc.id).get()).data()
-      const event = mergeEvent(stored as Record<string, unknown>, closed) as EventRaw
+  for (const eventDoc of eventsSnap.docs) {
+    const stored = eventDoc.data() as EventRaw & { unpublished?: boolean }
+    // A draft is its maker's alone: nobody is nudged about it.
+    if (!stored.food || stored.unpublished === true) continue
+    // Its teams are in its private record (../eventPrivate).
+    const closed = (await db.collection('eventPrivate').doc(eventDoc.id).get()).data()
+    const event = mergeEvent(stored as Record<string, unknown>, closed) as EventRaw
 
-      const items = event.foodItems ?? []
-      if (items.length === 0) continue
+    const items = event.foodItems ?? []
+    if (items.length === 0) continue
 
-      const foodKey = `${eventDoc.id}_${event.date}`
-      const signupSnap = await db.collection('foodSignups').doc(foodKey).get()
-      const signups = (signupSnap.data()?.signups as Record<string, { uid?: string }>) ?? {}
+    const foodKey = `${eventDoc.id}_${event.date}`
+    const signupSnap = await db.collection('foodSignups').doc(foodKey).get()
+    const signups = (signupSnap.data()?.signups as Record<string, { uid?: string }>) ?? {}
 
-      const open = openItemIndexes(items, signups)
-      if (open.length === 0) continue
+    const open = openItemIndexes(items, signups)
+    if (open.length === 0) continue
 
-      const claimedBy = new Set(Object.values(signups).map((s) => String(s?.uid ?? '')))
-      const uids = await inviteeUids(db, event)
-      // Who said they can't come: not asked to bring anything.
-      const availSnap = await db.collection('avail').doc(foodKey.replace(/\//g, '_')).get()
-      const answers = (availSnap.data()?.responses as Record<string, { status?: string }>) ?? {}
+    const claimedBy = new Set(Object.values(signups).map((s) => String(s?.uid ?? '')))
+    const uids = await inviteeUids(db, event)
+    // Who said they can't come: not asked to bring anything.
+    const availSnap = await db.collection('avail').doc(foodKey.replace(/\//g, '_')).get()
+    const answers = (availSnap.data()?.responses as Record<string, { status?: string }>) ?? {}
 
-      for (const uid of uids) {
-        // Already bringing something — no nudge needed.
-        if (claimedBy.has(uid)) continue
-        // Not coming.
-        if (answers[uid]?.status === 'no') continue
+    for (const uid of uids) {
+      // Already bringing something — no nudge needed.
+      if (claimedBy.has(uid)) continue
+      // Not coming.
+      if (answers[uid]?.status === 'no') continue
 
-        const userSnap = await db.collection('users').doc(uid).get()
-        const roles = (userSnap.data()?.roles as string[]) ?? []
-        if (roles.includes('guest')) continue
+      const userSnap = await db.collection('users').doc(uid).get()
+      const roles = (userSnap.data()?.roles as string[]) ?? []
+      if (roles.includes('guest')) continue
 
-        await notifyUser(uid, 'foodSignupReminder', {
-          eventTitle: event.title ?? 'an event',
-          openCount: open.length,
-          link: `/(app)/events/${eventDoc.id}_${event.date}`,
-        })
-      }
-
-      logger.info(
-        `foodSignupReminders: ${eventDoc.id} has ${open.length} open item(s), nudged invitees`
-      )
+      await notifyUser(uid, 'foodSignupReminder', {
+        eventTitle: event.title ?? 'an event',
+        openCount: open.length,
+        link: `/(app)/events/${eventDoc.id}_${event.date}`,
+      })
     }
+
+    logger.info(
+      `foodSignupReminders: ${eventDoc.id} has ${open.length} open item(s), nudged invitees`
+    )
   }
-)
+})

@@ -223,11 +223,11 @@ describe('what the app lookups hand back', () => {
   it('reads their settings out plainly', () => {
     const p = {
       ...person('sarah', ['regular']),
-      notificationPrefs: { newMessage: { push: true, email: false }, weeklyDigest: true },
+      notificationPrefs: { newMessage: { push: true }, securityReportUrgent: false },
     } as unknown as UserProfile
     expect(settingsShown(p).notifications).toEqual({
-      newMessage: 'push on, email off',
-      weeklyDigest: 'on',
+      newMessage: 'on',
+      securityReportUrgent: 'off',
     })
   })
 })

@@ -15,8 +15,7 @@ import {
   clearPushToken,
   platformKey,
 } from '@/lib/notifications'
-import type { NotificationPrefs, UserProfile } from '@/types/user'
-import { EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
+import type { UserProfile } from '@/types/user'
 import { geocodeCity } from '@/lib/geocode'
 import { isValidPhone, normalizePhone } from '@/lib/textingList'
 import * as Sentry from '@sentry/react-native'
@@ -68,13 +67,6 @@ export default function OnboardingScreen() {
   const [wantsTexts, setWantsTexts] = useState(false)
   const [phone, setPhone] = useState('')
   const phoneOk = phone.trim() === '' || isValidPhone(phone)
-
-  const [notifPrefs, setNotifPrefs] = useState<
-    Pick<NotificationPrefs, 'weeklyDigest' | 'monthlyDigest'>
-  >({
-    weeklyDigest: true,
-    monthlyDigest: false,
-  })
 
   const [pushEnabled, setPushEnabled] = useState(false)
   const [pushBusy, setPushBusy] = useState(false)
@@ -180,11 +172,6 @@ export default function OnboardingScreen() {
           onboardingComplete: true,
           ...(!hasTeamRole && { roles: ['public'] }),
           ...(locationPref ? { locationPref } : {}),
-          notificationPrefs: {
-            ...(profile?.notificationPrefs ?? {}),
-            weeklyDigest: notifPrefs.weeklyDigest,
-            monthlyDigest: notifPrefs.monthlyDigest,
-          },
         },
         { merge: true }
       )
@@ -247,48 +234,6 @@ export default function OnboardingScreen() {
               Choose how you&apos;d like to receive updates. Push notifications will be available in
               a future update.
             </Paragraph>
-
-            {EMAIL_FEATURES_ENABLED ? (
-              <YStack gap="$4" backgroundColor="$surface" borderRadius="$4" padding="$4">
-                <XStack alignItems="center" justifyContent="space-between">
-                  <YStack flex={1} gap="$1">
-                    <Label fontWeight="600">Weekly digest</Label>
-                    <Text color="$colorMuted" fontSize="$2">
-                      Summary of the week&apos;s activities
-                    </Text>
-                  </YStack>
-                  <ToggleSwitch
-                    checked={notifPrefs.weeklyDigest}
-                    onCheckedChange={(v) => setNotifPrefs((p) => ({ ...p, weeklyDigest: v }))}
-                  />
-                </XStack>
-
-                <XStack alignItems="center" justifyContent="space-between">
-                  <YStack flex={1} gap="$1">
-                    <XStack gap="$2" alignItems="center">
-                      <Label fontWeight="600">Monthly digest</Label>
-                      <YStack
-                        backgroundColor="$primary"
-                        borderRadius="$2"
-                        paddingHorizontal="$2"
-                        paddingVertical="$1"
-                      >
-                        <Text color="white" fontSize="$1">
-                          Public users
-                        </Text>
-                      </YStack>
-                    </XStack>
-                    <Text color="$colorMuted" fontSize="$2">
-                      Monthly summary for public visitors
-                    </Text>
-                  </YStack>
-                  <ToggleSwitch
-                    checked={notifPrefs.monthlyDigest}
-                    onCheckedChange={(v) => setNotifPrefs((p) => ({ ...p, monthlyDigest: v }))}
-                  />
-                </XStack>
-              </YStack>
-            ) : null}
 
             <YStack
               backgroundColor="$surface"

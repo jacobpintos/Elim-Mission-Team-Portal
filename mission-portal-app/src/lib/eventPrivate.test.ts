@@ -13,7 +13,6 @@ import {
   withMoved,
   withoutPrivate,
 } from '../../functions/src/eventPrivate'
-import { digestEventsFor } from '../../functions/src/digestEvents'
 
 const teams = [{ name: 'Worship', leaders: ['lee'], members: ['sam'] }]
 const groups = [{ id: 'g1', members: ['ann', 'bo'] }]
@@ -195,26 +194,5 @@ describe('who may see an event at all', () => {
 
   it('reads its private record as those on it and the admins, public or not', () => {
     expect(eventReaders({ isPublic: true, users: ['me'] }, groups)).toEqual(['me', ADMINS])
-  })
-})
-
-describe('the digest email', () => {
-  const events = [
-    { title: 'Sunday', date: '2026-11-01', seenBy: [EVERYONE] },
-    { title: 'Staff retreat', date: '2026-11-02', seenBy: ['sam'] },
-    { title: 'Draft', date: '2026-11-03', unpublished: true, seenBy: [] },
-    // Not yet told who may see it: public or not.
-    { title: 'Older', date: '2026-11-04', isPublic: false },
-    { title: 'Older public', date: '2026-11-05', isPublic: true },
-  ]
-  const titles = (uid: string, roles: string[]) =>
-    digestEventsFor(events, { uid, roles }).map((e) => e.title)
-
-  it('lists only the events each person may see', () => {
-    expect(titles('ann', ['regular'])).toEqual(['Sunday', 'Older public'])
-    expect(titles('sam', ['regular'])).toEqual(['Sunday', 'Staff retreat', 'Older public'])
-    expect(titles('pub', ['public'])).toEqual(['Sunday', 'Older public'])
-    // An admin: all but drafts.
-    expect(titles('boss', ['admin'])).toEqual(['Sunday', 'Staff retreat', 'Older', 'Older public'])
   })
 })

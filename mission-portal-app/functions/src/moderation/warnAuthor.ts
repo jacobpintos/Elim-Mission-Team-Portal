@@ -1,7 +1,6 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
-import { RESEND_API_KEY } from '../email/client'
 import { requireAdmin } from '../owner'
 import { notifyUser } from '../push/notifyCore'
 
@@ -14,7 +13,7 @@ if (!admin.apps.length) admin.initializeApp()
  * report says wrote the message — which reportContent read from the message
  * itself — and what they are told is written here.
  */
-export const warnReportedAuthor = onCall({ secrets: [RESEND_API_KEY] }, async (req) => {
+export const warnReportedAuthor = onCall(async (req) => {
   const caller = await requireAdmin(req.auth?.uid)
   const reportId = typeof req.data?.reportId === 'string' ? req.data.reportId : ''
   if (!reportId || reportId.includes('/')) {

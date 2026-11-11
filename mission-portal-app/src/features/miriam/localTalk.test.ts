@@ -562,7 +562,7 @@ describe('notification switches', () => {
   it('email asked for: only push can be changed, asked', async () => {
     const say = conversation()
     expect(await say('Stop emailing me about announcements')).toEqual([
-      'ask: Email notifications aren’t on in the app, so I can only change the push ones. Did you mean: turn off “Announcement” notifications?',
+      'ask: The app doesn’t send email, so I can only change the notifications on your phone. Did you mean: turn off “Announcement” notifications?',
     ])
   })
 

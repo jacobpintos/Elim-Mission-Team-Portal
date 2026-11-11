@@ -10,7 +10,7 @@
  * moderates, as a subtab of the Inbox, rather than several screens away in the
  * admin area.
  */
-import { PUBLIC_SURFACE_ENABLED, EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
+import { PUBLIC_SURFACE_ENABLED } from '@/lib/featureFlags'
 import { ORG } from '@/custom'
 
 export interface AdminSection {
@@ -43,20 +43,18 @@ const SECTIONS: AdminSection[] = [
   { key: 'data', label: 'Data & Backups', tabLabel: 'Data', path: '/(app)/admin/data', icon: '💾' },
   { key: 'miriam', label: 'Miriam', path: '/(app)/admin/miriam', icon: '💬' },
   { key: 'theme', label: 'Theme', path: '/(app)/admin/theme', icon: '🎨' },
-  { key: 'digests', label: 'Digests', path: '/(app)/admin/digests', icon: '📰' },
   { key: 'licensing', label: 'Licensing', path: '/(app)/admin/licensing', icon: '📄' },
 ]
 
 /**
  * Analytics reports on public users and nothing else, so it goes wherever the
- * public-facing surface goes. Digests are email, and follow that flag.
+ * public-facing surface goes.
  */
 export const ADMIN_SECTIONS: AdminSection[] = [
   ...SECTIONS.filter((s) => {
     // Finance is the Accountant's, not every admin's: see adminSectionsFor.
     if (s.key === 'finance') return false
     if (s.key === 'analytics') return PUBLIC_SURFACE_ENABLED
-    if (s.key === 'digests') return EMAIL_FEATURES_ENABLED
     return true
   }),
   // This organization's own (src/custom): The Well's Vehicles.

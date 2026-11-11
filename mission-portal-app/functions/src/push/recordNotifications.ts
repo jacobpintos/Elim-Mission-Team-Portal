@@ -1,7 +1,6 @@
 import { onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
-import { RESEND_API_KEY } from '../email/client'
 import { ADMINS } from '../eventPrivate'
 import { instancesOf, type EventTemplate } from '../miriam/data'
 import { todayInOrg } from '../org'
@@ -34,9 +33,6 @@ type Db = admin.firestore.Firestore
 
 const str = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '')
 
-/** notifyUser may send an email, when that is switched on for the person. */
-const on = (document: string) => ({ document, secrets: [RESEND_API_KEY] })
-
 async function adminUids(db: Db): Promise<string[]> {
   const snap = await db.collection('users').where('roles', 'array-contains', 'admin').get()
   return snap.docs.map((d) => d.id)
@@ -64,7 +60,7 @@ const dataOf = (snap: { exists: boolean; data(): Doc | undefined } | undefined):
 // --- Tasks ------------------------------------------------------------------
 
 /** A task made, handed on, finished or fallen behind (./recordTellings taskTellings). */
-export const onTaskWritten = onDocumentWritten(on('tasks/{taskId}'), async (event) => {
+export const onTaskWritten = onDocumentWritten('tasks/{taskId}', async (event) => {
   const after = dataOf(event.data?.after)
   if (!after) return
   const before = dataOf(event.data?.before)
@@ -93,32 +89,29 @@ function eventLink(id: string, ev: Doc): string {
  * (./recordTellings eventTellings). The record holds who is on the event
  * (`access`) beside what they are given, so the two are compared as one.
  */
-export const onEventPrivateWritten = onDocumentWritten(
-  on('eventPrivate/{eventId}'),
-  async (event) => {
-    const { joined, removed, given } = eventTellings(
-      dataOf(event.data?.before),
-      dataOf(event.data?.after)
-    )
-    if (!joined.length && !removed.length && !given.length) return
-    const id = event.params.eventId
-    const ev = (await admin.firestore().doc(`events/${id}`).get()).data()
-    // Deleted with it, or a draft: its maker's alone, and nobody is told.
-    if (!ev || ev.unpublished === true) return
-    const eventTitle = str(ev.title) || 'an event'
-    const link = eventLink(id, ev)
-    const dates = (ev.overrides ?? {}) as Record<string, { title?: unknown } | undefined>
-    for (const uid of joined) await tellOne(uid, 'eventJoin', { eventTitle, link })
-    for (const uid of removed) await tellOne(uid, 'eventRemoved', { eventTitle })
-    for (const g of given) {
-      await tellOne(g.uid, 'eventLogistics', {
-        eventTitle: (g.dateKey && str(dates[g.dateKey]?.title)) || eventTitle,
-        itemLabel: g.itemLabel,
-        link: g.dateKey ? `/(app)/events/${encodeURIComponent(g.dateKey)}` : link,
-      })
-    }
+export const onEventPrivateWritten = onDocumentWritten('eventPrivate/{eventId}', async (event) => {
+  const { joined, removed, given } = eventTellings(
+    dataOf(event.data?.before),
+    dataOf(event.data?.after)
+  )
+  if (!joined.length && !removed.length && !given.length) return
+  const id = event.params.eventId
+  const ev = (await admin.firestore().doc(`events/${id}`).get()).data()
+  // Deleted with it, or a draft: its maker's alone, and nobody is told.
+  if (!ev || ev.unpublished === true) return
+  const eventTitle = str(ev.title) || 'an event'
+  const link = eventLink(id, ev)
+  const dates = (ev.overrides ?? {}) as Record<string, { title?: unknown } | undefined>
+  for (const uid of joined) await tellOne(uid, 'eventJoin', { eventTitle, link })
+  for (const uid of removed) await tellOne(uid, 'eventRemoved', { eventTitle })
+  for (const g of given) {
+    await tellOne(g.uid, 'eventLogistics', {
+      eventTitle: (g.dateKey && str(dates[g.dateKey]?.title)) || eventTitle,
+      itemLabel: g.itemLabel,
+      link: g.dateKey ? `/(app)/events/${encodeURIComponent(g.dateKey)}` : link,
+    })
   }
-)
+})
 
 // --- Availability ------------------------------------------------------------
 
@@ -127,7 +120,7 @@ export const onEventPrivateWritten = onDocumentWritten(
  * that event are told (./recordTellings answersToTell) — not the person
  * themselves, if they are one.
  */
-export const onAvailWritten = onDocumentWritten(on('avail/{key}'), async (event) => {
+export const onAvailWritten = onDocumentWritten('avail/{key}', async (event) => {
   const changed = answersToTell(dataOf(event.data?.before), dataOf(event.data?.after), Date.now())
   if (!changed.length) return
   const key = event.params.key
@@ -166,7 +159,7 @@ export const onAvailWritten = onDocumentWritten(on('avail/{key}'), async (event)
 // --- Conversations and reports -------------------------------------------------
 
 /** A conversation reported by someone in it: the admins who didn't report it are told it needs review. */
-export const onRoomReported = onDocumentUpdated(on('rooms/{roomId}'), async (event) => {
+export const onRoomReported = onDocumentUpdated('rooms/{roomId}', async (event) => {
   const before = dataOf(event.data?.before)
   const after = dataOf(event.data?.after)
   if (!after || !justReported(before, after)) return
@@ -188,7 +181,7 @@ export const onRoomReported = onDocumentUpdated(on('rooms/{roomId}'), async (eve
  * reporter only needs to know it wasn't ignored.
  */
 export const onContentReportResolved = onDocumentUpdated(
-  on('contentReports/{reportId}'),
+  'contentReports/{reportId}',
   async (event) => {
     const after = dataOf(event.data?.after)
     if (!after || !justResolved(dataOf(event.data?.before), after)) return

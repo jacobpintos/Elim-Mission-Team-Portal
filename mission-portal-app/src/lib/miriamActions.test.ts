@@ -67,19 +67,21 @@ describe('which food item was meant', () => {
 })
 
 describe('which notification switch', () => {
-  it('writes push, email or both, as Settings names it', () => {
-    expect(notificationSwitch('newMessage', 'both', false)).toEqual({
-      paths: ['notificationPrefs.newMessage.push', 'notificationPrefs.newMessage.email'],
-      label: 'New message (push and email)',
+  it('writes the switch Settings shows, as Settings names it', () => {
+    expect(notificationSwitch('newMessage', false)).toEqual({
+      paths: ['notificationPrefs.newMessage.push'],
+      label: 'New message',
     })
-    expect(notificationSwitch('weeklyDigest', 'email', false)?.paths).toEqual([
-      'notificationPrefs.weeklyDigest',
+    expect(notificationSwitch('securityReportUrgent', false)?.paths).toEqual([
+      'notificationPrefs.securityReportUrgent',
     ])
+    // The digests went with the app's email.
+    expect(notificationSwitch('weeklyDigest', false)).toBeNull()
   })
   it('keeps admins’ switches for admins, and refuses ones that do not exist', () => {
-    expect(notificationSwitch('chatFlagged', 'push', false)).toBeNull()
-    expect(notificationSwitch('chatFlagged', 'push', true)).not.toBeNull()
-    expect(notificationSwitch('roles', 'push', true)).toBeNull()
+    expect(notificationSwitch('chatFlagged', false)).toBeNull()
+    expect(notificationSwitch('chatFlagged', true)).not.toBeNull()
+    expect(notificationSwitch('roles', true)).toBeNull()
   })
 })
 

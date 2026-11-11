@@ -1,6 +1,6 @@
 import type { TourFlow } from '../types'
 import { ADMIN_SECTIONS } from '@/lib/adminSections'
-import { PUBLIC_SURFACE_ENABLED, EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
+import { PUBLIC_SURFACE_ENABLED } from '@/lib/featureFlags'
 import { hasCustom } from '@/custom'
 
 /** The opening card — asks whether to take the tour. */
@@ -572,17 +572,6 @@ export const adminFlow: TourFlow = {
           },
         ]
       : []),
-    ...(EMAIL_FEATURES_ENABLED
-      ? [
-          {
-            id: 'admin-digests',
-            route: '/admin/digests',
-            title: 'Email digests',
-            body: 'Configure the weekly and monthly email digests that go out to members.',
-            adminOnly: true,
-          },
-        ]
-      : []),
   ],
 }
 
@@ -716,9 +705,7 @@ export const settingsFlow: TourFlow = {
       id: 'settings-notifs',
       route: '/settings',
       title: 'Notifications & location',
-      body: EMAIL_FEATURES_ENABLED
-        ? 'Choose exactly which notifications you get by push and email, opt into digests, and set your location for nearby events.'
-        : 'Choose exactly which notifications you get, and set your location so events near you are flagged.',
+      body: 'Choose exactly which notifications you get, and set your location so events near you are flagged.',
     },
   ],
 }

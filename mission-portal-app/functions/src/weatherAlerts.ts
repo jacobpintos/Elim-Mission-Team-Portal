@@ -2,7 +2,6 @@ import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
-import { RESEND_API_KEY } from './email/client'
 import { notifyUser } from './push/notifyCore'
 
 if (!admin.apps.length) admin.initializeApp()
@@ -542,14 +541,11 @@ async function runWeatherCheck(
  * to move an event, and not urgent enough to poll for. Rebuilds the watch list
  * as it goes, which also rolls it forward as days pass.
  */
-export const weatherAlertCheck = onSchedule(
-  { schedule: '0 */4 * * *', secrets: [RESEND_API_KEY] },
-  async () => {
-    const days = await rebuildWatch()
-    const { fromStr, limitStr } = aheadWindow(todayUTCStr())
-    await runWeatherCheck(days, fromStr, limitStr, { prune: true })
-  }
-)
+export const weatherAlertCheck = onSchedule({ schedule: '0 */4 * * *' }, async () => {
+  const days = await rebuildWatch()
+  const { fromStr, limitStr } = aheadWindow(todayUTCStr())
+  await runWeatherCheck(days, fromStr, limitStr, { prune: true })
+})
 
 /**
  * The live watch: only the days around now, every five minutes.
@@ -561,16 +557,13 @@ export const weatherAlertCheck = onSchedule(
  * document read and makes no weather calls at all. The heavy work only happens
  * on the days there is something to watch.
  */
-export const weatherAlertNow = onSchedule(
-  { schedule: '*/5 * * * *', secrets: [RESEND_API_KEY] },
-  async () => {
-    const { fromStr, limitStr } = nowWindow(todayUTCStr())
-    const snap = await admin.firestore().doc(WATCH_DOC).get()
-    const days = (snap.data() as WatchDoc | undefined)?.days ?? {}
-    if (!Object.keys(days).some((d) => d >= fromStr && d <= limitStr)) return
-    await runWeatherCheck(days, fromStr, limitStr)
-  }
-)
+export const weatherAlertNow = onSchedule({ schedule: '*/5 * * * *' }, async () => {
+  const { fromStr, limitStr } = nowWindow(todayUTCStr())
+  const snap = await admin.firestore().doc(WATCH_DOC).get()
+  const days = (snap.data() as WatchDoc | undefined)?.days ?? {}
+  if (!Object.keys(days).some((d) => d >= fromStr && d <= limitStr)) return
+  await runWeatherCheck(days, fromStr, limitStr)
+})
 
 /**
  * Keep the watch list current.

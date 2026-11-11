@@ -101,14 +101,6 @@ jobs:
         run: npm ci
         working-directory: mission-portal-app/functions
 
-      - name: Write functions .env
-        if: |
-          (github.event_name == 'workflow_dispatch' && inputs.deploy_functions == true) ||
-          (github.event_name == 'push' && steps.changed.outputs.functions != '0')
-        run: |
-          echo "MAIL_FROM=${{ secrets.MAIL_FROM || 'Mission Portal <noreply@yourdomain.com>' }}" >> mission-portal-app/functions/.env
-          echo "MAIL_ADMIN_TO=${{ secrets.MAIL_ADMIN_TO || 'admin@yourdomain.com' }}" >> mission-portal-app/functions/.env
-
       # Miriam's model (functions/models/minilm, about 25 MB) is left out of the
       # functions' source (firebase.json: functions.ignore). Before, a copy went
       # into every function, about 1.2 GB for each deploy. Now it is kept in Cloud
@@ -125,6 +117,36 @@ jobs:
           npm run build
           node lib/scripts/uploadModel.js "$(node -p "require('../../firebase.json').storage[0].bucket")"
         working-directory: mission-portal-app/functions
+
+      # Functions taken out of the source are deleted from the project here,
+      # by name. The deploy below stops, changing nothing, when it finds a
+      # function in the project that the source no longer has: it won't delete
+      # one unasked. So each one retired is named here, with why, and deleted
+      # before it. Once they are gone this step does nothing, and the names
+      # can stay.
+      #
+      # - The app's own email (Resend): never switched on, and removed.
+      #   sendContactForm, weeklyDigest, monthlyDigest, sendDigestManual,
+      #   resendWebhook, unsubscribe.
+      - name: Delete retired functions
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.deploy_functions == true) ||
+          (github.event_name == 'push' && steps.changed.outputs.functions != '0')
+        env:
+          PROJECT: ${{ secrets.FIREBASE_PROJECT_ID }}
+          RETIRED: sendContactForm weeklyDigest monthlyDigest sendDigestManual resendWebhook unsubscribe
+        run: |
+          deployed=$(npx firebase-tools functions:list --json --project "$PROJECT" | jq -r '.result[]?.id' || true)
+          gone=""
+          for name in $RETIRED; do
+            if printf '%s\n' "$deployed" | grep -qx "$name"; then gone="$gone $name"; fi
+          done
+          if [ -z "$gone" ]; then
+            echo "None of the retired functions is deployed."
+            exit 0
+          fi
+          echo "Deleting:$gone"
+          npx firebase-tools functions:delete $gone --force --project "$PROJECT"
 
       # Deploy Cloud Functions only when functions source changed (or manually requested).
       - name: Deploy Cloud Functions

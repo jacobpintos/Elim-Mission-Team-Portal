@@ -661,8 +661,6 @@ const NOTIFICATIONS = [
   'publicAnnouncement',
   'publicEvent',
   'contentFeatured',
-  'weeklyDigest',
-  'monthlyDigest',
   'securityReportUrgent',
 ]
 const ACTS = ' Only when they plainly tell you to; they will be shown it to confirm first.'
@@ -827,17 +825,15 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
     },
     change_notification: {
       name: 'change_notification',
-      description: 'Turn one of their notifications on or off, by push, email or both.' + ACTS,
+      description: 'Turn one of their notifications on or off.' + ACTS,
       strict: true,
       input_schema: {
         type: 'object',
         properties: {
           notification: { type: 'string', enum: NOTIFICATIONS },
-          channel: {
-            type: 'string',
-            enum: ['push', 'email', 'both'],
-            description: 'For a digest, "email".',
-          },
+          // The app sends no email, so there is one channel. Kept for an app
+          // not yet updated, which asks "push, email, or both?" without it.
+          channel: { type: 'string', enum: ['push'], description: 'Always "push".' },
           on: { type: 'boolean' },
         },
         required: ['notification', 'channel', 'on'],
@@ -1514,7 +1510,7 @@ export const APP_TOOLS: Record<AppToolName, Omit<ToolDefinition, 'name'> & { nam
     read_settings: {
       name: 'read_settings',
       description:
-        'Their own profile and settings: name, email, title, roles, location for nearby events, and which notifications they get by push and by email.',
+        'Their own profile and settings: name, email, title, roles, location for nearby events, and which notifications they get.',
       strict: true,
       input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
     },

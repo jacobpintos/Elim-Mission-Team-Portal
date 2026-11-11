@@ -53,10 +53,8 @@ export function foodStillOpenSaid(open: string[]): string {
   return `${open.slice(0, -1).join(', ')} and ${open[open.length - 1]} are still open.`
 }
 
-/** Settings' switches that are a single on-or-off, not push and email. */
+/** Settings' switches that are kept as a plain on-or-off, not under `push`. */
 const SINGLE = {
-  weeklyDigest: 'Weekly digest email',
-  monthlyDigest: 'Monthly digest email',
   securityReportUrgent: 'Security reports break through Focus',
 } as const
 
@@ -70,22 +68,14 @@ export interface NotificationSwitch {
  * The switch asked for, as this person sees it in Settings — an admin's
  * own are only for admins — or null.
  */
-export function notificationSwitch(
-  key: string,
-  channel: 'push' | 'email' | 'both',
-  admin: boolean
-): NotificationSwitch | null {
+export function notificationSwitch(key: string, admin: boolean): NotificationSwitch | null {
   if (key in SINGLE) {
     return { paths: [`notificationPrefs.${key}`], label: SINGLE[key as keyof typeof SINGLE] }
   }
   const label = NOTIF_LABELS[key as NotifKey] ?? PUBLIC_NOTIF_LABELS[key as PublicNotifKey] ?? null
   if (!label) return null
   if (ADMIN_ONLY_NOTIF_KEYS.includes(key as NotifKey) && !admin) return null
-  const channels = channel === 'both' ? ['push', 'email'] : [channel]
-  return {
-    paths: channels.map((c) => `notificationPrefs.${key}.${c}`),
-    label: `${label} (${channel === 'both' ? 'push and email' : channel})`,
-  }
+  return { paths: [`notificationPrefs.${key}.push`], label }
 }
 
 /** Who is in it after adding and taking out — each once, the order kept. */

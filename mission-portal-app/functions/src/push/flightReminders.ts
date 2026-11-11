@@ -3,7 +3,6 @@ import { onTaskDispatched } from 'firebase-functions/v2/tasks'
 import { getFunctions } from 'firebase-admin/functions'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
-import { RESEND_API_KEY } from '../email/client'
 import { notifyUser } from './notifyCore'
 
 if (!admin.apps.length) admin.initializeApp()
@@ -196,7 +195,7 @@ export const onFlightWritten = onDocumentWritten('events/{eventId}', async (even
  * moment, and if it arrives late it sends anyway.
  */
 export const flightReminderTask = onTaskDispatched<ReminderPayload>(
-  { retryConfig: { maxAttempts: 3 }, secrets: [RESEND_API_KEY] },
+  { retryConfig: { maxAttempts: 3 } },
   async (req) => {
     const { eventId, entryId, leg, scheduledFor } = req.data
     const db = admin.firestore()

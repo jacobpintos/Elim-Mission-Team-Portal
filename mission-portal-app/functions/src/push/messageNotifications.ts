@@ -1,7 +1,6 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
-import { RESEND_API_KEY } from '../email/client'
 import { notifyUser } from './notifyCore'
 
 if (!admin.apps.length) admin.initializeApp()
@@ -14,7 +13,7 @@ if (!admin.apps.length) admin.initializeApp()
  * anyone who has muted the room (Room.mutedBy).
  */
 export const onMessageCreated = onDocumentCreated(
-  { document: 'rooms/{roomId}/messages/{msgId}', secrets: [RESEND_API_KEY] },
+  'rooms/{roomId}/messages/{msgId}',
   async (event) => {
     const msg = event.data?.data() as
       | { uid?: string | number; text?: string; attachment?: unknown }

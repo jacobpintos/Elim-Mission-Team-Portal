@@ -300,8 +300,7 @@ export function settingsShown(profile: UserProfile) {
   for (const [k, v] of Object.entries(prefs)) {
     if (typeof v === 'boolean') notifications[k] = v ? 'on' : 'off'
     else if (v && typeof v === 'object') {
-      const p = v as { push?: boolean; email?: boolean }
-      notifications[k] = `push ${p.push ? 'on' : 'off'}, email ${p.email ? 'on' : 'off'}`
+      notifications[k] = (v as { push?: boolean }).push ? 'on' : 'off'
     }
   }
   return {

@@ -1,7 +1,6 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
-import { RESEND_API_KEY } from './email/client'
 import { notifyUser } from './push/notifyCore'
 import { mergeEvent } from './eventPrivate'
 import { withinLimit, type UsageLimit } from './utils/usageLimit'
@@ -58,7 +57,7 @@ const ANNOUNCE_LIMIT: UsageLimit = {
  * record. An app not yet updated sends the event and the name instead, as it
  * always has for the teams.
  */
-export const notifyWorshipTeams = onCall({ secrets: [RESEND_API_KEY] }, async (req) => {
+export const notifyWorshipTeams = onCall(async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in first.')
   const caller = req.auth.uid
   const db = admin.firestore()

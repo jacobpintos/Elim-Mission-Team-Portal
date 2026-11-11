@@ -895,7 +895,7 @@ async function notificationOffer(
 
   // Likely: asked, saying exactly what would be done.
   const lead = ask.email
-    ? 'Email notifications aren’t on in the app, so I can only change the push ones. '
+    ? 'The app doesn’t send email, so I can only change the notifications on your phone. '
     : ask.oneChat
       ? `I can’t mute just one conversation from here — only every new message. `
       : ''

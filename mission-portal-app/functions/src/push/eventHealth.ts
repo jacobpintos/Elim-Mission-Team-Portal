@@ -1,7 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
-import { RESEND_API_KEY } from '../email/client'
 import { notifyUser } from './notifyCore'
 
 if (!admin.apps.length) admin.initializeApp()
@@ -33,65 +32,62 @@ function isOverdue(task: TaskRaw, today: string): boolean {
  * notifies admins only on the transition INTO behind (not on every run while
  * it stays behind).
  */
-export const eventHealthCheck = onSchedule(
-  { schedule: '0 15 * * *', secrets: [RESEND_API_KEY] },
-  async () => {
-    const db = admin.firestore()
-    const today = todayStr()
+export const eventHealthCheck = onSchedule({ schedule: '0 15 * * *' }, async () => {
+  const db = admin.firestore()
+  const today = todayStr()
 
-    const [eventsSnap, tasksSnap, adminsSnap] = await Promise.all([
-      db.collection('events').get(),
-      db.collection('tasks').get(),
-      db.collection('users').where('roles', 'array-contains', 'admin').get(),
-    ])
+  const [eventsSnap, tasksSnap, adminsSnap] = await Promise.all([
+    db.collection('events').get(),
+    db.collection('tasks').get(),
+    db.collection('users').where('roles', 'array-contains', 'admin').get(),
+  ])
 
-    const adminUids = adminsSnap.docs.map((d) => d.id)
-    if (adminUids.length === 0) return
+  const adminUids = adminsSnap.docs.map((d) => d.id)
+  if (adminUids.length === 0) return
 
-    const tasks = tasksSnap.docs.map((d) => d.data() as TaskRaw)
+  const tasks = tasksSnap.docs.map((d) => d.data() as TaskRaw)
 
-    for (const evDoc of eventsSnap.docs) {
-      const ev = evDoc.data() as {
-        title?: string
-        taskTemplateId?: string
-        deleted?: boolean
-        unpublished?: boolean
-      }
-      // A draft is its maker's alone: no other admin is told of it.
-      if (ev.deleted || ev.unpublished === true || !ev.taskTemplateId) continue
+  for (const evDoc of eventsSnap.docs) {
+    const ev = evDoc.data() as {
+      title?: string
+      taskTemplateId?: string
+      deleted?: boolean
+      unpublished?: boolean
+    }
+    // A draft is its maker's alone: no other admin is told of it.
+    if (ev.deleted || ev.unpublished === true || !ev.taskTemplateId) continue
 
-      const evTasks = tasks.filter(
-        (t) => String(t.evId ?? '') === evDoc.id || String(t.evTemplateId ?? '') === evDoc.id
-      )
-      if (evTasks.length === 0) continue
+    const evTasks = tasks.filter(
+      (t) => String(t.evId ?? '') === evDoc.id || String(t.evTemplateId ?? '') === evDoc.id
+    )
+    if (evTasks.length === 0) continue
 
-      const isBehind = evTasks.some((t) => t.status === 'behind' || isOverdue(t, today))
+    const isBehind = evTasks.some((t) => t.status === 'behind' || isOverdue(t, today))
 
-      const stateRef = db.doc(`eventHealthState/${evDoc.id}`)
-      const prevState = (await stateRef.get()).data() as { behind?: boolean } | undefined
-      const wasBehind = prevState?.behind === true
+    const stateRef = db.doc(`eventHealthState/${evDoc.id}`)
+    const prevState = (await stateRef.get()).data() as { behind?: boolean } | undefined
+    const wasBehind = prevState?.behind === true
 
-      if (isBehind !== wasBehind) {
-        await stateRef.set({
-          behind: isBehind,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    if (isBehind !== wasBehind) {
+      await stateRef.set({
+        behind: isBehind,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+    }
+
+    // Only notify on the on-time -> behind transition.
+    if (isBehind && !wasBehind) {
+      for (const uid of adminUids) {
+        await notifyUser(uid, 'eventHealthBehind', {
+          eventTitle: ev.title ?? 'An event',
+          eventId: evDoc.id,
+          // The list, not the card. Opening a card needs an instance key —
+          // templateId_date — and the health check reads the template only,
+          // so it has no date to build one from.
+          link: '/(app)/events',
         })
       }
-
-      // Only notify on the on-time -> behind transition.
-      if (isBehind && !wasBehind) {
-        for (const uid of adminUids) {
-          await notifyUser(uid, 'eventHealthBehind', {
-            eventTitle: ev.title ?? 'An event',
-            eventId: evDoc.id,
-            // The list, not the card. Opening a card needs an instance key —
-            // templateId_date — and the health check reads the template only,
-            // so it has no date to build one from.
-            link: '/(app)/events',
-          })
-        }
-        logger.info(`eventHealthCheck: ${evDoc.id} transitioned to behind`)
-      }
+      logger.info(`eventHealthCheck: ${evDoc.id} transitioned to behind`)
     }
   }
-)
+})

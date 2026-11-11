@@ -20,7 +20,6 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch'
 import { Avatar } from '@/components/ui/Avatar'
 import { isAdmin, isPublic, isSecurity } from '@/lib/roles'
 import { claudeAllowed, setClaudeAllowed } from '@/lib/claudeConsent'
-import { EMAIL_FEATURES_ENABLED } from '@/lib/featureFlags'
 import { geocodeCity } from '@/lib/geocode'
 import { pickAndUploadAvatar, uploadAvatarFromFile } from '@/lib/avatarUpload'
 import { confirmAsync } from '@/lib/confirm'
@@ -412,41 +411,25 @@ export default function SettingsScreen() {
   )
 
   /**
-   * Turn one channel on or off for every row in a section.
+   * Turn every row in a section on or off.
    *
    * One write rather than a loop of them: the whole prefs object is sent on
    * each update, so twenty sequential writes would race each other and the
    * last to land would undo the rest.
    */
-  const setAllPrefs = async (
-    keys: (NotifKey | PublicNotifKey)[],
-    field: 'push' | 'email',
-    value: boolean
-  ) => {
+  const setAllPrefs = async (keys: (NotifKey | PublicNotifKey)[], value: boolean) => {
     try {
       const next = { ...prefs }
-      for (const k of keys) {
-        next[k] = { ...(prefs[k] ?? { push: false, email: false }), [field]: value }
-      }
+      for (const k of keys) next[k] = { ...prefs[k], push: value }
       await updateDoc(doc(db, 'users', fbUser.uid), { notificationPrefs: next })
     } catch {
       toast('Failed', 'error')
     }
   }
 
-  /** Whether every row in a section already has this channel on. */
-  const allOn = (keys: (NotifKey | PublicNotifKey)[], field: 'push' | 'email') =>
-    keys.length > 0 && keys.every((k) => prefs[k]?.[field])
-
-  const toggleEmailPref = async (key: NotifKey, value: boolean) => {
-    try {
-      await updateDoc(doc(db, 'users', fbUser.uid), {
-        notificationPrefs: { ...prefs, [key]: { ...prefs[key], email: value } },
-      })
-    } catch {
-      toast('Failed', 'error')
-    }
-  }
+  /** Whether every row in a section is already on. */
+  const allOn = (keys: (NotifKey | PublicNotifKey)[]) =>
+    keys.length > 0 && keys.every((k) => prefs[k]?.push)
 
   const togglePushPref = async (key: NotifKey, value: boolean) => {
     try {
@@ -469,12 +452,9 @@ export default function SettingsScreen() {
     }
   }
 
-  // Flat boolean prefs, written by dot path so one flag cannot clobber the
+  // A flat boolean pref, written by dot path so one flag cannot clobber the
   // rest of the object.
-  const toggleDigest = async (
-    key: 'weeklyDigest' | 'monthlyDigest' | 'securityReportUrgent',
-    value: boolean
-  ) => {
+  const toggleFlag = async (key: 'securityReportUrgent', value: boolean) => {
     try {
       await updateDoc(doc(db, 'users', fbUser.uid), {
         [`notificationPrefs.${key}`]: value,
@@ -488,16 +468,6 @@ export default function SettingsScreen() {
     try {
       await updateDoc(doc(db, 'users', fbUser.uid), {
         notificationPrefs: { ...prefs, [key]: { ...prefs[key], push: value } },
-      })
-    } catch {
-      toast('Failed', 'error')
-    }
-  }
-
-  const togglePublicEmailPref = async (key: PublicNotifKey, value: boolean) => {
-    try {
-      await updateDoc(doc(db, 'users', fbUser.uid), {
-        notificationPrefs: { ...prefs, [key]: { ...prefs[key], email: value } },
       })
     } catch {
       toast('Failed', 'error')
@@ -1122,15 +1092,10 @@ export default function SettingsScreen() {
               <Text flex={1} color={colors.textMuted} fontSize="$2" fontWeight="700">
                 Type
               </Text>
-              <XStack gap="$3" width={EMAIL_FEATURES_ENABLED ? 110 : 55}>
+              <XStack gap="$3" width={55}>
                 <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">
                   Push
                 </Text>
-                {EMAIL_FEATURES_ENABLED ? (
-                  <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">
-                    Email
-                  </Text>
-                ) : null}
               </XStack>
             </XStack>
             {/* Everything at once. Reflects reality rather than a
@@ -1141,25 +1106,15 @@ export default function SettingsScreen() {
               <Label flex={1} fontSize="$3" fontWeight="700">
                 All notifications
               </Label>
-              <XStack gap="$3" width={EMAIL_FEATURES_ENABLED ? 110 : 55} alignItems="center">
+              <XStack gap="$3" width={55} alignItems="center">
                 <YStack flex={1} alignItems="center">
                   <ToggleSwitch
                     size="$2"
-                    checked={allOn(publicNotifKeys, 'push')}
-                    onCheckedChange={(v) => setAllPrefs(publicNotifKeys, 'push', v)}
+                    checked={allOn(publicNotifKeys)}
+                    onCheckedChange={(v) => setAllPrefs(publicNotifKeys, v)}
                     accessibilityLabel="All notifications, push"
                   />
                 </YStack>
-                {EMAIL_FEATURES_ENABLED ? (
-                  <YStack flex={1} alignItems="center">
-                    <ToggleSwitch
-                      size="$2"
-                      checked={allOn(publicNotifKeys, 'email')}
-                      onCheckedChange={(v) => setAllPrefs(publicNotifKeys, 'email', v)}
-                      accessibilityLabel="All notifications, email"
-                    />
-                  </YStack>
-                ) : null}
               </XStack>
             </XStack>
             <Separator />
@@ -1173,7 +1128,7 @@ export default function SettingsScreen() {
                 <Label flex={1} fontSize="$3">
                   {PUBLIC_NOTIF_LABELS[key]}
                 </Label>
-                <XStack gap="$3" width={EMAIL_FEATURES_ENABLED ? 110 : 55} alignItems="center">
+                <XStack gap="$3" width={55} alignItems="center">
                   <YStack flex={1} alignItems="center">
                     <ToggleSwitch
                       size="$2"
@@ -1182,29 +1137,9 @@ export default function SettingsScreen() {
                       accessibilityLabel={`${PUBLIC_NOTIF_LABELS[key]}, push`}
                     />
                   </YStack>
-                  {EMAIL_FEATURES_ENABLED ? (
-                    <YStack flex={1} alignItems="center">
-                      <ToggleSwitch
-                        size="$2"
-                        checked={prefs[key]?.email ?? false}
-                        onCheckedChange={(v) => togglePublicEmailPref(key, v)}
-                        accessibilityLabel={`${PUBLIC_NOTIF_LABELS[key]}, email`}
-                      />
-                    </YStack>
-                  ) : null}
                 </XStack>
               </XStack>
             ))}
-            {EMAIL_FEATURES_ENABLED ? (
-              <XStack alignItems="center" justifyContent="space-between">
-                <Label fontSize="$3">Monthly digest</Label>
-                <ToggleSwitch
-                  size="$2"
-                  checked={prefs.monthlyDigest ?? false}
-                  onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}
-                />
-              </XStack>
-            ) : null}
           </Section>
         ) : (
           <Section title="Notifications">
@@ -1227,15 +1162,10 @@ export default function SettingsScreen() {
               <Text flex={1} color={colors.textMuted} fontSize="$2" fontWeight="700">
                 Event
               </Text>
-              <XStack gap="$3" width={EMAIL_FEATURES_ENABLED ? 110 : 55}>
+              <XStack gap="$3" width={55}>
                 <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">
                   Push
                 </Text>
-                {EMAIL_FEATURES_ENABLED ? (
-                  <Text flex={1} color={colors.textMuted} fontSize="$2" textAlign="center">
-                    Email
-                  </Text>
-                ) : null}
               </XStack>
             </XStack>
             {/* Everything at once. Reflects reality rather than a
@@ -1246,25 +1176,15 @@ export default function SettingsScreen() {
               <Label flex={1} fontSize="$3" fontWeight="700">
                 All notifications
               </Label>
-              <XStack gap="$3" width={EMAIL_FEATURES_ENABLED ? 110 : 55} alignItems="center">
+              <XStack gap="$3" width={55} alignItems="center">
                 <YStack flex={1} alignItems="center">
                   <ToggleSwitch
                     size="$2"
-                    checked={allOn(memberNotifKeys, 'push')}
-                    onCheckedChange={(v) => setAllPrefs(memberNotifKeys, 'push', v)}
+                    checked={allOn(memberNotifKeys)}
+                    onCheckedChange={(v) => setAllPrefs(memberNotifKeys, v)}
                     accessibilityLabel="All notifications, push"
                   />
                 </YStack>
-                {EMAIL_FEATURES_ENABLED ? (
-                  <YStack flex={1} alignItems="center">
-                    <ToggleSwitch
-                      size="$2"
-                      checked={allOn(memberNotifKeys, 'email')}
-                      onCheckedChange={(v) => setAllPrefs(memberNotifKeys, 'email', v)}
-                      accessibilityLabel="All notifications, email"
-                    />
-                  </YStack>
-                ) : null}
               </XStack>
             </XStack>
             <Separator />
@@ -1278,7 +1198,7 @@ export default function SettingsScreen() {
                 <Label flex={1} fontSize="$3">
                   {NOTIF_LABELS[key]}
                 </Label>
-                <XStack gap="$3" width={EMAIL_FEATURES_ENABLED ? 110 : 55} alignItems="center">
+                <XStack gap="$3" width={55} alignItems="center">
                   <YStack flex={1} alignItems="center">
                     <ToggleSwitch
                       size="$2"
@@ -1287,22 +1207,12 @@ export default function SettingsScreen() {
                       accessibilityLabel={`${NOTIF_LABELS[key]}, push`}
                     />
                   </YStack>
-                  {EMAIL_FEATURES_ENABLED ? (
-                    <YStack flex={1} alignItems="center">
-                      <ToggleSwitch
-                        size="$2"
-                        checked={prefs[key]?.email ?? false}
-                        onCheckedChange={(v) => toggleEmailPref(key, v)}
-                        accessibilityLabel={`${NOTIF_LABELS[key]}, email`}
-                      />
-                    </YStack>
-                  ) : null}
                 </XStack>
               </XStack>
             ))}
             {/* How far ahead the flight reminder lands. Only worth showing to
                 someone who wants the reminder at all. */}
-            {prefs.flightReminder?.push || prefs.flightReminder?.email ? (
+            {prefs.flightReminder?.push ? (
               <XStack alignItems="center" justifyContent="space-between" gap="$2">
                 <Label flex={1} fontSize="$3">
                   Flight reminder lead time
@@ -1341,27 +1251,7 @@ export default function SettingsScreen() {
                 <ToggleSwitch
                   size="$2"
                   checked={prefs.securityReportUrgent ?? true}
-                  onCheckedChange={(v) => toggleDigest('securityReportUrgent', v)}
-                />
-              </XStack>
-            ) : null}
-            {EMAIL_FEATURES_ENABLED ? (
-              <XStack alignItems="center" justifyContent="space-between">
-                <Label fontSize="$3">Weekly digest</Label>
-                <ToggleSwitch
-                  size="$2"
-                  checked={prefs.weeklyDigest ?? false}
-                  onCheckedChange={(v) => toggleDigest('weeklyDigest', v)}
-                />
-              </XStack>
-            ) : null}
-            {EMAIL_FEATURES_ENABLED ? (
-              <XStack alignItems="center" justifyContent="space-between">
-                <Label fontSize="$3">Monthly digest</Label>
-                <ToggleSwitch
-                  size="$2"
-                  checked={prefs.monthlyDigest ?? false}
-                  onCheckedChange={(v) => toggleDigest('monthlyDigest', v)}
+                  onCheckedChange={(v) => toggleFlag('securityReportUrgent', v)}
                 />
               </XStack>
             ) : null}

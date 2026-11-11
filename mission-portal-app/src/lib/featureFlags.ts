@@ -6,23 +6,6 @@
  */
 
 /**
- * Whether outbound email features are offered.
- *
- * Everything email-shaped in the app sends through Resend, and `MAIL_FROM` is
- * still pointed at a placeholder domain, so those sends fail. Offering a
- * "weekly digest" switch that quietly delivers nothing is exactly the kind of
- * non-functional feature Apple rejects under Guideline 2.1, so the switches
- * are hidden until a verified sending domain is configured.
- *
- * This covers digests and the per-notification Email column only. Changing
- * your account email and resetting a password go through Firebase Auth's own
- * mailer, not Resend — they work, and they stay.
- *
- * Push notifications are unaffected.
- */
-export const EMAIL_FEATURES_ENABLED = false
-
-/**
  * Whether people can make their own account.
  *
  * Off: every account is made by an admin, in user management (the

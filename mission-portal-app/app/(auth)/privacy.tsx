@@ -77,7 +77,7 @@ export default function PrivacyPolicyScreen() {
             Privacy Policy
           </Text>
           <Text color={c.textMuted} fontSize={13}>
-            Effective date: October 27, 2026
+            Effective date: November 11, 2026
           </Text>
           <Body>
             This Privacy Policy explains how The Well of Iowa (“we,” “us,” or “our”) collects, uses,
@@ -152,8 +152,8 @@ export default function PrivacyPolicyScreen() {
               inventory, operations, and announcements.
             </Bullet>
             <Bullet>
-              Send push notifications and email digests you subscribe to (weekly and/or monthly);
-              you can change these preferences at any time in Profile &amp; Settings.
+              Send the push notifications you choose to receive; you can change these preferences at
+              any time in Profile &amp; Settings.
             </Bullet>
             <Bullet>
               Display upcoming events near your stated location (only when you have opted in to
@@ -240,12 +240,13 @@ export default function PrivacyPolicyScreen() {
           </Body>
         </Section>
 
-        <Section title="6. Notifications, Email Digests &amp; the Texting List">
+        <Section title="6. Notifications &amp; the Texting List">
           <Body>
-            The App may send push notifications and email digests for events, assignments,
-            announcements, and other team activity. You control which notifications you receive in
-            Profile &amp; Settings → Notifications. You can unsubscribe from email digests at any
-            time by toggling them off in settings or clicking “Unsubscribe” in any digest email.
+            The App may send push notifications for events, assignments, announcements, and other
+            team activity. You control which notifications you receive in Profile &amp; Settings →
+            Notifications. The App sends no email newsletters or digests. The only emails connected
+            with your account are the ones you ask for: to verify a new email address or to reset
+            your password, which our sign-in provider (Google Firebase) sends.
           </Body>
           <Body>
             The texting list is separate from the App and works differently, so it is worth being
@@ -396,9 +397,6 @@ export default function PrivacyPolicyScreen() {
             <Bullet>
               Meta (Facebook), when an admin connects the church&rsquo;s Facebook Page so the App
               can show its posts — facebook.com/privacy/policy
-            </Bullet>
-            <Bullet>
-              Resend (delivering email, when the App sends any) — resend.com/legal/privacy-policy
             </Bullet>
           </YStack>
           <Body>

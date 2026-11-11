@@ -1,7 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
-import { RESEND_API_KEY } from '../email/client'
 import { notifyUser } from './notifyCore'
 import { clockOf, nextOccurrence, zonedTime, type Repeat } from './reminderTime'
 import { instancesOf, type EventTemplate, type Group } from '../miriam/data'
@@ -61,85 +60,82 @@ function setTo(next: ReturnType<typeof nextBeforeEvent>) {
  * a run that overlaps another never sends it twice; one marked done before
  * its time is not sent at all.
  */
-export const sendDueReminders = onSchedule(
-  { schedule: 'every 1 minutes', secrets: [RESEND_API_KEY] },
-  async () => {
-    const db = admin.firestore()
-    const now = Date.now()
-    const snap = await db.collection('reminders').where('pending', '==', true).get()
-    // Read only when a reminder before every event comes due.
-    let world: Awaited<ReturnType<typeof eventsAndGroups>> | null = null
-    for (const doc of snap.docs) {
-      const r = doc.data() as EveryEventRule & {
-        uid?: string
-        text?: string
-        remindAt?: number
-        done?: boolean
-        repeat?: Repeat
-        tz?: string
-        everyEvent?: boolean
-        eventKey?: string
-        eventTitle?: string
-      }
-      if (typeof r.remindAt !== 'number' || r.remindAt > now) continue
-      const claimed = await db.runTransaction(async (tx) => {
-        const fresh = await tx.get(doc.ref)
-        const f = fresh.data()
-        // Moved on meanwhile (refreshEveryEventReminders): not due after all.
-        if (!fresh.exists || f?.pending !== true || (f?.remindAt ?? 0) > now) return false
-        // A repeating one is set for its next time as it is sent; one before
-        // every event, once sent, for its next event (below); any other is done with.
-        tx.update(
-          doc.ref,
-          r.repeat
+export const sendDueReminders = onSchedule({ schedule: 'every 1 minutes' }, async () => {
+  const db = admin.firestore()
+  const now = Date.now()
+  const snap = await db.collection('reminders').where('pending', '==', true).get()
+  // Read only when a reminder before every event comes due.
+  let world: Awaited<ReturnType<typeof eventsAndGroups>> | null = null
+  for (const doc of snap.docs) {
+    const r = doc.data() as EveryEventRule & {
+      uid?: string
+      text?: string
+      remindAt?: number
+      done?: boolean
+      repeat?: Repeat
+      tz?: string
+      everyEvent?: boolean
+      eventKey?: string
+      eventTitle?: string
+    }
+    if (typeof r.remindAt !== 'number' || r.remindAt > now) continue
+    const claimed = await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(doc.ref)
+      const f = fresh.data()
+      // Moved on meanwhile (refreshEveryEventReminders): not due after all.
+      if (!fresh.exists || f?.pending !== true || (f?.remindAt ?? 0) > now) return false
+      // A repeating one is set for its next time as it is sent; one before
+      // every event, once sent, for its next event (below); any other is done with.
+      tx.update(
+        doc.ref,
+        r.repeat
+          ? {
+              remindAt: nextOccurrence(r.remindAt as number, r.repeat, r.tz, now),
+              done: false,
+              sentAt: now,
+            }
+          : r.everyEvent
+            ? { pending: false, sentAt: now, sentKeys: sentWith(r.sentKeys, r.eventKey) }
+            : { pending: false, sentAt: now }
+      )
+      return true
+    })
+    if (!claimed) continue
+    if (r.done || !r.uid) {
+      // Ticked off for this one: skipped, and on to the next.
+    } else if (now - r.remindAt > TOO_LATE_MS) {
+      logger.warn('sendDueReminders: too late to send', { id: doc.id })
+    } else {
+      try {
+        await notifyUser(
+          r.uid,
+          'reminder',
+          r.everyEvent && r.eventKey
             ? {
-                remindAt: nextOccurrence(r.remindAt as number, r.repeat, r.tz, now),
-                done: false,
-                sentAt: now,
+                text: beforeEventSaid(r, r.eventTitle ?? 'Your event'),
+                link: `/events/${encodeURIComponent(r.eventKey)}`,
+                reminderId: doc.id,
               }
-            : r.everyEvent
-              ? { pending: false, sentAt: now, sentKeys: sentWith(r.sentKeys, r.eventKey) }
-              : { pending: false, sentAt: now }
+            : { text: r.text ?? '', link: '/assignments', reminderId: doc.id },
+          { immediate: true }
         )
-        return true
-      })
-      if (!claimed) continue
-      if (r.done || !r.uid) {
-        // Ticked off for this one: skipped, and on to the next.
-      } else if (now - r.remindAt > TOO_LATE_MS) {
-        logger.warn('sendDueReminders: too late to send', { id: doc.id })
-      } else {
-        try {
-          await notifyUser(
-            r.uid,
-            'reminder',
-            r.everyEvent && r.eventKey
-              ? {
-                  text: beforeEventSaid(r, r.eventTitle ?? 'Your event'),
-                  link: `/events/${encodeURIComponent(r.eventKey)}`,
-                  reminderId: doc.id,
-                }
-              : { text: r.text ?? '', link: '/assignments', reminderId: doc.id },
-            { immediate: true }
-          )
-        } catch (err) {
-          logger.error('sendDueReminders: failed', { id: doc.id, err })
-        }
+      } catch (err) {
+        logger.error('sendDueReminders: failed', { id: doc.id, err })
       }
-      if (r.everyEvent) {
-        try {
-          world ??= await eventsAndGroups(db)
-          const rule = { ...r, sentKeys: sentWith(r.sentKeys, r.eventKey) }
-          const next = nextBeforeEvent(rule, world.events, world.groups, now)
-          await doc.ref.update({ ...setTo(next), done: false })
-        } catch (err) {
-          // refreshEveryEventReminders sets it on its next run.
-          logger.error('sendDueReminders: next event not set', { id: doc.id, err })
-        }
+    }
+    if (r.everyEvent) {
+      try {
+        world ??= await eventsAndGroups(db)
+        const rule = { ...r, sentKeys: sentWith(r.sentKeys, r.eventKey) }
+        const next = nextBeforeEvent(rule, world.events, world.groups, now)
+        await doc.ref.update({ ...setTo(next), done: false })
+      } catch (err) {
+        // refreshEveryEventReminders sets it on its next run.
+        logger.error('sendDueReminders: next event not set', { id: doc.id, err })
       }
     }
   }
-)
+})
 
 /**
  * Reminders before every event kept on their next event: one added since,

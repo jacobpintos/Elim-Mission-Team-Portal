@@ -15,9 +15,8 @@ import { listed, plain, quoted, withoutAsking, withoutEnding } from './miriamRep
  * "let me know when we go live": one of their notification switches, worked
  * out on the device rather than by Claude.
  *
- * Only the switches Settings shows this person, and only push: email
- * notifications are not on in the app (lib/featureFlags), so Settings shows
- * no email column, and none is offered here.
+ * Only the switches Settings shows this person, and only push: the app
+ * sends no email, so there is no other kind to offer.
  */
 
 /** The switches Settings shows this person, in its order. */

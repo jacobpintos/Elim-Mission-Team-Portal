@@ -566,7 +566,6 @@ export default function AppLayout() {
                 <Tabs.Screen name="admin/theme" options={{ href: null }} />
                 <Tabs.Screen name="admin/analytics" options={{ href: null }} />
                 <Tabs.Screen name="admin/audit" options={{ href: null }} />
-                <Tabs.Screen name="admin/digests" options={{ href: null }} />
                 <Tabs.Screen name="admin/licensing" options={{ href: null }} />
                 <Tabs.Screen name="admin/leadership" options={{ href: null }} />
                 <Tabs.Screen name="admin/vehicles" options={{ href: null }} />

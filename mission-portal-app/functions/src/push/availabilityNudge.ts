@@ -1,7 +1,6 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { logger } from 'firebase-functions'
 import * as admin from 'firebase-admin'
-import { RESEND_API_KEY } from '../email/client'
 import { requireAdmin } from '../owner'
 import { withinLimit, type UsageLimit } from '../utils/usageLimit'
 import { notifyUser } from './notifyCore'
@@ -23,7 +22,7 @@ const MAX_PEOPLE = 300
  * and that each of them is on the event, and writes what they are sent —
  * the event's name and the day — from the event itself.
  */
-export const nudgeAvailability = onCall({ secrets: [RESEND_API_KEY] }, async (req) => {
+export const nudgeAvailability = onCall(async (req) => {
   const caller = await requireAdmin(req.auth?.uid)
   const key = typeof req.data?.eventKey === 'string' ? req.data.eventKey.slice(0, 200) : ''
   const parts = key.includes('/') ? null : availKeyParts(key)

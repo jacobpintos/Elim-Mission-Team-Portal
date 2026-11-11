@@ -3,7 +3,6 @@ import { todayInOrg } from '../org'
 import * as admin from 'firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions'
-import { RESEND_API_KEY } from '../email/client'
 import { notifyUser } from '../push/notifyCore'
 import { requireAdmin } from '../owner'
 import { taskSeenBy } from '../recordAccess'
@@ -61,8 +60,6 @@ const COLLECTION = 'reimbursements'
 const FIRST_ACCOUNTANT_NAME = 'Sunny Singh'
 
 const MAX_NOTE = 1000
-
-const CALL_OPTS = { secrets: [RESEND_API_KEY] }
 
 /** Today where the church is (../org), which is when "already passed" is decided. */
 function today(): string {
@@ -231,7 +228,7 @@ async function eventFor(db: FirebaseFirestore.Firestore, rawId: unknown, rawDate
 
 // ─── Asking ──────────────────────────────────────────────────────────────────
 
-export const submitReimbursement = onCall(CALL_OPTS, async (req) => {
+export const submitReimbursement = onCall(async (req) => {
   const uid = requireUid(req)
   const db = admin.firestore()
 
@@ -323,7 +320,7 @@ export const submitReimbursement = onCall(CALL_OPTS, async (req) => {
 
 // ─── Deciding ────────────────────────────────────────────────────────────────
 
-export const decideReimbursement = onCall(CALL_OPTS, async (req) => {
+export const decideReimbursement = onCall(async (req) => {
   const uid = requireUid(req)
   const db = admin.firestore()
   const { ref, r } = await loadFor(db, req.data?.id, uid, 'accountant')
@@ -379,7 +376,7 @@ export const decideReimbursement = onCall(CALL_OPTS, async (req) => {
 
 // ─── Moving the pay date ─────────────────────────────────────────────────────
 
-export const requestPayDateChange = onCall(CALL_OPTS, async (req) => {
+export const requestPayDateChange = onCall(async (req) => {
   const uid = requireUid(req)
   const db = admin.firestore()
   const { ref, r } = await loadFor(db, req.data?.id, uid, 'accountant')
@@ -435,7 +432,7 @@ export const requestPayDateChange = onCall(CALL_OPTS, async (req) => {
   return { ok: true }
 })
 
-export const answerPayDateChange = onCall(CALL_OPTS, async (req) => {
+export const answerPayDateChange = onCall(async (req) => {
   const uid = requireUid(req)
   const db = admin.firestore()
   const { ref, r } = await loadFor(db, req.data?.id, uid, 'submitter')
@@ -507,7 +504,7 @@ async function roomFor(
   return id
 }
 
-export const markReimbursementPaid = onCall(CALL_OPTS, async (req) => {
+export const markReimbursementPaid = onCall(async (req) => {
   const uid = requireUid(req)
   const db = admin.firestore()
   const { ref, r } = await loadFor(db, req.data?.id, uid, 'accountant')
@@ -582,7 +579,7 @@ export const markReimbursementPaid = onCall(CALL_OPTS, async (req) => {
  * the Accountant is the one who would approve them. The task goes on their
  * list with the due date; there is no one else to notify.
  */
-export const createExternalExpense = onCall(CALL_OPTS, async (req) => {
+export const createExternalExpense = onCall(async (req) => {
   const uid = requireUid(req)
   const db = admin.firestore()
 

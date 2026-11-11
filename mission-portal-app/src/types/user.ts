@@ -7,29 +7,27 @@ export type Sex = 'male' | 'female'
 export const DEFAULT_FLIGHT_REMINDER_HOURS = 3
 
 export interface NotificationPrefs {
-  newAssignment: { push: boolean; email: boolean }
-  newMessage: { push: boolean; email: boolean }
-  eventReminder: { push: boolean; email: boolean }
-  announcement: { push: boolean; email: boolean }
-  issueAssigned: { push: boolean; email: boolean }
-  weeklyDigest: boolean
-  monthlyDigest: boolean
+  newAssignment: { push: boolean }
+  newMessage: { push: boolean }
+  eventReminder: { push: boolean }
+  announcement: { push: boolean }
+  issueAssigned: { push: boolean }
   // General-user
-  eventJoin: { push: boolean; email: boolean }
-  eventRemoved: { push: boolean; email: boolean }
-  worshipSetAssigned: { push: boolean; email: boolean }
-  taskDueSoon: { push: boolean; email: boolean }
+  eventJoin: { push: boolean }
+  eventRemoved: { push: boolean }
+  worshipSetAssigned: { push: boolean }
+  taskDueSoon: { push: boolean }
   // Admin-only
-  rsvpNonAvailable: { push: boolean; email: boolean }
-  kaizenSubmission: { push: boolean; email: boolean }
-  issueSubmission: { push: boolean; email: boolean }
-  eventHealthBehind: { push: boolean; email: boolean }
-  chatFlagged: { push: boolean; email: boolean }
-  securityReport: { push: boolean; email: boolean }
+  rsvpNonAvailable: { push: boolean }
+  kaizenSubmission: { push: boolean }
+  issueSubmission: { push: boolean }
+  eventHealthBehind: { push: boolean }
+  chatFlagged: { push: boolean }
+  securityReport: { push: boolean }
   /**
    * Let an incident report break through Focus and Do Not Disturb.
    *
-   * A plain flag rather than a push/email pair: it changes how the security
+   * A plain flag rather than a switch of its own: it changes how the security
    * report push is delivered, not whether it is sent at all. Only has any
    * effect for users who answer reports (security role or admin) — see
    * interruptionLevelFor() in functions/src/push/notifyCore.ts. Defaults to on
@@ -39,14 +37,14 @@ export interface NotificationPrefs {
    * critical-alerts entitlement.
    */
   securityReportUrgent?: boolean
-  weatherAlertAdmin: { push: boolean; email: boolean }
+  weatherAlertAdmin: { push: boolean }
   /** Someone asked to be added to the event/meeting texting list. Only the
    *  Connections Coordinator is ever sent one. */
-  textingListSignup: { push: boolean; email: boolean }
+  textingListSignup: { push: boolean }
   /** A flight, hotel, carpool seat or food item was assigned to you. */
-  eventLogistics: { push: boolean; email: boolean }
+  eventLogistics: { push: boolean }
   /** Reminder before a flight you are booked on. */
-  flightReminder: { push: boolean; email: boolean }
+  flightReminder: { push: boolean }
   /**
    * A service or worship event has started streaming.
    *
@@ -58,7 +56,7 @@ export interface NotificationPrefs {
    * Deliberately left out of defaultNotificationPrefs for the same reason — a
    * new account starts unasked, not opted in.
    */
-  livestream?: { push: boolean; email: boolean }
+  livestream?: { push: boolean }
   /**
    * The Elim Store has started a new sale.
    *
@@ -66,15 +64,15 @@ export interface NotificationPrefs {
    * until someone asks for it on the store tab or in Settings, and absent
    * means no. Left out of defaultNotificationPrefs.
    */
-  storeSale?: { push: boolean; email: boolean }
+  storeSale?: { push: boolean }
   /** An event you are on opened a food sign-up. */
-  foodSignupOpen: { push: boolean; email: boolean }
+  foodSignupOpen: { push: boolean }
   /** Items are still unclaimed a few days before the event. */
-  foodSignupReminder: { push: boolean; email: boolean }
+  foodSignupReminder: { push: boolean }
   // Public-user specific
-  publicAnnouncement: { push: boolean; email: boolean }
-  publicEvent: { push: boolean; email: boolean }
-  contentFeatured: { push: boolean; email: boolean }
+  publicAnnouncement: { push: boolean }
+  publicEvent: { push: boolean }
+  contentFeatured: { push: boolean }
 }
 
 /**
@@ -94,33 +92,31 @@ export interface NotificationPrefs {
  */
 export function defaultNotificationPrefs(): NotificationPrefs {
   return {
-    newAssignment: { push: true, email: false },
-    newMessage: { push: true, email: false },
-    eventReminder: { push: true, email: true },
-    announcement: { push: true, email: false },
-    issueAssigned: { push: true, email: false },
-    weeklyDigest: true,
-    monthlyDigest: false,
-    eventJoin: { push: true, email: false },
-    eventRemoved: { push: true, email: false },
-    worshipSetAssigned: { push: true, email: false },
-    taskDueSoon: { push: true, email: false },
-    rsvpNonAvailable: { push: true, email: false },
-    kaizenSubmission: { push: true, email: false },
-    issueSubmission: { push: true, email: false },
-    eventHealthBehind: { push: true, email: false },
-    chatFlagged: { push: true, email: false },
-    securityReport: { push: true, email: false },
+    newAssignment: { push: true },
+    newMessage: { push: true },
+    eventReminder: { push: true },
+    announcement: { push: true },
+    issueAssigned: { push: true },
+    eventJoin: { push: true },
+    eventRemoved: { push: true },
+    worshipSetAssigned: { push: true },
+    taskDueSoon: { push: true },
+    rsvpNonAvailable: { push: true },
+    kaizenSubmission: { push: true },
+    issueSubmission: { push: true },
+    eventHealthBehind: { push: true },
+    chatFlagged: { push: true },
+    securityReport: { push: true },
     securityReportUrgent: true,
-    weatherAlertAdmin: { push: true, email: false },
-    textingListSignup: { push: true, email: false },
-    eventLogistics: { push: true, email: false },
-    flightReminder: { push: true, email: false },
-    foodSignupOpen: { push: true, email: false },
-    foodSignupReminder: { push: true, email: false },
-    publicAnnouncement: { push: true, email: false },
-    publicEvent: { push: true, email: false },
-    contentFeatured: { push: true, email: false },
+    weatherAlertAdmin: { push: true },
+    textingListSignup: { push: true },
+    eventLogistics: { push: true },
+    flightReminder: { push: true },
+    foodSignupOpen: { push: true },
+    foodSignupReminder: { push: true },
+    publicAnnouncement: { push: true },
+    publicEvent: { push: true },
+    contentFeatured: { push: true },
   }
 }
 

@@ -1,7 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
-import { RESEND_API_KEY } from '../email/client'
 import { notifyUser } from './notifyCore'
 
 if (!admin.apps.length) admin.initializeApp()
@@ -36,58 +35,55 @@ function addDays(dateStr: string, days: number): string {
  * each reminder is written back to the task doc so a given task never sends
  * the same reminder twice.
  */
-export const taskDueReminders = onSchedule(
-  { schedule: '0 14 * * *', secrets: [RESEND_API_KEY] },
-  async () => {
-    const db = admin.firestore()
-    const today = todayStr()
-    const weekOut = addDays(today, 7)
+export const taskDueReminders = onSchedule({ schedule: '0 14 * * *' }, async () => {
+  const db = admin.firestore()
+  const today = todayStr()
+  const weekOut = addDays(today, 7)
 
-    const snap = await db.collection('tasks').get()
+  const snap = await db.collection('tasks').get()
 
-    for (const doc of snap.docs) {
-      const task = doc.data() as TaskRaw
-      if (task.status === 'done') continue
+  for (const doc of snap.docs) {
+    const task = doc.data() as TaskRaw
+    if (task.status === 'done') continue
 
-      // projectedDate takes precedence over dueDate when present.
-      const effectiveDate = task.projectedDate || task.dueDate
-      if (!effectiveDate) continue
+    // projectedDate takes precedence over dueDate when present.
+    const effectiveDate = task.projectedDate || task.dueDate
+    if (!effectiveDate) continue
 
-      const assignees = (task.assignees ?? []).map(String).filter(Boolean)
-      if (assignees.length === 0) continue
+    const assignees = (task.assignees ?? []).map(String).filter(Boolean)
+    if (assignees.length === 0) continue
 
-      const isDueToday = effectiveDate === today
-      const isDueInAWeek = effectiveDate === weekOut
+    const isDueToday = effectiveDate === today
+    const isDueInAWeek = effectiveDate === weekOut
 
-      // Dedup against the exact date the reminder covers, so a shifted
-      // projectedDate correctly re-arms the reminder for the new date.
-      const alreadySentToday = task.notifiedDueTodayAt === effectiveDate
-      const alreadySentWeek = task.notifiedDueWeekAt === effectiveDate
+    // Dedup against the exact date the reminder covers, so a shifted
+    // projectedDate correctly re-arms the reminder for the new date.
+    const alreadySentToday = task.notifiedDueTodayAt === effectiveDate
+    const alreadySentWeek = task.notifiedDueWeekAt === effectiveDate
 
-      if (isDueToday && !alreadySentToday) {
-        for (const uid of assignees) {
-          await notifyUser(uid, 'taskDueSoon', {
-            taskTitle: task.title ?? 'A task',
-            taskId: String(task.id ?? doc.id),
-            dueToday: true,
-            // The assignments screen reads taskId and shows that one first.
-            link: `/(app)/assignments?taskId=${String(task.id ?? doc.id)}`,
-          })
-        }
-        await doc.ref.update({ notifiedDueTodayAt: effectiveDate })
-        logger.info(`taskDueReminders: due-today sent for task ${doc.id}`)
-      } else if (isDueInAWeek && !alreadySentWeek) {
-        for (const uid of assignees) {
-          await notifyUser(uid, 'taskDueSoon', {
-            taskTitle: task.title ?? 'A task',
-            taskId: String(task.id ?? doc.id),
-            dueToday: false,
-            link: `/(app)/assignments?taskId=${String(task.id ?? doc.id)}`,
-          })
-        }
-        await doc.ref.update({ notifiedDueWeekAt: effectiveDate })
-        logger.info(`taskDueReminders: 1-week sent for task ${doc.id}`)
+    if (isDueToday && !alreadySentToday) {
+      for (const uid of assignees) {
+        await notifyUser(uid, 'taskDueSoon', {
+          taskTitle: task.title ?? 'A task',
+          taskId: String(task.id ?? doc.id),
+          dueToday: true,
+          // The assignments screen reads taskId and shows that one first.
+          link: `/(app)/assignments?taskId=${String(task.id ?? doc.id)}`,
+        })
       }
+      await doc.ref.update({ notifiedDueTodayAt: effectiveDate })
+      logger.info(`taskDueReminders: due-today sent for task ${doc.id}`)
+    } else if (isDueInAWeek && !alreadySentWeek) {
+      for (const uid of assignees) {
+        await notifyUser(uid, 'taskDueSoon', {
+          taskTitle: task.title ?? 'A task',
+          taskId: String(task.id ?? doc.id),
+          dueToday: false,
+          link: `/(app)/assignments?taskId=${String(task.id ?? doc.id)}`,
+        })
+      }
+      await doc.ref.update({ notifiedDueWeekAt: effectiveDate })
+      logger.info(`taskDueReminders: 1-week sent for task ${doc.id}`)
     }
   }
-)
+})
