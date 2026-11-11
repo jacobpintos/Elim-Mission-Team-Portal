@@ -40,6 +40,7 @@ import { openDirections } from '@/lib/location'
 import { canKeepDateNotes, isDay, noteText } from '@/lib/dateNotes'
 import { minutesBeforeSaid, reminderAsked, reminderWhen, type Repeat } from '@/lib/reminders'
 import { briefingAsked, briefingUnderstood } from '@/lib/briefing'
+import { reportAsked, type ReportAsk } from '@/lib/eventReport'
 import { localToday } from '@/lib/events'
 import { asksAQuestion, songAsked, songThen } from '@/lib/miriamSongs'
 import { looksLikeLyrics, slidesAsked, slidesAsking, type SlidesAsk } from '@/lib/lyricSlides'
@@ -83,6 +84,13 @@ import { eventByKey, prepareAction } from './actions'
 import { appData, eventsLoaded, hereNow, quickFromApp } from './hereNow'
 import { offerDirections, remindBeforeEach, talkHere, type Talk } from './localTalk'
 import { BRIEFING_OFF, BRIEFING_OFF_KEY, BRIEFING_ON, type BriefingControls } from './useBriefing'
+import {
+  eventByKeyForReport,
+  eventForReport,
+  gatherEventReport,
+  mayHaveReports,
+  type ReportEvent,
+} from './eventReportData'
 import type { Listening } from './useListening'
 import { useMiriamActions } from './useMiriamActions'
 import { useMiriamMedia } from './useMiriamMedia'
@@ -187,6 +195,40 @@ export function useMiriamConversation(
   // A conversation she began ("Ok, tell me more about it"): what the reply is taken as.
   const startedRef = useRef<Starter | null>(null)
   const { giveBriefing, briefedFoodRef } = briefing
+
+  /**
+   * An admin's report on an event (lib/eventReport), shown and read out, and
+   * left open to be read. False when there is none to give: no such event, or
+   * not theirs to have — what was asked is then worked out another way.
+   */
+  const giveReport = async (ev: ReportEvent | null): Promise<boolean> => {
+    if (!ev) return false
+    setStage('thinking')
+    const report = await gatherEventReport(ev).catch(() => null)
+    if (!report) return false
+    setAnswer(report.text)
+    speak(report.spoken)
+    noteDone(report.spoken)
+    setStay(true)
+    setStage('answered')
+    return true
+  }
+
+  /** "Give me a report on Revival", worked out here: the event found, and its report given. */
+  const reportFor = async (ask: ReportAsk): Promise<boolean> => {
+    if (!mayHaveReports()) {
+      // Plainly asked for — not a name that only might be an event's.
+      if (ask.nameFirst) return false
+      const text = 'Event reports are for admins.'
+      setAnswer(text)
+      speak(text)
+      setStage('answered')
+      return true
+    }
+    // An event not found by these words — misheard, say — is left to Claude,
+    // who looks further and can ask for the report itself (open "report").
+    return giveReport(await eventForReport(ask))
+  }
 
   // Songs and videos (./useMiriamMedia), lyric slides (./useMiriamSlides), and
   // changes made for them (./useMiriamActions). Each reaches the others through
@@ -469,6 +511,9 @@ export function useMiriamConversation(
       await giveBriefing(typing)
       return
     }
+    // "Give me a report on Revival": an admin's report on an event, put together here.
+    const reportAsk = local ? reportAsked(withoutHerName(said), localToday()) : null
+    if (reportAsk && (await reportFor(reportAsk))) return
     // "Remind me to go to Costco at 5 pm tomorrow": set here, at once.
     const reminder = local ? reminderAsked(withoutHerName(said), new Date()) : null
     if (reminder) {
@@ -1084,6 +1129,11 @@ export function useMiriamConversation(
       }
       // A video asked for: played over the page, with nothing said over it.
       const wanted = result.kind === 'answer' ? result.open : null
+      // An event's report, which Claude found the event for: put together here,
+      // as it is when asked in so many words. Not to be had: Claude's words.
+      if (wanted?.kind === 'report') {
+        if (await giveReport(await eventByKeyForReport(wanted.key).catch(() => null))) return
+      }
       // A tour asked for: the app's own, to each screen in turn, as their role
       // has it — Miriam steps aside for it.
       if (wanted?.kind === 'tour') {
@@ -1176,7 +1226,13 @@ export function useMiriamConversation(
         if (/^https?:\/\//i.test(open.url)) {
           setLink({ url: open.url, name: open.label, label: 'Open the page' })
         }
-      } else if (open && open.kind !== 'video' && open.kind !== 'tour' && !anyOverlayOpen()) {
+      } else if (
+        open &&
+        open.kind !== 'video' &&
+        open.kind !== 'tour' &&
+        open.kind !== 'report' &&
+        !anyOverlayOpen()
+      ) {
         if (open.kind === 'screen') {
           // Only a screen this person has: checked again here.
           const screen = screensFor(useAuthStore.getState().profile).find((x) => x.id === open.id)

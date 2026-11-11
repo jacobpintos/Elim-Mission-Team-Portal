@@ -4,8 +4,10 @@ import {
   MOST_SUGGESTED,
   NEW_EVENT,
   newEventAsked,
+  REPORT,
   suggestionsFor,
 } from './miriamSuggestions'
+import { reportAsked } from './eventReport'
 import type { UserProfile } from '@/types/user'
 
 const person = (...roles: string[]) =>
@@ -18,6 +20,20 @@ describe('what her bar offers to tap', () => {
     expect(offered[0]).toEqual({ label: 'Create an event', starter: NEW_EVENT })
     expect(NEW_EVENT.ask).toBe('Ok, tell me more about it.')
     expect(NEW_EVENT.describing).toBe('event')
+  })
+
+  it('offers an admin a report on an event, asking which — and what it is finished by is a report asked for', () => {
+    expect(suggestionsFor('/events', person('admin'))[1]).toEqual({
+      label: 'Report on an event',
+      starter: REPORT,
+    })
+    expect(labels('/dashboard', person('admin'))).toContain('Report on an event')
+    expect(labels('/events', person('regular'))).not.toContain('Report on an event')
+    expect(labels('/dashboard', person('worship'))).not.toContain('Report on an event')
+    expect(reportAsked(`${REPORT.then} the youth retreat`, '2026-11-18')).toMatchObject({
+      name: 'youth retreat',
+      nameFirst: false,
+    })
   })
 
   it('never offers what someone can’t do', () => {

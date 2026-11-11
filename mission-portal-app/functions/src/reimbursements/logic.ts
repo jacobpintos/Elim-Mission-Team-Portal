@@ -234,3 +234,54 @@ export function receiptsDue(
     now >= receiptsKeptUntil(r.createdAt)
   )
 }
+
+/** A request as an event's report counts it (functions/src/reimbursements/eventSummary). */
+export interface OutstandingRequest {
+  status: ReimbursementStatus
+  total: number
+  approvedAmount: number | null
+  payBy: string | null
+  eventDate: string | null
+}
+
+/** What is still open on an event's requests: to decide, and to pay — some of it past its pay-by date. */
+export interface OutstandingSummary {
+  toDecide: number
+  toPay: number
+  /** Of those to pay, how many are past their pay-by date. */
+  overdue: number
+  /** Asked for, on those to decide; approved, on those to pay. In cents. */
+  toDecideCents: number
+  toPayCents: number
+}
+
+/**
+ * An event's requests still open: asked for and not yet decided, or decided
+ * and not yet paid. Denied and paid ones are done with. `date`: one date's
+ * alone (a repeating event's), when given. `today`: YYYY-MM-DD, for what is
+ * past its pay-by date.
+ */
+export function outstandingFor(
+  requests: OutstandingRequest[],
+  { date, today }: { date?: string | null; today: string }
+): OutstandingSummary {
+  const out: OutstandingSummary = {
+    toDecide: 0,
+    toPay: 0,
+    overdue: 0,
+    toDecideCents: 0,
+    toPayCents: 0,
+  }
+  for (const r of requests) {
+    if (date && r.eventDate && r.eventDate !== date) continue
+    if (canDecide(r.status)) {
+      out.toDecide++
+      out.toDecideCents += r.total
+    } else if (isAwaitingPayment(r.status)) {
+      out.toPay++
+      out.toPayCents += r.approvedAmount ?? r.total
+      if (r.payBy && r.payBy < today) out.overdue++
+    }
+  }
+  return out
+}

@@ -1377,6 +1377,36 @@ describe('availability — read as its event is', () => {
   })
 })
 
+describe('reportSeen — what an admin last saw in an event’s report', () => {
+  const seen = { events: { 'e1_2026-11-22': { at: 1, answers: { [MEMBER]: 'yes' } } } }
+
+  it('is an admin’s own to keep and read back', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'reportSeen', ADMIN), seen))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'reportSeen', ADMIN)))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'reportSeen', ADMIN)))
+  })
+
+  it('is no one else’s, another admin’s included, and no one’s who isn’t an admin', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'reportSeen', ADMIN), seen)
+      await setDoc(doc(ctx.firestore(), 'users', 'admin2-uid'), { roles: ['admin'] })
+    })
+    await assertFails(getDoc(doc(as(MEMBER), 'reportSeen', ADMIN)))
+    await assertFails(setDoc(doc(as(MEMBER), 'reportSeen', MEMBER), seen))
+    await assertFails(getDoc(doc(as('admin2-uid'), 'reportSeen', ADMIN)))
+    await assertFails(setDoc(doc(as('admin2-uid'), 'reportSeen', ADMIN), seen))
+  })
+
+  it('holds its reports and nothing else, a hundred at most', async () => {
+    await assertFails(setDoc(doc(as(ADMIN), 'reportSeen', ADMIN), { ...seen, extra: 1 }))
+    await assertFails(setDoc(doc(as(ADMIN), 'reportSeen', ADMIN), { events: 'all' }))
+    const many = Object.fromEntries(
+      Array.from({ length: 101 }, (_, i) => [`e${i}_2026-11-22`, { at: 1, answers: {} }])
+    )
+    await assertFails(setDoc(doc(as(ADMIN), 'reportSeen', ADMIN), { events: many }))
+  })
+})
+
 describe('roles carried in the sign-in token', () => {
   it('are read from the token, with no record to read', async () => {
     // A team member's token, and no record: the rules didn't read one.

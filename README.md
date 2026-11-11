@@ -139,6 +139,20 @@ Every step sends a push notification to the other person. Amounts and receipts a
 
 ---
 
+## Event reports
+
+An admin can ask Miriam for a report on an event: "Give me a report on Revival", "status report for Sunday", or **Report on an event** among her suggestions. She shows it in her panel and reads it out:
+
+- **Status:** Behind or On Track, by the same rule as the app's own badge: any task marked behind, or past its due date and not done.
+- **Tasks:** how many, how many are done, and by name the ones behind, overdue, and due in the next 7 days.
+- **Availability:** how many people on it are available, not available, partly, not sure, or haven't answered. Also who changed their answer since that admin last asked for this event's report. What each admin last saw is kept in `reportSeen/{uid}`, theirs alone.
+- **Reimbursements:** how many requests are waiting for a decision, how many are waiting to be paid, and how many are past their pay-by date. Counts only; the amounts are shown to the Accountant alone, as Finance is (`eventReimbursements`).
+- **Weather:** the forecast for its day and any weather alert, as the event's page shows them.
+
+It is put together on the device (`src/lib/eventReport.ts`, `src/features/miriam/eventReportData.ts`). When the words aren't recognised on the device, Claude finds the event and asks the app for the report.
+
+---
+
 ## Event history
 
 **Every night at 3:15 am Central**, `eventHistoryCleanup` (`functions/src/eventHistory.ts`) clears what's no longer needed:

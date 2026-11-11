@@ -786,6 +786,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // What an admin last saw of each event's availability, in its report
+    // from Miriam (src/lib/eventReport): kept so the next report says what
+    // changed since. Theirs alone, and only while they are an admin. One
+    // document each, holding a report per event; the app lets old ones go.
+    match /reportSeen/{uid} {
+      allow read: if isSelf(uid) && isAdmin();
+      allow create, update: if isSelf(uid) && isAdmin()
+        && request.resource.data.keys().hasOnly(['events'])
+        && request.resource.data.events is map
+        && request.resource.data.events.size() <= 100;
+      allow delete: if isSelf(uid);
+    }
+
     match /dateNotes/{uid} {
       allow read, delete: if isSelf(uid);
       allow create, update: if isSelf(uid) && keepsNotes()

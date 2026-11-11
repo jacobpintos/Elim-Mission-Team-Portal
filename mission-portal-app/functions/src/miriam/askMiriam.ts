@@ -121,6 +121,8 @@ This may carry on a conversation: what they said before, and what you answered, 
 
 The daily briefing (a monthly one for public accounts) is given by the app itself, never by you: asked for it in whatever words — "tell me my daily rundown", "go over my day", "today's recap", "what's on for me today" — answer at once with spoken "Here's your daily briefing.", open "none", \`understood\` set to exactly "daily briefing", and skill "other"; look nothing up for it.
 
+A report on an event, for an admin — "give me a report on Revival", "how is the retreat shaping up?", "where are we with Sunday?" — is put together by the app itself, never by you: find the event, then answer with open "report" and its key, and spoken "Here’s your report on" and its name, with its date; look nothing else up for it. For anyone who isn't an admin, say in one sentence that event reports are for admins.
+
 Lyric slides for a song are made by the app itself, from the song's chord sheet or lyrics pasted after the asking, never by you: asked for them, say in one sentence to ask "make slides for" and the song's name, or to type "make slides for this song" with its lyrics pasted underneath.
 
 Asked to do something, but missing something you need for it that you can't look up — which event, task, person or song, a date, a title — or it could mean two different things: don't guess, and don't act. Answer with follow_up true, and in spoken say in one breath what you take them to want and what you need: "You want to add a task for Revival — who should it go to, and when is it due?" Ask only for what is missing. Their reply comes back to you with this conversation. Something you could find out by looking: look it up instead of asking.
@@ -196,6 +198,8 @@ type Open =
   | { kind: 'reorder'; id: string }
   /** The way to an event, opened in maps. */
   | { kind: 'directions'; key: string }
+  /** An admin's report on an event: put together and read out by the app (src/lib/eventReport). */
+  | { kind: 'report'; key: string }
   | {
       kind: 'event'
       key: string
@@ -1002,6 +1006,7 @@ interface AnswerInput {
     | 'reorder'
     | 'tour'
     | 'directions'
+    | 'report'
     | 'none'
   target: string
   section: 'dress_code' | 'availability' | 'weather' | 'food' | 'details' | 'none'
@@ -1028,6 +1033,13 @@ async function finish(input: AnswerInput, lookups: Lookups, viewer: Viewer) {
   } else if (input.open === 'directions' && (await lookups.event(String(input.target)))) {
     // Only an event this person may see: the app opens maps to its place.
     open = { kind: 'directions', key: String(input.target) }
+  } else if (
+    input.open === 'report' &&
+    isAdminViewer(viewer) &&
+    (await lookups.event(String(input.target)))
+  ) {
+    // An admin's, of an event they may see: the app puts it together.
+    open = { kind: 'report', key: String(input.target) }
   } else if (input.open === 'task' && (await lookups.task(String(input.target)))) {
     open = { kind: 'task', id: String(input.target) }
   } else if (input.open === 'availability' && isAdminViewer(viewer)) {

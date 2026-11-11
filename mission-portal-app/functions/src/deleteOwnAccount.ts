@@ -74,6 +74,7 @@ export const deleteOwnAccount = onCall(async (req) => {
     `onboarding/${uid}`,
     `sheetNotes/${uid}`,
     `dateNotes/${uid}`,
+    `reportSeen/${uid}`,
     `users/${uid}`,
   ]) {
     try {

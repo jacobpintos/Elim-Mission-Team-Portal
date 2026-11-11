@@ -73,6 +73,8 @@ const ANNOUNCEMENT: Starter = {
   then: 'Post an announcement:',
 }
 const SLIDES: Starter = { ask: 'Which song?', then: 'Make slides for' }
+/** An admin's report on an event (lib/eventReport): which one asked, then given. */
+export const REPORT: Starter = { ask: 'Which event?', then: 'Give me a report on' }
 
 const say = (label: string, said = label): Suggestion => ({ label, say: said })
 const start = (label: string, starter: Starter): Suggestion => ({ label, starter })
@@ -111,6 +113,7 @@ export function suggestionsFor(path: string, profile: UserProfile | null): Sugge
   switch (screen) {
     case 'events':
       if (admin) own.push(start('Create an event', NEW_EVENT))
+      if (admin) own.push(start('Report on an event', REPORT))
       own.push(say('What’s my next event?'))
       if (has('assignments')) own.push(start('Block off dates', BLOCK_DAYS))
       own.push(say('Directions to my next event'))
@@ -119,6 +122,7 @@ export function suggestionsFor(path: string, profile: UserProfile | null): Sugge
     case 'home':
       own.push(say('What do I need to know today?'))
       if (admin) own.push(start('Create an event', NEW_EVENT))
+      if (admin) own.push(start('Report on an event', REPORT))
       own.push(say('What’s on this week?'))
       break
     case 'assignments':
@@ -152,6 +156,7 @@ export function suggestionsFor(path: string, profile: UserProfile | null): Sugge
     case 'admin':
     case 'rolehub':
       if (admin) own.push(start('Create an event', NEW_EVENT))
+      if (admin) own.push(start('Report on an event', REPORT))
       break
   }
 

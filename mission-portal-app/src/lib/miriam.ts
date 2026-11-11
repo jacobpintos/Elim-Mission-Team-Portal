@@ -130,6 +130,8 @@ export type MiriamOpen =
   | { kind: 'directions'; key: string }
   /** A page on the web Miriam found an answer on: a button to open it. */
   | { kind: 'link'; url: string; label: string }
+  /** An admin's report on an event, by its key: put together by the app (lib/eventReport). */
+  | { kind: 'report'; key: string }
 
 export type MiriamResult =
   /**
@@ -175,7 +177,7 @@ export type MiriamResult =
 export function miriamHref(
   open: Exclude<
     MiriamOpen,
-    { kind: 'screen' | 'video' | 'reorder' | 'tour' | 'directions' | 'link' }
+    { kind: 'screen' | 'video' | 'reorder' | 'tour' | 'directions' | 'link' | 'report' }
   >
 ): string {
   if (open.kind === 'task') return `/assignments?taskId=${encodeURIComponent(open.id)}`

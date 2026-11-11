@@ -430,16 +430,17 @@ export const COMMANDS: Record<CommandName, { roles: string[]; tool: ToolDefiniti
               'reorder',
               'tour',
               'directions',
+              'report',
               'none',
             ],
             description:
               'event: the event’s page; task: the task; availability: the admin availability page; ' +
-              'screen: one of the screens they can open, from the list they are sent; video: a video from Content, to play; reorder: a reorder list item’s link, to buy it; tour: the app’s guided tour, going to each screen and showing its features; directions: maps with the way to the event, opened on their phone or in the browser; none: nothing to show.',
+              'screen: one of the screens they can open, from the list they are sent; video: a video from Content, to play; reorder: a reorder list item’s link, to buy it; tour: the app’s guided tour, going to each screen and showing its features; directions: maps with the way to the event, opened on their phone or in the browser; report: an admin’s report on the event — behind or on track, its tasks, availability and what changed, reimbursements still open, and the weather — put together and read out by the app; none: nothing to show.',
           },
           target: {
             type: 'string',
             description:
-              'The event’s key (for event or directions), the task’s id, the screen’s id, the Content item’s id (from find_content), the reorder item’s id (from read_operations), or for a tour the part of the app as app_guide names it ("events", "worship"; "" for the whole app); "" when open is availability or none.',
+              'The event’s key (for event, directions or report), the task’s id, the screen’s id, the Content item’s id (from find_content), the reorder item’s id (from read_operations), or for a tour the part of the app as app_guide names it ("events", "worship"; "" for the whole app); "" when open is availability or none.',
           },
           section: {
             type: 'string',

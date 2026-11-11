@@ -79,6 +79,7 @@ export {
   createExternalExpense,
   handOverReimbursements,
 } from './reimbursements'
+export { eventReimbursements } from './reimbursements/eventSummary'
 export { nightlyBackup } from './backups'
 export { purgeOldReceipts } from './reimbursements/retention'
 export { publicEvent } from './publicEvent'
