@@ -57,6 +57,7 @@ npm run typecheck
 npm run lint
 npm test               # unit tests (vitest)
 npm run test:rules     # Firestore and Storage rules, against the emulators (needs Java)
+RULES_WITH_CLAIMS=1 npm run test:rules   # the same, with roles in the sign-in token
 npm run export:web     # the web build bundles
 ```
 
@@ -106,7 +107,7 @@ Then run **Deploy Firebase** by hand with **Deploy Storage Rules** ticked. If it
 - **Where roles are read:** each person's roles are kept in `users/{uid}.roles`, and copied into their sign-in token by `syncRoleClaims` whenever that record is written (which the app does each time it opens). The Firestore and Storage rules read roles from the token, so most requests read no record at all. A token made before it carried roles falls back to reading the record.
   - **Admin power** is always confirmed from the record as well, so taking someone's admin role away works at once.
   - **Other roles** taken away still count for someone until their token is renewed, within the hour. The app asks for a new token as soon as a person's roles change and shows the change once the token agrees, so in practice this only matters for a session someone keeps open on purpose.
-  - `npm run test:rules` runs every rules test twice: once reading the record, once from the token.
+  - The rules tests run both ways: `npm run test:rules` reads the record, and `RULES_WITH_CLAIMS=1 npm run test:rules` reads the token. CI runs both.
 - **Admin → Leadership** sets two jobs the app routes work to:
   - **Connections Coordinator:** receives the daily list of people asking to join the texting list.
   - **Accountant:** answers reimbursement requests. Until an admin chooses one, the first request goes to the account named **Sunny Singh**, who is then saved as the Accountant. Choosing someone else moves any open requests to them.

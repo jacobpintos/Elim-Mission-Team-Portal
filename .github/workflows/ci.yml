@@ -50,6 +50,17 @@ jobs:
       - name: Security rules tests
         run: npm run test:rules
 
+      # The same tests again, with each person's roles in their sign-in token,
+      # as functions/src/syncRoleClaims puts them there: the rules read them
+      # from the token rather than the person's record (firestore.rules
+      # myRoles). A run of its own, with emulators of its own: files put up
+      # in the first run would still be there. Set here rather than in
+      # package.json, whose scripts are part of the app's native fingerprint.
+      - name: Security rules tests, with roles in the token
+        run: npm run test:rules
+        env:
+          RULES_WITH_CLAIMS: '1'
+
       - name: Export web build
         env:
           EXPO_PUBLIC_FIREBASE_API_KEY: placeholder
