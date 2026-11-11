@@ -1,13 +1,35 @@
 rules_version = '2';
-// Last updated: 2026-11-10 — an availability answer is its own person's to
-// change; the audit log is the admins' to write; issues, ideas, planning
-// boards, inventory and task templates are the team's to read
+// Last updated: 2026-11-11 — roles read from the sign-in token where it
+// carries them; admin power still confirmed from the record each time
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
+    function myRecord() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    // The roles this person holds, as their sign-in token carries them
+    // (functions/src/rolesClaim, kept by syncRoleClaims) — no read of their
+    // record — or, from a token made before it carried them, as their record
+    // has them, as these rules always read them.
+    //
+    // A token is made afresh within the hour, and the app asks for one as
+    // soon as its roles change (src/stores/authStore). So a role taken away
+    // from someone whose app doesn't ask — a session kept open on purpose —
+    // still counts for them until their token runs out, within the hour.
+    // That is why admin power is not left to it (isAdmin, below).
+    function myRoles() {
+      return request.auth.token.get('roles', null) is list
+        ? request.auth.token.roles
+        : myRecord().data.roles;
+    }
+    // An admin: so the token says — and so their record says, read each
+    // time. The token can only take admin power away, never give it: taken
+    // from someone, it is gone at once, whatever token they hold. Someone
+    // given it has it once their token says so too, which their app sees to
+    // in a few seconds. For everyone else, whose token says no, nothing is read.
     function isAdmin() {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.hasAny(['admin']);
+      return isSignedIn() && myRoles().hasAny(['admin']) &&
+        myRecord().data.roles.hasAny(['admin']);
     }
     function isSelf(uid) { return isSignedIn() && request.auth.uid == uid; }
 
@@ -39,32 +61,27 @@ service cloud.firestore {
     // A guest is along for one trip: they may read the worship material they
     // have been added to, and change nothing.
     function isGuest() {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
-          .hasAny(['guest']);
+      return isSignedIn() && myRoles().hasAny(['guest']);
     }
     // Any account but a public one: what may keep notes on its own calendar.
     function keepsNotes() {
       return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
-          .hasAny(['admin', 'security', 'regular', 'intern', 'worship', 'guest']);
+        myRoles().hasAny(['admin', 'security', 'regular', 'intern', 'worship', 'guest']);
     }
     // Every account but a guest's or a public one: who sees the birthdays and
     // anniversaries on the event calendar (src/lib/occasions: seesOccasions).
     function seesOccasions() {
       return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
-          .hasAny(['admin', 'security', 'regular', 'intern', 'worship']);
+        myRoles().hasAny(['admin', 'security', 'regular', 'intern', 'worship']);
     }
     // An account holding the public role, whatever else it holds.
     function holdsPublic() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
-        .hasAny(['public']);
+      return myRoles().hasAny(['public']);
     }
+    // What the worship team keeps (set lists, chord sheets, input lists), and
+    // admins: an admin as isAdmin decides it, confirmed from their record.
     function isWorshipOrAdmin() {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
-          .hasAny(['admin', 'worship']);
+      return isSignedIn() && (myRoles().hasAny(['worship']) || isAdmin());
     }
 
     match /appSettings/theme {
@@ -210,7 +227,7 @@ service cloud.firestore {
         (data.seenBy.hasAny(seers()) && !followerOnly()));
     }
     function followerOnly() {
-      let roles = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles;
+      let roles = myRoles();
       return roles.hasAny(['public']) &&
         !roles.hasAny(['admin', 'security', 'regular', 'intern', 'worship', 'guest']);
     }
@@ -544,8 +561,7 @@ service cloud.firestore {
     // see how far along it is.
     function onTheTeam() {
       return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
-          .hasAny(['admin', 'security', 'regular', 'intern', 'worship']);
+        myRoles().hasAny(['admin', 'security', 'regular', 'intern', 'worship']);
     }
     function givenPreServiceItem(itemId) {
       return isSignedIn() &&
@@ -867,10 +883,9 @@ service cloud.firestore {
     }
 
     match /securityReports/{id} {
+      // Security answers reports; an admin as isAdmin decides it.
       function isSecurityOrAdmin() {
-        return isSignedIn() &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
-            .hasAny(['admin', 'security']);
+        return isSignedIn() && (myRoles().hasAny(['security']) || isAdmin());
       }
       allow create: if isSignedIn();
       allow read: if isSecurityOrAdmin();

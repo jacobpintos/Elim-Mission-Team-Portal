@@ -79,7 +79,21 @@ beforeAll(async () => {
 
 afterAll(async () => env?.cleanup())
 
-const as = (uid: string) => env.authenticatedContext(uid).storage()
+/** Run twice, with and without roles in the token: as firestore.rules.test.ts says. */
+const WITH_CLAIMS = process.env.RULES_WITH_CLAIMS === '1'
+const SEEDED_ROLES: Record<string, string[]> = {
+  [ADMIN]: ['admin'],
+  [MEMBER]: ['regular'],
+  [OTHER]: ['regular'],
+  [WORSHIP]: ['worship'],
+  [SECURITY]: ['security'],
+  [GUEST]: ['guest'],
+  [FOLLOWER]: ['public'],
+}
+const as = (uid: string) =>
+  env
+    .authenticatedContext(uid, WITH_CLAIMS && SEEDED_ROLES[uid] ? { roles: SEEDED_ROLES[uid] } : {})
+    .storage()
 const anon = () => env.unauthenticatedContext().storage()
 
 /** A file put there as the server would, which the rules don't apply to. */
@@ -476,6 +490,23 @@ describe('logos', () => {
     await assertSucceeds(uploadBytes(ref(as(ADMIN), 'logos/logo_2'), blob(512), IMAGE))
     await assertFails(deleteObject(ref(as(MEMBER), 'logos/logo_2')))
     await assertSucceeds(deleteObject(ref(as(ADMIN), 'logos/logo_2')))
+  })
+})
+
+describe('roles carried in the sign-in token', () => {
+  it('never give admin power the record doesn’t confirm', async () => {
+    // MEMBER's token says admin; their record says regular.
+    const stale = env.authenticatedContext(MEMBER, { roles: ['admin'] }).storage()
+    await assertFails(uploadBytes(ref(stale, 'logos/tok.png'), blob(512), IMAGE))
+    await assertFails(uploadBytes(ref(stale, 'pages/home/tok.jpg'), blob(512), IMAGE))
+  })
+
+  it('are read from the token for everyone else', async () => {
+    await seed('setListAudio/tok/track.mp3', { contentType: 'audio/mpeg' })
+    const guest = env.authenticatedContext('no-record-uid', { roles: ['guest'] }).storage()
+    await assertSucceeds(getDownloadURL(ref(guest, 'setListAudio/tok/track.mp3')))
+    const follower = env.authenticatedContext('no-record-uid', { roles: ['public'] }).storage()
+    await assertFails(getDownloadURL(ref(follower, 'setListAudio/tok/track.mp3')))
   })
 })
 

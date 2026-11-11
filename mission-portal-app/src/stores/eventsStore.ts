@@ -359,7 +359,9 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     let listeningAs: string | null = null
     const listen = () => {
       const profile = useAuthStore.getState().profile
-      const as = profile ? `${profile.uid}|${isAdmin(profile)}|${isPublic(profile)}` : ''
+      const as = profile
+        ? `${profile.uid}|${isAdmin(profile)}|${isPublic(profile)}|${useAuthStore.getState().tokenEpoch}`
+        : ''
       if (as === listeningAs) return
       listeningAs = as
       get()._unsubTemplates?.()

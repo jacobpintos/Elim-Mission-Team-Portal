@@ -88,7 +88,7 @@
     "export:web": "expo export -p web --output-dir dist",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:rules": "firebase emulators:exec --config ../firebase.test.json --only firestore,storage --project mission-portal-rules-test \"vitest run --config vitest.rules.config.ts\""
+    "test:rules": "firebase emulators:exec --config ../firebase.test.json --only firestore,storage --project mission-portal-rules-test \"vitest run --config vitest.rules.config.ts\" && firebase emulators:exec --config ../firebase.test.json --only firestore,storage --project mission-portal-rules-test \"env RULES_WITH_CLAIMS=1 vitest run --config vitest.rules.config.ts\""
   },
   "private": true
 }

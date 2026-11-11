@@ -23,6 +23,7 @@ import { defaultNotificationPrefs } from '@/types/user'
 import { SIGN_UP_ENABLED } from '@/lib/featureFlags'
 import { APP_URL } from '@/lib/orgInfo'
 import { markStartup } from '@/lib/startupTimeline'
+import { tokenAgrees } from '@/lib/tokenRoles'
 import type { UserProfile } from '@/types/user'
 
 interface AuthStore {
@@ -30,6 +31,13 @@ interface AuthStore {
   profile: UserProfile | null
   prevLoginAt: number | null
   loading: boolean
+  /**
+   * Counted up each time this sign-in's token is made again to carry roles
+   * it was behind on (lib/tokenRoles). The stores that listen as whoever is
+   * signed in (tasks, events, worship) listen again when it changes: what
+   * they asked with the old token may have been refused.
+   */
+  tokenEpoch: number
   _unsubAuth: (() => void) | null
   _unsubProfile: (() => void) | null
 
@@ -52,6 +60,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   profile: null,
   prevLoginAt: null,
   loading: true,
+  tokenEpoch: 0,
   _unsubAuth: null,
   _unsubProfile: null,
 
@@ -65,6 +74,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       }
       set({ fbUser, loading: true })
       let loginAtWritten = false
+      // Which of this person's profile snapshots is the newest: only it is
+      // shown, and only its check of the token goes on (below).
+      let latest = 0
       const unsubProfile = onSnapshot(
         doc(db, 'users', fbUser.uid),
         (snap) => {
@@ -103,7 +115,32 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
               updateDoc(doc(db, 'users', fbUser.uid), { roles: migrated }).catch(() => {})
             }
           }
-          set({ profile: userProfile, loading: false })
+          // Their roles as their record has them, shown once their token
+          // carries them too: the rules read roles from the token
+          // (lib/tokenRoles). Nearly always it does already, or carries none
+          // (the rules then read the record), and this is a moment's check.
+          // When it is behind — their roles just changed — a new token is
+          // asked for first, so what they are shown and what they may do
+          // change together.
+          //
+          // Read from the phone's copy (no signal, or the server not yet
+          // heard from): shown at once, as before, and checked after.
+          const seq = ++latest
+          const isCurrent = () => seq === latest
+          const bumped = () => ({ tokenEpoch: get().tokenEpoch + 1 })
+          if (!userProfile || snap.metadata.fromCache) {
+            set({ profile: userProfile, loading: false })
+            if (userProfile) {
+              tokenAgrees(fbUser, userProfile.roles, { isCurrent }).then((how) => {
+                if (how === 'refreshed' && isCurrent()) set(bumped())
+              })
+            }
+            return
+          }
+          tokenAgrees(fbUser, userProfile.roles, { isCurrent }).then((how) => {
+            if (!isCurrent()) return
+            set({ profile: userProfile, loading: false, ...(how === 'refreshed' ? bumped() : {}) })
+          })
         },
         () => {
           // Firestore read failed (e.g. permission denied) — unblock routing so the app

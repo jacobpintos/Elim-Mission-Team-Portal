@@ -111,7 +111,9 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     let listeningAs: string | null = null
     const listen = () => {
       const profile = useAuthStore.getState().profile
-      const as = profile ? `${profile.uid}|${isAdmin(profile)}` : ''
+      const as = profile
+        ? `${profile.uid}|${isAdmin(profile)}|${useAuthStore.getState().tokenEpoch}`
+        : ''
       if (as === listeningAs) return
       listeningAs = as
       get()._unsub?.()

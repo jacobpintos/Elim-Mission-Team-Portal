@@ -79,7 +79,7 @@ export const useWorshipStore = create<WorshipStore>((set, get) => ({
     const listen = () => {
       const profile = useAuthStore.getState().profile
       const reads = readsSetLists(profile)
-      const as = reads ? seers(profile).join('|') : ''
+      const as = reads ? `${seers(profile).join('|')}|${useAuthStore.getState().tokenEpoch}` : ''
       if (as === listeningAs) return
       listeningAs = as
       get()._unsub?.()

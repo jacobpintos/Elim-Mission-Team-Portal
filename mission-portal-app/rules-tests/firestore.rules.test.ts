@@ -120,7 +120,32 @@ beforeEach(async () => {
   })
 })
 
-const as = (uid: string) => env.authenticatedContext(uid).firestore()
+/**
+ * Every test runs twice (npm run test:rules): once with sign-ins whose token
+ * carries no roles, as one made before roles were put in it — so the rules
+ * read each person's record — and once (RULES_WITH_CLAIMS=1) with the roles
+ * in the token, as functions/src/syncRoleClaims keeps them, each account's
+ * as it is seeded here. The same answers either way.
+ */
+const WITH_CLAIMS = process.env.RULES_WITH_CLAIMS === '1'
+const SEEDED_ROLES: Record<string, string[]> = {
+  [ADMIN]: ['admin'],
+  [MEMBER]: ['regular'],
+  [OUTSIDER]: ['regular'],
+  [GUEST]: ['guest'],
+  [WORSHIP]: ['worship'],
+  'public-uid': ['public'],
+  'mixed-uid': ['public', 'regular'],
+  'admin2-uid': ['admin'],
+  '0RUxDLC8QGQ6qBTLgBkoMSgYibJ2': ['admin'],
+}
+const as = (uid: string) =>
+  env
+    .authenticatedContext(uid, WITH_CLAIMS && SEEDED_ROLES[uid] ? { roles: SEEDED_ROLES[uid] } : {})
+    .firestore()
+/** Signed in with these roles in the token, whatever the record says. */
+const withToken = (uid: string, roles: string[]) =>
+  env.authenticatedContext(uid, { roles }).firestore()
 const anon = () => env.unauthenticatedContext().firestore()
 
 describe('rooms', () => {
@@ -1349,6 +1374,54 @@ describe('availability — read as its event is', () => {
     )
     await assertFails(updateDoc(doc(as(MEMBER), 'avail', 'staff_2026-11-20'), { seenBy: ['*'] }))
     await assertFails(deleteDoc(doc(as(MEMBER), 'avail', 'staff_2026-11-20')))
+  })
+})
+
+describe('roles carried in the sign-in token', () => {
+  it('are read from the token, with no record to read', async () => {
+    // A team member's token, and no record: the rules didn't read one.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'issues', 'tok1'), { title: 'One' })
+    })
+    await assertSucceeds(getDoc(doc(withToken('no-record-uid', ['regular']), 'issues', 'tok1')))
+    await assertFails(getDoc(doc(withToken('no-record-uid', ['public']), 'issues', 'tok1')))
+  })
+
+  it('never give admin power the record doesn’t confirm: taken away, it is gone at once', async () => {
+    // MEMBER's token still says admin (made before it was taken away); their
+    // record says regular.
+    const stale = withToken(MEMBER, ['admin'])
+    await assertFails(setDoc(doc(stale, 'announcements', 'tok2'), { title: 'Hello' }))
+    await assertFails(getDocs(collection(stale, 'users')))
+    await assertFails(updateDoc(doc(stale, 'users', OUTSIDER), { roles: ['admin'] }))
+    // Nor through what the worship team keeps, which admins keep too.
+    await assertFails(setDoc(doc(stale, 'chordSheets', 'tok3'), { title: 'Song' }))
+  })
+
+  it('give admin power once the token says so too: until then, the record alone does not', async () => {
+    // Made an admin a moment ago: their record says so, their token not yet.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'promoted-uid'), { roles: ['admin'] })
+    })
+    await assertFails(
+      setDoc(doc(withToken('promoted-uid', ['regular']), 'announcements', 'tok4'), { title: 'Hi' })
+    )
+    await assertSucceeds(
+      setDoc(doc(withToken('promoted-uid', ['admin']), 'announcements', 'tok4'), { title: 'Hi' })
+    )
+  })
+
+  it('fall back to the record for a token made before it carried them', async () => {
+    await assertSucceeds(
+      setDoc(doc(env.authenticatedContext(ADMIN).firestore(), 'announcements', 'tok5'), {
+        title: 'Hi',
+      })
+    )
+    await assertFails(
+      setDoc(doc(env.authenticatedContext(MEMBER).firestore(), 'announcements', 'tok6'), {
+        title: 'Hi',
+      })
+    )
   })
 })
 

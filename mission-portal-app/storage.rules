@@ -1,6 +1,6 @@
 rules_version = '2';
-// Last updated: 2026-11-10 — who may write, delete and read each folder goes
-// by their role, read from Firestore.
+// Last updated: 2026-11-11 — roles read from the sign-in token where it
+// carries them; admin power still confirmed from the record each time.
 service firebase.storage {
   match /b/{bucket}/o {
     // Who someone is, is kept in Firestore: their roles in users/{uid}, who is
@@ -24,15 +24,25 @@ service firebase.storage {
     // it opens without these rules being asked. `read` below is who may ask
     // for that address, or list a folder.
     function signedIn() { return request.auth != null; }
-    function roles() {
-      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles;
+    function record() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
     }
-    function isAdmin() { return signedIn() && roles().hasAny(['admin']); }
-    function isWorshipOrAdmin() { return signedIn() && roles().hasAny(['admin', 'worship']); }
-    function isSecurityOrAdmin() { return signedIn() && roles().hasAny(['admin', 'security']); }
+    // Their roles as their sign-in token carries them, or else as their record
+    // has them; admin power confirmed from the record each time. As
+    // firestore.rules myRoles and isAdmin, which say why.
+    function roles() {
+      return request.auth.token.get('roles', null) is list
+        ? request.auth.token.roles
+        : record().data.roles;
+    }
+    function isAdmin() {
+      return signedIn() && roles().hasAny(['admin']) && record().data.roles.hasAny(['admin']);
+    }
+    function isWorshipOrAdmin() { return signedIn() && (roles().hasAny(['worship']) || isAdmin()); }
+    function isSecurityOrAdmin() { return signedIn() && (roles().hasAny(['security']) || isAdmin()); }
     // Who reads set lists and chord sheets (firestore.rules chordSheets).
     function readsWorship() {
-      return signedIn() && roles().hasAny(['admin', 'worship', 'guest']);
+      return signedIn() && (roles().hasAny(['worship', 'guest']) || isAdmin());
     }
     // Any account but a public one: who an event's travel details are for.
     function onTheTeamOrAGuest() {
