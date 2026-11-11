@@ -321,6 +321,17 @@ describe('users', () => {
     await assertFails(setDoc(doc(as(MEMBER), 'users', 'orphan-uid'), { roles: ['public'] }))
   })
 
+  it('leaves a leadership title to admins', async () => {
+    // "Lead Pastor": shown to visitors on the Connect page, to choose whom to
+    // ask to meet. It used to be anyone's to give themselves.
+    await assertFails(updateDoc(doc(as(MEMBER), 'users', MEMBER), { title: 'Lead Pastor' }))
+    await assertFails(updateDoc(doc(as(GUEST), 'users', GUEST), { title: 'Lead Pastor' }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', MEMBER), { title: 'Worship Director' }))
+    await assertFails(updateDoc(doc(as(MEMBER), 'users', MEMBER), { title: deleteField() }))
+    // The rest of their own record is still theirs.
+    await assertSucceeds(updateDoc(doc(as(MEMBER), 'users', MEMBER), { displayName: 'Still me' }))
+  })
+
   it('leaves male / female to admins', async () => {
     // It colours a person's carpool card and is set in user management.
     await assertFails(updateDoc(doc(as(MEMBER), 'users', MEMBER), { sex: 'female' }))

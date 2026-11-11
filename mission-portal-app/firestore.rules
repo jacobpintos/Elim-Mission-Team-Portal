@@ -93,14 +93,20 @@ service cloud.firestore {
       //
       // `sex` is set by admins in user management, for one thing: the colour of
       // a person's card when a carpool is arranged. Not theirs to change.
+      //
+      // Nor is `title` — "Lead Pastor", "Worship Director" — which admins give
+      // (Admin → Leadership Team) and visitors are shown on the Connect page,
+      // to choose whom to ask to meet. It used to be anyone's to give
+      // themselves, and so to be shown to visitors as one of the leadership.
       allow update: if (isAdmin() && (!isOwnerUid(uid) || isSelf(uid)))
         || (isSelf(uid) &&
             !request.resource.data.diff(resource.data).affectedKeys()
-              .hasAny(['roles', 'createdAt', 'sex']))
+              .hasAny(['roles', 'createdAt', 'sex', 'title']))
         || (isSelf(uid) &&
             resource.data.roles.hasOnly(['unverified']) &&
             request.resource.data.roles.hasOnly(['public']) &&
-            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'sex']));
+            !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['createdAt', 'sex', 'title']));
       allow delete: if isAdmin() && !isOwnerUid(uid);
     }
 

@@ -21,11 +21,12 @@ if (admin.apps.length === 0) {
  * or by a function that checks who is asking and writes the words itself
  * (notifyWorshipTeams below, ./push/availabilityNudge, ./moderation/warnAuthor).
  *
- * It is kept, sending nothing, for two reasons: an app not yet updated still
- * calls it, and is refused rather than told a function is missing; and a
- * deploy stops when a function is gone from the source. Once every phone has
- * the update it can be deleted: `firebase functions:delete sendNotification`,
- * and this with it.
+ * It is kept, sending nothing, so that an app not yet updated, which still
+ * calls it, is refused in the same deploy that starts the server sending:
+ * deleted first, as a function taken out has to be, those apps' requests
+ * would go nowhere for as long as the deploy takes. Once every phone has the
+ * update it can go: take this out, and add its name to the retired functions
+ * in .github/workflows/deploy-firebase.yml (README: "Taking a function out").
  */
 export const sendNotification = onCall(async () => {
   throw new HttpsError(
