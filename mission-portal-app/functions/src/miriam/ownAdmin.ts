@@ -42,7 +42,8 @@ if (!admin.apps.length) admin.initializeApp()
  */
 export const miriamOwnAdmin = onCall(
   // Reading the church's site, when asked, takes a minute or two.
-  { memory: '1GiB', cpu: 1, timeoutSeconds: 540 },
+  // Admin → Miriam: a handful of people, and 1 GiB each (../globalOptions).
+  { memory: '1GiB', cpu: 1, timeoutSeconds: 540, maxInstances: 2 },
   async (req) => {
     const uid = req.auth?.uid
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in first.')

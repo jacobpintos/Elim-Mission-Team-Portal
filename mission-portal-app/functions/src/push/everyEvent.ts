@@ -32,7 +32,7 @@ export interface NextBeforeEvent {
 }
 
 /** How far ahead the next of their events is looked for. */
-const AHEAD_DAYS = 120
+export const AHEAD_DAYS = 120
 
 /** An event as it is kept: the template, with its dates' own changes. */
 export type StoredEvent = EventTemplate & { overrides?: Record<string, Partial<EventTemplate>> }

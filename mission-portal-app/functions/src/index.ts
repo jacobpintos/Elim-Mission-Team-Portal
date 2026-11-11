@@ -1,3 +1,7 @@
+// First, before any function is defined: the limits every function is made
+// with (./globalOptions).
+import './globalOptions'
+
 export { sendNotification, notifyWorshipTeams } from './notify'
 export { createPortalUser } from './createPortalUser'
 export { registerPushToken } from './push/registerPushToken'
@@ -18,7 +22,6 @@ export {
 } from './push/recordNotifications'
 export { nudgeAvailability } from './push/availabilityNudge'
 export { onKaizenCreated, onIssueCreated } from './push/submissionNotifications'
-export { broadcastAnnouncement } from './push/sendBroadcast'
 export {
   onAnnouncementPublished,
   onPublicEventCreated,

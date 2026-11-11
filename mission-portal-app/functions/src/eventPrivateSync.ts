@@ -13,6 +13,7 @@ import {
 } from './eventPrivate'
 import { stampSetLists } from './recordAccessSync'
 import { activeBlocks, applyBlocksToEvent } from './blockedDatesSync'
+import { sweepPlan, type SweepState } from './sweepPlan'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -308,14 +309,49 @@ export async function settleAll(
   return { events: events.size, settled, availStamped, draftsFound }
 }
 
+/** Where settleEventRecords keeps when it last ran, and last read every event (./sweepPlan). */
+const SWEEP_STATE = 'sweeps/settleEventRecords'
+
 /**
- * Every event put right, each half hour: a safety net under the above, and
- * how the events from before the private record were moved into it.
+ * Events put right, each half hour: a safety net under the above, and how
+ * the events from before the private record were moved into it.
+ *
+ * It used to read every event, private record and group each time, to find
+ * the few written since. Now it reads the events written since it last ran
+ * (the app stamps `_updatedAt` on each, and on its private record's changes
+ * too, which it writes alongside), and every event once a day (./sweepPlan),
+ * for any a write didn't stamp: one from a server write, or from an app from
+ * before the stamp.
  */
 export const settleEventRecords = onSchedule(
   { schedule: 'every 30 minutes', timeoutSeconds: 540 },
   async () => {
-    const { events, settled } = await settleAll(admin.firestore())
-    if (settled) logger.info(`settleEventRecords: settled ${settled} of ${events}`)
+    const db = admin.firestore()
+    const stateRef = db.doc(SWEEP_STATE)
+    const now = Date.now()
+    const plan = sweepPlan((await stateRef.get()).data() as SweepState | undefined, now)
+    if (plan.kind === 'full') {
+      const { events, settled } = await settleAll(db)
+      if (settled) logger.info(`settleEventRecords: settled ${settled} of ${events}`)
+      await stateRef.set({ fullAt: now, at: now })
+      return
+    }
+    const written = await db
+      .collection('events')
+      .where('_updatedAt', '>=', new Date(plan.since))
+      .get()
+    let settled = 0
+    if (!written.empty) {
+      const groups = await readGroups(db)
+      for (const d of written.docs) {
+        try {
+          if (await settleEvent(db, d.id, groups, { quiet: true })) settled++
+        } catch (err) {
+          logger.error('settleEventRecords: failed', { id: d.id, err })
+        }
+      }
+    }
+    if (settled) logger.info(`settleEventRecords: settled ${settled} of ${written.size} written`)
+    await stateRef.set({ at: now }, { merge: true })
   }
 )

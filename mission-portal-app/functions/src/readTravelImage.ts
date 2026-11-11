@@ -82,7 +82,8 @@ Copy only what the picture actually shows. When a picture is hard to read, or it
  * there. Nothing read is stored or logged, only how much it cost.
  */
 export const readTravelImage = onCall(
-  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 90 },
+  // Each read costs money (Claude): at most three at once, whoever asks (../globalOptions).
+  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 90, maxInstances: 3 },
   async (req) => {
     const uid = req.auth?.uid
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in first.')

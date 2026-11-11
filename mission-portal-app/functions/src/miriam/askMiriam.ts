@@ -239,8 +239,11 @@ function screensFrom(list: unknown): string[] {
  * Nothing else said is stored, and only how much it cost is logged.
  */
 export const askMiriam = onCall(
-  // A whole processor: her own model runs here (./own/encoder).
-  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 90, memory: '1GiB', cpu: 1 },
+  // A whole processor: her own model runs here (./own/encoder). At most five
+  // copies (../globalOptions): each serves many requests at once, and the
+  // ones that reach Claude cost money — per person, the usage limit below
+  // holds that down; this holds down all of them together.
+  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 90, memory: '1GiB', cpu: 1, maxInstances: 5 },
   async (req) => {
     // Where it was handled, set as it goes, and noted once it ends (./stats).
     const turn: TurnNote = {}

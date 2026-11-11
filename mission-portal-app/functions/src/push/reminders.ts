@@ -3,10 +3,11 @@ import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 import { notifyUser } from './notifyCore'
 import { clockOf, nextOccurrence, zonedTime, type Repeat } from './reminderTime'
-import { instancesOf, type EventTemplate, type Group } from '../miriam/data'
+import { instancesOf, shiftDate, type EventTemplate, type Group } from '../miriam/data'
 import { mergeEvent } from '../eventPrivate'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import {
+  AHEAD_DAYS,
   beforeEventSaid,
   nextBeforeEvent,
   sentWith,
@@ -19,21 +20,68 @@ if (!admin.apps.length) admin.initializeApp()
 /** Missed by more than this (the job down a while): dropped, not sent late. */
 const TOO_LATE_MS = 12 * 60 * 60 * 1000
 
-/** Every event and group, as a reminder before every event needs them: read once a run. */
+/** How many private records are asked for at once. */
+const GET_ALL_CHUNK = 300
+
+/**
+ * The events a reminder before every event could come before, and every
+ * group, as it needs them: read once a run.
+ *
+ * Not every event kept: those held for a year after they happened are no
+ * use here. One that happens once, by the day it starts, in the stretch
+ * ./everyEvent looks over (AHEAD_DAYS) with a day or two either side for
+ * time zones; and every repeating one, whose start may be long past. A later
+ * day of an event over several days is never reminded of on its own (the
+ * same event), so its first day is all that is asked about.
+ */
 async function eventsAndGroups(db: admin.firestore.Firestore) {
-  const [events, closed, groups] = await Promise.all([
-    db.collection('events').get(),
-    // Its teams are in its private record (../eventPrivate): who is on it.
-    db.collection('eventPrivate').get(),
+  const today = new Date().toISOString().slice(0, 10)
+  const [dated, repeating, groups] = await Promise.all([
+    db
+      .collection('events')
+      .where('date', '>=', shiftDate(today, -2))
+      .where('date', '<=', shiftDate(today, AHEAD_DAYS + 2))
+      .get(),
+    db.collection('events').where('isRec', '==', true).get(),
     db.collection('groups').get(),
   ])
-  const privateOf = new Map(closed.docs.map((d) => [d.id, d.data()]))
+  const open = new Map<string, admin.firestore.DocumentData>()
+  for (const d of [...dated.docs, ...repeating.docs]) open.set(d.id, d.data())
+  // Its teams are in its private record (../eventPrivate): who is on it.
+  const ids = [...open.keys()]
+  const privateOf = new Map<string, admin.firestore.DocumentData | undefined>()
+  for (let i = 0; i < ids.length; i += GET_ALL_CHUNK) {
+    const refs = ids.slice(i, i + GET_ALL_CHUNK).map((id) => db.doc(`eventPrivate/${id}`))
+    for (const snap of await db.getAll(...refs)) privateOf.set(snap.id, snap.data())
+  }
   return {
-    events: events.docs.map((d) => ({
-      ...(mergeEvent(d.data(), privateOf.get(d.id)) as StoredEvent),
-      id: d.id,
+    events: ids.map((id) => ({
+      ...(mergeEvent(open.get(id) ?? {}, privateOf.get(id)) as StoredEvent),
+      id,
     })),
     groups: groups.docs.map((d) => ({ ...(d.data() as Group), id: d.id })),
+  }
+}
+
+/**
+ * The reminders whose time has come: still to send, and due by now. Asked of
+ * the database rather than read in full and sorted here, since this runs
+ * every minute: what it reads is what is due, not every reminder waiting.
+ *
+ * The question needs an index of its own (firestore.indexes.json, deployed
+ * with the rules). Until it is built — the minutes after it is first
+ * deployed — the database refuses it, and every reminder still to send is
+ * read instead, as before.
+ */
+async function dueReminders(db: admin.firestore.Firestore, now: number) {
+  const pending = db.collection('reminders').where('pending', '==', true)
+  try {
+    return await pending.where('remindAt', '<=', now).get()
+  } catch (err) {
+    // FAILED_PRECONDITION: the index isn't there yet.
+    if ((err as { code?: unknown }).code !== 9) throw err
+    logger.warn('sendDueReminders: index not built yet; reading every reminder still to send')
+    return pending.get()
   }
 }
 
@@ -55,15 +103,15 @@ function setTo(next: ReturnType<typeof nextBeforeEvent>) {
  * 5 pm tomorrow"), sent at their time as a push — they show in the Tasks tab
  * too (src/stores/remindersStore).
  *
- * Every minute, the ones still to send (`pending`, a field each has, so no
- * index is needed) whose time has come. Each is claimed before it is sent, so
+ * Every minute, the ones still to send whose time has come (dueReminders).
+ * Each is claimed before it is sent, so
  * a run that overlaps another never sends it twice; one marked done before
  * its time is not sent at all.
  */
 export const sendDueReminders = onSchedule({ schedule: 'every 1 minutes' }, async () => {
   const db = admin.firestore()
   const now = Date.now()
-  const snap = await db.collection('reminders').where('pending', '==', true).get()
+  const snap = await dueReminders(db, now)
   // Read only when a reminder before every event comes due.
   let world: Awaited<ReturnType<typeof eventsAndGroups>> | null = null
   for (const doc of snap.docs) {

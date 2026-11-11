@@ -40,9 +40,16 @@ export const taskDueReminders = onSchedule({ schedule: '0 14 * * *' }, async () 
   const today = todayStr()
   const weekOut = addDays(today, 7)
 
-  const snap = await db.collection('tasks').get()
+  // Only the tasks due today or a week from today, by either date that can
+  // decide it: not every task kept. Which of the two counts is worked out
+  // below, as it always was.
+  const [byDue, byProjected] = await Promise.all([
+    db.collection('tasks').where('dueDate', 'in', [today, weekOut]).get(),
+    db.collection('tasks').where('projectedDate', 'in', [today, weekOut]).get(),
+  ])
+  const docs = new Map([...byDue.docs, ...byProjected.docs].map((d) => [d.id, d]))
 
-  for (const doc of snap.docs) {
+  for (const doc of docs.values()) {
     const task = doc.data() as TaskRaw
     if (task.status === 'done') continue
 

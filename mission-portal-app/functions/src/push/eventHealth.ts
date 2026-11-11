@@ -2,25 +2,15 @@ import { onSchedule } from 'firebase-functions/v2/scheduler'
 import * as admin from 'firebase-admin'
 import { logger } from 'firebase-functions'
 import { notifyUser } from './notifyCore'
+import { eventsToRead, healthChanges, type HealthEvent, type HealthTask } from './eventHealthPlan'
 
 if (!admin.apps.length) admin.initializeApp()
 
-interface TaskRaw {
-  status?: string
-  dueDate?: string | null
-  projectedDate?: string | null
-  evId?: string | number | null
-  evTemplateId?: string | number | null
-}
+/** Events asked for at once. */
+const GET_ALL_CHUNK = 300
 
 function todayStr(): string {
   return new Date().toISOString().split('T')[0]
-}
-
-/** Mirrors the client's isOverdue(): past its effective date and not done. */
-function isOverdue(task: TaskRaw, today: string): boolean {
-  const effectiveDate = task.projectedDate || task.dueDate
-  return !!(effectiveDate && task.status !== 'done' && effectiveDate < today)
 }
 
 /**
@@ -36,58 +26,45 @@ export const eventHealthCheck = onSchedule({ schedule: '0 15 * * *' }, async () 
   const db = admin.firestore()
   const today = todayStr()
 
-  const [eventsSnap, tasksSnap, adminsSnap] = await Promise.all([
-    db.collection('events').get(),
-    db.collection('tasks').get(),
+  // The tasks still to do, the events last found behind, and the admins: not
+  // every event and task kept (./eventHealthPlan).
+  const [openSnap, behindSnap, adminsSnap] = await Promise.all([
+    db.collection('tasks').where('status', '!=', 'done').get(),
+    db.collection('eventHealthState').where('behind', '==', true).get(),
     db.collection('users').where('roles', 'array-contains', 'admin').get(),
   ])
 
   const adminUids = adminsSnap.docs.map((d) => d.id)
   if (adminUids.length === 0) return
 
-  const tasks = tasksSnap.docs.map((d) => d.data() as TaskRaw)
-
-  for (const evDoc of eventsSnap.docs) {
-    const ev = evDoc.data() as {
-      title?: string
-      taskTemplateId?: string
-      deleted?: boolean
-      unpublished?: boolean
+  const openTasks = openSnap.docs.map((d) => d.data() as HealthTask)
+  const behind = new Set(behindSnap.docs.map((d) => d.id))
+  const ids = eventsToRead(openTasks, behind)
+  const events: HealthEvent[] = []
+  for (let i = 0; i < ids.length; i += GET_ALL_CHUNK) {
+    const refs = ids.slice(i, i + GET_ALL_CHUNK).map((id) => db.doc(`events/${id}`))
+    for (const snap of await db.getAll(...refs)) {
+      if (snap.exists) events.push({ ...(snap.data() as Omit<HealthEvent, 'id'>), id: snap.id })
     }
-    // A draft is its maker's alone: no other admin is told of it.
-    if (ev.deleted || ev.unpublished === true || !ev.taskTemplateId) continue
+  }
 
-    const evTasks = tasks.filter(
-      (t) => String(t.evId ?? '') === evDoc.id || String(t.evTemplateId ?? '') === evDoc.id
-    )
-    if (evTasks.length === 0) continue
-
-    const isBehind = evTasks.some((t) => t.status === 'behind' || isOverdue(t, today))
-
-    const stateRef = db.doc(`eventHealthState/${evDoc.id}`)
-    const prevState = (await stateRef.get()).data() as { behind?: boolean } | undefined
-    const wasBehind = prevState?.behind === true
-
-    if (isBehind !== wasBehind) {
-      await stateRef.set({
-        behind: isBehind,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  for (const change of healthChanges(events, openTasks, behind, today)) {
+    await db.doc(`eventHealthState/${change.id}`).set({
+      behind: change.behind,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    // Only notify on the on-time -> behind transition.
+    if (!change.newlyBehind) continue
+    for (const uid of adminUids) {
+      await notifyUser(uid, 'eventHealthBehind', {
+        eventTitle: change.title,
+        eventId: change.id,
+        // The list, not the card. Opening a card needs an instance key —
+        // templateId_date — and the health check reads the template only,
+        // so it has no date to build one from.
+        link: '/(app)/events',
       })
     }
-
-    // Only notify on the on-time -> behind transition.
-    if (isBehind && !wasBehind) {
-      for (const uid of adminUids) {
-        await notifyUser(uid, 'eventHealthBehind', {
-          eventTitle: ev.title ?? 'An event',
-          eventId: evDoc.id,
-          // The list, not the card. Opening a card needs an instance key —
-          // templateId_date — and the health check reads the template only,
-          // so it has no date to build one from.
-          link: '/(app)/events',
-        })
-      }
-      logger.info(`eventHealthCheck: ${evDoc.id} transitioned to behind`)
-    }
+    logger.info(`eventHealthCheck: ${change.id} transitioned to behind`)
   }
 })

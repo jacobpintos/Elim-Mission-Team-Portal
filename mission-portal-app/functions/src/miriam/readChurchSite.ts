@@ -20,6 +20,8 @@ export const readChurchSite = onSchedule(
     memory: '1GiB',
     cpu: 1,
     timeoutSeconds: 540,
+    // Once a day: never two at once (../globalOptions).
+    maxInstances: 1,
   },
   async () => {
     // Each passage's meaning is worked out with her model (./model).

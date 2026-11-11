@@ -24,6 +24,7 @@ on:
     paths:
       - 'mission-portal-app/functions/**'
       - 'mission-portal-app/firestore.rules'
+      - 'mission-portal-app/firestore.indexes.json'
       - 'mission-portal-app/storage.rules'
       - '.github/workflows/deploy-firebase.yml'
 
@@ -60,6 +61,7 @@ jobs:
             echo "Cannot resolve ${BEFORE:-<empty>} — deploying everything."
             echo "functions=1" >> "$GITHUB_OUTPUT"
             echo "rules=1" >> "$GITHUB_OUTPUT"
+            echo "indexes=1" >> "$GITHUB_OUTPUT"
             echo "storage=1" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -70,11 +72,13 @@ jobs:
             echo "Workflow changed — deploying everything."
             echo "functions=1" >> "$GITHUB_OUTPUT"
             echo "rules=1" >> "$GITHUB_OUTPUT"
+            echo "indexes=1" >> "$GITHUB_OUTPUT"
             echo "storage=1" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "functions=$(grep -c 'mission-portal-app/functions/' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
           echo "rules=$(grep -c 'mission-portal-app/firestore.rules' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
+          echo "indexes=$(grep -c 'mission-portal-app/firestore.indexes.json' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
           echo "storage=$(grep -c 'mission-portal-app/storage.rules' /tmp/changed.txt || true)" >> "$GITHUB_OUTPUT"
 
       # Authenticate with Firebase using the service account JSON stored
@@ -118,6 +122,18 @@ jobs:
           node lib/scripts/uploadModel.js "$(node -p "require('../../firebase.json').storage[0].bucket")"
         working-directory: mission-portal-app/functions
 
+      # The database's indexes (firestore.indexes.json), before the functions
+      # that ask the questions they answer: an index takes some minutes to
+      # build after it is deployed, and a function asking before then is
+      # refused (sendDueReminders reads the slow way until it is ready). Never
+      # deletes an index made some other way: --non-interactive, without
+      # --force, leaves any the file doesn't list and only says so.
+      - name: Deploy Firestore indexes
+        if: |
+          (github.event_name == 'workflow_dispatch' && (inputs.deploy_functions == true || inputs.deploy_rules == true)) ||
+          (github.event_name == 'push' && (steps.changed.outputs.functions != '0' || steps.changed.outputs.indexes != '0'))
+        run: npx firebase-tools deploy --only firestore:indexes --non-interactive --project ${{ secrets.FIREBASE_PROJECT_ID }}
+
       # Functions taken out of the source are deleted from the project here,
       # by name. The deploy below stops, changing nothing, when it finds a
       # function in the project that the source no longer has: it won't delete
@@ -128,13 +144,14 @@ jobs:
       # - The app's own email (Resend): never switched on, and removed.
       #   sendContactForm, weeklyDigest, monthlyDigest, sendDigestManual,
       #   resendWebhook, unsubscribe.
+      # - broadcastAnnouncement: called by nothing, and read every account.
       - name: Delete retired functions
         if: |
           (github.event_name == 'workflow_dispatch' && inputs.deploy_functions == true) ||
           (github.event_name == 'push' && steps.changed.outputs.functions != '0')
         env:
           PROJECT: ${{ secrets.FIREBASE_PROJECT_ID }}
-          RETIRED: sendContactForm weeklyDigest monthlyDigest sendDigestManual resendWebhook unsubscribe
+          RETIRED: sendContactForm weeklyDigest monthlyDigest sendDigestManual resendWebhook unsubscribe broadcastAnnouncement
         run: |
           deployed=$(npx firebase-tools functions:list --json --project "$PROJECT" | jq -r '.result[]?.id' || true)
           gone=""
