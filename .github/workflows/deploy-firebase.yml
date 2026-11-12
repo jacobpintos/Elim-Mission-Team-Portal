@@ -128,11 +128,23 @@ jobs:
       # refused (sendDueReminders reads the slow way until it is ready). Never
       # deletes an index made some other way: --non-interactive, without
       # --force, leaves any the file doesn't list and only says so.
+      #
+      # Not in the way of the rest: an index only makes a query quicker, and
+      # what it serves works without one. Refused — the deploy's account may
+      # not make indexes until it is given the role — it is said so, below,
+      # and the functions and rules are deployed all the same.
       - name: Deploy Firestore indexes
+        id: indexes
+        continue-on-error: true
         if: |
           (github.event_name == 'workflow_dispatch' && (inputs.deploy_functions == true || inputs.deploy_rules == true)) ||
           (github.event_name == 'push' && (steps.changed.outputs.functions != '0' || steps.changed.outputs.indexes != '0'))
         run: npx firebase-tools deploy --only firestore:indexes --non-interactive --project ${{ secrets.FIREBASE_PROJECT_ID }}
+
+      - name: Say the indexes weren't deployed
+        if: steps.indexes.outcome == 'failure'
+        run: |
+          echo "::warning::The Firestore indexes were NOT deployed (most often: the deploy's service account may not make indexes). Everything else goes ahead; what they serve works without them, more slowly. To fix: give that account the Cloud Datastore Index Admin role (roles/datastore.indexAdmin) in Google Cloud IAM, then run Deploy Firebase again. See README: Deploying."
 
       # Functions taken out of the source are deleted from the project here,
       # by name. The deploy below stops, changing nothing, when it finds a
