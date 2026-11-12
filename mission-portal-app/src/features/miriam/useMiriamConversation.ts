@@ -88,6 +88,7 @@ import {
   eventByKeyForReport,
   eventForReport,
   gatherEventReport,
+  healthCardPath,
   mayHaveReports,
   type ReportEvent,
 } from './eventReportData'
@@ -215,6 +216,10 @@ export function useMiriamConversation(
     noteDone(report.spoken)
     setStay(true)
     setStage('answered')
+    // Its Event Health card, where it has one, on the screen behind her —
+    // unless something is open over the screen (a form, a sheet).
+    const card = healthCardPath(ev)
+    if (card && !anyOverlayOpen()) router.push(card as never)
     return true
   }
 

@@ -33,7 +33,8 @@ import { unplaced } from './carpoolCards'
 import { ScheduleBuilder } from './ScheduleBuilder'
 import { dayNames, scheduleByDay, tidySchedule, tidyTime, whenShown } from '@/lib/eventSchedule'
 import type { TaskTemplate } from '@/features/admin/TaskTemplateCard'
-import { getInstances, localToday, taskDueDate } from '@/lib/events'
+import { getInstances, localToday } from '@/lib/events'
+import { tasksFromTemplate } from '@/lib/templateTasks'
 import { blockedAmong, type Block } from '../../../functions/src/blockedDates'
 import { shiftDate } from '../../../functions/src/miriam/data'
 import { readBlocksFrom } from '@/stores/blockedDatesStore'
@@ -684,35 +685,29 @@ export function EventFormModal({
     ).catch(() => {})
   }
 
-  /** The tasks of the template chosen, for an event — and its assignees told. */
+  /**
+   * The tasks of the template chosen, for an event, that it doesn't have
+   * already (lib/templateTasks) — and their assignees told, by the server, as
+   * every task's are (functions: push/recordNotifications onTaskWritten).
+   */
   async function spawnTemplateTasks(eventId: string | number) {
     const tpl = form.taskTemplateId
       ? taskTemplates.find((tt) => String(tt.id) === form.taskTemplateId)
       : null
     if (!tpl) return
-    const eventDate = form.isRec ? null : formIso(form.date) || null
-    for (const taskItem of tpl.tasks ?? []) {
-      if (!taskItem.title.trim()) continue
-      const isPostEvent = (taskItem.daysAfterEvent ?? 0) > 0
-      const dueDate = taskDueDate(eventDate, taskItem)
-      await createTask({
-        title: taskItem.title,
-        assignees: taskItem.assignees ?? [],
-        lead: (taskItem.assignees ?? [])[0] ?? null,
-        by: profile?.uid ?? '',
-        status: 'pending',
-        evTemplateId: eventId,
-        evDate: eventDate,
-        dueDate,
-        ...(isPostEvent ? { isPostEvent: true } : {}),
-      })
-      // Its assignees are told by the server, as every task's are
-      // (functions: push/recordNotifications onTaskWritten).
-    }
+    const tasks = tasksFromTemplate(tpl.tasks ?? [], {
+      eventId,
+      eventDate: form.isRec ? null : formIso(form.date) || null,
+      by: profile?.uid ?? '',
+      membersOf: (ids) =>
+        allGroups.filter((g) => ids.includes(String(g.id))).flatMap((g) => g.members.map(String)),
+      existing: await taskTitlesOf(eventId),
+    })
+    for (const task of tasks) await createTask(task)
   }
 
-  /** Whether an event has tasks already: by its id as a number or as text. */
-  async function hasTasks(eventId: string | number) {
+  /** The titles of an event's tasks: by its id as a number or as text. */
+  async function taskTitlesOf(eventId: string | number): Promise<string[]> {
     const ids = [...new Set([eventId, String(eventId), Number(eventId)])].filter(
       (x) => x !== '' && !Number.isNaN(x)
     )
@@ -724,7 +719,7 @@ export function EventFormModal({
         where('evTemplateId', 'in', ids)
       )
     )
-    return !snap.empty
+    return snap.docs.map((d) => String((d.data() as { title?: string }).title ?? ''))
   }
 
   const doSave = async (finalUsers: (string | number)[], saveAsDraft = false) => {
@@ -821,9 +816,14 @@ export function EventFormModal({
         // by the server (functions: push/recordNotifications
         // onEventPrivateWritten): only what changed, since an event is saved
         // many times. A draft tells no one; published, it tells everyone, and
-        // gets its template's tasks (a draft from before held them already).
+        // gets its template's tasks. So does a published event given a
+        // template, or another one: those of its tasks it has already (by
+        // title) are left as they are, and none is taken away.
         const publishing = wasDraft && !saveAsDraft
-        if (publishing && !(await hasTasks(event.id))) await spawnTemplateTasks(event.id)
+        const templateGiven =
+          !!form.taskTemplateId &&
+          String(form.taskTemplateId) !== String(event.taskTemplateId ?? '')
+        if (!saveAsDraft && (publishing || templateGiven)) await spawnTemplateTasks(event.id)
         await auditEventSave(
           saveAsDraft ? 'draftSaved' : wasDraft ? 'published' : 'updated',
           form.title,

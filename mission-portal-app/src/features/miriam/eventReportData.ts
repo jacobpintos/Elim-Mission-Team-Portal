@@ -15,7 +15,9 @@ import {
   type ReportTask,
   type ReportWeather,
 } from '@/lib/eventReport'
+import { sameId } from '@/lib/ids'
 import { useAuthStore } from '@/stores/authStore'
+import { useEventsStore } from '@/stores/eventsStore'
 import { useGroupsStore } from '@/stores/groupsStore'
 import { useTasksStore } from '@/stores/tasksStore'
 import { useUsersStore } from '@/stores/usersStore'
@@ -80,6 +82,17 @@ export async function eventForReport(ask: ReportAsk): Promise<EventInstance | nu
       6
     )
   return eventAsked(ask, find)
+}
+
+/**
+ * Where its Event Health card is — Assignments, at the card — when it has
+ * one: an event given a task template has (app/(app)/assignments).
+ */
+export function healthCardPath(ev: EventInstance): string | null {
+  const tmpl = useEventsStore.getState().templates.find((t) => sameId(t.id, ev.templateId))
+  return tmpl?.taskTemplateId
+    ? `/assignments?healthEvent=${encodeURIComponent(String(ev.templateId))}`
+    : null
 }
 
 /** The event with this key, as the admin can see it. */

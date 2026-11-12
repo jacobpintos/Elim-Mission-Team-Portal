@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ScrollView, Pressable, View, TextInput, StyleSheet } from 'react-native'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -24,6 +24,7 @@ import { EventKanban } from '@/features/events/EventKanban'
 import { SetListDetailModal } from '@/features/worship/SetListDetailModal'
 import { isAdmin, isMember, isPublic } from '@/lib/roles'
 import { isOverdue } from '@/lib/availability'
+import { tasksFromTemplate } from '@/lib/templateTasks'
 import { sameId } from '@/lib/ids'
 import { FD } from '@/lib/format'
 import { typedDateToIso } from '@/lib/eventDates'
@@ -1204,7 +1205,11 @@ export default function Assignments() {
    * filter the screen was last left on, so the request inside it is the first
    * thing on the screen.
    */
-  const { taskId: focusTaskId } = useLocalSearchParams<{ taskId?: string }>()
+  const { taskId: focusTaskId, healthEvent } = useLocalSearchParams<{
+    taskId?: string
+    /** An event whose Event Health card to show (Miriam, after her report on it). */
+    healthEvent?: string
+  }>()
 
   const [filter, setFilter] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
@@ -1244,6 +1249,23 @@ export default function Assignments() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onTheTeam])
+
+  // Opened at an event's Event Health card (?healthEvent=): that view, once
+  // for each event asked — then the card scrolled to and marked, once it has
+  // been laid out. (Set as the link changes, while rendering, as React has
+  // state that follows what is passed in.)
+  const healthScroll = useRef<ScrollView>(null)
+  const scrolledTo = useRef<string | null>(null)
+  const [healthShownFor, setHealthShownFor] = useState<string | null>(null)
+  if (healthEvent && admin && healthShownFor !== healthEvent) {
+    setHealthShownFor(healthEvent)
+    setAdminView('health')
+  }
+  const onHealthCardLayout = (eventId: string | number, y: number) => {
+    if (!healthEvent || !sameId(eventId, healthEvent) || scrolledTo.current === healthEvent) return
+    scrolledTo.current = healthEvent
+    healthScroll.current?.scrollTo({ y: Math.max(0, y - 12), animated: true })
+  }
 
   useEffect(() => {
     if (!admin) return
@@ -1483,32 +1505,17 @@ export default function Assignments() {
     if (!ev || !tpl) return
     setSpawning(card.templateId)
     try {
-      for (const taskItem of tpl.tasks ?? []) {
-        if (!taskItem.title.trim()) continue
-        let dueDate: string | null = null
-        if (taskItem.daysAfterEvent && taskItem.daysAfterEvent > 0 && ev.date) {
-          const d = new Date(ev.date)
-          d.setDate(d.getDate() + taskItem.daysAfterEvent)
-          dueDate = d.toISOString().split('T')[0]
-        } else if (ev.date && taskItem.daysBefore > 0) {
-          const d = new Date(ev.date)
-          d.setDate(d.getDate() - taskItem.daysBefore)
-          dueDate = d.toISOString().split('T')[0]
-        }
-        const groupUids = getMemberUids(taskItem.assigneeGroups ?? [])
-        const allAssignees = [...new Set([...(taskItem.assignees ?? []), ...groupUids])]
-        // Its assignees are told by the server (functions: onTaskWritten).
-        await createTask({
-          title: taskItem.title,
-          assignees: allAssignees,
-          lead: allAssignees[0] ?? null,
-          by: profile?.uid ?? '',
-          status: 'pending',
-          evTemplateId: ev.id,
-          evDate: ev.date ?? null,
-          dueDate,
-        })
-      }
+      // As the event form makes them (lib/templateTasks): those it has
+      // already, by title, left out.
+      const tasks = tasksFromTemplate(tpl.tasks ?? [], {
+        eventId: ev.id,
+        eventDate: ev.isRec ? null : ev.date || null,
+        by: profile?.uid ?? '',
+        membersOf: getMemberUids,
+        existing: card.tasks.map((t) => t.title),
+      })
+      // Its assignees are told by the server (functions: onTaskWritten).
+      for (const task of tasks) await createTask(task)
       toast('Tasks spawned', 'success')
     } catch {
       toast('Failed to spawn tasks', 'error')
@@ -1602,7 +1609,7 @@ export default function Assignments() {
 
       {/* Event Health view */}
       {adminView === 'health' ? (
-        <ScrollView style={{ flex: 1 }}>
+        <ScrollView ref={healthScroll} style={{ flex: 1 }}>
           <XStack padding="$3" gap="$3" flexWrap="wrap" alignItems="flex-start">
             {eventHealthCards.length === 0 ? (
               <YStack
@@ -1625,6 +1632,7 @@ export default function Assignments() {
                       ? undefined
                       : () => setKanbanEvent({ title: card.title, tasks: card.tasks })
                   }
+                  onLayout={(e) => onHealthCardLayout(card.templateId, e.nativeEvent.layout.y)}
                   style={{ width: 300 }}
                 >
                   <YStack
@@ -1632,8 +1640,12 @@ export default function Assignments() {
                     borderRadius="$3"
                     padding="$3"
                     gap="$2"
-                    borderWidth={1}
-                    borderColor={colors.border}
+                    borderWidth={healthEvent && sameId(card.templateId, healthEvent) ? 2 : 1}
+                    borderColor={
+                      healthEvent && sameId(card.templateId, healthEvent)
+                        ? colors.primary
+                        : colors.border
+                    }
                   >
                     <Text color={colors.text} fontWeight="700" fontSize="$4" numberOfLines={2}>
                       {card.title}
