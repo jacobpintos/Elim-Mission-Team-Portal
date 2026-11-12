@@ -439,8 +439,9 @@ export function buildEventReport(input: EventReportInput): EventReport {
     .filter(([k]) => counts[k])
     .map(([k, label]) => `${counts[k]} ${label}`)
   const since = input.seen ? sinceSaid(input.seen.at, today) : ''
+  // The first report on it has nothing to compare with: nothing said of changes.
   const changeLines = !changes
-    ? ['• First report on it: next time, what changed since is shown here.']
+    ? []
     : changes.length
       ? [
           `• Since you last checked (${since}): ${changes

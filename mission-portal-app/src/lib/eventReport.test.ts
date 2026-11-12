@@ -323,10 +323,11 @@ describe('the report', () => {
     )
   })
 
-  it('says it is the first report the first time, and keeps the answers for the next', () => {
+  it('says nothing of changes the first time, and keeps the answers for the next', () => {
     const r = buildEventReport(input({ instance: { ann: { status: 'yes' } } }))
     expect(r.availability.changes).toBeNull()
-    expect(r.text).toContain('First report on it')
+    expect(r.text).not.toMatch(/first report|since you last|changed/i)
+    expect(r.spoken).not.toMatch(/first report|since you last|changed/i)
     expect(r.seen).toEqual({
       at: Date.parse('2026-11-18T15:00:00'),
       answers: { ann: 'yes', ben: 'none', cy: 'none', dee: 'none' },

@@ -206,8 +206,12 @@ export function useMiriamConversation(
     setStage('thinking')
     const report = await gatherEventReport(ev).catch(() => null)
     if (!report) return false
+    // Shown written out, and read aloud in fewer words: what is read isn't
+    // written out again beneath it (MiriamPanel shows what she says only
+    // when it isn't on screen), since the report on screen says it all.
     setAnswer(report.text)
     speak(report.spoken)
+    setSaid(null)
     noteDone(report.spoken)
     setStay(true)
     setStage('answered')
