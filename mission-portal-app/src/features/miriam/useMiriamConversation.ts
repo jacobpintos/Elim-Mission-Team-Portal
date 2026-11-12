@@ -205,6 +205,11 @@ export function useMiriamConversation(
   const giveReport = async (ev: ReportEvent | null): Promise<boolean> => {
     if (!ev) return false
     setStage('thinking')
+    // Its Event Health card, where it has one, on the screen behind her as
+    // she puts the report together and reads it out — as an answer about an
+    // event opens its page — unless something is open over the screen.
+    const card = mayHaveReports() ? healthCardPath(ev) : null
+    if (card && !anyOverlayOpen()) router.push(card as never)
     const report = await gatherEventReport(ev).catch(() => null)
     if (!report) return false
     // Shown written out, and read aloud in fewer words: what is read isn't
@@ -216,10 +221,6 @@ export function useMiriamConversation(
     noteDone(report.spoken)
     setStay(true)
     setStage('answered')
-    // Its Event Health card, where it has one, on the screen behind her —
-    // unless something is open over the screen (a form, a sheet).
-    const card = healthCardPath(ev)
-    if (card && !anyOverlayOpen()) router.push(card as never)
     return true
   }
 

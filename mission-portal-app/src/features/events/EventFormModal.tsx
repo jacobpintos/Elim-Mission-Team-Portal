@@ -773,7 +773,13 @@ export function EventFormModal({
         dressCode,
         ...reportTimesSaved,
         unpublished: saveAsDraft,
-        ...(form.taskTemplateId ? { taskTemplateId: form.taskTemplateId } : {}),
+        // "None" chosen for an event that had a template: taken off (left as
+        // it was, it stayed). The tasks it made stay, done or not.
+        ...(form.taskTemplateId
+          ? { taskTemplateId: form.taskTemplateId }
+          : event?.taskTemplateId
+            ? { taskTemplateId: '' }
+            : {}),
         ...(coords ? { _geocodeLat: coords.lat, _geocodeLng: coords.lng } : {}),
       }
       if (instanceKey && editScope === 'instance') {
