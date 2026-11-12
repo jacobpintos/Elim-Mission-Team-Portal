@@ -31,7 +31,7 @@ import {
   getPrevMatchingLabel,
   getPrevMatchingSection,
 } from './chordSheetFormat'
-import { buildChordSheetPdfBlob } from './chordSheetPdf'
+import { buildChordSheetPdfBlob, preparePdfExport } from './chordSheetPdf'
 import { FullScreenOverlay } from '@/components/ui/FullScreenOverlay'
 import { useCoverViewport } from '@/lib/useCoverViewport'
 import { resetPageZoom } from '@/lib/resetPageZoom'
@@ -325,6 +325,13 @@ export function ChordSheetViewer({
     const again = setTimeout(resetPageZoom, 400)
     return () => clearTimeout(again)
   }, [sheetKey, landscape])
+
+  // On the web, the PDF maker (jsPDF) is fetched as a sheet opens, not with
+  // the app: ready by the time Export is tapped, so the share sheet still
+  // opens from the tap (./chordSheetPdf.web).
+  useEffect(() => {
+    if (sheetKey) preparePdfExport()
+  }, [sheetKey])
 
   const cardMaxHeight = coverScreen
     ? windowHeight
@@ -950,7 +957,7 @@ export function ChordSheetViewer({
     // the share sheet where available (so it can be saved to Files, AirDropped,
     // etc.), or as a plain download otherwise.
     if (Platform.OS === 'web') {
-      const blob = buildChordSheetPdfBlob(
+      const blob = await buildChordSheetPdfBlob(
         sheet,
         selectedKey,
         isMinor,

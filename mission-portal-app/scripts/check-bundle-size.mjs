@@ -1,11 +1,13 @@
 /**
  * The web build's JavaScript, measured as it is sent (gzipped), against a
- * budget a little above its size in October 2026, so that it catches growth:
+ * budget a little above its size, so that it catches growth:
  *
- *  - what the first page loads (the scripts index.html names): 2.5 MB, from
- *    about 2.3 MB;
- *  - any one chunk loaded later (the PDF viewer, html2canvas, …): 500 KB,
- *    the largest being about 400 KB.
+ *  - what the first page loads (the scripts index.html names): 1.7 MB, from
+ *    about 1.55 MB in November 2026. It was 2.5 MB, from 2.3 MB, until the
+ *    map, jsPDF and Sentry were fetched only where they are used and zod was
+ *    taken out; this keeps what that saved.
+ *  - any one chunk loaded later (the map, the PDF viewer, Sentry, …): 500 KB,
+ *    the largest (the map) being about 470 KB.
  *
  * Finding nothing to measure fails too: that is a check that no longer looks
  * in the right place (as when Expo moved the files into js/web/), not an app
@@ -18,7 +20,7 @@ import { join, relative, sep } from 'node:path'
 import { gzipSync } from 'node:zlib'
 
 const KB = 1024
-const INITIAL_BUDGET = 2.5 * KB * KB
+const INITIAL_BUDGET = 1.7 * KB * KB
 const CHUNK_BUDGET = 500 * KB
 
 const dist = process.argv[2] ?? 'dist'

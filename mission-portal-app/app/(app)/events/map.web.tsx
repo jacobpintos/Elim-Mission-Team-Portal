@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useMemo } from 'react'
 import { ScrollView, View, Pressable } from 'react-native'
 import { YStack, XStack, Text } from 'tamagui'
 import { useRouter } from 'expo-router'
-import mapboxgl from 'mapbox-gl'
+// Its types only: the library itself is fetched when this screen opens (below).
+import type mapboxgl from 'mapbox-gl'
 import { useAuthStore } from '@/stores/authStore'
 import { useEventsStore } from '@/stores/eventsStore'
 import { useThemeColors } from '@/theme/useThemeColors'
@@ -25,6 +26,64 @@ type LocationGroup = {
   onewayMi: number
 }
 
+/** The map, with its controls, the home marker and state borders; `onReady` once it has loaded. */
+function startMap(
+  lib: typeof mapboxgl,
+  container: HTMLDivElement,
+  token: string,
+  onReady: () => void
+): mapboxgl.Map {
+  lib.accessToken = token
+  const map = new lib.Map({
+    container,
+    style: 'mapbox://styles/mapbox/light-v11',
+    center: [HOME_LNG, HOME_LAT],
+    zoom: 6.2,
+  })
+
+  map.addControl(new lib.NavigationControl({ visualizePitch: false }), 'top-right')
+
+  // Home marker
+  const homeEl = document.createElement('div')
+  homeEl.style.cssText = [
+    'width:14px',
+    'height:14px',
+    'background:#2980b9',
+    'border:3px solid white',
+    'border-radius:50%',
+    'box-shadow:0 1px 6px rgba(0,0,0,0.4)',
+  ].join(';')
+  new lib.Marker({ element: homeEl })
+    .setLngLat([HOME_LNG, HOME_LAT])
+    .setPopup(
+      new lib.Popup({ offset: 12, closeButton: false }).setHTML(
+        `<div style="font-family:system-ui;font-size:12px;"><strong>${HOME_SAID}</strong><br/>Mission departure point</div>`
+      )
+    )
+    .addTo(map)
+
+  map.on('load', () => {
+    map.addLayer(
+      {
+        id: 'us-state-borders',
+        type: 'line',
+        source: 'composite',
+        'source-layer': 'admin',
+        filter: ['==', ['get', 'admin_level'], 1],
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#5a7db5',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 3, 1, 8, 2.5],
+          'line-opacity': 0.85,
+        },
+      },
+      'road-label'
+    )
+    onReady()
+  })
+  return map
+}
+
 export default function EventsMapScreen() {
   const colors = useThemeColors()
   const router = useRouter()
@@ -32,6 +91,8 @@ export default function EventsMapScreen() {
   const { templates, overrides, subscribe } = useEventsStore()
 
   const mapContainer = useRef<HTMLDivElement>(null)
+  /** The map library, once fetched. */
+  const gl = useRef<typeof mapboxgl | null>(null)
   const map = useRef<mapboxgl.Map | null>(null)
   const markersRef = useRef<mapboxgl.Marker[]>([])
   const [mapReady, setMapReady] = useState(false)
@@ -126,62 +187,27 @@ export default function EventsMapScreen() {
     }
   }, [])
 
-  // Initialize map
+  // Initialize map. The library (mapbox-gl, about 470 KB sent) is fetched
+  // here, when the map is opened, rather than with the app for everyone who
+  // opens it: an import() is a file of its own in the web build.
   useEffect(() => {
     if (map.current || !mapContainer.current) return
     const token = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? ''
     if (!token) return
+    let gone = false
 
-    mapboxgl.accessToken = token
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/light-v11',
-      center: [HOME_LNG, HOME_LAT],
-      zoom: 6.2,
-    })
-
-    map.current.addControl(new mapboxgl.NavigationControl({ visualizePitch: false }), 'top-right')
-
-    // Home marker
-    const homeEl = document.createElement('div')
-    homeEl.style.cssText = [
-      'width:14px',
-      'height:14px',
-      'background:#2980b9',
-      'border:3px solid white',
-      'border-radius:50%',
-      'box-shadow:0 1px 6px rgba(0,0,0,0.4)',
-    ].join(';')
-    new mapboxgl.Marker({ element: homeEl })
-      .setLngLat([HOME_LNG, HOME_LAT])
-      .setPopup(
-        new mapboxgl.Popup({ offset: 12, closeButton: false }).setHTML(
-          `<div style="font-family:system-ui;font-size:12px;"><strong>${HOME_SAID}</strong><br/>Mission departure point</div>`
-        )
-      )
-      .addTo(map.current)
-
-    map.current.on('load', () => {
-      map.current!.addLayer(
-        {
-          id: 'us-state-borders',
-          type: 'line',
-          source: 'composite',
-          'source-layer': 'admin',
-          filter: ['==', ['get', 'admin_level'], 1],
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#5a7db5',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 3, 1, 8, 2.5],
-            'line-opacity': 0.85,
-          },
-        },
-        'road-label'
-      )
-      setMapReady(true)
-    })
+    import('mapbox-gl')
+      .then((m) => {
+        if (gone || map.current || !mapContainer.current) return
+        // As the package is built (CommonJS), its export may come as the default or as itself.
+        const lib = ((m as { default?: typeof mapboxgl }).default ?? m) as typeof mapboxgl
+        gl.current = lib
+        map.current = startMap(lib, mapContainer.current, token, () => setMapReady(true))
+      })
+      .catch((err) => console.warn('[EventsMap] the map could not be loaded', err))
 
     return () => {
+      gone = true
       map.current?.remove()
       map.current = null
     }
@@ -189,7 +215,8 @@ export default function EventsMapScreen() {
 
   // Update markers whenever active groups change
   useEffect(() => {
-    if (!mapReady || !map.current) return
+    const lib = gl.current
+    if (!mapReady || !map.current || !lib) return
 
     markersRef.current.forEach((m) => m.remove())
     markersRef.current = []
@@ -199,7 +226,7 @@ export default function EventsMapScreen() {
       return
     }
 
-    const bounds = new mapboxgl.LngLatBounds()
+    const bounds = new lib.LngLatBounds()
     bounds.extend([HOME_LNG, HOME_LAT])
 
     for (const { lat, lng, names, trips, onewayMi } of activeGroups) {
@@ -223,8 +250,7 @@ export default function EventsMapScreen() {
       })
 
       const nameHtml = names.map((n) => `<strong>${n}</strong>`).join('<br/>')
-      const popup = new mapboxgl.Popup({ offset: 20, closeButton: false, maxWidth: '220px' })
-        .setHTML(`
+      const popup = new lib.Popup({ offset: 20, closeButton: false, maxWidth: '220px' }).setHTML(`
           <div style="font-family:system-ui;padding:2px 4px;">
             ${nameHtml}
             <div style="margin-top:4px;color:#666;font-size:12px;">
@@ -233,7 +259,7 @@ export default function EventsMapScreen() {
           </div>
         `)
 
-      const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+      const marker = new lib.Marker({ element: el, anchor: 'bottom' })
         .setLngLat([lng, lat])
         .setPopup(popup)
         .addTo(map.current!)

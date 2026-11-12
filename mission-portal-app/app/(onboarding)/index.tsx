@@ -18,7 +18,7 @@ import {
 import type { UserProfile } from '@/types/user'
 import { geocodeCity } from '@/lib/geocode'
 import { isValidPhone, normalizePhone } from '@/lib/textingList'
-import * as Sentry from '@sentry/react-native'
+import { reportCrash } from '@/lib/crashReports'
 
 /**
  * The steps, in order, for the account being set up.
@@ -114,9 +114,9 @@ export default function OnboardingScreen() {
       }
     } catch (err: unknown) {
       // Was a bare "Failed to upload photo" with the actual cause discarded,
-      // which made a real device failure unreportable. Sentry.captureException
-      // gets the real reason into the dashboard; the toast now shows it too.
-      Sentry.captureException(err)
+      // which made a real device failure unreportable. reportCrash gets the
+      // real reason into the dashboard; the toast now shows it too.
+      reportCrash(err)
       const message = err instanceof Error ? err.message : 'Unknown error'
       toast(`Failed to upload photo: ${message}`, 'error')
     } finally {

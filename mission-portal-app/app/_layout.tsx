@@ -6,7 +6,7 @@ import '@tamagui/core/reset.css'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import * as Sentry from '@sentry/react-native'
+import { CrashBoundary, crashReportsOn, startCrashReports } from '@/lib/crashReports'
 import * as Notifications from 'expo-notifications'
 import { DynamicThemeProvider } from '@/theme/DynamicThemeProvider'
 import { useAuthStore } from '@/stores/authStore'
@@ -26,17 +26,9 @@ import '@/lib/webLinking'
 import { useThemeStore } from '@/stores/themeStore'
 import { ToastContainer } from '@/components/ui/Toast'
 
-// No DSN is configured yet, so avoid touching the native Sentry SDK at all —
-// initializing with an empty/undefined dsn still triggers native setup, which
-// isn't something we want running unconfigured in production.
-const sentryEnabled = Boolean(process.env.EXPO_PUBLIC_SENTRY_DSN)
-
-if (sentryEnabled) {
-  Sentry.init({
-    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-    debug: __DEV__,
-  })
-}
+// Crash reports (Sentry), once a DSN is configured: until then, not started
+// at all (lib/crashReports).
+startCrashReports()
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -263,8 +255,8 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   )
 
-  return sentryEnabled ? (
-    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>{content}</Sentry.ErrorBoundary>
+  return crashReportsOn ? (
+    <CrashBoundary fallback={<ErrorFallback />}>{content}</CrashBoundary>
   ) : (
     content
   )

@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useRouter, Link } from 'expo-router'
 import { useForm, Controller } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { atLeast, checkedBy, email } from '@/lib/formChecks'
 import { Pressable, KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
 import { YStack, XStack, Paragraph, Button, Input, Text } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -14,12 +13,15 @@ import { passwordInputProps } from '@/lib/passwordInput'
 import { EyeIcon } from '@/components/ui/EyeIcon'
 import { useThemeColors } from '@/theme/useThemeColors'
 
-const schema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-})
+interface FormData {
+  email: string
+  password: string
+}
 
-type FormData = z.infer<typeof schema>
+const checks = checkedBy<FormData>({
+  email: email('Invalid email address'),
+  password: atLeast(6, 'Password must be at least 6 characters'),
+})
 
 export default function LoginScreen() {
   useLightModeScreen()
@@ -35,7 +37,7 @@ export default function LoginScreen() {
     handleSubmit,
     formState: { errors },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: checks,
     defaultValues: { email: '', password: '' },
   })
 

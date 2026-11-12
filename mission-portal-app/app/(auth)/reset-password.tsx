@@ -2,19 +2,18 @@ import { useState } from 'react'
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
 import { Link } from 'expo-router'
 import { useForm, Controller } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { checkedBy, email } from '@/lib/formChecks'
 import { YStack, XStack, H1, Paragraph, Button, Input, Text } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useLightModeScreen } from '@/theme/useLightModeScreen'
 
-const schema = z.object({
-  email: z.string().email('Invalid email address'),
-})
+interface FormData {
+  email: string
+}
 
-type FormData = z.infer<typeof schema>
+const checks = checkedBy<FormData>({ email: email('Invalid email address') })
 
 export default function ResetPasswordScreen() {
   useLightModeScreen()
@@ -28,7 +27,7 @@ export default function ResetPasswordScreen() {
     handleSubmit,
     formState: { errors },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: checks,
     defaultValues: { email: '' },
   })
 

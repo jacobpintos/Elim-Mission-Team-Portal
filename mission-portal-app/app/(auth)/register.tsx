@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
 import { useRouter, Link, Redirect } from 'expo-router'
 import { useForm, Controller } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { atLeast, checkedBy, email, ticked } from '@/lib/formChecks'
 import { YStack, XStack, H1, Paragraph, Button, Input, Text, View } from 'tamagui'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
@@ -13,27 +12,25 @@ import { useLightModeScreen } from '@/theme/useLightModeScreen'
 import { TERMS_VERSION } from './terms'
 import { SIGN_UP_ENABLED } from '@/lib/featureFlags'
 
-const schema = z
-  .object({
-    displayName: z.string().min(2, 'Name must be at least 2 characters'),
-    email: z.string().email('Invalid email address'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-    confirmPassword: z.string(),
-    ageConfirm: z.boolean().refine((v) => v === true, {
-      message: 'You must confirm you are 13 or older to register',
-    }),
-    // App Store Review Guideline 1.2 requires users of a UGC app to agree to
-    // terms that forbid objectionable content and abusive behaviour.
-    termsAccept: z.boolean().refine((v) => v === true, {
-      message: 'You must accept the Terms of Use to register',
-    }),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  })
+interface FormData {
+  displayName: string
+  email: string
+  password: string
+  confirmPassword: string
+  ageConfirm: boolean
+  termsAccept: boolean
+}
 
-type FormData = z.infer<typeof schema>
+const checks = checkedBy<FormData>({
+  displayName: atLeast(2, 'Name must be at least 2 characters'),
+  email: email('Invalid email address'),
+  password: atLeast(8, 'Password must be at least 8 characters'),
+  confirmPassword: (value, all) => (value === all.password ? null : 'Passwords do not match'),
+  ageConfirm: ticked('You must confirm you are 13 or older to register'),
+  // App Store Review Guideline 1.2 requires users of a UGC app to agree to
+  // terms that forbid objectionable content and abusive behaviour.
+  termsAccept: ticked('You must accept the Terms of Use to register'),
+})
 
 /**
  * Sign-up, while people can make their own account (featureFlags: it is off,
@@ -55,7 +52,7 @@ function RegisterForm() {
     handleSubmit,
     formState: { errors },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: checks,
     defaultValues: {
       displayName: '',
       email: '',

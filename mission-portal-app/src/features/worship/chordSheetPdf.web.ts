@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf'
 import type { ChordSheet } from '@/types/chordSheet'
 import { getWordSlots } from '@/lib/nashvilleNumbers'
 import {
@@ -14,14 +13,32 @@ import {
 // Mirrors buildChordSheetHtml's layout section-by-section, but draws text
 // directly via jsPDF instead of emitting HTML, with manual page-break tracking
 // standing in for the HTML version's `page-break-inside:avoid`.
-export function buildChordSheetPdfBlob(
+//
+// jsPDF, with what it compresses with, is about 135 KB sent: fetched when a
+// chord sheet is opened (preparePdfExport), not with the app for everyone.
+// An import() is a file of its own in the web build.
+let pdfMaker: Promise<typeof import('jspdf')> | null = null
+
+/** Fetches jsPDF ahead of an export; again if fetching it failed. */
+export function preparePdfExport() {
+  if (!pdfMaker) {
+    pdfMaker = import('jspdf')
+    pdfMaker.catch(() => {
+      pdfMaker = null
+    })
+  }
+  return pdfMaker
+}
+
+export async function buildChordSheetPdfBlob(
   sheet: ChordSheet,
   selectedKey: string,
   isMinor: boolean,
   keyIdx: number,
   primaryColor: string,
   ccliLicense?: string
-): Blob {
+): Promise<Blob> {
+  const { jsPDF } = await preparePdfExport()
   const disp = (raw: string) => formatToken(raw, keyIdx, isMinor)
   const [pr, pg, pb] = hexToRgb(primaryColor)
   const DARK: [number, number, number] = [30, 30, 30]

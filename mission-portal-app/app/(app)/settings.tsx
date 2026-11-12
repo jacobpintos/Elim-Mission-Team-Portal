@@ -49,7 +49,7 @@ import { lookForSwitcher } from '@/features/video/lookAround'
 import { FindEncoder } from '@/features/video/FindEncoder'
 import { recentStartups } from '@/lib/startupTimeline'
 import { describeRun, type StartupRun } from '@/lib/startupSteps'
-import * as Sentry from '@sentry/react-native'
+import { reportCrash } from '@/lib/crashReports'
 import {
   ADMIN_ONLY_NOTIF_KEYS,
   NOTIF_LABELS,
@@ -281,9 +281,9 @@ export default function SettingsScreen() {
       if (result) toast('Photo updated', 'success')
     } catch (err: unknown) {
       // Was a bare "Failed to upload photo" with the actual cause discarded,
-      // which made a real device failure unreportable. Sentry.captureException
-      // gets the real reason into the dashboard; the toast now shows it too.
-      Sentry.captureException(err)
+      // which made a real device failure unreportable. reportCrash gets the
+      // real reason into the dashboard; the toast now shows it too.
+      reportCrash(err)
       const message = err instanceof Error ? err.message : 'Unknown error'
       toast(`Failed to upload photo: ${message}`, 'error')
     } finally {
