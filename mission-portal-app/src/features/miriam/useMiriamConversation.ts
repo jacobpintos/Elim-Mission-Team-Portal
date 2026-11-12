@@ -217,8 +217,9 @@ export function useMiriamConversation(
   /** "Give me a report on Revival", worked out here: the event found, and its report given. */
   const reportFor = async (ask: ReportAsk): Promise<boolean> => {
     if (!mayHaveReports()) {
-      // Plainly asked for — not a name that only might be an event's.
-      if (ask.nameFirst) return false
+      // Plainly asked for — not a name that only might be an event's, nor
+      // "how is Revival looking?", which her other answers take.
+      if (ask.loose) return false
       const text = 'Event reports are for admins.'
       setAnswer(text)
       speak(text)

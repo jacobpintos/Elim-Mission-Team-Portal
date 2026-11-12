@@ -32,7 +32,7 @@ describe('what her bar offers to tap', () => {
     expect(labels('/dashboard', person('worship'))).not.toContain('Report on an event')
     expect(reportAsked(`${REPORT.then} the youth retreat`, '2026-11-18')).toMatchObject({
       name: 'youth retreat',
-      nameFirst: false,
+      loose: false,
     })
   })
 

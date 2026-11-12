@@ -7,6 +7,7 @@ import { alertsForDate, fetchNWSAlerts, fetchWeather } from '@/lib/weather'
 import { seriesAvailKey } from '@/lib/availability'
 import {
   buildEventReport,
+  eventAsked,
   seenToDrop,
   type EventReport,
   type ReportAsk,
@@ -63,25 +64,22 @@ export type ReportEvent = EventInstance
 /** Whether this person may have event reports: admins. */
 export const mayHaveReports = () => isAdmin(useAuthStore.getState().profile)
 
-/**
- * The event asked about: on the day said, or by its name — the nearest
- * upcoming one that fits, or else the nearest past. Null when none fits.
- */
+/** The event asked about (lib/eventReport eventAsked), as this admin can see it. */
 export async function eventForReport(ask: ReportAsk): Promise<EventInstance | null> {
   const data = await eventsLoaded()
   if (!data) return null
-  const found = findEvents(
-    data.templates,
-    data.overrides,
-    data.groups,
-    data.viewer,
-    ask.name,
-    data.today,
-    ask.date ?? '',
-    6
-  )
-  if (ask.date || !ask.name) return found[0] ?? null
-  return found.find((ev) => ev.date >= data.today) ?? found[0] ?? null
+  const find = (date: string) =>
+    findEvents(
+      data.templates,
+      data.overrides,
+      data.groups,
+      data.viewer,
+      ask.name,
+      data.today,
+      date,
+      6
+    )
+  return eventAsked(ask, find)
 }
 
 /** The event with this key, as the admin can see it. */

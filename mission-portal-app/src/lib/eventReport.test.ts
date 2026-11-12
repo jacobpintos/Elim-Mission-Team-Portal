@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildEventReport,
+  eventAsked,
   reportAsked,
   seenToDrop,
   sinceSaid,
@@ -9,7 +10,12 @@ import {
   type ReportTask,
 } from './eventReport'
 import { outstandingFor } from '../../functions/src/reimbursements/logic'
-import type { EventInstance } from '../../functions/src/miriam/data'
+import {
+  findEvents,
+  type EventInstance,
+  type EventTemplate,
+  type Viewer,
+} from '../../functions/src/miriam/data'
 
 const today = '2026-11-18' // a Wednesday
 
@@ -28,27 +34,97 @@ describe('asking for a report', () => {
       expect(reportAsked(said, today), said).toEqual({
         date: null,
         name: 'revival',
-        nameFirst: false,
+        loose: false,
       })
     }
   })
 
   it('takes the day it is asked of', () => {
-    expect(reportAsked('Give me a report on Sunday’s service', today)).toMatchObject({
+    expect(reportAsked('Give me a report on Sunday’s service', today)).toEqual({
       date: '2026-11-22',
+      name: 'sunday service',
+      loose: false,
+    })
+    expect(reportAsked("Give me a report on this Sunday's service", today)).toMatchObject({
+      date: '2026-11-22',
+      name: 'sunday service',
+    })
+    expect(reportAsked('Give me a report on sunday service', today)).toMatchObject({
+      date: '2026-11-22',
+      name: 'sunday service',
     })
     expect(reportAsked('report on tomorrow', today)).toMatchObject({ date: '2026-11-19' })
+    expect(reportAsked("report on tonight's event", today)).toEqual({
+      date: today,
+      name: '',
+      loose: false,
+    })
+  })
+
+  it('takes “the next event”, or none named, as the next to come — “the next service” as the service', () => {
+    for (const said of [
+      'Give me a report on the next event',
+      'report on the next event',
+      'give me a report on my next event',
+      'give me a report on the upcoming event',
+      'give me a status report',
+      'give me a report',
+      'status report',
+      'event report',
+    ]) {
+      expect(reportAsked(said, today), said).toEqual({ date: null, name: '', loose: false })
+    }
+    expect(reportAsked('give me a report on the next service', today)).toEqual({
+      date: null,
+      name: 'service',
+      loose: false,
+    })
+    // Named before the word, as "the Revival report" is: loose.
+    expect(reportAsked('the next event report', today)).toEqual({
+      date: null,
+      name: '',
+      loose: true,
+    })
+    // "next Sunday" is still a day.
+    expect(reportAsked('give me a report on next Sunday', today)).toMatchObject({
+      date: '2026-11-22',
+    })
+  })
+
+  it('hears it asked as a question, loose: an event must be found by it, and only an admin has it', () => {
+    for (const [said, name] of [
+      ['How is Sunday Service looking?', 'sunday service'],
+      ["What's the status of Revival?", 'revival'],
+      ['Give me an update on Revival', 'revival'],
+      ['Are we on track for Revival?', 'revival'],
+      ['Is Revival behind?', 'revival'],
+      ['Where are we with the retreat?', 'retreat'],
+      ['Catch me up on Revival', 'revival'],
+      ['How are things looking for Revival?', 'revival'],
+    ]) {
+      expect(reportAsked(said, today), said).toMatchObject({ name, loose: true })
+    }
+    for (const said of [
+      'How is the weather looking?',
+      'How are you doing?',
+      "How's it going?",
+      'How am I looking?',
+      "What's my next event?",
+      'When is the next event?',
+    ]) {
+      expect(reportAsked(said, today), said).toBeNull()
+    }
   })
 
   it('takes a name said before the word, marked to be found before it is used', () => {
     expect(reportAsked('Give me the Revival report', today)).toEqual({
       date: null,
       name: 'revival',
-      nameFirst: true,
+      loose: true,
     })
     expect(reportAsked('the youth retreat status report', today)).toMatchObject({
       name: 'youth retreat',
-      nameFirst: true,
+      loose: true,
     })
   })
 
@@ -64,6 +140,58 @@ describe('asking for a report', () => {
     ]) {
       expect(reportAsked(said, today), said).toBeNull()
     }
+  })
+})
+
+describe('the event a report is given on', () => {
+  const admin: Viewer = { uid: 'boss', roles: ['admin'] }
+  const sunday: EventTemplate = {
+    id: 'svc',
+    title: 'Sunday Service',
+    isRec: true,
+    recur: 'weekly',
+    recDay: 0,
+  }
+  const revival: EventTemplate = {
+    id: 'rev',
+    title: 'Revival In The Heartland',
+    date: '2026-11-20',
+  }
+  const retreat: EventTemplate = { id: 'ret', title: 'Youth Retreat', date: '2026-12-05' }
+  const pastRetreat: EventTemplate = { id: 'old', title: 'Fall Retreat', date: '2026-10-10' }
+  const templates = [sunday, revival, retreat, pastRetreat]
+  /** As the app asks (features/miriam/eventReportData eventForReport). */
+  const asked = (said: string) => {
+    const ask = reportAsked(said, today)!
+    const find = (date: string) => findEvents(templates, {}, [], admin, ask.name, today, date, 6)
+    const ev = eventAsked(ask, find)
+    return ev && `${ev.title} ${ev.date}`
+  }
+
+  it('by its name, the next to come', () => {
+    expect(asked('Give me a report on sunday service')).toBe('Sunday Service 2026-11-22')
+    expect(asked('Give me a report on Revival')).toBe('Revival In The Heartland 2026-11-20')
+    expect(asked('report on the youth retreat')).toBe('Youth Retreat 2026-12-05')
+  })
+
+  it('the next event: whichever comes first; the next service: Sunday’s', () => {
+    expect(asked('Give me a report on the next event')).toBe('Revival In The Heartland 2026-11-20')
+    expect(asked('give me a status report')).toBe('Revival In The Heartland 2026-11-20')
+    expect(asked('give me a report on the next service')).toBe('Sunday Service 2026-11-22')
+  })
+
+  it('on a day said, that day’s; a day with nothing on it is none', () => {
+    expect(asked('give me a report on Friday')).toBe('Revival In The Heartland 2026-11-20')
+    expect(asked('give me a report on Sunday')).toBe('Sunday Service 2026-11-22')
+    expect(asked('give me a report on Thursday')).toBeNull()
+  })
+
+  it('a name not found is none: left to Claude, who looks further', () => {
+    expect(asked('give me a report on the picnic')).toBeNull()
+  })
+
+  it('a past event by name, when it has no date to come', () => {
+    expect(asked('give me a report on the fall retreat')).toBe('Fall Retreat 2026-10-10')
   })
 })
 

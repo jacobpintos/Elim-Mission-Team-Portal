@@ -23,13 +23,17 @@ import { eventRef } from './miriamQuick'
 // --- Asked for --------------------------------------------------------------
 
 export interface ReportAsk {
+  /** The day said, if one was. */
   date: string | null
+  /** The words naming it: none for "the next event", "service" for "the next service". */
   name: string
   /**
-   * Named before the word "report" ("the Revival report"): taken only if an
-   * event of that name is found — "the security report" is no event's.
+   * Not plainly a report asked for: named before the word "report" ("the
+   * Revival report" — "the security report" is no event's), or asked as a
+   * question ("how is Revival looking?"). Taken only if an event is found
+   * by it, and for anyone but an admin left to her other answers.
    */
-  nameFirst: boolean
+  loose: boolean
 }
 
 const ASK = String.raw`(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)?(?:(?:give|get|show|send|bring|read|run|pull)\s+(?:me\s+)?(?:up\s+)?|(?:i\s+(?:want|need)|i'd\s+like)\s+(?:to\s+(?:see|hear|get)\s+)?|(?:can|could|may)\s+i\s+(?:get|have|see|hear)\s+|let\s+me\s+(?:see|have|hear)\s+|let's\s+(?:see|hear|have)\s+|what(?:'s|\s+is)\s+)?`
@@ -49,6 +53,34 @@ const ASKED: RegExp[] = [
   // "report on Revival"
   new RegExp(String.raw`^${ASK}report\s+(?:on|about)\s+(.+?)${END}`),
 ]
+// Asked as a question, about an event ("how is Revival looking?"): loose.
+const ASKED_LOOSELY: RegExp[] = [
+  // "what's the status of Revival", "status on the retreat"
+  new RegExp(String.raw`^${ASK}(?:the\s+)?(?:status|state)\s+(?:of|on|for)\s+(.+?)${END}`),
+  // "give me an update on Revival", "a quick rundown of Sunday"
+  new RegExp(
+    String.raw`^${ASK}(?:an?\s+|the\s+|my\s+)?(?:quick\s+)?(?:update|rundown|run-down|overview|summary)\s+(?:on|of|for|about)\s+(.+?)${END}`
+  ),
+  // "how is Revival looking", "how's Sunday service coming along"
+  /^how(?:'s|\s+is|\s+are)\s+(.+?)\s+(?:looking|going|coming\s+along|coming|shaping\s+up)(?:\s+so\s+far)?$/,
+  // "how are things looking for Revival"
+  /^how(?:'s|\s+is|\s+are)\s+(?:it|things|we)\s+(?:looking|going|doing)\s+(?:for|with|on)\s+(.+)$/,
+  // "is Revival on track", "is the retreat behind"
+  /^(?:is|are)\s+(.+?)\s+(?:on\s+track|behind(?:\s+schedule)?|ready)$/,
+  // "are we on track for Revival", "are we ready for Sunday"
+  /^(?:are\s+we|is\s+everything|is\s+everyone)\s+(?:on\s+track|behind(?:\s+schedule)?|ready)\s+(?:for|with|on)\s+(.+)$/,
+  // "where are we with Revival", "where do we stand on the retreat"
+  /^where\s+(?:are\s+we|do\s+we\s+stand|are\s+things|do\s+things\s+stand)(?:\s+at)?\s+(?:with|on)\s+(.+)$/,
+  // "catch me up on Revival"
+  /^catch\s+me\s+up\s+on\s+(.+)$/,
+]
+/** Asked that way, but of the weather, a person, or how she is: not an event's report. */
+const NOT_ASKED_OF_AN_EVENT =
+  /\b(?:weather|forecast|rain|raining|snow|storm|temperature|you|yourself|i|me)\b/
+// "give me a status report", "the event report": none named — the next event's.
+const BARE = new RegExp(
+  String.raw`^${ASK}(?:(?:a|an|the|my|me\s+an?)\s+${KIND}|(?:status|event|progress)\s+)report${END}`
+)
 // "the Revival report", "give me the retreat status report"
 const NAME_FIRST = new RegExp(
   String.raw`^${ASK}(?:an?\s+|the\s+|my\s+)?(.+?)\s+${KIND}report${END}`
@@ -57,7 +89,18 @@ const NAME_FIRST = new RegExp(
 const NOT_AN_EVENT =
   /^(?:daily|morning|monthly|weekly|security|incident|issues?|kaizen|expenses?|reimbursements?|finance|financial|budget|bug|problem|weather|status|progress|event|quick|full)$/
 
-/** "Give me a report on Revival", "status report for Sunday", "the retreat report": the event asked about. */
+/**
+ * "The next event", "our upcoming one", "the next service": the nearest to
+ * come — the next Sunday service, said as a service.
+ */
+const NEXT =
+  /^(?:(?:the|my|our|this)\s+)?(?:very\s+)?(?:next|upcoming|coming|soonest)(?:\s+(?:event|one|thing|gathering|trip|meeting)s?|\s+(service|church(?:\s+service)?|worship(?:\s+service)?)s?)?$/
+
+/**
+ * "Give me a report on Revival", "status report for Sunday", "the retreat
+ * report", "a report on the next event", "how is Revival looking?": the
+ * event asked about.
+ */
 export function reportAsked(text: string, today: string): ReportAsk | null {
   const said = text
     .toLowerCase()
@@ -66,18 +109,49 @@ export function reportAsked(text: string, today: string): ReportAsk | null {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^(?:(?:hey|ok|okay)\s+)?(?:miriam\s+)?/, '')
+    // "this Sunday's service", "tonight's event": the day, as said.
+    .replace(/\b(today|tonight|tomorrow|(?:sun|mon|tues|wednes|thurs|fri|satur)day)'s\b/g, '$1')
   for (const re of ASKED) {
     const m = re.exec(said)
     if (m) return named(m[1], today, false)
   }
+  if (BARE.test(said)) return { date: null, name: '', loose: false }
   const m = NAME_FIRST.exec(said)
   if (m && !NOT_AN_EVENT.test(m[1].trim())) return named(m[1], today, true)
+  for (const re of ASKED_LOOSELY) {
+    const m = re.exec(said)
+    if (m && !NOT_ASKED_OF_AN_EVENT.test(m[1])) return named(m[1], today, true)
+  }
   return null
 }
 
-function named(words: string, today: string, nameFirst: boolean): ReportAsk | null {
+/**
+ * The event a report is asked of, from the events `find` gives for a day
+ * ('' for any): on the day said; else the one that best fits its name, the
+ * next to come of those that fit as well; and with no name ("the next
+ * event"), the next to come. Null when none fits.
+ *
+ * `find` is functions/src/miriam/data findEvents, which gives them in that
+ * order — best fit first, then upcoming before past, nearest first — so its
+ * first is the one: "the fall retreat" is the Fall Retreat, past or not,
+ * before a Youth Retreat still to come.
+ */
+export function eventAsked<E>(ask: ReportAsk, find: (date: string) => E[]): E | null {
+  if (ask.date) {
+    const onTheDay = find(ask.date)
+    if (onTheDay.length) return onTheDay[0]
+    // A day with no event (by that name) on it: "Sunday Service" asked late
+    // on a Sunday is still the service, by its name — but a day alone is none.
+    if (!ask.name) return null
+  }
+  return find('')[0] ?? null
+}
+
+function named(words: string, today: string, loose: boolean): ReportAsk | null {
+  const next = NEXT.exec(words.trim())
+  if (next) return { date: null, name: next[1] ? 'service' : '', loose }
   const ref = eventRef(words.replace(/'/g, '’'), today)
-  return ref ? { ...ref, nameFirst } : null
+  return ref ? { ...ref, loose } : null
 }
 
 // --- The report ---------------------------------------------------------------
