@@ -243,6 +243,11 @@ export interface Briefing {
   today: BriefEvent[]
   /** Nothing today: the next thing coming up. */
   next: BriefEvent | null
+  /**
+   * The other events of the days ahead (SOON_DAYS, from tomorrow: Monday's
+   * counts on a Friday), each once, their own first — not those above.
+   */
+  soon: BriefEvent[]
   /** The month's briefing: the events of the month ahead, each once. */
   upcoming: BriefEvent[]
   tasks: (BriefTask & { due: 'overdue' | 'today' | 'week'; label: string })[]
@@ -301,6 +306,11 @@ const longDate = (date: string) =>
 const weekday = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' })
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/** How far ahead "Coming up" looks: a week from today, whatever day it ends on. */
+export const SOON_DAYS = 7
+/** At most this many coming up. */
+const SOON_AT_MOST = 4
 
 /** How far off the briefing looks for an event that's behind. */
 export const BEHIND_DAYS = 14
@@ -460,11 +470,33 @@ export function buildBriefing(input: BriefingInput): Briefing {
   const shownToday = (mineToday.length ? mineToday : todays).slice(0, 4)
   const today_ = shownToday.map((ev) => eventCard(ev, input, today))
   let next: BriefEvent | null = null
+  let nextEv: EventInstance | undefined
   if (today_.length === 0) {
     const ahead = eventsBetween(input, shiftDate(today, 1), shiftDate(today, 60))
-    const nextEv = ahead.find((ev) => assignedTo(ev, groups).has(viewer.uid)) ?? ahead[0]
+    nextEv = ahead.find((ev) => assignedTo(ev, groups).has(viewer.uid)) ?? ahead[0]
     if (nextEv) next = eventCard(nextEv, input, today)
   }
+
+  // Coming up: the other events of the week ahead, counted from today, not
+  // to the week's end — each once (a weekly one on its next date), none
+  // already shown above; their own kept first when there are more.
+  const shownSeries = new Set(
+    [...shownToday, ...(nextEv ? [nextEv] : [])].map((ev) => String(ev.templateId))
+  )
+  const ahead = eventsBetween(input, shiftDate(today, 1), shiftDate(today, SOON_DAYS)).filter(
+    (ev) => {
+      const series = String(ev.templateId)
+      if (shownSeries.has(series)) return false
+      shownSeries.add(series)
+      return true
+    }
+  )
+  const own = (ev: EventInstance) => assignedTo(ev, groups).has(viewer.uid)
+  const kept = new Set(
+    [...ahead.filter(own), ...ahead.filter((ev) => !own(ev))].slice(0, SOON_AT_MOST)
+  )
+  const soonEvs = ahead.filter((ev) => kept.has(ev))
+  const soon = soonEvs.map((ev) => eventCard(ev, input, today))
 
   // Their tasks: overdue, due today, then due this week.
   const weekEnd = shiftDate(today, 7)
@@ -588,6 +620,14 @@ export function buildBriefing(input: BriefingInput): Briefing {
   } else {
     say(['head'], 'Nothing on today.')
   }
+  if (soonEvs.length) {
+    const dayOf = (date: string) =>
+      date === shiftDate(today, 1) ? 'tomorrow' : `on ${weekday(date)}`
+    say(
+      soonEvs.map((ev) => R.event(ev.instanceKey)),
+      `Coming up: ${listed(soonEvs.map((ev) => `${ev.title} ${dayOf(ev.date)}`))}.`
+    )
+  }
   const overdue = tasks.filter((t) => t.due === 'overdue')
   const dueToday = tasks.filter((t) => t.due === 'today')
   const thisWeek = tasks.filter((t) => t.due === 'week')
@@ -666,6 +706,7 @@ export function buildBriefing(input: BriefingInput): Briefing {
     needs,
     today: today_,
     next,
+    soon,
     upcoming: [],
     tasks,
     reminders,
@@ -802,6 +843,7 @@ function buildMonthly(input: BriefingInput): Briefing {
     needs: 0,
     today: [],
     next: null,
+    soon: [],
     upcoming,
     tasks: [],
     reminders: [],

@@ -6,6 +6,7 @@ import { miriamHref } from '@/lib/miriam'
 import {
   briefingRowId as R,
   type AttentionItem,
+  type BriefEvent,
   type Briefing,
   type FoodNudge,
 } from '@/lib/briefing'
@@ -50,6 +51,55 @@ export function BriefingView({
   const mark = (id: string) => setDone((d) => new Set(d).add(id))
   // A suggestion someone took first: the sheet as it is now, by event.
   const [left, setLeft] = useState<Record<string, string[]>>({})
+
+  /** An event's card: today's, what's next, or coming up — a tap opens it. */
+  const eventCardView = (ev: BriefEvent) => (
+    <Focus key={ev.key} id={R.event(ev.key)}>
+      <Pressable
+        onPress={() => onOpen(miriamHref({ kind: 'event', key: ev.key, section: null }))}
+        accessibilityRole="link"
+        accessibilityLabel={`${ev.title}, ${ev.time} ${ev.meridiem}`}
+      >
+        <XStack
+          style={[styles.card, { borderColor: colors.border, backgroundColor: colors.background }]}
+          gap="$3"
+        >
+          <YStack width={58}>
+            <Text color={colors.text} fontSize="$4" fontWeight="700">
+              {ev.time}
+            </Text>
+            <Text color={colors.textMuted} fontSize="$1">
+              {ev.meridiem}
+            </Text>
+          </YStack>
+          <YStack flex={1} gap="$1.5">
+            <Text color={colors.text} fontSize="$4" fontWeight="700">
+              {ev.title}
+            </Text>
+            {ev.place ? (
+              <Text color={colors.textMuted} fontSize="$2">
+                {ev.place}
+              </Text>
+            ) : null}
+            {ev.chips.length ? (
+              <XStack flexWrap="wrap" gap="$1.5">
+                {ev.chips.map((c) => (
+                  <View key={c} style={[styles.chip, { backgroundColor: colors.border }]}>
+                    <Text color={colors.text} fontSize="$1">
+                      {c}
+                    </Text>
+                  </View>
+                ))}
+              </XStack>
+            ) : null}
+          </YStack>
+          <Text color={colors.textMuted} alignSelf="center">
+            ›
+          </Text>
+        </XStack>
+      </Pressable>
+    </Focus>
+  )
 
   return (
     <YStack gap="$3" paddingBottom="$1">
@@ -105,56 +155,15 @@ export function BriefingView({
           title={b.period === 'month' ? 'THIS MONTH' : b.today.length ? 'TODAY' : 'NEXT UP'}
           colors={colors}
         >
-          {(b.period === 'month' ? b.upcoming : b.today.length ? b.today : [b.next!]).map((ev) => (
-            <Focus key={ev.key} id={R.event(ev.key)}>
-              <Pressable
-                onPress={() => onOpen(miriamHref({ kind: 'event', key: ev.key, section: null }))}
-                accessibilityRole="link"
-                accessibilityLabel={`${ev.title}, ${ev.time} ${ev.meridiem}`}
-              >
-                <XStack
-                  style={[
-                    styles.card,
-                    { borderColor: colors.border, backgroundColor: colors.background },
-                  ]}
-                  gap="$3"
-                >
-                  <YStack width={58}>
-                    <Text color={colors.text} fontSize="$4" fontWeight="700">
-                      {ev.time}
-                    </Text>
-                    <Text color={colors.textMuted} fontSize="$1">
-                      {ev.meridiem}
-                    </Text>
-                  </YStack>
-                  <YStack flex={1} gap="$1.5">
-                    <Text color={colors.text} fontSize="$4" fontWeight="700">
-                      {ev.title}
-                    </Text>
-                    {ev.place ? (
-                      <Text color={colors.textMuted} fontSize="$2">
-                        {ev.place}
-                      </Text>
-                    ) : null}
-                    {ev.chips.length ? (
-                      <XStack flexWrap="wrap" gap="$1.5">
-                        {ev.chips.map((c) => (
-                          <View key={c} style={[styles.chip, { backgroundColor: colors.border }]}>
-                            <Text color={colors.text} fontSize="$1">
-                              {c}
-                            </Text>
-                          </View>
-                        ))}
-                      </XStack>
-                    ) : null}
-                  </YStack>
-                  <Text color={colors.textMuted} alignSelf="center">
-                    ›
-                  </Text>
-                </XStack>
-              </Pressable>
-            </Focus>
-          ))}
+          {(b.period === 'month' ? b.upcoming : b.today.length ? b.today : [b.next!]).map(
+            eventCardView
+          )}
+        </Section>
+      ) : null}
+
+      {b.soon.length ? (
+        <Section title="COMING UP" colors={colors}>
+          {b.soon.map(eventCardView)}
         </Section>
       ) : null}
 
