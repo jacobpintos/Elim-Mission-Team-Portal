@@ -14,6 +14,7 @@ import {
   teamsOf,
 } from '../../functions/src/miriam/data'
 import { nudgeSaid, occasionsSoon, type Occasion, type OccasionNudge } from './occasions'
+import { behindOf, type ReportTask } from './eventReport'
 import { saleSaid } from './miriamStore'
 
 /**
@@ -147,7 +148,7 @@ export interface BriefReminder {
 
 /** Something needing an admin's (or the worship team's) attention, found by the app (features/miriam/briefingData). */
 export interface AttentionItem {
-  kind: 'availability' | 'issue' | 'kaizen' | 'setlist' | 'reimbursement'
+  kind: 'behind' | 'availability' | 'issue' | 'kaizen' | 'setlist' | 'reimbursement'
   title: string
   sub: string
   href: string
@@ -300,6 +301,66 @@ const longDate = (date: string) =>
 const weekday = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' })
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/** How far off the briefing looks for an event that's behind. */
+export const BEHIND_DAYS = 14
+/** At most this many named: the soonest. */
+const BEHIND_AT_MOST = 3
+
+/**
+ * For an admin: the events coming up (`upcoming`, soonest first) that are
+ * behind — a task marked behind, or past due and not done, as the Behind
+ * badge reads it (lib/eventReport behindOf). A repeating event once, on its
+ * next date. Each opens its Event Health card where it has one.
+ */
+export function behindAttention(
+  upcoming: (EventInstance & { taskTemplateId?: string })[],
+  tasks: ReportTask[],
+  today: string
+): AttentionItem[] {
+  const items: AttentionItem[] = []
+  const named = new Set<string>()
+  for (const ev of upcoming) {
+    if (items.length >= BEHIND_AT_MOST) break
+    const series = String(ev.templateId)
+    if (named.has(series)) continue
+    const { behind, overdue } = behindOf(tasks, ev, today)
+    if (!behind.length && !overdue.length) continue
+    named.add(series)
+    const what = [
+      behind.length ? `${plural(behind.length, 'task')} behind` : '',
+      overdue.length ? `${overdue.length} overdue` : '',
+    ]
+      .filter(Boolean)
+      .join(', ')
+    const ahead = Math.round(
+      (Date.parse(`${ev.date}T12:00:00`) - Date.parse(`${today}T12:00:00`)) / 86_400_000
+    )
+    const when =
+      ahead === 0
+        ? 'today'
+        : ahead === 1
+          ? 'tomorrow'
+          : ahead < 7
+            ? weekday(ev.date)
+            : new Date(`${ev.date}T12:00:00`).toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+              })
+    const saidWhen = ahead === 0 ? 'today' : ahead === 1 ? 'tomorrow' : `on ${when}`
+    items.push({
+      kind: 'behind',
+      title: `${ev.title} is behind`,
+      sub: `${what} · ${when}`,
+      href: ev.taskTemplateId
+        ? `/assignments?healthEvent=${encodeURIComponent(series)}`
+        : '/assignments',
+      spoken: `${ev.title} ${saidWhen} is behind, with ${what}`,
+    })
+  }
+  return items
+}
 const listed = (xs: string[]) =>
   xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)

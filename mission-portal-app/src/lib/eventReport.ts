@@ -259,6 +259,27 @@ export function tasksOfEvent(tasks: ReportTask[], ev: EventInstance): ReportTask
   )
 }
 
+const byDue = (a: ReportTask, b: ReportTask) =>
+  (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999')
+
+/**
+ * What makes an event Behind, as the app's badge reads it (Dashboard, Event
+ * Health): its open tasks marked behind, and those past their due date and
+ * not done — soonest due first. Neither: it's on track (or has no tasks).
+ * The report says so, and the briefing tells an admin (lib/briefing).
+ */
+export function behindOf(
+  tasks: ReportTask[],
+  ev: EventInstance,
+  today: string
+): { behind: ReportTask[]; overdue: ReportTask[] } {
+  const open = tasksOfEvent(tasks, ev).filter((t) => t.status !== 'done')
+  return {
+    behind: open.filter((t) => t.status === 'behind').sort(byDue),
+    overdue: open.filter((t) => t.status !== 'behind' && isOverdue(t, today)).sort(byDue),
+  }
+}
+
 /** Past its due date and not done, as the app's own isOverdue reads it. */
 const isOverdue = (t: ReportTask, today: string) =>
   t.status !== 'done' && !!t.dueDate && t.dueDate < today
@@ -391,10 +412,7 @@ export function buildEventReport(input: EventReportInput): EventReport {
   // done; due soon, the week ahead. As the app's own On Track / Behind.
   const mine = tasksOfEvent(input.tasks, ev)
   const open = mine.filter((t) => t.status !== 'done')
-  const byDue = (a: ReportTask, b: ReportTask) =>
-    (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999')
-  const behind = open.filter((t) => t.status === 'behind').sort(byDue)
-  const overdue = open.filter((t) => t.status !== 'behind' && isOverdue(t, today)).sort(byDue)
+  const { behind, overdue } = behindOf(input.tasks, ev, today)
   const dueSoon = open
     .filter((t) => t.status !== 'behind' && t.dueDate && t.dueDate >= today && t.dueDate <= soon)
     .sort(byDue)

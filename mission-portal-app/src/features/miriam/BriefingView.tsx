@@ -396,13 +396,15 @@ export function BriefingView({
                   <Row
                     colors={colors}
                     dot={
-                      a.kind === 'issue'
-                        ? '#f0a070'
-                        : a.kind === 'setlist'
-                          ? '#a77bdb'
-                          : a.kind === 'reimbursement'
-                            ? '#e67e22'
-                            : colors.primary
+                      a.kind === 'behind'
+                        ? '#c0392b'
+                        : a.kind === 'issue'
+                          ? '#f0a070'
+                          : a.kind === 'setlist'
+                            ? '#a77bdb'
+                            : a.kind === 'reimbursement'
+                              ? '#e67e22'
+                              : colors.primary
                     }
                     title={a.title}
                     sub={a.sub}

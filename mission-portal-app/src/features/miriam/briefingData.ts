@@ -14,10 +14,13 @@ import { announcementsShown, roomName } from '@/lib/miriamAppData'
 import {
   buildBriefing,
   type AttentionItem,
+  BEHIND_DAYS,
+  behindAttention,
   type BriefMoney,
   type Briefing,
   type FoodNudge,
 } from '@/lib/briefing'
+import type { ReportTask } from '@/lib/eventReport'
 import { fetchWeather } from '@/lib/weather'
 import { miriamHref } from '@/lib/miriam'
 import { accountantAttention, moneyBriefing } from '@/lib/reimbursementTally'
@@ -151,7 +154,8 @@ export async function gatherBriefing(): Promise<
           evOverrides,
           groups,
           viewer,
-          day
+          day,
+          useTasksStore.getState().tasks as unknown as ReportTask[]
         ),
       []
     ),
@@ -233,7 +237,13 @@ export async function gatherBriefing(): Promise<
     announcements,
     unread,
     // Money first: a payment due is a date someone outside is counting on.
-    attention: [...money.attention, ...attention],
+    // Events behind first, then what's owed or to decide, then the rest:
+    // the briefing shows the first five.
+    attention: [
+      ...attention.filter((a) => a.kind === 'behind'),
+      ...money.attention,
+      ...attention.filter((a) => a.kind !== 'behind'),
+    ],
     money: money.news,
     weather,
     food,
@@ -423,7 +433,8 @@ async function attentionFor(
   overrides: Record<string, Partial<EventTemplate>>,
   groups: Group[],
   viewer: { uid: string; roles: string[] },
-  day: string
+  day: string,
+  tasks: ReportTask[]
 ): Promise<AttentionItem[]> {
   if (!admin && !worship) return []
   const weekOut = shiftDate(day, 7)
@@ -434,6 +445,19 @@ async function attentionFor(
   const items: AttentionItem[] = []
 
   if (admin) {
+    // Events coming up that are behind, first: the soonest of the next two
+    // weeks, as their Behind badge reads it (lib/briefing behindAttention).
+    items.push(
+      ...behindAttention(
+        templates
+          .filter((t) => canSeeEvent(t, viewer, groups))
+          .flatMap((t) => instancesOf(t, day, shiftDate(day, BEHIND_DAYS), overrides))
+          .sort((a, b) => a.date.localeCompare(b.date)),
+        tasks,
+        day
+      )
+    )
+
     // Who hasn't answered availability, for the next few events this week.
     const unanswered = await Promise.all(upcoming.slice(0, 4).map((ev) => noAnswer(ev, groups)))
     upcoming.slice(0, 4).forEach((ev, i) => {
